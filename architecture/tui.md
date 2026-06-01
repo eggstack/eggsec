@@ -13,10 +13,21 @@ Manages the overall application state, event loop, and rendering.
 | `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
 | `runner.rs` | Main event loop using crossterm/ratatui |
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
-| `dispatch.rs` | Routes input to current tab via `TabDispatcher` |
 | `state_update.rs` | Async task result handling and routing |
-| `task_management.rs` | Maps tabs to `TaskConfig` for background execution |
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
+| `export.rs` | Export results to various formats |
+| `task_management.rs` | Maps tabs to `TaskConfig` for background execution |
+| `navigation.rs` | Tab navigation and quick switch |
+| `command.rs` | Command palette handling |
+| `help_config.rs` | Help configuration and display |
+| `bookmarks.rs` | Tab bookmark management |
+| `dispatch.rs` | Routes input to current tab via `TabDispatcher` |
+| `tab_error.rs` | Structured tab error types |
+| `confirmation.rs` | Confirmation dialog handling |
+| `error.rs` | App-level error types |
+| `notifications.rs` | In-app notification display |
+| `input.rs` | Global input processing |
+| `options.rs` | Global options handling |
 
 ### Tabs (`tabs/`)
 
@@ -72,6 +83,12 @@ Reusable UI primitives:
 | `ProgressGauge` | `progress.rs` | Animated progress bar with spinner |
 | `ScrollableText` | `scrollable.rs` | Scrollable text with scrollbar |
 | `Popup` | `popup.rs` | Modal dialogs (confirm, help, info) |
+| `Palette` | `palette.rs` | Command palette fuzzy search |
+| `Notifications` | `notifications.rs` | Toast notification display |
+| `SearchPopup` | `search_popup.rs` | Search overlay with results |
+| `EmptyState` | `empty_state.rs` | Empty state placeholder |
+| `HelpBar` | `help_bar.rs` | Bottom help bar display |
+| `HttpOptions` | `http_options.rs` | HTTP auth/proxy options panel |
 
 ### Workers (`workers/`)
 
@@ -105,7 +122,7 @@ History is shared via `Arc<Mutex<HistoryTab>>` for thread-safe access.
 
 ### Theme (`theme.rs`)
 
-`ThemeManager` holds dark/light themes with 30+ color fields.
+`ThemeManager` holds dark/light themes with 28 color fields.
 
 Use `tc!` macro for theme colors:
 ```rust

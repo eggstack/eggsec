@@ -10,8 +10,8 @@ SQLx-based persistence layer using PostgreSQL for storing scan results, findings
 |------|----------|-------------|
 | `StorageConfig` | `storage/mod.rs` | Database connection configuration (host, port, credentials, pool size) |
 | `Database` | `storage/postgres.rs` | PostgreSQL connection pool and operations |
-| `ScanModel` | `storage/models.rs` | Database model for scan records |
-| `FindingModel` | `storage/models.rs` | Database model for finding records |
+| `StoredScan` | `storage/models.rs` | Database model for scan records |
+| `StoredFinding` | `storage/models.rs` | Database model for finding records |
 
 ## Files
 
@@ -19,7 +19,7 @@ SQLx-based persistence layer using PostgreSQL for storing scan results, findings
 |------|-------------|
 | `mod.rs` | Module root: `StorageConfig`, `init_storage()` factory function |
 | `postgres.rs` | PostgreSQL connection pool, CRUD operations |
-| `models.rs` | Database model structs (ScanModel, FindingModel, etc.) |
+| `models.rs` | Database model structs (StoredScan, StoredFinding, etc.) |
 | `queries.rs` | Predefined SQL queries (insert, update, search) |
 
 ## Implementation Status

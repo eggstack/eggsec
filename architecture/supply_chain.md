@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Supply chain security analysis including SBOM generation (CycloneDX, SPDX formats), typosquatting detection, and dependency vulnerability scanning.
+Supply chain security analysis including SBOM generation (CycloneDX, SPDX formats), typosquatting detection, manifest discovery (Cargo.toml, package.json, go.mod, etc.), and configuration analysis of Dockerfiles and GitHub Actions workflows for misconfigurations.
 
 ## Key Types
 
@@ -19,9 +19,9 @@ Supply chain security analysis including SBOM generation (CycloneDX, SPDX format
 |------|-------------|
 | `mod.rs` | Module root: `SupplyChainReport`, `SupplyChainFinding` |
 | `sbom.rs` | SBOM generation in CycloneDX and SPDX formats |
-| `scanner.rs` | Dependency vulnerability scanner |
+| `scanner.rs` | Manifest discovery and configuration analysis (Dockerfile, GitHub Actions). Feature-gated behind `sbom`. |
 | `typosquat.rs` | Typosquatting detection for package names |
 
 ## Implementation Status
 
-Fully implemented. SBOM generation, dependency scanning, and typosquatting detection are all functional.
+Fully implemented. SBOM generation, manifest discovery/configuration analysis, and typosquatting detection are all functional. The `scanner.rs` module is feature-gated behind `sbom`.

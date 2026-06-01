@@ -16,8 +16,8 @@ Finding comparison engine that compares two scan result sets and identifies new,
 
 | File | Description |
 |------|-------------|
-| `mod.rs` | Module root: `diff_findings()`, `diff_findings_from_files()`, `DiffResult`, `DiffSummary`, fingerprint comparison logic |
+| `mod.rs` | Module root: `diff_findings()`, `load_findings_from_file()`, `DiffResult`, `DiffSummary`, fingerprint comparison logic |
 
 ## Implementation Status
 
-Fully implemented. `diff_findings()` compares finding sets by fingerprint and produces a structured `DiffResult`. File-based comparison via `diff_findings_from_files()` also supported.
+Fully implemented. `diff_findings()` compares `&[Finding]` slices by fingerprint and produces a structured `DiffResult`. `load_findings_from_file()` loads findings from a single JSONL file; load both files and pass the slices to `diff_findings()`.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wireless network security testing including WiFi reconnaissance, WPA/WPA2 handshake capture analysis, and weak point detection. Feature-gated behind the `wireless` flag.
+Wireless network security testing including iwlist scan parsing and wireless security type analysis (Open, WEP, WPA, WPA2, WPA3, Enterprise). Feature-gated behind the `wireless` flag.
 
 ## Key Types
 
@@ -22,4 +22,4 @@ Wireless network security testing including WiFi reconnaissance, WPA/WPA2 handsh
 
 ## Implementation Status
 
-Implemented behind `wireless` feature flag. Core types and scanner logic are in place with network enumeration, handshake analysis, and vulnerability detection.
+Implemented behind `wireless` feature flag. Core types and scanner logic are in place with iwlist-based network enumeration and security type analysis. WPA/WPA2 handshake capture analysis is not yet implemented (aspirational).

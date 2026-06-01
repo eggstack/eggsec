@@ -1,8 +1,8 @@
 //! Wireless security testing module
 //!
 //! Provides wireless network security testing capabilities including
-//! WiFi reconnaissance, WPA/WPA2 handshake capture analysis, and
-//! weak point detection.
+//! iwlist scan parsing and wireless security type analysis.
+//! WPA/WPA2 handshake capture analysis is aspirational (not yet implemented).
 //!
 //! This module is feature-gated behind the `wireless` feature flag.
 

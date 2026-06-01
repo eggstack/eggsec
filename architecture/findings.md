@@ -17,7 +17,7 @@ Canonical `Finding` schema with confidence levels, evidence kinds, and lifecycle
 | `Reproduction` | `findings/mod.rs` | Steps to reproduce the finding |
 | `FindingType` | `findings/mod.rs` | High-level classification |
 | `FindingSource` | `findings/mod.rs` | Which tool/module produced the finding |
-| `FindingStore` | `findings/store.rs` | In-memory finding storage with deduplication |
+| `FindingStore` | `findings/store.rs` | JSONL-based persistent file storage with deduplication |
 | `FindingStatus` | `findings/lifecycle.rs` | Finding status transitions (6 states) |
 
 ## Files
@@ -25,7 +25,7 @@ Canonical `Finding` schema with confidence levels, evidence kinds, and lifecycle
 | File | Description |
 |------|-------------|
 | `mod.rs` | Module root: all canonical types, `Confidence::score()`, `Confidence::from_ratio()` |
-| `store.rs` | `FindingStore` for in-memory finding storage and deduplication |
+| `store.rs` | `FindingStore` for JSONL-based persistent file storage (`findings.jsonl`) and deduplication |
 | `lifecycle.rs` | Finding lifecycle state machine (status transitions) |
 
 ## Implementation Status

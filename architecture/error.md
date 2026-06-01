@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Unified error types for the entire Slapper codebase. `SlapperError` is the primary error enum with 19+ variants covering configuration, network, HTTP, IO, proxy, and domain-specific failure modes.
+Unified error types for the entire Slapper codebase. `SlapperError` is the primary error enum with 22 variants covering configuration, network, HTTP, IO, proxy, and domain-specific failure modes.
 
 ## Key Types
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `SlapperError` | `error/mod.rs` | Primary error enum with 19 variants |
+| `SlapperError` | `error/mod.rs` | Primary error enum with 22 variants |
 | `Result<T>` | `error/mod.rs` | Type alias for `Result<T, SlapperError>` |
 
 ### SlapperError Variants

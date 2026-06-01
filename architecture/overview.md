@@ -268,8 +268,8 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 ### Scanner Types
 | Type | Location | Purpose |
 |------|----------|---------|
-| `ScanResults` | `scanner/mod.rs` | Port scan results |
-| `FingerprintResult` | `scanner/fingerprint.rs` | Service identification |
+| `ScanResults` | `waf/types.rs:188` | Port scan results |
+| `FingerprintResults` | `scanner/fingerprint.rs:83` | Service identification |
 | `SpoofConfig` | `scanner/spoof.rs` | IP spoofing configuration |
 | `TimingPreset` | `scanner/timing.rs` | Scan speed presets |
 
@@ -278,14 +278,14 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 |------|----------|---------|
 | `FuzzEngine` | `fuzzer/engine/` | Main fuzzing orchestrator |
 | `PayloadType` | `fuzzer/payloads/mod.rs` | 30 payload categories |
-| `FuzzResult` | `fuzzer/mod.rs` | Individual test result |
+| `FuzzResult` | `fuzzer/engine/types.rs:10` | Individual test result |
 
 ### WAF Types
 | Type | Location | Purpose |
 |------|----------|---------|
 | `WafDetector` | `waf/detector/` | WAF identification |
 | `BypassEngine` | `waf/bypass/` | Bypass technique execution |
-| `WafProfile` | `waf/types.rs` | WAF-specific configurations |
+| `WafProfile` | `waf/bypass/profiles.rs:9` | WAF-specific configurations |
 
 ### Tool/Agent Types
 | Type | Location | Purpose |
@@ -300,7 +300,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 ### Pipeline Types
 | Type | Location | Purpose |
 |------|----------|---------|
-| `Pipeline` | `pipeline/mod.rs` | Stage orchestrator |
+| `Pipeline` | `pipeline/executor.rs:38` | Stage orchestrator |
 | `Stage` | `pipeline/stage.rs` | Individual scan stage |
 | `PipelineContext` | `pipeline/context.rs` | Shared stage state |
 

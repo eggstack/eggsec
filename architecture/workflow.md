@@ -12,7 +12,8 @@ Finding lifecycle management including status transitions, assignment, comments,
 | `FindingStatus` | `workflow/status.rs` | Finding status state machine |
 | `Assignment` | `workflow/assignment.rs` | Finding assignment record |
 | `Comment` | `workflow/comments.rs` | Finding comment |
-| `SlaTracking` | `workflow/sla.rs` | SLA tracking and violation detection |
+| `SlaPolicy` | `workflow/sla.rs` | SLA policy definition (severity→hours) |
+| `SlaStatus` | `workflow/sla.rs` | SLA tracking and violation detection |
 
 ## Files
 

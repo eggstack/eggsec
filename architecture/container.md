@@ -28,4 +28,6 @@ Container security scanning for Docker images, Kubernetes configurations, contai
 
 ## Implementation Status
 
-Fully implemented. All sub-modules define result types and scanning logic. Feature-gated behind appropriate flags.
+Fully implemented. All sub-modules define result types and scanning logic.
+
+The top-level `container` module is feature-gated behind `#[cfg(feature = "container")]` at `lib.rs:84-88`. The `recon/containers.rs` module is NOT feature-gated at the module level but has extensive internal feature gating.

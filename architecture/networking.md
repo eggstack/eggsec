@@ -23,7 +23,7 @@ The `ParsedPacket::parse()` method orchestrates the full parsing chain from L2 t
 
 Live packet capture and analysis using the `pnet` library.
 
-- **Filtering**: Support for BPF-style filters to capture only relevant traffic.
+- **Filtering**: Custom protocol/port filter for capturing relevant traffic (matches TCP, UDP, ICMP, and specific ports via string comparison).
 - **Hexdump (`hexdump.rs`)**: Pretty-printed hex views of packet data.
 
 ### Packet Crafting (`craft.rs`)

@@ -25,6 +25,21 @@ WebSocket security testing including real connection testing, message injection,
 | `origin.rs` | Origin header validation testing |
 | `fuzz.rs` | WebSocket frame fuzzing |
 
+## Feature Gating
+
+The public API methods in `connection.rs`, `injection.rs`, `origin.rs`, and `fuzz.rs` are each gated behind `#[cfg(feature = "websocket")]`. The module root (`mod.rs`) is not feature-gated; it always compiles.
+
+## Tests
+
+7 tests in `fuzzer/payloads/websocket.rs:349-411`, all under `#[cfg(test)]` (none feature-gated):
+- `test_get_payloads_returns_non_empty`
+- `test_get_payloads_count_reasonable`
+- `test_payloads_are_non_empty_strings`
+- `test_payloads_contain_expected_patterns`
+- `test_subprotocol_tests_generation`
+- `test_subprotocol_tests_empty_when_no_protocols`
+- `test_all_tests_includes_subprotocol`
+
 ## Implementation Status
 
 Fully implemented. All four test categories (connection, injection, origin, fuzz) are functional with structured result types.

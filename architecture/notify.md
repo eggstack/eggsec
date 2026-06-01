@@ -12,7 +12,7 @@ Notification system supporting webhooks, Slack, Discord, and Microsoft Teams. Se
 | `NotifyManager` | `notify/mod.rs` | Central notification dispatcher |
 | `WebhookNotifier` | `notify/webhook.rs` | HTTP webhook sender with HMAC signing |
 | `WebhookConfig` | `notify/webhook.rs` | Individual webhook configuration (URL, secret, events) |
-| `WebhookEvent` | `notify/webhook.rs` | Enum: ScanStarted, ScanComplete, FindingDetected, Error |
+| `WebhookEvent` | `notify/webhook.rs` | Enum: ScanStarted, ScanComplete, ScanError, FindingDetected, RateLimited |
 | `NotificationPayload` | `notify/webhook.rs` | Serialized notification body |
 | `FindingSummary` | `notify/webhook.rs` | Finding summary for notifications |
 | `ScanStats` | `notify/webhook.rs` | Scan statistics for notifications |
