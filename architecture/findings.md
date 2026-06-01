@@ -18,7 +18,7 @@ Canonical `Finding` schema with confidence levels, evidence kinds, and lifecycle
 | `FindingType` | `findings/mod.rs` | High-level classification |
 | `FindingSource` | `findings/mod.rs` | Which tool/module produced the finding |
 | `FindingStore` | `findings/store.rs` | In-memory finding storage with deduplication |
-| `FindingLifecycle` | `findings/lifecycle.rs` | Finding status transitions |
+| `FindingStatus` | `findings/lifecycle.rs` | Finding status transitions (6 states) |
 
 ## Files
 
