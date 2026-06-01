@@ -248,11 +248,28 @@ impl NotifyManager {
                     scan_id: scan_id.to_string(),
                     target: target.to_string(),
                     message: format!("{} findings detected", findings.len()),
-                    findings: Some(findings),
+                    findings: Some(findings.clone()),
                     stats: None,
                 };
                 if let Err(e) = notifier.notify_teams(teams_url, &payload).await {
                     tracing::warn!("Teams notification failed: {}", e);
+                }
+            }
+        }
+
+        if let Some(ref discord_url) = self.discord_webhook {
+            if let Some(ref notifier) = self.notifier {
+                let payload = NotificationPayload {
+                    event: WebhookEvent::FindingDetected,
+                    timestamp: Utc::now(),
+                    scan_id: scan_id.to_string(),
+                    target: target.to_string(),
+                    message: format!("{} findings detected", findings.len()),
+                    findings: Some(findings),
+                    stats: None,
+                };
+                if let Err(e) = notifier.notify_discord(discord_url, &payload).await {
+                    tracing::warn!("Discord notification failed: {}", e);
                 }
             }
         }
