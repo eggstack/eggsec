@@ -16,6 +16,8 @@ pub mod finding;
 pub mod sla;
 pub mod status;
 
+use crate::workflow::finding::{Finding, FindingStatus};
+use crate::workflow::sla::calculate_sla;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -25,6 +27,7 @@ pub struct WorkflowReport {
     pub in_progress_findings: usize,
     pub resolved_findings: usize,
     pub sla_violations: usize,
+    pub findings: Vec<Finding>,
 }
 
 impl WorkflowReport {
@@ -33,20 +36,105 @@ impl WorkflowReport {
     }
 
     pub fn calculate_metrics(&mut self) {
-        self.sla_violations = self.open_findings;
+        self.sla_violations = self
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::Open)
+            .filter(|f| {
+                let status = calculate_sla(&f.id, f.severity, f.created_at);
+                status.is_violated
+            })
+            .count();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workflow::finding::FindingStatus;
+    use crate::types::Severity;
+
+    fn make_finding(id: &str, severity: Severity, status: FindingStatus, hours_ago: i64) -> Finding {
+        Finding {
+            id: id.to_string(),
+            title: format!("Finding {id}"),
+            description: String::new(),
+            severity,
+            status,
+            assignee: None,
+            created_at: chrono::Utc::now() - chrono::Duration::hours(hours_ago),
+            updated_at: chrono::Utc::now(),
+        }
+    }
 
     #[test]
-    fn test_workflow_report() {
+    fn test_workflow_report_default() {
+        let report = WorkflowReport::new();
+        assert_eq!(report.sla_violations, 0);
+        assert!(report.findings.is_empty());
+    }
+
+    #[test]
+    fn test_sla_violations_count_only_open_findings() {
         let mut report = WorkflowReport::new();
-        report.total_findings = 10;
-        report.open_findings = 5;
+        // Critical SLA is 24h. Created 48h ago -> violated.
+        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 48));
+        // High SLA is 168h. Created 200h ago -> violated.
+        report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 200));
+        // This one is resolved, should be ignored even if overdue.
+        report.findings.push(make_finding("f3", Severity::Critical, FindingStatus::Resolved, 100));
+        // InProgress, should be ignored.
+        report.findings.push(make_finding("f4", Severity::Medium, FindingStatus::InProgress, 800));
+
+        report.total_findings = 4;
+        report.open_findings = 2;
         report.calculate_metrics();
-        assert_eq!(report.sla_violations, 5);
+
+        assert_eq!(report.sla_violations, 2);
+    }
+
+    #[test]
+    fn test_sla_violations_zero_when_all_within_sla() {
+        let mut report = WorkflowReport::new();
+        // Critical SLA is 24h. Created 1h ago -> not violated.
+        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 1));
+        // High SLA is 168h. Created 10h ago -> not violated.
+        report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
+
+        report.total_findings = 2;
+        report.open_findings = 2;
+        report.calculate_metrics();
+
+        assert_eq!(report.sla_violations, 0);
+    }
+
+    #[test]
+    fn test_sla_violations_mixed_statuses() {
+        let mut report = WorkflowReport::new();
+        // Open and violated
+        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 48));
+        // Open and NOT violated
+        report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
+        // Resolved and violated (should not count)
+        report.findings.push(make_finding("f3", Severity::Critical, FindingStatus::Resolved, 48));
+        // FalsePositive and violated (should not count)
+        report.findings.push(make_finding("f4", Severity::High, FindingStatus::FalsePositive, 200));
+        // Verified and violated (should not count)
+        report.findings.push(make_finding("f5", Severity::Medium, FindingStatus::Verified, 800));
+
+        report.total_findings = 5;
+        report.open_findings = 2;
+        report.calculate_metrics();
+
+        assert_eq!(report.sla_violations, 1);
+    }
+
+    #[test]
+    fn test_sla_violations_empty_findings() {
+        let mut report = WorkflowReport::new();
+        report.total_findings = 0;
+        report.open_findings = 0;
+        report.calculate_metrics();
+        assert_eq!(report.sla_violations, 0);
     }
 }
