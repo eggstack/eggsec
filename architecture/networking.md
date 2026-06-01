@@ -21,7 +21,51 @@ The `ParsedPacket::parse()` method orchestrates the full parsing chain from L2 t
 
 ### Packet Capture (`capture.rs`)
 
-Live packet capture and analysis using the `pnet` library.
+Live packet capture and analysis using the `pnet` library (requires `packet-inspection` feature, Unix only).
+
+#### Types vs Implementations
+
+- `PacketInfo` (defined in `packet/mod.rs:25-34`) — parsed representation of a captured packet: timestamp, ethernet/IP/transport/app layers, raw size, and hex dump.
+- `CaptureConfig` (defined in `capture.rs:76-100`) — builder input: interface, BPF filter, promiscuous mode, snapshot length, timeout, max packets, save-to-file path, checksum validation.
+- `CaptureStats` (defined in `capture.rs:103-109`) — post-capture metrics: packets/bytes captured, packets dropped, runtime.
+- `PcapWriter` (defined in `capture.rs:14-74`) — writes raw packet data to PCAP files (see below).
+- `CaptureBuilder` (defined in `capture.rs:455-510`) — fluent builder for `PacketCapture` (see below).
+- `PacketCapture` (defined in `capture.rs:111`) — main capture engine; constructed via `CaptureBuilder`.
+
+#### `PcapWriter` (`capture.rs:14-74`)
+
+Writes packets in standard PCAP format. On construction (`new()`), writes the 24-byte global header (magic `0xa1b2c3d4`, version 2.4, network type 1/Ethernet). `write_packet()` writes a per-packet header (timestamp, captured length, original length) followed by packet data truncated to `snapshot_len`. Timestamp is derived from `SystemTime::now()`; clock errors are logged and propagated as `io::Error`.
+
+#### `CaptureBuilder` (`capture.rs:455-510`)
+
+Fluent builder pattern for `PacketCapture`. Methods consume and return `Self`:
+
+| Method | Description | Default |
+|--------|-------------|---------|
+| `interface(impl Into<String>)` | Network interface name | `""` |
+| `filter(impl Into<String>)` | BPF filter expression | `None` |
+| `promiscuous(bool)` | Promiscuous mode | `true` |
+| `snapshot_len(usize)` | Max bytes per packet | `65535` |
+| `timeout(Duration)` | Read timeout | `1s` |
+| `max_packets(usize)` | Stop after N packets | `None` (unlimited) |
+| `save_to_file(impl Into<String>)` | Write PCAP to file | `None` |
+| `build()` | Constructs `PacketCapture` | — |
+
+#### `PacketInfo` (`packet/mod.rs:25-34`)
+
+Parsed packet representation with optional protocol layers:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | `chrono::DateTime<Utc>` | Capture timestamp |
+| `ethernet` | `Option<EthernetFrame>` | L2 frame (MAC addresses) |
+| `ip` | `Option<IpPacket>` | L3 packet (src/dst IP) |
+| `transport` | `Option<TransportProtocol>` | L4 (TCP/UDP/ICMP) |
+| `app` | `Option<AppLayer>` | L7 (DNS/TLS/HTTP) |
+| `raw_size` | `usize` | Original packet size |
+| `hex_dump` | `String` | Formatted hex view |
+
+`summary()` produces a human-readable one-liner (e.g., `"AA:BB:CC:DD:EE:FF → 11:22:33:44:55:66 | 10.0.0.1 → 10.0.0.2 | TCP 443 → 54321 | SYN"`).
 
 - **Filtering**: Custom protocol/port filter for capturing relevant traffic (matches TCP, UDP, ICMP, and specific ports via string comparison).
 - **Hexdump (`hexdump.rs`)**: Pretty-printed hex views of packet data.

@@ -44,6 +44,41 @@ Unified error types for the entire Slapper codebase. `SlapperError` is the prima
 |------|-------------|
 | `mod.rs` | `SlapperError` enum, `From` impls for `reqwest::Error`/`anyhow::Error`, helper methods (`is_timeout()`, `is_network()`, `http_status()`, `with_timeout()`) |
 
+## From Implementations
+
+`SlapperError` implements `From` for 21 error types. One is via `#[from]` attribute on the enum variant; 20 are manual impls.
+
+### Non-Feature-Gated (18)
+
+| Source Type | Target Variant | Location |
+|-------------|----------------|----------|
+| `std::io::Error` | `Io` | `mod.rs:82` (via `#[from]` attribute) |
+| `reqwest::Error` | `Timeout`, `Network`, `HttpStatus`, or `RequestFailed` | `mod.rs:172-200` (dispatches based on error kind) |
+| `toml::de::Error` | `Parse` | `mod.rs:202-206` |
+| `serde_json::Error` | `Parse` | `mod.rs:208-212` |
+| `url::ParseError` | `Parse` | `mod.rs:214-218` |
+| `std::net::AddrParseError` | `AddressParse` | `mod.rs:220-224` |
+| `serde_yaml_neo::Error` | `Parse` | `mod.rs:226-230` |
+| `toml::ser::Error` | `Parse` | `mod.rs:232-236` |
+| `std::string::FromUtf8Error` | `Parse` | `mod.rs:238-242` |
+| `tokio::time::error::Elapsed` | `Timeout` | `mod.rs:244-251` |
+| `crate::config::ScopeError` | `ScopeViolation` | `mod.rs:253-257` |
+| `hickory_resolver::net::NetError` | `Network` | `mod.rs:259-263` |
+| `anyhow::Error` | `RequestFailed` | `mod.rs:265-273` |
+| `std::num::ParseIntError` | `Parse` | `mod.rs:329-333` |
+| `tokio::sync::AcquireError` | `Runtime` | `mod.rs:335-339` |
+| `quick_xml::Error` | `Output` | `mod.rs:341-345` |
+| `maxminddb::MaxMindDbError` | `Io` (via `std::io::Error::other`) | `mod.rs:347-351` |
+| `reqwest::header::InvalidHeaderValue` | `Http` | `mod.rs:353-357` |
+
+### Feature-Gated (3)
+
+| Source Type | Target Variant | Feature Gate | Location |
+|-------------|----------------|--------------|----------|
+| `crate::ai::AiError` | `RequestFailed`, `Config`, `Parse`, `Timeout`, or `RateLimited` | `ai-integration` | `mod.rs:275-313` |
+| `crate::packet::CaptureError` | `Network` | `packet-inspection` | `mod.rs:315-320` |
+| `crate::packet::TracerouteError` | `Network` | `packet-inspection` OR `stress-testing` | `mod.rs:322-327` |
+
 ## Implementation Status
 
 Fully implemented. Comprehensive error enum with `thiserror` derives, `From` conversions for common third-party errors, and helper methods for error classification.

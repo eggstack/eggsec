@@ -29,6 +29,39 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 - **Line-based Protocol**: Messages are newline-delimited JSON for simple, efficient communication.
 - **Real-time Updates**: Status updates and findings are streamed back to the coordinator as they happen.
 
+#### IP Allowlist (`remote.rs:34,70-83`)
+
+`RemoteListener` supports an optional IP allowlist (`ip_allowlist: Option<Vec<String>>`). When set via `with_allowlist()`, only connections from IPs matching the allowlist are accepted. Supports both individual IP addresses and CIDR ranges (via `ipnetwork::IpNetwork`). Non-matching connections are rejected with a warning log before the connection is fully established.
+
+#### Connection Limits (`remote.rs:17,209-213`)
+
+Default max connections: `MAX_CONNECTIONS = 100` (`remote.rs:17`). Configurable via `with_config()`. When the current connection count reaches `max_connections`, new connections are rejected with a warning log. Connections are tracked in `Arc<RwLock<Vec<String>>>` and cleaned up on disconnect.
+
+#### Rate Limiting (`remote.rs:18-19,121-140`)
+
+Default rate limit: `RATE_LIMIT_PER_MINUTE = 60` per IP (`remote.rs:18`). Window: `RATE_LIMIT_WINDOW_SECS = 60` seconds (`remote.rs:19`). Implemented via `check_rate_limit()` which maintains per-IP timestamp vectors in `FxHashMap<String, Vec<Instant>>`. A periodic cleanup task removes stale entries every 60 seconds (`remote.rs:180-193`).
+
+#### DNS Caching (`remote.rs:514-532`)
+
+`RemoteClient` caches DNS resolutions for 60 seconds (`cached_addr: Option<(SocketAddr, Instant)>`). The `resolve_cached()` method returns a cached address if within TTL, avoiding repeated DNS lookups. Cached addresses are not re-validated for reachability — connection failures are handled by the caller, which falls back to fresh resolution on the next attempt.
+
+### ResponseMessage Type (`command.rs:65-118`)
+
+```rust
+pub struct ResponseMessage {
+    pub id: String,
+    pub msg_type: String,          // "response", "authenticated", "registered", "heartbeat_ack", "result_ack", "tasks_assigned"
+    pub success: bool,
+    pub output: Option<String>,
+    pub error: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub hostname: Option<String>,
+    pub capabilities: Option<Vec<String>>,
+}
+```
+
+Constructors: `success(id, output, duration_ms)`, `error(id, error, duration_ms)`, `registration(id, hostname, capabilities)`.
+
 ## Key Components
 
 | Component | File | Lines | Key Function/Type |

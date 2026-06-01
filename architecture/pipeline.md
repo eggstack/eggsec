@@ -46,6 +46,28 @@ The `executor.rs` file is responsible for running the pipeline from start to fin
 - **Failure Recording**: Stage errors are recorded per stage in `StageResult` and surfaced in the report. CLI entrypoints return `ScanFailed` if any stage failed.
 - **Tool Integration**: `PipelineTool` implements `SecurityTool` for AI agent tool registry.
 
+#### Pipeline Struct Fields (`executor.rs:38-50`)
+
+```rust
+pub struct Pipeline {
+    target: String,
+    stages: Vec<Stage>,
+    profile: ScanProfile,
+    concurrency: usize,
+    concurrent_stages: bool,
+    common: CommonHttpArgs,
+    spoof_config: SpoofConfig,        // IP spoofing, decoy, fragment, scan type options
+    context: Arc<Mutex<PipelineContext>>,
+    session_path: Option<String>,     // Path for session checkpoint persistence (*.session/*.session.json)
+    tui_mode: bool,
+    config: Option<SlapperConfig>,    // Optional config for TLS, concurrency, default settings
+}
+```
+
+- `spoof_config` (`SpoofConfig`): Configures source IP spoofing, decoy addresses, fragmentation, scan type, packet trace, max rate, and TTL. Built from CLI args via `SpoofConfig::from_args()`.
+- `config` (`Option<SlapperConfig>`): Optional loaded config file. Used to read `http.verify_tls`, `http.timeout_secs`, `scan.default_concurrency`, and other settings. When `None`, defaults are used.
+- `session_path` (`Option<String>`): Extracted from `--output` arg when the path ends with `.session` or `.session.json`. When set, a `PipelineSession` checkpoint is written after each stage completes.
+
 ### Pipeline Context (`context.rs`)
 
 Maintains the state of a running pipeline, including intermediate results, shared variables, and the overall status.
@@ -76,11 +98,30 @@ Session checkpoints are written only when output path is explicitly a session-li
 
 `PipelineReport` aggregates results from all stages. Output formats:
 - `Display` - Human-readable console output
-- `generate_html()` - Styled HTML report
-- `generate_csv()` - CSV report
+- `generate_html()` - Styled HTML report (**free function**, not a method)
+- `generate_csv()` - CSV report (**free function**, not a method)
 - SARIF/JUnit via `output/` module
 
-**Key Field:** `manifest: Option<RunManifest>` at `report.rs:37` - optional run manifest providing structured metadata for regression workflows, populated after pipeline execution completes.
+#### PipelineReport Struct (`report.rs:24-38`)
+
+```rust
+pub struct PipelineReport {
+    pub target: String,
+    pub total_duration_ms: u64,
+    pub stage_results: Vec<StageResult>,
+    pub open_ports: Vec<PortResult>,
+    pub services: Vec<ServiceFingerprint>,
+    pub endpoints: Vec<EndpointResult>,
+    #[serde(skip)]
+    pub checkpoint_error: Option<String>,   // Session save error, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<RunManifest>,      // Run manifest for regression workflows
+}
+```
+
+**Note**: `generate_html(report: &PipelineReport)` and `generate_csv(report: &PipelineReport)` at `report.rs:113,211` are free functions that take `&PipelineReport` as a parameter, NOT methods on the struct. Call them as `report::generate_html(&report)`.
+
+**Key Field:** `checkpoint_error: Option<String>` at `report.rs:33` - captures any error from session checkpoint saves during pipeline execution. Logged at warn level when set. Skipped during serialization.
 
 ## CLI Entry Points (`mod.rs`)
 

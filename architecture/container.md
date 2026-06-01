@@ -12,9 +12,18 @@ Container security scanning for Docker images, Kubernetes configurations, contai
 | `ContainerScanType` | `container/mod.rs` | Enum: Docker, Kubernetes, EscapeDetection, CisBenchmark, Full |
 | `ContainerFinding` | `container/mod.rs` | Container security finding with category and severity |
 | `DockerScanResult` | `container/docker.rs` | Docker image analysis results |
-| `KubernetesScanResult` | `container/kubernetes.rs` | Kubernetes manifest security results |
+| `ImageLayer` | `container/docker.rs:18` | Single Docker image layer (id, instruction, size) |
+| `DockerVulnerability` | `container/docker.rs:25` | Package-level vulnerability in Docker image (package, versions, CVE, severity) |
+| `DockerMisconfiguration` | `container/docker.rs:34` | Dockerfile/docker-compose misconfiguration (check, severity, description, recommendation) |
+| `KubernetesScanResult` | `container/kubernetes.rs` | Kubernetes cluster scan results with per-category findings |
+| `ClusterInfo` | `container/kubernetes.rs:16` | Cluster metadata (server version, node count, namespace count) |
+| `K8sFinding` | `container/kubernetes.rs:23` | Kubernetes security finding (resource type/name, severity, description, recommendation) |
 | `EscapeDetectionResult` | `container/escape.rs` | Container escape risk assessment |
+| `EscapeRisk` | `container/escape.rs:12` | Individual escape risk (risk type, severity, description, recommendation) |
+| `EscapeRiskLevel` | `container/escape.rs:20` | Enum: None, Low, Medium, High, Critical |
 | `CisBenchmarkResult` | `container/cis.rs` | CIS benchmark compliance results |
+| `CisCheck` | `container/cis.rs:15` | Single CIS benchmark check (id, description, severity, status, recommendation) |
+| `CisCheckStatus` | `container/cis.rs:24` | Enum: Pass, Fail, Warn |
 
 ## Files
 

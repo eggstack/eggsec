@@ -198,6 +198,23 @@ For defense-lab regression workflows, a baseline run produces a manifest with `b
 
 The manifest is integrated into the pipeline output path: `PipelineReport` carries an optional `RunManifest` that is auto-generated after each run. The manifest is serialized alongside the report when output is written to disk.
 
+### `RunManifest::from_report()` (`run_manifest.rs:103-179`)
+
+Constructs a `RunManifest` from a completed `PipelineReport`. The conversion logic:
+
+- **`started_at`**: Computed as `now - report.total_duration_ms` (derived from the report's measured duration).
+- **`ended_at`**: Set to `Utc::now()`.
+- **`run_id`**: Generated via `uuid::Uuid::new_v4()`.
+- **`observations`**: Built by chaining three iterators:
+  1. Open ports → `{"type": "port", "port", "status", "service"}`
+  2. Services → `{"type": "service", "port", "service", "product", "version"}`
+  3. Interesting endpoints → `{"type": "endpoint", "path", "status_code", "content_length"}`
+- **`probe_intents`**: Stage names from successful `stage_results`.
+- **`feature_flags`**: All stage results formatted as `"stage:{name}"` (success) or `"stage:{name}:failed"` (failure).
+- **`findings`**: Left empty; populated separately via `populate_findings_from_report()`.
+
+`populate_findings_from_report()` (`run_manifest.rs:179-194`) generates a finding for each interesting endpoint with severity `Info`, category `"endpoint_discovery"`, and a description including the status code.
+
 ## Key Types
 
 | Type | Location | Purpose |
@@ -237,6 +254,8 @@ Avoid using `unwrap_or_default()` on serialization - use explicit error handling
 - `attack_graph.rs` - `GraphNode::properties`
 - `sarif.rs` - `SarifResult::properties`
 - `junit.rs` - `JUnitBuilder::test_suites`
+
+**Migration candidate**: `report_summary.rs` currently uses `std::collections::HashMap` for `by_severity`, `by_confidence`, `by_type`, and local `asset_counts` in `from_findings()`. Consider migrating to `FxHashMap` for consistency.
 
 ## Security Notes
 

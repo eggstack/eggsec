@@ -53,6 +53,31 @@ These modules exist in `src/recon/` but are **not** exported via `mod.rs` and ar
 - **SSH Auth (`ssh_auth.rs`)**: SSH banner grabbing and limited authentication probing (`SshAuthResult`, `SshAuthAttempt`).
 - **SSL Audit (`ssl_audit.rs`)**: TestSSL-like TLS security auditing with certificate analysis, protocol checking, and cipher suite evaluation (`SslAuditReport`, `SslGrade`, `SslCheck`, `SslFinding`).
 
+## Key Types
+
+| Type | Location | Description |
+|------|----------|-------------|
+| `ReconStep<T>` | `recon/runner.rs:18-35` | Internal enum for step execution outcome |
+
+### ReconStep Enum
+
+`ReconStep<T>` is a three-variant enum used internally by `runner.rs` to track whether each recon step succeeded, failed, or was skipped:
+
+```rust
+enum ReconStep<T> {
+    Skipped,
+    Completed(T),
+    Failed,
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `into_option()` | `fn into_option(self) -> Option<T>` | Returns `Some(T)` for `Completed`, `None` otherwise |
+| `is_failed()` | `fn is_failed(&self) -> bool` | Returns `true` only for `Failed` |
+
+Each `run_*` function in `runner.rs` returns `ReconStep<ModuleResult>`. The `run_full_recon()` orchestrator calls `.is_failed()` on each result to populate error strings on `FullReconResult`, and `.into_option()` to extract the successful values.
+
 ## Recon Runner (`runner.rs`)
 
 The `runner.rs` file orchestrates all these recon tasks, running them in parallel via `tokio::join!` to maximize efficiency.

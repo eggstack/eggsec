@@ -15,19 +15,17 @@ Manages the overall application state, event loop, and rendering.
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
 | `state_update.rs` | Async task result handling and routing |
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
-| `export.rs` | Export results to various formats |
-| `task_management.rs` | Maps tabs to `TaskConfig` for background execution |
-| `navigation.rs` | Tab navigation and quick switch |
-| `command.rs` | Command palette handling |
-| `help_config.rs` | Help configuration and display |
-| `bookmarks.rs` | Tab bookmark management |
-| `dispatch.rs` | Routes input to current tab via `TabDispatcher` |
-| `tab_error.rs` | Structured tab error types |
-| `confirmation.rs` | Confirmation dialog handling |
-| `error.rs` | App-level error types |
-| `notifications.rs` | In-app notification display |
-| `input.rs` | Global input processing |
-| `options.rs` | Global options handling |
+| `input.rs` | `InputMode` enum: `Normal`, `Insert` |
+| `navigation.rs` | Tab navigation helpers (next/prev tab, edge detection) |
+| `bookmarks.rs` | Tab bookmark toggle, query, and persistence |
+| `command.rs` | Command palette dispatch and execution |
+| `confirmation.rs` | `PendingAction` enum for deferred destructive actions |
+| `error.rs` | Friendly error message formatting for TUI display |
+| `export.rs` | Result export to file (JSON, CSV, HTML, SARIF, etc.) |
+| `help_config.rs` | Static help data and help overlay configuration |
+| `notifications.rs` | `Notification` and `NotificationSeverity` types for toast messages |
+| `options.rs` | `GlobalHttpOptions` struct (auth, proxy, TLS, rate-limit, user-agent) |
+| `tab_error.rs` | `TabError` enum with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) and `is_recoverable()` |
 
 ### Tabs (`tabs/`)
 
@@ -69,26 +67,145 @@ Manages the overall application state, event loop, and rendering.
 - `TabInput` - Input: `handle_focus_next()`, `handle_char()`, `handle_enter()`, etc.
 - `TabRender` - Rendering: `render()`, `render_overlays()`, `breadcrumb()`
 
+**Note on `auth.rs`**: The `AuthTab` exists at `tabs/auth.rs` with a full `TabInput` implementation but is NOT part of the `Tab` enum. It is not rendered as a standalone tab in the TUI. It serves as a standalone authentication testing module accessible only via CLI.
+
+### TabInput Interface (27 methods)
+
+All tabs implement the `TabInput` trait (`tabs/mod.rs:849-887`):
+
+| Method | Required | Signature |
+|--------|----------|-----------|
+| `handle_focus_next` | Yes | `fn handle_focus_next(&mut self)` |
+| `handle_focus_prev` | Yes | `fn handle_focus_prev(&mut self)` |
+| `handle_char` | Yes | `fn handle_char(&mut self, c: char)` |
+| `handle_backspace` | Yes | `fn handle_backspace(&mut self)` |
+| `handle_delete` | No | `fn handle_delete(&mut self)` - defaults to `handle_backspace()` |
+| `handle_enter` | Yes | `fn handle_enter(&mut self)` |
+| `handle_escape` | Yes | `fn handle_escape(&mut self)` |
+| `handle_up` | Yes | `fn handle_up(&mut self)` |
+| `handle_down` | Yes | `fn handle_down(&mut self)` |
+| `handle_left` | Yes | `fn handle_left(&mut self) -> bool` |
+| `handle_right` | Yes | `fn handle_right(&mut self) -> bool` |
+| `handle_paste` | No | `fn handle_paste(&mut self, text: &str)` |
+| `handle_copy` | No | `fn handle_copy(&mut self) -> Option<String>` - defaults to `None` |
+| `handle_word_forward` | No | `fn handle_word_forward(&mut self)` |
+| `handle_word_backward` | No | `fn handle_word_backward(&mut self)` |
+| `handle_home` | No | `fn handle_home(&mut self)` |
+| `handle_end` | No | `fn handle_end(&mut self)` |
+| `handle_top` | No | `fn handle_top(&mut self)` |
+| `handle_bottom` | No | `fn handle_bottom(&mut self)` |
+| `handle_autocomplete` | No | `fn handle_autocomplete(&mut self) -> bool` - defaults to `false` |
+| `handle_search` | No | `fn handle_search(&mut self, query: &str)` |
+| `is_input_focused` | Yes | `fn is_input_focused(&self) -> bool` |
+| `is_at_left_edge` | No | `fn is_at_left_edge(&self) -> bool` - defaults to `true` |
+| `is_at_right_edge` | No | `fn is_at_right_edge(&self) -> bool` - defaults to `true` |
+| `stop` | No | `fn stop(&mut self)` |
+| `page_up` | No | `fn page_up(&mut self, page_size: usize)` |
+| `page_down` | No | `fn page_down(&mut self, page_size: usize)` |
+
+Inherits from `TabState` (4 methods): `state()`, `progress()`, `reset()`, `set_error()`.
+
+### AppState Enum (`tabs/mod.rs:821-827`)
+
+```rust
+pub enum AppState {
+    Idle,
+    Running,
+    Completed,
+    Error(String),
+}
+```
+
+### InputMode Enum (`app/input.rs:1-6`)
+
+```rust
+pub enum InputMode {
+    Normal,  // vim-like navigation mode
+    Insert,  // text input mode
+}
+```
+
+### OverlayType Enum (`app/mod.rs:803-811`)
+
+Overlay precedence (highest first):
+
+```rust
+pub enum OverlayType {
+    ConfirmPopup,   // PendingAction confirmation dialog
+    CommandPalette,  // Ctrl+P command palette
+    QuickSwitch,    // Ctrl+X tab search/switch
+    Search,         // Ctrl+F global search
+    HttpOptions,    // h key HTTP options
+    Help,           // Space key help overlay
+}
+```
+
+### PendingAction Enum (`app/confirmation.rs:3-9`)
+
+```rust
+pub enum PendingAction {
+    ResetTab,           // Reset current tab state
+    SaveSettings,       // Save settings to config file
+    DeleteHistoryEntry, // Delete selected history entry
+    ClearHistory,       // Clear all history
+}
+```
+
+Each variant has a `message()` method returning a `(title, details)` tuple and an `execute()` method that performs the action on the `App`.
+
+### NotificationSeverity Enum (`app/notifications.rs`)
+
+```rust
+pub enum NotificationSeverity {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+```
+
+### ui.rs Draw Functions (`ui.rs`)
+
+| Function | Line | Purpose |
+|----------|------|---------|
+| `draw()` | 17 | Top-level render: layout, tabs, breadcrumb, content, status bar, overlays |
+| `draw_tabs()` | 359 | Tab bar with scrolling window (`TabWindow`) |
+| `draw_breadcrumb()` | 386 | Navigation breadcrumb path |
+| `draw_content()` | 428 | Delegates to current tab's `render()` and `render_overlays()` |
+| `draw_status_bar()` | 573 | Mode indicator (NORMAL/INSERT), status text, contextual help |
+| `draw_http_options_popup()` | 88 | HTTP options overlay (inline in ui.rs) |
+| `draw_command_palette()` | 154 | Command palette overlay (inline in ui.rs) |
+| `draw_search_popup()` | 245 | Search input overlay (inline in ui.rs) |
+| `draw_quick_switch()` | 275 | Quick switch tab search overlay (inline in ui.rs) |
+| `get_tab_status()` | 480 | Maps `AppState` to status text + color |
+| `get_normal_status()` | 490 | Returns status text for non-running tabs |
+| `get_help_text()` | 513 | Context-sensitive help text for status bar |
+| `layout::draw_notifications()` | (components) | Toast notifications (up to 3 stacked) |
+
 ### Components (`components/`)
 
-Reusable UI primitives:
+Reusable UI primitives (12 files):
 
 | Component | File | Purpose |
 |-----------|------|---------|
 | `InputField` | `input.rs` | Text input with cursor, validation, UTF-8 handling |
 | `InputGroup` | `input.rs` | Group of inputs with focus navigation |
+| `FormBuilder` | `input.rs` | Declarative form layout builder from input fields |
+| `ValidationResult` | `input.rs` | Field validation result type |
 | `Selector` | `selector.rs` | Dropdown selector with keyboard navigation |
+| `SelectorItem` | `selector.rs` | Item in a selector (label + value) |
 | `Checkbox` | `selector.rs` | Toggle checkbox |
 | `RadioGroup` | `selector.rs` | Radio button group |
 | `ProgressGauge` | `progress.rs` | Animated progress bar with spinner |
 | `ScrollableText` | `scrollable.rs` | Scrollable text with scrollbar |
 | `Popup` | `popup.rs` | Modal dialogs (confirm, help, info) |
-| `Palette` | `palette.rs` | Command palette fuzzy search |
-| `Notifications` | `notifications.rs` | Toast notification display |
-| `SearchPopup` | `search_popup.rs` | Search overlay with results |
-| `EmptyState` | `empty_state.rs` | Empty state placeholder |
-| `HelpBar` | `help_bar.rs` | Bottom help bar display |
-| `HttpOptions` | `http_options.rs` | HTTP auth/proxy options panel |
+| `centered_rect` | `popup.rs` | Centered rectangle helper for popups |
+| `empty_state_paragraph` | `empty_state.rs` | Empty state placeholder widget |
+| `draw_help_bar` | `help_bar.rs` | Contextual key hint bar |
+| `draw_http_options_popup` | `http_options.rs` | HTTP options overlay |
+| `draw_notifications` | `notifications.rs` | Toast notification renderer (up to 3 stacked) |
+| `draw_command_palette` | `palette.rs` | Command palette overlay with fuzzy search |
+| `draw_search_popup` | `search_popup.rs` | Global search input overlay |
 
 ### Workers (`workers/`)
 

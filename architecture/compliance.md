@@ -12,6 +12,8 @@ Compliance scanning and reporting against major security frameworks (OWASP Top 1
 | `ComplianceFinding` | `compliance/mod.rs` | Individual requirement check result |
 | `ComplianceStatus` | `compliance/mod.rs` | Enum: Pass, Fail, NotApplicable, NeedsReview |
 | `ComplianceFramework` | `compliance/mod.rs` | Enum: OWASP, PCIDSS, HIPAA, SOC2 |
+| `ComplianceSummary` | `compliance/report.rs:4` | Summary of a compliance report: framework name, numeric score, risk level, top 5 critical/high finding IDs |
+| `RiskLevel` | `compliance/report.rs:12` | Enum: Low (≥90), Medium (≥70), High (≥50), Critical (<50) — derived from `overall_score` |
 
 ## Files
 

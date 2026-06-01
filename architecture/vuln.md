@@ -8,7 +8,7 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `VulnAssessment` | `vuln/mod.rs` | Vulnerability assessment result |
+| `VulnAssessment` | `vuln/mod.rs:37` | Minimal placeholder: `mode` (String), `results` (Vec<String>), `assessed_at` (DateTime) — no structured findings; acts as a stub for pipeline integration |
 | `CvssScore` | `vuln/cvss.rs` | CVSS 3.1 score calculation and vector parsing |
 | `ExploitInfo` | `vuln/exploit.rs` | Exploit availability and maturity information |
 | `AssetCriticality` | `vuln/asset.rs` | Asset criticality scoring |
@@ -16,8 +16,9 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 | `PriorityLevel` | `vuln/prioritizer.rs` | Priority classification |
 | `RiskScore` | `vuln/prioritizer.rs` | Combined risk score calculation |
 | `TriageResult` | `vuln/triage.rs` | Triage decision result |
-| `TriageStatus` | `vuln/triage.rs` | Triage status enum |
+| `TriageStatus` | `vuln/triage.rs:13` | Enum: New, TruePositive, FalsePositive, NeedsReview, Duplicate |
 | `Remediation` | `vuln/remediation.rs` | Remediation guidance |
+| `RemediationPriority` | `vuln/remediation.rs:16` | Enum: Critical, High, Medium, Low — derived from severity; implements `Ord` for sorting |
 
 ## Files
 
