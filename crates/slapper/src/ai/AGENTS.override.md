@@ -23,7 +23,7 @@ Each AI client creates its own breaker directly via `CircuitBreaker::new()`.
 | `script_gen.rs` | Generates Python security scripts (feature-gated `ai-integration`) |
 | `cache.rs` | TTL cache for AI responses with persistence |
 | `types.rs` | Core types (`AiAnalysisResult`, `ScanFinding`, etc.) |
-| `errors.rs` | `AiError` enum with 10 variants |
+| `errors.rs` | `AiError` enum with 9 variants |
 
 ## Important Patterns
 

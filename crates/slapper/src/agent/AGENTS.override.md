@@ -76,4 +76,4 @@ All target commands in `commands/handlers/agent.rs` use consistent portfolio loa
 
 ## Known Issues
 
-- **Panic in alerts/routing.rs:79**: `.expect("Failed to create fallback HTTP client")` will panic if client creation fails. Convert to graceful error handling with `?` or match. This is the only remaining `expect()` in the agent module that can cause runtime crashes.
+- **Panic in alerts/routing.rs:251**: `.expect("HMAC can take key of any size")` - safe per HMAC documentation (accepts any key size), but inconsistent with the "no expect() in agent" pattern. Consider converting to `?` for consistency.
