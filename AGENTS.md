@@ -109,18 +109,34 @@ Use these sections as the canonical reference points when updating guidance or s
 | Clippy | ~33 warnings (pre-existing, none in ai module) |
 | Source files | 742 (.rs files in crates/) |
 | Payload types | 30 |
-| Tabs | 28 (+ conditional feature tabs) |
+| Tabs | 27 (28 with conditional feature tabs) |
 | WAF products | 34 |
 | NSE libraries | 169 |
 | Modules | 39 |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
-| CLI commands | 37 match arms |
+| CLI commands | ~29 base, ~40 with all features |
+
+### Codebase Issues (Known Stub Implementations)
+
+These modules exist but are stubs or have known limitations:
+
+| Module | Issue | Reference |
+|--------|-------|-----------|
+| `storage/postgres.rs` | All CRUD methods return empty values - no SQLx integration | `plans/review_storage.md` |
+| `vuln/mod.rs:37-40` | `VulnAssessment` only has `mode`, `results`, `assessed_at` - cannot hold structured findings | `plans/review_vuln.md` |
+| `supply_chain/sbom.rs` | SBOM generators return empty `vulnerabilities` vectors - no CVE lookup | `plans/review_supply_chain.md` |
 
 ### Security Notes
 
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
 - **TUI Settings Tab**: The settings editor applies exposed fields on top of an existing config and preserves non-exposed sections such as `profiles`, `schedule`, `remote`, `ai`, `search`, and `alert_channels`. See `architecture/config.md` for the current save semantics.
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
+- **Docker Shell Injection**: `container/docker.rs:208-209` uses unsanitized image names in `docker inspect` command - validate image names before passing to shell
+- **Silent Error Suppression**: Multiple modules use `let _ =` pattern that silently ignores errors:
+  - `notify/mod.rs:114,140-143,219-222,293-296` - notification failures
+  - `loadtest/runner.rs:315` - semaphore acquire
+  - `packet/capture.rs:209` - pcap write
+  - `kubernetes.rs:65,104,163,195,254` - API errors (uses `.ok()`)
 
 ### Key Patterns (Lessons Learned)
 
@@ -208,6 +224,29 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/logging.md` | Logging configuration |
 | `architecture/macros.md` | Exported macros |
 | `architecture/generated.md` | Auto-generated protobuf code |
+
+### Review Cycle 2026-06-02 (All Waves Complete)
+
+All 43 architecture documents reviewed against implementation (Phase 1 complete). Findings in `plans/review_*.md` (43 files), consolidated in `plans/review_consolidated.md` and `plans/stale_items.md`.
+
+#### Key Critical Issues Found
+1. **Defense-Lab stage counts wrong**: `pipeline.md:136-142` lists incorrect stage counts for all 5 defense-lab profiles
+2. **Storage module is stub**: All CRUD methods return empty values, no SQLx integration
+3. **VulnAssessment is stub**: Cannot hold structured findings - only mode/results/assessed_at
+4. **SBOM CVE lookup missing**: All SBOM generators return empty vulnerabilities vectors
+5. **Docker shell injection risk**: `container/docker.rs:208-209` unsanitized image names
+
+#### Documentation Accuracy Issues (23 HIGH priority items)
+- Various line number references drifted 10-150 lines
+- Field names don't match code (StressConfig: `rate_limit` → `rate_pps`, `threads` → `concurrency`)
+- Module counts off by 1 (recon: 17 → 18)
+- Missing defense-lab profiles from Available Stages table
+- Missing macros and constants from docs
+
+#### Stale Items
+- Historical bug fix tables in tui.md (800+ lines) should be archived
+- k8s-openapi issue resolved but still documented as warning
+- Bug patterns section may be stale (now enforced via lints)
 
 ### Review Cycle 2026-06-02 (Waves 4-7 Complete)
 

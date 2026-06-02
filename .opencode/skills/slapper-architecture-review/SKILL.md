@@ -216,3 +216,64 @@ Use `plans/review_<module>.md` (not `plans/<module>_review.md`) for consistency 
 
 #### Stale Items
 See `plans/stale_items.md` for full list
+
+### Review Cycle 2026-06-02 (43 documents)
+
+#### Phase 1: Full Architecture Review (43 documents)
+- All 43 architecture documents reviewed against implementation
+- 8 subagents deployed sequentially, each handling 1-11 documents
+- Findings in `plans/review_*.md` (43 files), consolidated in `plans/review_consolidated.md`
+
+#### Key Critical Issues Found
+1. **Defense-Lab stage counts wrong** (`pipeline.md:136-142`): All 5 profiles have incorrect stage counts
+2. **Storage module is stub** (`storage/postgres.rs`): All CRUD methods return empty values
+3. **VulnAssessment is stub** (`vuln/mod.rs:37-40`): Cannot hold structured findings
+4. **SBOM CVE lookup missing** (`supply_chain/sbom.rs`): Empty vulnerabilities vectors
+5. **Docker shell injection risk** (`container/docker.rs:208-209`): Unvalidated image names
+
+#### Accuracy Summary
+| Document | Accuracy | Key Issues |
+|----------|----------|------------|
+| overview.md | Medium | Source files 742 not 526, CLI count ~29 not 37 |
+| config.md | High | Minor line drift |
+| cli_commands.md | Medium | ~29 base commands vs documented 35+ |
+| error.md | High | `Io` variant line ref wrong (82 vs 56) |
+| tui.md | Medium | Tab count 27 vs 28, stale bug fix tables |
+| output.md | Medium | 8 formats documented but only 7 listed |
+| pipeline.md | Low | Defense-lab stage counts all wrong |
+| feature_matrix.md | Medium | k8s-openapi issue resolved (stale warning) |
+| findings.md | High | Fingerprint uses non-cryptographic hash |
+| ai_agents.md | High | File path missing `agent/` prefix |
+| recon.md | Medium | Module count 18 vs 17 |
+| defense_lab.md | High | All profiles verified correct |
+| fuzzer.md | High | All 30 payloads verified |
+| waf.md | High | All 34 products verified |
+| scanner.md | High | 261 endpoints verified |
+| nse_integration.md | Medium | Bug fix claims unverified |
+| hunt.md | High | All types verified |
+| distributed.md | High | All 7 TaskType variants verified |
+| loadtest.md | Medium | Semaphore acquire unwrap risk |
+| networking.md | High | PcapWriter silent drop |
+| proxy.md | High | 5 rotation strategies (doc says 3) |
+| websocket.md | Medium | Test file reference unverified |
+| wireless.md | High | All types verified |
+| auth.md | Medium | `run_full_test()` only runs 3/8 tests |
+| browser.md | Medium | 8 ClientIssueType variants but only 3 detected |
+| compliance.md | High | All types verified |
+| container.md | Medium | Docker shell injection risk |
+| diff.md | High | Uses JSON not JSONL (doc wrong) |
+| integrations.md | Medium | Jira/GitHub/GitLab paths unverified |
+| notify.md | Medium | Silent error suppression |
+| storage.md | Low | Stub - all methods return empty |
+| supply_chain.md | Low | SBOM no CVE lookup |
+| vuln.md | Low | VulnAssessment stub |
+| workflow.md | High | All types verified |
+| auth_context.md | High | All types verified |
+| constants.md | High | Additional WAF constants not doc'd |
+| types.md | High | All types verified |
+| utils.md | Medium | 23 submodules but only 21 in table |
+| probe.md | High | All types verified |
+| stress.md | Medium | Field names wrong (`rate_pps` vs `rate_limit`) |
+| macros.md | High | All macros verified |
+| logging.md | Medium | 4 macros undocumented |
+| generated.md | High | All types verified |
