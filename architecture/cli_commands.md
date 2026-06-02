@@ -6,7 +6,7 @@ The CLI and Commands layer is responsible for parsing user input, managing globa
 
 Slapper uses `clap` for command-line argument parsing. The CLI is organized into several modules, each defining the arguments for a specific category of commands:
 
-- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (35+ variants), and `CommonHttpArgs`.
+- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (37 variants), and `CommonHttpArgs`.
 - **`scan.rs`**: Arguments for the `scan` command (port scanning, endpoint discovery).
 - **`fuzz.rs`**: Arguments for the `fuzz` command (security fuzzing).
 - **`http.rs`**: Arguments for HTTP-specific operations (load, recon, graphql, oauth).
@@ -58,7 +58,7 @@ ctx.enforce_operation_policy(OperationRisk::High, Some(&args.target))?;
 
 ### `enforce_operation_policy()` Method
 
-`CommandContext::enforce_operation_policy()` at `commands/handlers/mod.rs:101-124` validates that an operation is allowed by the current execution policy:
+`CommandContext::enforce_operation_policy()` at `commands/handlers/mod.rs:101-127` validates that an operation is allowed by the current execution policy:
 1. Checks scope if a target is provided
 2. Validates risk level against `execution_policy` settings
 3. Blocks high-risk operations in non-interactive mode (`--json` flag)
