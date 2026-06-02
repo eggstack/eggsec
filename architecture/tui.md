@@ -25,7 +25,7 @@ Manages the overall application state, event loop, and rendering.
 | `help_config.rs` | Static help data and help overlay configuration |
 | `notifications.rs` | `Notification` and `NotificationSeverity` types for toast messages |
 | `options.rs` | `GlobalHttpOptions` struct (auth, proxy, TLS, rate-limit, user-agent) |
-| `tab_error.rs` | `TabError` enum with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) and `is_recoverable()` |
+| `tab_error.rs` | `TabError` enum with 5 categories (Network, Config, Resource, Target, Unknown) and `is_recoverable()` |
 
 ### Tabs (`tabs/`)
 
@@ -125,7 +125,7 @@ pub enum InputMode {
 }
 ```
 
-### OverlayType Enum (`app/mod.rs:803-811`)
+### OverlayType Enum (`app/mod.rs:732-739`)
 
 Overlay precedence (highest first):
 
@@ -184,7 +184,7 @@ pub enum NotificationSeverity {
 
 ### Components (`components/`)
 
-Reusable UI primitives (12 files):
+Reusable UI primitives (7 files):
 
 | Component | File | Purpose |
 |-----------|------|---------|
@@ -201,8 +201,7 @@ Reusable UI primitives (12 files):
 | `Popup` | `popup.rs` | Modal dialogs (confirm, help, info) |
 | `centered_rect` | `popup.rs` | Centered rectangle helper for popups |
 | `empty_state_paragraph` | `empty_state.rs` | Empty state placeholder widget |
-| `draw_help_bar` | `help_bar.rs` | Contextual key hint bar |
-**Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are inlined in `tui/ui.rs` (lines ~88, ~154, ~245, ~275), not in separate `components/` files. The previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`) were removed as dead code.
+**Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are inlined in `tui/ui.rs` (lines ~88, ~154, ~245, ~275), not in separate `components/` files. The previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`) were removed as dead code.
 
 ### Workers (`workers/`)
 
@@ -217,6 +216,8 @@ Background async tasks communicate via channels:
 | Recon | `recon.rs` | Recon operations (DNS, WHOIS, SSL, etc.) |
 | API | `api.rs` | GraphQL, OAuth, NSE operations |
 | Security | `security.rs` | Hunt, browser, compliance, storage, integrations |
+
+(8 files total including `mod.rs`)
 
 **Communication Flow**:
 ```
