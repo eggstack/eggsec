@@ -7,6 +7,9 @@ pub(crate) const OAUTH_TIMEOUT: u64 = 15;
 pub(crate) const FUZZ_TIMEOUT: u64 = 10;
 pub(crate) const WAF_TIMEOUT: u64 = 15;
 pub(crate) const AUTH_TEST_TIMEOUT: u64 = 10;
+#[allow(dead_code)]
 pub(crate) const ICMP_TIMEOUT: u64 = 2;
+#[allow(dead_code)]
 pub(crate) const TRACEROUTE_TIMEOUT: u64 = 3;
+#[allow(dead_code)]
 pub(crate) const PROXY_HEALTH_TIMEOUT: u64 = 10;

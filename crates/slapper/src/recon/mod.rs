@@ -107,6 +107,7 @@ use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
 use parking_lot::Mutex;
+#[cfg(feature = "tool-api")]
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};

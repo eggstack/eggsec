@@ -52,7 +52,7 @@ impl Database {
         }
     }
 
-    pub async fn insert_scan(&self, scan: &StoredScan) -> Result<()> {
+    pub async fn insert_scan(&self, _scan: &StoredScan) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query(
@@ -77,7 +77,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_scan(&self, id: &str) -> Result<Option<StoredScan>> {
+    pub async fn get_scan(&self, _id: &str) -> Result<Option<StoredScan>> {
         #[cfg(feature = "database")]
         {
             let row = sqlx::query("SELECT * FROM scans WHERE id = $1")
@@ -102,7 +102,7 @@ impl Database {
         }
     }
 
-    pub async fn list_scans(&self, limit: usize) -> Result<Vec<StoredScan>> {
+    pub async fn list_scans(&self, _limit: usize) -> Result<Vec<StoredScan>> {
         #[cfg(feature = "database")]
         {
             let rows = sqlx::query("SELECT * FROM scans ORDER BY started_at DESC LIMIT $1")
@@ -130,7 +130,7 @@ impl Database {
         }
     }
 
-    pub async fn insert_finding(&self, stored: &StoredFinding) -> Result<()> {
+    pub async fn insert_finding(&self, _stored: &StoredFinding) -> Result<()> {
         #[cfg(feature = "database")]
         {
             let finding_json = serde_json::to_value(&stored.finding).map_err(|e| {
@@ -163,7 +163,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_finding(&self, id: &str) -> Result<Option<StoredFinding>> {
+    pub async fn get_finding(&self, _id: &str) -> Result<Option<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let row = sqlx::query("SELECT * FROM findings WHERE id = $1")
@@ -180,7 +180,7 @@ impl Database {
         }
     }
 
-    pub async fn update_finding_status(&self, id: &str, status: FindingStatus) -> Result<()> {
+    pub async fn update_finding_status(&self, _id: &str, _status: FindingStatus) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query("UPDATE findings SET status = $1, updated_at = NOW() WHERE id = $2")
@@ -195,7 +195,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn list_findings(&self, scan_id: &str) -> Result<Vec<StoredFinding>> {
+    pub async fn list_findings(&self, _scan_id: &str) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let rows = if scan_id == "all" {
@@ -220,7 +220,7 @@ impl Database {
 
     pub async fn get_findings_by_severity(
         &self,
-        severity: Severity,
+        _severity: Severity,
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
