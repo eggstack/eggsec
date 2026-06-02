@@ -33,6 +33,11 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 | `deep` | PortScan → Fingerprint → EndpointScan → Fuzz |
 | `vuln` | PortScan → Fingerprint → EndpointScan → Recon → Fuzz |
 | `auth` | PortScan → Fingerprint → EndpointScan → Fuzz |
+| `defense-lab` | PortScan → Fingerprint → EndpointScan → Waf → Fuzz |
+| `synvoid-local` | PortScan → Fingerprint → EndpointScan → Waf |
+| `waf-regression` | PortScan → Fingerprint → Waf |
+| `protocol-edge` | PortScan → Fingerprint |
+| `nse-safe` | PortScan → Fingerprint → EndpointScan |
 
 **Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, and `jwt` are normalized into canonical stages via `Stage::from_string()`.
 

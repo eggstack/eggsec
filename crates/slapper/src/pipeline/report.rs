@@ -1,25 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use super::executor::StageResult;
-use crate::output::escape::{escape_html, escape_xml};
+use crate::output::escape::{escape_csv, escape_html, escape_xml};
 use crate::output::RunManifest;
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
 
-fn escape_csv(s: &str) -> String {
-    let formula_chars = ['=', '+', '-', '@', '\t', '\r'];
-    let starts_with_formula = s
-        .chars()
-        .next()
-        .map(|c| formula_chars.contains(&c))
-        .unwrap_or(false);
-    if s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s.to_string()
-    }
-}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PipelineReport {
