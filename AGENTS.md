@@ -8,7 +8,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan with active work items organized into parallel waves. Current plan covers Waves 4-7: critical bug fixes, type/count corrections, documentation gaps, and uncovered module documentation.
+**`plans/plan.md`** contains the consolidated implementation plan. All waves (0-7) are complete — no active work items remain.
 
 ## Quick Reference
 

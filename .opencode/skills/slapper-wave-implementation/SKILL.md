@@ -1,8 +1,8 @@
 # Wave Implementation Skill
 
-**Status**: COMPLETE - All waves from plans/plan.md have been completed (2026-05-31)
+**Status**: HISTORICAL REFERENCE ONLY - All waves completed 2026-06-02
 
-This skill documents the multi-wave implementation pattern used for executing large sets of related fixes across multiple modules. All items are now complete.
+This skill documents the multi-wave implementation pattern used for executing large sets of related fixes across multiple modules. All items are now complete. This file serves as a historical reference for future agents working on similar large-scale tasks.
 
 ## Overview
 
@@ -101,6 +101,22 @@ use rustc_hash::FxHashSet;
 3. **Compilation not verified**: Pushing branches without verifying compilation. Solution: Always run `cargo check --lib -p <package>` before pushing.
 
 4. **Plan not updated**: Forgetting to mark items as completed. Solution: Update plan.md before marking wave complete.
+
+## Historical Pitfalls (Lessons Learned)
+
+These pitfalls were encountered during the wave implementation and are preserved as guidance for future agents:
+
+1. **Branch collision**: Multiple subagents working on the same branch. Solution: Each subagent must have its own branch.
+
+2. **Merge order issues**: Pushing when local is behind. Solution: Always `git fetch origin main && git reset --hard origin/main` before merging multiple branches.
+
+3. **Compilation not verified**: Pushing branches without verifying compilation. Solution: Always run `cargo check --lib -p <package>` before pushing.
+
+4. **Plan not updated**: Forgetting to mark items as completed. Solution: Update plan.md before marking wave complete.
+
+5. **Stale assertions**: Plans may contain claims that no longer match reality. Solution: Always verify against actual source code before implementing.
+
+6. **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source.
 
 ## Resources
 
