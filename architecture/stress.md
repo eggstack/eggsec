@@ -27,7 +27,7 @@ Five flood types: `Syn`, `Udp`, `Http`, `Tcp`, `Icmp`.
 
 ### StressConfig
 
-Configuration for a stress test run: `target`, `port`, `stress_type`, `duration`, `threads`, `rate_limit`, `spoof_source`.
+Configuration for a stress test run: `target`, `port`, `stress_type`, `duration_secs`, `concurrency`, `rate_pps`, `spoof_source`, `spoof_range`, `random_source_port`, `payload_size`, `use_proxies`, `proxy_pool`.
 
 ### StressAuthorization
 
