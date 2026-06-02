@@ -1,15 +1,15 @@
 use crate::findings::Finding;
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// Structured report summary with aggregated statistics and risk narrative.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReportSummary {
     pub total_findings: usize,
-    pub by_severity: HashMap<String, usize>,
-    pub by_confidence: HashMap<String, usize>,
-    pub by_type: HashMap<String, usize>,
+    pub by_severity: FxHashMap<String, usize>,
+    pub by_confidence: FxHashMap<String, usize>,
+    pub by_type: FxHashMap<String, usize>,
     pub top_affected_assets: Vec<AssetCount>,
     pub risk_narrative: String,
     pub remediation_summary: Vec<String>,
@@ -25,10 +25,10 @@ pub struct AssetCount {
 impl ReportSummary {
     /// Build a summary from a slice of findings.
     pub fn from_findings(findings: &[Finding]) -> Self {
-        let mut by_severity: HashMap<String, usize> = HashMap::new();
-        let mut by_confidence: HashMap<String, usize> = HashMap::new();
-        let mut by_type: HashMap<String, usize> = HashMap::new();
-        let mut asset_counts: HashMap<String, usize> = HashMap::new();
+        let mut by_severity: FxHashMap<String, usize> = FxHashMap::default();
+        let mut by_confidence: FxHashMap<String, usize> = FxHashMap::default();
+        let mut by_type: FxHashMap<String, usize> = FxHashMap::default();
+        let mut asset_counts: FxHashMap<String, usize> = FxHashMap::default();
         let mut remediations: Vec<String> = Vec::new();
 
         for finding in findings {
