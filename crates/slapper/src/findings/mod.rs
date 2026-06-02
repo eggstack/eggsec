@@ -297,32 +297,27 @@ impl Finding {
     /// is rediscovered on the same asset. It hashes the finding type, asset
     /// identifier, location, CWE, and normalized title.
     pub fn compute_fingerprint(&self) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use sha2::{Digest, Sha256};
 
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Sha256::new();
 
-        self.affected_asset.asset_type.hash(&mut hasher);
-        self.affected_asset
-            .identifier
-            .to_lowercase()
-            .hash(&mut hasher);
-
-        format!("{:?}", self.finding_type).hash(&mut hasher);
+        hasher.update(self.affected_asset.asset_type.as_bytes());
+        hasher.update(self.affected_asset.identifier.to_lowercase().as_bytes());
+        hasher.update(format!("{:?}", self.finding_type).as_bytes());
 
         if let Some(ref path) = self.location.path {
-            path.to_lowercase().hash(&mut hasher);
+            hasher.update(path.to_lowercase().as_bytes());
         }
         if let Some(ref param) = self.location.parameter {
-            param.to_lowercase().hash(&mut hasher);
+            hasher.update(param.to_lowercase().as_bytes());
         }
         if let Some(ref cwe) = self.cwe {
-            cwe.hash(&mut hasher);
+            hasher.update(cwe.as_bytes());
         }
 
-        self.title.to_lowercase().trim().hash(&mut hasher);
+        hasher.update(self.title.to_lowercase().trim().as_bytes());
 
-        format!("{:016x}", hasher.finish())
+        hex::encode(hasher.finalize())
     }
 
     /// Recompute and store the fingerprint.
