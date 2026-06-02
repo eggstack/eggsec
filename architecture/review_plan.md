@@ -1,7 +1,8 @@
 # Architecture Review Plan
 
-**Status:** IN PROGRESS — Review Phase
+**Status:** COMPLETED
 **Created:** 2026-06-02
+**Completed:** 2026-06-02
 **Purpose:** Systematic review of all architecture documents, verification against codebase, bug/improvement discovery, and stale item pruning.
 
 ---
@@ -241,6 +242,46 @@ Before committing, verify and clean up:
 
 ## Execution Summary
 
-- [ ] Phase 1: 8 subagents complete document reviews (46 docs → 46 review files)
-- [ ] Phase 2: Stale item detection and reporting
-- [ ] Phase 3: Consolidation and commit to main
+- [x] Phase 1: 8 subagents complete document reviews (43 docs → 43 review files)
+- [x] Phase 2: Stale item detection and reporting → `plans/stale_items.md`
+- [x] Phase 3: Consolidation and commit to main → `plans/review_consolidated.md`
+
+---
+
+## Key Findings Summary
+
+### Critical Issues (5)
+1. **Defense-Lab stage counts incorrect** - `pipeline.md:136-142` shows wrong stage counts for all 5 profiles
+2. **Storage module is stub** - `storage/postgres.rs:6-7` is not connected to real database
+3. **SBOM no CVE lookup** - `supply_chain/sbom.rs` generators return empty vulnerability vectors
+4. **VulnAssessment is stub** - `vuln/mod.rs:37-40` cannot hold structured findings
+5. **Docker shell injection risk** - `container/docker.rs:208-209` vulnerable to command injection
+
+### Documentation Accuracy Issues (5)
+6. **k8s-openapi warning stale** - `feature_matrix.md:58-63` describes resolved issue
+7. **Recon module count 17 vs 18** - `recon.md` text says 17 but array has 18
+8. **Error line reference wrong** - `error.md:56` says mod.rs:56 but actual is mod.rs:82
+9. **AI agents path missing prefix** - `ai_agents.md` says `alerts/routing.rs` should be `agent/alerts/routing.rs`
+10. **StressConfig names wrong** - `stress.md` says `rate_limit` and `threads` but actual is `rate_pps` and `concurrency`
+
+### Cross-Cutting Concerns
+- **23 HIGH priority items** identified across 43 reviewed documents
+- **Multiple silent error suppression** patterns using `let _ =` that should log warnings
+- **Several modules are stubs** (storage, vuln, supply_chain SBOM) that need implementation or documentation updates
+- **Historical bug fix tables** in tui.md and scanner.md are stale and should be archived
+
+### Statistical Findings
+- **43 architecture docs** reviewed (46 planned, but 3 were duplicates in mapping table)
+- **41 modules** in `crates/slapper/src/`
+- **169 NSE libraries** in `slapper-nse/src/libraries/`
+- **34 WAF products** verified
+- **30 fuzzing payload types** verified
+- **261 scanner endpoints** verified
+- **28 tabs** in TUI (20 base + 8 feature-gated)
+
+### Top 5 Recommended Actions
+1. Fix defense-lab stage counts in `architecture/pipeline.md`
+2. Document storage as stub or implement SQLx integration
+3. Implement SBOM CVE lookup or document as planned
+4. Implement proper VulnAssessment or document as placeholder
+5. Add input validation for Docker image names
