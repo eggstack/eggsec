@@ -61,6 +61,25 @@ let rate_limit_sem = self.rate_limit.map(|rate| {
 
 Workers acquire permits before processing. Initial burst is prevented because semaphore starts with exactly `rate` permits.
 
+## HIGH Priority Issue (Pending Fix)
+
+**Semaphore Unwrap Could Panic at `runner.rs:315`:**
+
+```rust
+let _permit = sem.acquire().await.unwrap();
+```
+
+The semaphore acquire uses `.unwrap()` which could panic if the semaphore is closed. Handle the error explicitly instead of unwrapping - use match or map_err with tracing:
+
+```rust
+let permit = sem.acquire().await.map_err(|e| {
+    tracing::error!("Failed to acquire rate limit semaphore: {}", e);
+    e
+})?;
+```
+
+This is a potential panic point under error conditions.
+
 ## Testing
 
 ```bash

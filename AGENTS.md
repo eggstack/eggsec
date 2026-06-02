@@ -8,7 +8,12 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan. All waves (0-7) are complete — no active work items remain.
+**`plans/plan.md`** contains the consolidated implementation plan. Currently 148 items from architecture review are pending implementation across 6 waves.
+
+| Status | Items |
+|--------|-------|
+| Completed (Waves 0-7) | Bug fixes, documentation corrections, new architecture docs |
+| In Progress (Wave 1+) | 13 HIGH, 55 MEDIUM, 80 LOW priority items from architecture review |
 
 ## Quick Reference
 
@@ -43,10 +48,11 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `proxy/` | `crates/slapper/src/proxy/AGENTS.override.md` |
 | `stress/` | `crates/slapper/src/stress/AGENTS.override.md` |
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
-| `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
+| `packet/` | `crates/slapper/src/packet/AGENTS.override.md` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/AGENTS.override.md` |
 | `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
-| `nse/` | `slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
+| `nse/` | `slapper-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
+| `container/` | `crates/slapper/src/container/AGENTS.override.md` |
 
 ### Architecture Index
 
@@ -225,38 +231,6 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/macros.md` | Exported macros |
 | `architecture/generated.md` | Auto-generated protobuf code |
 
-### Review Cycle 2026-06-02 (All Waves Complete)
-
-All 43 architecture documents reviewed against implementation (Phase 1 complete). Findings in `plans/review_*.md` (43 files), consolidated in `plans/review_consolidated.md` and `plans/stale_items.md`.
-
-#### Key Critical Issues Found
-1. **Defense-Lab stage counts wrong**: `pipeline.md:136-142` lists incorrect stage counts for all 5 defense-lab profiles
-2. **Storage module is stub**: All CRUD methods return empty values, no SQLx integration
-3. **VulnAssessment is stub**: Cannot hold structured findings - only mode/results/assessed_at
-4. **SBOM CVE lookup missing**: All SBOM generators return empty vulnerabilities vectors
-5. **Docker shell injection risk**: `container/docker.rs:208-209` unsanitized image names
-
-#### Documentation Accuracy Issues (23 HIGH priority items)
-- Various line number references drifted 10-150 lines
-- Field names don't match code (StressConfig: `rate_limit` → `rate_pps`, `threads` → `concurrency`)
-- Module counts off by 1 (recon: 17 → 18)
-- Missing defense-lab profiles from Available Stages table
-- Missing macros and constants from docs
-
-#### Stale Items
-- Historical bug fix tables in tui.md (800+ lines) should be archived
-- k8s-openapi issue resolved but still documented as warning
-- Bug patterns section may be stale (now enforced via lints)
-
-### Review Cycle 2026-06-02 (Waves 4-7 Complete)
-
-All architecture review items from `plans/plan.md` completed:
-
-- **Wave 4:** Fixed SLA calculation bug, Discord notify dispatch, stale docstrings, feature matrix math
-- **Wave 5:** Corrected 15 type names, counts, and descriptions across architecture docs
-- **Wave 6:** Filled 14 documentation gaps across error, recon, proxy, output, TUI, pipeline, distributed, loadtest, findings, networking, container, compliance, vuln, hunt modules
-- **Wave 7:** Created 9 new architecture docs for stress, utils, types, constants, probe, auth_context, logging, macros, generated modules
-
 ## Verification Commands
 
 ```bash
@@ -267,3 +241,17 @@ cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
 cargo clippy --lib -p slapper
 ```
+
+## Planning Notes for Future Agents
+
+When implementing items from `plans/plan.md`:
+
+1. **Verify before implementing**: Some items in review files may be stale or incorrect. Always verify file paths, line numbers, and whether issues still exist before implementing.
+
+2. **Use subagents for parallel work**: Items are grouped into waves (1-6) that can be implemented in parallel by different agents.
+
+3. **High priority items**: Focus on security issues first (Wave 1: Docker shell injection, Loadtest semaphore panic, Networking pcap silent drop, NSE sandbox tests).
+
+4. **Documentation accuracy**: Many items are documentation fixes. Verify actual code behavior matches what documentation claims.
+
+5. **Stub modules**: Storage, VulnAssessment, and SBOM generators are known stubs - do not try to "fix" them without explicit instruction as they are intentional placeholders.
