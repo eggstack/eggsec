@@ -92,7 +92,9 @@ impl InjectionTester {
                             }
                         }
                     }
-                    let _ = ws_stream.close(None).await;
+                    if let Err(e) = ws_stream.close(None).await {
+                        tracing::debug!("Failed to close WebSocket stream: {}", e);
+                    }
                 }
                 Err(e) => {
                     result.details = format!("Connection failed: {}", e);
