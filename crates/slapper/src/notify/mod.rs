@@ -111,7 +111,11 @@ impl NotifyManager {
                 findings: None,
                 stats: None,
             };
-            let _ = notifier.notify(&payload).await;
+            for result in notifier.notify(&payload).await {
+                if let Err(e) = result {
+                    tracing::warn!("Failed to send notification: {}", e);
+                }
+            }
         }
     }
 

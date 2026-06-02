@@ -62,7 +62,10 @@ impl KubernetesScanner {
             secret_exposure: Vec::new(),
         };
 
-        result.cluster_info = self.get_cluster_info().await.ok();
+        match self.get_cluster_info().await {
+            Ok(info) => result.cluster_info = Some(info),
+            Err(e) => tracing::warn!("Failed to get cluster info: {}", e),
+        }
         result.rbac_issues = self.check_rbac().await;
         result.network_policy_issues = self.check_network_policies().await;
         result.pod_security_issues = self.check_pod_security().await;
