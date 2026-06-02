@@ -6,11 +6,8 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
     let mut report = ComplianceReport {
         framework: "SOC 2 Type II".to_string(),
         target: target.to_string(),
-        overall_score: 78.0,
-        total_requirements: 5,
-        passed: 4,
-        failed: 1,
         findings: Vec::new(),
+        ..Default::default()
     };
 
     let has_critical = findings.contains(&Severity::Critical);

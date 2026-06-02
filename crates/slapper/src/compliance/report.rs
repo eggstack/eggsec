@@ -83,9 +83,9 @@ impl ComplianceReport {
                 .map(|f| format!(
                     r#"<div class="finding {}"><strong>{}</strong>: {}</div>"#,
                     match f.severity {
-                        crate::types::Severity::Critical | crate::types::Severity::High =>
-                            "critical",
-                        _ => "high",
+                        crate::types::Severity::Critical => "critical",
+                        crate::types::Severity::High => "high",
+                        _ => "medium",
                     },
                     f.requirement_id,
                     f.description

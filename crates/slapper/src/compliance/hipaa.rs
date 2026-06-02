@@ -6,11 +6,8 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
     let mut report = ComplianceReport {
         framework: "HIPAA Security Rule".to_string(),
         target: target.to_string(),
-        overall_score: 70.0,
-        total_requirements: 8,
-        passed: 5,
-        failed: 3,
         findings: Vec::new(),
+        ..Default::default()
     };
 
     let has_critical = findings.contains(&Severity::Critical);

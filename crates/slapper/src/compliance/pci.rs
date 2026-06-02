@@ -6,11 +6,8 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
     let mut report = ComplianceReport {
         framework: "PCI DSS v4.0".to_string(),
         target: target.to_string(),
-        overall_score: 80.0,
-        total_requirements: 12,
-        passed: 9,
-        failed: 3,
         findings: Vec::new(),
+        ..Default::default()
     };
 
     let has_critical = findings.contains(&Severity::Critical);

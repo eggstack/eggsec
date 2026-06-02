@@ -6,11 +6,8 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
     let mut report = ComplianceReport {
         framework: "OWASP Top 10".to_string(),
         target: target.to_string(),
-        overall_score: 75.0,
-        total_requirements: 10,
-        passed: 7,
-        failed: 3,
         findings: Vec::new(),
+        ..Default::default()
     };
 
     let has_critical = findings.contains(&Severity::Critical);
