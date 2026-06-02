@@ -24,12 +24,13 @@ pub struct IntegrationConfig {
     pub gitlab: Option<gitlab::GitLabConfig>,
 }
 
-pub trait IssueTracker {
-    fn create_issue(&self, issue: &Issue) -> Result<String>;
-    fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()>;
-    fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()>;
-    fn get_issue(&self, id: &str) -> Result<Issue>;
-    fn search_issues(&self, query: &str) -> Result<Vec<Issue>>;
+#[async_trait::async_trait]
+pub trait IssueTracker: Send + Sync {
+    async fn create_issue(&self, issue: &Issue) -> Result<String>;
+    async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()>;
+    async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()>;
+    async fn get_issue(&self, id: &str) -> Result<Issue>;
+    async fn search_issues(&self, query: &str) -> Result<Vec<Issue>>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

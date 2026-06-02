@@ -12,15 +12,15 @@ pub struct GitHubConfig {
 
 pub struct GitHubClient {
     config: GitHubConfig,
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 impl GitHubClient {
     pub fn new(config: GitHubConfig) -> Self {
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self { config, client }
     }
 
@@ -32,8 +32,9 @@ impl GitHubClient {
     }
 }
 
+#[async_trait::async_trait]
 impl IssueTracker for GitHubClient {
-    fn create_issue(&self, issue: &Issue) -> Result<String> {
+    async fn create_issue(&self, issue: &Issue) -> Result<String> {
         let url = self.api_url("/issues");
 
         let labels = if issue.labels.is_empty() {
@@ -60,17 +61,19 @@ impl IssueTracker for GitHubClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
             let number = json["number"].as_i64().unwrap_or(1);
             Ok(format!("#{}", number))
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "GitHub API error {}: {}",
                 status, body
@@ -78,7 +81,7 @@ impl IssueTracker for GitHubClient {
         }
     }
 
-    fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
+    async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
         let issue_number = id.trim_start_matches('#');
         let url = self.api_url(&format!("/issues/{}", issue_number));
 
@@ -109,13 +112,14 @@ impl IssueTracker for GitHubClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             Ok(())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "GitHub API error {}: {}",
                 status, body
@@ -123,7 +127,7 @@ impl IssueTracker for GitHubClient {
         }
     }
 
-    fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
+    async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
         let issue_number = issue_id.trim_start_matches('#');
         let url = self.api_url(&format!("/issues/{}/comments", issue_number));
 
@@ -143,13 +147,14 @@ impl IssueTracker for GitHubClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             Ok(())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "GitHub API error {}: {}",
                 status, body
@@ -157,7 +162,7 @@ impl IssueTracker for GitHubClient {
         }
     }
 
-    fn get_issue(&self, id: &str) -> Result<Issue> {
+    async fn get_issue(&self, id: &str) -> Result<Issue> {
         let issue_number = id.trim_start_matches('#');
         let url = self.api_url(&format!("/issues/{}", issue_number));
 
@@ -171,11 +176,13 @@ impl IssueTracker for GitHubClient {
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
 
             let labels: Vec<String> = json["labels"]
@@ -218,7 +225,7 @@ impl IssueTracker for GitHubClient {
         }
     }
 
-    fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
+    async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
         let url = format!(
             "https://api.github.com/search/issues?q={}",
             urlencoding::encode(query)
@@ -234,11 +241,13 @@ impl IssueTracker for GitHubClient {
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
 
             let issues: Vec<Issue> = json["items"]
