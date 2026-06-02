@@ -2,7 +2,7 @@
 
 ## Overview
 
-These skills cover the agent observability system and configuration hot-reloading capabilities implemented in Wave 5.
+These skills cover the agent observability system and configuration hot-reloading capabilities.
 
 ## Skills
 

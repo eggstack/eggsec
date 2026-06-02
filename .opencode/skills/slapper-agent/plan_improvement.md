@@ -4,13 +4,15 @@ This skill guides AI agents through complex multi-wave improvement plans with pa
 
 ## Plan Status
 
-**Plan is COMPLETED and PRUNED as of 2026-05-29.**
-The `plans/plan.md` file has been pruned to only contain:
-- Completion summary (20/20 items completed)
-- Future considerations (lower priority items for later planning)
-- Historical reference for completed items
+**Plan is FULLY COMPLETE as of 2026-06-02.**
+The `plans/plan.md` file contains:
+- Completion summary of all 8 waves (0-7) with 100+ items total
+- Key module locations reference
+- Defense-lab profiles reference
+- Probe classification reference
+- Non-goals list
 
-A previous plan was completed on 2026-05-23 (47 items across 3 waves).
+All architecture documentation has been verified against the codebase.
 
 ## Verification Process
 
@@ -28,19 +30,7 @@ When reviewing plan items or implementing changes:
 - Always verify before claiming DONE
 - Commit after each fix
 - Update plan.md with completion status (only if not fully pruned)
-- Test count: 1324 base, 1469+ with full features (verified 2026-05-29)
-
-## Verification Results (2026-05-29)
-
-All 20 implementation items verified complete:
-- **Wave 1 (6 items)**: Production safety fixes - all completed
-- **Wave 2 (8 items)**: Error handling improvements - all completed
-- **Wave 3 (6 items)**: Implementation items - all completed (4 deferred items pruned)
-
-Deferred items removed from plan:
-- TUI unwrap_or_default: Low value, high refactoring risk, async-safe
-- NSE DNS rebinding: Architecture already validates IPs at connection time
-- NSE OSV/CISA KEV: Already fully implemented
+- Test count: 1324 base, 1469+ with full features
 
 ## Plan Pruning Pattern
 
