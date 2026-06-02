@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 pub use brute_force::BruteForceTester;
-pub use credential_stuffing::CredentialStuffer;
+pub use credential_stuffing::{CredentialStuffer, CredentialPair};
 pub use lockout::LockoutDetector;
 pub use mfa::MfaTester;
 pub use rate_limit::RateLimitTester;
@@ -125,10 +125,59 @@ impl AuthEngine {
             findings: Vec::new(),
         };
 
+        report.tests_run.push(AuthTestType::BruteForce);
+        let brute_tester = BruteForceTester::new(self.max_attempts, self.concurrency, self.timeout_secs)?;
+        if let (Some(ref usernames), Some(ref passwords)) = (&self.username_list, &self.password_list) {
+            if let Some(username) = usernames.first() {
+                if let Ok(result) = brute_tester.test(target, username, passwords).await {
+                    report.brute_force = Some(result);
+                }
+            }
+        }
+
+        report.tests_run.push(AuthTestType::CredentialStuffing);
+        let stuffer = CredentialStuffer::new(self.max_attempts, self.concurrency, self.timeout_secs)?;
+        let credentials: Vec<CredentialPair> = self.username_list
+            .as_ref()
+            .zip(self.password_list.as_ref())
+            .map(|(users, passes)| {
+                users.iter()
+                    .flat_map(|u| passes.iter().map(move |p| CredentialPair {
+                        username: u.clone(),
+                        password: p.clone(),
+                    }))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Ok(result) = stuffer.test(target, &credentials).await {
+            report.credential_stuffing = Some(result);
+        }
+
+        report.tests_run.push(AuthTestType::AccountLockout);
+        let lockout_detector = LockoutDetector::new(self.timeout_secs)?;
+        let username = self.username_list.as_ref()
+            .and_then(|u| u.first().map(|s| s.as_str()))
+            .unwrap_or("admin");
+        if let Ok(result) = lockout_detector.detect(target, username, self.max_attempts).await {
+            report.lockout_detection = Some(result);
+        }
+
         report.tests_run.push(AuthTestType::RateLimitBypass);
         let rate_tester = RateLimitTester::new(self.timeout_secs)?;
         if let Ok(result) = rate_tester.test(target).await {
             report.rate_limit = Some(result);
+        }
+
+        report.tests_run.push(AuthTestType::MfaBypass);
+        let mfa_tester = MfaTester::new(self.timeout_secs)?;
+        if let Ok(result) = mfa_tester.test(target).await {
+            report.mfa = Some(result);
+        }
+
+        report.tests_run.push(AuthTestType::SessionFixation);
+        let session_tester = SessionTester::new(self.timeout_secs)?;
+        if let Ok(result) = session_tester.test(target).await {
+            report.session = Some(result);
         }
 
         report.tests_run.push(AuthTestType::TimingAttack);
@@ -137,11 +186,7 @@ impl AuthEngine {
             report.timing = Some(result);
         }
 
-        report.tests_run.push(AuthTestType::SessionFixation);
-        let session_tester = SessionTester::new(self.timeout_secs)?;
-        if let Ok(result) = session_tester.test(target).await {
-            report.session = Some(result);
-        }
+        report.tests_run.push(AuthTestType::PasswordPolicy);
 
         report.total_attempts = self.attempt_counter.load(Ordering::SeqCst);
 
