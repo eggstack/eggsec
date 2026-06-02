@@ -3,8 +3,9 @@
 //! Provides security scanning for Docker containers and Kubernetes clusters.
 //! This module is feature-gated and requires the `container` feature.
 
+use crate::container::ContainerFinding;
+use crate::container::Severity;
 use crate::error::{Result, SlapperError};
-use crate::types::Severity;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
@@ -17,42 +18,13 @@ use kube::{
 #[cfg(feature = "container")]
 use k8s_openapi::api::core::v1::Pod;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContainerScanResult {
-    pub container_id: String,
-    pub image: String,
-    pub vulnerabilities: Vec<ContainerVulnerability>,
-    pub configuration_issues: Vec<ConfigIssue>,
-    pub overall_severity: Severity,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContainerVulnerability {
-    pub id: String,
-    pub package: String,
-    pub installed_version: String,
-    pub fixed_version: Option<String>,
-    pub severity: Severity,
-    pub description: String,
-    pub cve_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConfigIssue {
-    pub rule_id: String,
-    pub severity: Severity,
-    pub title: String,
-    pub description: String,
-    pub recommendation: String,
-}
+pub use crate::container::ContainerScanReport as ContainerScanResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KubernetesScanResult {
     pub cluster: String,
     pub namespace: Option<String>,
     pub pods: Vec<PodSecurityResult>,
-    pub services: Vec<ServiceSecurityResult>,
-    pub secrets: Vec<SecretSecurityResult>,
     pub overall_severity: Severity,
 }
 
@@ -60,23 +32,7 @@ pub struct KubernetesScanResult {
 pub struct PodSecurityResult {
     pub name: String,
     pub namespace: String,
-    pub containers: Vec<ContainerScanResult>,
-    pub security_context_issues: Vec<ConfigIssue>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceSecurityResult {
-    pub name: String,
-    pub namespace: String,
-    pub issues: Vec<ConfigIssue>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecretSecurityResult {
-    pub name: String,
-    pub namespace: String,
-    pub has_encryption_issues: bool,
-    pub description: String,
+    pub security_context_issues: Vec<ContainerFinding>,
 }
 
 pub struct ContainerScanner {
@@ -140,7 +96,6 @@ impl ContainerScanner {
             pod_results.push(PodSecurityResult {
                 name: pod_name,
                 namespace: pod_namespace,
-                containers: Vec::new(),
                 security_context_issues: security_issues,
             });
         }
@@ -149,21 +104,19 @@ impl ContainerScanner {
             cluster: "default".to_string(),
             namespace: namespace.map(String::from),
             pods: pod_results,
-            services: Vec::new(),
-            secrets: Vec::new(),
             overall_severity,
         })
     }
 
     #[cfg(feature = "container")]
-    fn check_pod_security(&self, pod: &Pod) -> Vec<ConfigIssue> {
+    fn check_pod_security(&self, pod: &Pod) -> Vec<ContainerFinding> {
         let mut issues = Vec::new();
 
         if let Some(spec) = &pod.spec {
             for container in &spec.containers {
                 if container.security_context.is_none() {
-                    issues.push(ConfigIssue {
-                        rule_id: "PSD001".to_string(),
+                    issues.push(ContainerFinding {
+                        category: "PSD001".to_string(),
                         severity: Severity::Medium,
                         title: "Missing container security context".to_string(),
                         description: format!(
@@ -180,8 +133,8 @@ impl ContainerScanner {
                         && liveness_probe.tcp_socket.is_none()
                         && liveness_probe.exec.is_none()
                     {
-                        issues.push(ConfigIssue {
-                            rule_id: "PSD002".to_string(),
+                        issues.push(ContainerFinding {
+                            category: "PSD002".to_string(),
                             severity: Severity::Low,
                             title: "Missing liveness probe".to_string(),
                             description: format!(
@@ -196,8 +149,8 @@ impl ContainerScanner {
             }
 
             if spec.host_pid == Some(true) {
-                issues.push(ConfigIssue {
-                    rule_id: "PSD003".to_string(),
+                issues.push(ContainerFinding {
+                    category: "PSD003".to_string(),
                     severity: Severity::High,
                     title: "Host PID namespace enabled".to_string(),
                     description: "Pod shares the host PID namespace".to_string(),
@@ -206,8 +159,8 @@ impl ContainerScanner {
             }
 
             if spec.host_network == Some(true) {
-                issues.push(ConfigIssue {
-                    rule_id: "PSD004".to_string(),
+                issues.push(ContainerFinding {
+                    category: "PSD004".to_string(),
                     severity: Severity::High,
                     title: "Host network enabled".to_string(),
                     description: "Pod shares the host network namespace".to_string(),
@@ -218,8 +171,8 @@ impl ContainerScanner {
             for container in &spec.containers {
                 if let Some(sc) = &container.security_context {
                     if sc.privileged == Some(true) {
-                        issues.push(ConfigIssue {
-                            rule_id: "PSD005".to_string(),
+                        issues.push(ContainerFinding {
+                            category: "PSD005".to_string(),
                             severity: Severity::Critical,
                             title: "Privileged container".to_string(),
                             description: format!(
@@ -244,21 +197,74 @@ impl ContainerScanner {
         ))
     }
 
-    #[allow(dead_code, unused_variables)]
-    /// Docker image scanning - implementation incomplete
+    #[cfg(feature = "container")]
+    pub async fn scan_docker_image(&self, image: &str) -> Result<ContainerScanResult> {
+        let scanner = crate::container::docker::DockerScanner::new();
+        let docker_result = scanner.scan_image(image).await?;
+
+        let mut findings = Vec::new();
+        for vuln in &docker_result.vulnerabilities {
+            findings.push(crate::container::ContainerFinding {
+                category: "Docker Vulnerability".to_string(),
+                severity: vuln.severity.clone(),
+                title: format!("{} {} ({})", vuln.package, vuln.installed_version, vuln.cve_id),
+                description: format!(
+                    "Package {} has vulnerability {}. Fixed in: {}",
+                    vuln.package,
+                    vuln.cve_id,
+                    vuln.fixed_version.as_deref().unwrap_or("not yet")
+                ),
+                recommendation: format!("Update {} to {}", vuln.package, vuln.fixed_version.as_deref().unwrap_or("latest")),
+            });
+        }
+        for misconfig in &docker_result.misconfigurations {
+            findings.push(crate::container::ContainerFinding {
+                category: "Docker Misconfiguration".to_string(),
+                severity: misconfig.severity.clone(),
+                title: misconfig.check.clone(),
+                description: misconfig.description.clone(),
+                recommendation: misconfig.recommendation.clone(),
+            });
+        }
+
+        let overall_severity = findings
+            .iter()
+            .map(|f| &f.severity)
+            .max_by_key(|s| match s {
+                Severity::Critical => 5,
+                Severity::High => 4,
+                Severity::Medium => 3,
+                Severity::Low => 2,
+                Severity::Info => 1,
+            })
+            .cloned()
+            .unwrap_or(Severity::Info);
+
+        Ok(ContainerScanResult {
+            target: image.to_string(),
+            scan_type: crate::container::ContainerScanType::Docker,
+            docker: Some(docker_result),
+            kubernetes: None,
+            escape_risks: None,
+            cis_benchmarks: None,
+            findings,
+        })
+    }
+
+    #[cfg(not(feature = "container"))]
     pub fn scan_docker_image(&self, _image: &str) -> Result<ContainerScanResult> {
         Err(SlapperError::Config(
-            "Docker image scanning requires full implementation".to_string(),
+            "Docker image scanning requires the `container` feature".to_string(),
         ))
     }
 
-    pub fn check_container_config(&self, config: &FxHashMap<String, String>) -> Vec<ConfigIssue> {
+    pub fn check_container_config(&self, config: &FxHashMap<String, String>) -> Vec<ContainerFinding> {
         let mut issues = Vec::new();
 
         if let Some(user) = config.get("USER") {
             if user.is_empty() || *user == "root" {
-                issues.push(ConfigIssue {
-                    rule_id: "DC001".to_string(),
+                issues.push(ContainerFinding {
+                    category: "DC001".to_string(),
                     severity: Severity::High,
                     title: "Container running as root".to_string(),
                     description: "Container is configured to run as root user".to_string(),
@@ -268,8 +274,8 @@ impl ContainerScanner {
         }
 
         if config.get("CAP_ADD").is_some() {
-            issues.push(ConfigIssue {
-                rule_id: "DC002".to_string(),
+            issues.push(ContainerFinding {
+                category: "DC002".to_string(),
                 severity: Severity::Medium,
                 title: "Capabilities added".to_string(),
                 description: "Container has additional Linux capabilities".to_string(),
@@ -278,8 +284,8 @@ impl ContainerScanner {
         }
 
         if config.get("privileged") == Some(&"true".to_string()) {
-            issues.push(ConfigIssue {
-                rule_id: "DC003".to_string(),
+            issues.push(ContainerFinding {
+                category: "DC003".to_string(),
                 severity: Severity::Critical,
                 title: "Privileged mode".to_string(),
                 description: "Container runs in privileged mode".to_string(),
@@ -318,6 +324,6 @@ mod tests {
 
         let issues = scanner.check_container_config(&config);
         assert!(!issues.is_empty());
-        assert_eq!(issues[0].rule_id, "DC001");
+        assert_eq!(issues[0].category, "DC001");
     }
 }

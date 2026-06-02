@@ -127,6 +127,14 @@ impl EscapeDetector {
 
         let risk_level = Self::calculate_risk_level(&risks);
 
+        if !risks.is_empty() {
+            tracing::debug!(
+                "Escape analysis found {} risk(s) (level: {:?})",
+                risks.len(),
+                risk_level
+            );
+        }
+
         EscapeDetectionResult {
             target: "docker-config".to_string(),
             escape_risks: risks,
