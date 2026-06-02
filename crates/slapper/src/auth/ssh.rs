@@ -2,7 +2,7 @@
 //!
 //! Tests SSH authentication with password-based credentials.
 
-use super::super::{AuthTestResult, ProtocolAuthTester};
+use super::super::AuthTestResult;
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
 use std::time::Duration;

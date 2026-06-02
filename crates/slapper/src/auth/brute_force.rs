@@ -98,9 +98,7 @@ impl BruteForceTester {
                         }
                     }
                 }
-                Err(_) => {
-                    result.lockout_detected = true;
-                }
+                Err(_) => {}
             }
         }
 
@@ -114,7 +112,7 @@ impl BruteForceTester {
         if lower.contains("welcome") || lower.contains("dashboard") {
             indicators.push("welcome message found".to_string());
         }
-        if lower.contains("set-cookie") || lower.contains("session") {
+        if lower.contains("session") {
             indicators.push("session indicator found".to_string());
         }
         if lower.contains("token") || lower.contains("jwt") {

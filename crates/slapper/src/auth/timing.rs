@@ -82,10 +82,11 @@ impl TimingTester {
         samples: usize,
     ) -> f64 {
         let mut total_ms = 0.0;
+        let mut successful = 0;
 
         for _ in 0..samples {
             let start = Instant::now();
-            let _ = self
+            let result = self
                 .client
                 .post(target)
                 .header(
@@ -96,10 +97,18 @@ impl TimingTester {
                 .send()
                 .await;
             let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-            total_ms += elapsed;
+
+            if result.is_ok() {
+                total_ms += elapsed;
+                successful += 1;
+            }
         }
 
-        total_ms / samples as f64
+        if successful > 0 {
+            total_ms / successful as f64
+        } else {
+            0.0
+        }
     }
 }
 

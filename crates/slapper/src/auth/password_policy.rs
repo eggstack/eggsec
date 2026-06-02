@@ -67,9 +67,9 @@ impl PasswordPolicyTester {
 
             if let Some(caps) = lower.match_indices("character").next() {
                 let after_caps = &lower[caps.0..];
-                for (i, c) in after_caps.chars().take(20).enumerate() {
+                for c in after_caps.chars().take(20) {
                     if c.is_ascii_digit() {
-                        if let Ok(len) = after_caps[..i].chars().filter(|&ch| ch == ' ').count().to_string().parse::<usize>() {
+                        if let Ok(len) = c.to_string().parse::<usize>() {
                             result.min_length = Some(len);
                             break;
                         }

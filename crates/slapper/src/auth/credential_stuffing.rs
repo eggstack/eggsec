@@ -101,9 +101,7 @@ impl CredentialStuffer {
                         }
                     }
                 }
-                Err(_) => {
-                    result.lockout_detected = true;
-                }
+                Err(_) => {}
             }
         }
 
