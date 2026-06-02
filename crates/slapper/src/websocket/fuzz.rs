@@ -82,7 +82,9 @@ impl FuzzTester {
                             }
                         }
                     }
-                    let _ = ws_stream.close(None).await;
+                    if let Err(e) = ws_stream.close(None).await {
+                        tracing::debug!("Failed to close WebSocket stream: {}", e);
+                    }
                 }
                 Err(e) => {
                     result.details = format!("Connection failed: {}", e);
@@ -121,7 +123,9 @@ impl FuzzTester {
                             result.server_response = Some("Received response".to_string());
                         }
                     }
-                    let _ = ws_stream.close(None).await;
+                    if let Err(e) = ws_stream.close(None).await {
+                        tracing::debug!("Failed to close WebSocket stream: {}", e);
+                    }
                 }
                 Err(e) => {
                     result.details = format!("Connection failed: {}", e);
@@ -149,7 +153,9 @@ impl FuzzTester {
             {
                 Ok(Ok((mut ws, _))) => {
                     connected += 1;
-                    let _ = ws.close(None).await;
+                    if let Err(e) = ws.close(None).await {
+                        tracing::debug!("Failed to close WebSocket stream: {}", e);
+                    }
                 }
                 _ => {
                     failed += 1;
