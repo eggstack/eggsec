@@ -28,6 +28,16 @@ All NSE library files now use `rustc_hash::FxHashMap`/`FxHashSet` for consistenc
 - **Mutex poisoning**: Use `.unwrap_or_else(|e| e.into_inner())` for graceful handling
 - **Async on sync RwLock**: parking_lot RwLock is synchronous - don't use `.await`
 
+## Known Issues (Pending Fix)
+
+1. **Missing Sandbox Integration Tests**: No visible test coverage for NSE sandbox enforcement (network and filesystem restrictions). The sandbox has `is_path_allowed()`, `is_host_allowed()`, `is_command_allowed()` methods in `slapper-nse/src/lib.rs:93-159`, but there are no `#[test]` functions testing these restrictions. Add integration tests for sandbox enforcement, particularly around network and filesystem restrictions.
+
+2. **TOCTOU Vulnerability in lfs Path Traversal**: `is_path_allowed()` could be bypassed via symlinks or race conditions between check and use.
+
+3. **DNS Rebinding Attack Vector**: `is_host_allowed()` DNS resolution could be vulnerable to DNS rebinding if `allowed_networks` changes between check and connect.
+
+4. **LazyLock Initialization Contention**: `WAF_SIGNATURES` LazyLock in the main slapper crate may have thread contention during first access in multi-threaded context.
+
 ## Dependencies
 
 - `mlua` for Lua VM

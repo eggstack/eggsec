@@ -36,7 +36,7 @@ fn is_valid_docker_image_name(name: &str) -> bool {
 
 ## Known Issues
 
-1. **Kubernetes Scanner Silently Fails**: API calls use `.ok()` on results at `kubernetes.rs:65, 104, 163, 195, 254`, silently ignoring network errors and returning empty results. Log network errors instead of silently ignoring them.
+1. **Kubernetes Scanner Silently Fails**: API call at `kubernetes.rs:65` uses `.ok()` on result, silently ignoring network errors. Lines 104, 163, 195, 254 use proper `if let Ok` handling which doesn't log errors but doesn't silently suppress them either. Only line 65 needs fixing - add `tracing::warn` for network errors instead of silently ignoring them.
 
 2. **Docker Socket Access Not Checked**: The escape detection in `escape.rs` checks for docker.sock in config strings but doesn't actually verify if the container has access to the Docker socket.
 

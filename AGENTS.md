@@ -8,12 +8,12 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan. Currently 148 items from architecture review are pending implementation across 6 waves.
+**`plans/plan.md`** contains the consolidated implementation plan with prioritized items across 6 waves for parallel implementation.
 
-| Status | Items |
+| Status | Scope |
 |--------|-------|
 | Completed (Waves 0-7) | Bug fixes, documentation corrections, new architecture docs |
-| In Progress (Wave 1+) | 13 HIGH, 55 MEDIUM, 80 LOW priority items from architecture review |
+| In Progress (Wave 1+) | Items from architecture review requiring implementation |
 
 ## Quick Reference
 
@@ -51,7 +51,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `packet/` | `crates/slapper/src/packet/AGENTS.override.md` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/AGENTS.override.md` |
 | `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
-| `nse/` | `slapper-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
+| `nse/` | `crates/slapper-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
 | `container/` | `crates/slapper/src/container/AGENTS.override.md` |
 
 ### Architecture Index
@@ -120,7 +120,7 @@ Use these sections as the canonical reference points when updating guidance or s
 | NSE libraries | 169 |
 | Modules | 39 |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
-| CLI commands | ~29 base, ~40 with all features |
+| CLI commands | 24 base, 37 with all features |
 
 ### Codebase Issues (Known Stub Implementations)
 
@@ -128,9 +128,9 @@ These modules exist but are stubs or have known limitations:
 
 | Module | Issue | Reference |
 |--------|-------|-----------|
-| `storage/postgres.rs` | All CRUD methods return empty values - no SQLx integration | `plans/review_storage.md` |
-| `vuln/mod.rs:37-40` | `VulnAssessment` only has `mode`, `results`, `assessed_at` - cannot hold structured findings | `plans/review_vuln.md` |
-| `supply_chain/sbom.rs` | SBOM generators return empty `vulnerabilities` vectors - no CVE lookup | `plans/review_supply_chain.md` |
+| `storage/postgres.rs` | All CRUD methods return empty values - no SQLx integration | `architecture/storage.md` |
+| `vuln/mod.rs:37-40` | `VulnAssessment` only has `mode`, `results`, `assessed_at` - cannot hold structured findings | `architecture/vuln.md` |
+| `supply_chain/sbom.rs` | SBOM generators return empty `vulnerabilities` vectors - no CVE lookup | `architecture/supply_chain.md` |
 
 ### Security Notes
 
@@ -139,10 +139,10 @@ These modules exist but are stubs or have known limitations:
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
 - **Docker Shell Injection**: `container/docker.rs:208-209` uses unsanitized image names in `docker inspect` command - validate image names before passing to shell
 - **Silent Error Suppression**: Multiple modules use `let _ =` pattern that silently ignores errors:
-  - `notify/mod.rs:114,140-143,219-222,293-296` - notification failures
+  - `notify/mod.rs:114` - notification failures (lines 140-143, 219-222, 293-296 properly log with `tracing::warn!`)
   - `loadtest/runner.rs:315` - semaphore acquire
   - `packet/capture.rs:209` - pcap write
-  - `kubernetes.rs:65,104,163,195,254` - API errors (uses `.ok()`)
+  - `kubernetes.rs:65` - API errors (uses `.ok()`; lines 104, 163, 195, 254 use proper `if let Ok` handling)
 
 ### Key Patterns (Lessons Learned)
 
@@ -166,6 +166,12 @@ These modules exist but are stubs or have known limitations:
 - **Fabricated claims**: Always verify module/file existence before documenting dead code. The `auth/multi_protocol/` directory was claimed to exist but doesn't.
 - **Proxy features exist**: `Tor` ProxyType and `Weighted`/`LowestLatency` rotation strategies already exist in code — verify before claiming they're missing.
 - **Feature matrix math**: When verifying feature counts, sum the sub-counts to check for arithmetic errors (e.g., 18+12=30≠28). Correct counts: 16 features-with-deps + 12 marker-only = 28.
+- **`.ok()` vs `if let Ok`**: Not all `.ok()` calls are bugs - `if let Ok` is proper error handling that doesn't log, while `.ok()` silently converts `Result` to `Option`. Verify which pattern is used before claiming an issue.
+- **`let _ =` pattern verification**: Some `let _ =` usages properly log errors via `tracing::warn!` in subsequent lines - verify the full context before claiming silent suppression.
+- **Ownership vs mutation**: `push()` takes ownership, doesn't mutate the pushed item - don't claim TOCTOU issues without verifying whether data is actually modified.
+- **JSONL format verification**: Code may correctly use JSONL format (line-delimited JSON) even when documentation claims otherwise. The findings store uses JSONL correctly.
+- **AiClient Clone**: Uses `#[derive(Clone)]` at `client.rs:54`, not manual implementation. Don't claim manual implementation without verifying.
+- **Method call patterns**: A method being "called unconditionally" isn't a bug if the method internally handles `None` values appropriately.
 
 ## Skills Directory
 
@@ -246,7 +252,7 @@ cargo clippy --lib -p slapper
 
 When implementing items from `plans/plan.md`:
 
-1. **Verify before implementing**: Some items in review files may be stale or incorrect. Always verify file paths, line numbers, and whether issues still exist before implementing.
+1. **Verify before implementing**: Many items in plan.md were verified and corrected during the 2026-06-02 review session, but always verify file paths, line numbers, and whether issues still exist before implementing.
 
 2. **Use subagents for parallel work**: Items are grouped into waves (1-6) that can be implemented in parallel by different agents.
 
@@ -255,3 +261,5 @@ When implementing items from `plans/plan.md`:
 4. **Documentation accuracy**: Many items are documentation fixes. Verify actual code behavior matches what documentation claims.
 
 5. **Stub modules**: Storage, VulnAssessment, and SBOM generators are known stubs - do not try to "fix" them without explicit instruction as they are intentional placeholders.
+
+6. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.

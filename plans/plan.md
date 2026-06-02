@@ -72,7 +72,7 @@
 - **Docker Scanner Shell Injection Risk:** `crates/slapper/src/container/docker.rs:208-209` uses `std::process::Command::new("docker")` with `args(["inspect", _image_name])`. If `_image_name` contains special characters, this could lead to command injection. Validate image names before passing to shell; reject or sanitize special characters.
 
 ### Defense Lab
-- **Verify RunManifest Location:** Document references `crates/slapper/src/output/run_manifest.rs` as defining RunManifest, but this was not verified during review. Read `output/run_manifest.rs` to verify it exists and contains the RunManifest struct definition.
+- **Verify RunManifest Location:** ~~Document references `crates/slapper/src/output/run_manifest.rs` as defining RunManifest, but this was not verified during review.~~ **RESOLVED:** File exists at `crates/slapper/src/output/run_manifest.rs:25-56` and contains properly defined `RunManifest` struct. This item is closed.
 
 ### Loadtest
 - **Semaphore Unwrap Could Panic:** At `runner.rs:315`, the semaphore acquire uses `.unwrap()` which could panic if the semaphore is closed: `let _permit = sem.acquire().await.unwrap();`. Handle the error explicitly instead of unwrapping - use match or map_err with tracing.
@@ -82,7 +82,7 @@
 
 ### NSE
 - **Bug Fix Implementations Unverified:** Historical bug fixes listed in documentation cannot be verified without reading each file. Add unit test coverage to prevent regressions; verify each listed fix was actually applied.
-- **CveCache/FxHashMap Migration:** If not migrated, using HashMap instead of FxHashMap could be a performance issue. Verify CveCache uses FxHashMap and add migration if needed.
+- **~~CveCache/FxHashMap Migration~~:** ~~If not migrated, using HashMap instead of FxHashMap could be a performance issue.~~ **RESOLVED:** CveCache already uses `FxHashMap` at `slapper-nse/src/cve/mod.rs:174`. No migration needed.
 - **Missing Sandbox Integration Tests:** No visible test coverage for NSE sandbox enforcement (network and filesystem restrictions). Add integration tests for sandbox enforcement, particularly around network and filesystem restrictions.
 
 ### Output
@@ -94,7 +94,7 @@
 - **Missing Defense-Lab Profiles from Available Stages Table:** "Available Stages" table at `pipeline.md:23-34` lists only 11 profiles, missing all 5 defense-lab profiles. Add all 5 defense-lab profiles to the Available Stages table with their correct stage counts.
 
 ### Recon
-- **Module Count Accurate:** ~~Document says 17 modules but `FULL_RECON_PIPELINE_MODULES` at `mod.rs:350-368` has 18 entries~~ - VERIFIED: The count IS 17 entries (reverse_dns, geolocation, threatintel, ssl, whois, subdomain, dns_records, techdetect, js, wayback, cloud, content, cors, email, takeover, cve, secrets). The architecture doc is correct. This item can be removed.
+- **Module Count Verified Accurate:** ~~Document says 17 modules but `FULL_RECON_PIPELINE_MODULES` at `mod.rs:350-368` has 18 entries~~ - VERIFIED: The count IS 17 entries (reverse_dns, geolocation, threatintel, ssl, whois, subdomain, dns_records, techdetect, js, wayback, cloud, content, cors, email, takeover, cve, secrets). The architecture doc is correct. **This item is closed.**
 
 ### Storage
 - **Stub Implementation Misleading Documentation:** The `Database` struct explicitly states "WARNING: Stub implementation - not connected to a real database". All methods return empty results. Architecture document does not mention this.
@@ -132,7 +132,7 @@
 - **Compliance Framework Modules Return Mock Data:** The owasp.rs, pci.rs, hipaa.rs, soc2.rs modules likely return simplified/mock compliance reports rather than actual framework-specific checks.
 
 ### Container
-- **Kubernetes Scanner Silently Fails:** API calls use `.ok()` on results (lines 65, 104, 163, 195, 254), silently ignoring network errors and returning empty results, making debugging difficult.
+- **Kubernetes Scanner Silently Fails:** API call at `kubernetes.rs:65` uses `.ok()` on result, silently ignoring network errors. Lines 104, 163, 195, 254 use proper `if let Ok` handling which doesn't log either. Only line 65 needs fixing - add `tracing::warn` for network errors instead of silently ignoring them.
 - **Docker Socket Access Not Checked:** The escape detection in `escape.rs` checks for docker.sock in config strings but doesn't actually verify if the container has access to the Docker socket.
 - **CIS Benchmark Checks Are Simplistic:** CIS checks in `cis.rs` use simple string matching (e.g., `lower.contains("privileged")`) which can produce false positives/negatives.
 
@@ -160,7 +160,7 @@
 - **IssueTracker Trait Should Be Async:** The IssueTracker trait methods (`create_issue`, `update_issue`, `add_comment`, `get_issue`, `search_issues`) are synchronous and return `Result`. Convert to `async fn` signatures to support proper async API client implementations.
 
 ### Kubernetes
-- **Scanner Silent Failures:** API calls use `.ok()` on results at `kubernetes.rs:65, 104, 163, 195, 254`, silently ignoring errors. Log network errors instead of silently ignoring them.
+- **Scanner Silent Failures:** API call at `kubernetes.rs:65` uses `.ok()` on result, silently ignoring network errors. Add `tracing::warn` for network errors instead of silently ignoring them. (Lines 104, 163, 195, 254 use proper `if let Ok` handling.)
 
 ### Logging
 - **Missing Logging Macros Documentation:** 4 macros (`log_request!`, `log_scan_progress!`, `log_finding!`, `log_error_context!`) at `logging/init.rs:83-131` not documented. Document these 4 macros or note them as internal.
@@ -171,7 +171,7 @@
 - **DNS Rebinding Attack Vector:** `is_host_allowed()` DNS resolution could be vulnerable to DNS rebinding if `allowed_networks` changes between check and connect.
 
 ### Notify
-- **Silent Error Suppression with `let _`:** `let _ = notifier.notify(&payload).await;` silently ignores notification failures at `notify/mod.rs:114, 140-143, 219-222, 293-296`. Replace with `tracing::warn` or similar error logging to avoid silent failures.
+- **Silent Error Suppression with `let _`:** `let _ = notifier.notify(&payload).await;` silently ignores notification failures at `notify/mod.rs:114`. Replace with `tracing::warn` or similar error logging to avoid silent failures. (Lines 140-143, 219-222, 293-296 properly log warnings with `tracing::warn!`.)
 - **No Retry Logic for Failed Notifications:** `WebhookNotifier::notify()` does not implement retry logic; failed webhooks are not retried. Implement retry logic with backoff for failed webhook deliveries.
 
 ### Pipeline
@@ -231,8 +231,8 @@
 ## LOW Priority Items
 
 ### AI Agents
-- **CodingAgent Tool List Mismatch:** The architecture document lists `"scan", "scan-ports", "fingerprint", "endpoints", "waf-detect", "search"` as CodingAgent allowed tools, but the test at `policy.rs:498-522` shows `endpoints` is allowed but not documented.
-- **Missing Clone Derive Documentation:** AiClient implements Clone manually (verified at `client.rs:602-608`) but not as a derived trait. Documentation could clarify this is intentional for internal Arc fields.
+- **CodingAgent Tool List Test Gap:** The architecture document at `ai_agents.md:171` lists `"scan", "scan-ports", "fingerprint", "endpoints", "waf-detect", "search"` as CodingAgent allowed tools, but the test at `policy.rs:498-522` only tests `scan`, `scan-ports`, `fingerprint`, `waf-detect`, `search` - `endpoints` is NOT tested. Add test coverage for `endpoints` tool.
+- **Missing Clone Derive Documentation:** AiClient uses `#[derive(Clone)]` at `client.rs:54` (not manual implementation). Documentation could clarify this uses internal `Arc` fields for cheap cloning.
 - **Feature-Gated Skills Module Not Documented:** The `skills.rs` file is conditionally compiled with `#[cfg(feature = "ai-integration")]`, correctly noted in `agent/mod.rs:19-20` but the architecture document doesn't explicitly call out this gating.
 
 ### Auth
@@ -257,7 +257,7 @@
 - **Node/Namespace Count Always None:** `ClusterInfo::node_count` and `namespace_count` are always `None` despite being part of the struct definition.
 
 ### Diff
-- **Documentation Says JSONL but Code Uses JSON:** Document states `load_findings_from_file()` loads from "JSONL file" but code uses `serde_json::from_str` which parses standard JSON. Update architecture/diff.md to say "JSON file" instead of "JSONL file".
+- **Documentation Says JSONL and Code Uses JSONL:** The claim that "documentation says JSONL but code uses JSON" is **inaccurate**. The findings store (`findings/store.rs`) uses JSONL format (extension `.jsonl`, comment says "Local JSONL-based finding store", uses `writeln!` for line-delimited JSON). Documentation saying JSONL is correct.
 - **Evidence Change Detection:** When finding severity changes, old/new evidence content is not stored in `FindingChange`. Store old and new evidence content in `FindingChange` struct.
 - **Fingerprint Collision Possible:** Diff logic uses `fingerprint` as key; hash collisions could cause findings to be lost. Use `HashMap<Fingerprint, Vec<Vec<Finding>>>` to handle collisions properly.
 - **format_diff_text() Not Documented:** `format_diff_text()` function at line 110 is not mentioned in architecture document. Document `format_diff_text()` utility function in architecture/diff.md.
@@ -283,7 +283,7 @@
 - **Regeneration Process Not Documented:** No documentation on how to regenerate the protobuf code. Update architecture/generated.md to document how to regenerate (protoc command or build.rs process).
 
 ### Hunt
-- **Potential TOCTOU in AttackChain Step Counting:** At `hunt/mod.rs:44`, `total_findings += chain.steps.len()` could be inconsistent if `chain.steps` is modified between the `len()` call and the `push()` call at line 45.
+- **Potential TOCTOU in AttackChain Step Counting:** At `hunt/mod.rs:44`, `total_findings += chain.steps.len()` could theoretically be inconsistent if `chain.steps` were modified between the `len()` call and the `push()` at line 45. However, line 45 uses `self.attack_chains.push(chain)` which takes ownership, not a reference - `chain.steps` is NOT modified. **This issue is inaccurate** - the push doesn't modify steps.
 - **No Aggregation of Concurrent Results:** Results are processed sequentially after each check completes rather than collecting all concurrent tasks and processing together.
 - **Empty Report Handling:** If all checks return empty vectors, the report will have `total_findings: 0`. This is valid but could be confusing.
 - **Unbounded Vector Growth:** Each sub-module returns a `Vec` which is appended to the report. For targets with many findings, this could lead to significant memory usage without limits.
@@ -293,8 +293,8 @@
 - **No Error Handling Strategy Documented:** The trait returns `Result<String>` for `create_issue` and `Result<()>` for other methods, but there's no documentation on error cases or retry logic. Add documentation to the trait methods explaining error cases and consider adding retry logic for transient failures.
 
 ### Loadtest
-- **Rate Limit Semaphore Comment Misleading:** The comment "Semaphore starts with `rate` permits, preventing initial burst" at line 272 is slightly misleading. It actually starts with `rate` permits which allows `rate` requests through immediately before the first interval tick.
-- **set_common_with_config Auth Gap:** `set_common_with_config()` method at `runner.rs:149-170` properly merges config settings but does not call `apply_auth_headers()` with merged config's auth if `common.auth` is `None`.
+- **Rate Limit Semaphore Comment Misleading:** The comment "Semaphore starts with `rate` permits, preventing initial burst" at line 272 is misleading. It actually starts with `rate` permits which ALLOWS an initial burst of `rate` requests before rate limiting kicks in.
+- **set_common_with_config Auth Handling:** `set_common_with_config()` at `runner.rs:165` calls `apply_auth_headers()` unconditionally regardless of whether `common.auth` is `None`. The `apply_auth_headers` method internally handles `None` values (lines 179-203), so auth is applied when available. **This is not a bug** - just clarify the behavior if documentation is desired.
 
 ### Macros
 - **Confusing Macro Signature Documentation:** The macro signatures in the documentation show simplified syntax that doesn't fully capture the actual macro patterns. Improve documentation format for `run_if_enabled!` macro signature.
@@ -311,7 +311,7 @@
 - **Duplicate Payload Construction:** `notify_scan_complete()` method constructs the same `NotificationPayload` multiple times for webhooks, Slack, Discord, and Teams. Construct payload once and clone for each platform.
 - **No Timeout on Webhook Requests:** `create_http_client(10)` has 10s timeout but individual webhook requests don't have explicit timeouts and could hang. Add explicit timeout wrappers to individual webhook requests.
 - **RateLimited Event Never Dispatched:** `WebhookEvent::RateLimited` variant exists but `NotifyManager` has no `notify_rate_limited()` method. Add `notify_rate_limited()` method to `NotifyManager` or remove unused variant.
-- **Teams Webhook Not Integrated:** `NotifyManager` stores `teams_webhook: Option<String>` but has no `notify_teams()` method call, unlike Slack and Discord. Add `notify_teams()` call in dispatch methods or remove unused `teams_webhook` field.
+- **Teams Webhook Not Publicly Accessible:** `NotifyManager` stores `teams_webhook: Option<String>` at line 42, and `notify_teams()` exists on `WebhookNotifier` (used internally at `mod.rs:181-196`), but there's no public `notify_teams()` method on `NotifyManager` for external callers. Consider exposing a public method if Teams integration is intended for external use.
 
 ### Output
 - **HashMap Migration Incomplete in report_summary.rs:** `report_summary.rs` uses `std::collections::HashMap` for `by_severity`, `by_confidence`, `by_type`, and `asset_counts` instead of FxHashMap.
@@ -320,7 +320,7 @@
 - **RunManifest Excludes Non-Interesting Endpoints:** `populate_findings_from_report()` only creates findings for `interesting` endpoints; non-interesting are excluded.
 
 ### Overview
-- **Command Count Imprecision:** `overview.md:156` says "37+" and `cli_commands.md:9` says "35+" but actual is ~29 without features, ~40 with all. Clarify base command count vs. feature-gated count in documentation.
+- **Command Count Imprecision:** `overview.md:156` says "37+" and `cli_commands.md:9` says "35+" but actual counts are: **24 base commands**, **37 with all features** (not 29/40 as claimed). Base commands are: ScanPorts, ScanEndpoints, Fingerprint, Scan, Resume, Fuzz, Waf, WafStress, Graphql, OAuth, AuthTest, Recon, Plan, Ci, Config, Doctor, Load, Report, Vuln, Storage, Cluster, Notify, Remote, Exec. Update documentation to reflect actual counts.
 - **Test Count May Be Stale:** `overview.md:581` claims "1324 base, 1469+ with full features" but counts may have changed. Verify with actual test run and update if necessary.
 
 ### Pipeline
@@ -417,23 +417,22 @@
 |---------|---------|
 | Container Docker Shell Injection fix | Loadtest Semaphore unwrap panic fix |
 | Networking PcapWriter silent drop fix | NSE Sandbox integration tests |
-| - | Storage stub documentation clarification |
 
 ### Wave 2: Documentation Accuracy (Parallel: 2-3 agents)
 **Focus:** Fix documentation mismatches and missing documentation
 
 | Agent A | Agent B | Agent C |
 |---------|---------|---------|
-| Pipeline defense-lab stage counts | Output format count (8→7/8) | StressConfig field names correction |
-| Pipeline CSV NFKC escape | Defense Lab RunManifest verification | - |
-| Missing defense-lab profiles table | - | - |
+| Pipeline defense-lab stage counts | Output format count (7→8) | StressConfig field names correction |
+| Pipeline CSV NFKC escape | Missing defense-lab profiles table (5 profiles) | - |
+| Defense Lab RunManifest verification | ~~Verify RunManifest~~ (RESOLVED) | - |
 
 ### Wave 3: Error Handling Improvements (Parallel: 2 agents)
 **Focus:** Address silent error suppression patterns across modules
 
 | Agent A | Agent B |
 |---------|---------|
-| Notify `let _` pattern replacements | Kubernetes `.ok()` error logging |
+| Notify `let _` pattern replacement (line 114 only) | Kubernetes `.ok()` error logging (line 65 only) |
 | Scanner endpoints silent suppression | WebSocket close() error handling |
 | Findings store deduplication | - |
 
@@ -442,27 +441,28 @@
 
 | Agent A | Agent B |
 |---------|---------|
-| FxHashMap migrations (NSE CveCache, output report_summary, diff) | VulnAssessment struct redesign |
+| FxHashMap migrations (output report_summary, diff) | VulnAssessment struct redesign |
 | Non-cryptographic fingerprint in Findings | DEFAULT_ENDPOINTS lazy loading consideration |
-| Supply Chain SBOM CVE lookup decision | - |
+| ~~NSE CveCache FxHashMap~~ (RESOLVED) | Supply Chain SBOM CVE lookup decision |
 
 ### Wave 5: Feature Completeness (Parallel: 3 agents)
 **Focus:** Complete incomplete implementations
 
 | Agent A | Agent B | Agent C |
 |---------|---------|---------|
-| Auth run_full_test() all 8 test types | Browser XSS payload parameterization | Notify retry logic and Teams integration |
-| Notify `let _` pattern replacements | Browser SPA route handling | IssueTracker async trait conversion |
-| Compliance framework implementations | - | - |
+| Auth run_full_test() all 8 test types | Browser XSS payload parameterization | Notify retry logic |
+| Browser SPA route handling | IssueTracker async trait conversion | Compliance framework implementations |
+| - | Teams webhook public API (exists internally) | - |
 
 ### Wave 6: Low Priority Improvements (Ongoing - Single agent or distributed)
 Items that don't block functionality but improve robustness:
-- Browser SPA route handling expansion
+- Browser SPA route handling expansion (React Router v6 `*` catch-all)
 - CVSS vector parsing validation
 - SLA calculation for resolved findings
 - ESSID parsing robustness
 - CIS benchmark check improvements
 - Various documentation updates
+- AiClient Clone derive documentation (uses #[derive], not manual)
 
 ---
 
@@ -472,5 +472,35 @@ Items that don't block functionality but improve robustness:
 - Duplicates were merged; higher-detail version retained
 - Priority designations preserved from original classifications
 - Wave groupings suggest approximate parallelization; actual timing may vary based on agent availability
-- **Verified items:** Docker shell injection, StressConfig field names, Output format count confirmed as documentation errors
-- **Corrected items:** Recon module count (verified as 17, not 18 - documentation was correct)
+
+### Verification Corrections (2026-06-02)
+
+The following items were corrected based on codebase verification:
+
+| Item | Correction |
+|------|------------|
+| NSE CveCache/FxHashMap | Already uses FxHashMap at `slapper-nse/src/cve/mod.rs:174` - no migration needed |
+| Defense Lab RunManifest | File exists at `crates/slapper/src/output/run_manifest.rs:25-56` - verified working |
+| Recon module count | Verified as 17 entries - architecture documentation was correct |
+| Kubernetes .ok() lines | Only line 65 uses `.ok()`; lines 104, 163, 195, 254 use proper `if let Ok` handling |
+| Notify `let _` lines | Only line 114 uses silent ignore; lines 140-143, 219-222, 293-296 properly log warnings |
+| AI Agents CodingAgent | `endpoints` IS documented in `ai_agents.md:171` but NOT tested in `policy.rs:498-522` |
+| AiClient Clone | Uses `#[derive(Clone)]` at `client.rs:54`, not manual implementation |
+| Hunt TOCTOU | `push()` takes ownership, doesn't modify `chain.steps` - issue is inaccurate |
+| Loadtest apply_auth_headers | Method IS called unconditionally; handles `None` internally - not a bug |
+| Notify Teams webhook | `notify_teams()` exists on `WebhookNotifier` at lines 167-187 - not missing |
+| Diff JSONL vs JSON | Code DOES use JSONL format correctly; documentation is accurate |
+| Overview command counts | Actual is 24 base, 37 with all features (not 29/40 as claimed) |
+
+### Verified Items (Still Require Action)
+
+| Item | Status |
+|------|--------|
+| Container Docker shell injection | **VERIFIED** - exists at `docker.rs:208-209` |
+| Loadtest semaphore unwrap | **VERIFIED** - exists at `runner.rs:315` |
+| Networking PcapWriter silent drop | **VERIFIED** - exists at `capture.rs:209` |
+| NSE Sandbox tests missing | **VERIFIED** - no test coverage for sandbox enforcement |
+| StressConfig field names | **VERIFIED** - docs say `rate_limit`/`threads`, actual is `rate_pps`/`concurrency` |
+| Output format count | **VERIFIED** - table lists 7, enum has 8 (PDF not in enum, Pretty/Compact missing) |
+| Pipeline CSV NFKC | **VERIFIED** - `pipeline/report.rs:10-22` lacks NFKC, `output/escape.rs:16-35` has it |
+| Pipeline defense-lab table | **VERIFIED** - 5 defense-lab profiles missing from `pipeline.md:23-34` |
