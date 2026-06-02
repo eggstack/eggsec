@@ -137,12 +137,12 @@ These modules exist but are stubs or have known limitations:
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
 - **TUI Settings Tab**: The settings editor applies exposed fields on top of an existing config and preserves non-exposed sections such as `profiles`, `schedule`, `remote`, `ai`, `search`, and `alert_channels`. See `architecture/config.md` for the current save semantics.
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
-- **Docker Shell Injection**: `container/docker.rs:208-209` uses unsanitized image names in `docker inspect` command - validate image names before passing to shell
-- **Silent Error Suppression**: Multiple modules use `let _ =` pattern that silently ignores errors:
-  - `notify/mod.rs:114` - notification failures (lines 140-143, 219-222, 293-296 properly log with `tracing::warn!`)
-  - `loadtest/runner.rs:315` - semaphore acquire
-  - `packet/capture.rs:209` - pcap write
-  - `kubernetes.rs:65` - API errors (uses `.ok()`; lines 104, 163, 195, 254 use proper `if let Ok` handling)
+- **Docker Shell Injection**: FIXED - `container/docker.rs:inspect_image()` now validates image names before passing to shell (2026-06-02)
+- **Silent Error Suppression**: FIXED - All listed issues now properly log errors instead of silent suppression (2026-06-02):
+  - `notify/mod.rs:114` - now logs with `tracing::warn!`
+  - `loadtest/runner.rs:315` - now handles semaphore acquire errors gracefully
+  - `packet/capture.rs:209` - now logs pcap write failures
+  - `kubernetes.rs:65` - now logs network errors
 
 ### Key Patterns (Lessons Learned)
 
