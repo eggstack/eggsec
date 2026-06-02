@@ -8,12 +8,13 @@ Slapper supports a wide range of output formats to integrate with different tool
 
 | Format | File | Purpose |
 |--------|------|---------|
-| JSON | `convert.rs` | Pretty-printed and compact JSON |
-| SARIF | `sarif.rs` | Static Analysis Results Interchange Format |
+| Pretty | `report.rs` | Formatted console output (default) |
+| JSON | `convert.rs` | Pretty-printed JSON |
+| Compact | `convert.rs` | Compact single-line JSON |
 | HTML | `html.rs` | Human-readable, interactive reports with charts |
 | Markdown | `markdown.rs` | Easy copy-pasting into documentation |
-| PDF | `pdf.rs` | Formal reporting (feature-gated) |
 | CSV | `csv.rs` | Spreadsheet-based analysis |
+| SARIF | `sarif.rs` | Static Analysis Results Interchange Format |
 | JUnit XML | `junit.rs` | CI/CD pipeline integration |
 
 ## Core Features
