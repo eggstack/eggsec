@@ -199,24 +199,24 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/nse_integration.md` | NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 28 tabs (+ conditional feature tabs), event loop, components |
 | `architecture/defense_lab.md` | Defense-lab mode and regression validation |
+| `architecture/stress.md` | Stress testing module (raw sockets, IP spoofing) |
+| `architecture/utils.md` | Utility functions (23 submodules) |
+| `architecture/types.md` | Core types (Severity, SensitiveString, OutputFormat) |
+| `architecture/constants.md` | Centralized constants |
+| `architecture/probe.md` | Probe classification (ProbeIntent, ProbeRisk) |
+| `architecture/auth_context.md` | Auth context YAML parsing |
+| `architecture/logging.md` | Logging configuration |
+| `architecture/macros.md` | Exported macros |
+| `architecture/generated.md` | Auto-generated protobuf code |
 
-### Review Cycle 2026-05-31 (34 documents — Full Architecture Review)
+### Review Cycle 2026-06-02 (Waves 4-7 Complete)
 
-All 34 architecture documents reviewed against codebase. Findings consolidated in `plans/plan.md` (Wave 4-6).
+All architecture review items from `plans/plan.md` completed:
 
-**Critical Bugs (in plan Wave 4):**
-- `workflow/mod.rs:35-37` — SLA violation calc ignores actual SLA logic
-- `notify/mod.rs:199-258` — Missing Discord dispatch in `notify_findings()`
-- `storage/postgres.rs:19-56` — Stub database returns hardcoded values
-- `lib.rs:16-17` — Stale docstrings (22→30 payloads, 26→34 WAF)
-
-**Key Discrepancies (in plan Wave 5):**
-- Confidence enum: 5 variants (findings) vs 4 (output/agent.rs) — undocumented divergence
-- WAF_BLOCKED_STATUS_CODES: fuzzer uses 3 codes, WAF uses 4 — inconsistent
-
-**Statistics (All Match):** Tabs 28, PayloadType 30, WAF 34, NSE libs 169, Output 8, CLI 37, Modules 39
-
-**Stale Items:** 9 uncovered modules documented in plan Wave 7
+- **Wave 4:** Fixed SLA calculation bug, Discord notify dispatch, stale docstrings, feature matrix math
+- **Wave 5:** Corrected 15 type names, counts, and descriptions across architecture docs
+- **Wave 6:** Filled 14 documentation gaps across error, recon, proxy, output, TUI, pipeline, distributed, loadtest, findings, networking, container, compliance, vuln, hunt modules
+- **Wave 7:** Created 9 new architecture docs for stress, utils, types, constants, probe, auth_context, logging, macros, generated modules
 
 ## Verification Commands
 
