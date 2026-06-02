@@ -1,6 +1,7 @@
 use crate::container::Severity;
-use crate::error::Result;
+use crate::error::{SlapperError, Result};
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DockerScanResult {
@@ -204,9 +205,21 @@ impl DockerScanner {
         issues
     }
 
-    async fn inspect_image(&self, _image_name: &str) -> Result<serde_json::Value> {
-        let output = std::process::Command::new("docker")
-            .args(["inspect", _image_name])
+    fn is_valid_image_name(image_name: &str) -> bool {
+        image_name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == ':' || c == '@' || c == '-' || c == '_' || c == '.' || c == '/')
+    }
+
+    async fn inspect_image(&self, image_name: &str) -> Result<serde_json::Value> {
+        if !Self::is_valid_image_name(image_name) {
+            return Err(SlapperError::Validation(format!(
+                "Invalid image name: contains forbidden characters"
+            )));
+        }
+
+        let output = Command::new("docker")
+            .args(["inspect", image_name])
             .output();
 
         match output {
