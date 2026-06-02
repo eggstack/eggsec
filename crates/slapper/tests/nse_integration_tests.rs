@@ -5,6 +5,346 @@
 
 #![cfg(feature = "nse")]
 
+use ipnetwork::IpNetwork;
+use slapper::nse::SandboxConfig;
+use std::net::IpAddr;
+use std::path::PathBuf;
+use tempfile::TempDir;
+
+#[cfg(test)]
+mod sandbox_enforcement_tests {
+    use super::*;
+
+    fn create_sandbox_with_allowed_dir(path: &str) -> SandboxConfig {
+        SandboxConfig {
+            enabled: true,
+            allowed_dir: Some(PathBuf::from(path)),
+            allowed_commands: Vec::new(),
+            log_violations: true,
+            allowed_networks: Vec::new(),
+        }
+    }
+
+    fn create_sandbox_with_commands(commands: Vec<&str>) -> SandboxConfig {
+        SandboxConfig {
+            enabled: true,
+            allowed_dir: Some(PathBuf::from("/tmp")),
+            allowed_commands: commands.into_iter().map(String::from).collect(),
+            log_violations: true,
+            allowed_networks: Vec::new(),
+        }
+    }
+
+    fn create_sandbox_with_networks(networks: Vec<&str>) -> SandboxConfig {
+        let allowed_networks: Vec<IpNetwork> = networks
+            .into_iter()
+            .filter_map(|n| n.parse().ok())
+            .collect();
+        SandboxConfig {
+            enabled: true,
+            allowed_dir: Some(PathBuf::from("/tmp")),
+            allowed_commands: Vec::new(),
+            log_violations: true,
+            allowed_networks,
+        }
+    }
+
+    #[test]
+    fn test_path_sandbox_blocks_parent_traversal() {
+        let temp_dir = TempDir::new().unwrap();
+        let allowed_path = temp_dir.path().to_str().unwrap();
+        let sandbox = create_sandbox_with_allowed_dir(allowed_path);
+
+        let blocked_path = format!("{}/../../../etc/passwd", allowed_path);
+        assert!(
+            sandbox.get_allowed_path(&blocked_path).is_none(),
+            "Path traversal with '..' should be blocked"
+        );
+    }
+
+    #[test]
+    fn test_path_sandbox_allows_inside_allowed_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let allowed_path = temp_dir.path().to_str().unwrap();
+        let sandbox = create_sandbox_with_allowed_dir(allowed_path);
+
+        let file_path = temp_dir.path().join("test_file.txt");
+        std::fs::write(&file_path, "test").unwrap();
+
+        let result = sandbox.get_allowed_path(file_path.to_str().unwrap());
+        assert!(
+            result.is_some(),
+            "Files inside allowed directory should be accessible"
+        );
+    }
+
+    #[test]
+    fn test_path_sandbox_blocks_outside_allowed_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let allowed_path = temp_dir.path().to_str().unwrap();
+        let sandbox = create_sandbox_with_allowed_dir(allowed_path);
+
+        let result = sandbox.get_allowed_path("/etc/passwd");
+        assert!(
+            result.is_none(),
+            "Paths outside allowed directory should be blocked"
+        );
+    }
+
+    #[test]
+    fn test_path_sandbox_with_symlink_traversal() {
+        let temp_dir = TempDir::new().unwrap();
+        let allowed_path = temp_dir.path().to_str().unwrap();
+        let sandbox = create_sandbox_with_allowed_dir(allowed_path);
+
+        let link_path = temp_dir.path().join("link_to_etc");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc", &link_path).unwrap();
+
+        let through_symlink = format!("{}/link_to_etc/passwd", allowed_path);
+        let result = sandbox.get_allowed_path(&through_symlink);
+        assert!(
+            result.is_none(),
+            "Accessing files through symlinks outside allowed dir should be blocked"
+        );
+    }
+
+    #[test]
+    fn test_path_sandbox_resolves_symlinks_inside_allowed() {
+        let temp_dir = TempDir::new().unwrap();
+        let allowed_path = temp_dir.path().to_str().unwrap();
+        let sandbox = create_sandbox_with_allowed_dir(allowed_path);
+
+        let sub_dir = temp_dir.path().join("subdir");
+        std::fs::create_dir(&sub_dir).unwrap();
+
+        let file_path = sub_dir.join("test.txt");
+        std::fs::write(&file_path, "content").unwrap();
+
+        let link_path = temp_dir.path().join("link_to_file");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&file_path, &link_path).unwrap();
+
+        let link_result = sandbox.get_allowed_path(link_path.to_str().unwrap());
+        assert!(
+            link_result.is_some(),
+            "Symlinks to files inside allowed dir should work"
+        );
+    }
+
+    #[test]
+    fn test_command_sandbox_blocks_all_when_empty() {
+        let sandbox = create_sandbox_with_commands(vec![]);
+
+        assert!(
+            !sandbox.is_command_allowed("ls"),
+            "No commands should be allowed when allowed_commands is empty"
+        );
+        assert!(
+            !sandbox.is_command_allowed("cat"),
+            "cat should not be allowed when allowed_commands is empty"
+        );
+        assert!(
+            !sandbox.is_command_allowed("curl"),
+            "curl should not be allowed when allowed_commands is empty"
+        );
+    }
+
+    #[test]
+    fn test_command_sandbox_allows_specific_commands() {
+        let sandbox = create_sandbox_with_commands(vec!["ls", "cat"]);
+
+        assert!(
+            sandbox.is_command_allowed("ls"),
+            "ls should be allowed"
+        );
+        assert!(
+            sandbox.is_command_allowed("cat"),
+            "cat should be allowed"
+        );
+        assert!(
+            sandbox.is_command_allowed("cat /etc/passwd"),
+            "cat with args should be allowed if cat is in list"
+        );
+    }
+
+    #[test]
+    fn test_command_sandbox_blocks_unlisted_commands() {
+        let sandbox = create_sandbox_with_commands(vec!["ls", "cat"]);
+
+        assert!(
+            !sandbox.is_command_allowed("rm"),
+            "rm should not be allowed"
+        );
+        assert!(
+            !sandbox.is_command_allowed("curl"),
+            "curl should not be allowed"
+        );
+        assert!(
+            !sandbox.is_command_allowed("wget"),
+            "wget should not be allowed"
+        );
+    }
+
+    #[test]
+    fn test_command_sandbox_extracts_command_name() {
+        let sandbox = create_sandbox_with_commands(vec!["ls"]);
+
+        assert!(
+            sandbox.is_command_allowed("ls -la"),
+            "ls -la should match 'ls' command"
+        );
+        assert!(
+            sandbox.is_command_allowed("ls  -la"),
+            "ls with multiple spaces should match"
+        );
+    }
+
+    #[test]
+    fn test_network_sandbox_allows_matching_ip() {
+        let sandbox = create_sandbox_with_networks(vec!["192.168.1.0/24", "10.0.0.0/8"]);
+
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([192, 168, 1, 100])),
+            "IP in 192.168.1.0/24 should be allowed"
+        );
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([10, 20, 30, 40])),
+            "IP in 10.0.0.0/8 should be allowed"
+        );
+    }
+
+    #[test]
+    fn test_network_sandbox_blocks_non_matching_ip() {
+        let sandbox = create_sandbox_with_networks(vec!["192.168.1.0/24"]);
+
+        assert!(
+            !sandbox.is_network_allowed(IpAddr::from([192, 168, 2, 1])),
+            "IP outside allowed network should be blocked"
+        );
+        assert!(
+            !sandbox.is_network_allowed(IpAddr::from([8, 8, 8, 8])),
+            "Public IP outside allowed network should be blocked"
+        );
+    }
+
+    #[test]
+    fn test_network_sandbox_allows_all_when_empty() {
+        let sandbox = SandboxConfig {
+            enabled: true,
+            allowed_dir: Some(PathBuf::from("/tmp")),
+            allowed_commands: Vec::new(),
+            log_violations: true,
+            allowed_networks: Vec::new(),
+        };
+
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([8, 8, 8, 8])),
+            "All IPs should be allowed when allowed_networks is empty"
+        );
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([1, 1, 1, 1])),
+            "Any IP should work when no restrictions"
+        );
+    }
+
+    #[test]
+    fn test_network_sandbox_disabled_allows_all() {
+        let sandbox = SandboxConfig {
+            enabled: false,
+            allowed_dir: Some(PathBuf::from("/tmp")),
+            allowed_commands: Vec::new(),
+            log_violations: true,
+            allowed_networks: vec!["192.168.1.0/24".parse().unwrap()],
+        };
+
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([8, 8, 8, 8])),
+            "When sandbox is disabled, all IPs should be allowed"
+        );
+    }
+
+    #[test]
+    fn test_host_resolution_with_allowlist() {
+        let sandbox = create_sandbox_with_networks(vec!["127.0.0.0/8"]);
+
+        let localhost_ips = sandbox.resolve_host("localhost");
+        assert!(
+            !localhost_ips.is_empty(),
+            "localhost should resolve to at least one IP"
+        );
+        assert!(
+            localhost_ips.iter().all(|ip| sandbox.is_network_allowed(*ip)),
+            "All resolved IPs should be in allowed networks"
+        );
+    }
+
+    #[test]
+    fn test_sandbox_config_enabled_default() {
+        let sandbox = SandboxConfig::enabled();
+        assert!(sandbox.enabled, "Sandbox should be enabled");
+        assert!(
+            sandbox.allowed_dir.is_some(),
+            "Default allowed_dir should be set"
+        );
+    }
+
+    #[test]
+    fn test_sandbox_config_disabled_allows_all() {
+        let sandbox = SandboxConfig {
+            enabled: false,
+            allowed_dir: None,
+            allowed_commands: Vec::new(),
+            log_violations: true,
+            allowed_networks: Vec::new(),
+        };
+
+        assert!(
+            sandbox.get_allowed_path("/any/path").is_some(),
+            "All paths should be allowed when disabled"
+        );
+        assert!(
+            sandbox.is_command_allowed("any_command"),
+            "All commands should be allowed when disabled"
+        );
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([1, 2, 3, 4])),
+            "All IPs should be allowed when disabled"
+        );
+    }
+
+    #[test]
+    fn test_path_sandbox_with_none_allowed_dir() {
+        let sandbox = SandboxConfig {
+            enabled: true,
+            allowed_dir: None,
+            allowed_commands: Vec::new(),
+            log_violations: true,
+            allowed_networks: Vec::new(),
+        };
+
+        let result = sandbox.get_allowed_path("/etc/passwd");
+        assert!(
+            result.is_some(),
+            "When allowed_dir is None, all paths should be allowed"
+        );
+    }
+
+    #[test]
+    fn test_ipv6_network_sandbox() {
+        let sandbox = create_sandbox_with_networks(vec!["::1/128", "fc00::/7"]);
+
+        assert!(
+            sandbox.is_network_allowed(IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1])),
+            "IPv6 localhost should be allowed"
+        );
+        assert!(
+            !sandbox.is_network_allowed(IpAddr::from([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 1])),
+            "IPv6 outside allowed networks should be blocked"
+        );
+    }
+}
+
 #[cfg(test)]
 mod integration_tests {
     use slapper::nse::executor::NseExecutor;

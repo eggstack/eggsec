@@ -89,29 +89,47 @@ impl SandboxConfig {
         }
     }
 
-    /// Check if a file path is allowed under the sandbox.
-    pub fn is_path_allowed(&self, path: &str) -> bool {
+    /// Check if a file path is allowed under the sandbox and return the canonical path.
+    ///
+    /// This method canonicalizes the path and verifies it starts with the allowed root.
+    /// Returns `Some(canonical_path)` if allowed, `None` if blocked or invalid.
+    ///
+    /// # Security Note
+    /// The returned canonical path must be used for actual file operations to avoid
+    /// TOCTOU (Time-of-Check-Time-of-Use) vulnerabilities. A separate check followed
+    /// by operations on the original path could allow symlink attacks.
+    pub fn get_allowed_path(&self, path: &str) -> Option<PathBuf> {
         if !self.enabled {
-            return true;
+            return Some(PathBuf::from(path));
         }
 
         let Some(allowed_dir) = self.allowed_root() else {
-            return true;
+            return Some(PathBuf::from(path));
         };
 
         let path_buf = PathBuf::from(path);
         let Ok(canonical) = path_buf.canonicalize() else {
-            // If canonicalize fails (file doesn't exist), check the parent
             if let Some(parent) = path_buf.parent() {
                 if let Ok(canonical_parent) = parent.canonicalize() {
-                    return canonical_parent.starts_with(&allowed_dir);
+                    if canonical_parent.starts_with(&allowed_dir) {
+                        return Some(canonical_parent.join(path_buf.file_name()?));
+                    }
                 }
             }
-            // Reject if we can't verify the path
-            return false;
+            return None;
         };
 
-        canonical.starts_with(allowed_dir)
+        if canonical.starts_with(allowed_dir) {
+            Some(canonical)
+        } else {
+            None
+        }
+    }
+
+    /// Check if a file path is allowed under the sandbox.
+    #[deprecated(since = "0.1.0", note = "Use get_allowed_path() to avoid TOCTOU vulnerabilities")]
+    pub fn is_path_allowed(&self, path: &str) -> bool {
+        self.get_allowed_path(path).is_some()
     }
 
     /// Check if a command is allowed via `io.popen`.
@@ -156,22 +174,51 @@ impl SandboxConfig {
     ///
     /// This resolves the hostname and checks the resulting IP against allowed networks.
     /// Returns `false` if resolution fails while an allowlist is configured.
+    ///
+    /// # Security Note - DNS Rebinding
+    /// This method checks if ANY resolved IP is allowed, but the actual connection
+    /// may use a DIFFERENT IP if DNS changes between check and connection time.
+    /// For sensitive operations, use `resolve_host()` immediately before connecting
+    /// to get the actual IPs that will be used, and ensure DNS hasn't changed.
     pub fn is_host_allowed(&self, host: &str) -> bool {
+        !self.resolve_host(host).is_empty()
+    }
+
+    /// Resolve a hostname to a list of IP addresses.
+    ///
+    /// # Security Note - DNS Rebinding
+    /// DNS responses can change between calls. For sandbox enforcement, you should:
+    /// 1. Call this method to resolve the host
+    /// 2. Immediately use one of the returned IPs for the connection
+    /// 3. Do not re-resolve the same hostname before connecting
+    ///
+    /// If sandboxing is disabled or no networks are restricted, returns all resolved IPs.
+    /// If resolution fails or no IPs match the allowlist, returns an empty vector.
+    pub fn resolve_host(&self, host: &str) -> Vec<IpAddr> {
         use std::net::ToSocketAddrs;
 
         if !self.enabled {
-            return true;
+            if let Ok(addrs) = format!("{}:0", host).to_socket_addrs() {
+                return addrs.map(|a| a.ip()).collect();
+            }
+            return Vec::new();
         }
 
         if self.allowed_networks.is_empty() {
-            return true;
+            if let Ok(addrs) = format!("{}:0", host).to_socket_addrs() {
+                return addrs.map(|a| a.ip()).collect();
+            }
+            return Vec::new();
         }
 
-        let Ok(mut addrs) = format!("{}:0", host).to_socket_addrs() else {
-            return false;
+        let Ok(addrs) = format!("{}:0", host).to_socket_addrs() else {
+            return Vec::new();
         };
 
-        addrs.any(|addr| self.is_network_allowed(addr.ip()))
+        addrs
+            .map(|a| a.ip())
+            .filter(|ip| self.is_network_allowed(*ip))
+            .collect()
     }
 }
 

@@ -7,9 +7,13 @@ pub mod brute_force;
 pub mod credential_stuffing;
 pub mod lockout;
 pub mod mfa;
+pub mod password_policy;
 pub mod rate_limit;
 pub mod session;
 pub mod timing;
+
+#[cfg(feature = "nse-ssh2")]
+pub mod multi_protocol;
 
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -20,6 +24,7 @@ pub use brute_force::BruteForceTester;
 pub use credential_stuffing::{CredentialStuffer, CredentialPair};
 pub use lockout::LockoutDetector;
 pub use mfa::MfaTester;
+pub use password_policy::{PasswordPolicyTester, PasswordPolicyResult};
 pub use rate_limit::RateLimitTester;
 pub use session::SessionTester;
 pub use timing::TimingTester;
@@ -35,6 +40,7 @@ pub struct AuthTestReport {
     pub mfa: Option<mfa::MfaTestResult>,
     pub session: Option<session::SessionTestResult>,
     pub timing: Option<timing::TimingTestResult>,
+    pub password_policy: Option<PasswordPolicyResult>,
     pub total_attempts: usize,
     pub findings: Vec<AuthFinding>,
 }
@@ -74,10 +80,10 @@ pub struct AuthEngine {
 }
 
 impl AuthEngine {
-    pub fn new(max_attempts: usize, concurrency: usize, timeout_secs: u64) -> Result<Self> {
+    pub fn new(max_attempts: usize, concurrency: usize, timeout_secs: u64, stop_on_lockout: bool) -> Result<Self> {
         Ok(Self {
             max_attempts,
-            stop_on_lockout: true,
+            stop_on_lockout,
             concurrency,
             timeout_secs,
             username_list: None,
@@ -121,6 +127,7 @@ impl AuthEngine {
             mfa: None,
             session: None,
             timing: None,
+            password_policy: None,
             total_attempts: 0,
             findings: Vec::new(),
         };
@@ -187,6 +194,10 @@ impl AuthEngine {
         }
 
         report.tests_run.push(AuthTestType::PasswordPolicy);
+        let policy_tester = PasswordPolicyTester::new(self.timeout_secs)?;
+        if let Ok(result) = policy_tester.test(target).await {
+            report.password_policy = Some(result);
+        }
 
         report.total_attempts = self.attempt_counter.load(Ordering::SeqCst);
 
@@ -210,13 +221,13 @@ mod tests {
 
     #[test]
     fn test_auth_engine_creation() {
-        let engine = AuthEngine::new(100, 10, 30);
+        let engine = AuthEngine::new(100, 10, 30, true);
         assert!(engine.is_ok());
     }
 
     #[test]
     fn test_auth_engine_stop_flag() {
-        let engine = AuthEngine::new(100, 10, 30).unwrap();
+        let engine = AuthEngine::new(100, 10, 30, true).unwrap();
         assert!(!engine.should_stop());
         engine.stop();
         assert!(engine.should_stop());
@@ -224,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_auth_engine_attempt_counter() {
-        let engine = AuthEngine::new(5, 10, 30).unwrap();
+        let engine = AuthEngine::new(5, 10, 30, true).unwrap();
         assert!(engine.increment_attempts());
         assert!(engine.increment_attempts());
         assert!(engine.increment_attempts());
@@ -235,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_auth_engine_load_wordlists() {
-        let mut engine = AuthEngine::new(100, 10, 30).unwrap();
+        let mut engine = AuthEngine::new(100, 10, 30, true).unwrap();
         engine.load_wordlists(
             vec!["admin".to_string(), "user".to_string()],
             vec!["password".to_string(), "123456".to_string()],

@@ -104,19 +104,19 @@ pub enum EvidenceKind {
 impl std::fmt::Display for EvidenceKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvidenceKind::HttpRequest => write!(f, "http_request"),
-            EvidenceKind::HttpResponse => write!(f, "http_response"),
-            EvidenceKind::Header => write!(f, "header"),
-            EvidenceKind::BodySnippet => write!(f, "body_snippet"),
-            EvidenceKind::Timing => write!(f, "timing"),
-            EvidenceKind::Diff => write!(f, "diff"),
-            EvidenceKind::Banner => write!(f, "banner"),
-            EvidenceKind::DnsRecord => write!(f, "dns_record"),
-            EvidenceKind::Certificate => write!(f, "certificate"),
-            EvidenceKind::PortState => write!(f, "port_state"),
-            EvidenceKind::Screenshot => write!(f, "screenshot"),
-            EvidenceKind::FilePath => write!(f, "file_path"),
-            EvidenceKind::LogLine => write!(f, "log_line"),
+            EvidenceKind::HttpRequest => write!(f, "HTTP Request"),
+            EvidenceKind::HttpResponse => write!(f, "HTTP Response"),
+            EvidenceKind::Header => write!(f, "Header"),
+            EvidenceKind::BodySnippet => write!(f, "Body Snippet"),
+            EvidenceKind::Timing => write!(f, "Timing"),
+            EvidenceKind::Diff => write!(f, "Diff"),
+            EvidenceKind::Banner => write!(f, "Banner"),
+            EvidenceKind::DnsRecord => write!(f, "DNS Record"),
+            EvidenceKind::Certificate => write!(f, "Certificate"),
+            EvidenceKind::PortState => write!(f, "Port State"),
+            EvidenceKind::Screenshot => write!(f, "Screenshot"),
+            EvidenceKind::FilePath => write!(f, "File Path"),
+            EvidenceKind::LogLine => write!(f, "Log Line"),
         }
     }
 }

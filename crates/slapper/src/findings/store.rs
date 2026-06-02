@@ -32,6 +32,15 @@ impl FindingStore {
 
     /// Store a finding
     pub fn store_finding(&self, finding: Finding) -> anyhow::Result<StoredFinding> {
+        let fingerprint = finding.fingerprint.clone();
+        let mut findings = self.load_findings()?;
+
+        if let Some(idx) = findings.iter().position(|f| f.finding.fingerprint == fingerprint) {
+            findings[idx].finding = finding;
+            self.write_findings(&findings)?;
+            return Ok(findings[idx].clone());
+        }
+
         let stored = StoredFinding::new(finding);
         let line = serde_json::to_string(&stored)?;
 

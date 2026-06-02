@@ -95,7 +95,7 @@ pub async fn scan_dom_xss(target: &str, config: &BrowserConfig) -> Result<Vec<Do
             ];
 
             const findings = [];
-            const testPayload = '<img src=x onerror=alert(1)>';
+            const testPayload = $payload$;
 
             for (const source of sources) {
                 try {
@@ -118,7 +118,7 @@ pub async fn scan_dom_xss(target: &str, config: &BrowserConfig) -> Result<Vec<Do
 
             return findings;
         })()
-    "#;
+    "#.replace("$payload$", &config.xss_payload);
 
     let result = tab.evaluate(js_script, true)?;
 

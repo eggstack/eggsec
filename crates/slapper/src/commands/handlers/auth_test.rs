@@ -11,7 +11,7 @@ pub async fn handle_auth_test(
     args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);
 
-    let engine = AuthEngine::new(args.max_attempts, args.concurrency, args.timeout)?;
+    let engine = AuthEngine::new(args.max_attempts, args.concurrency, args.timeout, true)?;
 
     let mut report = AuthTestReport {
         target: args.target.clone(),
@@ -23,6 +23,7 @@ pub async fn handle_auth_test(
         mfa: None,
         session: None,
         timing: None,
+        password_policy: None,
         total_attempts: 0,
         findings: Vec::new(),
     };

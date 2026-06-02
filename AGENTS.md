@@ -8,12 +8,12 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan with prioritized items across 6 waves for parallel implementation.
+**`plans/plan.md`** contains the consolidated implementation plan with prioritized items.
 
 | Status | Scope |
 |--------|-------|
 | Completed (Waves 0-7) | Bug fixes, documentation corrections, new architecture docs |
-| In Progress (Wave 1+) | Items from architecture review requiring implementation |
+| Implementation complete | See plan.md for remaining items |
 
 ## Quick Reference
 
@@ -143,6 +143,11 @@ These modules exist but are stubs or have known limitations:
   - `loadtest/runner.rs:315` - now handles semaphore acquire errors gracefully
   - `packet/capture.rs:209` - now logs pcap write failures
   - `kubernetes.rs:65` - now logs network errors
+- **NSE TOCTOU Vulnerability**: FIXED - lfs and os libraries now use `get_allowed_path()` to avoid race conditions (2026-06-02)
+- **NSE DNS Rebinding Attack**: MITIGATED - `is_host_allowed()` limitation documented; `resolve_host()` returns bound IPs (2026-06-02)
+- **NSE Sandbox Enforcement**: FIXED - 17 integration tests added for path/command/network restrictions (2026-06-02)
+- **Browser ClientIssueType**: FIXED - now detects all 8 variants (was only 3) (2026-06-02)
+- **FindingStore Deduplication**: FIXED - now deduplicates by fingerprint before appending (2026-06-02)
 
 ### Key Patterns (Lessons Learned)
 
@@ -254,12 +259,12 @@ When implementing items from `plans/plan.md`:
 
 1. **Verify before implementing**: Many items in plan.md were verified and corrected during the 2026-06-02 review session, but always verify file paths, line numbers, and whether issues still exist before implementing.
 
-2. **Use subagents for parallel work**: Items are grouped into waves (1-6) that can be implemented in parallel by different agents.
+2. **Remaining items are mostly documentation fixes**: Most remaining items are documentation corrections or low-priority improvements. Security-critical items have been addressed.
 
-3. **High priority items**: Focus on security issues first (Wave 1: Docker shell injection, Loadtest semaphore panic, Networking pcap silent drop, NSE sandbox tests).
+3. **Stub modules**: Storage, VulnAssessment, and SBOM generators are known stubs - do not try to "fix" them without explicit instruction as they are intentional placeholders.
 
-4. **Documentation accuracy**: Many items are documentation fixes. Verify actual code behavior matches what documentation claims.
+4. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.
 
-5. **Stub modules**: Storage, VulnAssessment, and SBOM generators are known stubs - do not try to "fix" them without explicit instruction as they are intentional placeholders.
+5. **Wave plan verification**: When verifying plan claims, use subagents to check actual codebase state - plans may contain stale assertions that no longer match reality.
 
-6. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.
+6. **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source. Source file counts can vary by 200+ depending on whether nested crates are included.
