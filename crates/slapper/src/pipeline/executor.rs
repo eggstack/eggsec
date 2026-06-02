@@ -247,6 +247,7 @@ impl Pipeline {
             endpoints: context.endpoints,
             checkpoint_error,
             manifest: None,
+            vuln_assessment: None,
         };
 
         let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
@@ -287,6 +288,7 @@ impl Pipeline {
             endpoints: context.endpoints,
             checkpoint_error: None,
             manifest: None,
+            vuln_assessment: None,
         };
 
         let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
@@ -305,6 +307,7 @@ impl Pipeline {
             Stage::LoadTest => self.run_load_test().await,
             Stage::Waf => self.run_waf().await,
             Stage::Recon => self.run_recon().await,
+            Stage::Vuln => Ok(()),
         }
     }
 

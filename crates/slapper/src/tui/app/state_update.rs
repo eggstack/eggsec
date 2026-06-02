@@ -368,10 +368,34 @@ impl super::App {
             TaskResult::Vuln(ref assessment) => {
                 self.vuln.state = AppState::Completed;
                 self.vuln.results_view.clear();
-                for line in &assessment.results {
+                
+                // Display summary lines (backward compat)
+                for line in &assessment.summary {
                     self.vuln
                         .results_view
                         .add_line(ratatui::text::Line::from(line.clone()));
+                }
+                
+                // If no summary but structured data exists, display it
+                if assessment.summary.is_empty() {
+                    if let Some(ref cvss) = assessment.cvss_score {
+                        self.vuln.display_cvss(&cvss.vector);
+                    }
+                    if let Some(ref info) = assessment.exploit_info {
+                        self.vuln.display_exploit_info(&info.cve_id, info.clone());
+                    }
+                    if let Some(ref asset) = assessment.asset_criticality {
+                        self.vuln.display_asset(asset.clone());
+                    }
+                    if !assessment.prioritized_findings.is_empty() {
+                        self.vuln.display_prioritized(assessment.prioritized_findings.clone());
+                    }
+                    if let Some(ref result) = assessment.triage_results.first() {
+                        self.vuln.display_triage(result.clone());
+                    }
+                    if let Some(ref rem) = assessment.remediation_plans.first() {
+                        self.vuln.display_remediation(rem.clone());
+                    }
                 }
                 None
             }

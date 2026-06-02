@@ -1,4 +1,5 @@
-use crate::storage::{models::StoredFinding, models::StoredScan, StorageConfig};
+use crate::findings::lifecycle::StoredFinding;
+use crate::storage::{models::StoredScan, StorageConfig};
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
@@ -213,7 +214,7 @@ impl StorageTab {
         for finding in &findings {
             self.results_view.add_line(Line::from(format!(
                 "  [{}] {} - {:?} ({})",
-                finding.severity, finding.title, finding.status, finding.id
+                finding.finding.severity, finding.finding.title, finding.status, finding.finding.id
             )));
         }
     }
@@ -305,9 +306,8 @@ impl TabRender for StorageTab {
                     tc!(border)
                 },
             ));
+        let input_area = config_block.inner(*input_area);
         f.render_widget(config_block, input_area);
-
-        let input_area = config_block.inner(input_area);
 
         let status_color = if self.connected {
             tc!(success)
@@ -378,16 +378,16 @@ impl TabRender for StorageTab {
                 )
                 .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
-            f.render_widget(gauge, results_area);
+            f.render_widget(gauge, *results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, None);
+                .render(f, *results_area, None);
         } else {
             let placeholder = empty_state_paragraph(
                 "Database Storage",
                 "Configure database connection and press Enter",
             );
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, *results_area);
         }
     }
 }

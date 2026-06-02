@@ -11,6 +11,7 @@ pub enum Stage {
     LoadTest,
     Waf,
     Recon,
+    Vuln,
 }
 
 impl std::fmt::Display for Stage {
@@ -23,6 +24,7 @@ impl std::fmt::Display for Stage {
             Stage::LoadTest => write!(f, "Load Test"),
             Stage::Waf => write!(f, "WAF Test"),
             Stage::Recon => write!(f, "Recon"),
+            Stage::Vuln => write!(f, "Vulnerability Assessment"),
         }
     }
 }
@@ -79,6 +81,7 @@ impl Stage {
             ScanProfile::Vuln => vec![
                 Stage::PortScan,
                 Stage::Fingerprint,
+                Stage::Vuln,
                 Stage::EndpointScan,
                 Stage::Recon,
                 Stage::Fuzz,
@@ -120,6 +123,7 @@ impl Stage {
             "jwt" => Some(Stage::Fuzz),
             "waf" => Some(Stage::Waf),
             "recon" => Some(Stage::Recon),
+            "vuln" | "vulnerability" | "vuln-assess" => Some(Stage::Vuln),
             _ => None,
         }
     }

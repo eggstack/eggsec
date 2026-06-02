@@ -228,8 +228,7 @@ See `plans/stale_items.md` for full list
 1. **Defense-Lab stage counts wrong** (`pipeline.md:136-142`): All 5 profiles have incorrect stage counts
 2. **Storage module is stub** (`storage/postgres.rs`): All CRUD methods return empty values
 3. **VulnAssessment is stub** (`vuln/mod.rs:37-40`): Cannot hold structured findings
-4. **SBOM CVE lookup missing** (`supply_chain/sbom.rs`): Empty vulnerabilities vectors
-5. **Docker shell injection risk** (`container/docker.rs:208-209`): Unvalidated image names
+4. **Docker shell injection risk** (`container/docker.rs:208-209`): Unvalidated image names
 
 #### Accuracy Summary
 | Document | Accuracy | Key Issues |
@@ -265,7 +264,6 @@ See `plans/stale_items.md` for full list
 | integrations.md | Medium | Jira/GitHub/GitLab paths unverified |
 | notify.md | Medium | Silent error suppression |
 | storage.md | Low | Stub - all methods return empty |
-| supply_chain.md | Low | SBOM no CVE lookup |
 | vuln.md | Low | VulnAssessment stub |
 | workflow.md | High | All types verified |
 | auth_context.md | High | All types verified |

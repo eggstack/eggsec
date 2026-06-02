@@ -160,6 +160,11 @@ pub enum TaskConfig {
         mode: String,
         target: Option<String>,
         cve_id: Option<String>,
+        title: Option<String>,
+        description: Option<String>,
+        cvss_vector: Option<String>,
+        asset_type: Option<String>,
+        severity: Option<String>,
     },
 }
 
@@ -208,7 +213,7 @@ pub enum TaskResult {
         scans: Vec<crate::storage::models::StoredScan>,
     },
     StorageListFindings {
-        findings: Vec<crate::storage::models::StoredFinding>,
+        findings: Vec<crate::findings::lifecycle::StoredFinding>,
     },
     Integrations,
     IntegrationsCreateIssue {
@@ -579,7 +584,12 @@ impl TaskRunner {
                 mode,
                 target,
                 cve_id,
-            } => super::security::run_vuln_task(mode, target, cve_id, progress_tx, result_tx).await,
+                title,
+                description,
+                cvss_vector,
+                asset_type,
+                severity,
+            } => super::security::run_vuln_task(mode, target, cve_id, title, description, cvss_vector, asset_type, severity, progress_tx, result_tx).await,
         };
         result
     }

@@ -22,6 +22,6 @@ Supply chain security analysis including SBOM generation (CycloneDX, SPDX format
 | `scanner.rs` | Manifest discovery and configuration analysis (Dockerfile, GitHub Actions). Feature-gated behind `sbom`. |
 | `typosquat.rs` | Typosquatting detection for package names |
 
-## Implementation Status
+## Scope
 
-Fully implemented. SBOM generation, manifest discovery/configuration analysis, and typosquatting detection are all functional. The `scanner.rs` module is feature-gated behind `sbom`.
+SBOM vulnerability lookup (CVE matching against generated SBOMs) is explicitly out of scope. The module generates SBOMs in CycloneDX and SPDX formats but does not perform vulnerability database lookups against them.

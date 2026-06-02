@@ -361,7 +361,12 @@ impl TaskBuilder for super::tabs::VulnTab {
         Some(workers::TaskConfig::Vuln {
             mode: self.get_mode().to_string(),
             target: None,
-            cve_id: None,
+            cve_id: Some(self.cve_id().to_string()).filter(|s| !s.is_empty()),
+            title: Some(self.title().to_string()).filter(|s| !s.is_empty()),
+            description: Some(self.description().to_string()).filter(|s| !s.is_empty()),
+            cvss_vector: Some(self.cvss_vector().to_string()).filter(|s| !s.is_empty()),
+            asset_type: Some(self.asset_type().to_string()).filter(|s| !s.is_empty()),
+            severity: Some(self.severity_str().to_string()).filter(|s| !s.is_empty()),
         })
     }
 }

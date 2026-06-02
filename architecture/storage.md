@@ -24,4 +24,4 @@ SQLx-based persistence layer using PostgreSQL for storing scan results, findings
 
 ## Implementation Status
 
-Implemented behind `database` feature flag. Core types and connection logic are in place. Returns a config error when the feature is not enabled.
+Fully implemented behind `database` feature flag. SQLx-based persistence with PostgreSQL using `PgPool` connection pool via `PgPoolOptions`. All CRUD operations use parameterized queries. `Finding` data and `status_history` are stored in JSONB columns. The unified `StoredFinding` type is re-exported from `findings::lifecycle`. Migrations live in `crates/slapper/migrations/`. Returns a config error when the feature is not enabled.

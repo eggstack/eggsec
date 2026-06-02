@@ -12,7 +12,7 @@
 |----------|-------|
 | Completed (2026-06-02 session) | 17 items |
 | Remaining Items | ~20 |
-| Known Intentional Stubs | 3 |
+| Known Intentional Stubs | 0 |
 
 ---
 
@@ -62,6 +62,22 @@
 | Lossy anyhow::Error conversion | Fixed with proper error mapping | `error/mod.rs` |
 | FindingStore deduplication | `store_finding()` now deduplicates by fingerprint | `findings/store.rs` |
 
+### Storage
+
+| Item | Description | Reference |
+|------|-------------|-----------|
+| Unified StoredFinding type | `StoredFinding` re-exported from `findings::lifecycle` for database persistence | `storage/models.rs` |
+| SQLx implementation | Full CRUD operations with PostgreSQL via `PgPool` and parameterized queries | `storage/postgres.rs` |
+| Migrations | Schema creation for scans, findings, and users tables | `crates/slapper/migrations/` |
+
+### Vuln Assessment
+
+| Item | Description | Reference |
+|------|-------------|-----------|
+| Structured VulnAssessment | Rich struct with `cvss_score`, `exploit_info`, `asset_criticality`, `prioritized_findings`, `triage_results`, `remediation_plans`, `summary` | `vuln/mod.rs:37` |
+| TUI worker wiring | VulnAssessment integrated into TUI scan workflow | `tui/` |
+| Stage::Vuln pipeline integration | Vulnerability assessment stage in security assessment pipeline | `pipeline/stage.rs` |
+
 ### Diff Module
 
 | Item | Description | Reference |
@@ -92,7 +108,7 @@
 
 ## Remaining Items
 
-> **Note:** Storage, VulnAssessment, and SBOM generators are intentional stubs documented in `architecture/storage.md`, `architecture/vuln.md`, and `architecture/supply_chain.md`. Do not include these in implementation efforts.
+> **Note:** Storage and VulnAssessment are now fully implemented. See Completed Work section above.
 
 ### High Priority
 
@@ -118,8 +134,7 @@
 | Recon | Pattern/file counts unverified | Pending |
 | Scanner | UDP fingerprinting timeout handling | Pending |
 | Storage | Sensitive passwords not encrypted at rest | Pending |
-| Supply Chain | SBOM limited to 3 ecosystems | Pending |
-| Supply Chain | Type duplication in SupplyChainFinding | Pending |
+
 | WAF | No timeout on bypass attempts | Pending |
 | WebSocket | Silent error suppression in close() | Pending |
 
@@ -192,13 +207,5 @@ The following items were verified against actual codebase:
 | Overview command counts | Actual is 24 base, 37 with all features |
 
 ---
-
-## Intentional Stubs (Do Not Fix)
-
-| Module | Reason |
-|--------|--------|
-| `storage/postgres.rs` | SQLx integration not implemented - documented stub |
-| `vuln/mod.rs:37-40` | VulnAssessment cannot hold structured findings - documented stub |
-| `supply_chain/sbom.rs` | SBOM generators return empty vulnerabilities - documented stub |
 
 (End of file)

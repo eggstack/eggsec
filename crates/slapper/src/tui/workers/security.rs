@@ -239,7 +239,8 @@ pub async fn run_storage_task(
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
     use crate::storage::init_storage;
-    use crate::storage::models::{ScanStatus, StoredFinding, StoredScan};
+    use crate::findings::lifecycle::StoredFinding;
+    use crate::storage::models::{ScanStatus, StoredScan};
 
     if let Err(e) = progress_tx.send((0, 3)).await {
         tracing::warn!("Failed to send storage progress: {}", e);
@@ -306,14 +307,41 @@ pub async fn run_storage_task(
         }
         "search_cve" => {
             if let Some(ref cve) = cve_id {
-                let finding = StoredFinding::new(
-                    "cve-search",
-                    &format!("CVE search: {}", cve),
-                    crate::types::Severity::Medium,
-                );
+                let finding = crate::findings::Finding {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    fingerprint: String::new(),
+                    title: format!("CVE search: {}", cve),
+                    description: format!("Search results for {}", cve),
+                    severity: crate::types::Severity::Medium,
+                    confidence: crate::findings::Confidence::Informational,
+                    finding_type: crate::findings::FindingType::ScanResult,
+                    cwe: None,
+                    owasp: None,
+                    cve: Some(cve.clone()),
+                    affected_asset: crate::findings::AffectedAsset {
+                        asset_type: "cve_search".to_string(),
+                        identifier: cve.clone(),
+                        host: None,
+                        port: None,
+                        protocol: None,
+                    },
+                    location: crate::findings::FindingLocation::default(),
+                    evidence: vec![],
+                    reproduction: None,
+                    remediation: None,
+                    discovered_at: chrono::Utc::now(),
+                    source: crate::findings::FindingSource {
+                        tool: "slapper".to_string(),
+                        module: "storage".to_string(),
+                        run_id: None,
+                    },
+                    tags: vec![],
+                    metadata: serde_json::Value::Null,
+                };
+                let stored = StoredFinding::new(finding);
                 if let Err(e) = result_tx
                     .send(TaskResult::StorageListFindings {
-                        findings: vec![finding],
+                        findings: vec![stored],
                     })
                     .await
                 {
@@ -470,35 +498,124 @@ pub async fn run_vuln_task(
     mode: String,
     target: Option<String>,
     cve_id: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
+    cvss_vector: Option<String>,
+    asset_type: Option<String>,
+    severity: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::vuln::VulnAssessment;
+    use crate::vuln::{VulnAssessment, CvssScore, ExploitInfo, AssetCriticality, Remediation};
+    use crate::vuln::asset::assess_asset;
+    use crate::vuln::prioritizer::prioritize_findings;
+    use crate::vuln::triage::triage_finding;
+    use crate::types::Severity;
 
     if let Err(e) = progress_tx.send((0, 3)).await {
         tracing::warn!("Failed to send vuln progress: {}", e);
     }
 
-    match mode.as_str() {
-        "cvss_calc" | "exploit_check" | "asset_assess" | "prioritize" | "triage"
-        | "remediation" => {
-            let mut results = vec![format!("Mode: {}", mode)];
-            if let Some(ref t) = target {
-                results.push(format!("Target: {}", t));
-            }
-            if let Some(ref c) = cve_id {
-                results.push(format!("CVE: {}", c));
-            }
-            results.push(format!("Assessment completed at: {}", chrono::Utc::now()));
+    let mut assessment = VulnAssessment::new(&mode);
 
-            let assessment = VulnAssessment {
-                mode: mode.clone(),
-                results,
-                assessed_at: chrono::Utc::now(),
-            };
-            if let Err(e) = result_tx.send(TaskResult::Vuln(assessment)).await {
-                tracing::warn!("Failed to send vuln result: {}", e);
+    match mode.as_str() {
+        "cvss_calc" => {
+            let vector = cvss_vector.as_deref().unwrap_or("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H");
+            match CvssScore::from_vector(vector) {
+                Ok(cvss) => {
+                    assessment.summary.push(format!("CVSS 3.1 Score: {:.1} ({})", cvss.base_score, cvss.severity()));
+                    assessment.summary.push(format!("Vector: {}", cvss.vector));
+                    assessment.cvss_score = Some(cvss);
+                }
+                Err(e) => {
+                    assessment.summary.push(format!("Error: {}", e));
+                }
             }
+        }
+        "exploit_check" => {
+            let cve = cve_id.as_deref().unwrap_or("CVE-2021-44228");
+            let info = ExploitInfo::assess(cve);
+            assessment.summary.push(format!("Exploitability: {}", cve));
+            assessment.summary.push(format!("Public Exploit: {}", if info.has_public_exploit { "Yes" } else { "No" }));
+            assessment.summary.push(format!("CISA KEV: {}", if info.in_cisa_kev { "Yes" } else { "No" }));
+            assessment.summary.push(format!("Exploit Score: {:.1}", info.exploit_score));
+            assessment.exploit_info = Some(info);
+        }
+        "asset_assess" => {
+            let target_str = target.as_deref().unwrap_or("unknown");
+            let atype = asset_type.as_deref().unwrap_or("web_server");
+            let asset = assess_asset(target_str, atype);
+            assessment.summary.push(format!("Asset: {}", asset.asset_id));
+            assessment.summary.push(format!("Overall Score: {:.1}", asset.overall_score));
+            assessment.summary.push(format!("Technology: {:.1} | Environment: {:.1} | Data: {:.1} | Users: {:.1}",
+                asset.technology_score, asset.environment_score, asset.data_sensitivity, asset.user_base));
+            assessment.asset_criticality = Some(asset);
+        }
+        "prioritize" => {
+            let title_str = title.as_deref().unwrap_or("Untitled finding");
+            let sev = severity.as_deref()
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "critical" => Some(Severity::Critical),
+                    "high" => Some(Severity::High),
+                    "medium" => Some(Severity::Medium),
+                    "low" => Some(Severity::Low),
+                    _ => Some(Severity::Info),
+                })
+                .unwrap_or(Severity::High);
+            let findings = vec![
+                ("find-1".to_string(), title_str.to_string(), sev, None),
+            ];
+            let prioritized = prioritize_findings(&findings);
+            assessment.summary.push(format!("Prioritized {} finding(s):", prioritized.len()));
+            for f in &prioritized {
+                assessment.summary.push(format!("  #{} [{}] {} - Risk: {:.1} ({:?})",
+                    f.priority_rank, f.severity, f.title, f.risk_score.combined_score, f.risk_score.priority_level));
+            }
+            assessment.prioritized_findings = prioritized;
+        }
+        "triage" => {
+            let finding_id_str = cve_id.as_deref().unwrap_or("find-1");
+            let title_str = title.as_deref().unwrap_or("Untitled finding");
+            let desc_str = description.as_deref().unwrap_or("");
+            let sev = severity.as_deref()
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "critical" => Some(Severity::Critical),
+                    "high" => Some(Severity::High),
+                    "medium" => Some(Severity::Medium),
+                    "low" => Some(Severity::Low),
+                    _ => Some(Severity::Info),
+                })
+                .unwrap_or(Severity::Medium);
+            let cvss = cvss_vector.as_deref().and_then(|v| {
+                CvssScore::from_vector(v).ok().map(|s| s.base_score)
+            });
+            let result = triage_finding(finding_id_str, title_str, desc_str, sev, cvss);
+            assessment.summary.push(format!("Triage: {}", result.finding_id));
+            assessment.summary.push(format!("Status: {:?}", result.triage_status));
+            assessment.summary.push(format!("Confidence: {:.0}%", result.confidence * 100.0));
+            assessment.summary.push(format!("Reason: {}", result.reason));
+            assessment.triage_results.push(result);
+        }
+        "remediation" => {
+            let title_str = title.as_deref().unwrap_or("Untitled finding");
+            let sev = severity.as_deref()
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "critical" => Some(Severity::Critical),
+                    "high" => Some(Severity::High),
+                    "medium" => Some(Severity::Medium),
+                    "low" => Some(Severity::Low),
+                    _ => Some(Severity::Info),
+                })
+                .unwrap_or(Severity::Medium);
+            let rem = Remediation::for_finding("find-1", title_str, sev);
+            assessment.summary.push(format!("Remediation: {}", rem.title));
+            assessment.summary.push(format!("Priority: {:?}", rem.priority));
+            assessment.summary.push(format!("Effort: {:.1} hours", rem.effort_hours));
+            assessment.summary.push("Steps:".to_string());
+            for (i, step) in rem.steps.iter().enumerate() {
+                assessment.summary.push(format!("  {}. {}", i + 1, step));
+            }
+            assessment.remediation_plans.push(rem);
         }
         _ => {
             if let Err(e) = result_tx
@@ -507,7 +624,19 @@ pub async fn run_vuln_task(
             {
                 tracing::warn!("Failed to send unknown vuln mode error: {}", e);
             }
+            if let Err(e) = progress_tx.send((3, 3)).await {
+                tracing::warn!("Failed to send vuln progress: {}", e);
+            }
+            return Ok(());
         }
+    }
+
+    if let Err(e) = progress_tx.send((2, 3)).await {
+        tracing::warn!("Failed to send vuln progress: {}", e);
+    }
+
+    if let Err(e) = result_tx.send(TaskResult::Vuln(assessment)).await {
+        tracing::warn!("Failed to send vuln result: {}", e);
     }
 
     if let Err(e) = progress_tx.send((3, 3)).await {

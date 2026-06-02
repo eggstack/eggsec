@@ -92,6 +92,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
 - `CodingAgentFindingReport` - Typed output schema for coding-agent findings in `tool/protocol/mcp/coding_agent_output.rs`
 - `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs`
+- `StoredFinding` - Unified finding type in `findings::lifecycle`, re-exported by `storage::models` for database persistence
 
 ### Important Patterns
 
@@ -124,13 +125,8 @@ Use these sections as the canonical reference points when updating guidance or s
 
 ### Codebase Issues (Known Stub Implementations)
 
-These modules exist but are stubs or have known limitations:
+No remaining stub implementations.
 
-| Module | Issue | Reference |
-|--------|-------|-----------|
-| `storage/postgres.rs` | All CRUD methods return empty values - no SQLx integration | `architecture/storage.md` |
-| `vuln/mod.rs:37-40` | `VulnAssessment` only has `mode`, `results`, `assessed_at` - cannot hold structured findings | `architecture/vuln.md` |
-| `supply_chain/sbom.rs` | SBOM generators return empty `vulnerabilities` vectors - no CVE lookup | `architecture/supply_chain.md` |
 
 ### Security Notes
 
@@ -261,7 +257,7 @@ When implementing items from `plans/plan.md`:
 
 2. **Remaining items are mostly documentation fixes**: Most remaining items are documentation corrections or low-priority improvements. Security-critical items have been addressed.
 
-3. **Stub modules**: Storage, VulnAssessment, and SBOM generators are known stubs - do not try to "fix" them without explicit instruction as they are intentional placeholders.
+3. **No remaining stubs**: All previously-stub modules (Storage, VulnAssessment) are now fully implemented.
 
 4. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.
 

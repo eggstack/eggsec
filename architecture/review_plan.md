@@ -250,12 +250,11 @@ Before committing, verify and clean up:
 
 ## Key Findings Summary
 
-### Critical Issues (5)
+### Critical Issues (4)
 1. **Defense-Lab stage counts incorrect** - `pipeline.md:136-142` shows wrong stage counts for all 5 profiles
 2. **Storage module is stub** - `storage/postgres.rs:6-7` is not connected to real database
-3. **SBOM no CVE lookup** - `supply_chain/sbom.rs` generators return empty vulnerability vectors
-4. **VulnAssessment is stub** - `vuln/mod.rs:37-40` cannot hold structured findings
-5. **Docker shell injection risk** - `container/docker.rs:208-209` vulnerable to command injection
+3. **VulnAssessment is stub** - `vuln/mod.rs:37-40` cannot hold structured findings
+4. **Docker shell injection risk** - `container/docker.rs:208-209` vulnerable to command injection
 
 ### Documentation Accuracy Issues (5)
 6. **k8s-openapi warning stale** - `feature_matrix.md:58-63` describes resolved issue
@@ -267,7 +266,7 @@ Before committing, verify and clean up:
 ### Cross-Cutting Concerns
 - **23 HIGH priority items** identified across 43 reviewed documents
 - **Multiple silent error suppression** patterns using `let _ =` that should log warnings
-- **Several modules are stubs** (storage, vuln, supply_chain SBOM) that need implementation or documentation updates
+- **Several modules are stubs** (storage, vuln) that need implementation or documentation updates
 - **Historical bug fix tables** in tui.md and scanner.md are stale and should be archived
 
 ### Statistical Findings
@@ -279,9 +278,8 @@ Before committing, verify and clean up:
 - **261 scanner endpoints** verified
 - **28 tabs** in TUI (20 base + 8 feature-gated)
 
-### Top 5 Recommended Actions
+### Top 4 Recommended Actions
 1. Fix defense-lab stage counts in `architecture/pipeline.md`
 2. Document storage as stub or implement SQLx integration
-3. Implement SBOM CVE lookup or document as planned
-4. Implement proper VulnAssessment or document as placeholder
-5. Add input validation for Docker image names
+3. Implement proper VulnAssessment or document as placeholder
+4. Add input validation for Docker image names

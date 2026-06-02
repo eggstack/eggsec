@@ -23,6 +23,8 @@ pub struct PipelineReport {
     /// Populated after pipeline execution completes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest: Option<RunManifest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vuln_assessment: Option<crate::vuln::VulnAssessment>,
 }
 
 impl std::fmt::Display for PipelineReport {
@@ -70,6 +72,13 @@ impl std::fmt::Display for PipelineReport {
             }
         } else if !self.endpoints.is_empty() {
             writeln!(f, "endpoints: {} found", self.endpoints.len())?;
+        }
+
+        if let Some(ref vuln) = self.vuln_assessment {
+            let _ = writeln!(f, "vulnerability assessment");
+            for line in &vuln.summary {
+                writeln!(f, "\t{}", line)?;
+            }
         }
 
         Ok(())
