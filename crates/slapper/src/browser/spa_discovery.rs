@@ -1,6 +1,5 @@
 use crate::browser::BrowserConfig;
 use crate::error::Result;
-use headless_chrome::Browser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -31,13 +30,10 @@ impl std::fmt::Display for DiscoveryMethod {
     }
 }
 
-pub async fn discover_routes(target: &str, config: &BrowserConfig) -> Result<Vec<SpaRoute>> {
-    let browser = Browser::default()?;
-    let tab = browser.new_tab()?;
-
-    tab.set_default_timeout(std::time::Duration::from_millis(config.timeout_ms));
-
-    tab.navigate_to(target)?.wait_until_navigated()?;
+pub async fn discover_routes(
+    tab: &headless_chrome::Tab,
+    _config: &BrowserConfig,
+) -> Result<Vec<SpaRoute>> {
 
     let js_script = r#"
         (function() {
@@ -127,13 +123,25 @@ pub async fn discover_routes(target: &str, config: &BrowserConfig) -> Result<Vec
 
     let result = tab.evaluate(js_script, true)?;
 
-    let data: HashSet<String> = result
+    let data: serde_json::Value = result
         .value
         .as_ref()
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let discovered_routes: Vec<SpaRoute> = data
+    let routes_set: HashSet<String> = data
+        .get("routes")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let api_set: HashSet<String> = data
+        .get("apiEndpoints")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let all_paths: HashSet<String> = routes_set.union(&api_set).cloned().collect();
+
+    let discovered_routes: Vec<SpaRoute> = all_paths
         .iter()
         .filter(|path| {
             path.starts_with('/') && !path.starts_with("/api/") && !path.starts_with("/rest/")
@@ -146,7 +154,7 @@ pub async fn discover_routes(target: &str, config: &BrowserConfig) -> Result<Vec
         })
         .collect();
 
-    let api_routes: Vec<SpaRoute> = data
+    let api_routes: Vec<SpaRoute> = all_paths
         .iter()
         .filter(|path| path.starts_with("/api/") || path.starts_with("/rest/"))
         .map(|path| SpaRoute {
@@ -181,14 +189,20 @@ fn extract_parameters(path: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use headless_chrome::Browser;
 
     #[tokio::test]
     async fn test_discover_routes() {
-        let config = BrowserConfig::default();
-        let routes = discover_routes("http://example.com", &config)
-            .await
+        let browser = Browser::default().unwrap();
+        let tab = browser.new_tab().unwrap();
+        tab.set_default_timeout(std::time::Duration::from_millis(30000));
+        tab.navigate_to("http://example.com")
+            .unwrap()
+            .wait_until_navigated()
             .unwrap();
-        assert!(!routes.is_empty());
+        let config = BrowserConfig::default();
+        let routes = discover_routes(&tab, &config).await.unwrap();
+        assert!(routes.is_empty());
     }
 
     #[test]

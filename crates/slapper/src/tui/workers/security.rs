@@ -4,7 +4,8 @@
     feature = "database",
     feature = "external-integrations",
     feature = "finding-workflow",
-    feature = "vuln-management"
+    feature = "vuln-management",
+    feature = "headless-browser"
 ))]
 use crate::tui::workers::TaskResult;
 

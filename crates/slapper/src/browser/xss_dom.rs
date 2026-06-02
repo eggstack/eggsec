@@ -1,7 +1,6 @@
 use crate::browser::BrowserConfig;
 use crate::error::Result;
 use crate::types::Severity;
-use headless_chrome::Browser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -65,13 +64,11 @@ static SINKS: &[&str] = &[
     "script.src",
 ];
 
-pub async fn scan_dom_xss(target: &str, config: &BrowserConfig) -> Result<Vec<DomXssFinding>> {
-    let browser = Browser::default()?;
-    let tab = browser.new_tab()?;
-
-    tab.set_default_timeout(std::time::Duration::from_millis(config.timeout_ms));
-
-    tab.navigate_to(target)?.wait_until_navigated()?;
+pub async fn scan_dom_xss(
+    tab: &headless_chrome::Tab,
+    config: &BrowserConfig,
+) -> Result<Vec<DomXssFinding>> {
+    let target = tab.get_url();
 
     let js_script = r#"
         (function() {
@@ -120,7 +117,7 @@ pub async fn scan_dom_xss(target: &str, config: &BrowserConfig) -> Result<Vec<Do
         })()
     "#.replace("$payload$", &config.xss_payload);
 
-    let result = tab.evaluate(js_script, true)?;
+    let result = tab.evaluate(&js_script, true)?;
 
     let findings_list: Vec<HashMap<String, String>> = result
         .value
@@ -182,7 +179,7 @@ fn calculate_severity(source: &str, sink: &str) -> (Severity, f32) {
     (severity, cvss_score)
 }
 
-fn get_remediation(source: &str, sink: &str) -> String {
+fn get_remediation(_source: &str, sink: &str) -> String {
     match sink {
         "innerHTML" | "outerHTML" => {
             "Use textContent instead of innerHTML/outerHTML; sanitize HTML with DOMPurify if needed".to_string()
@@ -205,12 +202,20 @@ fn get_remediation(source: &str, sink: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use headless_chrome::Browser;
 
     #[tokio::test]
     async fn test_scan_dom_xss() {
+        let browser = Browser::default().unwrap();
+        let tab = browser.new_tab().unwrap();
+        tab.set_default_timeout(std::time::Duration::from_millis(30000));
+        tab.navigate_to("http://example.com")
+            .unwrap()
+            .wait_until_navigated()
+            .unwrap();
         let config = BrowserConfig::default();
-        let findings = scan_dom_xss("http://example.com", &config).await.unwrap();
-        assert!(!findings.is_empty());
+        let findings = scan_dom_xss(&tab, &config).await.unwrap();
+        assert!(findings.is_empty());
     }
 
     #[test]

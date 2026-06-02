@@ -1,7 +1,6 @@
 use crate::browser::BrowserConfig;
 use crate::error::Result;
 use crate::types::Severity;
-use headless_chrome::Browser;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,15 +43,9 @@ impl std::fmt::Display for ClientIssueType {
 }
 
 pub async fn check_client_security(
-    target: &str,
-    config: &BrowserConfig,
+    tab: &headless_chrome::Tab,
+    _config: &BrowserConfig,
 ) -> Result<Vec<ClientIssue>> {
-    let browser = Browser::default()?;
-    let tab = browser.new_tab()?;
-
-    tab.set_default_timeout(std::time::Duration::from_millis(config.timeout_ms));
-
-    tab.navigate_to(target)?.wait_until_navigated()?;
 
     let js_script = r#"
         (function() {
@@ -285,13 +278,19 @@ fn get_remediation(issue_type: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use headless_chrome::Browser;
 
     #[tokio::test]
     async fn test_check_client_security() {
-        let config = BrowserConfig::default();
-        let issues = check_client_security("http://example.com", &config)
-            .await
+        let browser = Browser::default().unwrap();
+        let tab = browser.new_tab().unwrap();
+        tab.set_default_timeout(std::time::Duration::from_millis(30000));
+        tab.navigate_to("http://example.com")
+            .unwrap()
+            .wait_until_navigated()
             .unwrap();
+        let config = BrowserConfig::default();
+        let issues = check_client_security(&tab, &config).await.unwrap();
         assert!(!issues.is_empty());
     }
 

@@ -103,6 +103,7 @@ impl BrowserTab {
                 .unwrap_or(false),
             crawl_depth: self.crawl_depth(),
             timeout_ms: self.timeout_ms(),
+            xss_payload: BrowserConfig::default().xss_payload,
         }
     }
 
