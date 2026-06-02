@@ -206,7 +206,9 @@ impl PacketCapture {
                     }
 
                     if let Some(ref mut writer) = pcap_writer {
-                        let _ = writer.write_packet(&packet);
+                        if let Err(e) = writer.write_packet(&packet) {
+                            tracing::warn!("Failed to write packet to pcap file: {}", e);
+                        }
                     }
 
                     let packet_info = Self::parse_packet_internal(&packet);
