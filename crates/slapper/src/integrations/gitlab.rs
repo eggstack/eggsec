@@ -12,15 +12,15 @@ pub struct GitLabConfig {
 
 pub struct GitLabClient {
     config: GitLabConfig,
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 impl GitLabClient {
     pub fn new(config: GitLabConfig) -> Self {
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self { config, client }
     }
 
@@ -34,8 +34,9 @@ impl GitLabClient {
     }
 }
 
+#[async_trait::async_trait]
 impl IssueTracker for GitLabClient {
-    fn create_issue(&self, issue: &Issue) -> Result<String> {
+    async fn create_issue(&self, issue: &Issue) -> Result<String> {
         let url = self.api_url("/issues");
 
         let labels = if issue.labels.is_empty() {
@@ -57,17 +58,19 @@ impl IssueTracker for GitLabClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
             let iid = json["iid"].as_i64().unwrap_or(1);
             Ok(format!("!{}", iid))
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "GitLab API error {}: {}",
                 status, body
@@ -75,7 +78,7 @@ impl IssueTracker for GitLabClient {
         }
     }
 
-    fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
+    async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
         let issue_iid = id.trim_start_matches('!');
         let url = self.api_url(&format!("/issues/{}", issue_iid));
 
@@ -106,13 +109,14 @@ impl IssueTracker for GitLabClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             Ok(())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "GitLab API error {}: {}",
                 status, body
@@ -120,7 +124,7 @@ impl IssueTracker for GitLabClient {
         }
     }
 
-    fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
+    async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
         let issue_iid = issue_id.trim_start_matches('!');
         let url = self.api_url(&format!("/issues/{}/notes", issue_iid));
 
@@ -135,13 +139,14 @@ impl IssueTracker for GitLabClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             Ok(())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "GitLab API error {}: {}",
                 status, body
@@ -149,7 +154,7 @@ impl IssueTracker for GitLabClient {
         }
     }
 
-    fn get_issue(&self, id: &str) -> Result<Issue> {
+    async fn get_issue(&self, id: &str) -> Result<Issue> {
         let issue_iid = id.trim_start_matches('!');
         let url = self.api_url(&format!("/issues/{}", issue_iid));
 
@@ -158,11 +163,13 @@ impl IssueTracker for GitLabClient {
             .get(&url)
             .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
 
             let labels: Vec<String> = json["labels"]
@@ -205,7 +212,7 @@ impl IssueTracker for GitLabClient {
         }
     }
 
-    fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
+    async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
         let url = self.api_url(&format!("/issues?search={}", query));
 
         let response = self
@@ -213,11 +220,13 @@ impl IssueTracker for GitLabClient {
             .get(&url)
             .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
 
             let issues: Vec<Issue> = json

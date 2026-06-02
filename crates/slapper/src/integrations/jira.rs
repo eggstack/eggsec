@@ -13,21 +13,22 @@ pub struct JiraConfig {
 
 pub struct JiraClient {
     config: JiraConfig,
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 impl JiraClient {
     pub fn new(config: JiraConfig) -> Self {
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self { config, client }
     }
 }
 
+#[async_trait::async_trait]
 impl IssueTracker for JiraClient {
-    fn create_issue(&self, issue: &Issue) -> Result<String> {
+    async fn create_issue(&self, issue: &Issue) -> Result<String> {
         let url = format!("{}/rest/api/3/issue", self.config.url);
 
         let severity_label = issue
@@ -66,16 +67,18 @@ impl IssueTracker for JiraClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
             Ok(json["key"].as_str().unwrap_or("JIRA-1").to_string())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "Jira API error {}: {}",
                 status, body
@@ -83,7 +86,7 @@ impl IssueTracker for JiraClient {
         }
     }
 
-    fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
+    async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
         let url = format!("{}/rest/api/3/issue/{}", self.config.url, id);
 
         let mut fields = serde_json::Map::new();
@@ -123,13 +126,14 @@ impl IssueTracker for JiraClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             Ok(())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "Jira API error {}: {}",
                 status, body
@@ -137,7 +141,7 @@ impl IssueTracker for JiraClient {
         }
     }
 
-    fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
+    async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
         let url = format!("{}/rest/api/3/issue/{}/comment", self.config.url, issue_id);
 
         let body = serde_json::json!({
@@ -164,13 +168,14 @@ impl IssueTracker for JiraClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             Ok(())
         } else {
             let status = response.status();
-            let body = response.text().unwrap_or_default();
+            let body = response.text().await.unwrap_or_default();
             Err(SlapperError::Network(format!(
                 "Jira API error {}: {}",
                 status, body
@@ -178,7 +183,7 @@ impl IssueTracker for JiraClient {
         }
     }
 
-    fn get_issue(&self, id: &str) -> Result<Issue> {
+    async fn get_issue(&self, id: &str) -> Result<Issue> {
         let url = format!("{}/rest/api/3/issue/{}", self.config.url, id);
 
         let response = self
@@ -189,11 +194,13 @@ impl IssueTracker for JiraClient {
                 Some(self.config.api_token.expose_secret()),
             )
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
 
             let fields = &json["fields"];
@@ -228,7 +235,7 @@ impl IssueTracker for JiraClient {
         }
     }
 
-    fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
+    async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
         let url = format!("{}/rest/api/3/search", self.config.url);
 
         let body = serde_json::json!({
@@ -246,11 +253,13 @@ impl IssueTracker for JiraClient {
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
+            .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
         if response.status().is_success() {
             let json: serde_json::Value = response
                 .json()
+                .await
                 .map_err(|e| SlapperError::Network(e.to_string()))?;
 
             let issues: Vec<Issue> = json["issues"]

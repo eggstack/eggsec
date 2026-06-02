@@ -91,6 +91,40 @@ impl WebhookNotifier {
         webhook: &WebhookConfig,
         payload: &NotificationPayload,
     ) -> Result<(), String> {
+        const MAX_RETRIES: u32 = 3;
+        const BASE_DELAY_MS: u64 = 1000;
+
+        let mut last_error = String::new();
+
+        for attempt in 0..MAX_RETRIES {
+            if attempt > 0 {
+                let delay_ms = BASE_DELAY_MS * 2u64.pow(attempt - 1);
+                tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+            }
+
+            match self.try_send_webhook(webhook, payload).await {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    last_error = e;
+                    if attempt < MAX_RETRIES - 1 {
+                        tracing::warn!(
+                            "Webhook delivery attempt {} failed, retrying: {}",
+                            attempt + 1,
+                            last_error
+                        );
+                    }
+                }
+            }
+        }
+
+        Err(last_error)
+    }
+
+    async fn try_send_webhook(
+        &self,
+        webhook: &WebhookConfig,
+        payload: &NotificationPayload,
+    ) -> Result<(), String> {
         let client = &self.client;
 
         let mut request = client.post(&webhook.url);
