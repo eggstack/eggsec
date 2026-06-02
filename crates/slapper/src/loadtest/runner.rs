@@ -312,7 +312,9 @@ impl LoadTestRunner {
                     }
 
                     if let Some(sem) = &rate_limit_sem {
-                        let _permit = sem.acquire().await.unwrap();
+                        if let Err(e) = sem.acquire().await {
+                            tracing::warn!("rate limit semaphore acquire failed: {}, skipping rate limit for this request", e);
+                        }
                     }
 
                     let request_start = Instant::now();
