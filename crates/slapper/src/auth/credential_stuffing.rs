@@ -34,7 +34,7 @@ pub struct CredentialStuffer {
 
 impl CredentialStuffer {
     pub fn new(max_attempts: usize, concurrency: usize, timeout_secs: u64) -> Result<Self> {
-        let engine = AuthEngine::new(max_attempts, concurrency, timeout_secs)?;
+        let engine = AuthEngine::new(max_attempts, concurrency, timeout_secs, true)?;
         let client = create_insecure_http_client(timeout_secs)?;
         Ok(Self { engine, client })
     }

@@ -11,7 +11,7 @@ Proxy pool management supporting SOCKS4/5, HTTP CONNECT, and HTTPS proxies with 
 | `ProxyManager` | `proxy/mod.rs` | Central proxy orchestrator (pool + rotator + health checker) |
 | `ProxiedConnection` | `proxy/mod.rs` | Connection routed through proxy chain |
 | `ProxyPool` | `proxy/pool.rs` | Thread-safe proxy pool with statistics tracking |
-| `ProxyRotator` | `proxy/rotator.rs` | Rotation strategy selector (round-robin, least-used, random) |
+| `ProxyRotator` | `proxy/rotator.rs` | Rotation strategy selector (round-robin, random, weighted, least-used, lowest-latency) |
 | `HealthChecker` | `proxy/health.rs` | Async health checking for proxy endpoints |
 | `ProxyHealth` | `proxy/health.rs` | Health status of a proxy |
 | `ProxyConfig` | `proxy/config.rs` | Proxy pool configuration |

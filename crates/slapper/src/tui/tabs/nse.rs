@@ -188,7 +188,7 @@ impl TabRender for NseTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(input_block, chunks[0]);
+        f.render_widget(&input_block, chunks[0]);
 
         // Input fields
         let input_chunks = Layout::default()

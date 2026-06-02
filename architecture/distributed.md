@@ -62,6 +62,36 @@ pub struct ResponseMessage {
 
 Constructors: `success(id, output, duration_ms)`, `error(id, error, duration_ms)`, `registration(id, hostname, capabilities)`.
 
+## Worker Capabilities (`mod.rs:83-91`)
+
+The `CAPABILITIES` constant defines the set of task types that distributed workers can advertise support for:
+
+```rust
+pub const CAPABILITIES: &[&str] = &[
+    "PortScan",
+    "ServiceFingerprint",
+    "EndpointDiscovery",
+    "Fuzz",
+    "WafTest",
+    "LoadTest",
+    "Recon",
+];
+```
+
+When workers register with the coordinator via `CommandMessage::Register`, they include their capabilities. The coordinator uses these capabilities to assign appropriate tasks to each worker based on what the worker is capable of performing. The `WorkerRegistration` struct at `mod.rs:93-100` stores the worker's reported capabilities alongside its `worker_id`, `hostname`, `max_concurrency`, and `status`.
+
+### Capability Matching
+
+| Capability | TaskType | Description |
+|------------|----------|-------------|
+| `PortScan` | `PortScan` | TCP/UDP port scanning |
+| `ServiceFingerprint` | `Fingerprint` | Service/version detection |
+| `EndpointDiscovery` | `Endpoints` | HTTP endpoint discovery |
+| `Fuzz` | `Fuzz` | Fuzzing engine |
+| `WafTest` | `WafTest` | WAF detection and bypass |
+| `LoadTest` | `LoadTest` | HTTP load testing |
+| `Recon` | `Recon` | Reconnaissance |
+
 ## Key Components
 
 | Component | File | Lines | Key Function/Type |

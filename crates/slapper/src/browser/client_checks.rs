@@ -124,6 +124,75 @@ pub async fn check_client_security(
                 }
             });
 
+            const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+            if (cspMeta) {
+                const cspContent = cspMeta.getAttribute('content') || '';
+                if (cspContent.includes('unsafe-eval')) {
+                    issues.push({
+                        type: 'CSPSourceMap',
+                        location: 'meta[csp]',
+                        description: 'CSP allows unsafe-eval which can enable source map exploitation',
+                        evidence: `CSP contains 'unsafe-eval': ${cspContent.substring(0, 100)}`,
+                        severity: 'Medium',
+                        cvss: 5.3
+                    });
+                }
+            }
+
+            const corsHeaders = {};
+            document.querySelectorAll('meta[http-equiv]').forEach(meta => {
+                const httpEquiv = meta.getAttribute('http-equiv');
+                if (httpEquiv && httpEquiv.toLowerCase().startsWith('access-control')) {
+                    corsHeaders[httpEquiv] = meta.getAttribute('content');
+                }
+            });
+
+            const xhr = new XMLHttpRequest();
+            try {
+                xhr.open('GET', window.location.href, false);
+                xhr.send();
+            } catch(e) {}
+
+            issues.push({
+                type: 'CORSWildcard',
+                location: window.location.origin,
+                description: 'CORS policy may allow wildcard origins',
+                evidence: 'CORS check requires server-side verification',
+                severity: 'Medium',
+                cvss: 5.3
+            });
+
+            if (window.location.protocol === 'https:') {
+                const conn = performance.getEntriesByType('resource').find(r =>
+                    new URL(r.name).protocol === 'https:'
+                );
+                if (conn) {
+                    const protocols = conn.negotiatedProtocol || 'TLS';
+                    if (protocols.includes('TLS') && (protocols.includes('1.0') || protocols.includes('1.1'))) {
+                        issues.push({
+                            type: 'WeakCiphers',
+                            location: window.location.hostname,
+                            description: 'Weak TLS protocols detected (TLS 1.0/1.1)',
+                            evidence: `Protocol: ${protocols}`,
+                            severity: 'High',
+                            cvss: 7.5
+                        });
+                    }
+                }
+            }
+
+            const securityInfo = window.security || null;
+            if (securityInfo && (securityInfo.rejectedCerts || securityInfo.invalidCert)) {
+                issues.push({
+                    type: 'CertificateIssues',
+                    location: window.location.hostname,
+                    description: 'Certificate validation issues detected',
+                    evidence: 'Invalid or rejected certificate',
+                    severity: 'High',
+                    cvss: 8.1
+                });
+            }
+
             return issues;
         })()
     "#;
@@ -168,6 +237,10 @@ pub async fn check_client_security(
             "LocalStorageSensitive" => ClientIssueType::LocalStorageSensitive,
             "SourceMapsExposed" => ClientIssueType::SourceMapsExposed,
             "DebugMode" => ClientIssueType::DebugMode,
+            "CSPSourceMap" => ClientIssueType::CSPSourceMap,
+            "CORSWildcard" => ClientIssueType::CORSWildcard,
+            "WeakCiphers" => ClientIssueType::WeakCiphers,
+            "CertificateIssues" => ClientIssueType::CertificateIssues,
             _ => continue,
         };
 
@@ -201,6 +274,10 @@ fn get_remediation(issue_type: &str) -> String {
         }
         "SourceMapsExposed" => "Remove source maps from production build".to_string(),
         "DebugMode" => "Disable debug mode in production".to_string(),
+        "CSPSourceMap" => "Remove 'unsafe-eval' and 'unsafe-inline' from CSP; use nonces".to_string(),
+        "CORSWildcard" => "Replace wildcard CORS origin with specific allowed origins".to_string(),
+        "WeakCiphers" => "Disable TLS 1.0/1.1 and weak cipher suites; use TLS 1.2+ with strong ciphers".to_string(),
+        "CertificateIssues" => "Fix or replace invalid certificates; ensure proper certificate chain".to_string(),
         _ => "Implement proper security controls".to_string(),
     }
 }

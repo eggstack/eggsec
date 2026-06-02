@@ -75,6 +75,9 @@ pub enum SlapperError {
     #[error("Output error: {0}")]
     Output(String),
 
+    #[error("Internal error: {0}")]
+    Internal(String),
+
     #[error("Scope violation: {0}")]
     ScopeViolation(String),
 
@@ -264,11 +267,12 @@ impl From<hickory_resolver::net::NetError> for SlapperError {
 
 impl From<anyhow::Error> for SlapperError {
     fn from(e: anyhow::Error) -> Self {
-        SlapperError::RequestFailed {
-            method: "UNKNOWN".to_string(),
-            url: "unknown".to_string(),
-            error: e.to_string(),
-        }
+        let msg = if let Some(src) = e.source() {
+            format!("{}: {}", e, src)
+        } else {
+            e.to_string()
+        };
+        SlapperError::Internal(msg)
     }
 }
 

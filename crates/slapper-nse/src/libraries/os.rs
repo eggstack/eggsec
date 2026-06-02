@@ -152,16 +152,21 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
 
     let sandbox_for_remove = sandbox.clone();
     let remove_fn = lua.create_function(move |_lua, filename: String| {
-        if sandbox_for_remove.enabled {
-            if !sandbox_for_remove.is_path_allowed(&filename) {
-                OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-                if sandbox_for_remove.log_violations {
-                    tracing::warn!(path = %filename, "Sandbox: blocked os.remove call");
+        let file_path = if sandbox_for_remove.enabled {
+            match sandbox_for_remove.get_allowed_path(&filename) {
+                Some(canonical) => canonical,
+                None => {
+                    OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
+                    if sandbox_for_remove.log_violations {
+                        tracing::warn!(path = %filename, "Sandbox: blocked os.remove call");
+                    }
+                    return Ok(false);
                 }
-                return Ok(false);
             }
-        }
-        match std::fs::remove_file(&filename) {
+        } else {
+            std::path::PathBuf::from(&filename)
+        };
+        match std::fs::remove_file(&file_path) {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
@@ -170,18 +175,26 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
 
     let sandbox_for_rename = sandbox.clone();
     let rename_fn = lua.create_function(move |_lua, (oldname, newname): (String, String)| {
-        if sandbox_for_rename.enabled {
-            if !sandbox_for_rename.is_path_allowed(&oldname)
-                || !sandbox_for_rename.is_path_allowed(&newname)
-            {
+        let (old_path, new_path) = if sandbox_for_rename.enabled {
+            let Some(canonical_old) = sandbox_for_rename.get_allowed_path(&oldname) else {
                 OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                 if sandbox_for_rename.log_violations {
                     tracing::warn!(old = %oldname, new = %newname, "Sandbox: blocked os.rename call");
                 }
                 return Ok(false);
-            }
-        }
-        match std::fs::rename(&oldname, &newname) {
+            };
+            let Some(canonical_new) = sandbox_for_rename.get_allowed_path(&newname) else {
+                OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
+                if sandbox_for_rename.log_violations {
+                    tracing::warn!(old = %oldname, new = %newname, "Sandbox: blocked os.rename call");
+                }
+                return Ok(false);
+            };
+            (canonical_old, canonical_new)
+        } else {
+            (std::path::PathBuf::from(&oldname), std::path::PathBuf::from(&newname))
+        };
+        match std::fs::rename(&old_path, &new_path) {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
@@ -196,16 +209,21 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
 
     let sandbox_for_chdir = sandbox.clone();
     let chdir_fn = lua.create_function(move |_lua, path: String| {
-        if sandbox_for_chdir.enabled {
-            if !sandbox_for_chdir.is_path_allowed(&path) {
-                OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-                if sandbox_for_chdir.log_violations {
-                    tracing::warn!(path = %path, "Sandbox: blocked os.chdir call");
+        let dir_path = if sandbox_for_chdir.enabled {
+            match sandbox_for_chdir.get_allowed_path(&path) {
+                Some(canonical) => canonical,
+                None => {
+                    OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
+                    if sandbox_for_chdir.log_violations {
+                        tracing::warn!(path = %path, "Sandbox: blocked os.chdir call");
+                    }
+                    return Ok(-1);
                 }
-                return Ok(-1);
             }
-        }
-        match env::set_current_dir(&path) {
+        } else {
+            std::path::PathBuf::from(&path)
+        };
+        match env::set_current_dir(&dir_path) {
             Ok(()) => Ok(0),
             Err(_) => Ok(-1),
         }

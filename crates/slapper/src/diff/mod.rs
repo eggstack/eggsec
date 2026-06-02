@@ -1,7 +1,8 @@
+use crate::findings::Evidence;
 use crate::findings::Finding;
 use anyhow::Result;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::Path;
 
 /// Result of comparing two scans
@@ -23,6 +24,8 @@ pub struct FindingChange {
     pub old_confidence: crate::findings::Confidence,
     pub new_confidence: crate::findings::Confidence,
     pub evidence_changed: bool,
+    pub old_evidence: Option<Vec<Evidence>>,
+    pub new_evidence: Option<Vec<Evidence>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,12 +40,12 @@ pub struct DiffSummary {
 
 /// Compare two sets of findings and produce a diff result
 pub fn diff_findings(old_findings: &[Finding], new_findings: &[Finding]) -> DiffResult {
-    let old_map: HashMap<&str, &Finding> = old_findings
+    let old_map: FxHashMap<&str, &Finding> = old_findings
         .iter()
         .map(|f| (f.fingerprint.as_str(), f))
         .collect();
 
-    let new_map: HashMap<&str, &Finding> = new_findings
+    let new_map: FxHashMap<&str, &Finding> = new_findings
         .iter()
         .map(|f| (f.fingerprint.as_str(), f))
         .collect();
@@ -66,6 +69,8 @@ pub fn diff_findings(old_findings: &[Finding], new_findings: &[Finding]) -> Diff
                     old_confidence: old_f.confidence,
                     new_confidence: new_f.confidence,
                     evidence_changed: old_f.evidence.len() != new_f.evidence.len(),
+                    old_evidence: Some(old_f.evidence.clone()),
+                    new_evidence: Some(new_f.evidence.clone()),
                 });
             } else {
                 persisting.push((*new_f).clone());

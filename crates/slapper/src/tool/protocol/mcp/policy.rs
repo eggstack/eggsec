@@ -507,6 +507,7 @@ mod tests {
             make_tool("waf-detect", ToolCategory::Waf),
             make_tool("waf-bypass", ToolCategory::Waf),
             make_tool("search", ToolCategory::Pipeline),
+            make_tool("endpoints", ToolCategory::Scanning),
         ];
         let filtered = policy.filter_tools(tools);
         let ids: Vec<&str> = filtered.iter().map(|t| t.id.as_str()).collect();
@@ -515,6 +516,7 @@ mod tests {
         assert!(ids.contains(&"fingerprint"));
         assert!(ids.contains(&"waf-detect"));
         assert!(ids.contains(&"search"));
+        assert!(ids.contains(&"endpoints"));
         assert!(!ids.contains(&"fuzz"));
         assert!(!ids.contains(&"recon"));
         assert!(!ids.contains(&"load"));
