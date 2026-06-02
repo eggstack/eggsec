@@ -105,6 +105,31 @@ pub struct SandboxConfig {
 }
 ```
 
+### TOCTOU Prevention (RESOLVED 2026-06-02)
+
+The `get_allowed_path()` method (lib.rs:101) returns `Option<PathBuf>` - the canonical path if allowed, `None` otherwise. All file operations in lfs and os libraries now use this method to avoid race conditions between check and use:
+
+```rust
+// Use get_allowed_path() to avoid TOCTOU
+if let Some(canonical) = sandbox.get_allowed_path(path) {
+    // Use canonical path for actual file operations
+    fs::metadata(&canonical)
+} else {
+    // Path blocked by sandbox
+}
+```
+
+### DNS Rebinding Mitigation (RESOLVED 2026-06-02)
+
+The `resolve_host()` method (lib.rs:155) returns `Vec<IpAddr>` of all allowed IPs for a hostname. This allows callers to get the actual IPs that passed validation and use them immediately before DNS can change:
+
+```rust
+let allowed_ips = sandbox.resolve_host("example.com");
+// Use allowed_ips immediately for connection
+```
+
+**Limitation**: `is_host_allowed()` checks at call time but actual connection may use different IP if DNS changes. Use `resolve_host()` for security-sensitive operations.
+
 ### Symlink Cycles (RESOLVED)
 
 Previously, symlink cycle detection was incomplete - if `canonicalize()` failed, it fell back to the unresolved path. **This is now fixed** - canonicalization failures result in the path being blocked.
@@ -116,16 +141,30 @@ Previously, symlink cycle detection was incomplete - if `canonicalize()` failed,
 3. **Use allowlist for io.popen** - Only permit known-safe commands
 4. **Use allowed_networks** - Configure CIDR blocklist to restrict socket connections to expected network ranges
 
-## Path Validation Pattern
+## Path Validation Pattern (Recommended)
+
+Use `get_allowed_path()` to get the canonical path AND validate it in one call:
 
 ```rust
-let canonical = match path_buf.canonicalize() {
-    Ok(c) => c,
-    Err(e) => return Err(format!("Path could not be resolved: {} - blocked", e)),
-};
-if !canonical.starts_with(allowed_dir) {
-    return Err("Path blocked by sandbox");
+// RECOMMENDED: get_allowed_path returns canonical path if allowed
+if let Some(canonical_path) = sandbox.get_allowed_path(path) {
+    // canonical_path is already validated AND canonical
+    let file = fs::File::open(&canonical_path)?;
+    // ... use file
+} else {
+    return Err("Path blocked by sandbox".into());
 }
+```
+
+For network operations, use `resolve_host()` to get validated IPs:
+
+```rust
+// RECOMMENDED: resolve_host returns allowed IPs
+let allowed_ips = sandbox.resolve_host(host);
+if allowed_ips.is_empty() {
+    return Err("Host not allowed by sandbox".into());
+}
+// Use allowed_ips immediately for connection
 ```
 
 ## Triggers
