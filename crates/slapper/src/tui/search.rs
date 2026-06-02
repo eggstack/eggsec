@@ -35,20 +35,6 @@ impl GlobalSearch {
         }
     }
 
-    pub fn search(&mut self, app: &App, query: &str) {
-        let data = vec![
-            ("Recon", app.recon.target().to_string()),
-            ("Fingerprint", app.fingerprint.target().to_string()),
-            ("Fuzz", app.fuzz.target().to_string()),
-            ("WAF", app.waf.target().to_string()),
-            ("Scan", app.scan.target().to_string()),
-            ("Scan Endpoints", app.scan_endpoints.target().to_string()),
-            ("Scan Ports", app.scan_ports.target().to_string()),
-            ("Stress", app.stress.target().to_string()),
-        ];
-        self.search_from_strings(query, &data);
-    }
-
     pub fn search_from_strings(&mut self, query: &str, data: &[(&str, String)]) {
         self.results.clear();
         self.active_tab = None;
@@ -75,36 +61,12 @@ impl GlobalSearch {
         }
     }
 
-    pub fn move_up(&mut self) {
-        if self.selected > 0 {
-            self.selected -= 1;
-            self.update_active_tab();
-        }
-    }
-
-    pub fn move_down(&mut self) {
-        if self.selected < self.results.len().saturating_sub(1) {
-            self.selected += 1;
-            self.update_active_tab();
-        }
-    }
-
-    fn update_active_tab(&mut self) {
-        if let Some(idx) = self.results.get(self.selected) {
-            self.active_tab = Some(idx.tab.clone());
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.results.is_empty()
     }
 
     pub fn len(&self) -> usize {
         self.results.len()
-    }
-
-    pub fn selected(&self) -> usize {
-        self.selected
     }
 }
 

@@ -597,21 +597,20 @@ self.inputs.fields[1].cursor_pos = 11;
 
 ### Silent Send Error Handling
 
-Workers use `let _ = channel.send(...).await` for progress and result sending. This is intentional because:
-
-1. If the main loop has been dropped (app closed), there's no point propagating the error
-2. Progress updates that fail don't affect the final result
-3. Result sending failures are logged at error level before return
+Workers use the proper error-handling pattern for channel sends:
 
 ```rust
-// Worker send pattern - intentional silent suppression
-let results = runner.run().await?;
-let _ = result_tx.send(TaskResult::LoadTest(results)).await;
-let _ = progress_tx.send((requests, requests)).await;
-Ok(())
+if let Err(e) = result_tx.send(TaskResult::LoadTest(results)).await {
+    tracing::warn!("Failed to send load test results: {}", e);
+}
+if let Err(e) = progress_tx.send((requests, requests)).await {
+    tracing::warn!("Failed to send progress: {}", e);
+}
 ```
 
-For critical failures that should be visible, workers return `Err(...)` which propagates to `run()` and is handled at the TaskRunner level.
+If the main loop has been dropped (app closed), the send fails — but this is logged at `warn` level for diagnostics. For critical failures that should abort the task, workers return `Err(...)` which propagates to `run()` and is handled at the TaskRunner level.
+
+DO NOT use `let _ = channel.send(...).await` — this silently drops errors. See `architecture/tui.md` for the full pattern.
 
 ### Error String Matching in Retry Logic
 

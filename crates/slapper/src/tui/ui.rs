@@ -11,8 +11,8 @@ use super::App;
 use crate::tui::components::{centered_rect, confirm_popup, help_popup_for_tab};
 
 /// Layout constants — shared with `runner.rs` for mouse hit-testing.
-const LAYOUT_MARGIN: u16 = 1;
-const TAB_BAR_HEIGHT: u16 = 3;
+pub const LAYOUT_MARGIN: u16 = 1;
+pub const TAB_BAR_HEIGHT: u16 = 3;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
@@ -28,10 +28,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         ])
         .split(f.area());
 
-    draw_tabs(f, app, chunks[0]);
-    draw_breadcrumb(f, app, chunks[1]);
-    draw_content(f, app, chunks[2]);
-    draw_status_bar(f, app, chunks[3]);
+    let tab_area = chunks.first().copied().unwrap_or(area);
+    let breadcrumb_area = chunks.get(1).copied().unwrap_or(area);
+    let content_area = chunks.get(2).copied().unwrap_or(area);
+    let status_area = chunks.get(3).copied().unwrap_or(area);
+    draw_tabs(f, app, tab_area);
+    draw_breadcrumb(f, app, breadcrumb_area);
+    draw_content(f, app, content_area);
+    draw_status_bar(f, app, status_area);
 
     if app.show_help {
         let help = help_popup_for_tab(app.current_tab);
@@ -49,7 +53,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
                 .fg(tc!(text_dim))
                 .add_modifier(Modifier::ITALIC),
         );
-        f.render_widget(context_paragraph, context_chunks[1]);
+        f.render_widget(
+            context_paragraph,
+            context_chunks.get(1).copied().unwrap_or(area),
+        );
     }
 
     if let Some(ref mut palette) = app.command_palette {
@@ -183,13 +190,13 @@ fn draw_command_palette(f: &mut Frame, app: &mut App) {
         ])
         .split(inner);
 
-    let content_height = chunks[2].height;
+    let content_height = chunks.get(2).copied().unwrap_or(inner).height;
     palette.update_content_height(content_height);
 
     // Query input
     let query_paragraph = Paragraph::new(format!("Query: {}", palette.query))
         .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
-    f.render_widget(query_paragraph, chunks[0]);
+    f.render_widget(query_paragraph, chunks.first().copied().unwrap_or(inner));
 
     // Pagination
     let visible_height = palette.visible_results_height();
@@ -203,7 +210,7 @@ fn draw_command_palette(f: &mut Frame, app: &mut App) {
     };
     let status_paragraph =
         Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
-    f.render_widget(status_paragraph, chunks[1]);
+    f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
 
     // Results (only visible items)
     let mut items: Vec<ListItem> = Vec::new();
@@ -239,7 +246,7 @@ fn draw_command_palette(f: &mut Frame, app: &mut App) {
                 .border_style(Style::default().fg(tc!(border))),
         )
         .style(Style::default().fg(tc!(text)));
-    f.render_widget(list, chunks[2]);
+    f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
 }
 
 fn draw_search_popup(f: &mut Frame, app: &App) {
@@ -304,7 +311,7 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
 
     let query_paragraph = Paragraph::new(format!("Filter: {}", app.quick_switch_query))
         .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
-    f.render_widget(query_paragraph, chunks[0]);
+    f.render_widget(query_paragraph, chunks.first().copied().unwrap_or(inner));
 
     let results = app.get_quick_switch_results();
     let selected_display = if results.is_empty() {
@@ -315,9 +322,15 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     let status_text = format!("{}/{}", selected_display, results.len());
     let status_paragraph =
         Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
-    f.render_widget(status_paragraph, chunks[1]);
+    f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
 
-    let visible_rows = chunks[2].height.saturating_sub(2).max(1) as usize;
+    let visible_rows = chunks
+        .get(2)
+        .copied()
+        .unwrap_or(inner)
+        .height
+        .saturating_sub(2)
+        .max(1) as usize;
     let selected = app
         .quick_switch_selected
         .min(results.len().saturating_sub(1));
@@ -353,7 +366,7 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
                 .border_style(Style::default().fg(tc!(border))),
         )
         .style(Style::default().fg(tc!(text)));
-    f.render_widget(list, chunks[2]);
+    f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
 }
 
 fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
@@ -624,13 +637,16 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
             .bg(mode_color)
             .add_modifier(Modifier::BOLD),
     );
-    f.render_widget(mode_indicator_widget, chunks[0]);
+    f.render_widget(
+        mode_indicator_widget,
+        chunks.first().copied().unwrap_or(area),
+    );
 
     let status =
         ratatui::widgets::Paragraph::new(status_text).style(Style::default().fg(status_color));
-    f.render_widget(status, chunks[1]);
+    f.render_widget(status, chunks.get(1).copied().unwrap_or(area));
 
     let help =
         ratatui::widgets::Paragraph::new(help_text).style(Style::default().fg(tc!(text_dim)));
-    f.render_widget(help, chunks[2]);
+    f.render_widget(help, chunks.get(2).copied().unwrap_or(area));
 }

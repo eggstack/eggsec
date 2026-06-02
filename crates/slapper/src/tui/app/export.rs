@@ -2,6 +2,28 @@ use super::{Notification, NotificationSeverity};
 use crate::types::OutputFormat;
 
 impl super::App {
+    fn export_tab_json<T, F>(&mut self, get: F, filename: &str, tab_name: &str)
+    where
+        T: serde::Serialize,
+        F: for<'a> FnOnce(&'a Self) -> Option<&'a T>,
+    {
+        let results = get(self);
+        match results {
+            Some(data) => match serde_json::to_string_pretty(data) {
+                Ok(json) => self.save_export(&format!("{}.json", filename), json),
+                Err(e) => {
+                    let msg = format!("Failed to serialize {} results: {}", tab_name, e);
+                    tracing::error!("{}", msg);
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                }
+            },
+            None => {
+                let msg = format!("No exportable data for {} tab.", tab_name);
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
+            }
+        }
+    }
+
     pub(super) fn export_results(&mut self) {
         let ext = self.get_export_extension();
         let base_name = match self.current_tab {
@@ -72,131 +94,31 @@ impl super::App {
     pub(super) fn export_json(&mut self) {
         match self.current_tab {
             super::tabs::Tab::Recon => {
-                if let Some(results) = self.recon.get_results() {
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("recon_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize recon results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Recon tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
+                self.export_tab_json(|s| s.recon.get_results(), "recon_results", "Recon")
             }
             super::tabs::Tab::Load => {
-                if let Some(results) = self.load.get_results() {
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("load_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize load results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Load tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
+                self.export_tab_json(|s| s.load.get_results(), "load_results", "Load")
             }
-            super::tabs::Tab::ScanPorts => {
-                if let Some(results) = self.scan_ports.get_results() {
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("port_scan_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize port scan results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Scan Ports tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
-            }
-            super::tabs::Tab::ScanEndpoints => {
-                if let Some(results) = self.scan_endpoints.get_results() {
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("endpoint_scan_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize endpoint scan results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Scan Endpoints tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
-            }
-            super::tabs::Tab::Fingerprint => {
-                if let Some(results) = self.fingerprint.get_results() {
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("fingerprint_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize fingerprint results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Fingerprint tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
-            }
+            super::tabs::Tab::ScanPorts => self.export_tab_json(
+                |s| s.scan_ports.get_results(),
+                "port_scan_results",
+                "Scan Ports",
+            ),
+            super::tabs::Tab::ScanEndpoints => self.export_tab_json(
+                |s| s.scan_endpoints.get_results(),
+                "endpoint_scan_results",
+                "Scan Endpoints",
+            ),
+            super::tabs::Tab::Fingerprint => self.export_tab_json(
+                |s| s.fingerprint.get_results(),
+                "fingerprint_results",
+                "Fingerprint",
+            ),
             super::tabs::Tab::Fuzz => {
-                if let Some(results) = self.fuzz.get_results() {
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("fuzz_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize fuzz results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Fuzz tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
+                self.export_tab_json(|s| s.fuzz.get_results(), "fuzz_results", "Fuzz")
             }
             super::tabs::Tab::Waf => {
-                let mut has_data = false;
-                if let Some(results) = self.waf.get_detection_result() {
-                    has_data = true;
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("waf_detection_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize WAF detection results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                }
-                if let Some(results) = self.waf.get_bypass_results() {
-                    has_data = true;
-                    match serde_json::to_string_pretty(results) {
-                        Ok(json) => self.save_export("waf_bypass_results.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize WAF bypass results: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                }
-                if !has_data {
-                    let msg = "No exportable data for WAF tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
+                self.export_waf_json()
             }
             super::tabs::Tab::WafStress => {
                 if let Some(results) = self.waf_stress.get_results() {
@@ -206,22 +128,11 @@ impl super::App {
                     self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
-            super::tabs::Tab::Scan => {
-                if let Some(report) = self.scan.get_report() {
-                    match serde_json::to_string_pretty(report) {
-                        Ok(json) => self.save_export("pipeline_scan_report.json", json),
-                        Err(e) => {
-                            let msg = format!("Failed to serialize pipeline scan report: {}", e);
-                            tracing::error!("{}", msg);
-                            self.notification =
-                                Some(Notification::new(msg, NotificationSeverity::Error));
-                        }
-                    }
-                } else {
-                    let msg = "No exportable data for Scan tab.".to_string();
-                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-                }
-            }
+            super::tabs::Tab::Scan => self.export_tab_json(
+                |s| s.scan.get_report(),
+                "pipeline_scan_report",
+                "Scan",
+            ),
             super::tabs::Tab::Resume => {
                 let msg = "Resume tab: no exportable data (use original scan results)".to_string();
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
@@ -302,6 +213,50 @@ impl super::App {
                 let msg = "Vuln tab: no exportable data available".to_string();
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
+        }
+    }
+
+    fn export_waf_json(&mut self) {
+        let detection_json = match self.waf.get_detection_result() {
+            Some(r) => match serde_json::to_string_pretty(&r) {
+                Ok(j) => Some(j),
+                Err(e) => {
+                    tracing::error!("Failed to serialize WAF detection results: {}", e);
+                    self.notification = Some(Notification::new(
+                        format!("Export failed: {}", e),
+                        NotificationSeverity::Error,
+                    ));
+                    return;
+                }
+            },
+            None => None,
+        };
+        let bypass_json = match self.waf.get_bypass_results() {
+            Some(r) => match serde_json::to_string_pretty(&r) {
+                Ok(j) => Some(j),
+                Err(e) => {
+                    tracing::error!("Failed to serialize WAF bypass results: {}", e);
+                    self.notification = Some(Notification::new(
+                        format!("Export failed: {}", e),
+                        NotificationSeverity::Error,
+                    ));
+                    return;
+                }
+            },
+            None => None,
+        };
+
+        if detection_json.is_none() && bypass_json.is_none() {
+            let msg = "No exportable data for WAF tab.".to_string();
+            self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
+            return;
+        }
+
+        if let Some(json) = detection_json {
+            self.save_export("waf_detection_results.json", json);
+        }
+        if let Some(json) = bypass_json {
+            self.save_export("waf_bypass_results.json", json);
         }
     }
 

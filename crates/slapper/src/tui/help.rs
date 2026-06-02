@@ -7,18 +7,6 @@ use crate::tui::Tab;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HelpContext {
     Normal,
-    Configuration,
-    Scanning,
-    Fuzzing,
-    Advanced,
-    CommandDiscovery,
-}
-
-#[derive(Debug, Clone)]
-pub struct HelpOverlay {
-    pub visible: bool,
-    pub context: HelpContext,
-    pub content: String,
 }
 
 #[derive(Debug, Clone)]
@@ -61,19 +49,8 @@ impl CommandPalette {
         }
     }
 
-    pub fn with_popup_size(mut self, width: u16, height: u16) -> Self {
-        self.popup_width = width;
-        self.popup_height = height;
-        self
-    }
-
     pub fn visible_results_height(&self) -> usize {
         let computed = (self.last_content_height as usize).saturating_sub(3);
-        computed.min(self.results.len()).max(1)
-    }
-
-    pub fn visible_results_height_for_area(&self, popup_content_height: u16) -> usize {
-        let computed = (popup_content_height as usize).saturating_sub(3);
         computed.min(self.results.len()).max(1)
     }
 
@@ -85,11 +62,6 @@ impl CommandPalette {
         self.results
             .len()
             .saturating_sub(self.visible_results_height())
-    }
-
-    pub fn max_scroll_offset_for_height(&self, content_height: u16) -> usize {
-        let vis = self.visible_results_height_for_area(content_height);
-        self.results.len().saturating_sub(vis)
     }
 
     pub fn adjust_scroll_for_selection(&mut self) {

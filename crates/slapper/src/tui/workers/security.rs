@@ -242,6 +242,10 @@ pub async fn run_storage_task(
     use crate::findings::lifecycle::StoredFinding;
     use crate::storage::models::{ScanStatus, StoredScan};
 
+    let result_tx_timeout = result_tx.clone();
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        async move {
     if let Err(e) = progress_tx.send((0, 3)).await {
         tracing::warn!("Failed to send storage progress: {}", e);
     }
@@ -381,6 +385,22 @@ pub async fn run_storage_task(
     }
 
     Ok(())
+        },
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => {
+            tracing::warn!("Storage task timed out after 60s");
+            if let Err(e) = result_tx_timeout
+                .send(TaskResult::Error("Storage task timed out".to_string()))
+                .await
+            {
+                tracing::warn!("Failed to send timeout error: {}", e);
+            }
+            Ok(())
+        }
+    }
 }
 
 #[cfg(feature = "external-integrations")]
@@ -396,6 +416,10 @@ pub async fn run_integrations_task(
 ) -> anyhow::Result<()> {
     use crate::integrations::Issue;
 
+    let result_tx_timeout = result_tx.clone();
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        async move {
     if let Err(e) = progress_tx.send((0, 3)).await {
         tracing::warn!("Failed to send integrations progress: {}", e);
     }
@@ -461,6 +485,22 @@ pub async fn run_integrations_task(
         tracing::warn!("Failed to send integrations progress: {}", e);
     }
     Ok(())
+        },
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => {
+            tracing::warn!("Integrations task timed out after 60s");
+            if let Err(e) = result_tx_timeout
+                .send(TaskResult::Error("Integrations task timed out".to_string()))
+                .await
+            {
+                tracing::warn!("Failed to send timeout error: {}", e);
+            }
+            Ok(())
+        }
+    }
 }
 
 #[cfg(feature = "finding-workflow")]
@@ -512,6 +552,10 @@ pub async fn run_vuln_task(
     use crate::vuln::triage::triage_finding;
     use crate::types::Severity;
 
+    let result_tx_timeout = result_tx.clone();
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        async move {
     if let Err(e) = progress_tx.send((0, 3)).await {
         tracing::warn!("Failed to send vuln progress: {}", e);
     }
@@ -643,4 +687,20 @@ pub async fn run_vuln_task(
         tracing::warn!("Failed to send vuln progress: {}", e);
     }
     Ok(())
+        },
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => {
+            tracing::warn!("Vuln task timed out after 120s");
+            if let Err(e) = result_tx_timeout
+                .send(TaskResult::Error("Vuln task timed out".to_string()))
+                .await
+            {
+                tracing::warn!("Failed to send timeout error: {}", e);
+            }
+            Ok(())
+        }
+    }
 }

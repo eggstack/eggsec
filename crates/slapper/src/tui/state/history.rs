@@ -73,25 +73,6 @@ impl HistoryTab {
         );
     }
 
-    pub fn add_fuzz_result(
-        &mut self,
-        target: &str,
-        total_payloads: usize,
-        anomalies: usize,
-        waf_blocked: usize,
-    ) {
-        let summary = format!(
-            "{} payloads, {} anomalies, {} WAF blocked",
-            total_payloads, anomalies, waf_blocked
-        );
-        let details = vec![
-            format!("Total payloads tested: {}", total_payloads),
-            format!("Anomalies detected: {}", anomalies),
-            format!("WAF blocked: {}", waf_blocked),
-        ];
-        self.add_entry("Fuzz".to_string(), target.to_string(), summary, details);
-    }
-
     pub fn add_waf_result(
         &mut self,
         target: &str,

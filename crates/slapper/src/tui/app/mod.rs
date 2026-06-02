@@ -27,7 +27,7 @@ pub use runner::run;
 pub(crate) mod notifications;
 
 use super::error::make_friendly_error;
-use crate::tui::help::{CommandPalette, HelpContext, HelpManager, HelpOverlay};
+use crate::tui::help::{CommandPalette, HelpContext, HelpManager};
 use crate::tui::session::{SessionConfig, SessionManager};
 use crate::tui::state::SharedHistory;
 use crate::tui::tabs;
@@ -38,7 +38,7 @@ use crate::types::OutputFormat;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use rustc_hash::FxHashSet;
-use task_management::TabTaskConfigSource;
+use task_management::TaskBuilder;
 
 pub struct App {
     pub current_tab: Tab,
@@ -100,7 +100,6 @@ pub struct App {
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
     pub result_rx: Option<tokio::sync::mpsc::Receiver<workers::TaskResult>>,
     pub help_manager: HelpManager,
-    pub help_overlay: Option<HelpOverlay>,
     pub command_palette: Option<CommandPalette>,
     pub help_context: HelpContext,
     pub pending_action: Option<PendingAction>,
@@ -109,7 +108,6 @@ pub struct App {
     pub last_tab_area_width: u16,
     pub bookmarks: FxHashSet<String>,
     pub paused: bool,
-    pub spinner_tick: u64,
     pub notification: Option<Notification>,
     pub show_quick_switch: bool,
     pub quick_switch_query: String,
@@ -235,7 +233,6 @@ impl App {
             progress_rx: None,
             result_rx: None,
             help_manager: HelpManager::new(),
-            help_overlay: None,
             command_palette: None,
             help_context: HelpContext::Normal,
             pending_action: None,
@@ -243,11 +240,17 @@ impl App {
             notification: None,
             bookmarks: restored_bookmarks,
             paused: false,
-            spinner_tick: 0,
             show_quick_switch: false,
             quick_switch_query: String::new(),
             quick_switch_selected: 0,
         };
+
+        if let Some(state) = &restored_state {
+            if !app.theme_manager.set_theme(&state.theme_name) {
+                tracing::warn!("Unknown theme name in session: {}", state.theme_name);
+            }
+            crate::tui::theme::sync_theme_to_thread_local(app.theme_manager.current());
+        }
 
         // Sync settings with current theme
         let theme = app.theme_manager.current().clone();
@@ -282,63 +285,8 @@ impl App {
         }
     }
 
-    pub fn is_running(&mut self) -> bool {
-        match self.current_tab {
-            Tab::Recon => tabs::TabState::state(&self.recon) == tabs::AppState::Running,
-            Tab::Load => tabs::TabState::state(&self.load) == tabs::AppState::Running,
-            Tab::ScanPorts => tabs::TabState::state(&self.scan_ports) == tabs::AppState::Running,
-            Tab::ScanEndpoints => {
-                tabs::TabState::state(&self.scan_endpoints) == tabs::AppState::Running
-            }
-            Tab::Fingerprint => tabs::TabState::state(&self.fingerprint) == tabs::AppState::Running,
-            Tab::Fuzz => tabs::TabState::state(&self.fuzz) == tabs::AppState::Running,
-            Tab::Waf => tabs::TabState::state(&self.waf) == tabs::AppState::Running,
-            Tab::WafStress => tabs::TabState::state(&self.waf_stress) == tabs::AppState::Running,
-            Tab::Scan => tabs::TabState::state(&self.scan) == tabs::AppState::Running,
-            Tab::Resume => tabs::TabState::state(&self.resume) == tabs::AppState::Running,
-            Tab::Proxy => tabs::TabState::state(&self.proxy) == tabs::AppState::Running,
-            Tab::Packet => tabs::TabState::state(&self.packet) == tabs::AppState::Running,
-            Tab::GraphQl => tabs::TabState::state(&self.graphql) == tabs::AppState::Running,
-            Tab::OAuth => tabs::TabState::state(&self.oauth) == tabs::AppState::Running,
-            Tab::Cluster => tabs::TabState::state(&self.cluster) == tabs::AppState::Running,
-            Tab::Stress => tabs::TabState::state(&self.stress) == tabs::AppState::Running,
-            Tab::Report => tabs::TabState::state(&self.report) == tabs::AppState::Running,
-            Tab::Settings | Tab::History | Tab::Dashboard => false,
-            #[cfg(feature = "nse")]
-            Tab::Nse => tabs::TabState::state(&self.nse) == tabs::AppState::Running,
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => tabs::TabState::state(&self.hunt) == tabs::AppState::Running,
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => false,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => tabs::TabState::state(&self.browser) == tabs::AppState::Running,
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => false,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => tabs::TabState::state(&self.compliance) == tabs::AppState::Running,
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => false,
-            #[cfg(feature = "database")]
-            Tab::Storage => tabs::TabState::state(&self.storage) == tabs::AppState::Running,
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => false,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => {
-                tabs::TabState::state(&self.integrations) == tabs::AppState::Running
-            }
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => false,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => tabs::TabState::state(&self.workflow) == tabs::AppState::Running,
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => false,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => tabs::TabState::state(&self.vuln) == tabs::AppState::Running,
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => false,
-        }
+    pub fn is_running(&self) -> bool {
+        self.current_tab.as_tab_state(self).is_running()
     }
 
     fn dispatcher_mut(&mut self) -> TabDispatcher<'_> {
@@ -385,7 +333,33 @@ impl App {
     }
 
     fn build_current_task(&self) -> Option<workers::TaskConfig> {
-        self.current_tab.build_task_config_from_app(self)
+        match self.current_tab {
+            Tab::Recon => self.recon.build_task_config(),
+            Tab::Load => self.load.build_task_config(),
+            Tab::ScanPorts => self.scan_ports.build_task_config(),
+            Tab::ScanEndpoints => self.scan_endpoints.build_task_config(),
+            Tab::Fingerprint => self.fingerprint.build_task_config(),
+            Tab::Fuzz => self.fuzz.build_task_config(),
+            Tab::Waf => self.waf.build_task_config(),
+            Tab::WafStress => self.waf_stress.build_task_config(),
+            Tab::Scan => self.scan.build_task_config(),
+            Tab::Packet => self.packet.build_task_config(),
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => self.hunt.build_task_config(),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => self.browser.build_task_config(),
+            #[cfg(feature = "compliance")]
+            Tab::Compliance => self.compliance.build_task_config(),
+            #[cfg(feature = "database")]
+            Tab::Storage => self.storage.build_task_config(),
+            #[cfg(feature = "external-integrations")]
+            Tab::Integrations => self.integrations.build_task_config(),
+            #[cfg(feature = "finding-workflow")]
+            Tab::Workflow => self.workflow.build_task_config(),
+            #[cfg(feature = "vuln-management")]
+            Tab::Vuln => self.vuln.build_task_config(),
+            _ => None,
+        }
     }
 
     pub fn handle_escape(&mut self) {
@@ -630,10 +604,6 @@ impl App {
         self.paused
     }
 
-    pub fn pause(&mut self) {
-        self.paused = true;
-    }
-
     pub fn resume(&mut self) {
         self.paused = false;
     }
@@ -651,20 +621,6 @@ impl App {
     pub fn toggle_theme(&mut self) {
         self.theme_manager.toggle();
         crate::tui::theme::sync_theme_to_thread_local(self.theme_manager.current());
-    }
-
-    pub fn set_dark_mode(&mut self, enabled: bool) {
-        let target_mode = if enabled { "dark" } else { "light" };
-        if self.theme_manager.set_theme(target_mode) {
-            crate::tui::theme::sync_theme_to_thread_local(self.theme_manager.current());
-            self.needs_redraw = true;
-        }
-    }
-
-    pub fn set_accent_color(&mut self, color: &str) {
-        self.theme_manager.set_accent_color(color);
-        crate::tui::theme::sync_theme_to_thread_local(self.theme_manager.current());
-        self.needs_redraw = true;
     }
 
     pub fn toggle_quick_switch(&mut self) {
@@ -768,34 +724,6 @@ impl App {
     /// Check if any overlay is active (blocks tab content interaction)
     pub fn is_any_overlay_active(&self) -> bool {
         self.topmost_overlay().is_some()
-    }
-
-    /// Set a notification message with the given severity
-    pub fn set_notification(&mut self, message: String, severity: NotificationSeverity) {
-        self.notification = Some(Notification::new(message, severity));
-        self.needs_redraw = true;
-    }
-
-    /// Clear any current notification (if expired or manually dismissed)
-    pub fn clear_notification(&mut self) {
-        if let Some(ref notification) = self.notification {
-            if notification.is_expired() {
-                self.notification = None;
-                self.needs_redraw = true;
-            }
-        }
-    }
-
-    /// Get the current notification if any (and clear if expired)
-    pub fn get_notification(&mut self) -> Option<&Notification> {
-        if let Some(ref notification) = self.notification {
-            if notification.is_expired() {
-                self.notification = None;
-                self.needs_redraw = true;
-                return None;
-            }
-        }
-        self.notification.as_ref()
     }
 }
 
@@ -910,15 +838,6 @@ mod tests {
     }
 
     #[test]
-    fn test_help_overlay_set_and_cleared() {
-        let mut app = create_test_app();
-        assert!(app.help_overlay.is_none());
-
-        app.help_overlay = None;
-        assert!(app.help_overlay.is_none());
-    }
-
-    #[test]
     fn test_search_query_set_and_cleared() {
         let mut app = create_test_app();
         assert!(app.search_query.is_empty());
@@ -966,14 +885,6 @@ mod tests {
 
         app.current_tab = Tab::Dashboard;
         assert!(!app.is_running());
-    }
-
-    #[test]
-    fn test_app_stop_clears_task_handle() {
-        let mut app = create_test_app();
-        app.task_handle = None;
-        app.stop();
-        assert!(app.task_handle.is_none());
     }
 
     #[test]
@@ -1044,17 +955,6 @@ mod tests {
         // Confirm popup should take precedence
         app.request_confirmation(PendingAction::ResetTab);
         assert_eq!(app.topmost_overlay(), Some(OverlayType::ConfirmPopup));
-    }
-
-    #[test]
-    fn test_topmost_overlay_command_palette_precedence() {
-        let mut app = create_test_app();
-        app.show_help = true;
-        app.show_search = true;
-        app.show_http_options = true;
-
-        // Simulate command palette visible
-        // Note: command_palette needs to be created - this test may need adjustment
     }
 
     #[test]

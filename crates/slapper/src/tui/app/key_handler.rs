@@ -86,10 +86,6 @@ impl KeyHandler {
             }
             (KeyModifiers::NONE, KeyCode::Tab) => app.handle_focus_next(),
             (KeyModifiers::SHIFT, KeyCode::BackTab) => app.handle_focus_prev(),
-            (KeyModifiers::NONE, KeyCode::Char('h')) if app.is_http_options_visible() => {
-                app.show_http_options = false;
-                app.needs_redraw = true;
-            }
             (KeyModifiers::NONE, KeyCode::Enter) => self.handle_enter(app),
             _ => return false,
         }
@@ -326,7 +322,6 @@ impl KeyHandler {
                     if let Some(ref mut palette) = app.command_palette {
                         palette.query.pop();
                         let new_query = palette.query.clone();
-                        let _ = palette;
                         app.update_command_palette_query(&new_query);
                     }
                     if let Some(ref mut palette) = app.command_palette {
@@ -341,7 +336,6 @@ impl KeyHandler {
                 if let Some(ref mut palette) = app.command_palette {
                     palette.query.push(c);
                     let new_query = palette.query.clone();
-                    drop(palette);
                     app.update_command_palette_query(&new_query);
                 }
                 if let Some(ref mut palette) = app.command_palette {

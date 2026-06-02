@@ -235,24 +235,6 @@ impl ThemeManager {
         themes.sort();
         themes
     }
-
-    pub fn set_accent_color(&mut self, color_name: &str) {
-        let color = match color_name.to_lowercase().as_str() {
-            "cyan" => Color::Cyan,
-            "blue" => Color::Blue,
-            "green" => Color::Green,
-            "yellow" => Color::Yellow,
-            "red" => Color::Red,
-            "magenta" => Color::Magenta,
-            "white" => Color::White,
-            "black" => Color::Black,
-            _ => return,
-        };
-        self.current.colors.accent = color;
-        self.current.colors.border_focused = color;
-        self.current.colors.tab_active = color;
-        self.current.colors.selected = color;
-    }
 }
 
 pub fn sync_theme_to_thread_local(theme: &Theme) {

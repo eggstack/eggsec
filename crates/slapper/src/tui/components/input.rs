@@ -94,10 +94,7 @@ impl InputField {
             let value_lower = self.value.to_lowercase();
             completions
                 .iter()
-                .filter(|s| {
-                    let s_lower = s.to_lowercase();
-                    s_lower.starts_with(&value_lower)
-                })
+                .filter(|s| s.to_lowercase().starts_with(&value_lower))
                 .map(|s| s.to_string())
                 .collect()
         } else {
@@ -515,13 +512,6 @@ impl InputField {
             }
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
-pub enum InputState {
-    None,
-    Focused(usize),
 }
 
 pub struct InputGroup {

@@ -617,6 +617,9 @@ impl TabInput for DashboardTab {
 mod tests {
     use super::*;
     use crate::tui::tabs::history::HistoryEntry;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 
     fn create_test_entry(
         timestamp: &str,
@@ -624,11 +627,7 @@ mod tests {
         scan_type: &str,
         target: &str,
     ) -> HistoryEntry {
-        static mut NEXT_ID: usize = 0;
-        let id = unsafe {
-            NEXT_ID += 1;
-            NEXT_ID
-        };
+        let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
         HistoryEntry {
             id,
             timestamp: timestamp.to_string(),

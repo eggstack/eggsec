@@ -24,9 +24,10 @@ pub async fn run_fuzz(
     use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
     use crate::fuzzer::engine::FuzzEngine;
 
-    let fuzz_mode = if mode.to_lowercase() == "burst" {
+    let mode_lower = mode.to_lowercase();
+    let fuzz_mode = if mode_lower == "burst" {
         FuzzMode::Burst
-    } else if mode.to_lowercase() == "adaptive" {
+    } else if mode_lower == "adaptive" {
         FuzzMode::Adaptive
     } else {
         FuzzMode::Sequential
@@ -250,6 +251,10 @@ pub async fn run_waf_stress(
         tracing::warn!("Failed to send progress: {}", e);
     }
     tracing::debug!("WAF stress completed (fuzzer_run_waf_stress returned no results, sending empty WafStress)");
+    // Note: WafStress results are always empty because the underlying
+    // fuzzer_run_waf_stress function returns Result<(), Error> with no
+    // result data. This is a known design limitation; downstream
+    // consumers should treat WafStress(vec![]) as "completed with no findings".
     if let Err(e) = result_tx.send(TaskResult::WafStress(vec![])).await {
         tracing::warn!("Failed to send WAF stress results: {}", e);
     }

@@ -13,10 +13,7 @@ use super::KeyHandler;
 use crate::tui::state;
 use crate::tui::tabs::TabWindow;
 use crate::tui::ui;
-
-/// Layout constants matching `ui::draw()` — change these if the layout changes.
-const LAYOUT_MARGIN: u16 = 1;
-const TAB_BAR_HEIGHT: u16 = 3;
+use crate::tui::ui::{LAYOUT_MARGIN, TAB_BAR_HEIGHT};
 
 fn compute_tab_area(term_width: u16) -> ratatui::layout::Rect {
     ratatui::layout::Rect {
@@ -174,8 +171,6 @@ where
     let mut pending_redraw = false;
 
     loop {
-        app.spinner_tick = app.spinner_tick.wrapping_add(1);
-
         app.update();
 
         app.auto_save_if_due();

@@ -202,10 +202,7 @@ Reusable UI primitives (12 files):
 | `centered_rect` | `popup.rs` | Centered rectangle helper for popups |
 | `empty_state_paragraph` | `empty_state.rs` | Empty state placeholder widget |
 | `draw_help_bar` | `help_bar.rs` | Contextual key hint bar |
-| `draw_http_options_popup` | `http_options.rs` | HTTP options overlay |
-| `draw_notifications` | `notifications.rs` | Toast notification renderer (up to 3 stacked) |
-| `draw_command_palette` | `palette.rs` | Command palette overlay with fuzzy search |
-| `draw_search_popup` | `search_popup.rs` | Global search input overlay |
+**Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are inlined in `tui/ui.rs` (lines ~88, ~154, ~245, ~275), not in separate `components/` files. The previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`) were removed as dead code.
 
 ### Workers (`workers/`)
 
@@ -249,7 +246,43 @@ let style = Style::default().fg(tc!(text));
 
 ### Session Management (`session.rs`)
 
-`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in `~/.slapper/sessions/`, writes a quick-save on exit, and restores the saved theme name when loading sessions.
+`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/slapper/sessions/` on Linux via `directories::ProjectDirs`, with `~/.slapper/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions.
+
+### Adding a New Tab
+
+Adding a new tab requires changes in **7-9 locations** (the `App` struct is a god-object with 60+ fields). Each new tab must be added to:
+
+1. `Tab` enum (`tabs/mod.rs`) — variant + `title()`, `description()`, `cli_command()`, `stable_id()`, `from_stable_id()`, `all()` (feature-gated)
+2. `App` struct (`app/mod.rs`) — new field for the tab instance
+3. `Tab::as_tab_state()`, `as_tab_state_mut()`, `as_tab_render()`, `as_tab_input()` — 28-variant exhaustive match each
+4. `App::get_current_help()` (`app/navigation.rs`) — 28-variant match
+5. `command_to_tab()` + `execute_command()` (`app/command.rs`) — 28-variant match each
+6. `export_results()` + `export_json()` (`app/export.rs`) — per-tab export logic
+7. `App::build_current_task()` (`app/task_management.rs`) — trait dispatch
+8. `help_config.rs` — static help section data
+
+This duplication is a known architectural debt. A future refactor should move these to trait-based dispatch (e.g., `TabState::is_running()` instead of the exhaustive match).
+
+## Maintenance Notes
+
+**2026-06-02 dead code cleanup**: Removed the following dead code (all verified via grep with zero callers):
+- 5 backup files in `tabs/` (`*.orig`, `*.bak`)
+- 5 dead component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`)
+- `TabError::Internal`, `TabError::Auth` variants
+- 5 `HelpContext` variants (`Configuration`, `Scanning`, `Fuzzing`, `Advanced`, `CommandDiscovery`)
+- `HelpOverlay` struct + `App.help_overlay` field
+- `GlobalSearch::search`, `move_up`, `move_down`, `selected`, `update_active_tab`
+- `CommandPalette::with_popup_size`, `visible_results_height_for_area`, `max_scroll_offset_for_height`
+- `SessionManager::restore_session` + 7 tests (logic was inlined in `App::new_inner`)
+- `state/history.rs::add_fuzz_result`
+- `InputState` enum
+- 6 dead `App` methods (`pause`, `set_dark_mode`, `set_accent_color`, `set_notification`, `clear_notification`, `get_notification`)
+- `App.spinner_tick` field
+- `ThemeManager::set_accent_color`
+- 3 tautology tests in `app/mod.rs`
+- Dead `h` handler in `key_handler.rs` (unreachable due to overlay precedence)
+
+Net result: ~700 lines of dead code removed, 10 fewer tests (3 tautologies + 7 session tests), 0 new warnings.
 
 ## Entry Point
 

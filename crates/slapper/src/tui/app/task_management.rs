@@ -4,56 +4,6 @@ pub trait TaskBuilder {
     fn build_task_config(&self) -> Option<workers::TaskConfig>;
 }
 
-pub trait TabTaskConfigSource {
-    fn build_task_config_from_app(&self, app: &super::App) -> Option<workers::TaskConfig>;
-}
-
-impl TabTaskConfigSource for super::tabs::Tab {
-    fn build_task_config_from_app(&self, app: &super::App) -> Option<workers::TaskConfig> {
-        match self {
-            super::tabs::Tab::Recon => Some(app.recon.build_task_config()?),
-            super::tabs::Tab::Load => Some(app.load.build_task_config()?),
-            super::tabs::Tab::ScanPorts => Some(app.scan_ports.build_task_config()?),
-            super::tabs::Tab::ScanEndpoints => Some(app.scan_endpoints.build_task_config()?),
-            super::tabs::Tab::Fingerprint => Some(app.fingerprint.build_task_config()?),
-            super::tabs::Tab::Fuzz => Some(app.fuzz.build_task_config()?),
-            super::tabs::Tab::Waf => Some(app.waf.build_task_config()?),
-            super::tabs::Tab::WafStress => Some(app.waf_stress.build_task_config()?),
-            super::tabs::Tab::Scan => Some(app.scan.build_task_config()?),
-            super::tabs::Tab::Packet => Some(app.packet.build_task_config()?),
-            #[cfg(feature = "advanced-hunting")]
-            super::tabs::Tab::Hunt => Some(app.hunt.build_task_config()?),
-            #[cfg(not(feature = "advanced-hunting"))]
-            super::tabs::Tab::Hunt => None,
-            #[cfg(feature = "headless-browser")]
-            super::tabs::Tab::Browser => Some(app.browser.build_task_config()?),
-            #[cfg(not(feature = "headless-browser"))]
-            super::tabs::Tab::Browser => None,
-            #[cfg(feature = "compliance")]
-            super::tabs::Tab::Compliance => Some(app.compliance.build_task_config()?),
-            #[cfg(not(feature = "compliance"))]
-            super::tabs::Tab::Compliance => None,
-            #[cfg(feature = "database")]
-            super::tabs::Tab::Storage => Some(app.storage.build_task_config()?),
-            #[cfg(not(feature = "database"))]
-            super::tabs::Tab::Storage => None,
-            #[cfg(feature = "external-integrations")]
-            super::tabs::Tab::Integrations => Some(app.integrations.build_task_config()?),
-            #[cfg(not(feature = "external-integrations"))]
-            super::tabs::Tab::Integrations => None,
-            #[cfg(feature = "finding-workflow")]
-            super::tabs::Tab::Workflow => Some(app.workflow.build_task_config()?),
-            #[cfg(not(feature = "finding-workflow"))]
-            super::tabs::Tab::Workflow => None,
-            #[cfg(feature = "vuln-management")]
-            super::tabs::Tab::Vuln => Some(app.vuln.build_task_config()?),
-            #[cfg(not(feature = "vuln-management"))]
-            super::tabs::Tab::Vuln => None,
-            _ => None,
-        }
-    }
-}
-
 impl TaskBuilder for super::tabs::ReconTab {
     fn build_task_config(&self) -> Option<workers::TaskConfig> {
         let target = self.target();
@@ -368,72 +318,5 @@ impl TaskBuilder for super::tabs::VulnTab {
             asset_type: Some(self.asset_type().to_string()).filter(|s| !s.is_empty()),
             severity: Some(self.severity_str().to_string()).filter(|s| !s.is_empty()),
         })
-    }
-}
-
-impl TaskBuilder for super::tabs::ResumeTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::ProxyTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::GraphQlTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::OAuthTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::ClusterTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::StressTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::ReportTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-#[cfg(feature = "nse")]
-impl TaskBuilder for super::tabs::NseTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::SettingsTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::DashboardTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
-    }
-}
-
-impl TaskBuilder for super::tabs::HistoryTab {
-    fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
     }
 }

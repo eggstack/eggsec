@@ -135,8 +135,11 @@ impl Popup {
 
         if !self.buttons.is_empty() {
             if let Some(button_area) = chunks.get(1) {
-                let button_widths: Vec<u16> =
-                    self.buttons.iter().map(|b| (b.len() + 4) as u16).collect();
+                let button_widths: Vec<u16> = self
+                    .buttons
+                    .iter()
+                    .map(|b| (b.chars().count() + 4) as u16)
+                    .collect();
                 let total_width: u16 = button_widths.iter().sum();
                 let spacing = (button_area.width.saturating_sub(total_width))
                     / (self.buttons.len().saturating_sub(1).max(1) as u16);
