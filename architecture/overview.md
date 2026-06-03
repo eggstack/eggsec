@@ -141,7 +141,6 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`findings/`](../crates/slapper/src/findings/) | Finding store, lifecycle management, fingerprinting | [findings.md](findings.md) |
 | [`diff/`](../crates/slapper/src/diff/) | Scan result diffing, baseline comparison | [diff.md](diff.md) |
 | [`logging/`](../crates/slapper/src/logging/) | Structured logging with tracing | [logging.md](logging.md) |
-| [`macros.rs`](../crates/slapper/src/macros.rs) | Utility macros | [macros.md](macros.md) |
 | [`utils/`](../crates/slapper/src/utils/) | 23 submodules (HTTP client, rate limiting, circuit breaker, formatting) | [utils.md](utils.md) |
 | [`auth_context/`](../crates/slapper/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/slapper/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
@@ -612,7 +611,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 | **Integration** | [ai_agents.md](ai_agents.md), [nse_integration.md](nse_integration.md), [integrations.md](integrations.md), [notify.md](notify.md) |
 | **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md) |
 | **Compliance** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
-| **Utilities** | [utils.md](utils.md), [logging.md](logging.md), [macros.md](macros.md), [probe.md](probe.md) |
+| **Utilities** | [utils.md](utils.md), [logging.md](logging.md), [probe.md](probe.md) |
 | **Reference** | [feature_matrix.md](feature_matrix.md), [defense_lab.md](defense_lab.md), [review_plan.md](review_plan.md) |
 
 ### Implementation Plan

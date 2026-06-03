@@ -235,7 +235,6 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/probe.md` | Probe classification (ProbeIntent, ProbeRisk) |
 | `architecture/auth_context.md` | Auth context YAML parsing |
 | `architecture/logging.md` | Logging configuration |
-| `architecture/macros.md` | Exported macros |
 | `architecture/generated.md` | Auto-generated protobuf code |
 
 ## Verification Commands

@@ -59,8 +59,7 @@ All `.md` files in `architecture/` **except** `review_plan.md`. This excludes th
 | 38 | `utils.md` | `src/utils/` | ~30 | `plans/review_utils.md` |
 | 39 | `probe.md` | `src/probe.rs` | ~28 | `plans/review_probe.md` |
 | 40 | `stress.md` | `src/stress/` | ~28 | `plans/review_stress.md` |
-| 41 | `macros.md` | `src/macros.rs` | ~22 | `plans/review_macros.md` |
-| 42 | `logging.md` | `src/logging/` | ~18 | `plans/review_logging.md` |
+| 41 | `logging.md` | `src/logging/` | ~18 | `plans/review_logging.md` |
 | 43 | `generated.md` | generated protobuf | ~12 | `plans/review_generated.md` |
 | 44 | `notify.md` | `src/notify/` | ~29 | `plans/review_notify.md` |
 | 45 | `container.md` | `src/container/` | ~31 | `plans/review_container.md` |
@@ -107,10 +106,10 @@ All `.md` files in `architecture/` **except** `review_plan.md`. This excludes th
 **Write to:** `plans/review_auth.md`, `plans/review_browser.md`, `plans/review_compliance.md`, `plans/review_container.md`, `plans/review_diff.md`, `plans/review_integrations.md`, `plans/review_notify.md`, `plans/review_storage.md`, `plans/review_supply_chain.md`, `plans/review_vuln.md`, `plans/review_workflow.md`
 **Focus:** Authentication patterns, headless browser, compliance checks, container detection, diff engine, integration hooks, notification channels, storage backends, supply chain, vuln DB, workflow engine.
 
-### Agent 8 — Utility & Type Modules (7 docs)
-**Documents:** `auth_context.md`, `constants.md`, `types.md`, `utils.md`, `probe.md`, `stress.md`, `macros.md`, `logging.md`, `generated.md`
-**Write to:** `plans/review_auth_context.md`, `plans/review_constants.md`, `plans/review_types.md`, `plans/review_utils.md`, `plans/review_probe.md`, `plans/review_stress.md`, `plans/review_macros.md`, `plans/review_logging.md`, `plans/review_generated.md`
-**Focus:** Verify type definitions, constants values, utility functions, probe classification, stress testing, macro definitions, logging configuration, generated protobuf code.
+### Agent 8 — Utility & Type Modules (6 docs)
+**Documents:** `auth_context.md`, `constants.md`, `types.md`, `utils.md`, `probe.md`, `stress.md`, `logging.md`, `generated.md`
+**Write to:** `plans/review_auth_context.md`, `plans/review_constants.md`, `plans/review_types.md`, `plans/review_utils.md`, `plans/review_probe.md`, `plans/review_stress.md`, `plans/review_logging.md`, `plans/review_generated.md`
+**Focus:** Verify type definitions, constants values, utility functions, probe classification, stress testing, logging configuration, generated protobuf code.
 
 ---
 
@@ -226,7 +225,7 @@ After all reviews complete, a consolidation agent will:
 - `tui.md` is the largest doc (~1715 lines); its agent should focus on structural claims (tab count, event loop, state management) rather than pixel-level details.
 - `nse_integration.md` spans a separate crate (`slapper-nse/`); agent must check both crates.
 - Feature flags in `Cargo.toml` at root and `crates/slapper/Cargo.toml` must be cross-referenced for `feature_matrix.md`.
-- Several new architecture docs were added in Wave 7: `auth_context.md`, `constants.md`, `types.md`, `utils.md`, `probe.md`, `stress.md`, `macros.md`, `logging.md`, `generated.md` - ensure these are reviewed for accuracy.
+- Several new architecture docs were added in Wave 7: `auth_context.md`, `constants.md`, `types.md`, `utils.md`, `probe.md`, `stress.md`, `logging.md`, `generated.md` - ensure these are reviewed for accuracy.
 
 ---
 

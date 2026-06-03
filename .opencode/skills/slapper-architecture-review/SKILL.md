@@ -272,6 +272,5 @@ See `plans/stale_items.md` for full list
 | utils.md | Medium | 23 submodules but only 21 in table |
 | probe.md | High | All types verified |
 | stress.md | Medium | Field names wrong (`rate_pps` vs `rate_limit`) |
-| macros.md | High | All macros verified |
 | logging.md | Medium | 4 macros undocumented |
 | generated.md | High | All types verified |
