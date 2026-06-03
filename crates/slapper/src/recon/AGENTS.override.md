@@ -28,11 +28,11 @@ The recon module is organized as follows:
 ### Subdomain Discovery
 - `subdomain.rs` - Subdomain enumeration via crt.sh, Threatminer, DNS verification
 - `wayback.rs` - Wayback Machine historical URL discovery
-- `takeover.rs` - Subdomain takeover detection with 20+ service fingerprints
+- `takeover.rs` - Subdomain takeover detection with 31 service fingerprints
 
 ### Security
 - `cve.rs` - CVE mapping with built-in database + NVD API integration
-- `secrets.rs` - Secret detection with 24 regex patterns (not in pipeline)
+- `secrets.rs` - Secret detection with 25 regex patterns (in pipeline, runs after content analysis)
 - `ssl.rs` - SSL/TLS certificate analysis
 - `threatintel.rs` - Threat intelligence (VirusTotal, Shodan, AlienVault OTX)
 - `git_secrets.rs` - Git repository secret scanning (feature-gated)
@@ -97,6 +97,5 @@ These modules exist but are not part of `run_full_recon`:
 - `smtp_auth.rs` - SMTP auth testing (detached)
 - `ssh_auth.rs` - SSH auth testing (detached)
 - `ssl_audit.rs` - SSL audit (detached)
-- `secrets.rs` - Secret detection (standalone only)
 
 (End file - 146 lines)

@@ -115,6 +115,69 @@ use std::sync::Arc;
 
 pub use spinner::Spinner;
 
+struct SpinnerGuard {
+    stop: Arc<AtomicBool>,
+    has_spinner: bool,
+}
+
+impl SpinnerGuard {
+    fn start(args: &ReconArgs, stage: &Arc<Mutex<String>>) -> Self {
+        let has_spinner = !args.quiet;
+        let stop = Arc::new(AtomicBool::new(false));
+
+        if has_spinner {
+            let stop_clone = stop.clone();
+            let stage_clone = stage.clone();
+            std::thread::spawn(move || {
+                let mut spinner = Spinner::new(stop_clone, stage_clone);
+                while !spinner.stop.load(Ordering::Relaxed) {
+                    spinner.tick();
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                spinner.stop();
+            });
+            runner::set_stage(stage, "init");
+        }
+
+        Self { stop, has_spinner }
+    }
+
+    async fn stop(&self) {
+        if self.has_spinner {
+            self.stop.store(true, Ordering::Relaxed);
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    }
+}
+
+async fn write_recon_output(
+    recon: &FullReconResult,
+    args: &ReconArgs,
+    has_spinner: bool,
+) -> Result<()> {
+    let output = if args.json {
+        serde_json::to_string_pretty(recon)?
+    } else {
+        let mut buf = Vec::new();
+        if !has_spinner {
+            buf.extend_from_slice(b"\n");
+        }
+        buf.extend_from_slice(runner::print_recon_results_string(recon).as_bytes());
+        String::from_utf8(buf)?
+    };
+
+    if let Some(ref output_file) = args.output {
+        tokio::fs::write(output_file, &output).await?;
+        if !args.quiet && !args.json {
+            eprintln!("Results written to {}", output_file);
+        }
+    } else {
+        println!("{}", output);
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FullReconResult {
     pub target: String,
@@ -176,30 +239,12 @@ where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
     let stage = Arc::new(Mutex::new(String::new()));
-    let stop = Arc::new(AtomicBool::new(false));
-    let has_spinner = !args.quiet;
+    let spinner = SpinnerGuard::start(&args, &stage);
     let verbose = args.verbose;
-
-    if has_spinner {
-        let stop_clone = stop.clone();
-        let stage_clone = stage.clone();
-        std::thread::spawn(move || {
-            let mut spinner = Spinner::new(stop_clone, stage_clone);
-            while !spinner.stop.load(Ordering::Relaxed) {
-                spinner.tick();
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            spinner.stop();
-        });
-        runner::set_stage(&stage, "init");
-    }
 
     let recon = runner::run_full_recon(&args, config, stage, verbose).await?;
 
-    if has_spinner {
-        stop.store(true, Ordering::Relaxed);
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
+    spinner.stop().await;
 
     if let Some(ref cve_mapping) = recon.cve_mapping {
         for vuln in &cve_mapping.vulnerabilities {
@@ -273,77 +318,19 @@ where
         }
     }
 
-    let output = if args.json {
-        serde_json::to_string_pretty(&recon)?
-    } else {
-        let mut buf = Vec::new();
-        if !has_spinner {
-            buf.extend_from_slice(b"\n");
-        }
-        buf.extend_from_slice(runner::print_recon_results_string(&recon).as_bytes());
-        String::from_utf8(buf)?
-    };
-
-    if let Some(ref output_file) = args.output {
-        tokio::fs::write(output_file, &output).await?;
-        if !args.quiet && !args.json {
-            eprintln!("Results written to {}", output_file);
-        }
-    } else {
-        println!("{}", output);
-    }
-
-    Ok(())
+    write_recon_output(&recon, &args, spinner.has_spinner).await
 }
 
 pub async fn run_cli(args: ReconArgs, config: &SlapperConfig) -> Result<()> {
     let stage = Arc::new(Mutex::new(String::new()));
-    let stop = Arc::new(AtomicBool::new(false));
-    let has_spinner = !args.quiet;
+    let spinner = SpinnerGuard::start(&args, &stage);
     let verbose = args.verbose;
-
-    if has_spinner {
-        let stop_clone = stop.clone();
-        let stage_clone = stage.clone();
-        std::thread::spawn(move || {
-            let mut spinner = Spinner::new(stop_clone, stage_clone);
-            while !spinner.stop.load(Ordering::Relaxed) {
-                spinner.tick();
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            spinner.stop();
-        });
-        runner::set_stage(&stage, "init");
-    }
 
     let recon = runner::run_full_recon(&args, config, stage, verbose).await?;
 
-    if has_spinner {
-        stop.store(true, Ordering::Relaxed);
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
+    spinner.stop().await;
 
-    let output = if args.json {
-        serde_json::to_string_pretty(&recon)?
-    } else {
-        let mut buf = Vec::new();
-        if !has_spinner {
-            buf.extend_from_slice(b"\n");
-        }
-        buf.extend_from_slice(runner::print_recon_results_string(&recon).as_bytes());
-        String::from_utf8(buf)?
-    };
-
-    if let Some(ref output_file) = args.output {
-        tokio::fs::write(output_file, &output).await?;
-        if !args.quiet && !args.json {
-            eprintln!("Results written to {}", output_file);
-        }
-    } else {
-        println!("{}", output);
-    }
-
-    Ok(())
+    write_recon_output(&recon, &args, spinner.has_spinner).await
 }
 
 pub use runner::{print_recon_results_string, run_full_recon};
