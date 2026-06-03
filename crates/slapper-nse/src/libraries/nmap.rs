@@ -195,7 +195,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                 .get("_ports")
                 .unwrap_or_else(|_| lua.create_table().unwrap());
 
-            let results = lua.create_table().unwrap();
+            let results = lua.create_table()?;
             let mut idx = 1;
 
             for pair in ports.pairs::<String, Table>() {
@@ -350,7 +350,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                         "connected_at",
                         std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
+                            .unwrap_or_default()
                             .as_secs(),
                     )?;
                 }
@@ -462,7 +462,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                                             stream: new_stream,
                                             created_at: std::time::SystemTime::now()
                                                 .duration_since(std::time::UNIX_EPOCH)
-                                                .unwrap()
+                                                .unwrap_or_default()
                                                 .as_secs(),
                                         },
                                     );
@@ -759,7 +759,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
     nmap.set(
         "list_supported_methods",
         lua.create_function(|lua, _host: Option<String>| {
-            let table = lua.create_table().unwrap();
+            let table = lua.create_table()?;
             Ok(table)
         })?,
     )?;
@@ -1106,7 +1106,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, _: ()| {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_millis();
             Ok(now as f64)
         })?,
@@ -1117,7 +1117,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, _: ()| {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs() as f64;
             Ok(now)
         })?,
@@ -1418,7 +1418,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, ()| {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs() as f64;
             Ok(now)
         })?,
@@ -1429,7 +1429,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, ()| {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_millis() as f64;
             Ok(now)
         })?,
@@ -1440,7 +1440,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, ()| {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs() as f64;
             Ok(now)
         })?,
@@ -1586,7 +1586,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
     nmap.set(
         "version_table",
         lua.create_function(|_lua, ()| {
-            let table = _lua.create_table().unwrap();
+            let table = _lua.create_table()?;
             table.set("version", env!("CARGO_PKG_VERSION"))?;
             table.set("name", "slapper")?;
             Ok(table)

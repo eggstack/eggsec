@@ -275,11 +275,18 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
             |lua, (host, port, uri, username, password): (String, u16, String, String, String)| {
                 let result = lua.create_table()?;
 
-                let client = reqwest::blocking::Client::builder()
+                let client = match reqwest::blocking::Client::builder()
                     .timeout(std::time::Duration::from_secs(10))
                     .danger_accept_invalid_certs(true)
                     .build()
-                    .unwrap();
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        result.set("status", "error")?;
+                        result.set("error", format!("Failed to create HTTP client: {}", e))?;
+                        return Ok(result);
+                    }
+                };
 
                 let url = format!("http://{}:{}{}", host, port, uri);
                 let response = client

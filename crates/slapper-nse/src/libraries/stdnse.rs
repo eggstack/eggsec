@@ -819,7 +819,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, (_func, _args): (mlua::Function, Option<Table>)| {
             let thread_id = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_nanos() as i64;
 
             // Spawn a background thread that executes the function
@@ -842,7 +842,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
                 let threads: Table = stdnse_tbl
                     .get("_threads")
                     .unwrap_or_else(|_| _lua.create_table().unwrap());
-                let thread_info = _lua.create_table().unwrap();
+                let thread_info = _lua.create_table()?;
                 thread_info.set("id", thread_id)?;
                 thread_info.set("status", "running")?;
                 let _ = threads.set(thread_id.to_string(), thread_info);
@@ -922,7 +922,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         let _ = registry.set(current_key, arr);
         let _ = nmap_tbl.set("registry", registry);
 
-        let result = lua.create_table().unwrap();
+        let result = lua.create_table()?;
         result.set("success", true)?;
         Ok(result)
     })?;

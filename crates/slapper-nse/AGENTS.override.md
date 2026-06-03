@@ -17,6 +17,19 @@ The NSE (Nmap Scripting Engine) module (`crates/slapper-nse/`) provides Lua VM i
 | `src/libraries/creds.rs:102,123` | Performance | Replaced `HashSet` with `FxHashSet` for local `seen` variables |
 | `src/public_api/api.rs:107-108,381,413,463,486,532` | Performance | Replaced all `HashMap` with `FxHashMap` for CVE database, HTTP headers |
 
+## Recent Bug Fixes (2026-06-03)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `src/libraries/nmap.rs` | 7 `SystemTime::now().duration_since(UNIX_EPOCH).unwrap()` calls | Changed to `.unwrap_or_default()` for clock edge case safety |
+| `src/libraries/nmap.rs` | `lua.create_table().unwrap()` in standalone calls | Changed to `lua.create_table()?` where closure returns Result |
+| `src/libraries/nmap.rs` | 25 `lua.create_table().unwrap()` in `unwrap_or_else` fallbacks | Kept as-is (safe fallback; Table doesn't impl Default) |
+| `src/libraries/brute.rs:282` | `reqwest::blocking::Client::builder()...build().unwrap()` | Changed to match with error response on failure |
+| `src/libraries/smb.rs:56` | `addr.parse::<SocketAddr>().unwrap()` | Changed to `.map_err()` returning io::Error |
+| `src/libraries/io.rs:68,77` | `let _ = std::fs::create_dir_all(parent)` silent failure | Added `tracing::warn!` logging on directory creation failure |
+| `src/libraries/stdnse.rs:822` | `SystemTime::now()...unwrap()` | Changed to `.unwrap_or_default()` |
+| `tests/sandbox_tests.rs` | No sandbox integration tests | Added 17 integration tests for SandboxConfig (paths, commands, networks, host resolution) |
+
 ## NSE Libraries HashMap Usage
 
 All NSE library files now use `rustc_hash::FxHashMap`/`FxHashSet` for consistency and performance.
@@ -30,7 +43,7 @@ All NSE library files now use `rustc_hash::FxHashMap`/`FxHashSet` for consistenc
 
 ## Known Issues (Pending Fix)
 
-1. **Missing Sandbox Integration Tests**: No visible test coverage for NSE sandbox enforcement (network and filesystem restrictions). The sandbox has `is_path_allowed()`, `is_host_allowed()`, `is_command_allowed()` methods in `slapper-nse/src/lib.rs:93-159`, but there are no `#[test]` functions testing these restrictions. Add integration tests for sandbox enforcement, particularly around network and filesystem restrictions.
+1. ~~**Missing Sandbox Integration Tests**~~ FIXED - 17 integration tests added in `tests/sandbox_tests.rs` covering path restrictions, command allowlists, network filtering, and host resolution.
 
 2. **TOCTOU Vulnerability in lfs Path Traversal**: `is_path_allowed()` could be bypassed via symlinks or race conditions between check and use.
 

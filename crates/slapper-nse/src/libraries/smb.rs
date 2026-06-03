@@ -53,7 +53,9 @@ const SMB_COMMAND_TRANS2: u8 = 0x32;
 fn smb_negotiate(host: &str, port: u16) -> std::io::Result<(TcpStream, Vec<u8>)> {
     let addr = format!("{}:{}", host, port);
     let mut stream = TcpStream::connect_timeout(
-        &addr.parse::<std::net::SocketAddr>().unwrap(),
+        &addr.parse::<std::net::SocketAddr>().map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid address: {}", e))
+        })?,
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(10)))?;

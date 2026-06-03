@@ -65,7 +65,9 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                 "w" => {
                     let path = PathBuf::from(&filename);
                     if let Some(parent) = path.parent() {
-                        let _ = std::fs::create_dir_all(parent);
+                        if let Err(e) = std::fs::create_dir_all(parent) {
+                            tracing::warn!("Failed to create parent directory {:?}: {}", parent, e);
+                        }
                     }
                     File::create(&filename)
                 }
@@ -74,7 +76,9 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                 "w+" => {
                     let path = PathBuf::from(&filename);
                     if let Some(parent) = path.parent() {
-                        let _ = std::fs::create_dir_all(parent);
+                        if let Err(e) = std::fs::create_dir_all(parent) {
+                            tracing::warn!("Failed to create parent directory {:?}: {}", parent, e);
+                        }
                     }
                     OpenOptions::new()
                         .read(true)
