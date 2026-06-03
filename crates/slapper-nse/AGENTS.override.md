@@ -29,6 +29,9 @@ The NSE (Nmap Scripting Engine) module (`crates/slapper-nse/`) provides Lua VM i
 | `src/libraries/io.rs:68,77` | `let _ = std::fs::create_dir_all(parent)` silent failure | Added `tracing::warn!` logging on directory creation failure |
 | `src/libraries/stdnse.rs:822` | `SystemTime::now()...unwrap()` | Changed to `.unwrap_or_default()` |
 | `tests/sandbox_tests.rs` | No sandbox integration tests | Added 17 integration tests for SandboxConfig (paths, commands, networks, host resolution) |
+| `src/libraries/lfs.rs` | TOCTOU documentation gap | Added module-level doc explaining TOCTOU limitation and mitigation approach |
+| `src/libraries/peg_parser.rs:224` | `current_char().unwrap()` could panic on empty input | Changed to `.ok_or(PegError::UnexpectedEnd)?` with new test case |
+| `src/libraries/vnc.rs:101,107,311,317` | `try_into().unwrap()` on challenge slices | Changed to `.map_err()` returning io::Error with descriptive message |
 
 ## NSE Libraries HashMap Usage
 
@@ -45,11 +48,13 @@ All NSE library files now use `rustc_hash::FxHashMap`/`FxHashSet` for consistenc
 
 1. ~~**Missing Sandbox Integration Tests**~~ FIXED - 17 integration tests added in `tests/sandbox_tests.rs` covering path restrictions, command allowlists, network filtering, and host resolution.
 
-2. **TOCTOU Vulnerability in lfs Path Traversal**: `is_path_allowed()` could be bypassed via symlinks or race conditions between check and use.
+2. **TOCTOU Vulnerability in lfs Path Traversal**: DOCUMENTED - Module-level doc in `lfs.rs` explains the race window and mitigation (canonicalization). Remaining gap requires local filesystem write access to exploit.
 
 3. **DNS Rebinding Attack Vector**: `is_host_allowed()` DNS resolution could be vulnerable to DNS rebinding if `allowed_networks` changes between check and connect.
 
 4. **LazyLock Initialization Contention**: `WAF_SIGNATURES` LazyLock in the main slapper crate may have thread contention during first access in multi-threaded context.
+
+5. **Dead Code Files**: `peg_parser.rs` and `pest_bridge.rs` exist in `src/libraries/` but are not declared in `mod.rs` and never compiled. They may be leftover from development or intended for future use.
 
 ## Dependencies
 

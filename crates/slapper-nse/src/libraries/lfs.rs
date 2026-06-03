@@ -2,6 +2,15 @@
 //!
 //! File system operations for NSE scripts.
 //! Based on Nmap's lfs library concepts.
+//!
+//! # Security Note - TOCTOU Limitation
+//! All file operations validate the path against the sandbox's `allowed_dir` using
+//! canonicalization (resolving symlinks) before performing the operation. However, a narrow
+//! TOCTOU (Time-of-Check-Time-of-Use) race window exists: between `get_allowed_path()`
+//! returning the canonical path and the actual filesystem call, a symlink could theoretically
+//! be swapped to point outside the sandbox. This requires local filesystem write access to
+//! the sandbox directory and precise timing. On Unix, `O_NOFOLLOW` is used where possible
+//! to mitigate symlink-following during file opens.
 
 use mlua::{Lua, Result as LuaResult};
 use std::fs;

@@ -221,7 +221,7 @@ impl PegParser {
     }
 
     fn parse_literal(&mut self) -> Result<PegNode, PegError> {
-        let quote = self.current_char().unwrap();
+        let quote = self.current_char().ok_or(PegError::UnexpectedEnd)?;
         self.pos += 1;
 
         let mut literal = String::new();
@@ -522,5 +522,13 @@ mod tests {
 
         let result2 = PegMatcher::match_pattern(&node, "123", 0);
         assert!(result2.is_none());
+    }
+
+    #[test]
+    fn test_parse_literal_unexpected_end() {
+        // Unterminated string literal should return UnexpectedEnd, not panic
+        let mut parser = PegParser::new("\"hello");
+        let result = parser.parse();
+        assert!(result.is_err());
     }
 }
