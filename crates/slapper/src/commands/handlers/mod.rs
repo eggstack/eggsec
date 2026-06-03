@@ -65,15 +65,18 @@ pub struct CommandContext {
     pub scope: Scope,
     pub json: bool,
     config_path: Option<String>,
+    pub notify_manager: crate::notify::NotifyManager,
 }
 
 impl CommandContext {
     pub fn new(config: SlapperConfig, scope: Scope, json: bool) -> Self {
+        let notify_manager = crate::notify::NotifyManager::from_settings(&config);
         Self {
             config,
             scope,
             json,
             config_path: None,
+            notify_manager,
         }
     }
 

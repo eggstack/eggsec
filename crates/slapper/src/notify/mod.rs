@@ -14,7 +14,6 @@ pub struct NotifyConfig {
     pub slack_webhook: Option<String>,
     pub discord_webhook: Option<String>,
     pub teams_webhook: Option<String>,
-    pub notify_on_start: bool,
     pub notify_on_complete: bool,
     pub notify_on_findings: bool,
     pub notify_on_error: bool,
@@ -27,7 +26,6 @@ impl Default for NotifyConfig {
             slack_webhook: None,
             discord_webhook: None,
             teams_webhook: None,
-            notify_on_start: false,
             notify_on_complete: true,
             notify_on_findings: true,
             notify_on_error: true,
@@ -36,7 +34,7 @@ impl Default for NotifyConfig {
 }
 
 pub struct NotifyManager {
-    notifier: Option<WebhookNotifier>,
+    notifier: WebhookNotifier,
     slack_webhook: Option<String>,
     discord_webhook: Option<String>,
     teams_webhook: Option<String>,
@@ -45,11 +43,8 @@ pub struct NotifyManager {
 
 impl NotifyManager {
     pub fn new(config: NotifyConfig) -> Self {
-        let notifier = if config.webhooks.is_empty() {
-            None
-        } else {
-            WebhookNotifier::new(config.webhooks.clone()).ok()
-        };
+        let notifier = WebhookNotifier::new(config.webhooks.clone())
+            .unwrap_or_else(|_| WebhookNotifier::new(vec![]).expect("empty webhook list"));
 
         Self {
             notifier,
@@ -89,7 +84,6 @@ impl NotifyManager {
             slack_webhook: notify_settings.slack_webhook.clone(),
             discord_webhook: notify_settings.discord_webhook.clone(),
             teams_webhook: notify_settings.teams_webhook.clone(),
-            notify_on_start: false,
             notify_on_complete: notify_settings.notify_on_complete,
             notify_on_findings: notify_settings.notify_on_findings,
             notify_on_error: true,
@@ -97,26 +91,16 @@ impl NotifyManager {
     }
 
     pub async fn notify_scan_started(&self, scan_id: &str, target: &str) {
-        if !self.config.notify_on_start {
-            return;
-        }
-
-        if let Some(ref notifier) = self.notifier {
-            let payload = NotificationPayload {
-                event: WebhookEvent::ScanStarted,
-                timestamp: Utc::now(),
-                scan_id: scan_id.to_string(),
-                target: target.to_string(),
-                message: "Scan started".to_string(),
-                findings: None,
-                stats: None,
-            };
-            for result in notifier.notify(&payload).await {
-                if let Err(e) = result {
-                    tracing::warn!("Failed to send notification: {}", e);
-                }
-            }
-        }
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanStarted,
+            timestamp: Utc::now(),
+            scan_id: scan_id.to_string(),
+            target: target.to_string(),
+            message: "Scan started".to_string(),
+            findings: None,
+            stats: None,
+        };
+        self.dispatch(&payload).await;
     }
 
     pub async fn notify_scan_complete(
@@ -131,73 +115,16 @@ impl NotifyManager {
             return;
         }
 
-        if let Some(ref notifier) = self.notifier {
-            let payload = NotificationPayload {
-                event: WebhookEvent::ScanComplete,
-                timestamp: Utc::now(),
-                scan_id: scan_id.to_string(),
-                target: target.to_string(),
-                message: message.to_string(),
-                findings: findings.clone(),
-                stats: stats.clone(),
-            };
-            for result in notifier.notify(&payload).await {
-                if let Err(e) = result {
-                    tracing::warn!("Webhook notification failed: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref slack_url) = self.slack_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::ScanComplete,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: message.to_string(),
-                    findings: findings.clone(),
-                    stats: stats.clone(),
-                };
-                if let Err(e) = notifier.notify_slack(slack_url, &payload).await {
-                    tracing::warn!("Slack notification failed: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref discord_url) = self.discord_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::ScanComplete,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: message.to_string(),
-                    findings: findings.clone(),
-                    stats,
-                };
-                if let Err(e) = notifier.notify_discord(discord_url, &payload).await {
-                    tracing::warn!("Discord notification failed: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref teams_url) = self.teams_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::ScanComplete,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: message.to_string(),
-                    findings,
-                    stats: None,
-                };
-                if let Err(e) = notifier.notify_teams(teams_url, &payload).await {
-                    tracing::warn!("Teams notification failed: {}", e);
-                }
-            }
-        }
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: scan_id.to_string(),
+            target: target.to_string(),
+            message: message.to_string(),
+            findings,
+            stats,
+        };
+        self.dispatch(&payload).await;
     }
 
     pub async fn notify_findings(
@@ -210,73 +137,16 @@ impl NotifyManager {
             return;
         }
 
-        if let Some(ref notifier) = self.notifier {
-            let payload = NotificationPayload {
-                event: WebhookEvent::FindingDetected,
-                timestamp: Utc::now(),
-                scan_id: scan_id.to_string(),
-                target: target.to_string(),
-                message: format!("{} findings detected", findings.len()),
-                findings: Some(findings.clone()),
-                stats: None,
-            };
-            for result in notifier.notify(&payload).await {
-                if let Err(e) = result {
-                    tracing::warn!("Webhook notification failed: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref slack_url) = self.slack_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::FindingDetected,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: format!("{} findings detected", findings.len()),
-                    findings: Some(findings.clone()),
-                    stats: None,
-                };
-                if let Err(e) = notifier.notify_slack(slack_url, &payload).await {
-                    tracing::warn!("Slack notification failed: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref teams_url) = self.teams_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::FindingDetected,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: format!("{} findings detected", findings.len()),
-                    findings: Some(findings.clone()),
-                    stats: None,
-                };
-                if let Err(e) = notifier.notify_teams(teams_url, &payload).await {
-                    tracing::warn!("Teams notification failed: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref discord_url) = self.discord_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::FindingDetected,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: format!("{} findings detected", findings.len()),
-                    findings: Some(findings),
-                    stats: None,
-                };
-                if let Err(e) = notifier.notify_discord(discord_url, &payload).await {
-                    tracing::warn!("Discord notification failed: {}", e);
-                }
-            }
-        }
+        let payload = NotificationPayload {
+            event: WebhookEvent::FindingDetected,
+            timestamp: Utc::now(),
+            scan_id: scan_id.to_string(),
+            target: target.to_string(),
+            message: format!("{} findings detected", findings.len()),
+            findings: Some(findings),
+            stats: None,
+        };
+        self.dispatch(&payload).await;
     }
 
     pub async fn notify_error(&self, scan_id: &str, target: &str, error: &str) {
@@ -284,60 +154,46 @@ impl NotifyManager {
             return;
         }
 
-        if let Some(ref notifier) = self.notifier {
-            let payload = NotificationPayload {
-                event: WebhookEvent::ScanError,
-                timestamp: Utc::now(),
-                scan_id: scan_id.to_string(),
-                target: target.to_string(),
-                message: error.to_string(),
-                findings: None,
-                stats: None,
-            };
-            for result in notifier.notify(&payload).await {
-                if let Err(e) = result {
-                    tracing::warn!("Webhook notification failed: {}", e);
-                }
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanError,
+            timestamp: Utc::now(),
+            scan_id: scan_id.to_string(),
+            target: target.to_string(),
+            message: error.to_string(),
+            findings: None,
+            stats: None,
+        };
+        self.dispatch(&payload).await;
+    }
+
+    async fn dispatch(&self, payload: &NotificationPayload) {
+        for result in self.notifier.notify(payload).await {
+            if let Err(e) = result {
+                tracing::warn!("Webhook notification failed: {}", e);
+            }
+        }
+
+        if let Some(ref slack_url) = self.slack_webhook {
+            if let Err(e) = self.notifier.notify_slack(slack_url, payload).await {
+                tracing::warn!("Slack notification failed: {}", e);
             }
         }
 
         if let Some(ref discord_url) = self.discord_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::ScanError,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: error.to_string(),
-                    findings: None,
-                    stats: None,
-                };
-                if let Err(e) = notifier.notify_discord(discord_url, &payload).await {
-                    tracing::warn!("Discord notification failed: {}", e);
-                }
+            if let Err(e) = self.notifier.notify_discord(discord_url, payload).await {
+                tracing::warn!("Discord notification failed: {}", e);
             }
         }
 
         if let Some(ref teams_url) = self.teams_webhook {
-            if let Some(ref notifier) = self.notifier {
-                let payload = NotificationPayload {
-                    event: WebhookEvent::ScanError,
-                    timestamp: Utc::now(),
-                    scan_id: scan_id.to_string(),
-                    target: target.to_string(),
-                    message: error.to_string(),
-                    findings: None,
-                    stats: None,
-                };
-                if let Err(e) = notifier.notify_teams(teams_url, &payload).await {
-                    tracing::warn!("Teams notification failed: {}", e);
-                }
+            if let Err(e) = self.notifier.notify_teams(teams_url, payload).await {
+                tracing::warn!("Teams notification failed: {}", e);
             }
         }
     }
 
     pub fn is_enabled(&self) -> bool {
-        self.notifier.is_some()
+        self.notifier.is_enabled()
             || self.slack_webhook.is_some()
             || self.discord_webhook.is_some()
             || self.teams_webhook.is_some()
@@ -347,5 +203,115 @@ impl NotifyManager {
 impl Default for NotifyManager {
     fn default() -> Self {
         Self::new(NotifyConfig::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_notify_config_defaults() {
+        let config = NotifyConfig::default();
+        assert!(config.webhooks.is_empty());
+        assert!(config.slack_webhook.is_none());
+        assert!(config.discord_webhook.is_none());
+        assert!(config.teams_webhook.is_none());
+        assert!(config.notify_on_complete);
+        assert!(config.notify_on_findings);
+        assert!(config.notify_on_error);
+    }
+
+    #[test]
+    fn test_notify_manager_default() {
+        let manager = NotifyManager::default();
+        assert!(!manager.is_enabled());
+    }
+
+    #[test]
+    fn test_notify_manager_is_enabled_with_webhook() {
+        let config = NotifyConfig {
+            webhooks: vec![WebhookConfig {
+                name: "test".to_string(),
+                url: "https://example.com".to_string(),
+                secret: None,
+                headers: std::collections::HashMap::new(),
+                events: vec![WebhookEvent::ScanComplete],
+            }],
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_notify_manager_is_enabled_with_slack() {
+        let config = NotifyConfig {
+            slack_webhook: Some("https://hooks.slack.com/test".to_string()),
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_notify_manager_is_enabled_with_discord() {
+        let config = NotifyConfig {
+            discord_webhook: Some("https://discord.com/api/webhooks/test".to_string()),
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_notify_manager_is_enabled_with_teams() {
+        let config = NotifyConfig {
+            teams_webhook: Some("https://outlook.office.com/webhook/test".to_string()),
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_notify_manager_created_with_empty_webhooks() {
+        let config = NotifyConfig {
+            webhooks: vec![],
+            slack_webhook: Some("https://hooks.slack.com/test".to_string()),
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        assert!(manager.is_enabled());
+    }
+
+    #[test]
+    fn test_notify_config_serialization() {
+        let config = NotifyConfig {
+            webhooks: vec![WebhookConfig {
+                name: "my-hook".to_string(),
+                url: "https://example.com/hook".to_string(),
+                secret: None,
+                headers: std::collections::HashMap::new(),
+                events: vec![WebhookEvent::ScanComplete],
+            }],
+            slack_webhook: Some("https://hooks.slack.com/test".to_string()),
+            discord_webhook: None,
+            teams_webhook: None,
+            notify_on_complete: true,
+            notify_on_findings: false,
+            notify_on_error: true,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: NotifyConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.webhooks.len(), 1);
+        assert_eq!(deserialized.webhooks[0].name, "my-hook");
+        assert_eq!(
+            deserialized.slack_webhook,
+            Some("https://hooks.slack.com/test".to_string())
+        );
+        assert!(deserialized.notify_on_complete);
+        assert!(!deserialized.notify_on_findings);
     }
 }

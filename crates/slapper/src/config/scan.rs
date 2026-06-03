@@ -109,9 +109,6 @@ pub struct NotificationConfig {
     pub discord_webhook: Option<String>,
 
     #[serde(default)]
-    pub email_notifications: bool,
-
-    #[serde(default)]
     pub teams_webhook: Option<String>,
 
     #[serde(default)]

@@ -45,7 +45,6 @@ pub enum WebhookEvent {
     ScanComplete,
     ScanError,
     FindingDetected,
-    RateLimited,
 }
 
 pub struct WebhookNotifier {
@@ -67,6 +66,10 @@ impl WebhookNotifier {
         let client = create_http_client(10)?;
 
         Ok(Self { client, webhooks })
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        !self.webhooks.is_empty()
     }
 
     pub async fn notify(&self, payload: &NotificationPayload) -> Vec<Result<(), String>> {
@@ -145,11 +148,15 @@ impl WebhookNotifier {
             request = request.header(key.as_str(), value.as_str());
         }
 
-        request
+        let response = request
             .json(payload)
             .send()
             .await
             .map_err(|e| format!("Webhook request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Webhook returned status {}", response.status()));
+        }
 
         Ok(())
     }
@@ -160,20 +167,7 @@ impl WebhookNotifier {
         payload: &NotificationPayload,
     ) -> Result<(), String> {
         let slack_payload = self.build_slack_payload(payload);
-
-        let response = self
-            .client
-            .post(webhook_url)
-            .json(&slack_payload)
-            .send()
-            .await
-            .map_err(|e| format!("Slack webhook failed: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("Slack returned status {}", response.status()));
-        }
-
-        Ok(())
+        self.send_with_retry(webhook_url, &slack_payload, "Slack").await
     }
 
     pub async fn notify_discord(
@@ -182,20 +176,7 @@ impl WebhookNotifier {
         payload: &NotificationPayload,
     ) -> Result<(), String> {
         let discord_payload = self.build_discord_payload(payload);
-
-        let response = self
-            .client
-            .post(webhook_url)
-            .json(&discord_payload)
-            .send()
-            .await
-            .map_err(|e| format!("Discord webhook failed: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("Discord returned status {}", response.status()));
-        }
-
-        Ok(())
+        self.send_with_retry(webhook_url, &discord_payload, "Discord").await
     }
 
     pub async fn notify_teams(
@@ -204,20 +185,55 @@ impl WebhookNotifier {
         payload: &NotificationPayload,
     ) -> Result<(), String> {
         let teams_payload = self.build_teams_payload(payload);
+        self.send_with_retry(webhook_url, &teams_payload, "Teams").await
+    }
 
-        let response = self
-            .client
-            .post(webhook_url)
-            .json(&teams_payload)
-            .send()
-            .await
-            .map_err(|e| format!("Teams webhook failed: {}", e))?;
+    async fn send_with_retry(
+        &self,
+        url: &str,
+        payload: &serde_json::Value,
+        platform: &str,
+    ) -> Result<(), String> {
+        const MAX_RETRIES: u32 = 3;
+        const BASE_DELAY_MS: u64 = 1000;
 
-        if !response.status().is_success() {
-            return Err(format!("Teams returned status {}", response.status()));
+        let mut last_error = String::new();
+
+        for attempt in 0..MAX_RETRIES {
+            if attempt > 0 {
+                let delay_ms = BASE_DELAY_MS * 2u64.pow(attempt - 1);
+                tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+            }
+
+            match self
+                .client
+                .post(url)
+                .json(payload)
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        return Ok(());
+                    }
+                    last_error = format!("{} returned status {}", platform, response.status());
+                }
+                Err(e) => {
+                    last_error = format!("{} webhook failed: {}", platform, e);
+                }
+            }
+
+            if attempt < MAX_RETRIES - 1 {
+                tracing::warn!(
+                    "{} delivery attempt {} failed, retrying: {}",
+                    platform,
+                    attempt + 1,
+                    last_error
+                );
+            }
         }
 
-        Ok(())
+        Err(last_error)
     }
 
     fn build_slack_payload(&self, payload: &NotificationPayload) -> serde_json::Value {
@@ -226,7 +242,6 @@ impl WebhookNotifier {
             WebhookEvent::ScanComplete => "#36a64f",
             WebhookEvent::ScanError => "#dc3545",
             WebhookEvent::FindingDetected => "#ffc107",
-            WebhookEvent::RateLimited => "#fd7e14",
         };
 
         let mut attachment = serde_json::json!({
@@ -276,7 +291,6 @@ impl WebhookNotifier {
             WebhookEvent::ScanComplete => 0x36a64f,
             WebhookEvent::ScanError => 0xdc3545,
             WebhookEvent::FindingDetected => 0xffc107,
-            WebhookEvent::RateLimited => 0xfd7e14,
         };
 
         let mut fields = vec![
@@ -321,7 +335,6 @@ impl WebhookNotifier {
             WebhookEvent::ScanComplete => "36a64f",
             WebhookEvent::ScanError => "dc3545",
             WebhookEvent::FindingDetected => "ffc107",
-            WebhookEvent::RateLimited => "fd7e14",
         };
 
         let mut facts = vec![
@@ -368,5 +381,252 @@ impl WebhookNotifier {
                 }]
             }]
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_webhook_event_serialization() {
+        let events = vec![
+            WebhookEvent::ScanStarted,
+            WebhookEvent::ScanComplete,
+            WebhookEvent::ScanError,
+            WebhookEvent::FindingDetected,
+        ];
+        for event in &events {
+            let json = serde_json::to_string(event).unwrap();
+            let deserialized: WebhookEvent = serde_json::from_str(&json).unwrap();
+            assert_eq!(*event, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_notification_payload_serialization() {
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "test-scan".to_string(),
+            target: "example.com".to_string(),
+            message: "Test message".to_string(),
+            findings: Some(vec![FindingSummary {
+                severity: "high".to_string(),
+                finding_type: "xss".to_string(),
+                description: "Reflected XSS".to_string(),
+                location: "/search".to_string(),
+            }]),
+            stats: Some(ScanStats {
+                duration_ms: 1500,
+                requests_total: 100,
+                requests_success: 95,
+                requests_failed: 5,
+                findings_total: 3,
+            }),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: NotificationPayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(payload.event, deserialized.event);
+        assert_eq!(payload.scan_id, deserialized.scan_id);
+        assert_eq!(payload.target, deserialized.target);
+        assert_eq!(payload.message, deserialized.message);
+        assert!(deserialized.findings.is_some());
+        assert!(deserialized.stats.is_some());
+    }
+
+    #[test]
+    fn test_notification_payload_skips_none_fields() {
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanStarted,
+            timestamp: Utc::now(),
+            scan_id: "test".to_string(),
+            target: "test.com".to_string(),
+            message: "test".to_string(),
+            findings: None,
+            stats: None,
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        assert!(!json.contains("findings"));
+        assert!(!json.contains("stats"));
+    }
+
+    #[test]
+    fn test_finding_summary_creation() {
+        let finding = FindingSummary {
+            severity: "critical".to_string(),
+            finding_type: "sqli".to_string(),
+            description: "SQL injection in login".to_string(),
+            location: "/login".to_string(),
+        };
+        assert_eq!(finding.severity, "critical");
+        assert_eq!(finding.location, "/login");
+    }
+
+    #[test]
+    fn test_scan_stats_creation() {
+        let stats = ScanStats {
+            duration_ms: 5000,
+            requests_total: 200,
+            requests_success: 190,
+            requests_failed: 10,
+            findings_total: 5,
+        };
+        assert_eq!(stats.duration_ms, 5000);
+        assert_eq!(stats.findings_total, 5);
+    }
+
+    #[test]
+    fn test_webhook_config_creation() {
+        let config = WebhookConfig {
+            name: "test-webhook".to_string(),
+            url: "https://example.com/hook".to_string(),
+            secret: Some(SensitiveString::new("my-secret")),
+            headers: HashMap::new(),
+            events: vec![WebhookEvent::ScanComplete, WebhookEvent::FindingDetected],
+        };
+        assert_eq!(config.name, "test-webhook");
+        assert_eq!(config.events.len(), 2);
+        assert!(config.secret.is_some());
+    }
+
+    #[test]
+    fn test_webhook_notifier_is_enabled() {
+        let notifier_empty = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        assert!(!notifier_empty.is_enabled());
+
+        let notifier_with_hooks = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![WebhookConfig {
+                name: "test".to_string(),
+                url: "https://example.com".to_string(),
+                secret: None,
+                headers: HashMap::new(),
+                events: vec![WebhookEvent::ScanComplete],
+            }],
+        };
+        assert!(notifier_with_hooks.is_enabled());
+    }
+
+    #[test]
+    fn test_build_slack_payload() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "Done".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let slack = notifier.build_slack_payload(&payload);
+        assert!(slack.get("attachments").is_some());
+        let attachments = slack["attachments"].as_array().unwrap();
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0]["color"], "#36a64f");
+    }
+
+    #[test]
+    fn test_build_discord_payload() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanError,
+            timestamp: Utc::now(),
+            scan_id: "s2".to_string(),
+            target: "example.com".to_string(),
+            message: "Error occurred".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let discord = notifier.build_discord_payload(&payload);
+        assert!(discord.get("embeds").is_some());
+        let embeds = discord["embeds"].as_array().unwrap();
+        assert_eq!(embeds.len(), 1);
+        assert_eq!(embeds[0]["color"], 0xdc3545);
+    }
+
+    #[test]
+    fn test_build_teams_payload() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::FindingDetected,
+            timestamp: Utc::now(),
+            scan_id: "s3".to_string(),
+            target: "example.com".to_string(),
+            message: "Findings found".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let teams = notifier.build_teams_payload(&payload);
+        assert_eq!(teams["@type"], "MessageCard");
+        assert_eq!(teams["themeColor"], "ffc107");
+    }
+
+    #[test]
+    fn test_slack_payload_with_findings() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::FindingDetected,
+            timestamp: Utc::now(),
+            scan_id: "s4".to_string(),
+            target: "example.com".to_string(),
+            message: "1 finding".to_string(),
+            findings: Some(vec![FindingSummary {
+                severity: "high".to_string(),
+                finding_type: "xss".to_string(),
+                description: "XSS in search".to_string(),
+                location: "/q".to_string(),
+            }]),
+            stats: None,
+        };
+        let slack = notifier.build_slack_payload(&payload);
+        let fields = slack["attachments"][0]["fields"].as_array().unwrap();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[2]["title"], "Findings");
+    }
+
+    #[test]
+    fn test_discord_payload_with_stats() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "s5".to_string(),
+            target: "example.com".to_string(),
+            message: "Done".to_string(),
+            findings: None,
+            stats: Some(ScanStats {
+                duration_ms: 2000,
+                requests_total: 50,
+                requests_success: 48,
+                requests_failed: 2,
+                findings_total: 1,
+            }),
+        };
+        let discord = notifier.build_discord_payload(&payload);
+        let fields = discord["embeds"][0]["fields"].as_array().unwrap();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[2]["name"], "Statistics");
     }
 }

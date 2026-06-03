@@ -36,22 +36,43 @@ pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -
         proxy_pool: args.proxy_file,
     };
 
-    let stress_test = StressTest::new(config)?;
-    let stats = stress_test.run().await?;
+    let scan_id = format!("stress-{}", chrono::Utc::now().timestamp());
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &args.target)
+        .await;
 
-    if ctx.json {
-        println!("{}", serde_json::to_string_pretty(&stats)?);
-    } else {
-        println!("\nStress Test Complete:");
-        println!("  Packets sent: {}", stats.packets_sent);
-        println!("  Bytes sent: {}", stats.bytes_sent);
-        println!("  Duration: {} ms", stats.duration_ms);
-        if stats.errors > 0 {
-            println!("  Errors: {}", stats.errors);
+    let stress_test = StressTest::new(config)?;
+    match stress_test.run().await {
+        Ok(stats) => {
+            if ctx.json {
+                println!("{}", serde_json::to_string_pretty(&stats)?);
+            } else {
+                println!("\nStress Test Complete:");
+                println!("  Packets sent: {}", stats.packets_sent);
+                println!("  Bytes sent: {}", stats.bytes_sent);
+                println!("  Duration: {} ms", stats.duration_ms);
+                if stats.errors > 0 {
+                    println!("  Errors: {}", stats.errors);
+                }
+            }
+            ctx.notify_manager
+                .notify_scan_complete(
+                    &scan_id,
+                    &args.target,
+                    "Stress test completed",
+                    None,
+                    None,
+                )
+                .await;
+            Ok(())
+        }
+        Err(e) => {
+            ctx.notify_manager
+                .notify_error(&scan_id, &args.target, &e.to_string())
+                .await;
+            Err(e)
         }
     }
-
-    Ok(())
 }
 
 #[cfg(feature = "stress-testing")]
