@@ -20,4 +20,4 @@ Finding comparison engine that compares two scan result sets and identifies new,
 
 ## Implementation Status
 
-Fully implemented. `diff_findings()` compares `&[Finding]` slices by fingerprint and produces a structured `DiffResult`. `load_findings_from_file()` loads findings from a single JSONL file; load both files and pass the slices to `diff_findings()`.
+Fully implemented. `diff_findings()` compares `&[Finding]` slices by fingerprint and produces a structured `DiffResult`. `load_findings_from_file()` loads findings from a single JSON file; load both files and pass the slices to `diff_findings()`.

@@ -166,6 +166,13 @@ pub fn format_diff_text(diff: &DiffResult) -> String {
             "--- Persisting Findings ({}) ---\n",
             diff.persisting.len()
         ));
+        for f in &diff.persisting {
+            out.push_str(&format!(
+                "  [{}] {} ({})\n",
+                f.severity, f.title, f.confidence
+            ));
+        }
+        out.push('\n');
     }
 
     out
