@@ -51,7 +51,7 @@ pub struct AttackGraph {
 }
 ```
 
-`AttackGraphBuilder::from_chains()` converts `AttackChain` values into graph structures and is feature-gated behind `advanced-hunting`. `AttackGraphBuilder::to_html()` is **not** feature-gated — it accepts any `&AttackGraph` and renders an HTML page with D3.js visualization scaffolding, so it can be used with manually constructed graphs without enabling the `advanced-hunting` feature.
+`AttackGraphBuilder::from_chains()` converts `AttackChain` values into graph structures. The `AttackChain` type import is feature-gated behind `advanced-hunting`, so `from_chains()` is only available when that feature is enabled. `AttackGraphBuilder::to_html()` is **not** feature-gated — it accepts any `&AttackGraph` and renders an HTML page with D3.js visualization scaffolding, so it can be used with manually constructed graphs without enabling the `advanced-hunting` feature.
 
 ### Trend Analysis (`trend.rs`)
 
@@ -64,11 +64,51 @@ pub struct TrendAnalyzer {
 pub enum TrendDirection { Improving, Stable, Worsening }
 ```
 
-`TrendAnalyzer` stores up to 1000 `ScanResult` entries in an `lru::LruCache` keyed by result ID. When the cache is full, the least-recently-used entry is evicted. `get_trend()` sorts results by timestamp and computes sliding-window deltas for critical, high, and medium finding counts across consecutive scans. `ResultComparator` provides lower-level comparison with composite deduplication keys `(title, category, cve)`.
+`TrendAnalyzer` stores up to 1000 `ScanResult` entries in an `lru::LruCache` keyed by result ID. When the cache is full, the least-recently-used entry is evicted. `get_trend()` sorts results by timestamp and computes sliding-window deltas for critical, high, and medium finding counts across consecutive scans. The overall `TrendDirection` is determined by the critical trend only: any increase yields `Worsening`, any decrease yields `Improving`, otherwise `Stable`. `ResultComparator` provides lower-level comparison with composite deduplication keys `(title, category, cve)`.
 
 ### Baseline Comparison (`baseline.rs`)
 
 Detects regressions by comparing current findings against a baseline.
+
+### Session Persistence (`session.rs`)
+
+Persists scan state across TUI sessions:
+
+```rust
+pub struct ScanSession {
+    pub version: String,
+    pub created_at: String,
+    pub last_modified: String,
+    pub tab_states: FxHashMap<String, TabSessionState>,
+    pub results: FxHashMap<String, serde_json::Value>,
+}
+```
+
+`ScanSession` saves/loads tab input state and results to JSON files. `TabSessionState` tracks per-tab input fields and options via `FxHashMap`.
+
+### AI Output Schema (`ai_schema.rs`)
+
+Typed output for AI consumption:
+
+```rust
+pub struct AiOutput {
+    pub findings: Vec<AiFinding>,
+    pub summary: AiSummary,
+}
+```
+
+`AiOutput::from_findings()` computes a risk score (0-10) weighted by severity and confidence, and generates an executive summary string.
+
+### PDF Report (`pdf.rs`)
+
+Feature-gated (`pdf` feature) PDF generation using `printpdf`. `PdfGenerator::generate_report()` renders findings with severity-colored markers and metadata headers.
+
+### Escape Utilities (`escape.rs`)
+
+Shared escaping functions used across output formats:
+- `escape_html()` - HTML entity encoding
+- `escape_csv()` - NFKC normalization + quoting for formula injection protection
+- `escape_xml()` - XML entity encoding
 
 ### Scheduling (`schedule.rs`)
 
@@ -182,8 +222,8 @@ pub struct RunManifest {
     pub slapper_version: String,
     pub target_scope: String,
     pub profile: String,
-    pub probe_intents: Vec<String>,
-    pub risk_budget: String,
+    pub probe_intents: Vec<ProbeIntent>,
+    pub risk_budget: ProbeRisk,
     pub feature_flags: Vec<String>,
     pub observations: Vec<serde_json::Value>,
     pub findings: Vec<serde_json::Value>,
@@ -210,7 +250,7 @@ Constructs a `RunManifest` from a completed `PipelineReport`. The conversion log
   1. Open ports → `{"type": "port", "port", "status", "service"}`
   2. Services → `{"type": "service", "port", "service", "product", "version"}`
   3. Interesting endpoints → `{"type": "endpoint", "path", "status_code", "content_length"}`
-- **`probe_intents`**: Stage names from successful `stage_results`.
+- **`probe_intents`**: `ProbeIntent` values derived from successful `stage_results` via `stage.to_probe_intent()`.
 - **`feature_flags`**: All stage results formatted as `"stage:{name}"` (success) or `"stage:{name}:failed"` (failure).
 - **`findings`**: Left empty; populated separately via `populate_findings_from_report()`.
 
@@ -231,6 +271,10 @@ Constructs a `RunManifest` from a completed `PipelineReport`. The conversion log
 | `TrendAnalysis` | `trend.rs` | Historical trend data |
 | `CronScheduler` | `schedule.rs` | Cron-based scan scheduling |
 | `ScanQueue` | `schedule.rs` | Priority-based scan queue |
+| `ScanSession` | `session.rs` | TUI session persistence |
+| `AiOutput` | `ai_schema.rs` | AI-consumable finding output with risk score |
+| `PdfGenerator` | `pdf.rs` | PDF report generation (feature-gated) |
+| `BaselineComparison` | `baseline.rs` | Regression detection against baseline |
 
 ### Error Handling
 
@@ -255,8 +299,9 @@ Avoid using `unwrap_or_default()` on serialization - use explicit error handling
 - `attack_graph.rs` - `GraphNode::properties`
 - `sarif.rs` - `SarifResult::properties`
 - `junit.rs` - `JUnitBuilder::test_suites`
+- `report_summary.rs` - `ReportSummary::from_findings` (by_severity, by_confidence, by_type, asset_counts)
 
-**Migration candidate**: `report_summary.rs` currently uses `std::collections::HashMap` for `by_severity`, `by_confidence`, `by_type`, and local `asset_counts` in `from_findings()`. Consider migrating to `FxHashMap` for consistency.
+All `HashMap` usage in the output module has been migrated to `FxHashMap`, including `report_summary.rs` (`by_severity`, `by_confidence`, `by_type`, `asset_counts`).
 
 ## Security Notes
 
