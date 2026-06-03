@@ -40,45 +40,25 @@ let mut status_codes: FxHashMap<u16, u64> = FxHashMap::default();
 |------|-------|-----|
 | `metrics.rs:76` | Panic message "3 significant figures is invalid" is incorrect | Use `expect("Failed to create hdrhistogram")` instead |
 
-## Rate Limiting (Updated 2026-05-28)
+## Rate Limiting (Updated 2026-06-03)
 
-Rate limiting was refactored from mutex-based to semaphore token bucket approach:
+Rate limiting uses a **semaphore token bucket** with `forget()` to permanently consume permits:
 
-```rust
-let rate_limit_sem = self.rate_limit.map(|rate| {
-    let sem = Arc::new(Semaphore::new(rate as usize));
-    let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
-    let sem_clone = sem.clone();
-    tokio::spawn(async move {
-        loop {
-            sleep(min_interval).await;
-            sem_clone.add_permits(1);
-        }
-    });
-    sem
-});
-```
+1. A semaphore starts with 0 permits
+2. A background task adds 1 permit every `min_interval` (1/rate seconds)
+3. Workers acquire a permit and call `forget()` to permanently consume it (preventing reacquisition)
+4. Workers that can't acquire a permit block until one is available
 
-Workers acquire permits before processing. Initial burst is prevented because semaphore starts with exactly `rate` permits.
+This ensures RPS stays close to the configured limit. Using `forget()` is critical — returning the permit to the semaphore would allow immediate reacquisition, defeating rate limiting.
 
-## HIGH Priority Issue (Pending Fix)
+## Bug Fix (2026-06-03)
 
-**Semaphore Unwrap Could Panic at `runner.rs:315`:**
-
-```rust
-let _permit = sem.acquire().await.unwrap();
-```
-
-The semaphore acquire uses `.unwrap()` which could panic if the semaphore is closed. Handle the error explicitly instead of unwrapping - use match or map_err with tracing:
-
-```rust
-let permit = sem.acquire().await.map_err(|e| {
-    tracing::error!("Failed to acquire rate limit semaphore: {}", e);
-    e
-})?;
-```
-
-This is a potential panic point under error conditions.
+| File | Issue | Fix |
+|------|-------|-----|
+| `metrics.rs:87,94` | Silent error suppression with `let _ =` on `histogram.record()` | Now logs with `tracing::warn!` on failure |
+| `runner.rs:314-317` | Rate limiting acquire discarded the permit, allowing immediate reacquisition | Now uses `permit.forget()` to permanently consume permits, enforcing actual rate limits |
+| `runner.rs:271-282` | Semaphore started with `rate` permits allowing unbounded initial burst | Changed to start with 0 permits; background task adds permits at configured rate |
+| `tool/implementations/loadtest.rs:80-108` | `LoadTestTool::execute()` discarded actual `LoadTestResults` | Now runs via `LoadTestRunner::from_args_with_config()` directly and returns serialized results |
 
 ## Testing
 

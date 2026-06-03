@@ -77,9 +77,11 @@ impl SecurityTool for LoadTestTool {
                 tracing::warn!(error = %e, "Failed to load config for loadtest, using defaults");
             })
             .unwrap_or_default();
-        tokio::time::timeout(
+
+        let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, &config)?;
+        let results = tokio::time::timeout(
             std::time::Duration::from_secs(60),
-            crate::loadtest::run_cli(args, &config),
+            runner.run(),
         )
         .await
         .map_err(|e| crate::error::SlapperError::Timeout {
@@ -91,11 +93,17 @@ impl SecurityTool for LoadTestTool {
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
 
+        let results_json = serde_json::to_value(&results)
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "Failed to serialize load test results");
+                serde_json::json!({ "target": target, "requests": requests, "concurrency": concurrency })
+            });
+
         Ok(ToolResponse {
             request_id: request.id,
             tool_id: "load".to_string(),
             status: crate::tool::ResponseStatus::Success,
-            results: serde_json::json!({ "target": target, "requests": requests, "concurrency": concurrency }),
+            results: results_json,
             metadata: crate::tool::ResponseMetadata {
                 started_at,
                 completed_at,

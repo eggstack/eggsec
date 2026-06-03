@@ -269,7 +269,7 @@ impl LoadTestRunner {
         let issued_requests = Arc::new(AtomicU64::new(0));
 
         let rate_limit_sem = self.rate_limit.map(|rate| {
-            let sem = Arc::new(Semaphore::new(rate as usize));
+            let sem = Arc::new(Semaphore::new(0));
             let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
             let sem_clone = sem.clone();
             tokio::spawn(async move {
@@ -312,8 +312,11 @@ impl LoadTestRunner {
                     }
 
                     if let Some(sem) = &rate_limit_sem {
-                        if let Err(e) = sem.acquire().await {
-                            tracing::warn!("Failed to acquire rate limit semaphore: {} - continuing without rate limiting", e);
+                        match sem.acquire().await {
+                            Ok(permit) => permit.forget(),
+                            Err(e) => {
+                                tracing::warn!("Rate limit semaphore closed: {} - continuing without rate limiting", e);
+                            }
                         }
                     }
 

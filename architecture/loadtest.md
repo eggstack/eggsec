@@ -124,14 +124,14 @@ Load testing can be combined with **Fuzzing** to see how a target behaves under 
 
 ### Rate Limiting Algorithm
 
-Rate limiting uses a **semaphore-based token bucket** approach (replaced mutex approach on 2026-05-28):
+Rate limiting uses a **semaphore token bucket** approach:
 
-1. A background task adds 1 permit to the semaphore every `min_interval` (1/rate seconds)
-2. Worker attempts to acquire a permit before processing
-3. If no permits available, worker waits (backpressure)
-4. Semaphore starts with `rate` permits, preventing initial burst
+1. A semaphore starts with 0 permits
+2. A background task adds 1 permit to the semaphore every `min_interval` (1/rate seconds)
+3. Worker acquires a permit via `acquire().await` and calls `forget()` to permanently consume it
+4. If no permits available, worker blocks until one is added (backpressure)
 
-This ensures RPS stays close to the configured limit even under high concurrency without lock contention.
+Using `forget()` is critical — returning the permit would allow immediate reacquisition, defeating rate limiting. This ensures RPS stays close to the configured limit even under high concurrency without lock contention.
 
 ### Response Body Handling
 

@@ -84,14 +84,18 @@ impl Metrics {
 
     pub fn record_success(&mut self, latency: Duration, status_code: u16) {
         let latency_ms = latency.as_millis() as u64;
-        let _ = self.histogram.record(latency_ms);
+        if let Err(e) = self.histogram.record(latency_ms) {
+            tracing::warn!("Failed to record latency {}: {}", latency_ms, e);
+        }
         self.successful += 1;
         *self.status_codes.entry(status_code).or_insert(0) += 1;
     }
 
     pub fn record_http_response(&mut self, latency: Duration, status_code: u16) {
         let latency_ms = latency.as_millis() as u64;
-        let _ = self.histogram.record(latency_ms);
+        if let Err(e) = self.histogram.record(latency_ms) {
+            tracing::warn!("Failed to record latency {}: {}", latency_ms, e);
+        }
         *self.status_codes.entry(status_code).or_insert(0) += 1;
 
         if (200..400).contains(&status_code) {
