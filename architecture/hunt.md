@@ -10,9 +10,9 @@ Advanced threat hunting module for detecting attack chains, business logic flaws
 |------|----------|-------------|
 | `HuntReport` | `hunt/mod.rs:24` | Aggregated hunt results across all categories; tracks per-category findings and total count |
 | `HuntConfig` | `hunt/mod.rs:110` | Configuration controlling which hunt categories to run |
-| `AttackChain` | `hunt/chain.rs` | Multi-step attack chain (privilege escalation, data exfiltration, RCE) |
+| `AttackChain` | `hunt/chain.rs` | Multi-step attack chain (privilege escalation, data exfiltration, RCE, lateral movement, persistence, DoS) |
 | `BusinessLogicFlaw` | `hunt/business.rs` | Business logic vulnerability |
-| `RaceCondition` | `hunt/race.rs` | Race condition / concurrency vulnerability |
+| `RaceCondition` | `hunt/race.rs` | Race condition / concurrency vulnerability (`remediation` field is private) |
 | `AuthzBypass` | `hunt/authz.rs` | Authorization bypass vulnerability |
 | `SessionIssue` | `hunt/session.rs` | Session management vulnerability |
 
@@ -31,8 +31,10 @@ All sub-module checks are **enabled by default**:
 | `check_race_conditions` | `true` | Run `race::check_race_conditions()` |
 | `check_authz_bypass` | `true` | Run `authz::check_authz_bypass()` |
 | `check_session` | `true` | Run `session::check_session_security()` |
-| `concurrency` | `10` | Max concurrent checks |
-| `timeout_ms` | `30000` | Per-check timeout (30s) |
+| `concurrency` | `10` | Max concurrent checks (unused — see note below) |
+| `timeout_ms` | `30000` | Per-check timeout (30s) (unused — see note below) |
+
+> **Note:** `concurrency` and `timeout_ms` are plumbed through `HuntConfig` but ignored by all sub-module detection functions (parameter name prefixed with `_config`).
 
 ### Sub-module Check Details
 
@@ -47,8 +49,8 @@ All sub-module checks are **enabled by default**:
 | `business.rs` | Business logic flaw detection (price manipulation, workflow bypass) |
 | `race.rs` | Race condition and TOCTOU testing |
 | `authz.rs` | Authorization bypass testing (IDOR, privilege escalation) |
-| `session.rs` | Session management security (fixation, token leakage) |
+| `session.rs` | Session management security (fixation, timeout, token prediction, cookies, CSRF) |
 
 ## Implementation Status
 
-Fully implemented. `run_hunt()` orchestrates all sub-modules based on `HuntConfig` flags. Each sub-module provides detection functions that return structured results.
+Implemented as template-based detection. `run_hunt()` orchestrates all sub-modules based on `HuntConfig` flags, but each detection function returns hardcoded findings regardless of target. No actual HTTP requests or analysis is performed.
