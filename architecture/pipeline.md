@@ -152,6 +152,14 @@ Five defense-lab profiles are implemented in `cli/mod.rs:262-266` and mapped to 
 - **Repeatability**: Ensure that complex scans are performed consistently every time.
 - **Efficiency**: Reduce manual intervention by automatically triggering the next logical step in a scan.
 
+## Recent Bug Fixes (2026-06-03)
+
+| Issue | Fix |
+|-------|-----|
+| `Stage::Vuln` was a no-op (`Ok(())`) | Implemented `run_vuln()` with CVSS scoring, asset criticality, and finding prioritization |
+| `run_concurrent()` skipped session checkpointing | Added session save after concurrent execution completion |
+| `PipelineContext` lacked `vuln_assessment` field | Added `vuln_assessment: Option<VulnAssessment>` for inter-stage data sharing |
+
 ## Recent Bug Fixes (2026-05-22)
 
 | Issue | Fix |

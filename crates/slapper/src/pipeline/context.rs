@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
+use crate::vuln::VulnAssessment;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PipelineContext {
@@ -13,6 +14,8 @@ pub struct PipelineContext {
     pub endpoints: Vec<EndpointResult>,
     pub port_results: Vec<PortResult>,
     pub http_ports: Vec<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vuln_assessment: Option<VulnAssessment>,
 }
 
 impl PipelineContext {
@@ -61,5 +64,9 @@ impl PipelineContext {
 
     pub fn update_endpoints(&mut self, endpoints: Vec<EndpointResult>) {
         self.endpoints = endpoints;
+    }
+
+    pub fn update_vuln_assessment(&mut self, assessment: VulnAssessment) {
+        self.vuln_assessment = Some(assessment);
     }
 }

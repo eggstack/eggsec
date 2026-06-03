@@ -94,6 +94,9 @@ fn test_pipeline_report_failure_helpers() {
         open_ports: vec![],
         services: vec![],
         endpoints: vec![],
+        checkpoint_error: None,
+        manifest: None,
+        vuln_assessment: None,
     };
 
     assert!(report.has_failures());

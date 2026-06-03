@@ -42,6 +42,14 @@ let mut services: FxHashMap<u16, ServiceFingerprint> = FxHashMap::default();
 | `stage.rs` | Profile mapping duplicated between stage.rs and tool/implementations/pipeline.rs | Created `profile_from_str()` shared function |
 | `executor.rs:575-577` | `get_extended_ports()` hardcoded string | Now uses `EXTENDED_SCAN_PORTS.to_string()` constant |
 
+## Fixes (2026-06-03)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `executor.rs:385` | `Stage::Vuln` was a no-op (`Ok(())`) | Implemented `run_vuln()` with CVSS scoring, asset criticality assessment, and finding prioritization using vuln module |
+| `executor.rs:333-374` | `run_concurrent()` skipped session checkpointing | Added session save after concurrent execution completion |
+| `context.rs` | `PipelineContext` lacked `vuln_assessment` field | Added `vuln_assessment: Option<VulnAssessment>` for inter-stage data sharing |
+
 ## Key Patterns
 
 1. **Sequential execution** via simple `match` in `execute_stage()` - no trait abstraction

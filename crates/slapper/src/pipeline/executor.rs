@@ -320,7 +320,7 @@ impl Pipeline {
             endpoints: context.endpoints,
             checkpoint_error,
             manifest: None,
-            vuln_assessment: None,
+            vuln_assessment: context.vuln_assessment,
         };
 
         let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
@@ -354,6 +354,25 @@ impl Pipeline {
         let stage_results = futures::future::join_all(stage_futures).await;
         let context = self.context.lock().await.clone();
 
+        let mut checkpoint_error = None;
+        if let Some(ref path) = self.session_path {
+            let session = PipelineSession {
+                target: self.target.clone(),
+                completed_stages: stage_results.iter().map(|r| r.stage).collect(),
+                remaining_stages: Vec::new(),
+                context: context.clone(),
+                spoof_config: self.spoof_config.clone(),
+            };
+            if let Err(e) = save(path, &session) {
+                tracing::warn!(
+                    path = %path,
+                    error = %e,
+                    "Failed to save session checkpoint after concurrent execution"
+                );
+                checkpoint_error = Some(e.to_string());
+            }
+        }
+
         let mut report = PipelineReport {
             target: self.target.clone(),
             total_duration_ms: start.elapsed().as_millis() as u64,
@@ -361,9 +380,9 @@ impl Pipeline {
             open_ports: context.port_results,
             services: context.services.into_values().collect(),
             endpoints: context.endpoints,
-            checkpoint_error: None,
+            checkpoint_error,
             manifest: None,
-            vuln_assessment: None,
+            vuln_assessment: context.vuln_assessment,
         };
 
         let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
@@ -382,7 +401,7 @@ impl Pipeline {
             Stage::LoadTest => self.run_load_test().await,
             Stage::Waf => self.run_waf().await,
             Stage::Recon => self.run_recon().await,
-            Stage::Vuln => Ok(()),
+            Stage::Vuln => self.run_vuln().await,
         }
     }
 
@@ -667,6 +686,73 @@ impl Pipeline {
         let default_config = SlapperConfig::default();
         let config = self.config.as_ref().unwrap_or(&default_config);
         crate::recon::run_cli(args, config).await?;
+
+        Ok(())
+    }
+
+    async fn run_vuln(&self) -> Result<()> {
+        use crate::types::Severity;
+        use crate::vuln::VulnAssessment;
+        use crate::vuln::asset::assess_asset;
+        use crate::vuln::prioritizer::prioritize_findings;
+
+        let context = self.context.lock().await;
+        let mut assessment = VulnAssessment::new("pipeline");
+
+        let mut findings: Vec<(String, String, Severity, Option<f32>)> = Vec::new();
+
+        for endpoint in &context.endpoints {
+            if endpoint.interesting {
+                let severity = match endpoint.status_code {
+                    200 => Severity::Medium,
+                    301 | 302 => Severity::Low,
+                    401 | 403 => Severity::Medium,
+                    500..=599 => Severity::High,
+                    _ => Severity::Info,
+                };
+                findings.push((
+                    format!("endpoint-{}", endpoint.path),
+                    format!("Interesting endpoint: {}", endpoint.path),
+                    severity,
+                    None,
+                ));
+            }
+        }
+
+        for (port, service) in &context.services {
+            if service.service == "HTTP" || service.service == "HTTPS" {
+                findings.push((
+                    format!("service-{}", port),
+                    format!("{} service on port {}", service.service, port),
+                    Severity::Info,
+                    None,
+                ));
+            }
+        }
+
+        if findings.is_empty() {
+            assessment.summary.push("No findings to assess".to_string());
+        } else {
+            let prioritized = prioritize_findings(&findings);
+            assessment.summary.push(format!("Assessed {} finding(s):", prioritized.len()));
+            for f in &prioritized {
+                assessment.summary.push(format!(
+                    "  #{} [{}] {} - Risk: {:.1} ({:?})",
+                    f.priority_rank, f.severity, f.title, f.risk_score.combined_score, f.risk_score.priority_level
+                ));
+            }
+            assessment.prioritized_findings = prioritized;
+        }
+
+        let target_str = self.target.clone();
+        let asset = assess_asset(&target_str, "web_server");
+        assessment.summary.push(format!("Asset criticality: {:.1}", asset.overall_score));
+        assessment.asset_criticality = Some(asset);
+
+        drop(context);
+
+        let mut context = self.context.lock().await;
+        context.update_vuln_assessment(assessment);
 
         Ok(())
     }
