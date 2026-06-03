@@ -1,5 +1,6 @@
 use super::lifecycle::{FindingStatus, ScanRun, StoredFinding};
 use super::Finding;
+use parking_lot::Mutex;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -7,12 +8,15 @@ use std::path::PathBuf;
 /// Local JSONL-based finding store
 pub struct FindingStore {
     base_dir: PathBuf,
+    /// Guards read-modify-write cycles on the findings file.
+    lock: Mutex<()>,
 }
 
 impl FindingStore {
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
         Self {
             base_dir: base_dir.into(),
+            lock: Mutex::new(()),
         }
     }
 
@@ -32,12 +36,13 @@ impl FindingStore {
 
     /// Store a finding
     pub fn store_finding(&self, finding: Finding) -> anyhow::Result<StoredFinding> {
+        let _guard = self.lock.lock();
         let fingerprint = finding.fingerprint.clone();
-        let mut findings = self.load_findings()?;
+        let mut findings = self.load_findings_inner()?;
 
         if let Some(idx) = findings.iter().position(|f| f.finding.fingerprint == fingerprint) {
             findings[idx].finding = finding;
-            self.write_findings(&findings)?;
+            self.write_findings_inner(&findings)?;
             return Ok(findings[idx].clone());
         }
 
@@ -55,6 +60,11 @@ impl FindingStore {
 
     /// Load all findings
     pub fn load_findings(&self) -> anyhow::Result<Vec<StoredFinding>> {
+        let _guard = self.lock.lock();
+        self.load_findings_inner()
+    }
+
+    fn load_findings_inner(&self) -> anyhow::Result<Vec<StoredFinding>> {
         let path = self.findings_path();
         if !path.exists() {
             return Ok(vec![]);
@@ -83,7 +93,8 @@ impl FindingStore {
         new_status: FindingStatus,
         note: Option<String>,
     ) -> anyhow::Result<()> {
-        let mut findings = self.load_findings()?;
+        let _guard = self.lock.lock();
+        let mut findings = self.load_findings_inner()?;
 
         let finding = findings
             .iter_mut()
@@ -91,25 +102,27 @@ impl FindingStore {
 
         match finding {
             Some(f) => {
-                f.change_status(new_status, note);
+                f.change_status(new_status, note)?;
             }
             None => {
                 anyhow::bail!("Finding with fingerprint '{}' not found", fingerprint);
             }
         }
 
-        self.write_findings(&findings)?;
+        self.write_findings_inner(&findings)?;
         Ok(())
     }
 
     /// Get findings by status
     pub fn findings_by_status(&self, status: FindingStatus) -> anyhow::Result<Vec<StoredFinding>> {
-        let all = self.load_findings()?;
+        let _guard = self.lock.lock();
+        let all = self.load_findings_inner()?;
         Ok(all.into_iter().filter(|f| f.status == status).collect())
     }
 
     /// Record a scan run
     pub fn record_run(&self, run: ScanRun) -> anyhow::Result<()> {
+        let _guard = self.lock.lock();
         let line = serde_json::to_string(&run)?;
 
         let mut file = OpenOptions::new()
@@ -123,6 +136,7 @@ impl FindingStore {
 
     /// Load all scan runs
     pub fn load_runs(&self) -> anyhow::Result<Vec<ScanRun>> {
+        let _guard = self.lock.lock();
         let path = self.runs_path();
         if !path.exists() {
             return Ok(vec![]);
@@ -144,7 +158,7 @@ impl FindingStore {
         Ok(runs)
     }
 
-    fn write_findings(&self, findings: &[StoredFinding]) -> anyhow::Result<()> {
+    fn write_findings_inner(&self, findings: &[StoredFinding]) -> anyhow::Result<()> {
         let mut file = fs::File::create(self.findings_path())?;
         for finding in findings {
             let line = serde_json::to_string(finding)?;

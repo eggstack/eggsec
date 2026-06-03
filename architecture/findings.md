@@ -80,7 +80,7 @@ Each transition is recorded in `status_history: Vec<StatusChange>` with timestam
 |--------|----------|---------------|
 | `findings/mod.rs` | `Confirmed`, `High`, `Medium`, `Low`, `Informational` (5) | 1.0, 0.75, 0.5, 0.25, 0.0 |
 | `output/agent.rs` | `Confirmed`, `Likely`, `Possible`, `Unlikely` (4) | 1.0, 0.75, 0.5, 0.25 |
-| `recon/secrets.rs` | `Confirmed`, `Likely`, `Possible`, `Unlikely` (4) | Similar |
+| `recon/secrets.rs` | `High`, `Medium`, `Low` (3) | Similar |
 
 The `findings` module includes an `Informational` variant (score 0.0) that the other modules lack. The naming also diverges (`High`/`Medium`/`Low` vs `Likely`/`Possible`/`Unlikely`). This is a known divergence — the findings module defines the target canonical schema, and the other modules have not yet been migrated.
 

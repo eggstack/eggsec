@@ -12,6 +12,26 @@ pub enum FindingStatus {
     Reopened,
 }
 
+impl FindingStatus {
+    /// Returns the set of valid target statuses from `self`.
+    pub fn valid_transitions(&self) -> &'static [FindingStatus] {
+        use FindingStatus::*;
+        match self {
+            New => &[Confirmed, FalsePositive, AcceptedRisk],
+            Confirmed => &[Remediated, AcceptedRisk, FalsePositive],
+            AcceptedRisk => &[Reopened, FalsePositive],
+            FalsePositive => &[Reopened],
+            Remediated => &[Reopened],
+            Reopened => &[Confirmed, FalsePositive, AcceptedRisk],
+        }
+    }
+
+    /// Check whether a transition from `self` to `target` is allowed.
+    pub fn can_transition_to(&self, target: &FindingStatus) -> bool {
+        self.valid_transitions().contains(target)
+    }
+}
+
 impl std::fmt::Display for FindingStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -55,7 +75,18 @@ impl StoredFinding {
         }
     }
 
-    pub fn change_status(&mut self, new_status: FindingStatus, note: Option<String>) {
+    pub fn change_status(
+        &mut self,
+        new_status: FindingStatus,
+        note: Option<String>,
+    ) -> anyhow::Result<()> {
+        if !self.status.can_transition_to(&new_status) {
+            anyhow::bail!(
+                "Invalid status transition: {:?} -> {:?}",
+                self.status,
+                new_status
+            );
+        }
         let old_status = self.status;
         self.status_history.push(StatusChange {
             from: old_status,
@@ -65,6 +96,7 @@ impl StoredFinding {
         });
         self.status = new_status;
         self.updated_at = chrono::Utc::now();
+        Ok(())
     }
 }
 
@@ -138,13 +170,32 @@ mod tests {
     #[test]
     fn change_status_records_history() {
         let mut stored = StoredFinding::new(test_finding("fp1"));
-        stored.change_status(FindingStatus::Confirmed, Some("Looks real".to_string()));
+        stored
+            .change_status(FindingStatus::Confirmed, Some("Looks real".to_string()))
+            .unwrap();
 
         assert_eq!(stored.status, FindingStatus::Confirmed);
         assert_eq!(stored.status_history.len(), 1);
         assert_eq!(stored.status_history[0].from, FindingStatus::New);
         assert_eq!(stored.status_history[0].to, FindingStatus::Confirmed);
         assert_eq!(stored.status_history[0].note.as_deref(), Some("Looks real"));
+    }
+
+    #[test]
+    fn invalid_transition_is_rejected() {
+        let mut stored = StoredFinding::new(test_finding("fp1"));
+        let result = stored.change_status(FindingStatus::Remediated, None);
+        assert!(result.is_err());
+        assert_eq!(stored.status, FindingStatus::New);
+    }
+
+    #[test]
+    fn valid_transitions_from_new() {
+        assert!(FindingStatus::New.can_transition_to(&FindingStatus::Confirmed));
+        assert!(FindingStatus::New.can_transition_to(&FindingStatus::FalsePositive));
+        assert!(FindingStatus::New.can_transition_to(&FindingStatus::AcceptedRisk));
+        assert!(!FindingStatus::New.can_transition_to(&FindingStatus::Remediated));
+        assert!(!FindingStatus::New.can_transition_to(&FindingStatus::Reopened));
     }
 
     #[test]
