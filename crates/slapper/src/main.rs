@@ -3,7 +3,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 
 use slapper::cli::Cli;
-use slapper::logging::{init_logging, LogFormat, LogLevel};
+use slapper::logging::{init_logging, LogFormat};
 
 fn generate_shell_completion(shell: Shell) -> Result<()> {
     let mut cmd = Cli::command();
@@ -26,7 +26,6 @@ async fn main() -> Result<()> {
     }
 
     init_logging(
-        LogLevel::Info,
         if cli.json {
             LogFormat::Json
         } else {

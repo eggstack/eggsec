@@ -1,3 +1,3 @@
 mod init;
 
-pub use init::{init_logging, LogFormat, LogLevel};
+pub use init::{init_logging, LogFormat};
