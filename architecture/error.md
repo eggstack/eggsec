@@ -43,7 +43,8 @@ Unified error types for the entire Slapper codebase. `SlapperError` is the prima
 
 | File | Description |
 |------|-------------|
-| `mod.rs` | `SlapperError` enum, `From` impls for `reqwest::Error`/`anyhow::Error`, helper methods (`is_timeout()`, `is_network()`, `http_status()`, `with_timeout()`) |
+| `error/mod.rs` | `SlapperError` enum, `From` impls for 21 error types, helper methods (`is_timeout()`, `is_network()`, `http_status()`, `with_timeout()`) |
+| `utils/error.rs` | Error message sanitization utilities (`sanitize_error_message()`, `sanitize_rate_limit_error()`, `sanitize_internal_error()`) |
 
 ## From Implementations
 
@@ -79,6 +80,41 @@ Unified error types for the entire Slapper codebase. `SlapperError` is the prima
 | `crate::ai::AiError` | `RequestFailed`, `Config`, `Parse`, `Timeout`, or `RateLimited` | `ai-integration` | `mod.rs:279-317` |
 | `crate::packet::CaptureError` | `Network` | `packet-inspection` | `mod.rs:319-324` |
 | `crate::packet::TracerouteError` | `Network` | `packet-inspection` OR `stress-testing` | `mod.rs:326-331` |
+
+## Related Error Types
+
+These domain-specific error types serve specialized purposes and intentionally do **not** convert to `SlapperError`. They are used within their respective modules and converted at module boundaries via `.map_err()`.
+
+| Type | Location | Purpose | Converts to `SlapperError`? |
+|------|----------|---------|-----------------------------|
+| `ConfigError` | `config/settings.rs:698` | Config file IO/parse/serialize errors | No (config boundary) |
+| `ScopeError` | `config/scope.rs:401` | Target scope validation errors | Yes (via `From` impl) |
+| `AiError` | `ai/errors.rs:6` | AI/LLM API errors (9 variants) | Yes (feature-gated) |
+| `CaptureError` | `packet/capture.rs:440` | Packet capture errors (7 variants) | Yes (feature-gated) |
+| `TracerouteError` | `packet/traceroute.rs:543` | Traceroute errors (4 variants) | Yes (feature-gated) |
+| `ProbeError` | `packet/traceroute.rs:555` | Traceroute probe errors (5 variants) | No (encapsulated by `TracerouteError`) |
+| `ToolError` / `ToolErrorType` | `tool/tool_error.rs:4` | Serializable API/MCP error (11 types) | No (serializable JSON schema) |
+| `QueueError` | `distributed/queue.rs:155` | Distributed task queue errors | No (queue boundary) |
+| `CallbackUrlValidationError` | `tool/protocol/agent_routes.rs:28` | MCP callback URL validation | No (validation boundary) |
+| `PacketValidationError` | `packet/craft.rs:68` | Packet crafting validation | No (crafting boundary) |
+| `CiError` | `commands/handlers/ci.rs:9` | CI exit code semantics | No (not `std::error::Error`) |
+| `TabError` | `tui/app/tab_error.rs:4` | TUI tab error categorization | No (TUI boundary) |
+
+### Design Rationale
+
+- **`SlapperError`** is the canonical error for library code. All modules that are part of the core library return `Result<T, SlapperError>` (aliased as `crate::error::Result<T>`).
+- **Domain-specific errors** (`ConfigError`, `ToolError`, `QueueError`, etc.) exist where callers need structured error data (e.g., `ToolError` is serialized to JSON for MCP responses; `CiError` maps to process exit codes).
+- **`anyhow::Result`** is used in binary entry points (command handlers, TUI workers, agent code) for convenience, with `.map_err()` bridges to `SlapperError` at boundaries.
+
+## Utilities
+
+| Function | File | Description |
+|----------|------|-------------|
+| `sanitize_error_message()` | `utils/error.rs:31` | Strips stack traces, file paths, internal details from error strings; truncates to 200 chars |
+| `sanitize_rate_limit_error()` | `utils/error.rs:70` | Sanitizes and additionally strips rate limiter implementation details |
+| `sanitize_internal_error()` | `utils/error.rs:77` | Returns a generic "internal error" message for external consumption |
+
+These utilities prevent information leakage when error messages are exposed to clients (e.g., API responses, TUI display). Used by the tool layer and API handlers.
 
 ## Implementation Status
 
