@@ -12,6 +12,7 @@ use super::session::{save, PipelineSession};
 use super::stage::{parse_stages, Stage, EXTENDED_SCAN_PORTS};
 use crate::cli::{CommonHttpArgs, ScanArgs, ScanProfile};
 use crate::config::SlapperConfig;
+use crate::probe::ProbeRisk;
 use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
 
@@ -39,6 +40,7 @@ pub struct Pipeline {
     target: String,
     stages: Vec<Stage>,
     profile: ScanProfile,
+    risk_budget: ProbeRisk,
     concurrency: usize,
     concurrent_stages: bool,
     common: CommonHttpArgs,
@@ -51,10 +53,12 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new(target: &str) -> Self {
+        let profile = ScanProfile::Quick;
         Self {
             target: target.to_string(),
             stages: Vec::new(),
-            profile: ScanProfile::Quick,
+            risk_budget: profile.max_risk_budget(),
+            profile,
             concurrency: 10,
             concurrent_stages: false,
             common: CommonHttpArgs::default(),
@@ -123,6 +127,7 @@ impl Pipeline {
             target: args.target.clone(),
             stages,
             profile: args.profile,
+            risk_budget: args.profile.max_risk_budget(),
             concurrency,
             concurrent_stages: args.concurrent_stages,
             common: args.common,
@@ -241,6 +246,24 @@ impl Pipeline {
         Ok(())
     }
 
+    /// Check whether a stage's risk level fits within the profile's risk budget.
+    ///
+    /// Returns `Ok(true)` if the stage should run, `Ok(false)` if it should
+    /// be skipped (risk exceeds budget), or `Err` on hard blocks.
+    fn validate_stage_risk(&self, stage: Stage) -> Result<bool> {
+        let stage_risk = stage.to_probe_risk();
+        if stage_risk.risk_level() > self.risk_budget.risk_level() {
+            tracing::info!(
+                stage = %stage,
+                stage_risk = ?stage_risk,
+                budget = ?self.risk_budget,
+                "Skipping stage: risk level exceeds profile budget"
+            );
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
     pub async fn run(&self) -> Result<PipelineReport> {
         self.validate_defense_lab_scope()?;
         self.validate_feature_gates()?;
@@ -272,7 +295,13 @@ impl Pipeline {
             }
             let stage_start = Instant::now();
 
-            let result = self.execute_stage(stage).await;
+            let allowed = self.validate_stage_risk(*stage)?;
+            let result = if allowed {
+                self.execute_stage(stage).await
+            } else {
+                tracing::info!(stage = %stage, "Stage skipped due to risk budget");
+                Ok(())
+            };
 
             let stage_result = StageResult {
                 stage: *stage,
@@ -323,7 +352,8 @@ impl Pipeline {
             vuln_assessment: context.vuln_assessment,
         };
 
-        let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
+        let mut manifest =
+            crate::output::RunManifest::from_report(&report, "pipeline", self.risk_budget);
         manifest.populate_findings_from_report(&report);
         report.manifest = Some(manifest);
 
@@ -335,12 +365,20 @@ impl Pipeline {
         self.validate_feature_gates()?;
         let start = Instant::now();
 
+        let risk_budget = self.risk_budget;
         let stage_futures: Vec<_> = self
             .stages
             .iter()
-            .map(|stage| async {
+            .map(|stage| async move {
                 let stage_start = Instant::now();
-                let result = self.execute_stage(stage).await;
+                let stage_risk = stage.to_probe_risk();
+                let allowed = stage_risk.risk_level() <= risk_budget.risk_level();
+                let result = if allowed {
+                    self.execute_stage(stage).await
+                } else {
+                    tracing::info!(stage = %stage, "Stage skipped due to risk budget");
+                    Ok(())
+                };
                 let stage_result = StageResult {
                     stage: *stage,
                     duration_ms: stage_start.elapsed().as_millis() as u64,
@@ -385,7 +423,8 @@ impl Pipeline {
             vuln_assessment: context.vuln_assessment,
         };
 
-        let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
+        let mut manifest =
+            crate::output::RunManifest::from_report(&report, "pipeline", self.risk_budget);
         manifest.populate_findings_from_report(&report);
         report.manifest = Some(manifest);
 

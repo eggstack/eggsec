@@ -26,10 +26,6 @@ impl PipelineContext {
         }
     }
 
-    pub fn should_run_fuzzer(&self) -> bool {
-        self.endpoints.iter().any(|e| e.interesting)
-    }
-
     pub fn get_http_ports(&self) -> Vec<u16> {
         self.services
             .iter()

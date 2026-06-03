@@ -101,7 +101,7 @@ impl RunManifest {
     /// Populates `started_at` from now minus the run duration, `ended_at` as now,
     /// and derives `observations` from open ports/services/endpoints.
     /// `findings` are derived from interesting endpoints (as a simple heuristic).
-    pub fn from_report(report: &PipelineReport, profile: &str) -> Self {
+    pub fn from_report(report: &PipelineReport, profile: &str, risk_budget: ProbeRisk) -> Self {
         let now = Utc::now();
         let started_at = now - chrono::Duration::milliseconds(report.total_duration_ms as i64);
 
@@ -165,7 +165,7 @@ impl RunManifest {
             target_scope: report.target.clone(),
             profile: profile.to_string(),
             probe_intents,
-            risk_budget: ProbeRisk::SafeActive,
+            risk_budget,
             feature_flags,
             observations,
             findings: Vec::new(),

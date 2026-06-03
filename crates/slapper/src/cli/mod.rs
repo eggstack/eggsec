@@ -312,6 +312,31 @@ impl ScanProfile {
     pub fn requires_nse(&self) -> bool {
         matches!(self, ScanProfile::NseSafe)
     }
+
+    /// Returns the maximum `ProbeRisk` level allowed for this profile.
+    ///
+    /// Stages whose risk exceeds this budget are skipped during pipeline
+    /// execution, providing a guardrail against unintended intrusive testing.
+    pub fn max_risk_budget(&self) -> crate::probe::ProbeRisk {
+        match self {
+            ScanProfile::Quick | ScanProfile::ProtocolEdge | ScanProfile::NseSafe => {
+                crate::probe::ProbeRisk::SafeActive
+            }
+            ScanProfile::Stealth => crate::probe::ProbeRisk::Passive,
+            ScanProfile::DefenseLab | ScanProfile::SynvoidLocal | ScanProfile::WafRegression => {
+                crate::probe::ProbeRisk::Intrusive
+            }
+            ScanProfile::Endpoint
+            | ScanProfile::Web
+            | ScanProfile::Waf
+            | ScanProfile::Recon
+            | ScanProfile::Vuln
+            | ScanProfile::Auth => crate::probe::ProbeRisk::Intrusive,
+            ScanProfile::Full | ScanProfile::Api | ScanProfile::Deep => {
+                crate::probe::ProbeRisk::Stress
+            }
+        }
+    }
 }
 
 pub use crate::types::OutputFormat;
@@ -325,4 +350,51 @@ pub struct GrpcServerArgs {
     pub port: u16,
     #[arg(long, help = "API key for authentication")]
     pub api_key: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::probe::ProbeRisk;
+
+    #[test]
+    fn quick_profile_allows_safe_active() {
+        assert_eq!(
+            ScanProfile::Quick.max_risk_budget(),
+            ProbeRisk::SafeActive
+        );
+    }
+
+    #[test]
+    fn stealth_profile_allows_passive_only() {
+        assert_eq!(
+            ScanProfile::Stealth.max_risk_budget(),
+            ProbeRisk::Passive
+        );
+    }
+
+    #[test]
+    fn full_profile_allows_stress() {
+        assert_eq!(ScanProfile::Full.max_risk_budget(), ProbeRisk::Stress);
+    }
+
+    #[test]
+    fn defense_lab_allows_intrusive() {
+        assert_eq!(
+            ScanProfile::DefenseLab.max_risk_budget(),
+            ProbeRisk::Intrusive
+        );
+    }
+
+    #[test]
+    fn risk_budget_ordering() {
+        assert!(
+            ProbeRisk::Passive.risk_level()
+                < ScanProfile::Quick.max_risk_budget().risk_level()
+        );
+        assert!(
+            ScanProfile::Stealth.max_risk_budget().risk_level()
+                < ScanProfile::Quick.max_risk_budget().risk_level()
+        );
+    }
 }

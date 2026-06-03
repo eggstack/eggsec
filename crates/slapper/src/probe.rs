@@ -42,16 +42,29 @@ pub enum ProbeRisk {
     ExploitAdjacent,
 }
 
-/// Metadata describing a specific probe's purpose, risk, and requirements.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProbeMetadata {
-    pub id: String,
-    pub name: String,
-    pub intent: ProbeIntent,
-    pub risk: ProbeRisk,
-    pub requires_explicit_scope: bool,
-    pub requires_budget: bool,
-    pub compatibility_source: Option<String>,
+impl ProbeRisk {
+    /// Returns a numeric risk level for ordering/comparison.
+    ///
+    /// Higher values indicate higher risk. Used to enforce risk budgets:
+    /// a stage is skipped if its risk level exceeds the profile's budget.
+    pub fn risk_level(self) -> u8 {
+        match self {
+            ProbeRisk::Passive => 0,
+            ProbeRisk::SafeActive => 1,
+            ProbeRisk::Intrusive => 2,
+            ProbeRisk::Credentialed => 3,
+            ProbeRisk::Stress => 4,
+            ProbeRisk::ExploitAdjacent => 5,
+        }
+    }
+
+    /// Returns `true` if this risk level requires explicit user opt-in.
+    pub fn requires_opt_in(self) -> bool {
+        matches!(
+            self,
+            ProbeRisk::Intrusive | ProbeRisk::Stress | ProbeRisk::ExploitAdjacent
+        )
+    }
 }
 
 #[cfg(test)]
@@ -68,22 +81,6 @@ mod tests {
     fn probe_risk_safe_active_serializes_kebab_case() {
         let json = serde_json::to_string(&ProbeRisk::SafeActive).unwrap();
         assert_eq!(json, "\"safe-active\"");
-    }
-
-    #[test]
-    fn probe_metadata_round_trip() {
-        let meta = ProbeMetadata {
-            id: "tcp-syn-001".to_string(),
-            name: "TCP SYN Discovery".to_string(),
-            intent: ProbeIntent::Discovery,
-            risk: ProbeRisk::SafeActive,
-            requires_explicit_scope: false,
-            requires_budget: false,
-            compatibility_source: Some("nmap:default".to_string()),
-        };
-        let json = serde_json::to_string(&meta).unwrap();
-        let deserialized: ProbeMetadata = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized, meta);
     }
 
     #[test]
@@ -120,5 +117,24 @@ mod tests {
             let json = serde_json::to_string(variant).unwrap();
             assert_eq!(json, *expected, "ProbeRisk::{:?} serialization", variant);
         }
+    }
+
+    #[test]
+    fn probe_risk_levels_are_ordered() {
+        assert!(ProbeRisk::Passive.risk_level() < ProbeRisk::SafeActive.risk_level());
+        assert!(ProbeRisk::SafeActive.risk_level() < ProbeRisk::Intrusive.risk_level());
+        assert!(ProbeRisk::Intrusive.risk_level() < ProbeRisk::Credentialed.risk_level());
+        assert!(ProbeRisk::Credentialed.risk_level() < ProbeRisk::Stress.risk_level());
+        assert!(ProbeRisk::Stress.risk_level() < ProbeRisk::ExploitAdjacent.risk_level());
+    }
+
+    #[test]
+    fn probe_risk_requires_opt_in() {
+        assert!(!ProbeRisk::Passive.requires_opt_in());
+        assert!(!ProbeRisk::SafeActive.requires_opt_in());
+        assert!(!ProbeRisk::Credentialed.requires_opt_in());
+        assert!(ProbeRisk::Intrusive.requires_opt_in());
+        assert!(ProbeRisk::Stress.requires_opt_in());
+        assert!(ProbeRisk::ExploitAdjacent.requires_opt_in());
     }
 }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::cli::ScanProfile;
-use crate::probe::ProbeIntent;
+use crate::probe::{ProbeIntent, ProbeRisk};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Stage {
@@ -140,6 +140,24 @@ impl Stage {
             Stage::Waf => ProbeIntent::WafEvaluation,
             Stage::Recon => ProbeIntent::Discovery,
             Stage::Vuln => ProbeIntent::ServiceValidation,
+        }
+    }
+
+    /// Map this stage to its minimum required risk level.
+    ///
+    /// Stages that are inherently more intrusive require a higher risk
+    /// budget to execute. The pipeline uses this to skip stages that
+    /// exceed the profile's allowed risk budget.
+    pub fn to_probe_risk(self) -> ProbeRisk {
+        match self {
+            Stage::PortScan => ProbeRisk::SafeActive,
+            Stage::Fingerprint => ProbeRisk::Passive,
+            Stage::EndpointScan => ProbeRisk::SafeActive,
+            Stage::Fuzz => ProbeRisk::Intrusive,
+            Stage::LoadTest => ProbeRisk::Stress,
+            Stage::Waf => ProbeRisk::Intrusive,
+            Stage::Recon => ProbeRisk::Passive,
+            Stage::Vuln => ProbeRisk::SafeActive,
         }
     }
 }
@@ -306,5 +324,17 @@ mod tests {
         assert_eq!(Stage::Waf.to_probe_intent(), ProbeIntent::WafEvaluation);
         assert_eq!(Stage::Recon.to_probe_intent(), ProbeIntent::Discovery);
         assert_eq!(Stage::Vuln.to_probe_intent(), ProbeIntent::ServiceValidation);
+    }
+
+    #[test]
+    fn test_stage_to_probe_risk() {
+        assert_eq!(Stage::PortScan.to_probe_risk(), ProbeRisk::SafeActive);
+        assert_eq!(Stage::Fingerprint.to_probe_risk(), ProbeRisk::Passive);
+        assert_eq!(Stage::EndpointScan.to_probe_risk(), ProbeRisk::SafeActive);
+        assert_eq!(Stage::Fuzz.to_probe_risk(), ProbeRisk::Intrusive);
+        assert_eq!(Stage::LoadTest.to_probe_risk(), ProbeRisk::Stress);
+        assert_eq!(Stage::Waf.to_probe_risk(), ProbeRisk::Intrusive);
+        assert_eq!(Stage::Recon.to_probe_risk(), ProbeRisk::Passive);
+        assert_eq!(Stage::Vuln.to_probe_risk(), ProbeRisk::SafeActive);
     }
 }
