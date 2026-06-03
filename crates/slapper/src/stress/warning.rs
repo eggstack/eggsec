@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::Result;
 use crate::utils::sanitize_for_logging;
 use std::io::{self, Write};
@@ -78,15 +76,6 @@ pub fn require_confirmation() -> Result<bool> {
     }
 
     Ok(confirmed)
-}
-
-pub fn display_final_warning() -> Result<()> {
-    eprintln!();
-    eprintln!("Last chance to cancel. Press Ctrl+C within 3 seconds to abort...");
-
-    std::thread::sleep(std::time::Duration::from_secs(3));
-
-    Ok(())
 }
 
 pub fn display_completion(stats: &super::StressStats) {

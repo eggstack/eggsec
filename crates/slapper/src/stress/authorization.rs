@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::{Result, SlapperError};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -130,19 +128,6 @@ impl StressAuthorization {
                 return Err(SlapperError::Validation(format!(
                     "Requested duration {}s exceeds maximum allowed duration {}s",
                     duration_secs, max_duration
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    pub fn verify_stress_type(&self, stress_type: &str) -> Result<()> {
-        if let Some(ref allowed_types) = self.stress_scope.allowed_stress_types {
-            let type_lower = stress_type.to_lowercase();
-            if !allowed_types.iter().any(|t| t.to_lowercase() == type_lower) {
-                return Err(SlapperError::Validation(format!(
-                    "Stress type '{}' is not in allowed types: {:?}",
-                    stress_type, allowed_types
                 )));
             }
         }

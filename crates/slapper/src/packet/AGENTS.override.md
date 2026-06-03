@@ -21,27 +21,9 @@ Specialized guidance for the packet capture/crafting module.
 - Requires `stress-testing` feature for raw sockets and IP spoofing
 - Requires `packet-inspection` feature for packet capture
 
-## HIGH Priority Issue (Pending Fix)
+## Known Issues
 
-**PcapWriter Write Result Silently Dropped at `capture.rs:209`:**
-
-```rust
-let _ = writer.write_packet(&packet);
-```
-
-The PcapWriter `write_packet` result is silently dropped. While PcapWriter itself handles errors properly, the caller ignores the result which could hide write failures.
-
-**Fix required**: Log a warning when write_packet fails instead of silently dropping the result:
-
-```rust
-if let Err(e) = writer.write_packet(&packet) {
-    tracing::warn!("Failed to write packet to pcap: {}", e);
-}
-```
-
-## Silent Error Suppression Pattern
-
-The `let _ =` pattern is used at `capture.rs:209` for pcap write errors. This should be replaced with explicit error logging. See "Key Patterns" in AGENTS.md for proper error handling.
+**None currently pending.**
 
 ## Testing
 

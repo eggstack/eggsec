@@ -1,8 +1,5 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Default)]
@@ -102,72 +99,6 @@ impl StressStats {
         self.bytes_sent += other.bytes_sent;
         self.errors += other.errors;
     }
-}
-
-pub struct RateLimiter {
-    target_pps: u64,
-    interval_ns: u64,
-    tokens: Arc<AtomicU64>,
-    last_refill: Arc<parking_lot::Mutex<Instant>>,
-}
-
-impl RateLimiter {
-    pub fn new(target_pps: u64) -> Self {
-        let interval_ns = if target_pps > 0 {
-            1_000_000_000 / target_pps
-        } else {
-            0
-        };
-
-        Self {
-            target_pps,
-            interval_ns,
-            tokens: Arc::new(AtomicU64::new(target_pps)),
-            last_refill: Arc::new(parking_lot::Mutex::new(Instant::now())),
-        }
-    }
-
-    pub async fn wait_for_token(&self) {
-        if self.target_pps == 0 {
-            return;
-        }
-
-        loop {
-            let tokens = self.tokens.load(Ordering::Relaxed);
-            if tokens > 0
-                && self
-                    .tokens
-                    .compare_exchange(tokens, tokens - 1, Ordering::Relaxed, Ordering::Relaxed)
-                    .is_ok()
-            {
-                return;
-            }
-
-            let last = *self.last_refill.lock();
-            let elapsed_ns = Instant::now().duration_since(last).as_nanos() as u64;
-            let elapsed_since_refill = elapsed_ns % self.interval_ns;
-            let wait_ns = self.interval_ns.saturating_sub(elapsed_since_refill);
-            tokio::time::sleep(Duration::from_nanos(wait_ns)).await;
-        }
-    }
-
-    pub fn refill(&self) {
-        let mut last = self.last_refill.lock();
-        let now = Instant::now();
-        let elapsed_ns = now.duration_since(*last).as_nanos() as u64;
-
-        if elapsed_ns >= 1_000_000_000 {
-            let new_tokens = (elapsed_ns / 1_000_000_000) * self.target_pps;
-            self.tokens.fetch_add(new_tokens, Ordering::Relaxed);
-            *last = now;
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PacketBatch {
-    pub packets: Vec<Vec<u8>>,
-    pub total_size: u64,
 }
 
 #[cfg(test)]
@@ -279,70 +210,5 @@ mod tests {
         assert_eq!(stats1.packets_sent, 300);
         assert_eq!(stats1.bytes_sent, 19200);
         assert_eq!(stats1.errors, 8);
-    }
-
-    #[test]
-    fn test_packet_batch_new() {
-        let batch = PacketBatch::new(10);
-        assert!(batch.is_empty());
-        assert_eq!(batch.len(), 0);
-    }
-
-    #[test]
-    fn test_packet_batch_add() {
-        let mut batch = PacketBatch::new(10);
-        batch.add(vec![1, 2, 3, 4]);
-        assert!(!batch.is_empty());
-        assert_eq!(batch.len(), 1);
-        assert_eq!(batch.total_size, 4);
-    }
-
-    #[test]
-    fn test_packet_batch_clear() {
-        let mut batch = PacketBatch::new(10);
-        batch.add(vec![1, 2]);
-        batch.add(vec![3, 4]);
-        batch.clear();
-        assert!(batch.is_empty());
-        assert_eq!(batch.total_size, 0);
-    }
-
-    #[test]
-    fn test_rate_limiter_new() {
-        let limiter = RateLimiter::new(100);
-        assert_eq!(limiter.interval_ns, 10_000_000);
-    }
-
-    #[test]
-    fn test_rate_limiter_zero_pps() {
-        let limiter = RateLimiter::new(0);
-        assert_eq!(limiter.interval_ns, 0);
-    }
-}
-
-impl PacketBatch {
-    pub fn new(_capacity: usize) -> Self {
-        Self {
-            packets: Vec::new(),
-            total_size: 0,
-        }
-    }
-
-    pub fn add(&mut self, packet: Vec<u8>) {
-        self.total_size += packet.len() as u64;
-        self.packets.push(packet);
-    }
-
-    pub fn len(&self) -> usize {
-        self.packets.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.packets.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.packets.clear();
-        self.total_size = 0;
     }
 }

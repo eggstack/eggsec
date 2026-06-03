@@ -3,27 +3,14 @@ use crate::error::{Result, SlapperError};
 #[cfg(all(feature = "stress-testing", unix))]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(all(feature = "stress-testing", unix))]
-use std::time::{Duration, Instant};
-
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::datalink::{self, Channel::Ethernet, Config, NetworkInterface};
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::icmp::echo_request::MutableEchoRequestPacket;
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::icmp::{IcmpCode, IcmpTypes};
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::ip::IpNextHeaderProtocols;
-
-#[cfg(all(feature = "stress-testing", unix))]
 use pnet_packet::ipv4::MutableIpv4Packet;
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet_packet::ipv6::MutableIpv6Packet;
 
 #[cfg(all(feature = "stress-testing", unix))]
-use rand::Rng;
-
-#[cfg(all(feature = "stress-testing", unix))]
 use super::metrics::StressMetrics;
+#[cfg(all(feature = "stress-testing", unix))]
+use super::utils;
 #[cfg(all(feature = "stress-testing", unix))]
 use super::{StressConfig, StressStats};
 
@@ -34,14 +21,14 @@ const ICMP_PAYLOAD_SIZE: usize = 56;
 
 #[cfg(all(feature = "stress-testing", unix))]
 pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> Result<StressStats> {
-    let target_ip = resolve_target(&config.target).await?;
+    let target_ip = utils::resolve_target(&config.target).await?;
     let target_addr = SocketAddr::new(target_ip, 0);
 
-    let interface = get_network_interface()?;
-    let (mut tx, _rx) = create_channel(&interface)?;
+    let interface = utils::get_network_interface()?;
+    let (mut tx, _rx) = utils::create_channel(&interface, "ICMP probe")?;
 
     let payload_size = config.payload_size.max(ICMP_PAYLOAD_SIZE);
-    let payload = generate_payload(payload_size);
+    let payload = utils::generate_payload(payload_size);
 
     metrics.start();
 
@@ -61,17 +48,17 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
         let packet = match target_addr.ip() {
             IpAddr::V4(dst_ip) => {
                 let src_ip = if config.spoof_source {
-                    get_spoofed_source(&config.spoof_range)?
+                    utils::get_spoofed_source(&config.spoof_range)?
                 } else {
-                    get_local_ip(&interface)?
+                    utils::get_local_ip(&interface)?
                 };
                 build_icmp_packet_v4(src_ip, dst_ip, identifier, &payload)?
             }
             IpAddr::V6(dst_ip) => {
                 let src_ip = if config.spoof_source {
-                    get_spoofed_source_v6(&config.spoof_range)?
+                    utils::get_spoofed_source_v6(&config.spoof_range)?
                 } else {
-                    get_local_ip_v6(&interface)?
+                    utils::get_local_ip_v6(&interface)?
                 };
                 build_icmp_packet_v6(src_ip, dst_ip, identifier, &payload)?
             }
@@ -168,176 +155,6 @@ fn build_icmp_packet_v6(
     icmp_packet.set_checksum(0);
 
     Ok(buffer)
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-async fn resolve_target(target: &str) -> Result<IpAddr> {
-    if let Ok(ip) = target.parse::<IpAddr>() {
-        return Ok(ip);
-    }
-
-    let addrs: Vec<_> = tokio::net::lookup_host((target, 0)).await?.collect();
-
-    addrs
-        .first()
-        .map(|a| a.ip())
-        .ok_or_else(|| SlapperError::Runtime(format!("Failed to resolve target: {}", target)))
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn get_network_interface() -> Result<NetworkInterface> {
-    let interfaces = datalink::interfaces();
-
-    interfaces
-        .into_iter()
-        .find(|iface| iface.is_up() && !iface.is_loopback() && !iface.ips.is_empty())
-        .ok_or_else(|| SlapperError::Runtime("No suitable network interface found".to_string()))
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn create_channel(
-    interface: &NetworkInterface,
-) -> Result<(
-    Box<dyn datalink::DataLinkSender>,
-    Box<dyn datalink::DataLinkReceiver>,
-)> {
-    crate::utils::privilege::check_privileged("ICMP probe")?;
-    let config = Config::default();
-
-    match datalink::channel(interface, config) {
-        Ok(Ethernet(tx, rx)) => Ok((tx, rx)),
-        Ok(_) => Err(SlapperError::Runtime(
-            "Unsupported channel type".to_string(),
-        )),
-        Err(e) => Err(SlapperError::Runtime(format!(
-            "Failed to create channel: {}",
-            e
-        ))),
-    }
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn get_local_ip(interface: &NetworkInterface) -> Result<Ipv4Addr> {
-    interface
-        .ips
-        .iter()
-        .find_map(|ip| match ip.ip() {
-            IpAddr::V4(ip) => Some(ip),
-            _ => None,
-        })
-        .ok_or_else(|| SlapperError::Runtime("No IPv4 address found on interface".to_string()))
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn get_local_ip_v6(interface: &NetworkInterface) -> Result<Ipv6Addr> {
-    interface
-        .ips
-        .iter()
-        .find_map(|ip| match ip.ip() {
-            IpAddr::V6(ip) => Some(ip),
-            _ => None,
-        })
-        .ok_or_else(|| SlapperError::Runtime("No IPv6 address found on interface".to_string()))
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn get_spoofed_source(range: &Option<String>) -> Result<Ipv4Addr> {
-    let mut rng = rand::thread_rng();
-
-    if let Some(range_str) = range {
-        let parts: Vec<&str> = range_str.split('/').collect();
-        if parts.len() == 2 {
-            let base: Ipv4Addr = parts[0].parse()?;
-            let prefix: u8 = parts[1].parse()?;
-
-            let base_u32 = u32::from(base);
-            let host_bits = 32 - prefix;
-            let offset = rng.gen_range(1..(1u32 << host_bits) - 1);
-
-            return Ok(Ipv4Addr::from(base_u32 | offset));
-        }
-
-        let parts: Vec<&str> = range_str.split('-').collect();
-        if parts.len() == 2 {
-            let start: u32 = parts[0].parse()?;
-            let end: u32 = parts[1].parse()?;
-            if end > start {
-                let offset = rng.gen_range(0..(end - start + 1));
-                return Ok(Ipv4Addr::from(start + offset));
-            }
-        }
-    }
-
-    Ok(Ipv4Addr::new(
-        rng.gen_range(1..254),
-        rng.gen_range(0..254),
-        rng.gen_range(0..254),
-        rng.gen_range(1..254),
-    ))
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn get_spoofed_source_v6(range: &Option<String>) -> Result<Ipv6Addr> {
-    let mut rng = rand::thread_rng();
-
-    if let Some(range_str) = range {
-        let parts: Vec<&str> = range_str.split('/').collect();
-        if parts.len() == 2 {
-            let base: Ipv6Addr = parts[0].parse()?;
-            let prefix: u8 = parts[1].parse()?;
-
-            let base_segments = base.segments();
-            let host_bits = 128 - prefix;
-            let offset_lo = rng.gen_range(1..u16::MAX);
-            let offset_hi = if host_bits > 16 {
-                rng.gen_range(0..(1u16 << (host_bits - 16).min(16)))
-            } else {
-                0
-            };
-
-            let new_lo = base_segments[7] | offset_lo;
-            let new_hi = base_segments[6] | offset_hi;
-            return Ok(Ipv6Addr::new(
-                base_segments[0],
-                base_segments[1],
-                base_segments[2],
-                base_segments[3],
-                base_segments[4],
-                base_segments[5],
-                new_hi,
-                new_lo,
-            ));
-        }
-
-        let parts: Vec<&str> = range_str.split('-').collect();
-        if parts.len() == 2 {
-            let start: u128 = parts[0].parse()?;
-            let end: u128 = parts[1].parse()?;
-            if end > start {
-                let offset = rng.gen_range(0..(end - start + 1));
-                return Ok(Ipv6Addr::from(start + offset));
-            }
-        }
-    }
-
-    Ok(Ipv6Addr::new(
-        0xfe80,
-        0,
-        0,
-        0,
-        rng.gen_range(0..0xffff),
-        rng.gen_range(0..0xffff),
-        rng.gen_range(0..0xffff),
-        rng.gen_range(1..0xffff),
-    ))
-}
-
-#[cfg(all(feature = "stress-testing", unix))]
-fn generate_payload(size: usize) -> Vec<u8> {
-    let mut rng = rand::thread_rng();
-    let mut payload = vec![0u8; size];
-    rng.fill(&mut payload[..]);
-    payload
 }
 
 #[cfg(not(all(feature = "stress-testing", unix)))]

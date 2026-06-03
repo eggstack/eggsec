@@ -2,6 +2,18 @@
 
 Specialized guidance for the stress testing module.
 
+## Shared Utilities (`utils.rs`)
+
+Common functions shared across `syn.rs`, `icmp.rs`, and `udp.rs`:
+- `resolve_target()` — async DNS resolution or IP parsing
+- `get_network_interface()` — finds first up, non-loopback interface with IPs
+- `create_channel()` — opens raw Ethernet channel via pnet (takes a label for privilege check)
+- `get_local_ip()` / `get_local_ip_v6()` — extract IP from interface
+- `get_spoofed_source()` / `get_spoofed_source_v6()` — CIDR and dash-range IPv4/IPv6 spoofing
+- `generate_payload()` — random byte payload generation
+
+All functions are behind `#[cfg(all(feature = "stress-testing", unix))]`.
+
 ## raw_udp Integration
 
 The `raw_udp` module in `stress/udp.rs:20-117` is integrated:

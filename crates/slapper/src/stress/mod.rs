@@ -8,6 +8,8 @@ mod metrics;
 mod syn;
 #[cfg(feature = "stress-testing")]
 mod udp;
+#[cfg(feature = "stress-testing")]
+mod utils;
 mod warning;
 
 pub use authorization::StressAuthorization;
