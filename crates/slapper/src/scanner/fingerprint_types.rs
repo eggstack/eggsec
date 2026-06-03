@@ -94,7 +94,7 @@ impl ServiceIdentity {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnhancedFingerprint {
     pub identity: ServiceIdentity,
-    pub all可能性: Vec<ServiceIdentity>,
+    pub all_alternatives: Vec<ServiceIdentity>,
     pub raw_banner: Option<String>,
     pub scan_timestamp: chrono::DateTime<chrono::Utc>,
 }
@@ -107,7 +107,7 @@ impl EnhancedFingerprint {
 
     /// Check if there are conflicting fingerprints
     pub fn has_conflicts(&self) -> bool {
-        !self.all可能性.is_empty()
+        !self.all_alternatives.is_empty()
     }
 }
 
@@ -168,7 +168,7 @@ mod tests {
     fn enhanced_fingerprint_no_conflicts() {
         let fp = EnhancedFingerprint {
             identity: test_identity("nginx", FingerprintConfidence::High),
-            all可能性: vec![],
+            all_alternatives: vec![],
             raw_banner: None,
             scan_timestamp: chrono::Utc::now(),
         };
@@ -179,7 +179,7 @@ mod tests {
     fn enhanced_fingerprint_with_conflicts() {
         let fp = EnhancedFingerprint {
             identity: test_identity("nginx", FingerprintConfidence::Medium),
-            all可能性: vec![test_identity("apache", FingerprintConfidence::Low)],
+            all_alternatives: vec![test_identity("apache", FingerprintConfidence::Low)],
             raw_banner: None,
             scan_timestamp: chrono::Utc::now(),
         };

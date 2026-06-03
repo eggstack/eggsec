@@ -53,30 +53,7 @@ pub const COMMON_PORTS: &[(u16, &str)] = &[
 ];
 
 static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(|| {
-    let mut m = FxHashMap::default();
-    m.insert(21, "FTP");
-    m.insert(22, "SSH");
-    m.insert(23, "Telnet");
-    m.insert(25, "SMTP");
-    m.insert(53, "DNS");
-    m.insert(80, "HTTP");
-    m.insert(110, "POP3");
-    m.insert(143, "IMAP");
-    m.insert(443, "HTTPS");
-    m.insert(445, "SMB");
-    m.insert(993, "IMAPS");
-    m.insert(995, "POP3S");
-    m.insert(1433, "MSSQL");
-    m.insert(1521, "Oracle");
-    m.insert(3306, "MySQL");
-    m.insert(3389, "RDP");
-    m.insert(5432, "PostgreSQL");
-    m.insert(5900, "VNC");
-    m.insert(6379, "Redis");
-    m.insert(8080, "HTTP-Alt");
-    m.insert(8443, "HTTPS-Alt");
-    m.insert(27017, "MongoDB");
-    m
+    COMMON_PORTS.iter().copied().collect()
 });
 
 fn get_service_name(port: u16) -> &'static str {
@@ -586,13 +563,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         handles.push(handle);
     }
 
-    // Catch panics from workers to prevent thread pool corruption
-    // Workers may panic on malformed packets or unexpected network conditions
-    if let Err(panic_info) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
-        join_all(handles).await;
-    })) {
-        tracing::warn!("Worker pool panicked: {:?}", panic_info);
-    }
+    join_all(handles).await;
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }

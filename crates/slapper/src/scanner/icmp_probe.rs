@@ -29,7 +29,7 @@ pub struct PingStats {
 pub async fn ping_host(
     target: &str,
     count: u32,
-    _timeout: Duration,
+    timeout: Duration,
     interval: Duration,
 ) -> Result<(Vec<PingResult>, PingStats)> {
     let target_ip = resolve_target(target).await?;
@@ -41,7 +41,7 @@ pub async fn ping_host(
         let payload = [0u8; 56];
         let sequence = PingSequence(i as u16 + 1);
 
-        match tokio::time::timeout(_timeout, surge_ping::ping(target_ip, &payload)).await {
+        match tokio::time::timeout(timeout, surge_ping::ping(target_ip, &payload)).await {
             Ok(Ok((packet, rtt))) => {
                 let ttl = match &packet {
                     IcmpPacket::V4(p) => p.get_ttl().unwrap_or(64),
@@ -65,7 +65,7 @@ pub async fn ping_host(
                     "Ping probe to {} sequence {} timed out after {:?}",
                     target,
                     sequence.0,
-                    _timeout
+                    timeout
                 );
             }
         }

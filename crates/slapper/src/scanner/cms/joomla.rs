@@ -52,7 +52,9 @@ pub async fn enumerate_extensions(url: &str) -> Option<Vec<String>> {
                 return Some(extensions);
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            tracing::debug!("Failed to enumerate Joomla extensions: {}", e);
+        }
     }
 
     None
@@ -76,7 +78,9 @@ pub async fn scan_joomla(target: &CmsTarget, client: &Client) -> Result<CmsScanR
                 ));
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            tracing::debug!("Failed to check Joomla admin panel: {}", e);
+        }
     }
     let mut result = scanner.build_scan_result(target, CmsType::Joomla, vulnerabilities, misconfigurations);
     result.version = version;
@@ -101,7 +105,9 @@ async fn detect_joomla_version(target: &CmsTarget, client: &Client) -> Option<St
                 }
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            tracing::debug!("Failed to detect Joomla version from manifest: {}", e);
+        }
     }
 
     None

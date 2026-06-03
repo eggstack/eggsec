@@ -34,7 +34,7 @@
       "CVE-2021-23336"
     ]
   },
-  "all可能性": [
+  "all_alternatives": [
     {
       "service_name": "openresty",
       "version": "1.19.3.1",

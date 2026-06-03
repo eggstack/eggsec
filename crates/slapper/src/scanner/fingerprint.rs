@@ -345,14 +345,13 @@ async fn fingerprint_port(
 ) -> Option<ServiceFingerprint> {
     let addr = SocketAddr::new(ip, port);
 
-    #[allow(unreachable_patterns)]
     let probes_to_try: &[(&str, &[u8], &str)] = match port {
         8080 | 8090 | 8180 => &[("Jenkins", b"GET /api/json HTTP/1.0\r\n\r\n", "\"jobs\"|Crumb")],
         6443 | 8443 | 10443 => &[("Kubernetes API", b"GET /api/v1 HTTP/1.0\r\nHost: localhost\r\n\r\n", "\"kind\":|k8s")],
         8086 | 8087 | 9092 => &[("InfluxDB", b"GET /ping HTTP/1.0\r\nHost: localhost\r\n\r\n", "InfluxDB|X-Influxdb")],
-        8081 | 8000 | 8001 => &[("Caddy", b"GET / HTTP/1.0\r\n\r\n", "Caddy")],
-        9090 | 3000 | 3001 => &[("Prometheus/Grafana", b"GET /api/v1/status/config HTTP/1.0\r\n\r\n", "Prometheus|Grafana")],
-        80 | 8080 | 8000 | 3000 | 5000 | 443 | 8443 | 8888 | 9000 | 9090 | 32768 | 49152 | 49153 | 49154 => &[
+        8081 | 8001 => &[("Caddy", b"GET / HTTP/1.0\r\n\r\n", "Caddy")],
+        9090 | 3001 => &[("Prometheus/Grafana", b"GET /api/v1/status/config HTTP/1.0\r\n\r\n", "Prometheus|Grafana")],
+        80 | 8000 | 3000 | 5000 | 443 | 8888 | 9000 | 32768 | 49152 | 49153 | 49154 => &[
             ("HTTP", b"HEAD / HTTP/1.0\r\n\r\n", "HTTP"),
         ],
         22 | 2222 => &[("SSH", b"", "SSH")],
@@ -369,7 +368,7 @@ async fn fingerprint_port(
         5672 | 5671 => &[("RabbitMQ", b"AMQP\x00\x00\x09\x01", "AMQP")],
         2181..=2183 => &[("Zookeeper", b"ruok", "imok")],
         9200 | 9300 | 9243 => &[("Elasticsearch", b"GET / HTTP/1.0\r\n\r\n", "\"name\"|\"cluster_name\"|lucene")],
-        9092..=9094 => &[("Kafka", b"\x00\x00\x00\x1c\x00\x01\x00\x00\x00\x00\x00\x03api\x00\x00\x00\x01\x00", "\\x00\\x00\\x00")],
+        9093 | 9094 => &[("Kafka", b"\x00\x00\x00\x1c\x00\x01\x00\x00\x00\x00\x00\x03api\x00\x00\x00\x01\x00", "\\x00\\x00\\x00")],
         1433 | 1434 | 14330 => &[("MSSQL", b"\x12\x01\x00\x34\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00", "\\x04\\x00")],
         1521 | 1522 | 1526 => &[("Oracle", b"\x00\x7c\x00\x00\x06\x00\x00\x00\x00\x00\x00\x00\x00", "\\x00\\x7c")],
         873 => &[("Rsyncd", b"", "@RSYNCD:")],

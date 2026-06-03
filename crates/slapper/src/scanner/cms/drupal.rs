@@ -52,7 +52,9 @@ pub async fn enumerate_modules(url: &str) -> Option<Vec<String>> {
                 return Some(modules);
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            tracing::debug!("Failed to enumerate Drupal modules: {}", e);
+        }
     }
 
     None
@@ -76,7 +78,9 @@ pub async fn scan_drupal(target: &CmsTarget, client: &Client) -> Result<CmsScanR
                 ));
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            tracing::debug!("Failed to check admin login page: {}", e);
+        }
     }
     let mut result = scanner.build_scan_result(target, CmsType::Drupal, vulnerabilities, misconfigurations);
     result.version = version;
@@ -96,7 +100,9 @@ async fn detect_drupal_version(target: &CmsTarget, client: &Client) -> Option<St
                 }
             }
         }
-        Err(_) => {}
+        Err(e) => {
+            tracing::debug!("Failed to detect Drupal version from CHANGELOG: {}", e);
+        }
     }
 
     None

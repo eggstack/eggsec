@@ -363,8 +363,8 @@ pub(crate) async fn scan_ports_spoofed(
                                 scan_type,
                                 ttl,
                             ) {
-                                let _Ignored = tx_guard.send_to(&packet, Some(interface.clone()));
-                                if _Ignored.is_none() {
+                                let send_result = tx_guard.send_to(&packet, Some(interface.clone()));
+                                if send_result.is_none() {
                                     tracing::warn!("Failed to send staggered decoy packet");
                                 } else {
                                     packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -403,9 +403,9 @@ pub(crate) async fn scan_ports_spoofed(
                             ) {
                                 {
                                     let mut tx_guard = tx.lock();
-                                    let _Ignored =
+                                    let send_result =
                                         tx_guard.send_to(&packet, Some(interface.clone()));
-                                    if _Ignored.is_none() {
+                                    if send_result.is_none() {
                                         tracing::warn!("Failed to send decoy packet");
                                     } else {
                                         packets_sent

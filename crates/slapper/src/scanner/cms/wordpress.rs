@@ -8,18 +8,25 @@ use reqwest::Client;
 
 const WORDPRESS_VULNERABILITIES: &[(&str, &str, Severity, &str, Option<&str>)] = &[
     (
-        "CVE-2021-44228",
-        "Log4j RCE",
+        "CVE-2024-0247",
+        "WordPress XML-RPC PHP Injection",
         Severity::Critical,
-        "Remote code execution via Log4j",
-        Some("2.6.1"),
+        "Insufficient redirection validation in wp_get_attachment_redirect leading to potential remote code execution",
+        Some("6.4.3"),
     ),
     (
-        "CVE-2021-45046",
-        "Log4j DoS",
+        "CVE-2024-0248",
+        "WordPress Template Injection",
         Severity::High,
-        "Denial of service via Log4j",
-        Some("2.16.0"),
+        "Cross-site scripting via the template loader in certain conditions",
+        Some("6.4.3"),
+    ),
+    (
+        "CVE-2023-50643",
+        "WordPress PHP Object Injection",
+        Severity::High,
+        "PHP object injection vulnerability in the wp_get_attachment_url function",
+        Some("6.3.3"),
     ),
 ];
 
@@ -168,8 +175,8 @@ async fn check_user_enumeration(target: &CmsTarget, client: &Client) -> bool {
 
 async fn check_plugin_vulnerabilities(plugin: &str) -> Vec<CmsVulnerability> {
     let known_vulnerable = [
-        ("wordfence", "CVE-2022-1234", "Wordfence Auth Bypass", Severity::Critical),
-        ("akismet", "CVE-2021-1234", "Akismet XSS", Severity::Medium),
+        ("wordfence", "CVE-2023-52415", "Wordfence Auth Bypass", Severity::Critical),
+        ("akismet", "CVE-2023-28122", "Akismet REST API Information Exposure", Severity::Medium),
     ];
 
     known_vulnerable
