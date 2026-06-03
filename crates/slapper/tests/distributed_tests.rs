@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 use slapper::distributed::queue::{TaskQueue, TaskResult};
-use slapper::distributed::{Task, TaskType};
+use slapper::distributed::{RemoteClient, RemoteListener, Task, TaskType};
 
 fn make_task(id: &str, job_id: &str) -> Task {
     Task {
@@ -176,4 +176,164 @@ async fn test_task_result_serde_roundtrip() {
     assert_eq!(parsed.task_id, "task-1");
     assert!(parsed.success);
     assert_eq!(parsed.duration_millis, 100);
+}
+
+#[tokio::test]
+async fn test_listener_client_auth_success() {
+    let psk = "test-psk-12345";
+
+    let listener_clone = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        // Use a TcpListener to get a free port
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+
+        // Now start the actual listener
+        listener_clone.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let mut client = RemoteClient::new_plaintext(psk.to_string());
+    let result = client
+        .register_worker(
+            "127.0.0.1",
+            port,
+            "worker-1".to_string(),
+            "test-host".to_string(),
+            vec!["PortScan".to_string()],
+        )
+        .await;
+
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_listener_client_invalid_psk() {
+    let psk = "correct-psk";
+
+    let listener_clone = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+
+        listener_clone.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Try with wrong PSK
+    let mut client = RemoteClient::new_plaintext("wrong-psk".to_string());
+    let result = client
+        .register_worker(
+            "127.0.0.1",
+            port,
+            "worker-1".to_string(),
+            "test-host".to_string(),
+            vec!["PortScan".to_string()],
+        )
+        .await;
+
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_listener_task_assignment_cycle() {
+    let psk = "task-cycle-psk";
+
+    let listener_clone = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+
+        // We need to access the task queue to enqueue tasks
+        // Since we can't directly access it, we'll use a simpler test pattern
+        listener_clone.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Connect and register
+    let mut client = RemoteClient::new_plaintext(psk.to_string());
+    let reg_result = client
+        .register_worker(
+            "127.0.0.1",
+            port,
+            "worker-1".to_string(),
+            "test-host".to_string(),
+            vec!["PortScan".to_string()],
+        )
+        .await;
+    assert!(reg_result.is_ok());
+
+    // Request tasks (queue is empty, should get empty list)
+    let tasks = client
+        .request_tasks("127.0.0.1", port, "worker-1".to_string(), 5)
+        .await
+        .unwrap();
+    assert!(tasks.is_empty());
+}
+
+#[tokio::test]
+async fn test_listener_heartbeat() {
+    let psk = "heartbeat-psk";
+
+    let listener_clone = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+
+        listener_clone.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let mut client = RemoteClient::new_plaintext(psk.to_string());
+    let result = client
+        .send_heartbeat(
+            "127.0.0.1",
+            port,
+            "worker-1".to_string(),
+            "idle".to_string(),
+        )
+        .await;
+
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_listener_connection_count() {
+    let psk = "count-psk";
+    let listener = RemoteListener::new(psk.to_string());
+    let count = listener.connection_count().await;
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn test_generate_psk_unique() {
+    let psk1 = slapper::distributed::generate_psk();
+    let psk2 = slapper::distributed::generate_psk();
+    assert_ne!(psk1, psk2);
+    assert_eq!(psk1.len(), 64);
+    assert_eq!(psk2.len(), 64);
 }

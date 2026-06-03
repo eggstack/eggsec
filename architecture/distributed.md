@@ -20,6 +20,39 @@ Independent nodes that perform the actual scanning and fuzzing tasks.
 - **Resource Monitoring**: Workers report their current load and availability to the coordinator.
 - **Task Execution**: Workers receive tasks, execute them locally using the core Slapper engine, and report results back.
 
+#### Worker Helpers
+
+- **`parse_coordinator_url(url: &str)`** (`worker.rs:11-31`): Parses `host:port` URLs, stripping `http://`/`https://` prefixes. Returns `Result<(&str, u16)>`.
+- **`worker_capabilities()`** (`worker.rs:33-35`): Returns `CAPABILITIES` as `Vec<String>` for registration messages.
+
+### Worker Status (`mod.rs:102-107`)
+
+```rust
+pub enum WorkerStatus {
+    Idle,
+    Busy,
+    Disconnected,
+}
+```
+
+Used in `WorkerRegistration.status` and `Heartbeat.status` to report worker state to the coordinator.
+
+### Heartbeat (`mod.rs:109-118`)
+
+```rust
+pub struct Heartbeat {
+    pub worker_id: String,
+    pub status: WorkerStatus,
+    pub current_jobs: usize,
+    pub completed_jobs: usize,
+    pub failed_jobs: usize,
+    pub cpu_usage: f32,
+    pub memory_usage: f32,
+}
+```
+
+Workers send periodic heartbeats to the coordinator reporting their current load. The coordinator uses this data for task assignment decisions.
+
 ### Communication (`remote.rs`, `io.rs`)
 
 Secure and efficient communication between nodes using line-based JSON over TCP (not gRPC or HTTP).
@@ -35,7 +68,7 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 
 #### Connection Limits (`remote.rs:17,209-213`)
 
-Default max connections: `MAX_CONNECTIONS = 100` (`remote.rs:17`). Configurable via `with_config()`. When the current connection count reaches `max_connections`, new connections are rejected with a warning log. Connections are tracked in `Arc<RwLock<Vec<String>>>` and cleaned up on disconnect.
+Default max connections: `MAX_CONNECTIONS = 100` (`remote.rs:17`). Configurable via `with_config()`. When the current connection count reaches `max_connections`, new connections are rejected with a warning log. Connections are tracked in `Arc<RwLock<FxHashSet<String>>>` and cleaned up on disconnect via `FxHashSet::remove()`.
 
 #### Rate Limiting (`remote.rs:18-19,121-140`)
 
@@ -97,6 +130,9 @@ When workers register with the coordinator via `CommandMessage::Register`, they 
 | Component | File | Lines | Key Function/Type |
 |-----------|------|-------|-------------------|
 | TaskType enum | mod.rs | 59-67 | 7 task types |
+| WorkerStatus enum | mod.rs | 102-107 | Idle, Busy, Disconnected |
+| WorkerRegistration | mod.rs | 93-100 | Worker metadata with capabilities |
+| Heartbeat | mod.rs | 109-118 | Worker liveness and load report |
 | Task struct | queue.rs | 8-18 | Core task representation |
 | TaskResult struct | queue.rs | 21-27 | Task execution result |
 | TaskQueue | queue.rs | 29-154 | Thread-safe task queue |
@@ -106,6 +142,7 @@ When workers register with the coordinator via `CommandMessage::Register`, they 
 | CommandExecutor | command.rs | 120-243 | Secure command execution |
 | CommandMessage | command.rs | 30-63 | Protocol messages (6 variants) |
 | Worker | worker.rs | 65-708 | Worker node |
+| parse_coordinator_url | worker.rs | 11-31 | URL parsing helper |
 | TlsServer | io.rs | 110-161 | TLS server from PEM |
 | TlsClient | io.rs | 163-225 | TLS client |
 | StreamWrapper | io.rs | 19-108 | Unified stream enum |

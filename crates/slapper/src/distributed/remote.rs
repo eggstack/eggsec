@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ pub struct TlsConfig {
 pub struct RemoteListener {
     psk: String,
     shutdown_tx: broadcast::Sender<()>,
-    connections: Arc<RwLock<Vec<String>>>,
+    connections: Arc<RwLock<FxHashSet<String>>>,
     rate_limits: Arc<RwLock<FxHashMap<String, Vec<Instant>>>>,
     max_connections: usize,
     rate_limit: u32,
@@ -42,7 +42,7 @@ impl RemoteListener {
         Self {
             psk,
             shutdown_tx,
-            connections: Arc::new(RwLock::new(Vec::new())),
+            connections: Arc::new(RwLock::new(FxHashSet::default())),
             rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
@@ -57,7 +57,7 @@ impl RemoteListener {
         Self {
             psk,
             shutdown_tx,
-            connections: Arc::new(RwLock::new(Vec::new())),
+            connections: Arc::new(RwLock::new(FxHashSet::default())),
             rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections,
             rate_limit,
@@ -72,7 +72,7 @@ impl RemoteListener {
         Self {
             psk,
             shutdown_tx,
-            connections: Arc::new(RwLock::new(Vec::new())),
+            connections: Arc::new(RwLock::new(FxHashSet::default())),
             rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
@@ -90,7 +90,7 @@ impl RemoteListener {
         Ok(Self {
             psk,
             shutdown_tx,
-            connections: Arc::new(RwLock::new(Vec::new())),
+            connections: Arc::new(RwLock::new(FxHashSet::default())),
             rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
@@ -255,7 +255,7 @@ impl RemoteListener {
         stream: TcpStream,
         addr: SocketAddr,
         psk: String,
-        connections: Arc<RwLock<Vec<String>>>,
+        connections: Arc<RwLock<FxHashSet<String>>>,
         tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
         task_queue: Arc<TaskQueue>,
     ) -> Result<()> {
@@ -295,7 +295,7 @@ impl RemoteListener {
         }
 
         // Register connection
-        connections.write().await.push(addr.to_string());
+        connections.write().await.insert(addr.to_string());
         tracing::info!(addr = %addr, "Authenticated successfully");
 
         // Send welcome
@@ -456,7 +456,7 @@ impl RemoteListener {
         }
 
         // Cleanup
-        connections.write().await.retain(|c| c != &addr_str);
+        connections.write().await.remove(&addr_str);
         tracing::info!(addr = %addr, "Client disconnected");
         Ok(())
     }
