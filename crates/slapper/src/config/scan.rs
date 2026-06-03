@@ -97,7 +97,11 @@ impl Default for OutputConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationConfig {
     #[serde(default)]
     pub webhooks: Vec<WebhookConfig>,
@@ -111,11 +115,28 @@ pub struct NotificationConfig {
     #[serde(default)]
     pub teams_webhook: Option<String>,
 
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub notify_on_complete: bool,
 
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub notify_on_findings: bool,
+
+    #[serde(default = "default_true")]
+    pub notify_on_error: bool,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            webhooks: Vec::new(),
+            slack_webhook: None,
+            discord_webhook: None,
+            teams_webhook: None,
+            notify_on_complete: true,
+            notify_on_findings: true,
+            notify_on_error: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,12 +156,17 @@ pub struct WebhookConfig {
     pub secret: Option<SensitiveString>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum WebhookEvent {
-    ScanStart,
+    #[serde(alias = "ScanStart")]
+    ScanStarted,
+    #[serde(alias = "ScanComplete")]
     ScanComplete,
-    Finding,
-    Error,
+    #[serde(alias = "Finding")]
+    FindingDetected,
+    #[serde(alias = "Error")]
+    ScanError,
 }
 
 impl WebhookConfig {

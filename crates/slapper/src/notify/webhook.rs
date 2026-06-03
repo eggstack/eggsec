@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-use crate::types::SensitiveString;
+use crate::config::{WebhookConfig, WebhookEvent};
 use crate::utils::create_http_client;
 use anyhow::Result;
 use hmac::{Hmac, Mac};
@@ -29,6 +28,18 @@ pub struct FindingSummary {
     pub location: String,
 }
 
+#[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
+impl From<&crate::tool::finding::Finding> for FindingSummary {
+    fn from(f: &crate::tool::finding::Finding) -> Self {
+        Self {
+            severity: f.severity.to_string(),
+            finding_type: f.finding_type.to_string(),
+            description: f.description.clone(),
+            location: f.location.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanStats {
     pub duration_ms: u64,
@@ -38,27 +49,9 @@ pub struct ScanStats {
     pub findings_total: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum WebhookEvent {
-    ScanStarted,
-    ScanComplete,
-    ScanError,
-    FindingDetected,
-}
-
 pub struct WebhookNotifier {
     client: reqwest::Client,
     webhooks: Vec<WebhookConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebhookConfig {
-    pub name: String,
-    pub url: String,
-    pub secret: Option<SensitiveString>,
-    pub headers: HashMap<String, String>,
-    pub events: Vec<WebhookEvent>,
 }
 
 impl WebhookNotifier {
@@ -387,6 +380,7 @@ impl WebhookNotifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::SensitiveString;
 
     #[test]
     fn test_webhook_event_serialization() {
@@ -481,13 +475,13 @@ mod tests {
     #[test]
     fn test_webhook_config_creation() {
         let config = WebhookConfig {
-            name: "test-webhook".to_string(),
+            name: Some("test-webhook".to_string()),
             url: "https://example.com/hook".to_string(),
             secret: Some(SensitiveString::new("my-secret")),
-            headers: HashMap::new(),
+            headers: rustc_hash::FxHashMap::default(),
             events: vec![WebhookEvent::ScanComplete, WebhookEvent::FindingDetected],
         };
-        assert_eq!(config.name, "test-webhook");
+        assert_eq!(config.name, Some("test-webhook".to_string()));
         assert_eq!(config.events.len(), 2);
         assert!(config.secret.is_some());
     }
@@ -503,10 +497,10 @@ mod tests {
         let notifier_with_hooks = WebhookNotifier {
             client: create_http_client(10).unwrap(),
             webhooks: vec![WebhookConfig {
-                name: "test".to_string(),
+                name: Some("test".to_string()),
                 url: "https://example.com".to_string(),
                 secret: None,
-                headers: HashMap::new(),
+                headers: rustc_hash::FxHashMap::default(),
                 events: vec![WebhookEvent::ScanComplete],
             }],
         };

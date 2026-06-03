@@ -1,16 +1,15 @@
 mod webhook;
 
-pub use webhook::{
-    FindingSummary, NotificationPayload, ScanStats, WebhookConfig, WebhookEvent, WebhookNotifier,
-};
+pub use webhook::{FindingSummary, NotificationPayload, ScanStats, WebhookNotifier};
 
-use crate::config::WebhookEvent as ConfigWebhookEvent;
+pub use crate::config::{WebhookConfig, WebhookEvent};
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotifyConfig {
-    pub webhooks: Vec<webhook::WebhookConfig>,
+    pub webhooks: Vec<WebhookConfig>,
     pub slack_webhook: Option<String>,
     pub discord_webhook: Option<String>,
     pub teams_webhook: Option<String>,
@@ -43,8 +42,13 @@ pub struct NotifyManager {
 
 impl NotifyManager {
     pub fn new(config: NotifyConfig) -> Self {
-        let notifier = WebhookNotifier::new(config.webhooks.clone())
-            .unwrap_or_else(|_| WebhookNotifier::new(vec![]).expect("empty webhook list"));
+        let notifier = match WebhookNotifier::new(config.webhooks.clone()) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!("Failed to create webhook notifier, using empty list: {}", e);
+                WebhookNotifier::new(vec![]).expect("empty webhook list")
+            }
+        };
 
         Self {
             notifier,
@@ -58,26 +62,17 @@ impl NotifyManager {
     pub fn from_settings(settings: &crate::config::SlapperConfig) -> Self {
         let notify_settings = &settings.notifications;
 
-        let mut webhooks = Vec::new();
-
-        for wh in &notify_settings.webhooks {
-            webhooks.push(webhook::WebhookConfig {
-                name: wh.name.clone().unwrap_or_else(|| "unnamed".to_string()),
+        let webhooks: Vec<WebhookConfig> = notify_settings
+            .webhooks
+            .iter()
+            .map(|wh| WebhookConfig {
+                name: wh.name.clone().or_else(|| Some("unnamed".to_string())),
                 url: wh.url.clone(),
                 secret: wh.secret.clone(),
-                headers: std::collections::HashMap::new(),
-                events: wh
-                    .events
-                    .iter()
-                    .map(|e| match e {
-                        ConfigWebhookEvent::ScanStart => WebhookEvent::ScanStarted,
-                        ConfigWebhookEvent::ScanComplete => WebhookEvent::ScanComplete,
-                        ConfigWebhookEvent::Finding => WebhookEvent::FindingDetected,
-                        ConfigWebhookEvent::Error => WebhookEvent::ScanError,
-                    })
-                    .collect(),
-            });
-        }
+                headers: wh.headers.clone(),
+                events: wh.events.clone(),
+            })
+            .collect();
 
         Self::new(NotifyConfig {
             webhooks,
@@ -86,7 +81,7 @@ impl NotifyManager {
             teams_webhook: notify_settings.teams_webhook.clone(),
             notify_on_complete: notify_settings.notify_on_complete,
             notify_on_findings: notify_settings.notify_on_findings,
-            notify_on_error: true,
+            notify_on_error: notify_settings.notify_on_error,
         })
     }
 
@@ -232,10 +227,10 @@ mod tests {
     fn test_notify_manager_is_enabled_with_webhook() {
         let config = NotifyConfig {
             webhooks: vec![WebhookConfig {
-                name: "test".to_string(),
+                name: Some("test".to_string()),
                 url: "https://example.com".to_string(),
                 secret: None,
-                headers: std::collections::HashMap::new(),
+                headers: rustc_hash::FxHashMap::default(),
                 events: vec![WebhookEvent::ScanComplete],
             }],
             ..Default::default()
@@ -289,10 +284,10 @@ mod tests {
     fn test_notify_config_serialization() {
         let config = NotifyConfig {
             webhooks: vec![WebhookConfig {
-                name: "my-hook".to_string(),
+                name: Some("my-hook".to_string()),
                 url: "https://example.com/hook".to_string(),
                 secret: None,
-                headers: std::collections::HashMap::new(),
+                headers: rustc_hash::FxHashMap::default(),
                 events: vec![WebhookEvent::ScanComplete],
             }],
             slack_webhook: Some("https://hooks.slack.com/test".to_string()),
@@ -306,7 +301,7 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: NotifyConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.webhooks.len(), 1);
-        assert_eq!(deserialized.webhooks[0].name, "my-hook");
+        assert_eq!(deserialized.webhooks[0].name, Some("my-hook".to_string()));
         assert_eq!(
             deserialized.slack_webhook,
             Some("https://hooks.slack.com/test".to_string())

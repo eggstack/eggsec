@@ -52,10 +52,10 @@ pub async fn send_webhook_notifications(
     if let Some(ref webhook_url) = config.webhook {
         println!("Sending test to custom webhook: {}", webhook_url);
         let webhook_config = vec![WebhookConfig {
-            name: "test".to_string(),
+            name: Some("test".to_string()),
             url: webhook_url.clone(),
             secret: config.secret.clone().map(SensitiveString::new),
-            headers: std::collections::HashMap::new(),
+            headers: rustc_hash::FxHashMap::default(),
             events: vec![WebhookEvent::ScanComplete],
         }];
         let notifier = WebhookNotifier::new(webhook_config)?;
