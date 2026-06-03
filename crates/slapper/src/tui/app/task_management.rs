@@ -288,8 +288,8 @@ impl TaskBuilder for super::tabs::IntegrationsTab {
             mode: mode.to_string(),
             title: Some(title).filter(|s| !s.is_empty()),
             description: Some(description).filter(|s| !s.is_empty()),
-            labels: vec![],
-            assignees: vec![],
+            labels: self.issue_labels(),
+            assignees: self.issue_assignees(),
         })
     }
 }

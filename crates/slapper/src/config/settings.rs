@@ -133,6 +133,9 @@ pub struct SlapperConfig {
     #[serde(default)]
     pub execution_policy: ExecutionPolicy,
 
+    #[serde(default)]
+    pub integrations: crate::integrations::IntegrationConfig,
+
     #[serde(default = "default_auto_save_interval")]
     pub auto_save_interval_secs: u64,
 }

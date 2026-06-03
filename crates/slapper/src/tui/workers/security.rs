@@ -415,13 +415,48 @@ pub async fn run_integrations_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::integrations::Issue;
+    use crate::integrations::{Issue, IssueTracker};
 
     let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         async move {
     if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send integrations progress: {}", e);
+    }
+
+    let tracker: Option<Box<dyn IssueTracker>> = if let Some(jira_config) = config.jira {
+        Some(Box::new(crate::integrations::jira::JiraClient::new(
+            jira_config,
+        )))
+    } else if let Some(github_config) = config.github {
+        Some(Box::new(crate::integrations::github::GitHubClient::new(
+            github_config,
+        )))
+    } else if let Some(gitlab_config) = config.gitlab {
+        Some(Box::new(crate::integrations::gitlab::GitLabClient::new(
+            gitlab_config,
+        )))
+    } else {
+        None
+    };
+
+    let tracker = match tracker {
+        Some(t) => t,
+        None => {
+            if let Err(e) = result_tx
+                .send(TaskResult::Error(
+                    "No tracker configured. Set Jira, GitHub, or GitLab credentials.".to_string(),
+                ))
+                .await
+            {
+                tracing::warn!("Failed to send config error: {}", e);
+            }
+            return Ok(());
+        }
+    };
+
+    if let Err(e) = progress_tx.send((1, 3)).await {
         tracing::warn!("Failed to send integrations progress: {}", e);
     }
 
@@ -432,41 +467,83 @@ pub async fn run_integrations_task(
             }
         }
         "create_issue" => {
-            if let (Some(t), Some(d)) = (&title, &description) {
-                let issue = crate::integrations::Issue {
-                    id: None,
-                    title: t.clone(),
-                    description: d.clone(),
-                    labels: labels.clone(),
-                    severity: None,
-                    assignees: assignees.clone(),
-                    status: None,
-                    url: None,
-                    created_at: None,
-                };
-                if let Err(e) = result_tx
-                    .send(TaskResult::IntegrationsCreateIssue { issue })
-                    .await
-                {
-                    tracing::warn!("Failed to send issue creation result: {}", e);
+            match (&title, &description) {
+                (Some(t), Some(d)) if !t.is_empty() && !d.is_empty() => {
+                    let issue = Issue {
+                        id: None,
+                        title: t.clone(),
+                        description: d.clone(),
+                        labels: labels.clone(),
+                        severity: None,
+                        assignees: assignees.clone(),
+                        status: None,
+                        url: None,
+                        created_at: None,
+                    };
+                    match tracker.create_issue(&issue).await {
+                        Ok(id) => {
+                            let created = Issue { id: Some(id.clone()), ..issue };
+                            if let Err(e) = result_tx
+                                .send(TaskResult::IntegrationsCreateIssue { issue: created })
+                                .await
+                            {
+                                tracing::warn!("Failed to send issue creation result: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to create issue: {}", e);
+                            if let Err(send_err) = result_tx
+                                .send(TaskResult::Error(format!("Failed to create issue: {}", e)))
+                                .await
+                            {
+                                tracing::warn!("Failed to send issue error: {}", send_err);
+                            }
+                        }
+                    }
                 }
-            } else {
-                if let Err(e) = result_tx
-                    .send(TaskResult::Error(
-                        "Title and description required for creating an issue".to_string(),
-                    ))
-                    .await
-                {
-                    tracing::warn!("Failed to send issue error: {}", e);
+                _ => {
+                    if let Err(e) = result_tx
+                        .send(TaskResult::Error(
+                            "Title and description required for creating an issue".to_string(),
+                        ))
+                        .await
+                    {
+                        tracing::warn!("Failed to send issue error: {}", e);
+                    }
                 }
             }
         }
         "search_issues" => {
-            if let Err(e) = result_tx
-                .send(TaskResult::IntegrationsSearchIssues { issues: vec![] })
-                .await
-            {
-                tracing::warn!("Failed to send issue search result: {}", e);
+            let query = title.as_deref().unwrap_or("");
+            if query.is_empty() {
+                if let Err(e) = result_tx
+                    .send(TaskResult::Error(
+                        "Search query required (enter in Issue Title field)".to_string(),
+                    ))
+                    .await
+                {
+                    tracing::warn!("Failed to send search error: {}", e);
+                }
+            } else {
+                match tracker.search_issues(query).await {
+                    Ok(issues) => {
+                        if let Err(e) = result_tx
+                            .send(TaskResult::IntegrationsSearchIssues { issues })
+                            .await
+                        {
+                            tracing::warn!("Failed to send issue search result: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to search issues: {}", e);
+                        if let Err(send_err) = result_tx
+                            .send(TaskResult::Error(format!("Failed to search issues: {}", e)))
+                            .await
+                        {
+                            tracing::warn!("Failed to send search error: {}", send_err);
+                        }
+                    }
+                }
             }
         }
         _ => {

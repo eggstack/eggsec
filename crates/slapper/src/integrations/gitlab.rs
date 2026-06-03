@@ -1,4 +1,5 @@
 use crate::error::{Result, SlapperError};
+use crate::integrations::common::handle_response_error;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -28,9 +29,58 @@ impl GitLabClient {
         format!(
             "{}/api/v4/projects/{}{}",
             self.config.url.trim_end_matches('/'),
-            self.config.project_id,
+            urlencoding::encode(&self.config.project_id),
             path
         )
+    }
+
+    fn parse_issue(json: &serde_json::Value) -> Issue {
+        let labels: Vec<String> = json["labels"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let assignees: Vec<String> = json["assignees"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v["username"].as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let status = json["state"]
+            .as_str()
+            .or_else(|| {
+                tracing::warn!(
+                    "GitLab: could not parse state from issue !{}",
+                    json["iid"].as_i64().unwrap_or(0)
+                );
+                None
+            })
+            .map(String::from);
+
+        let created_at = json["created_at"].as_str().and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+        });
+
+        Issue {
+            id: json["iid"].as_i64().map(|n| n.to_string()),
+            title: json["title"].as_str().unwrap_or("").to_string(),
+            description: json["description"].as_str().unwrap_or("").to_string(),
+            labels,
+            severity: None,
+            assignees,
+            status,
+            url: json["web_url"].as_str().map(String::from),
+            created_at,
+        }
     }
 }
 
@@ -61,21 +111,13 @@ impl IssueTracker for GitLabClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
-            let iid = json["iid"].as_i64().unwrap_or(1);
-            Ok(format!("!{}", iid))
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "GitLab API error {}: {}",
-                status, body
-            )))
-        }
+        let response = handle_response_error(response, "GitLab").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let iid = json["iid"].as_i64().unwrap_or(1);
+        Ok(format!("!{}", iid))
     }
 
     async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
@@ -112,16 +154,8 @@ impl IssueTracker for GitLabClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "GitLab API error {}: {}",
-                status, body
-            )))
-        }
+        handle_response_error(response, "GitLab").await?;
+        Ok(())
     }
 
     async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
@@ -142,16 +176,8 @@ impl IssueTracker for GitLabClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "GitLab API error {}: {}",
-                status, body
-            )))
-        }
+        handle_response_error(response, "GitLab").await?;
+        Ok(())
     }
 
     async fn get_issue(&self, id: &str) -> Result<Issue> {
@@ -166,54 +192,20 @@ impl IssueTracker for GitLabClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let response = handle_response_error(response, "GitLab").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-            let labels: Vec<String> = json["labels"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            Ok(Issue {
-                id: json["iid"].as_i64().map(|n| n.to_string()),
-                title: json["title"].as_str().unwrap_or("").to_string(),
-                description: json["description"].as_str().unwrap_or("").to_string(),
-                labels,
-                severity: None,
-                assignees: json["assignees"]
-                    .as_array()
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v["username"].as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                status: json["state"].as_str().map(String::from),
-                url: json["web_url"].as_str().map(String::from),
-                created_at: json["created_at"].as_str().and_then(|s| {
-                    chrono::DateTime::parse_from_rfc3339(s)
-                        .ok()
-                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                }),
-            })
-        } else {
-            let status = response.status();
-            Err(SlapperError::Network(format!(
-                "GitLab API error: {}",
-                status
-            )))
-        }
+        Ok(Self::parse_issue(&json))
     }
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
-        let url = self.api_url(&format!("/issues?search={}", query));
+        let url = self.api_url(&format!(
+            "/issues?search={}",
+            urlencoding::encode(query)
+        ));
 
         let response = self
             .client
@@ -223,62 +215,18 @@ impl IssueTracker for GitLabClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let response = handle_response_error(response, "GitLab").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-            let issues: Vec<Issue> = json
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .map(|item| {
-                            let labels: Vec<String> = item["labels"]
-                                .as_array()
-                                .map(|a| {
-                                    a.iter()
-                                        .filter_map(|v| v.as_str().map(String::from))
-                                        .collect()
-                                })
-                                .unwrap_or_default();
-                            Issue {
-                                id: item["iid"].as_i64().map(|n| n.to_string()),
-                                title: item["title"].as_str().unwrap_or("").to_string(),
-                                description: item["description"].as_str().unwrap_or("").to_string(),
-                                labels,
-                                severity: None,
-                                assignees: item["assignees"]
-                                    .as_array()
-                                    .map(|a| {
-                                        a.iter()
-                                            .filter_map(|v| {
-                                                v["username"].as_str().map(String::from)
-                                            })
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                                status: item["state"].as_str().map(String::from),
-                                url: item["web_url"].as_str().map(String::from),
-                                created_at: item["created_at"].as_str().and_then(|s| {
-                                    chrono::DateTime::parse_from_rfc3339(s)
-                                        .ok()
-                                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                                }),
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
+        let issues: Vec<Issue> = json
+            .as_array()
+            .map(|arr| arr.iter().map(Self::parse_issue).collect())
+            .unwrap_or_default();
 
-            Ok(issues)
-        } else {
-            let status = response.status();
-            Err(SlapperError::Network(format!(
-                "GitLab API error: {}",
-                status
-            )))
-        }
+        Ok(issues)
     }
 }
 

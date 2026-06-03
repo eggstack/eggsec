@@ -1,4 +1,5 @@
 use crate::error::{Result, SlapperError};
+use crate::integrations::common::handle_response_error;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,70 @@ impl JiraClient {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         Self { config, client }
+    }
+
+    fn parse_issue(json: &serde_json::Value) -> Issue {
+        let fields = &json["fields"];
+        let description = fields["description"]["content"][0]["content"][0]["text"]
+            .as_str()
+            .unwrap_or("");
+        if description.is_empty() {
+            tracing::warn!(
+                "Jira: could not parse description from issue {}",
+                json["key"].as_str().unwrap_or("<unknown>")
+            );
+        }
+
+        let labels: Vec<String> = fields["labels"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let severity = fields["priority"]["name"]
+            .as_str()
+            .and_then(|s| match s.to_lowercase().as_str() {
+                "highest" | "blocker" | "critical" => Some(crate::types::Severity::Critical),
+                "high" => Some(crate::types::Severity::High),
+                "medium" | "major" | "normal" => Some(crate::types::Severity::Medium),
+                "low" | "minor" | "trivial" => Some(crate::types::Severity::Low),
+                other => {
+                    tracing::warn!("Jira: unknown severity level '{}'", other);
+                    None
+                }
+            });
+
+        let assignees: Vec<String> = fields["assignee"]
+            .as_object()
+            .and_then(|a| a["displayName"].as_str())
+            .map(|s| vec![s.to_string()])
+            .unwrap_or_default();
+
+        let status = fields["status"]["name"]
+            .as_str()
+            .or_else(|| {
+                tracing::warn!(
+                    "Jira: could not parse status from issue {}",
+                    json["key"].as_str().unwrap_or("<unknown>")
+                );
+                None
+            })
+            .map(String::from);
+
+        Issue {
+            id: json["key"].as_str().map(String::from),
+            title: fields["summary"].as_str().unwrap_or("").to_string(),
+            description: description.to_string(),
+            labels,
+            severity,
+            assignees,
+            status,
+            url: None,
+            created_at: None,
+        }
     }
 }
 
@@ -70,20 +135,12 @@ impl IssueTracker for JiraClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
-            Ok(json["key"].as_str().unwrap_or("JIRA-1").to_string())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "Jira API error {}: {}",
-                status, body
-            )))
-        }
+        let response = handle_response_error(response, "Jira").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+        Ok(json["key"].as_str().unwrap_or("JIRA-1").to_string())
     }
 
     async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
@@ -118,7 +175,7 @@ impl IssueTracker for JiraClient {
 
         let response = self
             .client
-            .post(&url)
+            .put(&url)
             .basic_auth(
                 &self.config.username,
                 Some(self.config.api_token.expose_secret()),
@@ -129,16 +186,8 @@ impl IssueTracker for JiraClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "Jira API error {}: {}",
-                status, body
-            )))
-        }
+        handle_response_error(response, "Jira").await?;
+        Ok(())
     }
 
     async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
@@ -171,16 +220,8 @@ impl IssueTracker for JiraClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "Jira API error {}: {}",
-                status, body
-            )))
-        }
+        handle_response_error(response, "Jira").await?;
+        Ok(())
     }
 
     async fn get_issue(&self, id: &str) -> Result<Issue> {
@@ -197,110 +238,45 @@ impl IssueTracker for JiraClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let response = handle_response_error(response, "Jira").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-            let fields = &json["fields"];
-            let description = fields["description"]["content"][0]["content"][0]["text"]
-                .as_str()
-                .unwrap_or("")
-                .to_string();
-
-            let labels: Vec<String> = fields["labels"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            Ok(Issue {
-                id: json["key"].as_str().map(String::from),
-                title: fields["summary"].as_str().unwrap_or("").to_string(),
-                description,
-                labels,
-                severity: None,
-                assignees: vec![],
-                status: fields["status"].as_str().map(String::from),
-                url: None,
-                created_at: None,
-            })
-        } else {
-            let status = response.status();
-            Err(SlapperError::Network(format!("Jira API error: {}", status)))
-        }
+        Ok(Self::parse_issue(&json))
     }
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
-        let url = format!("{}/rest/api/3/search", self.config.url);
-
-        let body = serde_json::json!({
-            "jql": query,
-            "maxResults": 100
-        });
+        let url = format!(
+            "{}/rest/api/3/search?jql={}&maxResults=100",
+            self.config.url,
+            urlencoding::encode(query)
+        );
 
         let response = self
             .client
-            .post(&url)
+            .get(&url)
             .basic_auth(
                 &self.config.username,
                 Some(self.config.api_token.expose_secret()),
             )
-            .header("Content-Type", "application/json")
-            .json(&body)
             .send()
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let response = handle_response_error(response, "Jira").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-            let issues: Vec<Issue> = json["issues"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|item| {
-                            let fields = item.get("fields")?;
-                            let description = fields["description"]["content"][0]["content"][0]
-                                ["text"]
-                                .as_str()
-                                .unwrap_or("")
-                                .to_string();
-                            Some(Issue {
-                                id: item["key"].as_str().map(String::from),
-                                title: fields["summary"].as_str().unwrap_or("").to_string(),
-                                description,
-                                labels: fields["labels"]
-                                    .as_array()
-                                    .map(|a| {
-                                        a.iter()
-                                            .filter_map(|v| v.as_str().map(String::from))
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                                severity: None,
-                                assignees: vec![],
-                                status: fields["status"]["name"].as_str().map(String::from),
-                                url: None,
-                                created_at: None,
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
+        let issues: Vec<Issue> = json["issues"]
+            .as_array()
+            .map(|arr| arr.iter().map(Self::parse_issue).collect())
+            .unwrap_or_default();
 
-            Ok(issues)
-        } else {
-            let status = response.status();
-            Err(SlapperError::Network(format!("Jira API error: {}", status)))
-        }
+        Ok(issues)
     }
 }
 

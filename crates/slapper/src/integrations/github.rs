@@ -1,4 +1,5 @@
 use crate::error::{Result, SlapperError};
+use crate::integrations::common::handle_response_error;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,55 @@ impl GitHubClient {
             "https://api.github.com/repos/{}/{}{}",
             self.config.owner, self.config.repo, path
         )
+    }
+
+    fn parse_issue(json: &serde_json::Value) -> Issue {
+        let labels: Vec<String> = json["labels"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v["name"].as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let assignees: Vec<String> = json["assignees"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v["login"].as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let status = json["state"]
+            .as_str()
+            .or_else(|| {
+                tracing::warn!(
+                    "GitHub: could not parse state from issue #{}",
+                    json["number"].as_i64().unwrap_or(0)
+                );
+                None
+            })
+            .map(String::from);
+
+        let created_at = json["created_at"].as_str().and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+        });
+
+        Issue {
+            id: json["number"].as_i64().map(|n| n.to_string()),
+            title: json["title"].as_str().unwrap_or("").to_string(),
+            description: json["body"].as_str().unwrap_or("").to_string(),
+            labels,
+            severity: None,
+            assignees,
+            status,
+            url: json["html_url"].as_str().map(String::from),
+            created_at,
+        }
     }
 }
 
@@ -64,21 +114,13 @@ impl IssueTracker for GitHubClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
-            let number = json["number"].as_i64().unwrap_or(1);
-            Ok(format!("#{}", number))
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "GitHub API error {}: {}",
-                status, body
-            )))
-        }
+        let response = handle_response_error(response, "GitHub").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let number = json["number"].as_i64().unwrap_or(1);
+        Ok(format!("#{}", number))
     }
 
     async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
@@ -115,16 +157,8 @@ impl IssueTracker for GitHubClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "GitHub API error {}: {}",
-                status, body
-            )))
-        }
+        handle_response_error(response, "GitHub").await?;
+        Ok(())
     }
 
     async fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
@@ -150,16 +184,8 @@ impl IssueTracker for GitHubClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            Err(SlapperError::Network(format!(
-                "GitHub API error {}: {}",
-                status, body
-            )))
-        }
+        handle_response_error(response, "GitHub").await?;
+        Ok(())
     }
 
     async fn get_issue(&self, id: &str) -> Result<Issue> {
@@ -179,50 +205,13 @@ impl IssueTracker for GitHubClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let response = handle_response_error(response, "GitHub").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-            let labels: Vec<String> = json["labels"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v["name"].as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            Ok(Issue {
-                id: json["number"].as_i64().map(|n| n.to_string()),
-                title: json["title"].as_str().unwrap_or("").to_string(),
-                description: json["body"].as_str().unwrap_or("").to_string(),
-                labels,
-                severity: None,
-                assignees: json["assignees"]
-                    .as_array()
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v["login"].as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                status: None,
-                url: json["html_url"].as_str().map(String::from),
-                created_at: json["created_at"].as_str().and_then(|s| {
-                    chrono::DateTime::parse_from_rfc3339(s)
-                        .ok()
-                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                }),
-            })
-        } else {
-            let status = response.status();
-            Err(SlapperError::Network(format!(
-                "GitHub API error: {}",
-                status
-            )))
-        }
+        Ok(Self::parse_issue(&json))
     }
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
@@ -244,60 +233,18 @@ impl IssueTracker for GitHubClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        if response.status().is_success() {
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| SlapperError::Network(e.to_string()))?;
+        let response = handle_response_error(response, "GitHub").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-            let issues: Vec<Issue> = json["items"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .map(|item| {
-                            let labels: Vec<String> = item["labels"]
-                                .as_array()
-                                .map(|a| {
-                                    a.iter()
-                                        .filter_map(|v| v["name"].as_str().map(String::from))
-                                        .collect()
-                                })
-                                .unwrap_or_default();
-                            Issue {
-                                id: item["number"].as_i64().map(|n| n.to_string()),
-                                title: item["title"].as_str().unwrap_or("").to_string(),
-                                description: item["body"].as_str().unwrap_or("").to_string(),
-                                labels,
-                                severity: None,
-                                assignees: item["assignees"]
-                                    .as_array()
-                                    .map(|a| {
-                                        a.iter()
-                                            .filter_map(|v| v["login"].as_str().map(String::from))
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                                status: None,
-                                url: item["html_url"].as_str().map(String::from),
-                                created_at: item["created_at"].as_str().and_then(|s| {
-                                    chrono::DateTime::parse_from_rfc3339(s)
-                                        .ok()
-                                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                                }),
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
+        let issues: Vec<Issue> = json["items"]
+            .as_array()
+            .map(|arr| arr.iter().map(Self::parse_issue).collect())
+            .unwrap_or_default();
 
-            Ok(issues)
-        } else {
-            let status = response.status();
-            Err(SlapperError::Network(format!(
-                "GitHub API error: {}",
-                status
-            )))
-        }
+        Ok(issues)
     }
 }
 

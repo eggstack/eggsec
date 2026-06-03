@@ -311,8 +311,8 @@ impl TabRender for IntegrationsTab {
             .constraints([Constraint::Length(input_height), Constraint::Min(0)])
             .split(area);
 
-        let Some(input_area) = chunks.get(0) else { return; };
-        let Some(results_area) = chunks.get(1) else { return; };
+        let Some(input_area) = chunks.get(0).copied() else { return; };
+        let Some(results_area) = chunks.get(1).copied() else { return; };
 
         let config_block = Block::default()
             .borders(Borders::ALL)
@@ -324,9 +324,8 @@ impl TabRender for IntegrationsTab {
                     tc!(border)
                 },
             ));
-        f.render_widget(config_block, input_area);
-
         let input_area = config_block.inner(input_area);
+        f.render_widget(config_block, input_area);
 
         let mut sel = self.tracker_selector.clone();
         sel.focused = self.focus_area == IntegrationsFocusArea::Tracker;
