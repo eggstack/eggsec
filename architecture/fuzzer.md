@@ -8,42 +8,90 @@ The Fuzzer is the most advanced part of Slapper, designed to find vulnerabilitie
 
 The core loop that manages targets, payloads, and detections.
 
-- **State Management (`state.rs`)**: Keeps track of progress, discovered vulnerabilities, and session information.
-- **Mutator (`mutator.rs`)**: Applies transformations to payloads (e.g., encoding, truncation, bit-flipping).
-- **Rate Limiting (`rate_limit.rs`)**: Ensures the fuzzer doesn't overwhelm the target or the local network.
-- **Execution Modes**: Sequential (one at a time), Burst (concurrent up to 500), Adaptive (rate-limited)
+- **Core (`core.rs`)**: `FuzzEngine` struct — main entry point, builds HTTP client, manages configuration.
+- **Execution (`execution.rs`)**: Implements Sequential (one at a time), Burst (concurrent), and Adaptive (rate-limited) modes.
+- **Types (`types.rs`)**: `FuzzResult`, `FuzzSession`, `OwaspSummary` and related types.
+- **Utils (`utils.rs`)**: Payload mutation, session building, diffing orchestration, URL construction. Contains `WAF_BLOCKED_STATUS_CODES`.
+- **Chained (`chained.rs`)**: `StatefulFuzzer` for multi-step fuzz chains.
+- **Advanced (`advanced.rs`)**: Engine-level advanced fuzzing orchestration.
 
 ### Payloads (`payloads/`)
 
-Slapper comes with a vast library of payloads for different vulnerability types:
+Slapper comes with a vast library of payloads for different vulnerability types. The `PayloadType` enum defines 30 categories:
 
-- **Injection**: SQLi, XSS, Command Injection, Template Injection.
-- **File System**: Path Traversal, LFI/RFI.
-- **Logic**: Authentication bypass, Parameter Pollution.
-- **Grammar-based Fuzzing (`grammar.rs`)**: Generates structured payloads for complex protocols or data formats.
+- **Injection**: SQLi, XSS, Command Injection, Template Injection, LDAP, XXE, NoSQL, XPath, Expression.
+- **File System**: Path Traversal.
+- **Logic**: Authentication bypass (JWT, OAuth), IDOR, Prototype Pollution, Mass Assignment.
+- **Server-Side**: SSRF, ReDoS, Deserialization, Race Condition.
+- **Client-Side**: Open Redirect, CSV Injection.
+- **API Security**: GraphQL, gRPC, WebSocket, SOAP.
+- **Infrastructure**: Host Header Injection, Cache Poisoning, Compression Bombs, Header Expansion, OAST.
+
+Each payload type has its own module (e.g., `sqli.rs`, `xss.rs`). The `payload_vec!` macro in `macros.rs` builds payload vectors from inline data.
 
 ### Detection (`detection/`)
 
 Algorithms for identifying if a fuzzing attempt was successful.
 
-- **Error-based**: Looking for specific database errors or stack traces.
-- **Boolean-based**: Comparing responses for "True" vs "False" conditions.
-- **Time-based**: Detecting delays that indicate successful injection.
-- **Diffing (`diff.rs`)**: Comparing the response of a fuzzed request against a baseline "clean" request.
+- **Pattern Matching (`aho_corasick.rs`)**: Aho-Corasick multi-pattern matcher for leak detection (database errors, stack traces, file paths, sensitive data, credentials, debug info).
+- **Timing Analysis (`analyzer.rs`)**: `TimingAnalyzer` detects response time anomalies using IQR (Interquartile Range) baselines. Handles NaN values explicitly to prevent panics.
+- **Detection Patterns (`patterns.rs`)**: Raw pattern lists for SQL errors, stack traces, file paths, credentials, AWS keys, and connection strings.
+
+### Diffing (`diff.rs`)
+
+`ResponseDiffer` compares fuzzed responses against a baseline "clean" request. Tracks status changes, header differences, body length anomalies, cookie changes, and timing anomalies with a weighted anomaly score.
+
+### Session Management (`state.rs`)
+
+`HttpSession` tracks cookies, tokens, headers, and state data across requests. `SessionManager` provides async session storage. `AuthHandler` supports Basic, Bearer, API Key, and OAuth2/JWT authentication.
+
+### Mutator (`mutator.rs`)
+
+`Mutator` applies transformations to payloads: case toggle, URL encoding, double URL encoding, null byte injection, duplication, truncation, prefix/suffix addition, comment insertion, whitespace manipulation, reversal, and swapping.
+
+### Rate Limiting (`rate_limit.rs`)
+
+- `AdaptiveRateLimiter`: Adjusts request rate based on consecutive errors (backs off on 429/500+, recovers on success).
+- `RateLimiterTokenBucket`: Token bucket implementation for precise rate control.
+
+### Grammar-based Fuzzing (`grammar.rs`)
+
+`GrammarFuzzer` generates structured payloads from formal grammars supporting JSON, GraphQL, XML, JWT, and SSTI formats. Supports deterministic seeding via `with_seed()`.
+
+### Response Filtering (`filters.rs`)
+
+`FilterChain` applies sequential filters to exclude responses by status code, response size, word count, line count, response time, or regex patterns on the response body. Similar to ffuf's filtering.
+
+### Chained Fuzzing (`chain.rs`)
+
+`ChainExecutor` supports multi-step fuzz chains with variable extraction, conditional logic, and LRU regex caching (cache size 100). `AutoExploiter` automates exploitation chains.
+
+### Calibration (`calibration.rs`)
+
+Auto-calibration system that samples baseline responses before fuzzing to automatically configure filters. Analyzes status codes, response sizes, word counts, line counts, and timing to establish "normal" behavior.
+
+### Targets (`targets/`)
+
+Target-specific payload generation:
+- `apache.rs` - Apache-specific paths and misconfigurations
+- `nginx.rs` - Nginx-specific paths and misconfigurations
+- `php.rs` - PHP-specific payloads
+- `api.rs` - API endpoint discovery
+- `generic.rs` - Generic target payloads
 
 ### WAF Fingerprinting & Bypass (`waf_fingerprint.rs`)
 
-Specialized logic to detect Web Application Firewalls and apply bypass techniques (e.g., specific encodings, header manipulations) automatically.
+`WafFingerprinter` detects Web Application Firewalls via headers, cookies, status codes, and body patterns. Supports 17+ WAF products (Cloudflare, Akamai, AWS WAF, Imperva, F5 ASM, Azure WAF, ModSecurity, etc.) with bypass suggestions.
 
 ## Specialized Fuzzing
 
-- **API Schema Fuzzing (`api_schema/`)**: Automatically generates tests based on OpenAPI (Swagger) or gRPC definitions.
-- **Advanced Threat Hunting (`advanced.rs`)**: Uses more complex patterns to find obscure vulnerabilities.
-- **ReDoS Detection (`redos_detect.rs`)**: Specifically targets Regular Expression Denial of Service vulnerabilities.
+- **API Schema Fuzzing (`api_schema/`)**: Automatically generates tests based on OpenAPI 3.0 (Swagger) definitions. Type-aware payloads, auth bypass, required parameter omission, oversized payload generation.
+- **Advanced Threat Hunting (`advanced.rs`)**: Specialized fuzzers — `GraphQLFuzzer`, `JwtFuzzer`, `OAuthFuzzer`, `IdorFuzzer`, `SstiFuzzer`, `WebSocketFuzzer`, `GrpcFuzzer`.
+- **ReDoS Detection (`redos_detect.rs`)**: `RegexExecutor` with timeout-based detection (default 1000ms, max 100k iterations). `ReDosDetector` checks against known vulnerable patterns. `PayloadReDosChecker` extracts and tests regex patterns from payloads.
 
 ## Feedback Loop
 
-The fuzzer is designed to be "smart," using feedback from the target (e.g., changes in response time or body content) to prioritize certain payloads or mutators.
+The fuzzer is designed to be "smart," using feedback from the target (e.g., changes in response time or body content) to prioritize certain payloads or mutators. The `TimingAnalyzer` maintains running baselines, `PatternMatcher` detects leaks in real-time, and `FilterChain` excludes responses similar to baseline.
 
 ## Code Conventions
 
