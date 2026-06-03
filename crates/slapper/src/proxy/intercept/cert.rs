@@ -7,8 +7,8 @@ use rcgen::{
     BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose,
     KeyPair, SanType,
 };
-use rustc_hash::FxHashMap;
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct CertGenerator {

@@ -6,6 +6,7 @@
 use super::rules::{InterceptRule, RuleAction, RuleSet};
 use crate::error::Result;
 use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
@@ -138,7 +139,7 @@ impl InterceptProxy {
 pub struct InterceptRequest {
     pub method: String,
     pub path: String,
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub body: Option<String>,
     pub host: String,
 }
@@ -146,7 +147,7 @@ pub struct InterceptRequest {
 #[derive(Debug, Clone)]
 pub struct InterceptResponse {
     pub status_code: u16,
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub body: Option<String>,
 }
 
@@ -165,14 +166,14 @@ pub enum InterceptDecision {
 
 #[derive(Debug, Clone)]
 pub struct RequestModification {
-    pub headers: Option<std::collections::HashMap<String, String>>,
+    pub headers: Option<FxHashMap<String, String>>,
     pub path: Option<String>,
     pub body: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ResponseModification {
-    pub headers: Option<std::collections::HashMap<String, String>>,
+    pub headers: Option<FxHashMap<String, String>>,
     pub body: Option<String>,
     pub status_code: Option<u16>,
 }

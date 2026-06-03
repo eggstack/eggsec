@@ -257,7 +257,19 @@ fn parse_request_line(request: &str) -> (&str, &str) {
         .and_then(|line| {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
-                Some((parts.get(1).unwrap_or(&""), parts.get(1).unwrap_or(&"")))
+                let uri = parts[1];
+                if let Some(slash_idx) = uri.find("://") {
+                    let after_scheme = &uri[slash_idx + 3..];
+                    if let Some(path_start) = after_scheme.find('/') {
+                        let host = &after_scheme[..path_start];
+                        let path = &after_scheme[path_start..];
+                        return Some((host, path));
+                    } else {
+                        return Some((after_scheme, "/"));
+                    }
+                }
+                let path = if uri.starts_with('/') { uri } else { "/" };
+                Some(("", path))
             } else {
                 None
             }
@@ -307,5 +319,33 @@ mod tests {
             RuleAction::Block,
         );
         assert!(matches!(rule.action, RuleAction::Block));
+    }
+
+    #[test]
+    fn test_parse_request_line_absolute_uri() {
+        let (host, path) = parse_request_line("GET http://example.com/path HTTP/1.1\r\n");
+        assert_eq!(host, "example.com");
+        assert_eq!(path, "/path");
+    }
+
+    #[test]
+    fn test_parse_request_line_relative_uri() {
+        let (host, path) = parse_request_line("GET /admin HTTP/1.1\r\n");
+        assert_eq!(host, "");
+        assert_eq!(path, "/admin");
+    }
+
+    #[test]
+    fn test_parse_request_line_no_uri() {
+        let (host, path) = parse_request_line("INVALID");
+        assert_eq!(host, "");
+        assert_eq!(path, "");
+    }
+
+    #[test]
+    fn test_parse_request_line_absolute_uri_no_path() {
+        let (host, path) = parse_request_line("GET http://example.com HTTP/1.1\r\n");
+        assert_eq!(host, "example.com");
+        assert_eq!(path, "/");
     }
 }
