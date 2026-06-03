@@ -289,6 +289,31 @@ impl std::fmt::Display for ScanProfile {
     }
 }
 
+impl ScanProfile {
+    /// Returns `true` if this profile is a defense-lab variant that requires
+    /// local/private-scope targets only.
+    pub fn requires_private_scope(&self) -> bool {
+        matches!(
+            self,
+            ScanProfile::DefenseLab
+                | ScanProfile::SynvoidLocal
+                | ScanProfile::WafRegression
+                | ScanProfile::ProtocolEdge
+                | ScanProfile::NseSafe
+        )
+    }
+
+    /// Returns `true` if this profile requires the `packet-inspection` feature.
+    pub fn requires_packet_inspection(&self) -> bool {
+        matches!(self, ScanProfile::ProtocolEdge)
+    }
+
+    /// Returns `true` if this profile requires the `nse` feature.
+    pub fn requires_nse(&self) -> bool {
+        matches!(self, ScanProfile::NseSafe)
+    }
+}
+
 pub use crate::types::OutputFormat;
 
 #[cfg(feature = "grpc-api")]

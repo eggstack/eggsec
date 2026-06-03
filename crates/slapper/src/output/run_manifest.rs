@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::DiffSummary;
 use crate::pipeline::report::PipelineReport;
+use crate::probe::{ProbeIntent, ProbeRisk};
 use crate::types::Severity;
 
 /// Structured summary of a single assessment or defense-lab run.
@@ -38,9 +39,9 @@ pub struct RunManifest {
     /// Profile name (e.g. "defense-lab", "waf-regression").
     pub profile: String,
     /// Probe intent categories exercised during the run.
-    pub probe_intents: Vec<String>,
-    /// Maximum risk tier allowed (e.g. "safe-active", "intrusive").
-    pub risk_budget: String,
+    pub probe_intents: Vec<ProbeIntent>,
+    /// Maximum risk tier allowed for this run.
+    pub risk_budget: ProbeRisk,
     /// Feature flags enabled for this run.
     pub feature_flags: Vec<String>,
     /// Raw probe observations (response codes, latencies, payloads).
@@ -73,7 +74,7 @@ impl RunManifest {
             target_scope,
             profile,
             probe_intents: Vec::new(),
-            risk_budget: "safe-active".to_string(),
+            risk_budget: ProbeRisk::SafeActive,
             feature_flags: Vec::new(),
             observations: Vec::new(),
             findings: Vec::new(),
@@ -136,11 +137,11 @@ impl RunManifest {
             }))
             .collect();
 
-        let probe_intents: Vec<String> = report
+        let probe_intents: Vec<ProbeIntent> = report
             .stage_results
             .iter()
             .filter(|r| r.success)
-            .map(|r| format!("{}", r.stage))
+            .map(|r| r.stage.to_probe_intent())
             .collect();
 
         let feature_flags: Vec<String> = report
@@ -164,7 +165,7 @@ impl RunManifest {
             target_scope: report.target.clone(),
             profile: profile.to_string(),
             probe_intents,
-            risk_budget: "safe-active".to_string(),
+            risk_budget: ProbeRisk::SafeActive,
             feature_flags,
             observations,
             findings: Vec::new(),

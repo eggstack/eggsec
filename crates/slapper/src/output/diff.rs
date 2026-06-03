@@ -186,4 +186,76 @@ mod tests {
         assert_eq!(diff.escalated_findings[0].first_seen, old_time.to_rfc3339());
         assert_eq!(diff.escalated_findings[0].last_seen, new_time.to_rfc3339());
     }
+
+    #[test]
+    fn test_has_regressions_with_high_severity() {
+        let old = AgentFinding::new("rce", Severity::Low, "Critical vuln", "example.com", "/")
+            .with_description("old");
+        let old_id = old.id.clone();
+        let mut old = old;
+        old.timestamp = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let new = AgentFinding::new("rce", Severity::Critical, "Critical vuln", "example.com", "/")
+            .with_description("new");
+        let mut new = new;
+        new.id = old_id;
+        new.timestamp = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 2, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let diff = DiffEngine::compare(&[old], &[new]);
+        assert!(DiffEngine::has_regressions(&diff));
+    }
+
+    #[test]
+    fn test_has_no_regressions_when_no_escalations() {
+        let old = AgentFinding::new("xss", Severity::Medium, "XSS", "example.com", "/")
+            .with_description("old");
+        let old_id = old.id.clone();
+        let mut old = old;
+        old.timestamp = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let new = AgentFinding::new("xss", Severity::Low, "XSS", "example.com", "/")
+            .with_description("new");
+        let mut new = new;
+        new.id = old_id;
+        new.timestamp = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 2, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let diff = DiffEngine::compare(&[old], &[new]);
+        assert!(!DiffEngine::has_regressions(&diff));
+    }
+
+    #[test]
+    fn test_has_no_regressions_when_low_severity_escalation() {
+        let old = AgentFinding::new("info", Severity::Info, "Info", "example.com", "/")
+            .with_description("old");
+        let old_id = old.id.clone();
+        let mut old = old;
+        old.timestamp = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let new = AgentFinding::new("info", Severity::Low, "Info", "example.com", "/")
+            .with_description("new");
+        let mut new = new;
+        new.id = old_id;
+        new.timestamp = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 2, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let diff = DiffEngine::compare(&[old], &[new]);
+        assert!(!DiffEngine::has_regressions(&diff));
+    }
 }

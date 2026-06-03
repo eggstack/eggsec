@@ -170,7 +170,80 @@ impl Pipeline {
         &self.stages
     }
 
+    /// Validate that defense-lab profiles target private/loopback addresses only.
+    fn validate_defense_lab_scope(&self) -> Result<()> {
+        if !self.profile.requires_private_scope() {
+            return Ok(());
+        }
+
+        let target = &self.target;
+        let host = target
+            .strip_prefix("http://")
+            .or_else(|| target.strip_prefix("https://"))
+            .unwrap_or(target);
+        let host = host.split('/').next().unwrap_or(host);
+        let host = host.split(':').next().unwrap_or(host);
+        let host = host
+            .strip_prefix('[')
+            .and_then(|h| h.strip_suffix(']'))
+            .unwrap_or(host);
+
+        let is_private = if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            match ip {
+                std::net::IpAddr::V4(v4) => {
+                    v4.is_loopback()
+                        || v4.is_private()
+                        || v4.octets()[0] == 10
+                        || (v4.octets()[0] == 172 && (15..=31).contains(&v4.octets()[1]))
+                        || (v4.octets()[0] == 192 && v4.octets()[1] == 168)
+                }
+                std::net::IpAddr::V6(v6) => {
+                    v6.is_loopback()
+                        || (v6.segments()[0] & 0xfe00) == 0xfc00
+                        || (v6.segments()[0] & 0xffc0) == 0xfe80
+                }
+            }
+        } else {
+            let lower = host.to_lowercase();
+            lower == "localhost" || lower == "local" || lower.ends_with(".local")
+        };
+
+        if !is_private {
+            return Err(crate::error::SlapperError::ScopeViolation(format!(
+                "Defense-lab profile '{}' requires a local or private-lab target. \
+                 Target '{}' appears to be a public address. Use a localhost or \
+                 private CIDR target (e.g., 127.0.0.1, 10.0.0.0/8, 192.168.0.0/16).",
+                self.profile, self.target
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Validate that required compile-time features are enabled for the selected profile.
+    fn validate_feature_gates(&self) -> Result<()> {
+        if self.profile.requires_packet_inspection() && !cfg!(feature = "packet-inspection") {
+            return Err(crate::error::SlapperError::Config(format!(
+                "Profile '{}' requires the 'packet-inspection' feature. \
+                 Rebuild with: cargo build --features packet-inspection",
+                self.profile
+            )));
+        }
+
+        if self.profile.requires_nse() && !cfg!(feature = "nse") {
+            return Err(crate::error::SlapperError::Config(format!(
+                "Profile '{}' requires the 'nse' feature. \
+                 Rebuild with: cargo build --features nse",
+                self.profile
+            )));
+        }
+
+        Ok(())
+    }
+
     pub async fn run(&self) -> Result<PipelineReport> {
+        self.validate_defense_lab_scope()?;
+        self.validate_feature_gates()?;
         let start = Instant::now();
 
         if self.concurrent_stages {
@@ -258,6 +331,8 @@ impl Pipeline {
     }
 
     async fn run_concurrent(&self) -> Result<PipelineReport> {
+        self.validate_defense_lab_scope()?;
+        self.validate_feature_gates()?;
         let start = Instant::now();
 
         let stage_futures: Vec<_> = self

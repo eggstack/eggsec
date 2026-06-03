@@ -302,7 +302,12 @@ pub struct ScanArgs {
                 - stealth: web scan with randomized timing/header behavior for lab realism\n\
                 - deep: web scan with mutation fuzzing\n\
                 - vuln: CVE-prioritized fuzzing based on detected tech\n\
-                - auth: JWT/OAuth/IDOR security testing"
+                - auth: JWT/OAuth/IDOR security testing\n\
+                - defense-lab: local/private-scope controlled probe suite\n\
+                - synvoid-local: localhost/container/private lab defaults\n\
+                - waf-regression: WAF payload and evasion-resistance regression\n\
+                - protocol-edge: malformed protocol, TCP/TLS/HTTP edge behavior\n\
+                - nse-safe: sandboxed safe/default/version/discovery NSE scripts only"
     )]
     pub profile: super::ScanProfile,
     #[arg(

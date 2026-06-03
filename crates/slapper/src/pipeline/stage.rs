@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::cli::ScanProfile;
+use crate::probe::ProbeIntent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Stage {
@@ -127,6 +128,20 @@ impl Stage {
             _ => None,
         }
     }
+
+    /// Map this stage to its primary probe intent category.
+    pub fn to_probe_intent(self) -> ProbeIntent {
+        match self {
+            Stage::PortScan => ProbeIntent::Discovery,
+            Stage::Fingerprint => ProbeIntent::Fingerprint,
+            Stage::EndpointScan => ProbeIntent::ServiceValidation,
+            Stage::Fuzz => ProbeIntent::EvasionResistance,
+            Stage::LoadTest => ProbeIntent::LoadBearing,
+            Stage::Waf => ProbeIntent::WafEvaluation,
+            Stage::Recon => ProbeIntent::Discovery,
+            Stage::Vuln => ProbeIntent::ServiceValidation,
+        }
+    }
 }
 
 pub fn parse_stages(s: &str) -> Vec<Stage> {
@@ -211,5 +226,85 @@ mod tests {
     fn test_recon_profile() {
         let stages = Stage::from_profile(ScanProfile::Recon);
         assert!(stages.contains(&Stage::Recon));
+    }
+
+    #[test]
+    fn test_defense_lab_profile() {
+        let stages = Stage::from_profile(ScanProfile::DefenseLab);
+        assert_eq!(stages.len(), 5);
+        assert_eq!(stages[0], Stage::PortScan);
+        assert_eq!(stages[1], Stage::Fingerprint);
+        assert_eq!(stages[2], Stage::EndpointScan);
+        assert_eq!(stages[3], Stage::Waf);
+        assert_eq!(stages[4], Stage::Fuzz);
+    }
+
+    #[test]
+    fn test_synvoid_local_profile() {
+        let stages = Stage::from_profile(ScanProfile::SynvoidLocal);
+        assert_eq!(stages.len(), 4);
+        assert_eq!(stages[0], Stage::PortScan);
+        assert_eq!(stages[1], Stage::Fingerprint);
+        assert_eq!(stages[2], Stage::EndpointScan);
+        assert_eq!(stages[3], Stage::Waf);
+    }
+
+    #[test]
+    fn test_waf_regression_profile() {
+        let stages = Stage::from_profile(ScanProfile::WafRegression);
+        assert_eq!(stages.len(), 3);
+        assert_eq!(stages[0], Stage::PortScan);
+        assert_eq!(stages[1], Stage::Fingerprint);
+        assert_eq!(stages[2], Stage::Waf);
+    }
+
+    #[test]
+    fn test_protocol_edge_profile() {
+        let stages = Stage::from_profile(ScanProfile::ProtocolEdge);
+        assert_eq!(stages.len(), 2);
+        assert_eq!(stages[0], Stage::PortScan);
+        assert_eq!(stages[1], Stage::Fingerprint);
+    }
+
+    #[test]
+    fn test_nse_safe_profile() {
+        let stages = Stage::from_profile(ScanProfile::NseSafe);
+        assert_eq!(stages.len(), 3);
+        assert_eq!(stages[0], Stage::PortScan);
+        assert_eq!(stages[1], Stage::Fingerprint);
+        assert_eq!(stages[2], Stage::EndpointScan);
+    }
+
+    #[test]
+    fn test_profile_from_str_defense_lab() {
+        assert_eq!(profile_from_str("defense-lab"), Some(ScanProfile::DefenseLab));
+        assert_eq!(profile_from_str("synvoid-local"), Some(ScanProfile::SynvoidLocal));
+        assert_eq!(profile_from_str("waf-regression"), Some(ScanProfile::WafRegression));
+        assert_eq!(profile_from_str("protocol-edge"), Some(ScanProfile::ProtocolEdge));
+        assert_eq!(profile_from_str("nse-safe"), Some(ScanProfile::NseSafe));
+    }
+
+    #[test]
+    fn test_profile_from_str_case_insensitive() {
+        assert_eq!(profile_from_str("Defense-Lab"), Some(ScanProfile::DefenseLab));
+        assert_eq!(profile_from_str("SYNVOID-LOCAL"), Some(ScanProfile::SynvoidLocal));
+    }
+
+    #[test]
+    fn test_profile_from_str_invalid() {
+        assert_eq!(profile_from_str("nonexistent"), None);
+        assert_eq!(profile_from_str(""), None);
+    }
+
+    #[test]
+    fn test_stage_to_probe_intent() {
+        assert_eq!(Stage::PortScan.to_probe_intent(), ProbeIntent::Discovery);
+        assert_eq!(Stage::Fingerprint.to_probe_intent(), ProbeIntent::Fingerprint);
+        assert_eq!(Stage::EndpointScan.to_probe_intent(), ProbeIntent::ServiceValidation);
+        assert_eq!(Stage::Fuzz.to_probe_intent(), ProbeIntent::EvasionResistance);
+        assert_eq!(Stage::LoadTest.to_probe_intent(), ProbeIntent::LoadBearing);
+        assert_eq!(Stage::Waf.to_probe_intent(), ProbeIntent::WafEvaluation);
+        assert_eq!(Stage::Recon.to_probe_intent(), ProbeIntent::Discovery);
+        assert_eq!(Stage::Vuln.to_probe_intent(), ProbeIntent::ServiceValidation);
     }
 }
