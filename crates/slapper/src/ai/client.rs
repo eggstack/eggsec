@@ -293,14 +293,22 @@ impl AiClient {
             .unwrap_or("")
             .to_string();
 
-        serde_json::json!({
+        let mut normalized = serde_json::json!({
             "choices": [{
                 "message": {
                     "content": text
                 }
             }],
             "provider_response": result
-        })
+        });
+
+        if let Some(usage) = result.get("usage") {
+            if let Some(obj) = normalized.as_object_mut() {
+                obj.insert("usage".to_string(), usage.clone());
+            }
+        }
+
+        normalized
     }
 
     fn extract_content(

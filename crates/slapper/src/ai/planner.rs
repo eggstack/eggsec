@@ -448,6 +448,12 @@ impl AiPlanner {
         None
     }
 
+    /// Record the outcome of a plan execution for learning purposes.
+    ///
+    /// Uses a heuristic to match the plan to cached entries: plans are considered
+    /// equivalent if they have the same `total_tools` count and at least one stage
+    /// name contains the target string. This is a rough proxy — different plans with
+    /// the same tool count and target substring will match the same cache entry.
     pub fn record_outcome(&self, plan: &ExecutionPlan, outcome: &PlanOutcome) {
         let mut cache = self.learning_cache.write();
         let target_lower = outcome.target.to_lowercase();

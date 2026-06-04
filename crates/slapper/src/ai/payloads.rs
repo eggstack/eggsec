@@ -60,6 +60,7 @@ impl Clone for AiPayloadGenerator {
 }
 
 impl AiClient {
+    /// Convert this client into an `AiPayloadGenerator` with default caching (100 entries, 1hr TTL).
     pub fn into_payload_generator(self) -> AiPayloadGenerator {
         AiPayloadGenerator::new(self)
     }

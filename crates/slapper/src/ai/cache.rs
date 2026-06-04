@@ -267,11 +267,15 @@ impl AiCache {
     }
 
     pub async fn cleanup(&self) {
+        let should_persist;
         {
             let mut entries = self.entries.write().await;
             self.evict_expired(&mut entries);
+            should_persist = self.persist_path.is_some();
         }
-        self.persist().await;
+        if should_persist {
+            self.persist().await;
+        }
     }
 
     async fn persist(&self) {
@@ -305,7 +309,8 @@ impl AiCache {
             };
 
             if let Ok(json) = serde_json::to_string(&serialized) {
-                if let Err(e) = std::fs::write(path, json) {
+                let path_clone = path.clone();
+                if let Err(e) = tokio::fs::write(path_clone, json).await {
                     tracing::warn!("Failed to persist AI cache to {:?}: {}", path, e);
                 }
             }

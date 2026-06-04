@@ -9,7 +9,10 @@ Slapper features deep integration with AI models for analysis, payload generatio
 An abstraction layer for interacting with different LLM providers:
 - **Providers**: OpenAI, Azure, Anthropic, OpenAICompatible
 - **Features**: Bearer/Azure auth, circuit breaker, response normalization
-- **Methods**: `chat_completion_from_messages()`, `analyze_findings()`, `analyze_findings_typed()`, `suggest_payloads()`, `suggest_waf_bypass()`
+- **Methods**: `chat_completion_from_messages()`, `analyze_findings()`, `analyze_findings_typed()`, `suggest_payloads()`, `suggest_waf_bypass()`, `into_payload_generator()`
+- **Note**: `chat_completion()` is private — use `chat_completion_from_messages()` instead
+- **AiConfig fields**: `provider`, `model`, `api_key`, `base_url`, `max_tokens`, `temperature`, `max_payloads`, `max_bypasses`
+- **Anthropic normalization**: Anthropic responses are normalized to OpenAI format, with `usage` data preserved at the top level and original response under `provider_response`
 
 ### Adaptive Fuzzing (`adaptive.rs`)
 
@@ -48,13 +51,15 @@ AI-driven execution planning:
 - `AiPlanner::suggest_adjustments()` - Suggests plan modifications
 - `AiPlanner::record_outcome()` - Learns from plan outcomes
 - Learning cache with success rate tracking
+- **Note**: `record_outcome()` uses a heuristic to match plans — plans with the same `total_tools` count and target substring in any stage name are considered equivalent
 
 ### Script Generation (`script_gen.rs`) - Feature-gated `ai-integration`
 
 Generates Python security testing scripts:
 - `generate_waf_bypass_script()`, `generate_payload_script()`, `generate_adaptive_script()`
-- Scripts saved to `generated_scripts/` directory
+- Scripts saved to `{config_dir}/generated_scripts/` with naming convention `script_{vuln_type}_{timestamp}.py`
 - Includes proper headers and metadata
+- **PluginLanguage** enum: `Python`, `Ruby`, `Rust` (only Python is currently implemented)
 
 ## Key Types
 

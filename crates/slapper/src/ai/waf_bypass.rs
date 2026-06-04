@@ -335,6 +335,7 @@ mod tests {
             technique: "encoding".to_string(),
             success: true,
             failed_attempts: 0,
+            last_accessed: 0,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: WafBypassEntry = serde_json::from_str(&json).unwrap();

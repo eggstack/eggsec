@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
 
+/// Target language for generated security testing scripts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PluginLanguage {
     Python,
@@ -99,9 +100,10 @@ impl ScriptGenerator {
             .ok_or(AiError::InvalidResponse)?;
 
         let code = Self::extract_code_block(content, "python")
-            .or_else(|| Some(content.trim().to_string()))
-            .filter(|s| !s.is_empty())
-            .ok_or(AiError::InvalidResponse)?;
+            .unwrap_or_else(|| content.trim().to_string());
+        if code.is_empty() {
+            return Err(AiError::InvalidResponse);
+        }
 
         Ok(GeneratedScript {
             code,
@@ -150,9 +152,10 @@ impl ScriptGenerator {
             .ok_or(AiError::InvalidResponse)?;
 
         let code = Self::extract_code_block(content, "python")
-            .or_else(|| Some(content.trim().to_string()))
-            .filter(|s| !s.is_empty())
-            .ok_or(AiError::InvalidResponse)?;
+            .unwrap_or_else(|| content.trim().to_string());
+        if code.is_empty() {
+            return Err(AiError::InvalidResponse);
+        }
 
         Ok(GeneratedScript {
             code,
@@ -200,9 +203,10 @@ impl ScriptGenerator {
             .ok_or(AiError::InvalidResponse)?;
 
         let code = Self::extract_code_block(content, "python")
-            .or_else(|| Some(content.trim().to_string()))
-            .filter(|s| !s.is_empty())
-            .ok_or(AiError::InvalidResponse)?;
+            .unwrap_or_else(|| content.trim().to_string());
+        if code.is_empty() {
+            return Err(AiError::InvalidResponse);
+        }
 
         Ok(GeneratedScript {
             code,
@@ -218,6 +222,13 @@ impl ScriptGenerator {
         })
     }
 
+    /// Save a generated script to disk.
+    ///
+    /// Files are written to `{config_dir}/generated_scripts/` with the naming
+    /// convention `script_{vuln_type}_{timestamp}.py`. The file includes a
+    /// metadata header with description, version, author, and tags.
+    ///
+    /// Returns the path to the saved file.
     pub fn save_script(&self, script: &GeneratedScript) -> Result<PathBuf> {
         let filename = format!(
             "script_{}_{}.py",
