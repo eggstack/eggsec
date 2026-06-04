@@ -23,30 +23,38 @@ impl AssetCriticality {
     }
 
     pub fn with_technology(mut self, score: f32) -> Self {
-        self.technology_score = score;
+        self.technology_score = Self::clamp_score(score);
         self.recalculate();
         self
     }
 
     pub fn with_environment(mut self, score: f32) -> Self {
-        self.environment_score = score;
+        self.environment_score = Self::clamp_score(score);
         self.recalculate();
         self
     }
 
     pub fn with_data_sensitivity(mut self, score: f32) -> Self {
-        self.data_sensitivity = score;
+        self.data_sensitivity = Self::clamp_score(score);
         self.recalculate();
         self
     }
 
     pub fn with_user_base(mut self, score: f32) -> Self {
-        self.user_base = score;
+        self.user_base = Self::clamp_score(score);
         self.recalculate();
         self
     }
 
+    fn clamp_score(score: f32) -> f32 {
+        score.clamp(0.0, 10.0)
+    }
+
     fn recalculate(&mut self) {
+        self.technology_score = Self::clamp_score(self.technology_score);
+        self.environment_score = Self::clamp_score(self.environment_score);
+        self.data_sensitivity = Self::clamp_score(self.data_sensitivity);
+        self.user_base = Self::clamp_score(self.user_base);
         self.overall_score = (self.technology_score * 0.3
             + self.environment_score * 0.25
             + self.data_sensitivity * 0.3
@@ -83,5 +91,14 @@ mod tests {
             .with_technology(10.0)
             .with_data_sensitivity(10.0);
         assert_eq!(asset.overall_score, 8.0);
+    }
+
+    #[test]
+    fn test_asset_clamps_scores() {
+        let asset = AssetCriticality::new("test")
+            .with_technology(15.0)
+            .with_data_sensitivity(-2.0);
+        assert_eq!(asset.technology_score, 10.0);
+        assert_eq!(asset.data_sensitivity, 0.0);
     }
 }

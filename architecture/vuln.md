@@ -9,8 +9,8 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 | Type | Location | Description |
 |------|----------|-------------|
 | `VulnAssessment` | `vuln/mod.rs:37` | Rich assessment struct with fields: `mode`, `assessed_at`, `cvss_score`, `exploit_info`, `asset_criticality`, `prioritized_findings`, `triage_results`, `remediation_plans`, `summary` |
-| `CvssScore` | `vuln/cvss.rs` | CVSS 3.1 score calculation and vector parsing |
-| `ExploitInfo` | `vuln/exploit.rs` | Exploit availability and maturity information |
+| `CvssScore` | `vuln/cvss.rs` | CVSS 3.1 score calculation with base, temporal, and environmental scores |
+| `ExploitInfo` | `vuln/exploit.rs` | Exploit availability assessment (heuristic based on CVE year) |
 | `AssetCriticality` | `vuln/asset.rs` | Asset criticality scoring |
 | `PrioritizedFinding` | `vuln/prioritizer.rs` | Finding with combined risk score |
 | `PriorityLevel` | `vuln/prioritizer.rs` | Priority classification |
@@ -25,8 +25,8 @@ Vulnerability management and prioritization using CVSS 3.1 scoring, exploitabili
 | File | Description |
 |------|-------------|
 | `mod.rs` | Module root: `VulnAssessment`, re-exports of sub-module types |
-| `cvss.rs` | CVSS 3.1 score calculation and vector parsing |
-| `exploit.rs` | Exploitability assessment (known exploits, weaponization) |
+| `cvss.rs` | CVSS 3.1 base, temporal, and environmental score calculation and vector parsing |
+| `exploit.rs` | Exploitability assessment (heuristic based on CVE year parsing) |
 | `asset.rs` | Asset criticality scoring |
 | `prioritizer.rs` | Combined risk prioritization engine |
 | `triage.rs` | Finding triage workflow |
