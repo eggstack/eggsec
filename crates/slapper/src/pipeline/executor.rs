@@ -745,7 +745,7 @@ impl Pipeline {
                 let severity = match endpoint.status_code {
                     200 => Severity::Medium,
                     301 | 302 => Severity::Low,
-                    401 | 403 => Severity::Medium,
+                    401 | crate::constants::STATUS_FORBIDDEN => Severity::Medium,
                     500..=599 => Severity::High,
                     _ => Severity::Info,
                 };
@@ -841,6 +841,8 @@ impl Default for CommonHttpArgs {
             stealth: false,
             rate_limit: None,
             jitter: None,
+            auth_context: None,
+            auth_role: None,
         }
     }
 }

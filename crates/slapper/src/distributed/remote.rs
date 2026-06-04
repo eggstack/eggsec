@@ -34,6 +34,7 @@ pub struct RemoteListener {
     ip_allowlist: Option<Vec<String>>,
     tls_server: Option<Arc<TlsServer>>,
     task_queue: Arc<TaskQueue>,
+    workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
 }
 
 impl RemoteListener {
@@ -49,6 +50,7 @@ impl RemoteListener {
             ip_allowlist: None,
             tls_server: None,
             task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            workers: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 
@@ -64,6 +66,7 @@ impl RemoteListener {
             ip_allowlist: None,
             tls_server: None,
             task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            workers: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 
@@ -79,6 +82,7 @@ impl RemoteListener {
             ip_allowlist: Some(allowlist),
             tls_server: None,
             task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            workers: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 
@@ -97,6 +101,7 @@ impl RemoteListener {
             ip_allowlist: None,
             tls_server: Some(Arc::new(tls_server)),
             task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            workers: Arc::new(RwLock::new(FxHashMap::default())),
         })
     }
 
@@ -110,6 +115,18 @@ impl RemoteListener {
 
     fn get_capabilities() -> Vec<String> {
         CAPABILITIES.iter().map(|s| s.to_string()).collect()
+    }
+
+    pub async fn get_workers(&self) -> Vec<crate::distributed::WorkerRegistration> {
+        self.workers.read().await.values().cloned().collect()
+    }
+
+    pub async fn get_queue_counts(&self) -> (usize, usize, usize) {
+        (
+            self.task_queue.get_pending_count().await,
+            self.task_queue.get_in_progress_count().await,
+            self.task_queue.get_completed_count().await,
+        )
     }
 
     pub fn shutdown(&self) {
@@ -192,6 +209,24 @@ impl RemoteListener {
             }
         });
 
+        // Periodic stale task reassignment
+        let task_queue = Arc::clone(&self.task_queue);
+        let stale_handle = tokio::spawn(async move {
+            let mut stale_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+            loop {
+                stale_interval.tick().await;
+                let stale_tasks = task_queue
+                    .reassign_stale_tasks(crate::constants::WORKER_STALE_TIMEOUT_SECS)
+                    .await;
+                if !stale_tasks.is_empty() {
+                    tracing::warn!(
+                        count = stale_tasks.len(),
+                        "Reassigned stale tasks from disconnected workers"
+                    );
+                }
+            }
+        });
+
         loop {
             tokio::select! {
                 result = listener.accept() => {
@@ -223,8 +258,9 @@ impl RemoteListener {
                             let connections = Arc::clone(&self.connections);
                             let tls_acceptor = tls_acceptor.clone();
                             let task_queue = Arc::clone(&self.task_queue);
+                            let workers = Arc::clone(&self.workers);
                             let handle = tokio::spawn(async move {
-                                if let Err(e) = Self::handle_connection(stream, addr, psk, connections, tls_acceptor, task_queue).await {
+                                if let Err(e) = Self::handle_connection(stream, addr, psk, connections, tls_acceptor, task_queue, workers).await {
                                     tracing::error!("Connection error: {}", e);
                                 }
                             });
@@ -243,6 +279,7 @@ impl RemoteListener {
                 _ = shutdown_rx.recv() => {
                     tracing::info!("Shutting down listener...");
                     cleanup_handle.abort();
+                    stale_handle.abort();
                     break;
                 }
             }
@@ -258,6 +295,7 @@ impl RemoteListener {
         connections: Arc<RwLock<FxHashSet<String>>>,
         tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
         task_queue: Arc<TaskQueue>,
+        workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
     ) -> Result<()> {
         tracing::info!("Connection from {}", addr);
 
@@ -318,6 +356,9 @@ impl RemoteListener {
             .write_line(&serde_json::to_string(&welcome)?)
             .await?;
 
+        // Track which worker_id is associated with this connection for cleanup
+        let mut connected_worker_id: Option<String> = None;
+
         // Handle commands loop
         let addr_str = addr.to_string();
         loop {
@@ -375,8 +416,9 @@ impl RemoteListener {
                 } => {
                     let claimed_count = capabilities.len();
                     let valid_caps: Vec<String> = capabilities
-                        .into_iter()
+                        .iter()
                         .filter(|cap| CAPABILITIES.contains(&cap.as_str()))
+                        .cloned()
                         .collect();
                     if valid_caps.len() != claimed_count {
                         tracing::warn!(
@@ -384,12 +426,57 @@ impl RemoteListener {
                             "Worker advertised capabilities not in CAPABILITIES list; filtering"
                         );
                     }
+
+                    let cap_types: Vec<crate::distributed::TaskType> = valid_caps
+                        .iter()
+                        .filter_map(|cap| match cap.as_str() {
+                            "PortScan" => Some(crate::distributed::TaskType::PortScan),
+                            "ServiceFingerprint" => Some(crate::distributed::TaskType::ServiceFingerprint),
+                            "EndpointDiscovery" => Some(crate::distributed::TaskType::EndpointDiscovery),
+                            "Fuzz" => Some(crate::distributed::TaskType::Fuzz),
+                            "WafTest" => Some(crate::distributed::TaskType::WafTest),
+                            "LoadTest" => Some(crate::distributed::TaskType::LoadTest),
+                            "Recon" => Some(crate::distributed::TaskType::Recon),
+                            _ => None,
+                        })
+                        .collect();
+
+                    let registration = crate::distributed::WorkerRegistration {
+                        worker_id: id.clone(),
+                        hostname: hostname.clone(),
+                        capabilities: cap_types,
+                        max_concurrency: 10,
+                        status: crate::distributed::WorkerStatus::Idle,
+                        last_heartbeat_secs: Some(chrono::Utc::now().timestamp()),
+                    };
+                    workers.write().await.insert(id.clone(), registration);
+                    connected_worker_id = Some(id.clone());
+                    tracing::info!(worker_id = %id, hostname = %hostname, "Worker registered");
+
                     let response = ResponseMessage::registration(id, hostname, valid_caps);
                     line_writer
                         .write_line(&serde_json::to_string(&response)?)
                         .await?;
                 }
                 CommandMessage::Heartbeat { id, status } => {
+                    // Update worker status in registry
+                    if let Some(worker_id) = &connected_worker_id {
+                        let mut workers_guard = workers.write().await;
+                        if let Some(reg) = workers_guard.get_mut(worker_id) {
+                            reg.last_heartbeat_secs = Some(chrono::Utc::now().timestamp());
+                            // Parse status JSON to update worker state
+                            if let Ok(status_val) = serde_json::from_str::<serde_json::Value>(&status) {
+                                if let Some(status_str) = status_val.get("status").and_then(|v| v.as_str()) {
+                                    reg.status = match status_str {
+                                        "busy" => crate::distributed::WorkerStatus::Busy,
+                                        "idle" => crate::distributed::WorkerStatus::Idle,
+                                        _ => crate::distributed::WorkerStatus::Idle,
+                                    };
+                                }
+                            }
+                        }
+                    }
+
                     let response = ResponseMessage {
                         id,
                         msg_type: "heartbeat_ack".to_string(),
@@ -452,10 +539,71 @@ impl RemoteListener {
                 CommandMessage::AssignTasks { .. } => {
                     // Workers don't receive AssignTasks; this is coordinator-only
                 }
+                CommandMessage::EnqueueTask { id, task } => {
+                    match task_queue.enqueue(task).await {
+                        Ok(()) => {
+                            let response = ResponseMessage {
+                                id,
+                                msg_type: "enqueue_ack".to_string(),
+                                success: true,
+                                output: Some("Task enqueued".to_string()),
+                                error: None,
+                                duration_ms: None,
+                                hostname: None,
+                                capabilities: None,
+                            };
+                            line_writer
+                                .write_line(&serde_json::to_string(&response)?)
+                                .await?;
+                        }
+                        Err(e) => {
+                            let response = ResponseMessage::error(id, e.to_string(), None);
+                            line_writer
+                                .write_line(&serde_json::to_string(&response)?)
+                                .await?;
+                        }
+                    }
+                }
+                CommandMessage::StatusRequest { id } => {
+                    let workers_snapshot: Vec<crate::distributed::WorkerRegistration> =
+                        workers.read().await.values().cloned().collect();
+                    let (pending, in_progress, completed) = (
+                        task_queue.get_pending_count().await,
+                        task_queue.get_in_progress_count().await,
+                        task_queue.get_completed_count().await,
+                    );
+                    let status_data = serde_json::json!({
+                        "workers": workers_snapshot,
+                        "queue": {
+                            "pending": pending,
+                            "in_progress": in_progress,
+                            "completed": completed,
+                        },
+                    });
+                    let response = ResponseMessage {
+                        id,
+                        msg_type: "status".to_string(),
+                        success: true,
+                        output: Some(status_data.to_string()),
+                        error: None,
+                        duration_ms: None,
+                        hostname: None,
+                        capabilities: None,
+                    };
+                    line_writer
+                        .write_line(&serde_json::to_string(&response)?)
+                        .await?;
+                }
             }
         }
 
-        // Cleanup
+        // Cleanup — mark worker as disconnected but keep in registry for status visibility
+        if let Some(worker_id) = &connected_worker_id {
+            if let Some(reg) = workers.write().await.get_mut(worker_id) {
+                reg.status = crate::distributed::WorkerStatus::Disconnected;
+            }
+            tracing::info!(worker_id = %worker_id, "Worker connection closed");
+        }
         connections.write().await.remove(&addr_str);
         tracing::info!(addr = %addr, "Client disconnected");
         Ok(())
@@ -632,7 +780,7 @@ impl RemoteClient {
         let mut line_writer = self.connect_to_coordinator(host, port).await?;
 
         let cmd = CommandMessage::Register {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: worker_id.clone(),
             hostname,
             capabilities,
         };
@@ -937,5 +1085,82 @@ impl RemoteClient {
             response.error,
             response.duration_ms.unwrap_or(0),
         ))
+    }
+
+    pub async fn request_status(
+        &mut self,
+        host: &str,
+        port: u16,
+    ) -> Result<serde_json::Value> {
+        let mut line_writer = self.connect_to_coordinator(host, port).await?;
+
+        let cmd = CommandMessage::StatusRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+        };
+
+        line_writer
+            .write_line(&serde_json::to_string(&cmd)?)
+            .await?;
+
+        let response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| SlapperError::Network("Status request timed out".to_string()))??;
+
+        if !response.success {
+            return Err(SlapperError::Network(
+                response.error.unwrap_or_else(|| "Status request failed".to_string()),
+            ));
+        }
+
+        let data: serde_json::Value = response
+            .output
+            .and_then(|o| serde_json::from_str(&o).ok())
+            .unwrap_or(serde_json::json!({}));
+
+        Ok(data)
+    }
+
+    pub async fn enqueue_task(
+        &mut self,
+        host: &str,
+        port: u16,
+        task: crate::distributed::queue::Task,
+    ) -> Result<()> {
+        let mut line_writer = self.connect_to_coordinator(host, port).await?;
+
+        let cmd = CommandMessage::EnqueueTask {
+            id: uuid::Uuid::new_v4().to_string(),
+            task,
+        };
+
+        line_writer
+            .write_line(&serde_json::to_string(&cmd)?)
+            .await?;
+
+        let response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| SlapperError::Network("Enqueue task response timed out".to_string()))??;
+
+        if !response.success {
+            return Err(SlapperError::Network(
+                response.error.unwrap_or_else(|| "Failed to enqueue task".to_string()),
+            ));
+        }
+
+        Ok(())
     }
 }

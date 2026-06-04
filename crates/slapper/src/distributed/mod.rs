@@ -97,6 +97,8 @@ pub struct WorkerRegistration {
     pub capabilities: Vec<TaskType>,
     pub max_concurrency: usize,
     pub status: WorkerStatus,
+    #[serde(default)]
+    pub last_heartbeat_secs: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

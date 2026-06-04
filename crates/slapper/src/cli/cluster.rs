@@ -30,6 +30,8 @@ pub enum ClusterCommand {
     Coordinator(ClusterCoordinatorArgs),
     #[command(about = "Show cluster status")]
     Status(ClusterStatusArgs),
+    #[command(about = "Enqueue a task for workers to execute")]
+    AddTask(ClusterAddTaskArgs),
 }
 
 #[derive(clap::Args)]
@@ -42,6 +44,8 @@ pub struct ClusterWorkerArgs {
     pub worker_id: Option<String>,
     #[arg(long, help = "Pre-shared key for authentication")]
     pub psk: Option<String>,
+    #[arg(long, default_value = "30", help = "Heartbeat interval in seconds")]
+    pub heartbeat_interval: u64,
 }
 
 #[derive(clap::Args)]
@@ -60,4 +64,20 @@ pub struct ClusterCoordinatorArgs {
 pub struct ClusterStatusArgs {
     #[arg(long, help = "Coordinator address (for remote status)")]
     pub coordinator: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct ClusterAddTaskArgs {
+    #[arg(long, help = "Coordinator address (host:port)")]
+    pub coordinator: String,
+    #[arg(long, help = "Pre-shared key for authentication")]
+    pub psk: Option<String>,
+    #[arg(long, help = "Task type (PortScan, ServiceFingerprint, EndpointDiscovery, Fuzz, WafTest, LoadTest, Recon)")]
+    pub task_type: String,
+    #[arg(long, help = "Target to scan")]
+    pub target: String,
+    #[arg(long, help = "Task payload as JSON string")]
+    pub payload: Option<String>,
+    #[arg(long, help = "Job ID (auto-generated if not set)")]
+    pub job_id: Option<String>,
 }

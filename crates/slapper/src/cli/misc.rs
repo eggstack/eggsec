@@ -129,8 +129,6 @@ pub enum RemoteCommand {
     Cert(CertArgs),
     #[command(about = "Start remote listener")]
     Start(RemoteStartArgs),
-    #[command(about = "Stop remote listener")]
-    Stop,
 }
 
 #[derive(clap::Args)]

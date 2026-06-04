@@ -18,10 +18,6 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                     .to_string(),
             )?;
 
-            println!("Starting worker node...");
-            println!("  Coordinator: {}", worker_args.coordinator);
-            println!("  Workers: {}", worker_args.workers);
-
             let worker_id = worker_args.worker_id.clone().unwrap_or_else(|| {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 let duration = SystemTime::now()
@@ -30,33 +26,34 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                 format!("worker-{}", duration.as_millis())
             });
 
-            let (host, port) = extract_host_and_port(&worker_args.coordinator);
+            let config = crate::distributed::worker::WorkerConfig {
+                worker_id: worker_id.clone(),
+                coordinator_url: worker_args.coordinator.clone(),
+                max_concurrency: worker_args.workers,
+                heartbeat_interval_secs: worker_args.heartbeat_interval,
+            };
 
-            let mut client = RemoteClient::new(psk.clone());
+            println!("Starting worker node...");
+            println!("  Worker ID: {}", worker_id);
+            println!("  Coordinator: {}", worker_args.coordinator);
+            println!("  Max concurrency: {}", worker_args.workers);
+            println!("  Heartbeat interval: {}s", worker_args.heartbeat_interval);
 
-            println!(
-                "Worker '{}' connecting to coordinator at {}:{}",
-                worker_id, host, port
-            );
+            let mut worker = crate::distributed::worker::Worker::new(config, psk);
 
-            let result = client
-                .execute(
-                    &host,
-                    port,
-                    vec!["slapper".to_string(), "--version".to_string()],
-                    Some(30),
-                )
-                .await;
-
-            match result {
-                Ok(_r) => {
-                    eprintln!("[EXPERIMENTAL] Cluster worker mode is not fully implemented.");
-                    println!("Connected to coordinator successfully!");
-                    println!("Worker '{}' ready. Press Ctrl+C to stop.", worker_id);
-                    println!("\nWorker functionality: Use 'slapper remote exec' to execute commands on this worker.");
+            match worker.start().await {
+                Ok(()) => {
+                    println!("Worker '{}' connected and ready. Press Ctrl+C to stop.", worker_id);
                 }
                 Err(e) => {
                     anyhow::bail!("Failed to connect to coordinator: {}. Make sure the coordinator is running with 'slapper cluster coordinator --psk <key>'", e);
+                }
+            }
+
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    println!("\nShutting down worker...");
+                    worker.shutdown();
                 }
             }
         }
@@ -127,21 +124,43 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
                 let mut client = RemoteClient::new(psk);
 
-                match client
-                    .execute(
-                        &host,
-                        port,
-                        vec![
-                            "slapper".to_string(),
-                            "cluster".to_string(),
-                            "status".to_string(),
-                        ],
-                        Some(10),
-                    )
-                    .await
-                {
-                    Ok(r) => {
-                        println!("{}", r.output);
+                match client.request_status(&host, port).await {
+                    Ok(data) => {
+                        println!("\nCluster Status");
+                        println!("==============");
+
+                        if let Some(workers) = data.get("workers").and_then(|w| w.as_array()) {
+                            println!("\nWorkers ({}):", workers.len());
+                            if workers.is_empty() {
+                                println!("  No workers connected.");
+                            } else {
+                                for w in workers {
+                                    let id = w.get("worker_id").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let hostname = w.get("hostname").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let status = w.get("status").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let last_hb = w.get("last_heartbeat_secs").and_then(|v| v.as_i64());
+                                    let hb_ago = last_hb.map(|ts| {
+                                        let now = chrono::Utc::now().timestamp();
+                                        now - ts
+                                    });
+                                    let hb_str = hb_ago
+                                        .map(|ago| format!("{}s ago", ago))
+                                        .unwrap_or_else(|| "never".to_string());
+                                    println!("  {} ({}) — status: {}, last heartbeat: {}", id, hostname, status, hb_str);
+                                }
+                            }
+                        }
+
+                        if let Some(queue) = data.get("queue") {
+                            let pending = queue.get("pending").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let in_progress = queue.get("in_progress").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let completed = queue.get("completed").and_then(|v| v.as_u64()).unwrap_or(0);
+                            println!("\nTask Queue:");
+                            println!("  Pending:     {}", pending);
+                            println!("  In Progress: {}", in_progress);
+                            println!("  Completed:   {}", completed);
+                        }
+                        println!();
                     }
                     Err(e) => {
                         println!("Failed to connect: {}", e);
@@ -154,6 +173,74 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                 println!(
                     "  Then check status with: slapper cluster status --coordinator <address>"
                 );
+            }
+        }
+        ClusterCommand::AddTask(add_args) => {
+            let psk = get_psk_from_args_or_config(
+                add_args.psk.clone(),
+                ctx.config
+                    .remote
+                    .psk
+                    .as_ref()
+                    .map(|s| s.expose_secret().to_string()),
+                "PSK required. Use --psk or set [remote.psk] in config".to_string(),
+            )?;
+
+            let task_type = match add_args.task_type.as_str() {
+                "PortScan" => crate::distributed::TaskType::PortScan,
+                "ServiceFingerprint" => crate::distributed::TaskType::ServiceFingerprint,
+                "EndpointDiscovery" => crate::distributed::TaskType::EndpointDiscovery,
+                "Fuzz" => crate::distributed::TaskType::Fuzz,
+                "WafTest" => crate::distributed::TaskType::WafTest,
+                "LoadTest" => crate::distributed::TaskType::LoadTest,
+                "Recon" => crate::distributed::TaskType::Recon,
+                other => {
+                    anyhow::bail!(
+                        "Invalid task type: '{}'. Must be one of: PortScan, ServiceFingerprint, EndpointDiscovery, Fuzz, WafTest, LoadTest, Recon",
+                        other
+                    );
+                }
+            };
+
+            let payload: rustc_hash::FxHashMap<String, serde_json::Value> =
+                if let Some(payload_str) = &add_args.payload {
+                    serde_json::from_str(payload_str)
+                        .map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?
+                } else {
+                    rustc_hash::FxHashMap::default()
+                };
+
+            let job_id = add_args
+                .job_id
+                .clone()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+            let task = crate::distributed::Task {
+                id: uuid::Uuid::new_v4().to_string(),
+                job_id,
+                task_type,
+                target: add_args.target.clone(),
+                payload,
+                worker_id: None,
+                assigned_at_secs: None,
+            };
+
+            let (host, port) = extract_host_and_port(&add_args.coordinator);
+
+            let mut client = RemoteClient::new(psk);
+
+            println!(
+                "Enqueueing {} task for target '{}'...",
+                add_args.task_type, add_args.target
+            );
+
+            match client.enqueue_task(&host, port, task).await {
+                Ok(()) => {
+                    println!("Task enqueued successfully. Workers will pick it up shortly.");
+                }
+                Err(e) => {
+                    anyhow::bail!("Failed to enqueue task: {}", e);
+                }
             }
         }
     }
@@ -236,10 +323,6 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
                     listener.shutdown();
                 }
             }
-        }
-        RemoteCommand::Stop => {
-            eprintln!("[STUB] Remote stop is not yet implemented.");
-            println!("(Note: This requires a running listener to respond to stop signal)");
         }
     }
 

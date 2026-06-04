@@ -337,3 +337,170 @@ async fn test_generate_psk_unique() {
     assert_eq!(psk1.len(), 64);
     assert_eq!(psk2.len(), 64);
 }
+
+#[tokio::test]
+async fn test_stale_task_reassignment() {
+    let queue = TaskQueue::new(100);
+
+    // Enqueue and dequeue a task (simulating assignment)
+    queue.enqueue(make_task("task-stale", "job-1")).await.unwrap();
+    let task = queue.dequeue("worker-dead").await.unwrap().unwrap();
+    assert_eq!(task.id, "task-stale");
+    assert_eq!(queue.get_in_progress_count().await, 1);
+
+    // Reassign with timeout_secs=-1 so any assigned task is considered stale
+    let stale = queue.reassign_stale_tasks(-1).await;
+    assert_eq!(stale.len(), 1);
+    assert_eq!(stale[0].id, "task-stale");
+    // Task should be back in pending
+    assert_eq!(queue.get_in_progress_count().await, 0);
+    assert_eq!(queue.get_pending_count().await, 1);
+
+    // The reassigned task should have cleared worker_id and assigned_at
+    let requeued = queue.dequeue("worker-2").await.unwrap().unwrap();
+    assert_eq!(requeued.id, "task-stale");
+    assert!(requeued.worker_id.is_some()); // dequeue sets it again
+}
+
+#[tokio::test]
+async fn test_enqueue_task_command() {
+    let psk = "enqueue-psk";
+
+    let listener = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+        listener.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let mut client = RemoteClient::new_plaintext(psk.to_string());
+
+    // First register
+    client
+        .register_worker(
+            "127.0.0.1",
+            port,
+            "worker-enq".to_string(),
+            "test-host".to_string(),
+            vec!["PortScan".to_string()],
+        )
+        .await
+        .unwrap();
+
+    // Enqueue a task
+    let task = make_task("task-enq", "job-enq");
+    client
+        .enqueue_task("127.0.0.1", port, task)
+        .await
+        .unwrap();
+
+    // Request tasks — should get the enqueued task back
+    let tasks = client
+        .request_tasks("127.0.0.1", port, "worker-enq".to_string(), 5)
+        .await
+        .unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].id, "task-enq");
+}
+
+#[tokio::test]
+async fn test_status_request() {
+    let psk = "status-psk";
+
+    let listener = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+        listener.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let mut client = RemoteClient::new_plaintext(psk.to_string());
+
+    // Register a worker
+    client
+        .register_worker(
+            "127.0.0.1",
+            port,
+            "worker-stat".to_string(),
+            "stat-host".to_string(),
+            vec!["PortScan".to_string()],
+        )
+        .await
+        .unwrap();
+
+    // Request status
+    let status = client.request_status("127.0.0.1", port).await.unwrap();
+
+    // Should have workers array and queue object
+    assert!(status.get("workers").is_some());
+    assert!(status.get("queue").is_some());
+
+    let workers = status["workers"].as_array().unwrap();
+    assert_eq!(workers.len(), 1);
+    assert_eq!(workers[0]["worker_id"].as_str().unwrap(), "worker-stat");
+    assert_eq!(workers[0]["hostname"].as_str().unwrap(), "stat-host");
+
+    let queue = &status["queue"];
+    assert_eq!(queue["pending"].as_u64().unwrap(), 0);
+    assert_eq!(queue["in_progress"].as_u64().unwrap(), 0);
+    assert_eq!(queue["completed"].as_u64().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn test_worker_registry_disconnect_cleanup() {
+    let psk = "cleanup-psk";
+
+    let listener = RemoteListener::new(psk.to_string());
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+
+    tokio::spawn(async move {
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = std_listener.local_addr().unwrap().port();
+        let _ = addr_tx.send(port);
+        drop(std_listener);
+        listener.start(port).await.unwrap();
+    });
+
+    let port = addr_rx.await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Connect and register
+    {
+        let mut client = RemoteClient::new_plaintext(psk.to_string());
+        client
+            .register_worker(
+                "127.0.0.1",
+                port,
+                "worker-cleanup".to_string(),
+                "cleanup-host".to_string(),
+                vec!["PortScan".to_string()],
+            )
+            .await
+            .unwrap();
+    } // client dropped — connection closes
+
+    // Give time for cleanup
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // Check status — worker should be marked Disconnected
+    let mut client2 = RemoteClient::new_plaintext(psk.to_string());
+    let status = client2.request_status("127.0.0.1", port).await.unwrap();
+    let workers = status["workers"].as_array().unwrap();
+    assert_eq!(workers.len(), 1);
+    assert_eq!(workers[0]["worker_id"].as_str().unwrap(), "worker-cleanup");
+    assert_eq!(workers[0]["status"].as_str().unwrap(), "Disconnected");
+}

@@ -11,28 +11,13 @@ pub async fn run_load_test(
     requests: u64,
     concurrency: usize,
     timeout: Duration,
-    auth_context_path: Option<String>,
-    auth_role: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
     use crate::loadtest::runner::LoadTestRunner;
 
-    let mut runner =
+    let runner =
         LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
-
-    if let (Some(ref path), Some(ref role)) = (&auth_context_path, &auth_role) {
-        match crate::auth_context::load_auth_context_file(std::path::Path::new(path)) {
-            Ok(ctx) => match crate::auth_context::get_context_entry(&ctx, role) {
-                Ok(entry) => {
-                    tracing::info!("Loaded auth context role '{}' from {}", role, path);
-                    runner.set_auth_context(entry.clone());
-                }
-                Err(e) => tracing::warn!("Failed to resolve auth role: {}", e),
-            },
-            Err(e) => tracing::warn!("Failed to load auth context file: {}", e),
-        }
-    }
 
     if let Err(e) = progress_tx.send((0, requests)).await {
         tracing::warn!("Failed to send initial progress: {}", e);

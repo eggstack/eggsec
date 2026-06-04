@@ -1,35 +1,12 @@
 use crate::distributed::{RemoteClient, Task, TaskResult, TaskType, CAPABILITIES};
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::task::JoinHandle;
 
 const MAX_TASKS_PER_REQUEST: usize = 5;
-
-/// Extract an `AuthContextEntry` from the task payload, if `auth_context_path`
-/// and `auth_role` keys are present.
-fn load_auth_context_from_payload(
-    payload: &FxHashMap<String, serde_json::Value>,
-) -> Option<crate::auth_context::AuthContextEntry> {
-    let path = payload.get("auth_context_path")?.as_str()?;
-    let role = payload.get("auth_role")?.as_str()?;
-    let ctx = crate::auth_context::load_auth_context_file(std::path::Path::new(path))
-        .map_err(|e| {
-            tracing::warn!("Distributed worker: failed to load auth context from {}: {}", path, e);
-            e
-        })
-        .ok()?;
-    crate::auth_context::get_context_entry(&ctx, role)
-        .map_err(|e| {
-            tracing::warn!("Distributed worker: failed to resolve auth role '{}': {}", role, e);
-            e
-        })
-        .cloned()
-        .ok()
-}
 
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
     let url = url
@@ -412,8 +389,6 @@ async fn process_port_scan(task: Task) -> Result<serde_json::Value> {
 
     let parsed_ports = crate::utils::parsing::parse_ports(ports)?;
 
-    let auth_context_entry = load_auth_context_from_payload(&task.payload);
-
     let results = crate::scanner::ports::scan_ports(
         target,
         crate::scanner::ports::PortScanConfig {
@@ -424,7 +399,6 @@ async fn process_port_scan(task: Task) -> Result<serde_json::Value> {
             spoof_config: crate::scanner::spoof::SpoofConfig::default(),
             progress_tx: None,
             max_results: None,
-            auth_context_entry,
         },
     )
     .await?;
@@ -501,8 +475,6 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
         .and_then(|v| v.as_u64())
         .unwrap_or(20) as usize;
 
-    let auth_context_entry = load_auth_context_from_payload(&task.payload);
-
     let results = crate::scanner::endpoints::scan_endpoints(EndpointScanConfig {
         base_url: target.to_string(),
         endpoints: wordlist,
@@ -514,7 +486,6 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
         verify_tls: true,
         progress_tx: None,
         max_results: None,
-        auth_context_entry,
     })
     .await?;
 

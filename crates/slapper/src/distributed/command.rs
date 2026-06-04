@@ -60,6 +60,15 @@ pub enum CommandMessage {
         id: String,
         tasks: Vec<crate::distributed::queue::Task>,
     },
+    #[serde(rename = "enqueue_task")]
+    EnqueueTask {
+        id: String,
+        task: crate::distributed::queue::Task,
+    },
+    #[serde(rename = "status_request")]
+    StatusRequest {
+        id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
