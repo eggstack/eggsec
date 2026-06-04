@@ -161,6 +161,96 @@ impl StressAuthorization {
             },
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn with_stress_scope(stress_scope: StressScope) -> Self {
+        Self {
+            scope: Scope::default(),
+            stress_scope,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_rate_within_limit() {
+        let auth = StressAuthorization::for_tests(true);
+        assert!(auth.verify_rate(50000).is_ok());
+    }
+
+    #[test]
+    fn verify_rate_exceeds_limit() {
+        let auth = StressAuthorization::for_tests(true);
+        let result = auth.verify_rate(200000);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("exceeds maximum allowed rate"));
+    }
+
+    #[test]
+    fn verify_rate_no_limit() {
+        let auth = StressAuthorization::with_stress_scope(StressScope {
+            allow_stress_test: true,
+            max_rate_pps: None,
+            ..StressScope::default()
+        });
+        assert!(auth.verify_rate(u64::MAX).is_ok());
+    }
+
+    #[test]
+    fn verify_duration_within_limit() {
+        let auth = StressAuthorization::for_tests(true);
+        assert!(auth.verify_duration(60).is_ok());
+    }
+
+    #[test]
+    fn verify_duration_exceeds_limit() {
+        let auth = StressAuthorization::for_tests(true);
+        let result = auth.verify_duration(600);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("exceeds maximum allowed duration"));
+    }
+
+    #[test]
+    fn verify_duration_no_limit() {
+        let auth = StressAuthorization::with_stress_scope(StressScope {
+            allow_stress_test: true,
+            max_duration_secs: None,
+            ..StressScope::default()
+        });
+        assert!(auth.verify_duration(u64::MAX).is_ok());
+    }
+
+    #[test]
+    fn verify_target_disallowed() {
+        let mut scope = Scope::default();
+        scope.require_explicit_scope = true;
+        let auth = StressAuthorization {
+            scope,
+            stress_scope: StressScope {
+                allow_stress_test: true,
+                ..StressScope::default()
+            },
+        };
+        let result = auth.verify_target("evil.com");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn verify_target_stress_not_enabled() {
+        let auth = StressAuthorization::with_stress_scope(StressScope {
+            allow_stress_test: false,
+            ..StressScope::default()
+        });
+        let result = auth.verify_target("localhost");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Stress testing is not enabled"));
+    }
 }
 
 pub fn create_example_stress_config() -> String {

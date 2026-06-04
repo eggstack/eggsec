@@ -59,11 +59,15 @@ impl StressMetrics {
 
 impl Clone for StressMetrics {
     fn clone(&self) -> Self {
+        let start_time = std::sync::OnceLock::new();
+        if let Some(t) = self.start_time.get() {
+            let _ = start_time.set(*t);
+        }
         Self {
             packets_sent: AtomicU64::new(self.packets_sent.load(Ordering::Relaxed)),
             bytes_sent: AtomicU64::new(self.bytes_sent.load(Ordering::Relaxed)),
             errors: AtomicU64::new(self.errors.load(Ordering::Relaxed)),
-            start_time: std::sync::OnceLock::new(),
+            start_time,
         }
     }
 }
@@ -152,10 +156,12 @@ mod tests {
     fn test_stress_metrics_clone() {
         let metrics = StressMetrics::new();
         metrics.record_packet(100);
+        metrics.start();
         let cloned = metrics.clone();
         cloned.record_packet(200);
         assert_eq!(metrics.packets_sent(), 1);
-        assert_eq!(cloned.packets_sent(), 1);
+        assert_eq!(cloned.packets_sent(), 2);
+        assert!(cloned.elapsed().as_millis() >= 0);
     }
 
     #[test]

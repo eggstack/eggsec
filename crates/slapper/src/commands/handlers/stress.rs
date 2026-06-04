@@ -67,10 +67,11 @@ pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -
             Ok(())
         }
         Err(e) => {
+            let msg = e.to_string();
             ctx.notify_manager
-                .notify_error(&scan_id, &args.target, &e.to_string())
+                .notify_error(&scan_id, &args.target, &msg)
                 .await;
-            Err(e)
+            anyhow::bail!(msg);
         }
     }
 }

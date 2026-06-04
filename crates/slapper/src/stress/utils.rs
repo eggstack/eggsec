@@ -1,14 +1,16 @@
-#[cfg(all(feature = "stress-testing", unix))]
+#[cfg(feature = "stress-testing")]
 use crate::error::{Result, SlapperError};
+#[cfg(feature = "stress-testing")]
+use std::net::IpAddr;
 #[cfg(all(feature = "stress-testing", unix))]
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet::datalink::{self, Channel::Ethernet, Config, NetworkInterface};
-#[cfg(all(feature = "stress-testing", unix))]
+#[cfg(feature = "stress-testing")]
 use rand::Rng;
 
-#[cfg(all(feature = "stress-testing", unix))]
+#[cfg(feature = "stress-testing")]
 pub async fn resolve_target(target: &str) -> Result<IpAddr> {
     if let Ok(ip) = target.parse::<IpAddr>() {
         return Ok(ip);
@@ -189,7 +191,7 @@ pub fn get_spoofed_source_v6(range: &Option<String>) -> Result<Ipv6Addr> {
     ))
 }
 
-#[cfg(all(feature = "stress-testing", unix))]
+#[cfg(feature = "stress-testing")]
 pub fn generate_payload(size: usize) -> Vec<u8> {
     let mut rng = rand::thread_rng();
     let mut payload = vec![0u8; size];

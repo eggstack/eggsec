@@ -14,6 +14,8 @@ use tokio::net::UdpSocket;
 #[cfg(feature = "stress-testing")]
 use super::metrics::StressMetrics;
 #[cfg(feature = "stress-testing")]
+use super::utils;
+#[cfg(feature = "stress-testing")]
 use super::{StressConfig, StressStats};
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -119,10 +121,10 @@ pub async fn run_udp_flood(
     config: &StressConfig,
     metrics: Arc<StressMetrics>,
 ) -> Result<StressStats> {
-    let target_ip = resolve_target(&config.target).await?;
+    let target_ip = utils::resolve_target(&config.target).await?;
     let target_addr = SocketAddr::new(target_ip, config.port);
 
-    let payload = generate_payload(config.payload_size);
+    let payload = utils::generate_payload(config.payload_size);
 
     metrics.start();
 
@@ -377,20 +379,6 @@ async fn run_udp_flood_standard(
 }
 
 #[cfg(feature = "stress-testing")]
-async fn resolve_target(target: &str) -> Result<IpAddr> {
-    if let Ok(ip) = target.parse::<IpAddr>() {
-        return Ok(ip);
-    }
-
-    let addrs: Vec<_> = tokio::net::lookup_host((target, 0)).await?.collect();
-
-    addrs
-        .first()
-        .map(|a| a.ip())
-        .ok_or_else(|| SlapperError::Runtime(format!("Failed to resolve target: {}", target)))
-}
-
-#[cfg(feature = "stress-testing")]
 async fn create_udp_socket(port: Option<u16>) -> Result<UdpSocket> {
     let socket = if let Some(port) = port {
         UdpSocket::bind(format!("0.0.0.0:{}", port)).await?
@@ -401,14 +389,6 @@ async fn create_udp_socket(port: Option<u16>) -> Result<UdpSocket> {
     socket.set_broadcast(true)?;
 
     Ok(socket)
-}
-
-#[cfg(feature = "stress-testing")]
-fn generate_payload(size: usize) -> Vec<u8> {
-    let mut rng = rand::thread_rng();
-    let mut payload = vec![0u8; size];
-    rng.fill(&mut payload[..]);
-    payload
 }
 
 #[cfg(not(feature = "stress-testing"))]

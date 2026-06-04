@@ -26,7 +26,7 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
     let target_addr = SocketAddr::new(target_ip, config.port);
 
     let interface = utils::get_network_interface()?;
-    let (mut tx, _rx) = utils::create_channel(&interface, "SYN scan")?;
+    let (mut tx, _rx) = utils::create_channel(&interface, "SYN flood")?;
 
     metrics.start();
 

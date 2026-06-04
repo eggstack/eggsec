@@ -3,6 +3,14 @@ use crate::error::{Result, SlapperError};
 #[cfg(all(feature = "stress-testing", unix))]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(all(feature = "stress-testing", unix))]
+use std::time::{Duration, Instant};
+#[cfg(all(feature = "stress-testing", unix))]
+use pnet::packet::ip::IpNextHeaderProtocols;
+#[cfg(all(feature = "stress-testing", unix))]
+use pnet_packet::icmp::echo_request::MutableEchoRequestPacket;
+#[cfg(all(feature = "stress-testing", unix))]
+use pnet_packet::icmp::{IcmpCode, IcmpTypes};
+#[cfg(all(feature = "stress-testing", unix))]
 use pnet_packet::ipv4::MutableIpv4Packet;
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet_packet::ipv6::MutableIpv6Packet;
@@ -25,7 +33,7 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     let target_addr = SocketAddr::new(target_ip, 0);
 
     let interface = utils::get_network_interface()?;
-    let (mut tx, _rx) = utils::create_channel(&interface, "ICMP probe")?;
+    let (mut tx, _rx) = utils::create_channel(&interface, "ICMP flood")?;
 
     let payload_size = config.payload_size.max(ICMP_PAYLOAD_SIZE);
     let payload = utils::generate_payload(payload_size);
