@@ -132,5 +132,95 @@ mod tests {
             weak_passwords_tested: Vec::new(),
         };
         assert!(!result.policy_detected);
+        assert!(result.min_length.is_none());
+        assert!(!result.accepts_weak_passwords);
+        assert!(result.weak_passwords_tested.is_empty());
+    }
+
+    #[test]
+    fn test_password_policy_result_with_policy() {
+        let result = PasswordPolicyResult {
+            target: "http://example.com".to_string(),
+            policy_detected: true,
+            min_length: Some(8),
+            requires_uppercase: true,
+            requires_lowercase: true,
+            requires_digit: true,
+            requires_special: true,
+            accepts_weak_passwords: false,
+            weak_passwords_tested: Vec::new(),
+        };
+        assert!(result.policy_detected);
+        assert_eq!(result.min_length, Some(8));
+        assert!(result.requires_uppercase);
+        assert!(result.requires_lowercase);
+        assert!(result.requires_digit);
+        assert!(result.requires_special);
+        assert!(!result.accepts_weak_passwords);
+    }
+
+    #[test]
+    fn test_password_policy_result_accepts_weak() {
+        let result = PasswordPolicyResult {
+            target: "http://example.com".to_string(),
+            policy_detected: true,
+            min_length: None,
+            requires_uppercase: false,
+            requires_lowercase: false,
+            requires_digit: false,
+            requires_special: false,
+            accepts_weak_passwords: true,
+            weak_passwords_tested: vec![
+                "password".to_string(),
+                "123456".to_string(),
+                "admin".to_string(),
+            ],
+        };
+        assert!(result.accepts_weak_passwords);
+        assert_eq!(result.weak_passwords_tested.len(), 3);
+        assert!(result.weak_passwords_tested.contains(&"password".to_string()));
+        assert!(result.weak_passwords_tested.contains(&"123456".to_string()));
+        assert!(result.weak_passwords_tested.contains(&"admin".to_string()));
+    }
+
+    #[test]
+    fn test_password_policy_result_serialization() {
+        let result = PasswordPolicyResult {
+            target: "http://example.com".to_string(),
+            policy_detected: true,
+            min_length: Some(12),
+            requires_uppercase: true,
+            requires_lowercase: false,
+            requires_digit: true,
+            requires_special: false,
+            accepts_weak_passwords: true,
+            weak_passwords_tested: vec!["test".to_string()],
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: PasswordPolicyResult = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.target, result.target);
+        assert_eq!(deserialized.policy_detected, result.policy_detected);
+        assert_eq!(deserialized.min_length, result.min_length);
+        assert_eq!(deserialized.requires_uppercase, result.requires_uppercase);
+        assert_eq!(deserialized.requires_lowercase, result.requires_lowercase);
+        assert_eq!(deserialized.requires_digit, result.requires_digit);
+        assert_eq!(deserialized.requires_special, result.requires_special);
+        assert_eq!(deserialized.accepts_weak_passwords, result.accepts_weak_passwords);
+        assert_eq!(deserialized.weak_passwords_tested, result.weak_passwords_tested);
+    }
+
+    #[test]
+    fn test_password_policy_tester_creation() {
+        let tester = PasswordPolicyTester::new(10);
+        assert!(tester.is_ok());
+    }
+
+    #[test]
+    fn test_password_policy_tester_creation_various_timeouts() {
+        assert!(PasswordPolicyTester::new(1).is_ok());
+        assert!(PasswordPolicyTester::new(30).is_ok());
+        assert!(PasswordPolicyTester::new(300).is_ok());
     }
 }

@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::types::Severity;
 use crate::utils::create_insecure_http_client;
 use serde::{Deserialize, Serialize};
 
@@ -17,8 +18,6 @@ pub struct MfaBypassMethod {
     pub description: String,
     pub severity: Severity,
 }
-
-pub use crate::types::Severity;
 
 pub struct MfaTester {
     client: reqwest::Client,
