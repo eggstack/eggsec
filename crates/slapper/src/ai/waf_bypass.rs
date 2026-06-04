@@ -86,12 +86,11 @@ impl SmartWafBypass {
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
 
-            self.knowledge_base.sort_by_key(|e| {
-                (
-                    e.failed_attempts >= 3,
-                    e.failed_attempts,
-                    now.saturating_sub(e.last_accessed),
-                )
+            // Evict least useful entries first: most failures, then oldest
+            self.knowledge_base.sort_by(|a, b| {
+                b.failed_attempts
+                    .cmp(&a.failed_attempts)
+                    .then(now.saturating_sub(b.last_accessed).cmp(&now.saturating_sub(a.last_accessed)))
             });
             let keep_count = self.max_knowledge_base_size / 2;
             self.knowledge_base.truncate(keep_count);

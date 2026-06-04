@@ -120,25 +120,25 @@ impl From<AiCacheSerialized> for AiCache {
 
 impl From<&AiCache> for AiCacheSerialized {
     fn from(cache: &AiCache) -> Self {
-        let entries: FxHashMap<String, CacheEntrySer> = cache
-            .entries
-            .blocking_read()
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.clone(),
-                    CacheEntrySer {
-                        value: v.value.clone(),
-                        created_at: v.created_at,
-                        ttl_nanos: v.ttl.as_nanos() as u64,
-                        hit_count: v.hit_count,
-                    },
-                )
-            })
-            .collect();
+        let entries = cache.entries.try_read().map(|guard| {
+            guard
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        CacheEntrySer {
+                            value: v.value.clone(),
+                            created_at: v.created_at,
+                            ttl_nanos: v.ttl.as_nanos() as u64,
+                            hit_count: v.hit_count,
+                        },
+                    )
+                })
+                .collect()
+        });
 
         AiCacheSerialized {
-            entries,
+            entries: entries.unwrap_or_default(),
             max_entries: cache.max_entries,
             default_ttl_nanos: cache.default_ttl.as_nanos() as u64,
         }
@@ -286,26 +286,28 @@ impl AiCache {
                 }
             }
 
-            let entries = self.entries.read().await;
-            let serialized_entries: FxHashMap<String, CacheEntrySer> = entries
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        CacheEntrySer {
-                            value: v.value.clone(),
-                            created_at: v.created_at,
-                            ttl_nanos: v.ttl.as_nanos() as u64,
-                            hit_count: v.hit_count,
-                        },
-                    )
-                })
-                .collect();
+            let serialized = {
+                let entries = self.entries.read().await;
+                let serialized_entries: FxHashMap<String, CacheEntrySer> = entries
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            CacheEntrySer {
+                                value: v.value.clone(),
+                                created_at: v.created_at,
+                                ttl_nanos: v.ttl.as_nanos() as u64,
+                                hit_count: v.hit_count,
+                            },
+                        )
+                    })
+                    .collect();
 
-            let serialized = AiCacheSerialized {
-                entries: serialized_entries,
-                max_entries: self.max_entries,
-                default_ttl_nanos: self.default_ttl.as_nanos() as u64,
+                AiCacheSerialized {
+                    entries: serialized_entries,
+                    max_entries: self.max_entries,
+                    default_ttl_nanos: self.default_ttl.as_nanos() as u64,
+                }
             };
 
             if let Ok(json) = serde_json::to_string(&serialized) {

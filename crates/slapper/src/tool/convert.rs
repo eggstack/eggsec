@@ -352,7 +352,7 @@ mod tests {
                 cve_ids: vec![],
                 remediation: Some("Use parameterized queries".to_string()),
                 references: vec![],
-                metadata: std::collections::HashMap::new(),
+                metadata: rustc_hash::FxHashMap::default(),
             }],
         };
 

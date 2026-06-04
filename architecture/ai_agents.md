@@ -92,6 +92,10 @@ Slapper can run as an agent-readable scanning orchestrator that executes configu
 - **Portfolio (`portfolio.rs`)**: Stores targets, schedules, and scan history metadata.
 - **Constraints (`constraints/`)**: Enforces do-not-do rules, target restrictions, and scan/rate limits.
 - **Skills (`skills.rs`)**: Represents discrete capabilities the agent can employ (e.g., "scan", "fuzz", "recon").
+- **Config Watcher (`config_watcher.rs`)**: Hot-reloading of agent configuration via `ConfigWatcher`.
+- **Logging (`logging.rs`)**: `AgentLogger` with daily rotation and JSON format.
+- **Alerts (`alerts/`)**: Alert routing, aggregation, and channel delivery (Slack, PagerDuty, email, webhook).
+- **Events (`events.rs`)**: Event handler trait and security event types.
 
 ## MCP Integration
 
@@ -197,6 +201,17 @@ impl McpProfilePolicy {
 }
 ```
 
+### Coding Agent Output Schema (`coding_agent_output.rs`)
+
+Typed output schema for the coding-agent profile:
+
+- `CodingAgentFindingReport` - Top-level report with schema version, target, findings, and summary
+- `CodingAgentFinding` - Individual finding with severity, confidence, evidence, and patch relevance
+- `CodingAgentEvidence` - Evidence snippet (raw exploit payloads stripped by default)
+- `CodingAgentSummary` - Aggregated counts by severity
+
+**Patch relevance mapping**: Critical/High → `blocks_merge`, Medium → `should_fix`, Low → `review_manually`
+
 ## Recent Bug Fixes (2026-05-22)
 
 ### AI Module
@@ -220,5 +235,12 @@ impl McpProfilePolicy {
 8. **mod.rs** - Changed test event `severity_counts` to `FxHashMap::default()`
 9. **memory.rs:137** - Added fallback hash-based name when `file_stem()` returns None
 10. **mod.rs:657** - Changed `unwrap_or_default()` to `unwrap_or_else()` with warning log
+
+### MCP Module
+1. **policy.rs** - Fixed CGNAT check dead code: replaced `&& false` with proper 100.64.0.0/10 range check via `is_cgnat()`
+2. **cache.rs** - Replaced `blocking_read()` in `From<&AiCache>` with `try_read()` to prevent tokio runtime panics
+
+### WAF Bypass
+1. **waf_bypass.rs** - Fixed eviction order to evict failed/stale entries first instead of useful entries
 
 See `crates/slapper/src/ai/AGENTS.override.md` for detailed AI patterns and `crates/slapper/src/agent/AGENTS.override.md` for agent patterns.

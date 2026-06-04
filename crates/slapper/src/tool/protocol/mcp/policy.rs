@@ -437,6 +437,12 @@ fn is_metadata_endpoint(target: &str) -> bool {
         || lower.ends_with(".metadata.azure.internal")
 }
 
+/// Check if an IPv4 address is in the CGNAT range (100.64.0.0/10, RFC 6598).
+fn is_cgnat(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    octets[0] == 100 && (octets[1] & 0xC0) == 64
+}
+
 fn is_loopback_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_loopback(),
@@ -451,8 +457,7 @@ fn is_private_ip(ip: IpAddr) -> bool {
                 || v4.is_link_local()
                 || v4.is_broadcast()
                 || v4.is_unspecified()
-                || v4 == Ipv4Addr::new(100, 64, 0, 0) // CGNAT
-                    && false // Don't match the whole range, just specific check
+                || is_cgnat(v4)
         }
         IpAddr::V6(v6) => {
             v6.is_loopback()
