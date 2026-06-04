@@ -377,3 +377,269 @@ pub fn get_payloads() -> Vec<TargetPayload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustc_hash::FxHashMap;
+    use crate::fuzzer::TargetType;
+
+    fn make_test_spec() -> OpenAPISpec {
+        let mut paths = FxHashMap::default();
+        let mut query_params = Vec::new();
+        query_params.push(Parameter {
+            name: "id".to_string(),
+            location: "query".to_string(),
+            required: true,
+            schema: Schema {
+                r#type: Some("integer".to_string()),
+                format: None,
+                properties: None,
+                items: None,
+                enum_values: None,
+                minimum: None,
+                maximum: None,
+                min_length: None,
+                max_length: None,
+                pattern: None,
+                required: None,
+                all_of: None,
+                one_of: None,
+                any_of: None,
+            },
+            description: Some("Resource ID".to_string()),
+        });
+        query_params.push(Parameter {
+            name: "email".to_string(),
+            location: "query".to_string(),
+            required: false,
+            schema: Schema {
+                r#type: Some("string".to_string()),
+                format: Some("email".to_string()),
+                properties: None,
+                items: None,
+                enum_values: None,
+                minimum: None,
+                maximum: None,
+                min_length: None,
+                max_length: None,
+                pattern: None,
+                required: None,
+                all_of: None,
+                one_of: None,
+                any_of: None,
+            },
+            description: None,
+        });
+
+        let get_op = Operation {
+            operation_id: Some("getResource".to_string()),
+            summary: Some("Get resource".to_string()),
+            description: None,
+            parameters: query_params,
+            request_body: None,
+            responses: FxHashMap::default(),
+            security: None,
+            tags: Some(vec!["resources".to_string()]),
+        };
+
+        let post_op = Operation {
+            operation_id: Some("createResource".to_string()),
+            summary: Some("Create resource".to_string()),
+            description: None,
+            parameters: vec![],
+            request_body: Some(RequestBody {
+                required: true,
+                content: FxHashMap::default(),
+            }),
+            responses: FxHashMap::default(),
+            security: None,
+            tags: None,
+        };
+
+        paths.insert(
+            "/api/resource".to_string(),
+            PathItem {
+                get: Some(get_op),
+                post: None,
+                put: None,
+                patch: None,
+                delete: None,
+                options: None,
+                head: None,
+            },
+        );
+        paths.insert(
+            "/api/resource/create".to_string(),
+            PathItem {
+                get: None,
+                post: Some(post_op),
+                put: None,
+                patch: None,
+                delete: None,
+                options: None,
+                head: None,
+            },
+        );
+
+        OpenAPISpec {
+            openapi: "3.0.0".to_string(),
+            info: ApiInfo {
+                title: "Test API".to_string(),
+                version: "1.0.0".to_string(),
+                description: Some("Test API description".to_string()),
+            },
+            servers: vec![Server {
+                url: "http://localhost:8080".to_string(),
+                description: None,
+            }],
+            paths,
+            components: Components {
+                schemas: None,
+                security_schemes: None,
+            },
+        }
+    }
+
+    #[test]
+    fn test_api_get_payloads_count() {
+        let payloads = get_payloads();
+        assert_eq!(payloads.len(), 2);
+    }
+
+    #[test]
+    fn test_api_get_payloads_categories() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert_eq!(p.category, "idor");
+        }
+    }
+
+    #[test]
+    fn test_openapi_fuzzer_construction() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        assert_eq!(fuzzer.base_url, "http://localhost:8080");
+    }
+
+    #[test]
+    fn test_openapi_fuzzer_no_server_default() {
+        let mut spec = make_test_spec();
+        spec.servers = vec![];
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        assert_eq!(fuzzer.base_url, "");
+    }
+
+    #[test]
+    fn test_generate_targets_finds_operations() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let targets = fuzzer.generate_targets();
+        // Should find GET on /api/resource and POST on /api/resource/create
+        assert!(targets.len() >= 2, "should find at least 2 targets, got {}", targets.len());
+
+        let methods: Vec<&str> = targets.iter().map(|t| t.method.as_str()).collect();
+        assert!(methods.contains(&"GET"));
+        assert!(methods.contains(&"POST"));
+    }
+
+    #[test]
+    fn test_generate_targets_includes_fuzz_points() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let targets = fuzzer.generate_targets();
+        let get_target = targets.iter().find(|t| t.method == "GET").expect("GET target should exist");
+        assert_eq!(get_target.fuzz_points.len(), 2);
+        assert_eq!(get_target.fuzz_points[0].name, "id");
+        assert_eq!(get_target.fuzz_points[1].name, "email");
+    }
+
+    #[test]
+    fn test_extract_fuzz_point_types() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let targets = fuzzer.generate_targets();
+        let get_target = targets.iter().find(|t| t.method == "GET").expect("GET target should exist");
+
+        // id is integer
+        assert!(matches!(get_target.fuzz_points[0].fuzz_type, FuzzType::Integer));
+        // email is Email
+        assert!(matches!(get_target.fuzz_points[1].fuzz_type, FuzzType::Email));
+    }
+
+    #[test]
+    fn test_generate_fuzz_payloads_all_types() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+
+        let types = [
+            FuzzType::Integer,
+            FuzzType::String,
+            FuzzType::Email,
+            FuzzType::Url,
+            FuzzType::Uuid,
+            FuzzType::Date,
+            FuzzType::Boolean,
+            FuzzType::Array,
+            FuzzType::Object,
+            FuzzType::Custom("test".to_string()),
+        ];
+
+        for fuzz_type in &types {
+            let payloads = fuzzer.generate_fuzz_payloads(fuzz_type);
+            assert!(!payloads.is_empty(), "payloads for {:?} should not be empty", fuzz_type);
+        }
+    }
+
+    #[test]
+    fn test_generate_fuzz_payloads_integer_edge_cases() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let payloads = fuzzer.generate_fuzz_payloads(&FuzzType::Integer);
+        assert!(payloads.contains(&"0".to_string()));
+        assert!(payloads.contains(&"-1".to_string()));
+        assert!(payloads.contains(&"null".to_string()));
+        assert!(payloads.contains(&"NaN".to_string()));
+    }
+
+    #[test]
+    fn test_generate_fuzz_payloads_string_includes_xss() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let payloads = fuzzer.generate_fuzz_payloads(&FuzzType::String);
+        assert!(payloads.iter().any(|p| p.contains("<script>")));
+    }
+
+    #[test]
+    fn test_generate_fuzz_payloads_url_includes_ssrf() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let payloads = fuzzer.generate_fuzz_payloads(&FuzzType::Url);
+        assert!(payloads.iter().any(|p| p.contains("file:///")));
+        assert!(payloads.iter().any(|p| p.contains("gopher://")));
+    }
+
+    #[test]
+    fn test_openapi_types_display() {
+        assert_eq!(TargetType::Api.to_string(), "api");
+    }
+
+    #[test]
+    fn test_openapi_types_serialize_roundtrip() {
+        let spec = make_test_spec();
+        let json = serde_json::to_string(&spec).unwrap();
+        let parsed: OpenAPISpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.openapi, "3.0.0");
+        assert_eq!(parsed.info.title, "Test API");
+    }
+
+    #[test]
+    fn test_openapi_spec_server_url_used() {
+        let spec = make_test_spec();
+        let fuzzer = OpenAPIFuzzer::new(spec);
+        let targets = fuzzer.generate_targets();
+        for t in &targets {
+            assert!(t.url.starts_with("http://localhost:8080"));
+        }
+    }
+}

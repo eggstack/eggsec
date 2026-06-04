@@ -201,3 +201,72 @@ fn get_weak_comparison_payloads() -> Vec<TargetPayload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_php_payloads_non_empty() {
+        let payloads = get_payloads();
+        assert!(payloads.len() >= 25, "php should have at least 25 payloads, got {}", payloads.len());
+    }
+
+    #[test]
+    fn test_php_categories() {
+        let payloads = get_payloads();
+        let categories: Vec<&str> = payloads.iter().map(|p| p.category.as_str()).collect();
+        assert!(categories.contains(&"php-wrappers"));
+        assert!(categories.contains(&"serialization"));
+        assert!(categories.contains(&"type-juggling"));
+        assert!(categories.contains(&"file-upload"));
+        assert!(categories.contains(&"weak-comparison"));
+    }
+
+    #[test]
+    fn test_php_wrapper_count() {
+        let payloads = get_wrapper_payloads();
+        assert_eq!(payloads.len(), 8);
+    }
+
+    #[test]
+    fn test_php_serialization_count() {
+        let payloads = get_serialization_payloads();
+        assert_eq!(payloads.len(), 5);
+    }
+
+    #[test]
+    fn test_php_type_juggling_count() {
+        let payloads = get_type_juggling_payloads();
+        assert_eq!(payloads.len(), 8);
+    }
+
+    #[test]
+    fn test_php_file_upload_count() {
+        let payloads = get_file_upload_payloads();
+        assert_eq!(payloads.len(), 8);
+    }
+
+    #[test]
+    fn test_php_weak_comparison_count() {
+        let payloads = get_weak_comparison_payloads();
+        assert_eq!(payloads.len(), 4);
+    }
+
+    #[test]
+    fn test_php_all_payloads_have_required_fields() {
+        for p in get_payloads() {
+            assert!(!p.description.is_empty());
+            assert!(!p.category.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_php_wrapper_payloads_include_common_wrappers() {
+        let payloads = get_wrapper_payloads();
+        let payload_strs: Vec<&str> = payloads.iter().map(|p| p.payload.as_str()).collect();
+        assert!(payload_strs.iter().any(|p| p.contains("php://filter")));
+        assert!(payload_strs.iter().any(|p| p.contains("php://input")));
+        assert!(payload_strs.iter().any(|p| p.contains("expect://")));
+    }
+}

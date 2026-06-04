@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 use std::sync::LazyLock;
 
-const REGEX_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(100) };
+const REGEX_CACHE_SIZE: NonZeroUsize = match NonZeroUsize::new(100) {
+    Some(v) => v,
+    None => unreachable!(),
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChainAction {

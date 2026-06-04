@@ -185,3 +185,65 @@ fn get_svn_git_payloads() -> Vec<TargetPayload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generic_payloads_non_empty() {
+        let payloads = get_payloads();
+        assert!(payloads.len() >= 25, "generic should have at least 25 payloads, got {}", payloads.len());
+    }
+
+    #[test]
+    fn test_generic_categories() {
+        let payloads = get_payloads();
+        let categories: Vec<&str> = payloads.iter().map(|p| p.category.as_str()).collect();
+        assert!(categories.contains(&"debug"));
+        assert!(categories.contains(&"info-disclosure"));
+        assert!(categories.contains(&"backup"));
+        assert!(categories.contains(&"vcs"));
+    }
+
+    #[test]
+    fn test_generic_debug_count() {
+        let payloads = get_debug_payloads();
+        assert_eq!(payloads.len(), 6);
+    }
+
+    #[test]
+    fn test_generic_info_disclosure_count() {
+        let payloads = get_info_disclosure_payloads();
+        assert_eq!(payloads.len(), 7);
+    }
+
+    #[test]
+    fn test_generic_backup_count() {
+        let payloads = get_backup_payloads();
+        assert_eq!(payloads.len(), 10);
+    }
+
+    #[test]
+    fn test_generic_vcs_count() {
+        let payloads = get_svn_git_payloads();
+        assert_eq!(payloads.len(), 8);
+    }
+
+    #[test]
+    fn test_generic_all_payloads_have_required_fields() {
+        for p in get_payloads() {
+            assert!(!p.payload.is_empty());
+            assert!(!p.description.is_empty());
+            assert!(!p.category.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_generic_vcs_includes_git_and_svn() {
+        let payloads = get_svn_git_payloads();
+        let payload_strs: Vec<&str> = payloads.iter().map(|p| p.payload.as_str()).collect();
+        assert!(payload_strs.iter().any(|p| p.contains(".git")));
+        assert!(payload_strs.iter().any(|p| p.contains(".svn")));
+    }
+}

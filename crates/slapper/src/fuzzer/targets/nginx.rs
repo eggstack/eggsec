@@ -125,3 +125,57 @@ fn get_chunked_encoding_payloads() -> Vec<TargetPayload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nginx_payloads_non_empty() {
+        let payloads = get_payloads();
+        assert!(payloads.len() >= 15, "nginx should have at least 15 payloads, got {}", payloads.len());
+    }
+
+    #[test]
+    fn test_nginx_categories() {
+        let payloads = get_payloads();
+        let categories: Vec<&str> = payloads.iter().map(|p| p.category.as_str()).collect();
+        assert!(categories.contains(&"off-by-slash"));
+        assert!(categories.contains(&"alias-traversal"));
+        assert!(categories.contains(&"merge-slashes"));
+        assert!(categories.contains(&"http-smuggling"));
+    }
+
+    #[test]
+    fn test_nginx_off_by_slash_count() {
+        let payloads = get_off_by_slash_payloads();
+        assert_eq!(payloads.len(), 6);
+    }
+
+    #[test]
+    fn test_nginx_alias_traversal_count() {
+        let payloads = get_alias_traversal_payloads();
+        assert_eq!(payloads.len(), 5);
+    }
+
+    #[test]
+    fn test_nginx_merge_slashes_count() {
+        let payloads = get_merge_slashes_payloads();
+        assert_eq!(payloads.len(), 4);
+    }
+
+    #[test]
+    fn test_nginx_chunked_encoding_count() {
+        let payloads = get_chunked_encoding_payloads();
+        assert_eq!(payloads.len(), 4);
+    }
+
+    #[test]
+    fn test_nginx_all_payloads_have_required_fields() {
+        for p in get_payloads() {
+            assert!(!p.payload.is_empty());
+            assert!(!p.description.is_empty());
+            assert!(!p.category.is_empty());
+        }
+    }
+}

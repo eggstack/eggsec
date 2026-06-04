@@ -130,3 +130,57 @@ fn get_ssrf_payloads() -> Vec<TargetPayload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apache_payloads_non_empty() {
+        let payloads = get_payloads();
+        assert!(payloads.len() >= 15, "apache should have at least 15 payloads, got {}", payloads.len());
+    }
+
+    #[test]
+    fn test_apache_categories() {
+        let payloads = get_payloads();
+        let categories: Vec<&str> = payloads.iter().map(|p| p.category.as_str()).collect();
+        assert!(categories.contains(&"mod_status"));
+        assert!(categories.contains(&"htaccess-bypass"));
+        assert!(categories.contains(&"path-normalization"));
+        assert!(categories.contains(&"ssrf"));
+    }
+
+    #[test]
+    fn test_apache_mod_status_count() {
+        let payloads = get_mod_status_payloads();
+        assert_eq!(payloads.len(), 5);
+    }
+
+    #[test]
+    fn test_apache_htaccess_bypass_count() {
+        let payloads = get_htaccess_bypass_payloads();
+        assert_eq!(payloads.len(), 6);
+    }
+
+    #[test]
+    fn test_apache_path_normalization_count() {
+        let payloads = get_path_normalization_payloads();
+        assert_eq!(payloads.len(), 6);
+    }
+
+    #[test]
+    fn test_apache_ssrf_count() {
+        let payloads = get_ssrf_payloads();
+        assert_eq!(payloads.len(), 3);
+    }
+
+    #[test]
+    fn test_apache_all_payloads_have_required_fields() {
+        for p in get_payloads() {
+            assert!(!p.payload.is_empty());
+            assert!(!p.description.is_empty());
+            assert!(!p.category.is_empty());
+        }
+    }
+}

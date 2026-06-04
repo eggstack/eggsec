@@ -11,7 +11,7 @@ The core loop that manages targets, payloads, and detections.
 - **Core (`core.rs`)**: `FuzzEngine` struct — main entry point, builds HTTP client, manages configuration.
 - **Execution (`execution.rs`)**: Implements Sequential (one at a time), Burst (concurrent), and Adaptive (rate-limited) modes.
 - **Types (`types.rs`)**: `FuzzResult`, `FuzzSession`, `OwaspSummary` and related types.
-- **Utils (`utils.rs`)**: Payload mutation, session building, diffing orchestration, URL construction. Contains `WAF_BLOCKED_STATUS_CODES`.
+- **Utils (`utils.rs`)**: Payload mutation, session building, diffing orchestration, URL construction. References `crate::constants::waf::BLOCKED_STATUS_CODES` for WAF detection.
 - **Chained (`chained.rs`)**: `StatefulFuzzer` for multi-step fuzz chains.
 - **Advanced (`advanced.rs`)**: Engine-level advanced fuzzing orchestration.
 
@@ -81,7 +81,7 @@ Target-specific payload generation:
 
 ### WAF Fingerprinting & Bypass (`waf_fingerprint.rs`)
 
-`WafFingerprinter` detects Web Application Firewalls via headers, cookies, status codes, and body patterns. Supports 34 WAF products (Cloudflare, Akamai, AWS WAF, Imperva, F5 ASM, Azure WAF, ModSecurity, etc.) with bypass suggestions.
+`WafFingerprinter` detects Web Application Firewalls via headers, cookies, status codes, and body patterns. Supports 17 WAF products (Cloudflare, Akamai, AWS WAF, Imperva, F5 ASM, Azure WAF, FortiWeb, ModSecurity, Sucuri, Incapsula, Barracuda, DenyAll, Radware, Safe3, dotDefender, StackPath, Fastly, CloudFront) with bypass suggestions.
 
 ## Specialized Fuzzing
 
