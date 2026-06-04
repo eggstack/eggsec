@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use super::{Severity, SupplyChainFinding};
+
 /// Dependency manifest type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ManifestType {
@@ -39,17 +41,6 @@ pub struct DiscoveredManifest {
     pub path: String,
     pub manifest_type: ManifestType,
     pub dependency_count: Option<usize>,
-}
-
-/// A supply chain finding
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SupplyChainFinding {
-    pub severity: String,
-    pub category: String,
-    pub title: String,
-    pub description: String,
-    pub file_path: Option<String>,
-    pub line: Option<u32>,
 }
 
 /// Supply chain scan result
@@ -168,6 +159,64 @@ pub fn scan_repo(repo_path: &Path) -> anyhow::Result<SupplyChainScanResult> {
     })
 }
 
+/// Collect package names from all supported manifests in a project directory.
+///
+/// Parses Cargo.toml, package.json, and requirements.txt at the top level
+/// without walking subdirectories.
+pub fn collect_package_names(project_path: &Path) -> anyhow::Result<Vec<String>> {
+    let mut packages = Vec::new();
+
+    let cargo_toml = project_path.join("Cargo.toml");
+    if cargo_toml.exists() {
+        let content = std::fs::read_to_string(&cargo_toml)?;
+        let mut in_deps = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_deps = trimmed == "[dependencies]" || trimmed.starts_with("[dependencies.");
+                continue;
+            }
+            if in_deps && !trimmed.is_empty() && !trimmed.starts_with('#') {
+                if let Some((name, _)) = trimmed.split_once('=') {
+                    packages.push(name.trim().to_string());
+                }
+            }
+        }
+    }
+
+    let package_json = project_path.join("package.json");
+    if package_json.exists() {
+        let content = std::fs::read_to_string(&package_json)?;
+        let json: serde_json::Value = serde_json::from_str(&content)?;
+        if let Some(deps) = json.get("dependencies").and_then(|v| v.as_object()) {
+            for name in deps.keys() {
+                packages.push(name.clone());
+            }
+        }
+    }
+
+    let req_file = project_path.join("requirements.txt");
+    if req_file.exists() {
+        let content = std::fs::read_to_string(&req_file)?;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('-') {
+                continue;
+            }
+            let name = if trimmed.contains("==") {
+                trimmed.split("==").next().unwrap_or(trimmed).trim()
+            } else if trimmed.contains(">=") {
+                trimmed.split(">=").next().unwrap_or(trimmed).trim()
+            } else {
+                trimmed
+            };
+            packages.push(name.to_string());
+        }
+    }
+
+    Ok(packages)
+}
+
 fn count_cargo_toml_deps(path: &Path) -> anyhow::Result<usize> {
     let content = std::fs::read_to_string(path)?;
     let mut count = 0;
@@ -222,12 +271,13 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
             // Check for ADD instead of COPY
             if trimmed.starts_with("ADD ") && !trimmed.contains("http") {
                 findings.push(SupplyChainFinding {
-                    severity: "low".to_string(),
+                    severity: Severity::Low,
                     category: "dockerfile".to_string(),
                     title: "ADD used instead of COPY".to_string(),
                     description:
                         "Prefer COPY over ADD for local file copies to avoid unintended effects"
                             .to_string(),
+                    recommendation: "Replace ADD with COPY for local file operations".to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
@@ -238,11 +288,12 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
                 || (trimmed.starts_with("FROM ") && !trimmed.contains(":"))
             {
                 findings.push(SupplyChainFinding {
-                    severity: "info".to_string(),
+                    severity: Severity::Info,
                     category: "dockerfile".to_string(),
                     title: "Using latest or untagged base image".to_string(),
                     description: "Pin base images to specific versions for reproducibility"
                         .to_string(),
+                    recommendation: "Pin base image to a specific version tag or digest".to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
@@ -252,11 +303,12 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
         // Check for running as root (no USER instruction)
         if !has_user_instruction && !lines.is_empty() {
             findings.push(SupplyChainFinding {
-                severity: "medium".to_string(),
+                severity: Severity::Medium,
                 category: "dockerfile".to_string(),
                 title: "No USER instruction found".to_string(),
                 description: "Container may run as root. Add a USER instruction to run as non-root"
                     .to_string(),
+                recommendation: "Add a USER instruction to run as a non-root user".to_string(),
                 file_path: Some(path.display().to_string()),
                 line: None,
             });
@@ -286,11 +338,12 @@ fn check_github_actions(path: &Path) -> Vec<SupplyChainFinding> {
         // Check for overly broad permissions
         if content.contains("permissions: write-all") || content.contains("permissions: read-all") {
             findings.push(SupplyChainFinding {
-                severity: "medium".to_string(),
+                severity: Severity::Medium,
                 category: "github_actions".to_string(),
                 title: "Overly broad GitHub Actions permissions".to_string(),
                 description: "Workflows with write-all or read-all permissions may be excessive"
                     .to_string(),
+                recommendation: "Restrict permissions to least privilege required".to_string(),
                 file_path: Some(path.display().to_string()),
                 line: None,
             });
@@ -300,10 +353,11 @@ fn check_github_actions(path: &Path) -> Vec<SupplyChainFinding> {
         for (i, line) in content.lines().enumerate() {
             if line.contains("uses:") && !is_pinned_action(line) {
                 findings.push(SupplyChainFinding {
-                    severity: "low".to_string(),
+                    severity: Severity::Low,
                     category: "github_actions".to_string(),
                     title: "Unpinned GitHub Action".to_string(),
                     description: "Pin actions to specific versions or SHA hashes".to_string(),
+                    recommendation: "Pin action to a version tag (e.g., @v4) or SHA hash".to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
@@ -532,5 +586,55 @@ mod tests {
         let result = scan_repo(dir.path()).unwrap();
         assert_eq!(result.manifests.len(), 2);
         assert!(result.dockerfile_found);
+    }
+
+    #[test]
+    fn collect_package_names_cargo() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\nserde = \"1.0\"\ntokio = \"1\"\n\n[dev-dependencies]\nassert_cmd = \"2\"\n",
+        )
+        .unwrap();
+
+        let names = collect_package_names(dir.path()).unwrap();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"serde".to_string()));
+        assert!(names.contains(&"tokio".to_string()));
+    }
+
+    #[test]
+    fn collect_package_names_npm() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("package.json"),
+            r#"{"dependencies": {"express": "^4.18"}}"#,
+        )
+        .unwrap();
+
+        let names = collect_package_names(dir.path()).unwrap();
+        assert_eq!(names, vec!["express"]);
+    }
+
+    #[test]
+    fn collect_package_names_python() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("requirements.txt"),
+            "requests==2.28.0\nflask>=2.0\n# comment\n",
+        )
+        .unwrap();
+
+        let names = collect_package_names(dir.path()).unwrap();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"requests".to_string()));
+        assert!(names.contains(&"flask".to_string()));
+    }
+
+    #[test]
+    fn collect_package_names_empty() {
+        let dir = TempDir::new().unwrap();
+        let names = collect_package_names(dir.path()).unwrap();
+        assert!(names.is_empty());
     }
 }

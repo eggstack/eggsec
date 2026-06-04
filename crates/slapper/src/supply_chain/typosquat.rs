@@ -77,7 +77,6 @@ const WELL_KNOWN_PACKAGES: &[&str] = &[
     "guava",
     "lombok",
     "log4j",
-    "lodash",
     "moment",
     "underscore",
     "async",

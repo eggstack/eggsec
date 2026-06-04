@@ -50,7 +50,11 @@ impl SbomGenerator {
         Self
     }
 
-    pub fn generate_from_cargo(&self, project_path: &str) -> Result<SbomReport> {
+    pub fn generate_from_cargo(
+        &self,
+        project_path: &str,
+        format: SbomFormat,
+    ) -> Result<SbomReport> {
         let cargo_toml = Path::new(project_path).join("Cargo.toml");
         let cargo_lock = Path::new(project_path).join("Cargo.lock");
 
@@ -76,7 +80,7 @@ impl SbomGenerator {
             }
 
             return Ok(SbomReport {
-                format: SbomFormat::CycloneDx,
+                format,
                 project_name,
                 version,
                 generated_at: chrono::Utc::now().to_rfc3339(),
@@ -91,7 +95,11 @@ impl SbomGenerator {
         )))
     }
 
-    pub fn generate_from_npm(&self, project_path: &str) -> Result<SbomReport> {
+    pub fn generate_from_npm(
+        &self,
+        project_path: &str,
+        format: SbomFormat,
+    ) -> Result<SbomReport> {
         let package_json = Path::new(project_path).join("package.json");
         let package_lock = Path::new(project_path).join("package-lock.json");
 
@@ -163,7 +171,7 @@ impl SbomGenerator {
             }
 
             return Ok(SbomReport {
-                format: SbomFormat::CycloneDx,
+                format,
                 project_name,
                 version,
                 generated_at: chrono::Utc::now().to_rfc3339(),
@@ -178,7 +186,11 @@ impl SbomGenerator {
         )))
     }
 
-    pub fn generate_from_requirements(&self, project_path: &str) -> Result<SbomReport> {
+    pub fn generate_from_requirements(
+        &self,
+        project_path: &str,
+        format: SbomFormat,
+    ) -> Result<SbomReport> {
         let req_file = Path::new(project_path).join("requirements.txt");
         if req_file.exists() {
             let content = std::fs::read_to_string(&req_file)?;
@@ -215,7 +227,7 @@ impl SbomGenerator {
             }
 
             return Ok(SbomReport {
-                format: SbomFormat::CycloneDx,
+                format,
                 project_name: project_path
                     .split('/')
                     .next_back()
@@ -488,7 +500,7 @@ criterion = "0.5"
     #[test]
     fn test_generate_from_cargo_missing() {
         let gen = SbomGenerator::new();
-        let result = gen.generate_from_cargo("/nonexistent/path");
+        let result = gen.generate_from_cargo("/nonexistent/path", SbomFormat::CycloneDx);
         assert!(result.is_err());
     }
 

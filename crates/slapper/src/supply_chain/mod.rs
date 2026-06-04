@@ -1,7 +1,7 @@
 //! Supply chain security module
 //!
-//! Provides SBOM generation, typosquatting detection, and vulnerability lookup
-//! for software dependencies.
+//! Provides SBOM generation, typosquatting detection, and repository
+//! manifest/configuration analysis for software dependencies.
 
 pub mod sbom;
 pub mod scanner;
@@ -26,6 +26,8 @@ pub struct SupplyChainFinding {
     pub title: String,
     pub description: String,
     pub recommendation: String,
+    pub file_path: Option<String>,
+    pub line: Option<u32>,
 }
 
 pub use crate::types::Severity;
@@ -42,6 +44,8 @@ mod tests {
             title: "Test".to_string(),
             description: "Test".to_string(),
             recommendation: "Test".to_string(),
+            file_path: None,
+            line: None,
         };
         assert_eq!(finding.category, "SBOM");
     }
