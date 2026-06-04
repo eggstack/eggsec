@@ -43,27 +43,6 @@ pub enum XssSink {
     OnEventHandler,
 }
 
-static SOURCES: &[&str] = &[
-    "location.hash",
-    "location.search",
-    "document.cookie",
-    "document.referrer",
-    "localStorage",
-    "sessionStorage",
-];
-
-static SINKS: &[&str] = &[
-    "innerHTML",
-    "outerHTML",
-    "html()",
-    "document.write",
-    "eval",
-    "setTimeout",
-    "setInterval",
-    "Function",
-    "script.src",
-];
-
 pub async fn scan_dom_xss(
     tab: &headless_chrome::Tab,
     config: &BrowserConfig,
@@ -135,7 +114,7 @@ pub async fn scan_dom_xss(
         let (severity, cvss_score) = calculate_severity(&source, &sink);
 
         findings.push(DomXssFinding {
-            id: format!("xss-{}", uuid::Uuid::new_v4().to_string()[..8].to_string()),
+            id: format!("xss-{}", &uuid::Uuid::new_v4().to_string()[..8]),
             source: source.clone(),
             sink: sink.clone(),
             location: format!("{} (via browser)", target),
@@ -216,11 +195,5 @@ mod tests {
         let config = BrowserConfig::default();
         let findings = scan_dom_xss(&tab, &config).await.unwrap();
         assert!(findings.is_empty());
-    }
-
-    #[test]
-    fn test_xss_source_sink() {
-        assert_eq!(SOURCES.len(), 6);
-        assert_eq!(SINKS.len(), 9);
     }
 }

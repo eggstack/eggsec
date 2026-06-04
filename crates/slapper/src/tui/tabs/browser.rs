@@ -88,7 +88,7 @@ impl BrowserTab {
         BrowserConfig {
             check_dom_xss: self
                 .option_checkboxes
-                .get(0)
+                .first()
                 .map(|cb| cb.checked)
                 .unwrap_or(false),
             discover_spa_routes: self

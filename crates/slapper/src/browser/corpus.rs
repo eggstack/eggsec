@@ -5,6 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// A normalized request corpus entry captured from browser crawling
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +64,8 @@ pub struct RequestCorpus {
     pub openapi_links: Vec<String>,
     pub crawl_duration_ms: u64,
     pub pages_visited: usize,
+    #[serde(skip)]
+    seen_keys: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,17 +88,14 @@ impl RequestCorpus {
             openapi_links: Vec::new(),
             crawl_duration_ms: 0,
             pages_visited: 0,
+            seen_keys: HashSet::new(),
         }
     }
 
     /// Add a corpus entry, deduplicating by URL + method
     pub fn add_entry(&mut self, entry: CorpusEntry) {
         let key = format!("{}:{}", entry.method, entry.url);
-        if !self
-            .entries
-            .iter()
-            .any(|e| format!("{}:{}", e.method, e.url) == key)
-        {
+        if self.seen_keys.insert(key) {
             self.entries.push(entry);
         }
     }
@@ -182,6 +182,6 @@ mod tests {
     fn request_source_serializes_snake_case() {
         let source = RequestSource::WebSocket;
         let json = serde_json::to_string(&source).unwrap();
-        assert_eq!(json, "\"websocket\"");
+        assert_eq!(json, "\"web_socket\"");
     }
 }

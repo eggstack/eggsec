@@ -139,34 +139,29 @@ pub async fn discover_routes(
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let all_paths: HashSet<String> = routes_set.union(&api_set).cloned().collect();
+    let mut all_routes: Vec<SpaRoute> = Vec::new();
 
-    let discovered_routes: Vec<SpaRoute> = all_paths
-        .iter()
-        .filter(|path| {
-            path.starts_with('/') && !path.starts_with("/api/") && !path.starts_with("/rest/")
-        })
-        .map(|path| SpaRoute {
-            path: path.clone(),
-            method: "GET".to_string(),
-            parameters: extract_parameters(path),
-            discovered_via: DiscoveryMethod::Crawl,
-        })
-        .collect();
+    for path in &routes_set {
+        if path.starts_with('/') {
+            all_routes.push(SpaRoute {
+                path: path.clone(),
+                method: "GET".to_string(),
+                parameters: extract_parameters(path),
+                discovered_via: DiscoveryMethod::Crawl,
+            });
+        }
+    }
 
-    let api_routes: Vec<SpaRoute> = all_paths
-        .iter()
-        .filter(|path| path.starts_with("/api/") || path.starts_with("/rest/"))
-        .map(|path| SpaRoute {
-            path: path.clone(),
-            method: "GET".to_string(),
-            parameters: extract_parameters(path),
-            discovered_via: DiscoveryMethod::XhrInterception,
-        })
-        .collect();
-
-    let mut all_routes = discovered_routes;
-    all_routes.extend(api_routes);
+    for path in &api_set {
+        if path.starts_with('/') {
+            all_routes.push(SpaRoute {
+                path: path.clone(),
+                method: "GET".to_string(),
+                parameters: extract_parameters(path),
+                discovered_via: DiscoveryMethod::XhrInterception,
+            });
+        }
+    }
 
     Ok(all_routes)
 }
@@ -178,8 +173,8 @@ fn extract_parameters(path: &str) -> Vec<String> {
     for segment in segments {
         if segment.starts_with('{') && segment.ends_with('}') {
             params.push(segment[1..segment.len() - 1].to_string());
-        } else if segment.starts_with(':') {
-            params.push(segment[1..].to_string());
+        } else if let Some(stripped) = segment.strip_prefix(':') {
+            params.push(stripped.to_string());
         }
     }
 

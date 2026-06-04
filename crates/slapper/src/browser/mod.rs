@@ -99,10 +99,16 @@ async fn capture_requests(tab: &headless_chrome::Tab) -> Result<corpus::RequestC
             });
 
             const graphqlCandidates = [];
-            document.querySelectorAll('script[src]').forEach(s => {
+            document.querySelectorAll('script').forEach(s => {
+                const src = s.getAttribute('src') || '';
                 const text = s.textContent || '';
-                if (text.includes('graphql') || text.includes('gql')) {
-                    graphqlCandidates.push(s.src);
+                if (src.toLowerCase().includes('graphql') || src.toLowerCase().includes('gql')
+                    || text.includes('graphql') || text.includes('gql')
+                    || text.includes('GraphQL')) {
+                    const ref = src || 'inline-script';
+                    if (!graphqlCandidates.includes(ref)) {
+                        graphqlCandidates.push(ref);
+                    }
                 }
             });
 

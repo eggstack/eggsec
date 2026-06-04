@@ -132,59 +132,35 @@ pub async fn check_client_security(
                 }
             }
 
-            const corsHeaders = {};
-            document.querySelectorAll('meta[http-equiv]').forEach(meta => {
-                const httpEquiv = meta.getAttribute('http-equiv');
-                if (httpEquiv && httpEquiv.toLowerCase().startsWith('access-control')) {
-                    corsHeaders[httpEquiv] = meta.getAttribute('content');
-                }
-            });
-
-            const xhr = new XMLHttpRequest();
             try {
-                xhr.open('GET', window.location.href, false);
-                xhr.send();
-            } catch(e) {}
-
-            issues.push({
-                type: 'CORSWildcard',
-                location: window.location.origin,
-                description: 'CORS policy may allow wildcard origins',
-                evidence: 'CORS check requires server-side verification',
-                severity: 'Medium',
-                cvss: 5.3
-            });
-
-            if (window.location.protocol === 'https:') {
-                const conn = performance.getEntriesByType('resource').find(r =>
-                    new URL(r.name).protocol === 'https:'
-                );
-                if (conn) {
-                    const protocols = conn.negotiatedProtocol || 'TLS';
-                    if (protocols.includes('TLS') && (protocols.includes('1.0') || protocols.includes('1.1'))) {
+                const testOrigin = 'https://evil attacker.com';
+                const corsXhr = new XMLHttpRequest();
+                corsXhr.open('GET', window.location.href, false);
+                corsXhr.setRequestHeader('Origin', testOrigin);
+                try {
+                    corsXhr.send();
+                    const acao = corsXhr.getResponseHeader('Access-Control-Allow-Origin');
+                    if (acao === '*') {
                         issues.push({
-                            type: 'WeakCiphers',
-                            location: window.location.hostname,
-                            description: 'Weak TLS protocols detected (TLS 1.0/1.1)',
-                            evidence: `Protocol: ${protocols}`,
+                            type: 'CORSWildcard',
+                            location: window.location.origin,
+                            description: 'CORS policy allows wildcard origins (Access-Control-Allow-Origin: *)',
+                            evidence: 'Server responded with Access-Control-Allow-Origin: *',
+                            severity: 'Medium',
+                            cvss: 5.3
+                        });
+                    } else if (acao === testOrigin) {
+                        issues.push({
+                            type: 'CorsMisconfiguration',
+                            location: window.location.origin,
+                            description: 'CORS policy reflects arbitrary Origin header',
+                            evidence: 'Server reflected attacker-controlled Origin in Access-Control-Allow-Origin',
                             severity: 'High',
-                            cvss: 7.5
+                            cvss: 7.4
                         });
                     }
-                }
-            }
-
-            const securityInfo = window.security || null;
-            if (securityInfo && (securityInfo.rejectedCerts || securityInfo.invalidCert)) {
-                issues.push({
-                    type: 'CertificateIssues',
-                    location: window.location.hostname,
-                    description: 'Certificate validation issues detected',
-                    evidence: 'Invalid or rejected certificate',
-                    severity: 'High',
-                    cvss: 8.1
-                });
-            }
+                } catch(e) {}
+            } catch(e) {}
 
             return issues;
         })()
@@ -245,7 +221,7 @@ pub async fn check_client_security(
         };
 
         issues.push(ClientIssue {
-            id: format!("cs-{}", uuid::Uuid::new_v4().to_string()[..8].to_string()),
+            id: format!("cs-{}", &uuid::Uuid::new_v4().to_string()[..8]),
             issue_type,
             severity,
             location,
@@ -269,6 +245,7 @@ fn get_remediation(issue_type: &str) -> String {
         "DebugMode" => "Disable debug mode in production".to_string(),
         "CSPSourceMap" => "Remove 'unsafe-eval' and 'unsafe-inline' from CSP; use nonces".to_string(),
         "CORSWildcard" => "Replace wildcard CORS origin with specific allowed origins".to_string(),
+        "CorsMisconfiguration" => "Restrict CORS to specific trusted origins; never reflect arbitrary Origin headers".to_string(),
         "WeakCiphers" => "Disable TLS 1.0/1.1 and weak cipher suites; use TLS 1.2+ with strong ciphers".to_string(),
         "CertificateIssues" => "Fix or replace invalid certificates; ensure proper certificate chain".to_string(),
         _ => "Implement proper security controls".to_string(),
