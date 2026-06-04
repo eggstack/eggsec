@@ -36,6 +36,22 @@ impl WorkflowReport {
     }
 
     pub fn calculate_metrics(&mut self) {
+        self.total_findings = self.findings.len();
+        self.open_findings = self
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::Open)
+            .count();
+        self.in_progress_findings = self
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::InProgress)
+            .count();
+        self.resolved_findings = self
+            .findings
+            .iter()
+            .filter(|f| f.status == FindingStatus::Resolved || f.status == FindingStatus::Verified)
+            .count();
         self.sla_violations = self
             .findings
             .iter()
@@ -86,10 +102,12 @@ mod tests {
         // InProgress, should be ignored.
         report.findings.push(make_finding("f4", Severity::Medium, FindingStatus::InProgress, 800));
 
-        report.total_findings = 4;
-        report.open_findings = 2;
         report.calculate_metrics();
 
+        assert_eq!(report.total_findings, 4);
+        assert_eq!(report.open_findings, 2);
+        assert_eq!(report.in_progress_findings, 1);
+        assert_eq!(report.resolved_findings, 1);
         assert_eq!(report.sla_violations, 2);
     }
 
@@ -101,10 +119,10 @@ mod tests {
         // High SLA is 168h. Created 10h ago -> not violated.
         report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
 
-        report.total_findings = 2;
-        report.open_findings = 2;
         report.calculate_metrics();
 
+        assert_eq!(report.total_findings, 2);
+        assert_eq!(report.open_findings, 2);
         assert_eq!(report.sla_violations, 0);
     }
 
@@ -119,22 +137,40 @@ mod tests {
         report.findings.push(make_finding("f3", Severity::Critical, FindingStatus::Resolved, 48));
         // FalsePositive and violated (should not count)
         report.findings.push(make_finding("f4", Severity::High, FindingStatus::FalsePositive, 200));
-        // Verified and violated (should not count)
+        // Verified and violated (should not count as open)
         report.findings.push(make_finding("f5", Severity::Medium, FindingStatus::Verified, 800));
 
-        report.total_findings = 5;
-        report.open_findings = 2;
         report.calculate_metrics();
 
+        assert_eq!(report.total_findings, 5);
+        assert_eq!(report.open_findings, 2);
+        assert_eq!(report.resolved_findings, 2); // Resolved + Verified
         assert_eq!(report.sla_violations, 1);
     }
 
     #[test]
     fn test_sla_violations_empty_findings() {
         let mut report = WorkflowReport::new();
-        report.total_findings = 0;
-        report.open_findings = 0;
         report.calculate_metrics();
+        assert_eq!(report.total_findings, 0);
+        assert_eq!(report.sla_violations, 0);
+    }
+
+    #[test]
+    fn test_calculate_metrics_computes_all_fields() {
+        let mut report = WorkflowReport::new();
+        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 1));
+        report.findings.push(make_finding("f2", Severity::High, FindingStatus::InProgress, 10));
+        report.findings.push(make_finding("f3", Severity::Medium, FindingStatus::Resolved, 20));
+        report.findings.push(make_finding("f4", Severity::Low, FindingStatus::Verified, 30));
+        report.findings.push(make_finding("f5", Severity::Info, FindingStatus::FalsePositive, 40));
+
+        report.calculate_metrics();
+
+        assert_eq!(report.total_findings, 5);
+        assert_eq!(report.open_findings, 1);
+        assert_eq!(report.in_progress_findings, 1);
+        assert_eq!(report.resolved_findings, 2);
         assert_eq!(report.sla_violations, 0);
     }
 }

@@ -14,6 +14,7 @@ impl StatusWorkflow {
                 | (FindingStatus::Resolved, FindingStatus::Verified)
                 | (FindingStatus::Resolved, FindingStatus::Open)
                 | (FindingStatus::Verified, FindingStatus::Open)
+                | (FindingStatus::FalsePositive, FindingStatus::Open)
         )
     }
 
@@ -47,6 +48,10 @@ mod tests {
             &FindingStatus::Resolved,
             &FindingStatus::Verified
         ));
+        assert!(StatusWorkflow::can_transition(
+            &FindingStatus::FalsePositive,
+            &FindingStatus::Open
+        ));
     }
 
     #[test]
@@ -59,5 +64,27 @@ mod tests {
             &FindingStatus::FalsePositive,
             &FindingStatus::InProgress
         ));
+        assert!(!StatusWorkflow::can_transition(
+            &FindingStatus::Verified,
+            &FindingStatus::InProgress
+        ));
+    }
+
+    #[test]
+    fn test_validate_transition_ok() {
+        assert!(StatusWorkflow::validate_transition(
+            &FindingStatus::Open,
+            &FindingStatus::InProgress
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_validate_transition_error() {
+        let result = StatusWorkflow::validate_transition(
+            &FindingStatus::Open,
+            &FindingStatus::Verified,
+        );
+        assert!(result.is_err());
     }
 }

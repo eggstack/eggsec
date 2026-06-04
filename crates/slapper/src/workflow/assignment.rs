@@ -1,4 +1,3 @@
-use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -32,12 +31,12 @@ pub struct AssignmentRequest {
     pub notes: Option<String>,
 }
 
-pub fn assign_finding(request: &AssignmentRequest, assigned_by: &str) -> Result<Assignment> {
-    Ok(Assignment::new(
+pub fn assign_finding(request: &AssignmentRequest, assigned_by: &str) -> Assignment {
+    Assignment::new(
         &request.finding_id,
         &request.user_id,
         assigned_by,
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -49,5 +48,28 @@ mod tests {
         let assignment = Assignment::new("finding-1", "user-1", "admin");
         assert_eq!(assignment.finding_id, "finding-1");
         assert_eq!(assignment.user_id, "user-1");
+        assert_eq!(assignment.assigned_by, "admin");
+        assert!(assignment.notes.is_none());
+    }
+
+    #[test]
+    fn test_assign_finding() {
+        let request = AssignmentRequest {
+            finding_id: "finding-1".to_string(),
+            user_id: "user-1".to_string(),
+            notes: Some("Urgent".to_string()),
+        };
+        let assignment = assign_finding(&request, "admin");
+        assert_eq!(assignment.finding_id, "finding-1");
+        assert_eq!(assignment.user_id, "user-1");
+        assert_eq!(assignment.assigned_by, "admin");
+    }
+
+    #[test]
+    fn test_assignment_has_uuid() {
+        let assignment = Assignment::new("f1", "u1", "a1");
+        assert!(!assignment.id.is_empty());
+        let assignment2 = Assignment::new("f1", "u1", "a1");
+        assert_ne!(assignment.id, assignment2.id);
     }
 }

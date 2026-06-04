@@ -170,22 +170,7 @@ impl WorkflowTab {
         self.results_view.clear();
 
         let mut report = WorkflowReport::new();
-        report.total_findings = findings.len();
-        report.open_findings = findings
-            .iter()
-            .filter(|f| matches!(f.status, FindingStatus::Open))
-            .count();
-        report.in_progress_findings = findings
-            .iter()
-            .filter(|f| matches!(f.status, FindingStatus::InProgress))
-            .count();
-        report.resolved_findings = findings
-            .iter()
-            .filter(|f| {
-                matches!(f.status, FindingStatus::Resolved)
-                    || matches!(f.status, FindingStatus::Verified)
-            })
-            .count();
+        report.findings = findings;
         report.calculate_metrics();
         self.report = Some(report.clone());
 
@@ -203,12 +188,12 @@ impl WorkflowTab {
         )));
         self.results_view.add_line(Line::from(""));
 
-        if !findings.is_empty() {
+        if !report.findings.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 "Findings:",
                 Style::default().fg(tc!(success)),
             )));
-            for f in &findings {
+            for f in &report.findings {
                 let sla = calculate_sla(&f.id, f.severity, f.created_at);
                 let sla_str = if sla.is_violated {
                     "SLA VIOLATED".to_string()
