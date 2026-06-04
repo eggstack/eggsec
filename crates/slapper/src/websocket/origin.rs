@@ -71,7 +71,9 @@ impl OriginTester {
                     result.accepted = true;
                     result.status_code = Some(response.status().as_u16());
                     result.details = format!("Origin '{}' was accepted", origin);
-                    let _ = ws_stream.close(None).await;
+                    if let Err(e) = ws_stream.close(None).await {
+                        tracing::debug!("Failed to close WebSocket stream: {}", e);
+                    }
                 }
                 Err(e) => {
                     result.details = format!("Origin '{}' rejected: {}", origin, e);
