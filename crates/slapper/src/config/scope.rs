@@ -232,8 +232,16 @@ impl ScopeRule {
     pub fn matches(&self, target: &TargetScope) -> bool {
         if let Some(ref cidr) = self.cidr {
             if let Some(ref ip) = target.ip {
-                if let Ok(network) = IpNetwork::from_str(cidr) {
-                    return network.contains(*ip);
+                match IpNetwork::from_str(cidr) {
+                    Ok(network) => return network.contains(*ip),
+                    Err(e) => {
+                        tracing::warn!(
+                            cidr = %cidr,
+                            error = %e,
+                            "Failed to parse CIDR in scope rule, skipping match"
+                        );
+                        return false;
+                    }
                 }
             }
         }
@@ -245,8 +253,16 @@ impl ScopeRule {
 
             if self.pattern.contains('/') {
                 if let Some(ref ip) = target.ip {
-                    if let Ok(network) = IpNetwork::from_str(&self.pattern) {
-                        return network.contains(*ip);
+                    match IpNetwork::from_str(&self.pattern) {
+                        Ok(network) => return network.contains(*ip),
+                        Err(e) => {
+                            tracing::warn!(
+                                pattern = %self.pattern,
+                                error = %e,
+                                "Failed to parse CIDR pattern in scope rule, skipping match"
+                            );
+                            return false;
+                        }
                     }
                 }
             }
@@ -340,7 +356,8 @@ impl TargetScope {
                 .ok_or_else(|| ScopeError::InvalidTarget(target.to_string()))?
                 .to_string();
 
-            return Ok(Self { host, ip: None });
+            let ip = Self::resolve_host(&host).ok();
+            return Ok(Self { host, ip });
         }
 
         if target.contains('/') || target.contains(' ') {
@@ -353,7 +370,9 @@ impl TargetScope {
             return Err(ScopeError::InvalidTarget(target.to_string()));
         }
 
-        Ok(Self { host, ip: None })
+        let ip = Self::resolve_host(&host).ok();
+
+        Ok(Self { host, ip })
     }
 
     fn resolve_host(host: &str) -> Result<IpAddr, ScopeError> {

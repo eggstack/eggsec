@@ -574,6 +574,9 @@ impl SlapperConfig {
         if let Some(ref search) = self.search {
             search.validate()?;
         }
+        for webhook in &self.notifications.webhooks {
+            webhook.validate()?;
+        }
         for (name, profile) in &self.profiles {
             if name.is_empty() {
                 return Err(ConfigError::Validation(
@@ -585,6 +588,9 @@ impl SlapperConfig {
             }
             if let Some(ref scan) = profile.scan {
                 scan.validate()?;
+            }
+            if let Some(ref fuzz) = profile.fuzz {
+                fuzz.validate()?;
             }
         }
         if let Some(ref paths) = self.paths.custom_payloads_dir {

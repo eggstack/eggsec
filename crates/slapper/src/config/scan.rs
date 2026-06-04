@@ -224,3 +224,35 @@ pub struct FuzzProfile {
     pub concurrency: Option<usize>,
     pub timeout_ms: Option<u64>,
 }
+
+impl FuzzProfile {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(concurrency) = self.concurrency {
+            if concurrency == 0 {
+                return Err(ConfigError::Validation(
+                    "fuzz.concurrency cannot be 0 when set".to_string(),
+                ));
+            }
+            if concurrency > 1000 {
+                return Err(ConfigError::Validation(
+                    "fuzz.concurrency cannot exceed 1000".to_string(),
+                ));
+            }
+        }
+        if let Some(timeout) = self.timeout_ms {
+            if timeout == 0 {
+                return Err(ConfigError::Validation(
+                    "fuzz.timeout_ms cannot be 0 when set".to_string(),
+                ));
+            }
+        }
+        for pt in &self.payload_types {
+            if pt.is_empty() {
+                return Err(ConfigError::Validation(
+                    "fuzz.payload_types cannot contain empty strings".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}

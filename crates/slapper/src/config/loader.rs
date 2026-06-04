@@ -86,6 +86,9 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
     })?;
     let scope =
         Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
+    scope
+        .validate()
+        .map_err(|e| anyhow::anyhow!("Scope validation failed: {}", e))?;
     check_config_file_permissions(&canonical_path);
     Ok(scope)
 }
