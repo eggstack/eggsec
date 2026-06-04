@@ -45,8 +45,13 @@ impl KubernetesScanner {
     }
 
     pub fn from_in_cluster_config(timeout_secs: u64) -> Result<Self> {
-        let token =
-            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token").ok();
+        let token = match std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token") {
+            Ok(t) => Some(t),
+            Err(e) => {
+                tracing::warn!("Failed to read service account token: {} - in-cluster auth unavailable", e);
+                None
+            }
+        };
         let api_server = std::env::var("KUBERNETES_SERVICE_HOST")
             .map(|h| format!("https://{}", h))
             .unwrap_or_else(|_| "https://kubernetes.default.svc".to_string());

@@ -253,7 +253,14 @@ impl DockerScanner {
                     Ok(serde_json::Value::Object(serde_json::Map::new()))
                 }
             }
-            _ => Ok(serde_json::Value::Object(serde_json::Map::new())),
+            Ok(_) => {
+                tracing::debug!("docker inspect returned non-success for {}", image_name);
+                Ok(serde_json::Value::Object(serde_json::Map::new()))
+            }
+            Err(e) => {
+                tracing::warn!("Failed to inspect docker image {}: {}", image_name, e);
+                Ok(serde_json::Value::Object(serde_json::Map::new()))
+            }
         }
     }
 

@@ -106,7 +106,7 @@ impl EscapeDetector {
             "SYS_MODULE",
         ];
         for cap in &dangerous_caps {
-            if upper_contains(&lower, cap) {
+            if lower_contains(&lower, cap) {
                 risks.push(EscapeRisk {
                     risk_type: format!("Dangerous capability: {}", cap),
                     severity: Severity::High,
@@ -161,7 +161,7 @@ impl EscapeDetector {
     }
 }
 
-fn upper_contains(haystack: &str, needle: &str) -> bool {
+fn lower_contains(haystack: &str, needle: &str) -> bool {
     haystack.contains(&needle.to_lowercase())
 }
 
