@@ -266,6 +266,7 @@ impl From<&str> for SensitiveString {
 ///     check_config_file_permissions(&path);
 /// }
 /// ```
+#[cfg(unix)]
 pub fn check_config_file_permissions(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
 
@@ -301,6 +302,9 @@ pub fn check_config_file_permissions(path: &Path) {
         );
     }
 }
+
+#[cfg(not(unix))]
+pub fn check_config_file_permissions(_path: &Path) {}
 
 /// Canonical output format for reports and CLI output.
 ///
