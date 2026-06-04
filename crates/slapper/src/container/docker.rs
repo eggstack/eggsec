@@ -8,7 +8,6 @@ pub struct DockerScanResult {
     pub image_name: String,
     pub base_image: Option<String>,
     pub layers: Vec<ImageLayer>,
-    pub vulnerabilities: Vec<DockerVulnerability>,
     pub misconfigurations: Vec<DockerMisconfiguration>,
     pub exposed_ports: Vec<u16>,
     pub running_as_root: bool,
@@ -20,15 +19,6 @@ pub struct ImageLayer {
     pub layer_id: String,
     pub instruction: String,
     pub size_bytes: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DockerVulnerability {
-    pub package: String,
-    pub installed_version: String,
-    pub fixed_version: Option<String>,
-    pub cve_id: String,
-    pub severity: Severity,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,7 +47,6 @@ impl DockerScanner {
             image_name: image_name.to_string(),
             base_image: None,
             layers: Vec::new(),
-            vulnerabilities: Vec::new(),
             misconfigurations: Vec::new(),
             exposed_ports: Vec::new(),
             running_as_root: false,
@@ -113,6 +102,7 @@ impl DockerScanner {
             }
 
             if trimmed.starts_with("FROM ")
+                && !trimmed.to_lowercase().contains("scratch")
                 && (trimmed.contains("latest") || trimmed.split(':').count() == 1)
             {
                 issues.push(DockerMisconfiguration {

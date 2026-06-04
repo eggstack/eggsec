@@ -98,9 +98,11 @@ impl CisBenchmarkChecker {
             id: "1.1".to_string(),
             description: "Do not run containers as root".to_string(),
             severity: Severity::High,
-            status: if lower.contains("user")
+            status: if (lower.contains("user ") || lower.contains("user:"))
                 && !lower.contains("user root")
                 && !lower.contains("user 0")
+                && !lower.contains("user:root")
+                && !lower.contains("user:0")
             {
                 CisCheckStatus::Pass
             } else {
@@ -173,11 +175,22 @@ impl CisBenchmarkChecker {
             id: "1.7".to_string(),
             description: "Do not map container ports to privileged host ports".to_string(),
             severity: Severity::Medium,
-            status: if lower.contains("-p 0:") || lower.contains("-p 1:") || lower.contains("-p 2:")
-            {
-                CisCheckStatus::Fail
-            } else {
-                CisCheckStatus::Pass
+            status: {
+                let has_privileged_port = lower.split_whitespace().any(|part| {
+                    if let Some(port_part) = part.strip_prefix("-p ") {
+                        if let Some((host_port, _)) = port_part.split_once(':') {
+                            if let Ok(port) = host_port.parse::<u16>() {
+                                return port > 0 && port < 1024;
+                            }
+                        }
+                    }
+                    false
+                });
+                if has_privileged_port {
+                    CisCheckStatus::Fail
+                } else {
+                    CisCheckStatus::Pass
+                }
             },
             recommendation: "Use non-privileged host ports (>1024)".to_string(),
         });

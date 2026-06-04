@@ -14,7 +14,7 @@
 
 1. **Docker Socket Access Not Checked**: The escape detection in `escape.rs` checks for docker.sock in config strings but doesn't actually verify if the container has access to the Docker socket.
 
-2. **CIS Benchmark Checks Are Simplistic**: CIS checks in `cis.rs` use simple string matching (e.g., `lower.contains("privileged")`) which can produce false positives/negatives.
+2. **CIS Benchmark Checks Are Simplistic**: CIS checks in `cis.rs` use string matching (e.g., `lower.contains("privileged")`) which can produce false positives/negatives. Check 1.1 now uses word-boundary patterns (`"user "` / `"user:"`) to reduce false positives.
 
 ## Testing
 

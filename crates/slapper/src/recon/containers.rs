@@ -203,20 +203,6 @@ impl ContainerScanner {
         let docker_result = scanner.scan_image(image).await?;
 
         let mut findings = Vec::new();
-        for vuln in &docker_result.vulnerabilities {
-            findings.push(crate::container::ContainerFinding {
-                category: "Docker Vulnerability".to_string(),
-                severity: vuln.severity.clone(),
-                title: format!("{} {} ({})", vuln.package, vuln.installed_version, vuln.cve_id),
-                description: format!(
-                    "Package {} has vulnerability {}. Fixed in: {}",
-                    vuln.package,
-                    vuln.cve_id,
-                    vuln.fixed_version.as_deref().unwrap_or("not yet")
-                ),
-                recommendation: format!("Update {} to {}", vuln.package, vuln.fixed_version.as_deref().unwrap_or("latest")),
-            });
-        }
         for misconfig in &docker_result.misconfigurations {
             findings.push(crate::container::ContainerFinding {
                 category: "Docker Misconfiguration".to_string(),
@@ -226,19 +212,6 @@ impl ContainerScanner {
                 recommendation: misconfig.recommendation.clone(),
             });
         }
-
-        let overall_severity = findings
-            .iter()
-            .map(|f| &f.severity)
-            .max_by_key(|s| match s {
-                Severity::Critical => 5,
-                Severity::High => 4,
-                Severity::Medium => 3,
-                Severity::Low => 2,
-                Severity::Info => 1,
-            })
-            .cloned()
-            .unwrap_or(Severity::Info);
 
         Ok(ContainerScanResult {
             target: image.to_string(),
