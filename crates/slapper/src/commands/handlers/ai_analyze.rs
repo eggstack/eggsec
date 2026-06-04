@@ -180,9 +180,9 @@ fn format_ai_output(output: &AiOutput) -> String {
         "Critical: {} | High: {} | Medium: {} | Low: {} | Info: {}\n",
         summary.critical_count,
         summary.high_count,
-        summary.total_findings - summary.critical_count - summary.high_count,
-        0,
-        0
+        summary.medium_count,
+        summary.low_count,
+        summary.info_count
     ));
     s.push_str(&format!("Risk Score: {:.1}/10\n\n", summary.risk_score));
 

@@ -18,6 +18,18 @@ impl AiOutput {
             .iter()
             .filter(|f| f.severity == Severity::High)
             .count();
+        let medium = findings
+            .iter()
+            .filter(|f| f.severity == Severity::Medium)
+            .count();
+        let low = findings
+            .iter()
+            .filter(|f| f.severity == Severity::Low)
+            .count();
+        let info = findings
+            .iter()
+            .filter(|f| f.severity == Severity::Info)
+            .count();
         let risk_score = if total == 0 {
             0.0
         } else {
@@ -36,6 +48,9 @@ impl AiOutput {
                 total_findings: total,
                 critical_count: critical,
                 high_count: high,
+                medium_count: medium,
+                low_count: low,
+                info_count: info,
                 risk_score,
                 executive_summary: if critical > 0 {
                     format!(
@@ -86,6 +101,9 @@ pub struct AiSummary {
     pub total_findings: usize,
     pub critical_count: usize,
     pub high_count: usize,
+    pub medium_count: usize,
+    pub low_count: usize,
+    pub info_count: usize,
     pub risk_score: f32,
     pub executive_summary: String,
 }
@@ -119,6 +137,9 @@ mod tests {
         assert_eq!(output.summary.total_findings, 0);
         assert_eq!(output.summary.critical_count, 0);
         assert_eq!(output.summary.high_count, 0);
+        assert_eq!(output.summary.medium_count, 0);
+        assert_eq!(output.summary.low_count, 0);
+        assert_eq!(output.summary.info_count, 0);
         assert_eq!(output.summary.risk_score, 0.0);
         assert!(output.summary.executive_summary.contains("No findings"));
     }
@@ -158,6 +179,9 @@ mod tests {
         assert_eq!(output.summary.total_findings, 5);
         assert_eq!(output.summary.critical_count, 1);
         assert_eq!(output.summary.high_count, 1);
+        assert_eq!(output.summary.medium_count, 1);
+        assert_eq!(output.summary.low_count, 1);
+        assert_eq!(output.summary.info_count, 1);
     }
 
     #[test]
@@ -177,6 +201,9 @@ mod tests {
         let output = AiOutput::from_findings(findings);
         assert_eq!(output.summary.critical_count, 0);
         assert_eq!(output.summary.high_count, 0);
+        assert_eq!(output.summary.medium_count, 0);
+        assert_eq!(output.summary.low_count, 0);
+        assert_eq!(output.summary.info_count, 1);
         assert!(output.summary.executive_summary.contains("no critical"));
     }
 
