@@ -159,10 +159,13 @@ async fn capture_requests(tab: &headless_chrome::Tab) -> Result<corpus::RequestC
 
     let result = tab.evaluate(js_script, true)?;
 
-    let data: serde_json::Value = result
-        .value
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
+    let data: serde_json::Value = match result.value {
+        Some(v) => serde_json::from_value(v).unwrap_or_else(|e| {
+            tracing::warn!("Failed to deserialize request corpus data: {}", e);
+            serde_json::Value::default()
+        }),
+        None => serde_json::Value::default(),
+    };
 
     let current_url = data
         .get("url")
@@ -173,17 +176,26 @@ async fn capture_requests(tab: &headless_chrome::Tab) -> Result<corpus::RequestC
     let forms: Vec<corpus::FormInfo> = data
         .get("forms")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            tracing::warn!("Failed to deserialize forms data");
+            Vec::new()
+        });
 
     let js_urls: Vec<String> = data
         .get("scripts")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            tracing::warn!("Failed to deserialize scripts data");
+            Vec::new()
+        });
 
     let graphql_candidates: Vec<String> = data
         .get("graphqlCandidates")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            tracing::warn!("Failed to deserialize graphql candidates data");
+            Vec::new()
+        });
 
     let mut corpus = corpus::RequestCorpus::new();
     if !current_url.is_empty() {

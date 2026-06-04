@@ -96,11 +96,13 @@ pub async fn discover_routes(
 
     let result = tab.evaluate(js_script, true)?;
 
-    let data: serde_json::Value = result
-        .value
-        .as_ref()
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let data: serde_json::Value = match result.value.as_ref() {
+        Some(v) => serde_json::from_value(v.clone()).unwrap_or_else(|e| {
+            tracing::warn!("Failed to deserialize SPA discovery data: {}", e);
+            serde_json::Value::default()
+        }),
+        None => serde_json::Value::default(),
+    };
 
     let routes_set: HashSet<String> = data
         .get("routes")

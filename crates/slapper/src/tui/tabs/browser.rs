@@ -256,7 +256,8 @@ impl TabRender for BrowserTab {
             .constraints([
                 Constraint::Length(3),
                 Constraint::Length(3),
-                Constraint::Length(2),
+                Constraint::Length(3),
+                Constraint::Min(0),
             ])
             .split(config_inner);
 

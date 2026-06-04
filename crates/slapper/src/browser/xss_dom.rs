@@ -109,11 +109,13 @@ pub async fn scan_dom_xss(
 
     let result = tab.evaluate(&js_script, true)?;
 
-    let findings_list: Vec<HashMap<String, String>> = result
-        .value
-        .as_ref()
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let findings_list: Vec<HashMap<String, String>> = match result.value.as_ref() {
+        Some(v) => serde_json::from_value(v.clone()).unwrap_or_else(|e| {
+            tracing::warn!("Failed to deserialize DOM XSS findings: {}", e);
+            Vec::new()
+        }),
+        None => Vec::new(),
+    };
 
     let mut findings = Vec::new();
 

@@ -162,11 +162,13 @@ pub async fn check_client_security(
 
     let result = tab.evaluate(js_script, true)?;
 
-    let found_issues: Vec<serde_json::Value> = result
-        .value
-        .as_ref()
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let found_issues: Vec<serde_json::Value> = match result.value.as_ref() {
+        Some(v) => serde_json::from_value(v.clone()).unwrap_or_else(|e| {
+            tracing::warn!("Failed to deserialize client security issues: {}", e);
+            Vec::new()
+        }),
+        None => Vec::new(),
+    };
 
     let mut issues = Vec::new();
 
