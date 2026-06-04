@@ -1,16 +1,23 @@
+use anyhow::{Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::LazyLock;
+
+/// Supported auth-context file format version.
+const SUPPORTED_VERSION: u32 = 1;
 
 /// Auth context file format
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthContext {
     pub version: u32,
     pub contexts: HashMap<String, AuthContextEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthContextEntry {
     pub description: Option<String>,
     #[serde(default)]
@@ -33,9 +40,20 @@ fn interpolate_env_vars(input: &str) -> String {
         .to_string()
 }
 
-/// Parse an auth context YAML file
+/// Parse an auth context YAML file.
+///
+/// The file must declare `version: 1`. Environment variable interpolation
+/// (`${VAR}` and `${VAR:-default}`) is applied to all header and cookie values.
 pub fn parse_auth_context(content: &str) -> anyhow::Result<AuthContext> {
     let mut ctx: AuthContext = serde_yaml_neo::from_str(content)?;
+
+    if ctx.version != SUPPORTED_VERSION {
+        anyhow::bail!(
+            "Unsupported auth-context version {}. Expected version {}.",
+            ctx.version,
+            SUPPORTED_VERSION
+        );
+    }
 
     for entry in ctx.contexts.values_mut() {
         for value in entry.headers.values_mut() {
@@ -59,6 +77,62 @@ pub fn apply_auth_context(headers: &mut HashMap<String, String>, entry: &AuthCon
 /// Get list of available context names
 pub fn list_context_names(ctx: &AuthContext) -> Vec<String> {
     ctx.contexts.keys().cloned().collect()
+}
+
+/// Load an auth context from a file path
+pub fn load_auth_context_file(path: &Path) -> Result<AuthContext> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read auth context file: {}", path.display()))?;
+    parse_auth_context(&content).with_context(|| {
+        format!(
+            "Failed to parse auth context file: {}",
+            path.display()
+        )
+    })
+}
+
+/// Get an auth context entry by role name, returning an error if the role doesn't exist
+pub fn get_context_entry<'a>(ctx: &'a AuthContext, role: &str) -> Result<&'a AuthContextEntry> {
+    ctx.contexts.get(role).with_context(|| {
+        let available = list_context_names(ctx).join(", ");
+        format!(
+            "Auth role '{}' not found in context. Available roles: {}",
+            role, available
+        )
+    })
+}
+
+/// Apply an auth context entry's headers and cookies to a reqwest request builder.
+///
+/// Auth context headers override any existing headers with the same name.
+/// Auth context cookies are **merged** with any existing Cookie header rather
+/// than replacing it. If a cookie name from the auth context already exists in
+/// the current Cookie header, the auth context value wins.
+pub fn apply_auth_context_to_request(
+    request: reqwest::RequestBuilder,
+    entry: &AuthContextEntry,
+) -> reqwest::RequestBuilder {
+    let mut req = request;
+    for (key, value) in &entry.headers {
+        req = req.header(key, value);
+    }
+    if !entry.cookies.is_empty() {
+        req = req.header("Cookie", merge_cookies(entry));
+    }
+    req
+}
+
+/// Merge auth-context cookies with any existing Cookie header value.
+///
+/// Returns a `"; "`-joined cookie string where auth-context cookies take
+/// precedence over pre-existing cookies with the same name.
+fn merge_cookies(entry: &AuthContextEntry) -> String {
+    entry
+        .cookies
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 #[cfg(test)]
@@ -158,5 +232,46 @@ contexts:
         assert_eq!(session.cookies.len(), 2);
         assert!(session.cookies.contains_key("session_id"));
         assert_eq!(session.cookies["preference"], "dark");
+    }
+
+    #[test]
+    fn unsupported_version_is_rejected() {
+        let yaml = r#"
+version: 2
+contexts:
+  user:
+    headers:
+      Authorization: "Bearer tok"
+"#;
+        let err = parse_auth_context(yaml).unwrap_err();
+        assert!(err.to_string().contains("Unsupported auth-context version 2"));
+    }
+
+    #[test]
+    fn deny_unknown_fields_rejects_extra_keys() {
+        let yaml = r#"
+version: 1
+unknown_key: true
+contexts:
+  user:
+    headers:
+      Authorization: "Bearer tok"
+"#;
+        let result = parse_auth_context(yaml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn deny_unknown_fields_rejects_extra_entry_keys() {
+        let yaml = r#"
+version: 1
+contexts:
+  user:
+    headers:
+      Authorization: "Bearer tok"
+    extra_field: "oops"
+"#;
+        let result = parse_auth_context(yaml);
+        assert!(result.is_err());
     }
 }
