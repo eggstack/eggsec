@@ -6,7 +6,7 @@ Shared probe intent and risk vocabulary defined in `crates/slapper/src/probe.rs`
 
 ## Key Types
 
-### ProbeIntent (10 variants)
+### ProbeIntent (7 variants)
 
 Intent categories for security probes:
 
@@ -19,9 +19,6 @@ Intent categories for security probes:
 | `EvasionResistance` | Test WAF evasion techniques |
 | `LoadBearing` | Load testing |
 | `Stress` | Stress testing |
-| `MalformedProtocol` | Malformed protocol testing |
-| `Regression` | Regression testing |
-| `Compatibility` | Compatibility testing |
 
 ### ProbeRisk (6 variants)
 

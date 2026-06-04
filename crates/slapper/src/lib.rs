@@ -86,7 +86,6 @@ pub mod container;
 #[cfg(not(feature = "container"))]
 #[allow(dead_code)]
 mod container;
-pub mod diff;
 pub mod distributed;
 pub mod error;
 pub mod findings;

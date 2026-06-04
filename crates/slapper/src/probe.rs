@@ -22,9 +22,6 @@ pub enum ProbeIntent {
     EvasionResistance,
     LoadBearing,
     Stress,
-    MalformedProtocol,
-    Regression,
-    Compatibility,
 }
 
 /// Risk classification for security probes.
@@ -93,9 +90,6 @@ mod tests {
             (ProbeIntent::EvasionResistance, "\"evasion-resistance\""),
             (ProbeIntent::LoadBearing, "\"load-bearing\""),
             (ProbeIntent::Stress, "\"stress\""),
-            (ProbeIntent::MalformedProtocol, "\"malformed-protocol\""),
-            (ProbeIntent::Regression, "\"regression\""),
-            (ProbeIntent::Compatibility, "\"compatibility\""),
         ];
         for (variant, expected) in cases {
             let json = serde_json::to_string(variant).unwrap();

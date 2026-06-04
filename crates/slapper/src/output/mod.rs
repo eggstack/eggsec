@@ -85,7 +85,7 @@ pub use convert::{
     load_scan_report, FindingData, PortData, ScanReportData, ServiceData, WirelessNetworkReportData,
 };
 pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
-pub use diff::{DiffEngine, DiffFinding, DiffResult, DiffSummary};
+pub use diff::DiffSummary;
 pub use junit::{JUnitBuilder, JUnitReport, JUnitTestResult};
 pub use pdf::{PdfConfig, PdfGenerator};
 pub use report::{Report, ReportMetadata, ReportTemplate, SeverityCounts};
