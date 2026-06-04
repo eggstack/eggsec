@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
 pub mod auth;
+#[cfg(feature = "headless-browser")]
+pub mod browser;
 pub mod ci;
 pub mod cluster;
 pub mod fuzz;
@@ -33,6 +35,9 @@ pub use stress::*;
 
 #[cfg(feature = "wireless")]
 pub use wireless::*;
+
+#[cfg(feature = "headless-browser")]
+pub use browser::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -204,6 +209,11 @@ pub enum Commands {
     #[command(about = "Scan wireless networks for security issues", long_about = WIRELESS_ABOUT)]
     Wireless(WirelessArgs),
 
+    // --- Browser operations ---
+    #[cfg(feature = "headless-browser")]
+    #[command(about = "Run headless browser security testing", long_about = BROWSER_ABOUT)]
+    Browser(BrowserArgs),
+
     // --- gRPC server ---
     #[cfg(feature = "grpc-api")]
     #[command(about = "Start gRPC server for external tool integration")]
@@ -237,6 +247,16 @@ pub struct CommonHttpArgs {
     pub rate_limit: Option<u32>,
     #[arg(long, help = "Random delay between requests (ms range, e.g., 100-500)")]
     pub jitter: Option<String>,
+    #[arg(
+        long,
+        help = "Path to auth context YAML file (multi-user/multi-role testing)"
+    )]
+    pub auth_context: Option<String>,
+    #[arg(
+        long,
+        help = "Auth role name from the auth context file (required when --auth-context is set)"
+    )]
+    pub auth_role: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

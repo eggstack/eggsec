@@ -49,52 +49,59 @@ pub async fn scan_dom_xss(
 ) -> Result<Vec<DomXssFinding>> {
     let target = tab.get_url();
 
-    let js_script = r#"
-        (function() {
+    let escaped_payload = serde_json::to_string(&config.xss_payload)
+        .unwrap_or_else(|_| "\"<img src=x onerror=alert(1)>\"".to_string());
+
+    let js_script = format!(
+        r#"
+        (function() {{
             const sources = [
-                { name: 'location.hash', get: () => location.hash },
-                { name: 'location.search', get: () => location.search },
-                { name: 'document.cookie', get: () => document.cookie },
-                { name: 'document.referrer', get: () => document.referrer },
-                { name: 'localStorage', get: () => localStorage.getItem('test') },
-                { name: 'sessionStorage', get: () => sessionStorage.getItem('test') }
+                {{ name: 'location.hash', get: () => location.hash }},
+                {{ name: 'location.search', get: () => location.search }},
+                {{ name: 'document.cookie', get: () => document.cookie }},
+                {{ name: 'document.referrer', get: () => document.referrer }},
+                {{ name: 'localStorage', get: () => localStorage.getItem('test') }},
+                {{ name: 'sessionStorage', get: () => sessionStorage.getItem('test') }}
             ];
 
             const sinks = [
-                { name: 'innerHTML', check: (val) => { try { let d = document.createElement('div'); d.innerHTML = val; return true; } catch(e) { return false; } } },
-                { name: 'outerHTML', check: (val) => { try { let d = document.createElement('div'); d.outerHTML = val; return true; } catch(e) { return false; } } },
-                { name: 'document.write', check: () => true },
-                { name: 'eval', check: (val) => { try { eval(val); return false; } catch(e) { return true; } } },
-                { name: 'setTimeout', check: () => true },
-                { name: 'setInterval', check: () => true },
-                { name: 'Function', check: (val) => { try { new Function(val); return true; } catch(e) { return false; } } }
+                {{ name: 'innerHTML', check: (val) => {{ try {{ let d = document.createElement('div'); d.innerHTML = val; return true; }} catch(e) {{ return false; }} }} }},
+                {{ name: 'outerHTML', check: (val) => {{ try {{ let d = document.createElement('div'); d.outerHTML = val; return true; }} catch(e) {{ return false; }} }} }},
+                {{ name: 'jQuery.html', check: (val) => {{ try {{ if (typeof jQuery !== 'undefined') {{ jQuery('<div>').html(val); return true; }} return false; }} catch(e) {{ return false; }} }} }},
+                {{ name: 'document.write', check: () => true }},
+                {{ name: 'eval', check: (val) => {{ try {{ eval(val); return false; }} catch(e) {{ return true; }} }} }},
+                {{ name: 'setTimeout', check: () => true }},
+                {{ name: 'setInterval', check: () => true }},
+                {{ name: 'Function', check: (val) => {{ try {{ new Function(val); return true; }} catch(e) {{ return false; }} }} }}
             ];
 
             const findings = [];
-            const testPayload = $payload$;
+            const testPayload = {payload};
 
-            for (const source of sources) {
-                try {
+            for (const source of sources) {{
+                try {{
                     const sourceValue = source.get();
                     if (!sourceValue || sourceValue.length === 0) continue;
 
-                    for (const sink of sinks) {
-                        try {
-                            if (sink.check && sink.check(testPayload)) {
-                                findings.push({
+                    for (const sink of sinks) {{
+                        try {{
+                            if (sink.check && sink.check(testPayload)) {{
+                                findings.push({{
                                     source: source.name,
                                     sink: sink.name,
-                                    evidence: `Source: ${source.name}, Sink: ${sink.name}`
-                                });
-                            }
-                        } catch(e) {}
-                    }
-                } catch(e) {}
-            }
+                                    evidence: `Source: ${{source.name}}, Sink: ${{sink.name}}`
+                                }});
+                            }}
+                        }} catch(e) {{}}
+                    }}
+                }} catch(e) {{}}
+            }}
 
             return findings;
-        })()
-    "#.replace("$payload$", &config.xss_payload);
+        }})()
+    "#,
+        payload = escaped_payload
+    );
 
     let result = tab.evaluate(&js_script, true)?;
 
@@ -132,7 +139,7 @@ pub async fn scan_dom_xss(
 fn calculate_severity(source: &str, sink: &str) -> (Severity, f32) {
     let base_score: f32 = match sink {
         "eval" => 9.0,
-        "innerHTML" | "outerHTML" => 7.5,
+        "innerHTML" | "outerHTML" | "jQuery.html" => 7.5,
         "document.write" => 8.0,
         "setTimeout" | "setInterval" => 6.5,
         "Function" => 8.5,
@@ -162,6 +169,9 @@ fn get_remediation(_source: &str, sink: &str) -> String {
     match sink {
         "innerHTML" | "outerHTML" => {
             "Use textContent instead of innerHTML/outerHTML; sanitize HTML with DOMPurify if needed".to_string()
+        },
+        "jQuery.html" => {
+            "Avoid jQuery .html() with user input; use .text() or sanitize with DOMPurify first".to_string()
         },
         "eval" | "Function" => {
             "Avoid eval() and Function constructor; use JSON.parse() for data and DOMPurify for HTML".to_string()
@@ -195,5 +205,77 @@ mod tests {
         let config = BrowserConfig::default();
         let findings = scan_dom_xss(&tab, &config).await.unwrap();
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_calculate_severity_eval_critical() {
+        let (sev, score) = calculate_severity("location.hash", "eval");
+        assert_eq!(sev, Severity::Critical);
+        assert_eq!(score, 9.0);
+    }
+
+    #[test]
+    fn test_calculate_severity_innerhtml_high() {
+        let (sev, score) = calculate_severity("location.search", "innerHTML");
+        assert_eq!(sev, Severity::High);
+        assert_eq!(score, 7.5);
+    }
+
+    #[test]
+    fn test_calculate_severity_jquery_high() {
+        let (sev, score) = calculate_severity("location.hash", "jQuery.html");
+        assert_eq!(sev, Severity::High);
+        assert_eq!(score, 7.5);
+    }
+
+    #[test]
+    fn test_calculate_severity_cookie_modifier() {
+        let (_, score) = calculate_severity("document.cookie", "eval");
+        assert_eq!(score, 10.0); // 9.0 * 1.2 = 10.8, capped at 10.0
+    }
+
+    #[test]
+    fn test_calculate_severity_localstorage_modifier() {
+        let (_, score) = calculate_severity("localStorage", "innerHTML");
+        assert_eq!(score, 6.0); // 7.5 * 0.8 = 6.0
+    }
+
+    #[test]
+    fn test_get_remediation_innerhtml() {
+        let rem = get_remediation("location.hash", "innerHTML");
+        assert!(rem.contains("textContent"));
+        assert!(rem.contains("DOMPurify"));
+    }
+
+    #[test]
+    fn test_get_remediation_jquery() {
+        let rem = get_remediation("location.hash", "jQuery.html");
+        assert!(rem.contains("jQuery"));
+        assert!(rem.contains(".text()"));
+    }
+
+    #[test]
+    fn test_get_remediation_eval() {
+        let rem = get_remediation("location.hash", "eval");
+        assert!(rem.contains("eval()"));
+        assert!(rem.contains("JSON.parse()"));
+    }
+
+    #[test]
+    fn test_get_remediation_document_write() {
+        let rem = get_remediation("location.hash", "document.write");
+        assert!(rem.contains("document.write()"));
+    }
+
+    #[test]
+    fn test_get_remediation_settimeout() {
+        let rem = get_remediation("location.hash", "setTimeout");
+        assert!(rem.contains("setTimeout/setInterval"));
+    }
+
+    #[test]
+    fn test_get_remediation_unknown_sink() {
+        let rem = get_remediation("location.hash", "unknown");
+        assert!(rem.contains("input validation"));
     }
 }

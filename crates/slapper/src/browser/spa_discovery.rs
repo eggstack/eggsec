@@ -38,33 +38,9 @@ pub async fn discover_routes(
     let js_script = r#"
         (function() {
             const routes = new Set();
-            const apiEndpoints = new Set();
 
-            const interceptXhr = () => {
-                const originalXhrOpen = XMLHttpRequest.prototype.open;
-                XMLHttpRequest.prototype.open = function(method, url) {
-                    try {
-                        const parsed = new URL(url, window.location.origin);
-                        if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
-                            apiEndpoints.add(parsed.pathname);
-                        }
-                    } catch(e) {}
-                    return originalXhrOpen.apply(this, arguments);
-                };
-            };
-
-            const interceptFetch = () => {
-                const originalFetch = window.fetch;
-                window.fetch = function(url, options) {
-                    try {
-                        const parsed = new URL(url, window.location.origin);
-                        if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
-                            apiEndpoints.add(parsed.pathname);
-                        }
-                    } catch(e) {}
-                    return originalFetch.apply(this, arguments);
-                };
-            };
+            // Read API endpoints captured by interceptors injected before navigation
+            const apiEndpoints = new Set(window.__slapper_api_endpoints || []);
 
             const extractRoutesFromDom = () => {
                 const links = document.querySelectorAll('a[href]');
@@ -109,8 +85,6 @@ pub async fn discover_routes(
                 });
             };
 
-            interceptXhr();
-            interceptFetch();
             extractRoutesFromDom();
             extractRoutesFromJs();
 
@@ -207,5 +181,60 @@ mod tests {
             DiscoveryMethod::XhrInterception,
             DiscoveryMethod::XhrInterception
         );
+    }
+
+    #[test]
+    fn test_extract_parameters_curly() {
+        let params = extract_parameters("/api/users/{id}/posts/{postId}");
+        assert_eq!(params, vec!["id".to_string(), "postId".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_parameters_colon() {
+        let params = extract_parameters("/api/users/:id/posts/:postId");
+        assert_eq!(params, vec!["id".to_string(), "postId".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_parameters_none() {
+        let params = extract_parameters("/api/users/list");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_extract_parameters_mixed() {
+        let params = extract_parameters("/api/users/{id}/posts/:postId");
+        assert_eq!(params, vec!["id".to_string(), "postId".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_parameters_empty_segments() {
+        let params = extract_parameters("/");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_discovery_method_display() {
+        assert_eq!(DiscoveryMethod::Crawl.to_string(), "Crawl");
+        assert_eq!(DiscoveryMethod::XhrInterception.to_string(), "XHR Interception");
+        assert_eq!(DiscoveryMethod::FetchInterception.to_string(), "Fetch Interception");
+        assert_eq!(DiscoveryMethod::RouteParsing.to_string(), "Route Parsing");
+    }
+
+    #[test]
+    fn test_spa_route_eq() {
+        let r1 = SpaRoute {
+            path: "/api/users".to_string(),
+            method: "GET".to_string(),
+            parameters: vec![],
+            discovered_via: DiscoveryMethod::Crawl,
+        };
+        let r2 = SpaRoute {
+            path: "/api/users".to_string(),
+            method: "GET".to_string(),
+            parameters: vec![],
+            discovered_via: DiscoveryMethod::Crawl,
+        };
+        assert_eq!(r1, r2);
     }
 }

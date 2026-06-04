@@ -1,4 +1,6 @@
 pub mod auth_test;
+#[cfg(feature = "headless-browser")]
+pub mod browser;
 pub mod ci;
 pub mod cluster;
 pub mod config;
@@ -37,6 +39,8 @@ pub use scan::*;
 #[cfg(feature = "rest-api")]
 pub use agent::*;
 pub use auth_test::*;
+#[cfg(feature = "headless-browser")]
+pub use browser::*;
 pub use notify::*;
 pub use report::*;
 #[cfg(feature = "sbom")]
@@ -196,6 +200,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,
         #[cfg(feature = "wireless")]
         Some(Commands::Wireless(args)) => handle_wireless(ctx, args).await,
+        #[cfg(feature = "headless-browser")]
+        Some(Commands::Browser(args)) => handle_browser(ctx, args).await,
         #[cfg(feature = "grpc-api")]
         Some(Commands::Grpc(args)) => handle_grpc_server(ctx, args).await,
         Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,

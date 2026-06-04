@@ -45,6 +45,38 @@ pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<Bro
     let browser = headless_chrome::Browser::default()?;
     let tab = browser.new_tab()?;
     tab.set_default_timeout(std::time::Duration::from_millis(config.timeout_ms));
+
+    // Inject XHR/Fetch interceptors BEFORE navigation so they capture initial-load requests
+    if config.discover_spa_routes {
+        let interceptor_script = r#"
+            (function() {
+                const apiEndpoints = [];
+                const originalXhrOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url) {
+                    try {
+                        const parsed = new URL(url, window.location.origin);
+                        if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
+                            apiEndpoints.push(parsed.pathname);
+                        }
+                    } catch(e) {}
+                    return originalXhrOpen.apply(this, arguments);
+                };
+                const originalFetch = window.fetch;
+                window.fetch = function(url, options) {
+                    try {
+                        const parsed = new URL(url, window.location.origin);
+                        if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
+                            apiEndpoints.push(parsed.pathname);
+                        }
+                    } catch(e) {}
+                    return originalFetch.apply(this, arguments);
+                };
+                window.__slapper_api_endpoints = apiEndpoints;
+            })()
+        "#;
+        let _ = tab.evaluate(interceptor_script, false);
+    }
+
     tab.navigate_to(target)?.wait_until_navigated()?;
 
     if config.check_dom_xss {
@@ -67,7 +99,7 @@ pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<Bro
     let captured = capture_requests(&tab).await?;
     report.corpus = captured;
     report.corpus.crawl_duration_ms = (Utc::now() - start_time).num_milliseconds() as u64;
-    report.corpus.pages_visited = 1;
+    report.corpus.pages_visited = 1 + report.spa_routes.len();
 
     Ok(report)
 }
@@ -172,7 +204,6 @@ pub struct BrowserConfig {
     pub check_dom_xss: bool,
     pub discover_spa_routes: bool,
     pub check_client_security: bool,
-    pub crawl_depth: usize,
     pub timeout_ms: u64,
     pub xss_payload: String,
 }
@@ -183,7 +214,6 @@ impl Default for BrowserConfig {
             check_dom_xss: true,
             discover_spa_routes: true,
             check_client_security: true,
-            crawl_depth: 3,
             timeout_ms: 60000,
             xss_payload: "<img src=x onerror=alert(1)>".to_string(),
         }

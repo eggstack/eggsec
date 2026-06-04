@@ -37,7 +37,6 @@ impl BrowserTab {
     pub fn new() -> Self {
         let inputs = InputGroup::new()
             .add(InputField::new("Target URL"))
-            .add(InputField::new("Crawl Depth").with_value("3"))
             .add(InputField::new("Timeout (ms)").with_value("30000"));
 
         let option_checkboxes = vec![
@@ -68,18 +67,10 @@ impl BrowserTab {
             .unwrap_or("")
     }
 
-    pub fn crawl_depth(&self) -> usize {
-        self.inputs
-            .fields
-            .get(1)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(3)
-    }
-
     pub fn timeout_ms(&self) -> u64 {
         self.inputs
             .fields
-            .get(2)
+            .get(1)
             .and_then(|f| f.value.parse().ok())
             .unwrap_or(30000)
     }
@@ -101,7 +92,6 @@ impl BrowserTab {
                 .get(2)
                 .map(|cb| cb.checked)
                 .unwrap_or(false),
-            crawl_depth: self.crawl_depth(),
             timeout_ms: self.timeout_ms(),
             xss_payload: BrowserConfig::default().xss_payload,
         }
@@ -264,7 +254,6 @@ impl TabRender for BrowserTab {
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(2),

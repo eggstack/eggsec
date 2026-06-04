@@ -23,8 +23,6 @@ pub enum ClientIssueType {
     DebugMode,
     SourceMapsExposed,
     CORSWildcard,
-    WeakCiphers,
-    CertificateIssues,
 }
 
 impl std::fmt::Display for ClientIssueType {
@@ -36,8 +34,6 @@ impl std::fmt::Display for ClientIssueType {
             ClientIssueType::DebugMode => write!(f, "Debug Mode"),
             ClientIssueType::SourceMapsExposed => write!(f, "Source Maps Exposed"),
             ClientIssueType::CORSWildcard => write!(f, "CORS Wildcard"),
-            ClientIssueType::WeakCiphers => write!(f, "Weak Ciphers"),
-            ClientIssueType::CertificateIssues => write!(f, "Certificate Issues"),
         }
     }
 }
@@ -133,7 +129,7 @@ pub async fn check_client_security(
             }
 
             try {
-                const testOrigin = 'https://evil attacker.com';
+                const testOrigin = 'https://evil-attacker.example.com';
                 const corsXhr = new XMLHttpRequest();
                 corsXhr.open('GET', window.location.href, false);
                 corsXhr.setRequestHeader('Origin', testOrigin);
@@ -208,8 +204,6 @@ pub async fn check_client_security(
             "DebugMode" => ClientIssueType::DebugMode,
             "CSPSourceMap" => ClientIssueType::CSPSourceMap,
             "CORSWildcard" => ClientIssueType::CORSWildcard,
-            "WeakCiphers" => ClientIssueType::WeakCiphers,
-            "CertificateIssues" => ClientIssueType::CertificateIssues,
             _ => continue,
         };
 
@@ -246,8 +240,6 @@ fn get_remediation(issue_type: &str) -> String {
         "CSPSourceMap" => "Remove 'unsafe-eval' and 'unsafe-inline' from CSP; use nonces".to_string(),
         "CORSWildcard" => "Replace wildcard CORS origin with specific allowed origins".to_string(),
         "CorsMisconfiguration" => "Restrict CORS to specific trusted origins; never reflect arbitrary Origin headers".to_string(),
-        "WeakCiphers" => "Disable TLS 1.0/1.1 and weak cipher suites; use TLS 1.2+ with strong ciphers".to_string(),
-        "CertificateIssues" => "Fix or replace invalid certificates; ensure proper certificate chain".to_string(),
         _ => "Implement proper security controls".to_string(),
     }
 }
@@ -278,5 +270,60 @@ mod tests {
             ClientIssueType::LocalStorageSensitive
         );
         assert_eq!(ClientIssueType::CORSWildcard, ClientIssueType::CORSWildcard);
+        assert_eq!(ClientIssueType::CorsMisconfiguration, ClientIssueType::CorsMisconfiguration);
+    }
+
+    #[test]
+    fn test_remediation_localstorage() {
+        let rem = get_remediation("LocalStorageSensitive");
+        assert!(rem.contains("sessionStorage"));
+        assert!(rem.contains("httpOnly"));
+    }
+
+    #[test]
+    fn test_remediation_sourcemaps() {
+        let rem = get_remediation("SourceMapsExposed");
+        assert!(rem.contains("source maps"));
+    }
+
+    #[test]
+    fn test_remediation_debug() {
+        let rem = get_remediation("DebugMode");
+        assert!(rem.contains("debug mode"));
+    }
+
+    #[test]
+    fn test_remediation_csp() {
+        let rem = get_remediation("CSPSourceMap");
+        assert!(rem.contains("unsafe-eval"));
+        assert!(rem.contains("nonces"));
+    }
+
+    #[test]
+    fn test_remediation_cors_wildcard() {
+        let rem = get_remediation("CORSWildcard");
+        assert!(rem.contains("wildcard"));
+    }
+
+    #[test]
+    fn test_remediation_cors_reflection() {
+        let rem = get_remediation("CorsMisconfiguration");
+        assert!(rem.contains("trusted origins"));
+    }
+
+    #[test]
+    fn test_remediation_unknown() {
+        let rem = get_remediation("UnknownType");
+        assert!(rem.contains("security controls"));
+    }
+
+    #[test]
+    fn test_issue_type_display() {
+        assert_eq!(ClientIssueType::LocalStorageSensitive.to_string(), "Local Storage Sensitive");
+        assert_eq!(ClientIssueType::CorsMisconfiguration.to_string(), "CORS Misconfiguration");
+        assert_eq!(ClientIssueType::CSPSourceMap.to_string(), "CSP Source Map");
+        assert_eq!(ClientIssueType::DebugMode.to_string(), "Debug Mode");
+        assert_eq!(ClientIssueType::SourceMapsExposed.to_string(), "Source Maps Exposed");
+        assert_eq!(ClientIssueType::CORSWildcard.to_string(), "CORS Wildcard");
     }
 }
