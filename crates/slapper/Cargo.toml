@@ -100,6 +100,7 @@ arboard = "3.4"
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
 slapper-nse = { path = "../slapper-nse", optional = true }
+ssh2 = { version = "0.9", optional = true }
 
 [dependencies.libc]
 version = "0.2"
@@ -239,7 +240,7 @@ packet-inspection = ["pnet", "pnet_packet", "libc"]
 nse = ["tool-api", "dep:slapper-nse", "slapper-nse/nse"]
 
 # NSE with full SSH2/libssh2-backed support
-nse-ssh2 = ["nse", "slapper-nse/nse-ssh2"]
+nse-ssh2 = ["nse", "slapper-nse/nse-ssh2", "dep:ssh2"]
 
 # NSE sandbox - restrict dangerous Lua operations
 nse-sandbox = ["nse", "slapper-nse/sandbox"]

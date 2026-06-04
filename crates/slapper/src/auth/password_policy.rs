@@ -65,14 +65,12 @@ impl PasswordPolicyTester {
                 result.requires_special = true;
             }
 
-            if let Some(caps) = lower.match_indices("character").next() {
-                let after_caps = &lower[caps.0..];
-                for c in after_caps.chars().take(20) {
-                    if c.is_ascii_digit() {
-                        if let Ok(len) = c.to_string().parse::<usize>() {
-                            result.min_length = Some(len);
-                            break;
-                        }
+            let re = regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
+                .expect("valid regex pattern");
+            if let Some(caps) = re.captures(&lower) {
+                if let Some(m) = caps.get(1) {
+                    if let Ok(len) = m.as_str().parse::<usize>() {
+                        result.min_length = Some(len);
                     }
                 }
             }

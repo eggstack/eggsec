@@ -98,7 +98,9 @@ impl BruteForceTester {
                         }
                     }
                 }
-                Err(_) => {}
+                Err(e) => {
+                    tracing::warn!("Brute force request failed for '{}': {}", username, e);
+                }
             }
         }
 

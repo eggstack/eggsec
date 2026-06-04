@@ -5662,6 +5662,7 @@ dependencies = [
  "socket2 0.5.10",
  "spdx 0.10.9",
  "sqlx",
+ "ssh2",
  "strum 0.26.3",
  "subtle",
  "surge-ping",

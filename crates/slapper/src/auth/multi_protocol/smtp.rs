@@ -2,9 +2,10 @@
 //!
 //! Tests SMTP authentication mechanisms including PLAIN and LOGIN.
 
-use super::super::AuthTestResult;
+use super::AuthTestResult;
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
+use std::net::TcpStream;
 use std::time::Duration;
 
 pub async fn test_smtp_auth(
@@ -78,7 +79,6 @@ async fn test_single_credential(
 }
 
 async fn smtp_auth_attempt(addr: &str, username: &str, password: &str) -> Result<bool> {
-    use std::net::TcpStream;
     use std::io::{Read, Write};
 
     let mut stream = TcpStream::connect(addr)

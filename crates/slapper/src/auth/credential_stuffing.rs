@@ -101,7 +101,9 @@ impl CredentialStuffer {
                         }
                     }
                 }
-                Err(_) => {}
+                Err(e) => {
+                    tracing::warn!("Credential stuffing request failed for '{}': {}", cred.username, e);
+                }
             }
         }
 

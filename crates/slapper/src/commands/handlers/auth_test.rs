@@ -1,7 +1,9 @@
-use crate::auth::{AuthEngine, AuthFinding, AuthTestReport, AuthTestType, AUTH_BANNER};
+use crate::auth::{AuthFinding, AuthTestReport, AuthTestType, AUTH_BANNER};
 use crate::cli::AuthTestArgs;
 use crate::types::Severity;
 use anyhow::Result;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 pub async fn handle_auth_test(
     ctx: &crate::commands::CommandContext,
@@ -11,7 +13,7 @@ pub async fn handle_auth_test(
     args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);
 
-    let engine = AuthEngine::new(args.max_attempts, args.concurrency, args.timeout, true)?;
+    let attempt_counter = Arc::new(AtomicUsize::new(0));
 
     let mut report = AuthTestReport {
         target: args.target.clone(),
@@ -252,9 +254,7 @@ pub async fn handle_auth_test(
         }
     }
 
-    report.total_attempts = engine
-        .attempt_counter
-        .load(std::sync::atomic::Ordering::SeqCst);
+    report.total_attempts = attempt_counter.load(Ordering::SeqCst);
 
     let output = if args.json {
         serde_json::to_string_pretty(&report)?
