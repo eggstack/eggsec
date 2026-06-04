@@ -48,7 +48,6 @@ impl RateLimiter {
 }
 
 pub struct AdaptiveRateLimiter {
-    #[allow(dead_code)]
     base_rate: u32,
     current_rate: f64,
     min_rate: u32,
@@ -157,6 +156,14 @@ impl AdaptiveRateLimiter {
             return 0.0;
         }
         self.error_count as f64 / total as f64
+    }
+
+    pub fn reset(&mut self) {
+        self.current_rate = self.base_rate as f64;
+        self.response_times.clear();
+        self.error_count = 0;
+        self.success_count = 0;
+        self.cooldown_until = None;
     }
 }
 

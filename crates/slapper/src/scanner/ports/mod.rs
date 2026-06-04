@@ -15,49 +15,20 @@ use crate::utils::strip_controls;
 use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use crate::cli::PortScanArgs;
 use crate::config::SlapperConfig;
+use crate::utils::service_detection::get_service_name as get_service_name_from_utils;
 
 pub const MAX_SCAN_RESULTS: usize = 10000;
-pub const COMMON_PORTS: &[(u16, &str)] = &[
-    (21, "FTP"),
-    (22, "SSH"),
-    (23, "Telnet"),
-    (25, "SMTP"),
-    (53, "DNS"),
-    (80, "HTTP"),
-    (110, "POP3"),
-    (143, "IMAP"),
-    (443, "HTTPS"),
-    (445, "SMB"),
-    (993, "IMAPS"),
-    (995, "POP3S"),
-    (1433, "MSSQL"),
-    (1521, "Oracle"),
-    (3306, "MySQL"),
-    (3389, "RDP"),
-    (5432, "PostgreSQL"),
-    (5900, "VNC"),
-    (6379, "Redis"),
-    (8080, "HTTP-Alt"),
-    (8443, "HTTPS-Alt"),
-    (27017, "MongoDB"),
-];
-
-static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(|| {
-    COMMON_PORTS.iter().copied().collect()
-});
 
 fn get_service_name(port: u16) -> &'static str {
-    COMMON_PORTS_MAP.get(&port).copied().unwrap_or("unknown")
+    get_service_name_from_utils(port)
 }
 
 #[derive(Debug, Clone)]
@@ -592,6 +563,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::service_detection::COMMON_PORTS;
 
     #[test]
     fn test_get_service_name_known_ports() {

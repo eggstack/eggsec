@@ -96,9 +96,8 @@ pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerpri
 pub use fingerprint_types::{
     EnhancedFingerprint, EvidenceType, FingerprintConfidence, FingerprintEvidence, ServiceIdentity,
 };
-pub use ports::{
-    scan_ports, PortResult, PortScanConfig, PortScanResults, COMMON_PORTS, MAX_SCAN_RESULTS,
-};
+pub use ports::{scan_ports, PortResult, PortScanConfig, PortScanResults, MAX_SCAN_RESULTS};
+pub use crate::utils::service_detection::COMMON_PORTS;
 pub use spoof::{format_spoof_warning, random_ip_from_cidr, SpoofConfig, SpoofStats};
 pub use timing::{PortPriority, TimingConfig, TimingPreset};
 pub use udp_fingerprint::{
