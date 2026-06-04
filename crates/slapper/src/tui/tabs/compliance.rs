@@ -1,4 +1,4 @@
-use crate::compliance::{ComplianceFramework, ComplianceReport};
+use crate::compliance::{ComplianceFramework, ComplianceReport, ComplianceStatus};
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
@@ -92,7 +92,7 @@ impl ComplianceTab {
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
-            format!("Overall Score: {:.1}%", report.overall_score * 100.0),
+            format!("Overall Score: {:.1}%", report.overall_score),
             Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(Span::styled(
@@ -105,15 +105,19 @@ impl ComplianceTab {
             }),
         )));
         self.results_view.add_line(Line::from(""));
+        let na_count = report
+            .findings
+            .iter()
+            .filter(|f| f.status == ComplianceStatus::NotApplicable)
+            .count();
+        let review_count = report
+            .findings
+            .iter()
+            .filter(|f| f.status == ComplianceStatus::NeedsReview)
+            .count();
         self.results_view.add_line(Line::from(format!(
             "Passed: {} | Failed: {} | N/A: {} | Review: {}",
-            report.passed,
-            report.failed,
-            report
-                .total_requirements
-                .saturating_sub(report.passed)
-                .saturating_sub(report.failed),
-            report.findings.len()
+            report.passed, report.failed, na_count, review_count
         )));
         self.results_view.add_line(Line::from(""));
 
@@ -221,7 +225,7 @@ impl TabRender for ComplianceTab {
                     tc!(border)
                 },
             ));
-        f.render_widget(config_block, input_area);
+        f.render_widget(&config_block, input_area);
 
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)

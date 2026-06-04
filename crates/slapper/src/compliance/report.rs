@@ -72,7 +72,7 @@ impl ComplianceReport {
             match summary.risk_level {
                 RiskLevel::Low => "4caf50",
                 RiskLevel::Medium => "ff9800",
-                RiskLevel::High => "f57c00",
+                RiskLevel::High => "ff6d00",
                 RiskLevel::Critical => "d32f2f",
             },
             self.framework,
