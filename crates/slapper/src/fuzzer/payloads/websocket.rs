@@ -146,7 +146,7 @@ impl WebSocketFuzzer {
         Ok(results)
     }
 
-    fn generate_all_tests(&self) -> Vec<WebSocketTestResult> {
+    pub fn generate_all_tests(&self) -> Vec<WebSocketTestResult> {
         let mut results = Vec::new();
         results.extend(self.generate_injection_tests());
         results.extend(self.generate_dos_tests());

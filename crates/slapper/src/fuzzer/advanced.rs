@@ -411,8 +411,8 @@ impl AdvancedFuzzer for WebSocketFuzzer {
     async fn fuzz(&mut self, _client: &reqwest::Client) -> Vec<FuzzResult> {
         let mut results = Vec::new();
 
-        let injection_tests = self.generate_injection_tests();
-        for r in injection_tests {
+        let tests = self.generate_all_tests();
+        for r in tests {
             results.push(r.into_fuzz_result());
         }
 
@@ -426,19 +426,51 @@ impl AdvancedFuzzer for WebSocketFuzzer {
 
 impl FuzzerResultConverter<WebSocketTestResult> for WebSocketTestResult {
     fn into_fuzz_result(self) -> FuzzResult {
+        use crate::fuzzer::payloads::websocket::WebSocketVulnerability;
+
         let description = self.description.clone();
+        let owasp_category = match self.vulnerability {
+            WebSocketVulnerability::Injection => {
+                Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string())
+            }
+            WebSocketVulnerability::DoS => {
+                Some(crate::waf::types::OwaspCategory::A05_2021_SecurityMisconfiguration.to_string())
+            }
+            WebSocketVulnerability::CrossSiteWebSocketHijacking => {
+                Some(crate::waf::types::OwaspCategory::A01_2021_BrokenAccessControl.to_string())
+            }
+            WebSocketVulnerability::OriginBypass => {
+                Some(crate::waf::types::OwaspCategory::A01_2021_BrokenAccessControl.to_string())
+            }
+            WebSocketVulnerability::MessageFuzzing | WebSocketVulnerability::FrameFuzzing => {
+                Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string())
+            }
+            WebSocketVulnerability::AuthBypass => {
+                Some(crate::waf::types::OwaspCategory::A07_2021_AuthFailures.to_string())
+            }
+        };
+
+        let mut tags = vec!["websocket".to_string(), format!("{:?}", self.vulnerability)];
+        if self.success {
+            tags.push("confirmed".to_string());
+        }
+
         FuzzResult {
             payload: Payload {
                 payload_type: PayloadType::Websocket,
                 payload: self.message,
                 description,
                 severity: self.severity,
-                tags: vec![format!("{:?}", self.vulnerability)],
+                tags,
             },
             status_code: if self.success { 101 } else { 400 },
             response_time_ms: 0,
             response_length: None,
-            response_body: None,
+            response_body: if self.response_snippet.is_empty() {
+                None
+            } else {
+                Some(self.response_snippet)
+            },
             is_waf_blocked: false,
             is_anomaly: self.success,
             is_redos_suspected: false,
@@ -448,7 +480,7 @@ impl FuzzerResultConverter<WebSocketTestResult> for WebSocketTestResult {
                 vec![]
             },
             error: None,
-            owasp_category: Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string()),
+            owasp_category,
             detected_severity: self.severity,
         }
     }
