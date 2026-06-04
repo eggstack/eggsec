@@ -21,7 +21,7 @@ impl QueryBuilder {
         "SELECT f1.id, f2.id as duplicate_id
          FROM findings f1
          JOIN findings f2 ON f1.id < f2.id
-         WHERE similarity(f1.finding->>'title', f2.finding->>'title') > $1"
+         WHERE similarity(f1.finding->>'title', f2.finding->>'title') > $1::float"
     }
 }
 

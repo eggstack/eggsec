@@ -68,7 +68,7 @@ impl Database {
             .bind(&scan.scan_type)
             .bind(scan.started_at)
             .bind(scan.completed_at)
-            .bind(format!("{:?}", scan.status))
+            .bind(scan.status.to_string())
             .bind(scan.findings_count as i64)
             .execute(&self.pool)
             .await
@@ -144,13 +144,14 @@ impl Database {
                 "INSERT INTO findings (id, scan_id, finding, status, created_at, updated_at, status_history)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
                  ON CONFLICT (id) DO UPDATE SET
+                     scan_id = EXCLUDED.scan_id,
                      finding = EXCLUDED.finding,
                      status = EXCLUDED.status,
                      updated_at = EXCLUDED.updated_at,
                      status_history = EXCLUDED.status_history"
             )
             .bind(&stored.finding.id)
-            .bind(&stored.finding.affected_asset.identifier)
+            .bind(&stored.scan_id)
             .bind(finding_json)
             .bind(stored.status.to_string())
             .bind(stored.created_at)
@@ -172,7 +173,7 @@ impl Database {
                 .await
                 .map_err(|e| SlapperError::Config(format!("Failed to get finding: {}", e)))?;
 
-            Ok(row.map(|r| row_to_stored_finding(&r)))
+            Ok(row.map(|r| row_to_stored_finding(&r)).transpose()?)
         }
         #[cfg(not(feature = "database"))]
         {
@@ -195,25 +196,58 @@ impl Database {
         Ok(())
     }
 
-    pub async fn list_findings(&self, _scan_id: &str) -> Result<Vec<StoredFinding>> {
+    pub async fn list_findings(
+        &self,
+        _scan_id: &str,
+        _offset: usize,
+        _limit: usize,
+    ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
-            let rows = if scan_id == "all" {
-                sqlx::query("SELECT * FROM findings ORDER BY created_at DESC")
-                    .fetch_all(&self.pool)
-                    .await
-            } else {
-                sqlx::query("SELECT * FROM findings WHERE scan_id = $1 ORDER BY created_at DESC")
-                    .bind(scan_id)
-                    .fetch_all(&self.pool)
-                    .await
-            }
+            let rows = sqlx::query(
+                "SELECT * FROM findings WHERE scan_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT $3",
+            )
+            .bind(scan_id)
+            .bind(offset as i64)
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await
             .map_err(|e| SlapperError::Config(format!("Failed to list findings: {}", e)))?;
 
-            Ok(rows.iter().map(|r| row_to_stored_finding(r)).collect())
+            rows.iter()
+                .map(|r| row_to_stored_finding(r))
+                .collect::<Result<Vec<_>>>()
         }
         #[cfg(not(feature = "database"))]
         {
+            let _ = (_offset, _limit);
+            Ok(vec![])
+        }
+    }
+
+    pub async fn list_all_findings(
+        &self,
+        _offset: usize,
+        _limit: usize,
+    ) -> Result<Vec<StoredFinding>> {
+        #[cfg(feature = "database")]
+        {
+            let rows = sqlx::query(
+                "SELECT * FROM findings ORDER BY created_at DESC OFFSET $1 LIMIT $2",
+            )
+            .bind(offset as i64)
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| SlapperError::Config(format!("Failed to list all findings: {}", e)))?;
+
+            rows.iter()
+                .map(|r| row_to_stored_finding(r))
+                .collect::<Result<Vec<_>>>()
+        }
+        #[cfg(not(feature = "database"))]
+        {
+            let _ = (_offset, _limit);
             Ok(vec![])
         }
     }
@@ -234,7 +268,9 @@ impl Database {
                 SlapperError::Config(format!("Failed to get findings by severity: {}", e))
             })?;
 
-            Ok(rows.iter().map(|r| row_to_stored_finding(r)).collect())
+            rows.iter()
+                .map(|r| row_to_stored_finding(r))
+                .collect::<Result<Vec<_>>>()
         }
         #[cfg(not(feature = "database"))]
         {
@@ -250,51 +286,29 @@ fn parse_scan_status(s: String) -> ScanStatus {
         "Completed" => ScanStatus::Completed,
         "Failed" => ScanStatus::Failed,
         "Cancelled" => ScanStatus::Cancelled,
-        _ => ScanStatus::Running,
+        other => {
+            tracing::warn!(status = other, "Unknown scan status, defaulting to Running");
+            ScanStatus::Running
+        }
     }
 }
 
 #[cfg(feature = "database")]
-fn row_to_stored_finding(row: &sqlx::postgres::PgRow) -> StoredFinding {
+fn row_to_stored_finding(row: &sqlx::postgres::PgRow) -> Result<StoredFinding> {
     use sqlx::Row;
 
     let finding_json: serde_json::Value = row.get("finding");
     let history_json: serde_json::Value = row.get("status_history");
     let status_str: String = row.get("status");
+    let scan_id: String = row.get("scan_id");
 
-    let finding: crate::findings::Finding = serde_json::from_value(finding_json).unwrap_or_else(
-        |_| crate::findings::Finding {
-            id: uuid::Uuid::new_v4().to_string(),
-            fingerprint: String::new(),
-            title: "Deserialization failed".to_string(),
-            description: String::new(),
-            severity: Severity::Info,
-            confidence: crate::findings::Confidence::Informational,
-            finding_type: crate::findings::FindingType::ScanResult,
-            cwe: None,
-            owasp: None,
-            cve: None,
-            affected_asset: crate::findings::AffectedAsset {
-                asset_type: "unknown".to_string(),
-                identifier: "unknown".to_string(),
-                host: None,
-                port: None,
-                protocol: None,
-            },
-            location: crate::findings::FindingLocation::default(),
-            evidence: vec![],
-            reproduction: None,
-            remediation: None,
-            discovered_at: chrono::Utc::now(),
-            source: crate::findings::FindingSource {
-                tool: "unknown".to_string(),
-                module: "storage".to_string(),
-                run_id: None,
-            },
-            tags: vec![],
-            metadata: serde_json::Value::Null,
-        },
-    );
+    let finding: crate::findings::Finding = serde_json::from_value(finding_json).map_err(|e| {
+        SlapperError::Config(format!(
+            "Failed to deserialize finding JSON for id {}: {}",
+            row.get::<String, _>("id"),
+            e
+        ))
+    })?;
 
     let status = match status_str.as_str() {
         "new" => FindingStatus::New,
@@ -303,7 +317,14 @@ fn row_to_stored_finding(row: &sqlx::postgres::PgRow) -> StoredFinding {
         "false_positive" => FindingStatus::FalsePositive,
         "remediated" => FindingStatus::Remediated,
         "reopened" => FindingStatus::Reopened,
-        _ => FindingStatus::New,
+        other => {
+            tracing::warn!(
+                finding_id = row.get::<String, _>("id"),
+                status = other,
+                "Unknown finding status, defaulting to New"
+            );
+            FindingStatus::New
+        }
     };
 
     let status_history: Vec<crate::findings::lifecycle::StatusChange> =
@@ -312,13 +333,14 @@ fn row_to_stored_finding(row: &sqlx::postgres::PgRow) -> StoredFinding {
     let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
     let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
 
-    StoredFinding {
+    Ok(StoredFinding {
         finding,
+        scan_id,
         status,
         created_at,
         updated_at,
         status_history,
-    }
+    })
 }
 
 #[cfg(test)]

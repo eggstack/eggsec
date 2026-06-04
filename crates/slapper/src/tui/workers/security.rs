@@ -286,7 +286,7 @@ pub async fn run_storage_task(
         },
         "list_findings" => {
             let findings = if let Some(ref scan) = scan_id {
-                match db.list_findings(scan).await {
+                match db.list_findings(scan, 0, 1000).await {
                     Ok(f) => f,
                     Err(e) => {
                         tracing::warn!("Failed to list findings for scan {}: {}", scan, e);
@@ -294,7 +294,7 @@ pub async fn run_storage_task(
                     }
                 }
             } else {
-                match db.list_findings("all").await {
+                match db.list_all_findings(0, 1000).await {
                     Ok(f) => f,
                     Err(e) => {
                         tracing::warn!("Failed to list all findings: {}", e);
@@ -343,7 +343,7 @@ pub async fn run_storage_task(
                     tags: vec![],
                     metadata: serde_json::Value::Null,
                 };
-                let stored = StoredFinding::new(finding);
+                let stored = StoredFinding::new(finding, "");
                 if let Err(e) = result_tx
                     .send(TaskResult::StorageListFindings {
                         findings: vec![stored],

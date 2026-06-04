@@ -46,7 +46,7 @@ impl FindingStore {
             return Ok(findings[idx].clone());
         }
 
-        let stored = StoredFinding::new(finding);
+        let stored = StoredFinding::new(finding, "");
         let line = serde_json::to_string(&stored)?;
 
         let mut file = OpenOptions::new()

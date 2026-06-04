@@ -23,19 +23,15 @@ pub enum ScanStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StoredUser {
-    pub id: String,
-    pub username: String,
-    pub email: String,
-    pub role: UserRole,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum UserRole {
-    Admin,
-    Analyst,
-    Viewer,
+impl std::fmt::Display for ScanStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Running => write!(f, "Running"),
+            Self::Completed => write!(f, "Completed"),
+            Self::Failed => write!(f, "Failed"),
+            Self::Cancelled => write!(f, "Cancelled"),
+        }
+    }
 }
 
 impl StoredScan {

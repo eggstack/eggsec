@@ -49,6 +49,7 @@ impl std::fmt::Display for FindingStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredFinding {
     pub finding: super::Finding,
+    pub scan_id: String,
     pub status: FindingStatus,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -64,10 +65,11 @@ pub struct StatusChange {
 }
 
 impl StoredFinding {
-    pub fn new(finding: super::Finding) -> Self {
+    pub fn new(finding: super::Finding, scan_id: impl Into<String>) -> Self {
         let now = chrono::Utc::now();
         Self {
             finding,
+            scan_id: scan_id.into(),
             status: FindingStatus::New,
             created_at: now,
             updated_at: now,
@@ -162,14 +164,15 @@ mod tests {
 
     #[test]
     fn stored_finding_starts_as_new() {
-        let stored = StoredFinding::new(test_finding("fp1"));
+        let stored = StoredFinding::new(test_finding("fp1"), "scan-1");
         assert_eq!(stored.status, FindingStatus::New);
         assert!(stored.status_history.is_empty());
+        assert_eq!(stored.scan_id, "scan-1");
     }
 
     #[test]
     fn change_status_records_history() {
-        let mut stored = StoredFinding::new(test_finding("fp1"));
+        let mut stored = StoredFinding::new(test_finding("fp1"), "scan-1");
         stored
             .change_status(FindingStatus::Confirmed, Some("Looks real".to_string()))
             .unwrap();
@@ -183,7 +186,7 @@ mod tests {
 
     #[test]
     fn invalid_transition_is_rejected() {
-        let mut stored = StoredFinding::new(test_finding("fp1"));
+        let mut stored = StoredFinding::new(test_finding("fp1"), "scan-1");
         let result = stored.change_status(FindingStatus::Remediated, None);
         assert!(result.is_err());
         assert_eq!(stored.status, FindingStatus::New);
@@ -210,9 +213,10 @@ mod tests {
 
     #[test]
     fn stored_finding_serializes() {
-        let stored = StoredFinding::new(test_finding("fp1"));
+        let stored = StoredFinding::new(test_finding("fp1"), "scan-1");
         let json = serde_json::to_string(&stored).unwrap();
         assert!(json.contains("fp1"));
+        assert!(json.contains("scan-1"));
         assert!(json.contains("new"));
     }
 
