@@ -87,13 +87,13 @@ These domain-specific error types serve specialized purposes and intentionally d
 
 | Type | Location | Purpose | Converts to `SlapperError`? |
 |------|----------|---------|-----------------------------|
-| `ConfigError` | `config/settings.rs:698` | Config file IO/parse/serialize errors | No (config boundary) |
-| `ScopeError` | `config/scope.rs:401` | Target scope validation errors | Yes (via `From` impl) |
+| `ConfigError` | `config/settings.rs:707` | Config file IO/parse/serialize errors | No (config boundary) |
+| `ScopeError` | `config/scope.rs:420` | Target scope validation errors | Yes (via `From` impl) |
 | `AiError` | `ai/errors.rs:6` | AI/LLM API errors (9 variants) | Yes (feature-gated) |
 | `CaptureError` | `packet/capture.rs:440` | Packet capture errors (7 variants) | Yes (feature-gated) |
 | `TracerouteError` | `packet/traceroute.rs:543` | Traceroute errors (4 variants) | Yes (feature-gated) |
 | `ProbeError` | `packet/traceroute.rs:555` | Traceroute probe errors (5 variants) | No (encapsulated by `TracerouteError`) |
-| `ToolError` / `ToolErrorType` | `tool/tool_error.rs:4` | Serializable API/MCP error (11 types) | No (serializable JSON schema) |
+| `ToolError` / `ToolErrorType` | `tool/tool_error.rs:4` / `tool/tool_error.rs:51` | Serializable API/MCP error (11 types) | No (serializable JSON schema) |
 | `QueueError` | `distributed/queue.rs:155` | Distributed task queue errors | No (queue boundary) |
 | `CallbackUrlValidationError` | `tool/protocol/agent_routes.rs:28` | MCP callback URL validation | No (validation boundary) |
 | `PacketValidationError` | `packet/craft.rs:68` | Packet crafting validation | No (crafting boundary) |
