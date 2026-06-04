@@ -34,7 +34,7 @@ Each payload type has its own module (e.g., `sqli.rs`, `xss.rs`). The `payload_v
 Algorithms for identifying if a fuzzing attempt was successful.
 
 - **Pattern Matching (`aho_corasick.rs`)**: Aho-Corasick multi-pattern matcher for leak detection (database errors, stack traces, file paths, sensitive data, credentials, debug info).
-- **Timing Analysis (`analyzer.rs`)**: `TimingAnalyzer` detects response time anomalies using IQR (Interquartile Range) baselines. Handles NaN values explicitly to prevent panics.
+- **Timing Analysis (`analyzer.rs`)**: `TimingAnalyzer` detects response time anomalies using IQR (Interquartile Range) baselines. Internal stats (total requests, anomaly counts) use lock-free atomics, but `record()` requires `&mut self` and is wrapped in `Arc<Mutex<>>` at the call site. Handles NaN values explicitly to prevent panics.
 - **Detection Patterns (`patterns.rs`)**: Raw pattern lists for SQL errors, stack traces, file paths, credentials, AWS keys, and connection strings.
 
 ### Diffing (`diff.rs`)
@@ -47,7 +47,7 @@ Algorithms for identifying if a fuzzing attempt was successful.
 
 ### Mutator (`mutator.rs`)
 
-`Mutator` applies transformations to payloads: case toggle, URL encoding, double URL encoding, null byte injection, duplication, truncation, prefix/suffix addition, comment insertion, whitespace manipulation, reversal, and swapping.
+`generate_mutations()` is the public API entry point (re-exported from `fuzzer/mod.rs`). Internally it uses `Mutator` to apply transformations to payloads: case toggle, URL encoding, double URL encoding, null byte injection, duplication, truncation, prefix/suffix addition, comment insertion, whitespace manipulation, reversal, and swapping.
 
 ### Rate Limiting (`rate_limit.rs`)
 
@@ -73,15 +73,15 @@ Auto-calibration system that samples baseline responses before fuzzing to automa
 ### Targets (`targets/`)
 
 Target-specific payload generation:
+- `api.rs` - API endpoint discovery and OpenAPI spec parsing
 - `apache.rs` - Apache-specific paths and misconfigurations
 - `nginx.rs` - Nginx-specific paths and misconfigurations
 - `php.rs` - PHP-specific payloads
-- `api.rs` - API endpoint discovery
 - `generic.rs` - Generic target payloads
 
 ### WAF Fingerprinting & Bypass (`waf_fingerprint.rs`)
 
-`WafFingerprinter` detects Web Application Firewalls via headers, cookies, status codes, and body patterns. Supports 17+ WAF products (Cloudflare, Akamai, AWS WAF, Imperva, F5 ASM, Azure WAF, ModSecurity, etc.) with bypass suggestions.
+`WafFingerprinter` detects Web Application Firewalls via headers, cookies, status codes, and body patterns. Supports 34 WAF products (Cloudflare, Akamai, AWS WAF, Imperva, F5 ASM, Azure WAF, ModSecurity, etc.) with bypass suggestions.
 
 ## Specialized Fuzzing
 
@@ -125,9 +125,9 @@ let body = match response.text().await {
 ```
 
 ### WAF Detection
-WAF blocked status codes are defined as a constant in `engine/utils.rs`:
+WAF blocked status codes are defined in `crate::constants::waf::BLOCKED_STATUS_CODES` and referenced via `engine/utils.rs`:
 ```rust
-const WAF_BLOCKED_STATUS_CODES: &[u16] = &[403, 406, 429];
+const WAF_BLOCKED_STATUS_CODES: &[u16] = &crate::constants::waf::BLOCKED_STATUS_CODES;
 ```
 
 ### Timing Analysis

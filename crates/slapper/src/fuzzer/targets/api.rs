@@ -1,7 +1,7 @@
-use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use super::TargetPayload;
 use crate::utils::validation::validate_path;
 use serde::{Deserialize, Serialize};
-use rustc_hash::FxFxHashMap;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -363,24 +363,17 @@ impl OpenAPIFuzzer {
     }
 }
 
-pub fn get_payloads() -> Vec<Payload> {
-    let mut payloads = Vec::new();
-
-    payloads.push(Payload {
-        payload_type: PayloadType::Idor,
-        payload: "1".to_string(),
-        description: "IDOR test - sequential ID".to_string(),
-        severity: Severity::High,
-        tags: vec!["api".to_string(), "idor".to_string()],
-    });
-
-    payloads.push(Payload {
-        payload_type: PayloadType::Idor,
-        payload: "null".to_string(),
-        description: "IDOR test - null value".to_string(),
-        severity: Severity::Medium,
-        tags: vec!["api".to_string(), "idor".to_string()],
-    });
-
-    payloads
+pub fn get_payloads() -> Vec<TargetPayload> {
+    vec![
+        TargetPayload {
+            payload: "1".to_string(),
+            description: "IDOR test - sequential ID".to_string(),
+            category: "idor".to_string(),
+        },
+        TargetPayload {
+            payload: "null".to_string(),
+            description: "IDOR test - null value".to_string(),
+            category: "idor".to_string(),
+        },
+    ]
 }

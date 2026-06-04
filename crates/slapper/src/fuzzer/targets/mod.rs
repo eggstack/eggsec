@@ -1,3 +1,4 @@
+pub mod api;
 pub mod apache;
 pub mod generic;
 pub mod nginx;
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TargetType {
+    Api,
     Nginx,
     Apache,
     PHP,
@@ -16,6 +18,7 @@ pub enum TargetType {
 impl std::fmt::Display for TargetType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            TargetType::Api => write!(f, "api"),
             TargetType::Nginx => write!(f, "nginx"),
             TargetType::Apache => write!(f, "apache"),
             TargetType::PHP => write!(f, "php"),
@@ -29,6 +32,7 @@ impl std::str::FromStr for TargetType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "api" => Ok(TargetType::Api),
             "nginx" => Ok(TargetType::Nginx),
             "apache" => Ok(TargetType::Apache),
             "php" => Ok(TargetType::PHP),
@@ -47,6 +51,7 @@ pub struct TargetPayload {
 
 pub fn get_target_payloads(target: TargetType) -> Vec<TargetPayload> {
     match target {
+        TargetType::Api => api::get_payloads(),
         TargetType::Nginx => nginx::get_payloads(),
         TargetType::Apache => apache::get_payloads(),
         TargetType::PHP => php::get_payloads(),
