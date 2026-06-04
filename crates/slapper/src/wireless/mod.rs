@@ -68,8 +68,8 @@ pub struct WirelessScanner {
 }
 
 impl WirelessScanner {
-    pub fn new() -> Result<Self> {
-        Ok(Self { interface: None })
+    pub fn new() -> Self {
+        Self { interface: None }
     }
 
     pub fn with_interface(mut self, interface: String) -> Self {
@@ -257,6 +257,16 @@ impl WirelessScanner {
                         recommendation: "Ensure proper RADIUS server configuration, certificate validation, and EAP method security".to_string(),
                     });
                 }
+                SecurityType::Unknown => {
+                    vulnerabilities.push(WirelessVulnerability {
+                        ssid: network.ssid.clone(),
+                        bssid: network.bssid.clone(),
+                        vulnerability_type: "Unknown Security".to_string(),
+                        severity: Severity::Medium,
+                        description: "Wireless security type could not be determined - manual verification recommended".to_string(),
+                        recommendation: "Verify wireless security configuration manually".to_string(),
+                    });
+                }
                 _ => {}
             }
         }
@@ -266,7 +276,7 @@ impl WirelessScanner {
 
     fn generate_recommendations(networks: &[WirelessNetwork]) -> Vec<String> {
         let mut recommendations = Vec::new();
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = rustc_hash::FxHashSet::default();
 
         for network in networks {
             if seen.insert(network.security_type) {
@@ -301,12 +311,28 @@ impl WirelessScanner {
 
 impl Default for WirelessScanner {
     fn default() -> Self {
-        Self::new().unwrap()
+        Self::new()
     }
 }
 
 pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::convert::ScanReportData {
-    use crate::output::convert::WirelessNetworkReportData;
+    use crate::output::convert::{FindingData, WirelessNetworkReportData};
+
+    let scanner = WirelessScanner::new();
+    let findings: Vec<FindingData> = scanner
+        .analyze_networks(&result.networks)
+        .iter()
+        .map(|v| FindingData {
+            title: v.vulnerability_type.clone(),
+            severity: v.severity.as_str().to_string(),
+            category: "wireless".to_string(),
+            description: v.description.clone(),
+            location: format!("{} ({})", v.ssid, v.bssid),
+            evidence: None,
+            remediation: Some(v.recommendation.clone()),
+            cve_ids: Vec::new(),
+        })
+        .collect();
 
     let wireless_networks = result
         .networks
@@ -325,7 +351,7 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
         target: result.interface.clone(),
         scan_type: "wireless".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
-        findings: Vec::new(),
+        findings,
         open_ports: Vec::new(),
         services: Vec::new(),
         duration_ms: result.scan_duration_secs * 1000,
@@ -334,13 +360,13 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
 }
 
 pub async fn run_cli(args: crate::cli::WirelessArgs, _config: &crate::config::SlapperConfig) -> Result<()> {
-    let scanner = WirelessScanner::new()?.with_interface(args.interface.clone());
+    let scanner = WirelessScanner::new().with_interface(args.interface.clone());
 
     if !args.quiet {
         eprintln!("Scanning wireless networks on {}...", args.interface);
     }
 
-    let result = scanner.scan(10).await?;
+    let result = scanner.scan(args.duration).await?;
 
     let output = if args.json {
         serde_json::to_string_pretty(&result)?
@@ -393,13 +419,12 @@ mod tests {
 
     #[test]
     fn test_wireless_scanner_creation() {
-        let scanner = WirelessScanner::new();
-        assert!(scanner.is_ok());
+        let _scanner = WirelessScanner::new();
     }
 
     #[test]
     fn test_network_analysis() {
-        let scanner = WirelessScanner::new().unwrap();
+        let scanner = WirelessScanner::new();
         let networks = vec![
             WirelessNetwork {
                 ssid: "OpenNetwork".to_string(),

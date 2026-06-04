@@ -794,7 +794,7 @@ pub async fn run_wireless_task(
         tracing::warn!("Failed to send wireless progress: {}", e);
     }
 
-    let scanner = crate::wireless::WirelessScanner::new()?;
+    let scanner = crate::wireless::WirelessScanner::new();
     let scanner = scanner.with_interface(interface);
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(30),

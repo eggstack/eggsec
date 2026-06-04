@@ -7,10 +7,7 @@ pub async fn handle_wireless(ctx: &CommandContext, mut args: crate::cli::Wireles
     let target = args.interface.clone();
     let scan_id = format!("wireless-{}", chrono::Utc::now().timestamp());
     ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
-    match crate::wireless::run_cli(args, &ctx.config)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))
-    {
+    match crate::wireless::run_cli(args, &ctx.config).await {
         Ok(()) => {
             ctx.notify_manager
                 .notify_scan_complete(&scan_id, &target, "Wireless scan completed", None, None)
@@ -21,7 +18,7 @@ pub async fn handle_wireless(ctx: &CommandContext, mut args: crate::cli::Wireles
             ctx.notify_manager
                 .notify_error(&scan_id, &target, &e.to_string())
                 .await;
-            Err(e)
+            Err(e.into())
         }
     }
 }

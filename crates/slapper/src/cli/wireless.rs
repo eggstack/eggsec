@@ -8,7 +8,8 @@ NOTE: Requires building with --features wireless and root privileges for iwlist 
 Examples:
   slapper wireless wlan0
   slapper wireless wlan0 --json
-  slapper wireless wlan0 -o results.json";
+  slapper wireless wlan0 -o results.json
+  slapper wireless wlan0 --duration 15";
 
 #[derive(clap::Args)]
 pub struct WirelessArgs {
@@ -20,4 +21,6 @@ pub struct WirelessArgs {
     pub output: Option<String>,
     #[arg(long, short = 'q', help = "Suppress non-essential output")]
     pub quiet: bool,
+    #[arg(long, default_value_t = 10, help = "Scan duration in seconds")]
+    pub duration: u64,
 }
