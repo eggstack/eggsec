@@ -148,8 +148,8 @@ async fn build_clients(
         for proxy_entry in healthy_proxies {
             let mut builder = reqwest::Client::builder()
                 .timeout(Duration::from_secs(30))
-                .pool_max_idle_per_host(max_connections.min(100))
-                .pool_idle_timeout(Duration::from_secs(30))
+                .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+                .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
                 .connect_timeout(Duration::from_secs(5))
                 .tcp_keepalive(Duration::from_secs(60))
                 .tcp_nodelay(true)

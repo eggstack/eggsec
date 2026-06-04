@@ -25,7 +25,7 @@ pub struct BrowserArgs {
     #[arg(long, help = "Skip client-side security checks")]
     pub no_client_checks: bool,
 
-    #[arg(long, default_value_t = 60000, help = "Navigation timeout in milliseconds")]
+    #[arg(long, default_value_t = crate::constants::DEFAULT_BROWSER_TIMEOUT_MS, help = "Navigation timeout in milliseconds")]
     pub timeout: u64,
 
     #[arg(long, help = "Custom XSS payload (default: <img src=x onerror=alert(1)>)")]

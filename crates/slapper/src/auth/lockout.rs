@@ -107,10 +107,10 @@ impl LockoutDetector {
     fn classify_lockout(&self, status: u16, body: &str) -> LockoutType {
         let lower = body.to_lowercase();
 
-        if status == 423 {
+        if status == crate::constants::STATUS_LOCKED {
             return LockoutType::HardLockout;
         }
-        if status == 429 {
+        if status == crate::constants::STATUS_RATE_LIMITED {
             return LockoutType::SoftLockout;
         }
         if lower.contains("captcha") {

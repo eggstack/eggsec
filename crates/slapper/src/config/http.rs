@@ -8,7 +8,7 @@ fn default_timeout() -> u64 {
 }
 
 fn default_retry_delay() -> u64 {
-    1000
+    crate::constants::DEFAULT_RETRY_DELAY_MS
 }
 
 fn default_max_redirects() -> usize {
@@ -52,7 +52,7 @@ impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             timeout_secs: default_timeout(),
-            max_retries: 3,
+            max_retries: crate::constants::DEFAULT_MAX_RETRIES,
             retry_delay_ms: default_retry_delay(),
             verify_tls: true,
             follow_redirects: true,

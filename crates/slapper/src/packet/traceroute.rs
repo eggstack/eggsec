@@ -30,7 +30,7 @@ impl Default for TracerouteConfig {
             target: String::new(),
             max_hops: 30,
             timeout: Duration::from_secs(3),
-            max_retries: 3,
+            max_retries: crate::constants::DEFAULT_MAX_RETRIES,
             first_ttl: 1,
             port: 33434,
             use_icmp: false,

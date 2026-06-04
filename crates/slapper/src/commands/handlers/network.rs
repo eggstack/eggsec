@@ -138,7 +138,7 @@ pub async fn handle_traceroute(
         target: args.target.clone(),
         max_hops: args.max_hops,
         timeout: Duration::from_secs(args.timeout),
-        max_retries: 3,
+        max_retries: crate::constants::DEFAULT_MAX_RETRIES,
         first_ttl: 1,
         port: 33434,
         use_icmp: args.icmp,

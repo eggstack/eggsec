@@ -106,6 +106,7 @@ pub struct FuzzEngine {
     pub(crate) differ: Option<ResponseDiffer>,
     pub(crate) baseline_captured: bool,
     pub(crate) filter_chain: crate::fuzzer::FilterChain,
+    pub(crate) auth_context_entry: Option<crate::auth_context::AuthContextEntry>,
     #[cfg(feature = "ai-integration")]
     pub(crate) ai_generator: Option<crate::ai::AiPayloadGenerator>,
 }
@@ -169,6 +170,33 @@ impl FuzzEngine {
 
         let filter_chain = crate::fuzzer::FilterChain::new();
 
+        let auth_context_entry =
+            if let (Some(ref path), Some(ref role)) = (&args.common.auth_context, &args.common.auth_role)
+            {
+                match crate::auth_context::load_auth_context_file(std::path::Path::new(path)) {
+                    Ok(ctx) => match crate::auth_context::get_context_entry(&ctx, role) {
+                        Ok(entry) => {
+                            tracing::info!(
+                                "Loaded auth context role '{}' from {}",
+                                role,
+                                path
+                            );
+                            Some(entry.clone())
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to resolve auth role: {}", e);
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        tracing::warn!("Failed to load auth context file: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
         Ok(Self {
             args,
             client,
@@ -181,14 +209,13 @@ impl FuzzEngine {
             differ,
             baseline_captured: false,
             filter_chain,
+            auth_context_entry,
             #[cfg(feature = "ai-integration")]
             ai_generator: None,
         })
     }
 
     fn build_client(args: &FuzzArgs) -> Result<Client> {
-        let concurrency = args.concurrency;
-
         if args.common.insecure {
             tracing::warn!(
                 "TLS certificate verification disabled. This is insecure and should only \
@@ -198,9 +225,9 @@ impl FuzzEngine {
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(args.timeout))
             .danger_accept_invalid_certs(args.common.insecure)
-            .redirect(reqwest::redirect::Policy::limited(10))
-            .pool_max_idle_per_host(concurrency / 2)
-            .pool_idle_timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::limited(crate::constants::http::DEFAULT_MAX_REDIRECTS as usize))
+            .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+            .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
             .tcp_nodelay(true);
 
         if let Some(proxy_url) = &args.common.proxy {

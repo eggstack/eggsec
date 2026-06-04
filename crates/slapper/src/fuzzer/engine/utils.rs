@@ -15,7 +15,7 @@ use super::types::{BaselineResponse, FuzzResult, FuzzSession, OwaspSummary};
 
 use super::core::FuzzEngine;
 
-const WAF_BLOCKED_STATUS_CODES: &[u16] = &[403, 406, 429];
+const WAF_BLOCKED_STATUS_CODES: &[u16] = &crate::constants::waf::BLOCKED_STATUS_CODES;
 
 impl FuzzEngine {
     pub(crate) fn mutate_payloads(&self, payloads: &[Payload]) -> Vec<Payload> {
@@ -88,12 +88,14 @@ impl FuzzEngine {
     pub(crate) async fn capture_baseline_for_diffing(&mut self) -> Result<()> {
         if let Some(ref mut differ) = self.differ {
             let start = Instant::now();
-            let response = self
+            let mut request = self
                 .client
                 .get(&self.args.url)
-                .header("User-Agent", &self.user_agent)
-                .send()
-                .await?;
+                .header("User-Agent", &self.user_agent);
+            if let Some(ref entry) = self.auth_context_entry {
+                request = crate::auth_context::apply_auth_context_to_request(request, entry);
+            }
+            let response = request.send().await?;
 
             let status_code = response.status().as_u16();
             let headers = response.headers().clone();
@@ -134,6 +136,9 @@ impl FuzzEngine {
                 request = request.header("User-Agent", &self.user_agent);
                 if let Some(ref bearer) = self.args.common.bearer {
                     request = request.bearer_auth(bearer);
+                }
+                if let Some(ref entry) = self.auth_context_entry {
+                    request = crate::auth_context::apply_auth_context_to_request(request, entry);
                 }
 
                 if let Ok(resp) = request.send().await {
@@ -219,17 +224,20 @@ pub(crate) async fn send_payload_async(
     timing_analyzer: Arc<Mutex<TimingAnalyzer>>,
     pattern_matcher: PatternMatcher,
     user_agent: &str,
+    auth_context_entry: Option<&crate::auth_context::AuthContextEntry>,
 ) -> Result<FuzzResult> {
     let url = build_url(base_url, param, &payload.payload)?;
     let http_method = parse_method(method);
 
     let start = Instant::now();
 
-    let response = client
-        .request(http_method, url.clone())
-        .header("User-Agent", user_agent)
-        .send()
-        .await;
+    let mut request = client.request(http_method, url.clone());
+    request = request.header("User-Agent", user_agent);
+    if let Some(entry) = auth_context_entry {
+        request = crate::auth_context::apply_auth_context_to_request(request, entry);
+    }
+
+    let response = request.send().await;
 
     let response_time = start.elapsed();
     let mut timing: tokio::sync::MutexGuard<'_, TimingAnalyzer> = timing_analyzer.lock().await;

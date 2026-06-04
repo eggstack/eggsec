@@ -121,7 +121,7 @@ pub async fn run_recon(
         tracing::warn!("Failed to send progress: {}", e);
     }
 
-    let max_retries = 3;
+    let max_retries = crate::constants::DEFAULT_MAX_RETRIES;
     let base_delay_secs = 2u64;
 
     for attempt in 1..=max_retries {

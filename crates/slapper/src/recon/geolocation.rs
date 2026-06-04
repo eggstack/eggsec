@@ -435,7 +435,7 @@ impl GeoLocator {
 
         let response = self.client.get(&url).send().await?;
 
-        if response.status() == 429 || response.status() == 403 {
+        if response.status() == crate::constants::STATUS_RATE_LIMITED || response.status() == crate::constants::STATUS_FORBIDDEN {
             return Err(SlapperError::RateLimited(
                 "Rate limited or forbidden".to_string(),
             ));

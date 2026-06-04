@@ -73,8 +73,8 @@ impl AiClient {
         let circuit_breaker = Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(60)));
         let client = Client::builder()
             .timeout(Duration::from_secs(60))
-            .pool_max_idle_per_host(20)
-            .pool_idle_timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+            .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
             .tcp_nodelay(true)
             .build()
             .map_err(|e| AiError::RequestFailed(format!("failed to create AI HTTP client: {e}")))?;
@@ -193,7 +193,7 @@ impl AiClient {
 
         match request.send().await {
             Ok(response) => {
-                if response.status().as_u16() == 429 {
+                if response.status().as_u16() == crate::constants::STATUS_RATE_LIMITED {
                     self.circuit_breaker.record_failure();
                     return Err(AiError::RateLimited);
                 }

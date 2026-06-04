@@ -28,8 +28,8 @@ impl Default for WhoisConfig {
     fn default() -> Self {
         Self {
             timeout_secs: 10,
-            max_retries: 3,
-            retry_delay_ms: 1000,
+            max_retries: crate::constants::DEFAULT_MAX_RETRIES,
+            retry_delay_ms: crate::constants::DEFAULT_RETRY_DELAY_MS,
         }
     }
 }

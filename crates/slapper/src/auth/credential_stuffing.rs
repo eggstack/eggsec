@@ -91,10 +91,10 @@ impl CredentialStuffer {
                         });
                     }
 
-                    if status == 429 {
+                    if status == crate::constants::STATUS_RATE_LIMITED {
                         result.rate_limited = true;
                     }
-                    if status == 423 || body.contains("locked") {
+                    if status == crate::constants::STATUS_LOCKED || body.contains("locked") {
                         result.lockout_detected = true;
                         if self.engine.stop_on_lockout {
                             self.engine.stop();

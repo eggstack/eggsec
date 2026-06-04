@@ -38,7 +38,7 @@ impl From<ReqwestError> for AiError {
             AiError::Timeout
         } else if err.is_connect() {
             AiError::RequestFailed(err.to_string())
-        } else if err.status().map(|s| s.as_u16() == 429).unwrap_or(false) {
+        } else if err.status().map(|s| s.as_u16() == crate::constants::STATUS_RATE_LIMITED).unwrap_or(false) {
             AiError::RateLimited
         } else {
             AiError::RequestFailed(err.to_string())

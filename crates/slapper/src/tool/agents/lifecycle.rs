@@ -83,8 +83,8 @@ impl LifecycleManager {
         let (event_tx, event_rx) = mpsc::channel(100);
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
-            .pool_max_idle_per_host(20)
-            .pool_idle_timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+            .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
             .tcp_nodelay(true)
             .build()
             .unwrap_or_else(|_| Client::new());

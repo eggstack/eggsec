@@ -230,7 +230,7 @@ impl Default for BrowserConfig {
             check_dom_xss: true,
             discover_spa_routes: true,
             check_client_security: true,
-            timeout_ms: 60000,
+            timeout_ms: crate::constants::DEFAULT_BROWSER_TIMEOUT_MS,
             xss_payload: "<img src=x onerror=alert(1)>".to_string(),
         }
     }

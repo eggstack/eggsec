@@ -110,6 +110,7 @@ impl FuzzEngine {
             let progress = progress.clone();
             let payload_clone = payload.clone();
             let user_agent = self.user_agent.clone();
+            let auth_context_entry = self.auth_context_entry.clone();
 
             let handle = tokio::spawn(async move {
                 let Ok(_permit) = semaphore.acquire_owned().await else {
@@ -142,6 +143,7 @@ impl FuzzEngine {
                     timing_analyzer,
                     pattern_matcher,
                     &user_agent,
+                    auth_context_entry.as_ref(),
                 )
                 .await;
 
@@ -228,6 +230,7 @@ impl FuzzEngine {
             self.timing_analyzer.clone(),
             self.pattern_matcher.clone(),
             &self.user_agent,
+            self.auth_context_entry.as_ref(),
         )
         .await
     }
@@ -294,8 +297,8 @@ impl FuzzEngine {
                 Ok(r) => {
                     let is_error = r.error.is_some()
                         || r.status_code == 0
-                        || r.status_code == 429
-                        || r.status_code == 503;
+                        || r.status_code == crate::constants::STATUS_RATE_LIMITED
+                        || r.status_code == crate::constants::STATUS_SERVER_ERROR;
 
                     if is_error {
                         limiter.record_error(Some(r.status_code));

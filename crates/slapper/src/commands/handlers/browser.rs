@@ -19,7 +19,7 @@ pub async fn handle_browser(ctx: &CommandContext, mut args: crate::cli::BrowserA
     ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
 
     let report = match tokio::time::timeout(
-        std::time::Duration::from_millis(args.timeout + 10000),
+        std::time::Duration::from_millis(args.timeout + crate::constants::BROWSER_TIMEOUT_BUFFER_MS),
         crate::browser::run_browser_scan(&target, config),
     )
     .await

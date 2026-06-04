@@ -90,9 +90,9 @@ impl TaskScheduler {
     pub fn new() -> Self {
         Self {
             queue: Arc::new(RwLock::new(VecDeque::new())),
-            max_retries: 3,
+            max_retries: crate::constants::DEFAULT_MAX_RETRIES as usize,
             default_priority: TaskPriority::Normal,
-            default_retry_delay_ms: 30000,
+            default_retry_delay_ms: crate::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS,
         }
     }
 

@@ -13,7 +13,6 @@ use crate::utils::circuit_breaker::CircuitBreaker;
 use crate::utils::create_insecure_client_with_options;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use super::waf_patterns::{get_waf_signatures, WafSignature};
 use types::WafSignatureLower;
@@ -53,7 +52,7 @@ impl WafDetector {
             client,
             signatures,
             signatures_lower,
-            circuit_breaker: Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(30))),
+            circuit_breaker: Arc::new(CircuitBreaker::default()),
         })
     }
 }

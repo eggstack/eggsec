@@ -85,10 +85,10 @@ impl BruteForceTester {
                         });
                     }
 
-                    if status == 429 {
+                    if status == crate::constants::STATUS_RATE_LIMITED {
                         result.rate_limited = true;
                     }
-                    if status == 423
+                    if status == crate::constants::STATUS_LOCKED
                         || body.contains("locked")
                         || body.contains("too many attempts")
                     {

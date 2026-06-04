@@ -53,7 +53,7 @@ impl RateLimitTester {
 
             match response {
                 Ok(resp) => {
-                    if resp.status() == 429 {
+                    if resp.status() == crate::constants::STATUS_RATE_LIMITED {
                         result.rate_limited = true;
                         result.requests_until_limited = i + 1;
 

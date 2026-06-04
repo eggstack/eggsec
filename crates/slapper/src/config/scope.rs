@@ -65,9 +65,9 @@ impl Scope {
                     "max_requests_per_second must be greater than 0".to_string(),
                 ));
             }
-            if rate > 10000 {
+            if rate > crate::constants::MAX_REQUESTS_PER_SECOND_LIMIT {
                 return Err(ScopeError::Validation(
-                    "max_requests_per_second exceeds reasonable limit (10000)".to_string(),
+                    format!("max_requests_per_second exceeds reasonable limit ({})", crate::constants::MAX_REQUESTS_PER_SECOND_LIMIT),
                 ));
             }
         }

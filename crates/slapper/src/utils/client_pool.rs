@@ -3,6 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::constants;
+
 pub struct ClientPool {
     clients: Arc<Vec<Client>>,
     current_index: Arc<AtomicUsize>,
@@ -23,9 +25,9 @@ impl ClientPool {
             let mut builder = Client::builder()
                 .timeout(timeout)
                 .danger_accept_invalid_certs(insecure)
-                .redirect(reqwest::redirect::Policy::limited(10))
-                .pool_max_idle_per_host(pool_size / 2)
-                .pool_idle_timeout(Duration::from_secs(30))
+                .redirect(reqwest::redirect::Policy::limited(constants::http::DEFAULT_MAX_REDIRECTS as usize))
+                .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+                .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
                 .tcp_nodelay(true)
                 .user_agent(user_agent.clone());
 
@@ -80,7 +82,7 @@ impl ClientPool {
 
 impl Default for ClientPool {
     fn default() -> Self {
-        Self::new(10, Duration::from_secs(30), false, None, None)
+        Self::new(10, Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS), false, None, None)
     }
 }
 
@@ -91,7 +93,7 @@ pub struct OptimizedClientPool {
 impl OptimizedClientPool {
     pub fn new(pool_size: usize) -> Self {
         Self {
-            pool: ClientPool::new(pool_size, Duration::from_secs(30), false, None, None),
+            pool: ClientPool::new(pool_size, Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS), false, None, None),
         }
     }
 

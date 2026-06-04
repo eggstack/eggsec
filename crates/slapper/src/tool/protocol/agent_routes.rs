@@ -595,7 +595,7 @@ async fn lease_task(
         }
         _ => {}
     }
-    let lease_duration_ms = req.lease_duration_ms.unwrap_or(300000);
+    let lease_duration_ms = req.lease_duration_ms.unwrap_or(crate::constants::DEFAULT_LEASE_DURATION_MS);
     if let Err(e) = validate_lease_duration(lease_duration_ms) {
         return Err((StatusCode::BAD_REQUEST, e));
     }
@@ -660,7 +660,7 @@ async fn lease_next_task(
         }
         _ => {}
     }
-    let lease_duration_ms = req.lease_duration_ms.unwrap_or(300000);
+    let lease_duration_ms = req.lease_duration_ms.unwrap_or(crate::constants::DEFAULT_LEASE_DURATION_MS);
     if let Err(e) = validate_lease_duration(lease_duration_ms) {
         return Err((StatusCode::BAD_REQUEST, e));
     }

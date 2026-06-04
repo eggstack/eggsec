@@ -88,7 +88,7 @@ impl SecurityTool for WafTool {
         let target = &request.target.value;
 
         let concurrency = request.options.concurrency.unwrap_or(10);
-        let timeout = request.options.timeout_ms.unwrap_or(30000);
+        let timeout = request.options.timeout_ms.unwrap_or(crate::constants::DEFAULT_TOOL_TIMEOUT_MS);
 
         let result = match self.mode {
             WafMode::Detect => {

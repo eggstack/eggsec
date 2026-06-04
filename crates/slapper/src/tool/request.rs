@@ -252,7 +252,7 @@ pub struct RequestOptions {
 impl Default for RequestOptions {
     fn default() -> Self {
         Self {
-            timeout_ms: Some(30000),
+            timeout_ms: Some(crate::constants::DEFAULT_TOOL_TIMEOUT_MS),
             concurrency: Some(10),
             rate_limit: None,
             proxy: None,

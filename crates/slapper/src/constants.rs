@@ -10,16 +10,29 @@ pub const PROJECT_NAME: &str = "slapper";
 pub const DEFAULT_EXPORT_DIR: &str = "./exports";
 
 pub const DEFAULT_REMOTE_PORT: u16 = 7890;
-pub const DEFAULT_TRACEROUTE_PORT: u16 = 33434;
-pub const DEFAULT_PROXY_TIMEOUT_MS: u64 = 10000;
-pub const DEFAULT_HEALTH_CHECK_INTERVAL_SECS: u64 = 60;
-pub const DEFAULT_MAX_HEALTH_CHECK_FAILURES: u32 = 3;
-
-pub const WAYBACK_SNAPSHOT_LIMIT: usize = 100;
-pub const DEFAULT_ICMP_PAYLOAD_SIZE: usize = 56;
 
 pub const DEFAULT_CONFIG_FILE: &str = "slapper.toml";
-pub const DEFAULT_WORDLIST: &str = "wordlists/directories.txt";
+
+pub const DEFAULT_MAX_RETRIES: u32 = 3;
+pub const DEFAULT_RETRY_DELAY_MS: u64 = 1000;
+
+pub const DEFAULT_POOL_IDLE_TIMEOUT_SECS: u64 = 30;
+pub const DEFAULT_POOL_MAX_IDLE_PER_HOST: usize = 20;
+
+pub const DEFAULT_TOOL_TIMEOUT_MS: u64 = 30000;
+pub const DEFAULT_BROWSER_TIMEOUT_MS: u64 = 60000;
+pub const BROWSER_TIMEOUT_BUFFER_MS: u64 = 10000;
+
+pub const DEFAULT_TASK_QUEUE_CAPACITY: usize = 10000;
+pub const DEFAULT_LEASE_DURATION_MS: u64 = 300000;
+pub const DEFAULT_SCHEDULER_RETRY_DELAY_MS: u64 = 30000;
+
+pub const MAX_REQUESTS_PER_SECOND_LIMIT: u32 = 10000;
+
+pub const STATUS_RATE_LIMITED: u16 = 429;
+pub const STATUS_FORBIDDEN: u16 = 403;
+pub const STATUS_LOCKED: u16 = 423;
+pub const STATUS_SERVER_ERROR: u16 = 503;
 
 pub const SUPPORTED_WAF_COUNT: usize = 34;
 
@@ -44,29 +57,15 @@ pub mod http {
 }
 
 pub mod scan {
-    pub const DEFAULT_PORT_RANGE: &str = "1-1024";
     pub const DEFAULT_PORT_CONCURRENCY: usize = 100;
-    pub const DEFAULT_ENDPOINT_CONCURRENCY: usize = 20;
 }
 
 pub mod cache {
     pub const DEFAULT_TTL_SECS: u64 = 3600;
-    pub const DEFAULT_MAX_ENTRIES: usize = 10000;
-}
-
-pub mod nvd {
-    pub const DEFAULT_RATE_LIMIT_DELAY_MS: u64 = 6000;
-}
-
-pub mod ui {
-    pub const CHECK_MARK: &str = "✓";
-    pub const CROSS_MARK: &str = "✗";
-    pub const ARROW: &str = "→";
-
-    pub const WIDTH_DEFAULT: usize = 58;
 }
 
 pub mod waf {
+    pub const MAX_REDIRECTS: usize = 5;
     pub const HEADER_MATCH_SCORE: u16 = 25;
     pub const COOKIE_MATCH_SCORE: u16 = 20;
     pub const BODY_MATCH_SCORE: u16 = 15;

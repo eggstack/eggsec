@@ -48,7 +48,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: None,
-            task_queue: Arc::new(TaskQueue::new(10000)),
+            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
         }
     }
 
@@ -63,7 +63,7 @@ impl RemoteListener {
             rate_limit,
             ip_allowlist: None,
             tls_server: None,
-            task_queue: Arc::new(TaskQueue::new(10000)),
+            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
         }
     }
 
@@ -78,7 +78,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: Some(allowlist),
             tls_server: None,
-            task_queue: Arc::new(TaskQueue::new(10000)),
+            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
         }
     }
 
@@ -96,7 +96,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: Some(Arc::new(tls_server)),
-            task_queue: Arc::new(TaskQueue::new(10000)),
+            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
         })
     }
 

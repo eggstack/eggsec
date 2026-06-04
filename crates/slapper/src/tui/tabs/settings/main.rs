@@ -420,7 +420,7 @@ impl SettingsTab {
         let mut config = self.config.clone().unwrap_or_else(|| SlapperConfig {
             http: HttpConfig {
                 timeout_secs: 30,
-                max_retries: 3,
+                max_retries: crate::constants::DEFAULT_MAX_RETRIES,
                 follow_redirects: true,
                 verify_tls: true,
                 max_redirects: 10,
@@ -428,7 +428,7 @@ impl SettingsTab {
                 proxy_auth: None,
                 default_headers: rustc_hash::FxHashMap::default(),
                 default_user_agent: None,
-                retry_delay_ms: 1000,
+                retry_delay_ms: crate::constants::DEFAULT_RETRY_DELAY_MS,
             },
             scan: ScanConfig {
                 default_concurrency: 50,
