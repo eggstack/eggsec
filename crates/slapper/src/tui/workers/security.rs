@@ -5,7 +5,8 @@
     feature = "external-integrations",
     feature = "finding-workflow",
     feature = "vuln-management",
-    feature = "headless-browser"
+    feature = "headless-browser",
+    feature = "wireless"
 ))]
 use crate::tui::workers::TaskResult;
 
@@ -781,4 +782,33 @@ pub async fn run_vuln_task(
             Ok(())
         }
     }
+}
+
+#[cfg(feature = "wireless")]
+pub async fn run_wireless_task(
+    interface: String,
+    progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
+) -> anyhow::Result<()> {
+    if let Err(e) = progress_tx.send((0, 2)).await {
+        tracing::warn!("Failed to send wireless progress: {}", e);
+    }
+
+    let scanner = crate::wireless::WirelessScanner::new()?;
+    let scanner = scanner.with_interface(interface);
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        scanner.scan(10),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("Wireless scan timed out after 30s"))?
+    .map_err(|e| anyhow::anyhow!("Wireless scan failed: {}", e))?;
+
+    if let Err(e) = progress_tx.send((2, 2)).await {
+        tracing::warn!("Failed to send wireless progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::Wireless(result)).await {
+        tracing::warn!("Failed to send wireless result: {}", e);
+    }
+    Ok(())
 }

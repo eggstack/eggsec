@@ -34,6 +34,8 @@ mod waf;
 mod waf_stress;
 #[cfg(feature = "finding-workflow")]
 pub mod workflow;
+#[cfg(feature = "wireless")]
+pub mod wireless;
 
 #[cfg(feature = "headless-browser")]
 pub use browser::BrowserTab;
@@ -71,6 +73,8 @@ pub use waf::WafTab;
 pub use waf_stress::WafStressTab;
 #[cfg(feature = "finding-workflow")]
 pub use workflow::WorkflowTab;
+#[cfg(feature = "wireless")]
+pub use wireless::WirelessTab;
 
 use ratatui::{layout::Rect, Frame};
 
@@ -106,6 +110,7 @@ pub enum Tab {
     Integrations = 25,
     Workflow = 26,
     Vuln = 27,
+    Wireless = 28,
 }
 
 impl Tab {
@@ -139,6 +144,7 @@ impl Tab {
             Tab::Integrations => "Integrations",
             Tab::Workflow => "Workflow",
             Tab::Vuln => "Vuln",
+            Tab::Wireless => "Wireless",
         }
     }
 
@@ -172,6 +178,7 @@ impl Tab {
             Tab::Integrations => "slapper integrations",
             Tab::Workflow => "slapper workflow",
             Tab::Vuln => "slapper vuln",
+            Tab::Wireless => "slapper wireless",
         }
     }
 
@@ -205,6 +212,7 @@ impl Tab {
             Tab::Integrations => "Issue tracker integration (Jira, GitHub, GitLab)",
             Tab::Workflow => "Finding management and SLA tracking",
             Tab::Vuln => "Vulnerability prioritization and risk scoring",
+            Tab::Wireless => "Scan wireless networks for security issues",
         }
     }
 
@@ -281,6 +289,12 @@ impl Tab {
                 t.push(Tab::Browser);
                 t
             };
+            #[cfg(feature = "wireless")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Wireless);
+                t
+            };
             tabs
         });
         &TABS
@@ -328,6 +342,7 @@ impl Tab {
             25 => Some(Tab::Integrations),
             26 => Some(Tab::Workflow),
             27 => Some(Tab::Vuln),
+            28 => Some(Tab::Wireless),
             _ => None,
         }
     }
@@ -362,6 +377,7 @@ impl Tab {
             Tab::Integrations => "integrations",
             Tab::Workflow => "workflow",
             Tab::Vuln => "vuln",
+            Tab::Wireless => "wireless",
         }
     }
 
@@ -395,6 +411,7 @@ impl Tab {
             "integrations" => Tab::Integrations,
             "workflow" => Tab::Workflow,
             "vuln" => Tab::Vuln,
+            "wireless" => Tab::Wireless,
             _ => return None,
         };
         tab.visible_index().and(Some(tab))
@@ -603,6 +620,10 @@ impl Tab {
             Tab::Vuln => &app.vuln,
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => &app.dashboard,
+            #[cfg(feature = "wireless")]
+            Tab::Wireless => &app.wireless,
+            #[cfg(not(feature = "wireless"))]
+            Tab::Wireless => &app.dashboard,
         }
     }
 
@@ -636,6 +657,7 @@ impl Tab {
             Tab::Integrations => "Integrations",
             Tab::Workflow => "Workflow",
             Tab::Vuln => "Vuln",
+            Tab::Wireless => "Wireless",
         };
         vec![label]
     }
@@ -694,6 +716,10 @@ impl Tab {
             Tab::Vuln => &mut app.vuln,
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => &mut app.dashboard,
+            #[cfg(feature = "wireless")]
+            Tab::Wireless => &mut app.wireless,
+            #[cfg(not(feature = "wireless"))]
+            Tab::Wireless => &mut app.dashboard,
         }
     }
 
@@ -751,6 +777,10 @@ impl Tab {
             Tab::Vuln => &app.vuln,
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => &app.dashboard,
+            #[cfg(feature = "wireless")]
+            Tab::Wireless => &app.wireless,
+            #[cfg(not(feature = "wireless"))]
+            Tab::Wireless => &app.dashboard,
         }
     }
 
@@ -808,6 +838,10 @@ impl Tab {
             Tab::Vuln => &mut app.vuln,
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => &mut app.dashboard,
+            #[cfg(feature = "wireless")]
+            Tab::Wireless => &mut app.wireless,
+            #[cfg(not(feature = "wireless"))]
+            Tab::Wireless => &mut app.dashboard,
         }
     }
 }

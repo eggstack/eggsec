@@ -41,6 +41,8 @@ fn command_to_tab(command: &str) -> Option<Tab> {
         "workflow" => Some(Tab::Workflow),
         #[cfg(feature = "vuln-management")]
         "vuln" => Some(Tab::Vuln),
+        #[cfg(feature = "wireless")]
+        "wireless" | "wifi" => Some(Tab::Wireless),
         _ => None,
     }
 }

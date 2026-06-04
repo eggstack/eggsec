@@ -404,6 +404,11 @@ impl super::App {
                 tracing::warn!("TaskResult::Vuln received but feature \"vuln-management\" is disabled");
                 None
             }
+            #[cfg(feature = "wireless")]
+            TaskResult::Wireless(r) => {
+                self.wireless.set_results(r);
+                None
+            }
             _ => Some(result),
         }
     }
@@ -463,6 +468,10 @@ impl TabProgressUpdate for super::tabs::Tab {
                     .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
                     .count() as u64;
                 app.scan.update_progress(completed, total);
+            }
+            #[cfg(feature = "wireless")]
+            super::tabs::Tab::Wireless => {
+                app.wireless.update_progress(completed, total);
             }
             _ => {}
         }

@@ -307,6 +307,9 @@ pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
             crate::tui::tabs::Tab::Vuln => {
                 "  Enter            - Run vulnerability analysis".to_string()
             }
+            crate::tui::tabs::Tab::Wireless => {
+                "  Enter            - Scan wireless networks".to_string()
+            }
         },
         "".to_string(),
         "=== INPUT MODES ===".to_string(),

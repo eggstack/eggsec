@@ -14,6 +14,8 @@ pub mod scan;
 pub mod storage;
 pub mod stress;
 pub mod vuln;
+#[cfg(feature = "wireless")]
+pub mod wireless;
 pub use config::*;
 pub use doctor::*;
 #[cfg(feature = "rest-api")]
@@ -43,6 +45,8 @@ pub use storage::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 pub use vuln::*;
+#[cfg(feature = "wireless")]
+pub use wireless::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -190,6 +194,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Agent(args)) => handle_agent(ctx, args).await,
         #[cfg(feature = "ai-integration")]
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,
+        #[cfg(feature = "wireless")]
+        Some(Commands::Wireless(args)) => handle_wireless(ctx, args).await,
         #[cfg(feature = "grpc-api")]
         Some(Commands::Grpc(args)) => handle_grpc_server(ctx, args).await,
         Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,

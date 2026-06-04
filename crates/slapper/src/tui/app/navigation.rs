@@ -176,6 +176,9 @@ impl super::App {
             super::tabs::Tab::Vuln => {
                 "Vuln - Vulnerability prioritization and risk scoring.".to_string()
             }
+            super::tabs::Tab::Wireless => {
+                "Wireless - Scan wireless networks for security issues.".to_string()
+            }
         }
     }
 }

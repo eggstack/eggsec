@@ -20,7 +20,7 @@ pub struct WirelessNetwork {
     pub last_seen: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SecurityType {
     Open,
     WEP,
@@ -93,21 +93,20 @@ impl WirelessScanner {
             .map_err(|e| SlapperError::Network(format!("iwlist scan failed: {}", e)))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let networks = self.parse_scan_output(&stdout);
+        let mut networks = self.parse_scan_output(&stdout);
+        let scan_time = chrono::Utc::now().to_rfc3339();
+        for network in &mut networks {
+            network.last_seen = scan_time.clone();
+        }
+
+        let recommendations = Self::generate_recommendations(&networks);
 
         Ok(WirelessScanResult {
             interface: interface.clone(),
             networks,
             scan_duration_secs: duration_secs,
-            recommendations: Vec::new(),
+            recommendations,
         })
-    }
-
-    #[cfg(not(feature = "wireless"))]
-    pub async fn scan(&self, _duration_secs: u64) -> Result<WirelessScanResult> {
-        Err(SlapperError::Config(
-            "Wireless scanning requires the `wireless` feature".to_string(),
-        ))
     }
 
     #[cfg(feature = "wireless")]
@@ -118,11 +117,13 @@ impl WirelessScanner {
         let mut current_channel = 0u8;
         let mut current_security = SecurityType::Unknown;
         let mut current_signal = -100i32;
+        let mut current_auth_suite: Option<String> = None;
 
         for line in output.lines() {
             let line = line.trim();
 
             if line.starts_with("Cell ") {
+                current_auth_suite = None;
                 if let (Some(ssid), Some(bssid)) = (current_ssid.take(), current_bssid.take()) {
                     networks.push(WirelessNetwork {
                         ssid,
@@ -185,6 +186,16 @@ impl WirelessScanner {
             } else if line.contains("Encryption key:") && line.contains("off") {
                 current_security = SecurityType::Open;
             }
+
+            if line.contains("Authentication Suites") {
+                if let Some(suite) = line.split(':').nth(1) {
+                    current_auth_suite = Some(suite.trim().to_string());
+                }
+            }
+
+            if current_auth_suite.as_deref() == Some("802.1X") {
+                current_security = SecurityType::Enterprise;
+            }
         }
 
         if let (Some(ssid), Some(bssid)) = (current_ssid, current_bssid) {
@@ -199,11 +210,6 @@ impl WirelessScanner {
         }
 
         networks
-    }
-
-    #[cfg(not(feature = "wireless"))]
-    fn parse_scan_output(&self, _output: &str) -> Vec<WirelessNetwork> {
-        Vec::new()
     }
 
     pub fn analyze_networks(&self, networks: &[WirelessNetwork]) -> Vec<WirelessVulnerability> {
@@ -241,11 +247,55 @@ impl WirelessScanner {
                         recommendation: "Upgrade to WPA2 or WPA3".to_string(),
                     });
                 }
+                SecurityType::Enterprise => {
+                    vulnerabilities.push(WirelessVulnerability {
+                        ssid: network.ssid.clone(),
+                        bssid: network.bssid.clone(),
+                        vulnerability_type: "Enterprise Authentication".to_string(),
+                        severity: Severity::Low,
+                        description: "Enterprise (802.1X) network detected - verify RADIUS server configuration and certificate validation".to_string(),
+                        recommendation: "Ensure proper RADIUS server configuration, certificate validation, and EAP method security".to_string(),
+                    });
+                }
                 _ => {}
             }
         }
 
         vulnerabilities
+    }
+
+    fn generate_recommendations(networks: &[WirelessNetwork]) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for network in networks {
+            if seen.insert(network.security_type) {
+                match network.security_type {
+                    SecurityType::WEP => {
+                        recommendations.push("Upgrade from WEP to WPA2 or WPA3 immediately — WEP is trivially cracked".to_string());
+                    }
+                    SecurityType::Open => {
+                        recommendations.push("Enable WPA2 or WPA3 encryption on open networks".to_string());
+                    }
+                    SecurityType::WPA => {
+                        recommendations.push("Upgrade from WPA to WPA2 or WPA3 — WPA has known TKIP vulnerabilities".to_string());
+                    }
+                    SecurityType::Unknown => {
+                        recommendations.push("Verify wireless security configuration — security type could not be determined".to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if recommendations.is_empty() && !networks.is_empty() {
+            recommendations.push("All detected networks use strong encryption (WPA2/WPA3/Enterprise)".to_string());
+        }
+        if networks.is_empty() {
+            recommendations.push("No wireless networks were detected during the scan".to_string());
+        }
+
+        recommendations
     }
 }
 
@@ -253,6 +303,82 @@ impl Default for WirelessScanner {
     fn default() -> Self {
         Self::new().unwrap()
     }
+}
+
+pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::convert::ScanReportData {
+    use crate::output::convert::WirelessNetworkReportData;
+
+    let wireless_networks = result
+        .networks
+        .iter()
+        .map(|n| WirelessNetworkReportData {
+            ssid: n.ssid.clone(),
+            bssid: n.bssid.clone(),
+            channel: n.channel,
+            security_type: n.security_type.as_str().to_string(),
+            signal_strength: n.signal_strength,
+            last_seen: n.last_seen.clone(),
+        })
+        .collect();
+
+    crate::output::convert::ScanReportData {
+        target: result.interface.clone(),
+        scan_type: "wireless".to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        findings: Vec::new(),
+        open_ports: Vec::new(),
+        services: Vec::new(),
+        duration_ms: result.scan_duration_secs * 1000,
+        wireless_networks,
+    }
+}
+
+pub async fn run_cli(args: crate::cli::WirelessArgs, _config: &crate::config::SlapperConfig) -> Result<()> {
+    let scanner = WirelessScanner::new()?.with_interface(args.interface.clone());
+
+    if !args.quiet {
+        eprintln!("Scanning wireless networks on {}...", args.interface);
+    }
+
+    let result = scanner.scan(10).await?;
+
+    let output = if args.json {
+        serde_json::to_string_pretty(&result)?
+    } else {
+        let mut buf = String::new();
+        buf.push_str(&format!("Wireless Scan Results - Interface: {}\n", result.interface));
+        buf.push_str(&format!("Networks found: {}\n\n", result.networks.len()));
+
+        for (i, network) in result.networks.iter().enumerate() {
+            buf.push_str(&format!("  {}. {}\n", i + 1, network.ssid));
+            buf.push_str(&format!("     BSSID:    {}\n", network.bssid));
+            buf.push_str(&format!("     Channel:  {}\n", network.channel));
+            buf.push_str(&format!("     Security: {}\n", network.security_type.as_str()));
+            buf.push_str(&format!("     Signal:   {} dBm\n", network.signal_strength));
+            buf.push_str(&format!("     Last seen: {}\n", network.last_seen));
+            buf.push('\n');
+        }
+
+        if !result.recommendations.is_empty() {
+            buf.push_str("Recommendations:\n");
+            for rec in &result.recommendations {
+                buf.push_str(&format!("  - {}\n", rec));
+            }
+        }
+
+        buf
+    };
+
+    if let Some(ref output_file) = args.output {
+        tokio::fs::write(output_file, &output).await?;
+        if !args.quiet {
+            eprintln!("Results written to {}", output_file);
+        }
+    } else {
+        println!("{}", output);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

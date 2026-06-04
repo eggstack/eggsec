@@ -166,6 +166,10 @@ pub enum TaskConfig {
         asset_type: Option<String>,
         severity: Option<String>,
     },
+    #[cfg(feature = "wireless")]
+    Wireless {
+        interface: String,
+    },
 }
 
 #[derive(Debug)]
@@ -224,6 +228,8 @@ pub enum TaskResult {
     },
     Workflow(crate::workflow::WorkflowReport),
     Vuln(crate::vuln::VulnAssessment),
+    #[cfg(feature = "wireless")]
+    Wireless(crate::wireless::WirelessScanResult),
     Error(String),
 }
 
@@ -590,6 +596,10 @@ impl TaskRunner {
                 asset_type,
                 severity,
             } => super::security::run_vuln_task(mode, target, cve_id, title, description, cvss_vector, asset_type, severity, progress_tx, result_tx).await,
+            #[cfg(feature = "wireless")]
+            TaskConfig::Wireless { interface } => {
+                super::security::run_wireless_task(interface, progress_tx, result_tx).await
+            }
         };
         result
     }

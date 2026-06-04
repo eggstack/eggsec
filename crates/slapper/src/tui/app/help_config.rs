@@ -502,6 +502,20 @@ pub fn get_static_help_data() -> StaticHelpData {
         },
     );
 
+    #[cfg(feature = "wireless")]
+    sections.insert(
+        Tab::Wireless,
+        HelpSection {
+            title: "Wireless Scanning".to_string(),
+            content: "Scan wireless networks for security issues. Detects Open, WEP, WPA, WPA2, WPA3, and Enterprise (802.1X) networks.".to_string(),
+            commands: vec![
+                HelpCommand { key: "Enter".to_string(), description: "Start scan".to_string(), category: "Action".to_string() },
+                HelpCommand { key: "Tab".to_string(), description: "Toggle focus".to_string(), category: "Navigation".to_string() },
+                HelpCommand { key: "Esc".to_string(), description: "Stop scan".to_string(), category: "Control".to_string() },
+            ],
+        },
+    );
+
     let global_commands = vec![
         HelpCommand {
             key: "Ctrl+C".to_string(),

@@ -73,6 +73,10 @@ impl super::App {
             super::tabs::Tab::Vuln => "vuln_results",
             #[cfg(not(feature = "vuln-management"))]
             super::tabs::Tab::Vuln => "vuln_results",
+            #[cfg(feature = "wireless")]
+            super::tabs::Tab::Wireless => "wireless_results",
+            #[cfg(not(feature = "wireless"))]
+            super::tabs::Tab::Wireless => "wireless_results",
         };
 
         let filename = format!("{}.{}", base_name, ext);
@@ -211,6 +215,10 @@ impl super::App {
             }
             super::tabs::Tab::Vuln => {
                 let msg = "Vuln tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
+            }
+            super::tabs::Tab::Wireless => {
+                let msg = "Wireless tab: no exportable data available".to_string();
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
         }

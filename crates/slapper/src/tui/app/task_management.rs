@@ -320,3 +320,16 @@ impl TaskBuilder for super::tabs::VulnTab {
         })
     }
 }
+
+#[cfg(feature = "wireless")]
+impl TaskBuilder for super::tabs::WirelessTab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        let interface = self.interface();
+        if interface.is_empty() {
+            return None;
+        }
+        Some(workers::TaskConfig::Wireless {
+            interface: interface.to_string(),
+        })
+    }
+}

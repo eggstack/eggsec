@@ -12,6 +12,8 @@ pub mod plan;
 pub mod scan;
 pub mod storage;
 pub mod stress;
+#[cfg(feature = "wireless")]
+pub mod wireless;
 pub(crate) mod timeout;
 pub mod vuln;
 
@@ -28,6 +30,9 @@ pub use vuln::*;
 
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
+
+#[cfg(feature = "wireless")]
+pub use wireless::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -193,6 +198,11 @@ pub enum Commands {
     #[cfg(feature = "ai-integration")]
     #[command(about = "Post-scan AI analysis of findings")]
     AiAnalyze(AiAnalyzeArgs),
+
+    // --- Wireless operations ---
+    #[cfg(feature = "wireless")]
+    #[command(about = "Scan wireless networks for security issues", long_about = WIRELESS_ABOUT)]
+    Wireless(WirelessArgs),
 
     // --- gRPC server ---
     #[cfg(feature = "grpc-api")]

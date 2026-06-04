@@ -17,6 +17,8 @@ pub struct ScanReportData {
     pub open_ports: Vec<PortData>,
     pub services: Vec<ServiceData>,
     pub duration_ms: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wireless_networks: Vec<WirelessNetworkReportData>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +49,16 @@ pub struct ServiceData {
     pub service: String,
     pub version: Option<String>,
     pub banner: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WirelessNetworkReportData {
+    pub ssid: String,
+    pub bssid: String,
+    pub channel: u8,
+    pub security_type: String,
+    pub signal_strength: i32,
+    pub last_seen: String,
 }
 
 pub fn load_scan_report(path: &str) -> Result<ScanReportData, String> {
@@ -126,17 +138,53 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
     let findings: Vec<super::markdown::Finding> =
         report.findings.iter().map(|f| f.into()).collect();
 
-    generate_html_report(summary, findings)
+    let mut html = generate_html_report(summary, findings);
+
+    if !report.wireless_networks.is_empty() {
+        html.push_str("<section class=\"wireless-networks\">\n");
+        html.push_str("<h2>Wireless Networks</h2>\n");
+        html.push_str("<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\">\n");
+        html.push_str("<tr><th>SSID</th><th>BSSID</th><th>Channel</th><th>Security</th><th>Signal</th><th>Last Seen</th></tr>\n");
+        for network in &report.wireless_networks {
+            html.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{} dBm</td><td>{}</td></tr>\n",
+                network.ssid, network.bssid, network.channel,
+                network.security_type, network.signal_strength, network.last_seen
+            ));
+        }
+        html.push_str("</table>\n");
+        html.push_str("</section>\n\n");
+    }
+
+    html
 }
 
 pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::Error> {
     use super::markdown::{generate_markdown_report, ScanSummary};
+    use std::fmt::Write;
 
     let summary = ScanSummary::from(report);
     let findings: Vec<super::markdown::Finding> =
         report.findings.iter().map(|f| f.into()).collect();
 
-    generate_markdown_report(summary, findings)
+    let mut md = generate_markdown_report(summary, findings)?;
+
+    if !report.wireless_networks.is_empty() {
+        writeln!(md, "## Wireless Networks\n")?;
+        writeln!(md, "| SSID | BSSID | Channel | Security | Signal | Last Seen |")?;
+        writeln!(md, "|------|-------|---------|----------|--------|-----------|")?;
+        for network in &report.wireless_networks {
+            writeln!(
+                md,
+                "| {} | {} | {} | {} | {} dBm | {} |",
+                network.ssid, network.bssid, network.channel,
+                network.security_type, network.signal_strength, network.last_seen
+            )?;
+        }
+        writeln!(md)?;
+    }
+
+    Ok(md)
 }
 
 pub fn convert_to_csv(report: &ScanReportData) -> String {
@@ -259,6 +307,7 @@ mod tests {
             open_ports: vec![],
             services: vec![],
             duration_ms: 1000,
+            wireless_networks: vec![],
         }
     }
 

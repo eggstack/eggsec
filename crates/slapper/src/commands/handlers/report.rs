@@ -23,10 +23,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                     convert::convert_to_sarif(&report).map_err(|e| anyhow::anyhow!(e))?
                 }
                 ReportFormat::Html => {
-                    let summary = crate::output::markdown::ScanSummary::from(&report);
-                    let findings: Vec<crate::output::markdown::Finding> =
-                        report.findings.iter().map(Into::into).collect();
-                    crate::output::html::HtmlReport::new(summary, findings).generate()
+                    convert::convert_to_html(&report)
                 }
                 ReportFormat::Markdown => {
                     convert::convert_to_markdown(&report).map_err(|e| anyhow::anyhow!(e))?

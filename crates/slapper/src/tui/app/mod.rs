@@ -93,6 +93,8 @@ pub struct App {
     pub workflow: tabs::WorkflowTab,
     #[cfg(feature = "vuln-management")]
     pub vuln: tabs::VulnTab,
+    #[cfg(feature = "wireless")]
+    pub wireless: tabs::WirelessTab,
     pub export_format: OutputFormat,
     pub task_handle: Option<tokio::task::JoinHandle<()>>,
     pub task_inner_abort: Option<tokio::task::AbortHandle>,
@@ -213,6 +215,8 @@ impl App {
             workflow: tabs::WorkflowTab::new(),
             #[cfg(feature = "vuln-management")]
             vuln: tabs::VulnTab::new(),
+            #[cfg(feature = "wireless")]
+            wireless: tabs::WirelessTab::new(),
             http_options: GlobalHttpOptions::default(),
             history,
             show_help: false,
@@ -358,6 +362,8 @@ impl App {
             Tab::Workflow => self.workflow.build_task_config(),
             #[cfg(feature = "vuln-management")]
             Tab::Vuln => self.vuln.build_task_config(),
+            #[cfg(feature = "wireless")]
+            Tab::Wireless => self.wireless.build_task_config(),
             _ => None,
         }
     }
