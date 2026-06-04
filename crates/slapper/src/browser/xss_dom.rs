@@ -61,7 +61,9 @@ pub async fn scan_dom_xss(
                 {{ name: 'document.cookie', get: () => document.cookie }},
                 {{ name: 'document.referrer', get: () => document.referrer }},
                 {{ name: 'localStorage', get: () => localStorage.getItem('test') }},
-                {{ name: 'sessionStorage', get: () => sessionStorage.getItem('test') }}
+                {{ name: 'sessionStorage', get: () => sessionStorage.getItem('test') }},
+                {{ name: 'WebSocket', get: () => try {{ const ws = new WebSocket('ws://localhost'); return 'ws://localhost'; }} catch(e) {{ return ''; }} }},
+                {{ name: 'postMessage', get: () => {{ window.__slapper_test_msg = ''; window.addEventListener('message', (e) => {{ window.__slapper_test_msg = e.data; }}); return 'listener_set'; }} }}
             ];
 
             const sinks = [
@@ -72,7 +74,9 @@ pub async fn scan_dom_xss(
                 {{ name: 'eval', check: (val) => {{ try {{ eval(val); return false; }} catch(e) {{ return true; }} }} }},
                 {{ name: 'setTimeout', check: () => true }},
                 {{ name: 'setInterval', check: () => true }},
-                {{ name: 'Function', check: (val) => {{ try {{ new Function(val); return true; }} catch(e) {{ return false; }} }} }}
+                {{ name: 'Function', check: (val) => {{ try {{ new Function(val); return true; }} catch(e) {{ return false; }} }} }},
+                {{ name: 'scriptSrc', check: (val) => {{ try {{ let s = document.createElement('script'); s.src = val; return true; }} catch(e) {{ return false; }} }} }},
+                {{ name: 'onerror', check: (val) => {{ try {{ let d = document.createElement('img'); d.onerror = val; return true; }} catch(e) {{ return false; }} }} }}
             ];
 
             const findings = [];
@@ -143,6 +147,8 @@ fn calculate_severity(source: &str, sink: &str) -> (Severity, f32) {
         "document.write" => 8.0,
         "setTimeout" | "setInterval" => 6.5,
         "Function" => 8.5,
+        "scriptSrc" => 7.0,
+        "onerror" => 7.0,
         _ => 5.0,
     };
 
@@ -181,6 +187,12 @@ fn get_remediation(_source: &str, sink: &str) -> String {
         },
         "setTimeout" | "setInterval" => {
             "Avoid passing user input to setTimeout/setInterval; use safe string concatenation".to_string()
+        },
+        "scriptSrc" => {
+            "Avoid setting script.src from user input; use a whitelist of allowed script URLs".to_string()
+        },
+        "onerror" | "onload" | "onclick" => {
+            "Avoid assigning user input to on* event handlers; use addEventListener instead".to_string()
         },
         _ => {
             "Implement proper input validation and output encoding".to_string()
@@ -277,5 +289,33 @@ mod tests {
     fn test_get_remediation_unknown_sink() {
         let rem = get_remediation("location.hash", "unknown");
         assert!(rem.contains("input validation"));
+    }
+
+    #[test]
+    fn test_calculate_severity_scriptsrc() {
+        let (sev, score) = calculate_severity("location.hash", "scriptSrc");
+        assert_eq!(sev, Severity::High);
+        assert_eq!(score, 7.0);
+    }
+
+    #[test]
+    fn test_calculate_severity_onerror() {
+        let (sev, score) = calculate_severity("location.search", "onerror");
+        assert_eq!(sev, Severity::High);
+        assert_eq!(score, 7.0);
+    }
+
+    #[test]
+    fn test_get_remediation_scriptsrc() {
+        let rem = get_remediation("location.hash", "scriptSrc");
+        assert!(rem.contains("script.src"));
+        assert!(rem.contains("whitelist"));
+    }
+
+    #[test]
+    fn test_get_remediation_onerror() {
+        let rem = get_remediation("location.hash", "onerror");
+        assert!(rem.contains("on*"));
+        assert!(rem.contains("addEventListener"));
     }
 }

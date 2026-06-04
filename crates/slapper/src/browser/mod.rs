@@ -50,13 +50,14 @@ pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<Bro
     if config.discover_spa_routes {
         let interceptor_script = r#"
             (function() {
-                const apiEndpoints = [];
+                const xhrEndpoints = [];
+                const fetchEndpoints = [];
                 const originalXhrOpen = XMLHttpRequest.prototype.open;
                 XMLHttpRequest.prototype.open = function(method, url) {
                     try {
                         const parsed = new URL(url, window.location.origin);
                         if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
-                            apiEndpoints.push(parsed.pathname);
+                            xhrEndpoints.push(parsed.pathname);
                         }
                     } catch(e) {}
                     return originalXhrOpen.apply(this, arguments);
@@ -66,15 +67,18 @@ pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<Bro
                     try {
                         const parsed = new URL(url, window.location.origin);
                         if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
-                            apiEndpoints.push(parsed.pathname);
+                            fetchEndpoints.push(parsed.pathname);
                         }
                     } catch(e) {}
                     return originalFetch.apply(this, arguments);
                 };
-                window.__slapper_api_endpoints = apiEndpoints;
+                window.__slapper_xhr_endpoints = xhrEndpoints;
+                window.__slapper_fetch_endpoints = fetchEndpoints;
             })()
         "#;
-        let _ = tab.evaluate(interceptor_script, false);
+        if let Err(e) = tab.evaluate(interceptor_script, false) {
+            tracing::warn!("Failed to inject XHR/Fetch interceptor: {}", e);
+        }
     }
 
     tab.navigate_to(target)?.wait_until_navigated()?;
@@ -86,12 +90,12 @@ pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<Bro
     }
 
     if config.discover_spa_routes {
-        let routes = spa_discovery::discover_routes(&tab, &config).await?;
+        let routes = spa_discovery::discover_routes(&tab).await?;
         report.spa_routes = routes;
     }
 
     if config.check_client_security {
-        let issues = client_checks::check_client_security(&tab, &config).await?;
+        let issues = client_checks::check_client_security(&tab).await?;
         report.client_issues = issues;
         report.total_findings += report.client_issues.len();
     }

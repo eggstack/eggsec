@@ -1,4 +1,3 @@
-use crate::browser::BrowserConfig;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -32,15 +31,14 @@ impl std::fmt::Display for DiscoveryMethod {
 
 pub async fn discover_routes(
     tab: &headless_chrome::Tab,
-    _config: &BrowserConfig,
 ) -> Result<Vec<SpaRoute>> {
 
     let js_script = r#"
         (function() {
             const routes = new Set();
 
-            // Read API endpoints captured by interceptors injected before navigation
-            const apiEndpoints = new Set(window.__slapper_api_endpoints || []);
+            const xhrEndpoints = new Set(window.__slapper_xhr_endpoints || []);
+            const fetchEndpoints = new Set(window.__slapper_fetch_endpoints || []);
 
             const extractRoutesFromDom = () => {
                 const links = document.querySelectorAll('a[href]');
@@ -90,7 +88,8 @@ pub async fn discover_routes(
 
             return {
                 routes: Array.from(routes),
-                apiEndpoints: Array.from(apiEndpoints)
+                xhrEndpoints: Array.from(xhrEndpoints),
+                fetchEndpoints: Array.from(fetchEndpoints)
             };
         })()
     "#;
@@ -108,8 +107,13 @@ pub async fn discover_routes(
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let api_set: HashSet<String> = data
-        .get("apiEndpoints")
+    let xhr_set: HashSet<String> = data
+        .get("xhrEndpoints")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let fetch_set: HashSet<String> = data
+        .get("fetchEndpoints")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
@@ -126,13 +130,24 @@ pub async fn discover_routes(
         }
     }
 
-    for path in &api_set {
+    for path in &xhr_set {
         if path.starts_with('/') {
             all_routes.push(SpaRoute {
                 path: path.clone(),
                 method: "GET".to_string(),
                 parameters: extract_parameters(path),
                 discovered_via: DiscoveryMethod::XhrInterception,
+            });
+        }
+    }
+
+    for path in &fetch_set {
+        if path.starts_with('/') {
+            all_routes.push(SpaRoute {
+                path: path.clone(),
+                method: "GET".to_string(),
+                parameters: extract_parameters(path),
+                discovered_via: DiscoveryMethod::FetchInterception,
             });
         }
     }
@@ -169,8 +184,7 @@ mod tests {
             .unwrap()
             .wait_until_navigated()
             .unwrap();
-        let config = BrowserConfig::default();
-        let routes = discover_routes(&tab, &config).await.unwrap();
+        let routes = discover_routes(&tab).await.unwrap();
         assert!(routes.is_empty());
     }
 

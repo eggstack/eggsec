@@ -37,7 +37,7 @@ impl BrowserTab {
     pub fn new() -> Self {
         let inputs = InputGroup::new()
             .add(InputField::new("Target URL"))
-            .add(InputField::new("Timeout (ms)").with_value("30000"));
+            .add(InputField::new("Timeout (ms)").with_value("60000"));
 
         let option_checkboxes = vec![
             Checkbox::new("DOM XSS Scan").checked(true),
@@ -72,7 +72,7 @@ impl BrowserTab {
             .fields
             .get(1)
             .and_then(|f| f.value.parse().ok())
-            .unwrap_or(30000)
+            .unwrap_or(60000)
     }
 
     pub fn get_config(&self) -> BrowserConfig {
