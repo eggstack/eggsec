@@ -950,10 +950,13 @@ impl RemoteClient {
             return Ok(Vec::new());
         }
 
-        let tasks: Vec<crate::distributed::queue::Task> = response
-            .output
-            .and_then(|o| serde_json::from_str(&o).ok())
-            .unwrap_or_default();
+        let tasks: Vec<crate::distributed::queue::Task> = match response.output {
+            Some(o) => serde_json::from_str(&o).unwrap_or_else(|e| {
+                tracing::warn!("Failed to deserialize task list from coordinator: {}", e);
+                Vec::new()
+            }),
+            None => Vec::new(),
+        };
 
         Ok(tasks)
     }

@@ -309,7 +309,9 @@ impl Worker {
 
     pub fn shutdown(&mut self) {
         tracing::info!("Worker shutting down");
-        let _ = self.shutdown_tx.send(true);
+        if let Err(e) = self.shutdown_tx.send(true) {
+            tracing::warn!("Failed to send shutdown signal (no receivers): {:?}", e);
+        }
         if let Some(handle) = self.heartbeat_handle.take() {
             handle.abort();
         }
@@ -324,6 +326,7 @@ impl Worker {
 
 impl Drop for Worker {
     fn drop(&mut self) {
+        // Suppress warning in Drop — receivers may already be dropped during normal shutdown
         let _ = self.shutdown_tx.send(true);
         if let Some(handle) = self.heartbeat_handle.take() {
             handle.abort();

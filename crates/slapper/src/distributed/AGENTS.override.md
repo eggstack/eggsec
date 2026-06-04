@@ -64,6 +64,27 @@ fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
 }
 ```
 
+## Bugs Fixed (2026-06-04)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `worker.rs:312` | `shutdown()` used `let _ = self.shutdown_tx.send(true)` suppressing errors | Changed to `if let Err(e) =` with `tracing::warn!` logging |
+| `remote.rs:953-956` | Task list deserialization used `.ok()` silently dropping errors | Changed to `.unwrap_or_else(|e| { tracing::warn!(...); Vec::new() })` |
+
+## Architecture Doc Fixes (2026-06-04)
+
+The `architecture/distributed.md` doc was updated to fix inaccuracies found during interrogation:
+
+- Added `EnqueueTask` and `StatusRequest` to CommandMessage variants (was 6, now 8)
+- Added all 8 `ResponseMessage.msg_type` values to documentation
+- Added `RemoteListener` public methods table (get_workers, get_queue_counts, connection_count, etc.)
+- Added `RemoteClient` public methods table (request_status, enqueue_task, etc.)
+- Added `WorkerConfig` and `WorkerStats` struct documentation
+- Added `WorkerRegistration.last_heartbeat_secs` field
+- Added Worker task processor documentation (7 processors)
+- Fixed Capability Matching table: `ServiceFingerprint` TaskType (was incorrectly `Fingerprint`)
+- Updated all Key Components line numbers to match current source
+
 ## Bugs Fixed (2026-05-28)
 
 | File | Issue | Fix |
