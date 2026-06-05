@@ -54,19 +54,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     })?;
     stdnse.set("output_table", output_table_fn)?;
 
-    let get_script_args_fn = lua.create_function(|lua, key: Option<String>| {
-        if let Some(key) = key {
-            let stdnse_table = lua.globals().get::<Table>("stdnse")?;
-            if let Ok(args_table) = stdnse_table.get::<Table>("args") {
-                if let Ok(val) = args_table.get::<String>(key.as_str()) {
-                    return Ok(val);
-                }
-            }
-        }
-        Ok(String::new())
-    })?;
-    stdnse.set("get_script_args", get_script_args_fn)?;
-
     let debug_fn = lua.create_function(|lua, msg: String| {
         let globals = lua.globals();
         if let Ok(stdnse_tbl) = globals.get::<Table>("stdnse") {
@@ -460,12 +447,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         Ok(())
     })?;
     stdnse.set("output_add", output_add_fn)?;
-
-    let output_table_fn = lua.create_function(|lua, _: ()| {
-        let table = lua.create_table()?;
-        Ok(Value::Table(table))
-    })?;
-    stdnse.set("output_table", output_table_fn)?;
 
     let suppress_errors_fn = lua.create_function(|lua, suppress: Option<bool>| {
         let globals = lua.globals();
@@ -1193,96 +1174,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     let contains_fn =
         lua.create_function(|_lua, (text, pattern): (String, String)| Ok(text.contains(&pattern)))?;
     stdnse.set("contains", contains_fn)?;
-
-    // Add base to get the base coroutine
-    let base_fn = lua.create_function(|lua, ()| {
-        let globals = lua.globals();
-        let base_coroutine: Table = globals.get("base_coroutine").unwrap_or_else(|_| {
-            let t = lua.create_table().unwrap();
-            let _ = globals.set("base_coroutine", t.clone());
-            t
-        });
-        Ok(base_coroutine)
-    })?;
-    stdnse.set("base", base_fn)?;
-
-    // Add clock_ms function
-    let clock_ms_fn = lua.create_function(|_lua, ()| {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as f64;
-        Ok(now)
-    })?;
-    stdnse.set("clock_ms", clock_ms_fn)?;
-
-    // Add clock_us function
-    let clock_us_fn = lua.create_function(|_lua, ()| {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_micros() as f64;
-        Ok(now)
-    })?;
-    stdnse.set("clock_us", clock_us_fn)?;
-
-    // Add get_timeout function
-    let get_timeout_fn = lua.create_function(
-        |_lua, (host, max_timeout, min_timeout): (Option<String>, Option<i64>, Option<i64>)| {
-            let max = max_timeout.unwrap_or(30000);
-            let min = min_timeout.unwrap_or(2000);
-
-            let base_timeout = if host.is_some() { max } else { min };
-
-            Ok(base_timeout)
-        },
-    )?;
-    stdnse.set("get_timeout", get_timeout_fn)?;
-
-    // Add silent_require - require with errors silenced
-    let silent_require_fn = lua.create_function(|lua, module: String| {
-        let globals = lua.globals();
-
-        // Check if already loaded
-        if let Ok(modules) = globals.get::<Table>("_REQUIRE_MODULES") {
-            if let Ok(_) = modules.get::<mlua::Value>(module.as_str()) {
-                return Ok(mlua::Value::Boolean(true));
-            }
-        }
-
-        // Check globals
-        if let Ok(mod_val) = globals.get::<mlua::Value>(module.as_str()) {
-            return Ok(mod_val);
-        }
-
-        Ok(mlua::Value::Nil)
-    })?;
-    stdnse.set("silent_require", silent_require_fn)?;
-
-    // Add module function (for compatibility)
-    let module_fn = lua.create_function(|lua, (name, export): (String, Option<Table>)| {
-        let globals = lua.globals();
-        let env = lua.create_table()?;
-        let name_clone = name.clone();
-
-        if let Some(exp) = export {
-            for (k, v) in exp.pairs::<String, mlua::Value>().flatten() {
-                env.set(k, v)?;
-            }
-        }
-
-        env.set("_NAME", name_clone.clone())?;
-        env.set("_M", env.clone())?;
-
-        globals.set(name_clone.clone(), env.clone())?;
-
-        if let Ok(modules) = globals.get::<Table>("_REQUIRE_MODULES") {
-            let _ = modules.set(name_clone, env.clone());
-        }
-
-        Ok(env)
-    })?;
-    stdnse.set("module", module_fn)?;
 
     globals.set("stdnse", stdnse)?;
     Ok(())

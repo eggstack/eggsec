@@ -1231,51 +1231,50 @@ fn build_mysql_handshake_response(
 }
 
 fn mysql_password_hash(password: &str, salt: &[u8]) -> Vec<u8> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use sha1::{Digest, Sha1};
 
-    let mut hash1: Vec<u8> = Vec::new();
-    for c in password.bytes() {
-        let mut hasher = DefaultHasher::new();
-        c.hash(&mut hasher);
-        if !hash1.is_empty() {
-            hash1.last().unwrap().hash(&mut hasher);
-        }
-        hash1.push((hasher.finish() & 0xff) as u8);
+    let password_bytes = password.as_bytes();
+
+    let mut hash1 = Sha1::new();
+    hash1.update(password_bytes);
+    let hash1_result: [u8; 20] = hash1.finalize().into();
+
+    let mut hash2 = Sha1::new();
+    hash2.update(&hash1_result);
+    let hash2_result: [u8; 20] = hash2.finalize().into();
+
+    let mut combined = Vec::with_capacity(salt.len() + 20);
+    combined.extend_from_slice(salt);
+    combined.extend_from_slice(&hash2_result);
+
+    let mut hash3 = Sha1::new();
+    hash3.update(&combined);
+    let hash3_result: [u8; 20] = hash3.finalize().into();
+
+    let mut result = [0u8; 20];
+    for i in 0..20 {
+        result[i] = hash1_result[i] ^ hash3_result[i];
     }
 
-    let mut hash2: Vec<u8> = Vec::new();
-    for (i, b) in hash1.iter().enumerate() {
-        let mut hasher = DefaultHasher::new();
-        b.hash(&mut hasher);
-        if i > 0 {
-            hash1[i - 1].hash(&mut hasher);
-        }
-        hash2.push((hasher.finish() & 0xff) as u8);
-    }
-
-    let mut result = vec![0u8; 20];
-    let salt_len = salt.len();
-    for i in 0..salt_len {
-        if i < result.len() && i < hash1.len() {
-            result[i] = salt[i] ^ hash1[i];
-        }
-    }
-    for i in salt_len..result.len() {
-        result[i] = 0x00;
-    }
-
-    result
+    result.to_vec()
 }
 
 fn build_postgres_startup(username: &str) -> Vec<u8> {
-    let mut startup = vec![0u8; 8];
-    startup.extend_from_slice(username.as_bytes());
-    startup.push(0x00);
+    let mut startup = Vec::new();
+
+    // Protocol version 3.0 (placeholder for length)
+    startup.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+    // Version 3.0
+    startup.extend_from_slice(&[0x00, 0x03, 0x00, 0x00]);
+
+    // user key
     startup.extend_from_slice(b"user");
     startup.push(0x00);
+    // user value
     startup.extend_from_slice(username.as_bytes());
     startup.push(0x00);
+
+    // terminator
     startup.push(0x00);
 
     let len = startup.len() as u32;
@@ -1288,35 +1287,17 @@ fn build_postgres_startup(username: &str) -> Vec<u8> {
 }
 
 fn build_postgres_md5_response(username: &str, password: &str, salt: &[u8]) -> Vec<u8> {
-    let step1 = format!("{}{}", password, username);
+    use md5::{Digest, Md5};
 
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    let step1_input = format!("{}{}", password, username);
+    let mut hash1 = Md5::new();
+    hash1.update(step1_input.as_bytes());
+    let hash1_hex = format!("md5{:032x}", hash1.finalize());
 
-    let mut hash1: u32 = 0;
-    for b in step1.bytes() {
-        let mut hasher = DefaultHasher::new();
-        b.hash(&mut hasher);
-        if hash1 != 0 {
-            hash1.hash(&mut hasher);
-        }
-        hash1 = hasher.finish() as u32;
-    }
-
-    let salt_str = String::from_utf8_lossy(salt);
-    let step2 = format!("{:08x}{}", hash1, salt_str);
-
-    let mut hash2: u32 = 0;
-    for b in step2.bytes() {
-        let mut hasher = DefaultHasher::new();
-        b.hash(&mut hasher);
-        if hash2 != 0 {
-            hash2.hash(&mut hasher);
-        }
-        hash2 = hasher.finish() as u32;
-    }
-
-    let md5_str = format!("md5{:08x}", hash2);
+    let mut hash2 = Md5::new();
+    hash2.update(hash1_hex.as_bytes());
+    hash2.update(salt);
+    let md5_str = format!("md5{:032x}", hash2.finalize());
 
     let mut response = vec![b'p', b'w', b'd'];
     response.extend_from_slice(md5_str.as_bytes());

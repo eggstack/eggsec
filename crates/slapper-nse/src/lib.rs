@@ -78,7 +78,11 @@ impl Default for SandboxConfig {
 impl SandboxConfig {
     fn allowed_root(&self) -> Option<PathBuf> {
         let dir = self.allowed_dir.as_ref()?;
-        dir.canonicalize().ok().or_else(|| Some(dir.clone()))
+        match dir.canonicalize() {
+            Ok(canonical) => Some(canonical),
+            Err(_) if dir.exists() => Some(dir.clone()),
+            Err(_) => None,
+        }
     }
 
     /// Create a sandbox config with sandboxing enabled and default settings.
@@ -104,7 +108,7 @@ impl SandboxConfig {
         }
 
         let Some(allowed_dir) = self.allowed_root() else {
-            return Some(PathBuf::from(path));
+            return None;
         };
 
         let path_buf = PathBuf::from(path);
@@ -139,6 +143,18 @@ impl SandboxConfig {
         }
 
         if self.allowed_commands.is_empty() {
+            return false;
+        }
+
+        // Block commands containing shell metacharacters to prevent injection
+        if cmd.contains(';')
+            || cmd.contains('|')
+            || cmd.contains('&')
+            || cmd.contains('$')
+            || cmd.contains('`')
+            || cmd.contains('\n')
+            || cmd.contains('\r')
+        {
             return false;
         }
 

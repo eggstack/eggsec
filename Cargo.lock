@@ -5722,6 +5722,7 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "sha1",
  "ssh2",
  "tokio",
  "tracing",

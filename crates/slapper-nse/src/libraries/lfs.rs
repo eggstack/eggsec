@@ -341,12 +341,11 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
                 path
             )));
         };
-        if let Ok(_perms) = u32::from_str_radix(&mode, 8) {
-            match fs::metadata(&canonical_path) {
-                Ok(meta) => {
-                    let _ = meta.permissions();
-                    Ok(true)
-                }
+        if let Ok(perms) = u32::from_str_radix(&mode, 8) {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(perms);
+            match fs::set_permissions(&canonical_path, permissions) {
+                Ok(()) => Ok(true),
                 Err(e) => Err(mlua::Error::RuntimeError(format!(
                     "Failed to set mode: {}",
                     e
