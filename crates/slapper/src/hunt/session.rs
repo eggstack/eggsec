@@ -156,7 +156,7 @@ fn check_session_token_entropy(
 ) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
-    if let Some(set_cookie) = headers.get(reqwest::header::SET_COOKIE) {
+    for set_cookie in headers.get_all(reqwest::header::SET_COOKIE).iter() {
         if let Ok(cookie_str) = set_cookie.to_str() {
             let parts: Vec<&str> = cookie_str.split(';').collect();
             if let Some(name_value) = parts.first() {
@@ -203,6 +203,7 @@ async fn check_session_fixation(
     let request_count = 5;
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
+    let timeout = std::time::Duration::from_millis(config.timeout_ms);
 
     for _ in 0..request_count {
         let client = client.clone();
@@ -213,14 +214,15 @@ async fn check_session_fixation(
                 Ok(p) => p,
                 Err(_) => return Vec::new(),
             };
-            match client.get("/").await {
-                Ok(resp) => resp
+            let result = tokio::time::timeout(timeout, client.get("/")).await;
+            match result {
+                Ok(Ok(resp)) => resp
                     .headers()
                     .get_all(reqwest::header::SET_COOKIE)
                     .iter()
                     .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
                     .collect(),
-                Err(_) => Vec::new(),
+                _ => Vec::new(),
             }
         }));
     }
@@ -236,23 +238,33 @@ async fn check_session_fixation(
         return issues;
     }
 
-    let first = &all_cookies[0];
-    if first.is_empty() {
-        return issues;
-    }
-
-    let all_identical = all_cookies.iter().all(|c| c == first);
-
-    let has_session_cookie = first.iter().any(|cookie| {
+    let is_session_cookie = |cookie: &str| -> bool {
         let lower = cookie.to_lowercase();
         lower.contains("session")
             || lower.contains("sid")
             || lower.contains("token")
             || lower.contains("auth")
             || lower.contains("jwt")
-    });
+    };
 
-    if all_identical && has_session_cookie {
+    let session_cookies_only = |cookies: &[String]| -> Vec<String> {
+        cookies
+            .iter()
+            .filter(|c| is_session_cookie(c))
+            .cloned()
+            .collect()
+    };
+
+    let first_session: Vec<String> = session_cookies_only(&all_cookies[0]);
+    if first_session.is_empty() {
+        return issues;
+    }
+
+    let all_identical = all_cookies
+        .iter()
+        .all(|c| session_cookies_only(c) == first_session);
+
+    if all_identical {
         let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
         issues.push(SessionIssue {
             id,

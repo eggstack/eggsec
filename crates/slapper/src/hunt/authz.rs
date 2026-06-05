@@ -79,6 +79,7 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
     let mut bypasses = Vec::new();
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
+    let timeout = std::time::Duration::from_millis(config.timeout_ms);
 
     for path in ADMIN_PATHS {
         let client = client.clone();
@@ -97,7 +98,11 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
                     );
                 }
             };
-            let resp = client.get(&path).await;
+            let result = tokio::time::timeout(timeout, client.get(&path)).await;
+            let resp = match result {
+                Ok(r) => r,
+                Err(_) => Err(crate::error::SlapperError::Http("Request timed out".to_string())),
+            };
             (path, resp)
         }));
     }
@@ -145,6 +150,7 @@ async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass
     let mut bypasses = Vec::new();
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
+    let timeout = std::time::Duration::from_millis(config.timeout_ms);
 
     for path in IDOR_PATHS {
         let client = client.clone();
@@ -163,7 +169,11 @@ async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass
                     );
                 }
             };
-            let resp = client.get(&path).await;
+            let result = tokio::time::timeout(timeout, client.get(&path)).await;
+            let resp = match result {
+                Ok(r) => r,
+                Err(_) => Err(crate::error::SlapperError::Http("Request timed out".to_string())),
+            };
             (path, resp)
         }));
     }
