@@ -700,11 +700,21 @@ async fn process_load_test(task: Task) -> Result<serde_json::Value> {
     };
 
     let config = crate::config::SlapperConfig::default();
-    crate::loadtest::run_cli(args, &config).await?;
+    let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, &config)?;
+    let results = runner.run().await?;
 
     Ok(serde_json::json!({
         "target": target,
         "status": "completed",
+        "total_requests": results.total_requests,
+        "successful_requests": results.successful_requests,
+        "failed_requests": results.failed_requests,
+        "requests_per_second": results.requests_per_second,
+        "total_duration_ms": results.total_duration_ms,
+        "latency_p50_ms": results.latency_p50_ms,
+        "latency_p95_ms": results.latency_p95_ms,
+        "latency_p99_ms": results.latency_p99_ms,
+        "status_codes": results.status_codes,
     }))
 }
 

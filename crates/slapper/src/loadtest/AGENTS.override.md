@@ -18,47 +18,64 @@ use rustc_hash::FxHashMap;
 let mut status_codes: FxHashMap<u16, u64> = FxHashMap::default();
 ```
 
-## Recent Bug Fixes (2026-05-22)
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `runner.rs:116-122` | `from_args_with_config()` used `new()` bypassing validation | Changed to `new_with_tui_mode()` to ensure validation |
-| `runner.rs:275-317` | Rate limiting interval calculation could drift | Changed to `now_after_sleep + interval` instead of `next + interval` |
-| `runner.rs:341-345` | Non-success response bodies not consumed | Now consumes response body before recording metrics |
-
 ## Code Conventions
 
 1. **Worker Model**: Uses `tokio::task::JoinSet` with `worker_count = min(concurrency, total_requests)`
-2. **Rate Limiting**: Lock-protected token bucket with proper drift correction
+2. **Rate Limiting**: Semaphore token bucket with `forget()` for permanent permit consumption
 3. **Metrics**: Uses `hdrhistogram::Histogram<u64>` for latency percentiles (p50, p90, p95, p99)
-4. **Response Body Handling**: Non-success bodies consumed to prevent connection pool issues
-5. **Histogram Errors**: Suppress with `let _ = self.histogram.record(...)` not `.ok()`
+4. **Response Body Handling**: All response bodies (success and error) consumed to enable connection reuse
+5. **Histogram Errors**: Log with `tracing::warn!` on failure, never suppress with `let _ =`
 
-## Bug Fix (2026-05-28)
-
-| File | Issue | Fix |
-|------|-------|-----|
-| `metrics.rs:76` | Panic message "3 significant figures is invalid" is incorrect | Use `expect("Failed to create hdrhistogram")` instead |
-
-## Rate Limiting (Updated 2026-06-03)
+## Rate Limiting
 
 Rate limiting uses a **semaphore token bucket** with `forget()` to permanently consume permits:
 
 1. A semaphore starts with 0 permits
-2. A background task adds 1 permit every `min_interval` (1/rate seconds)
+2. A background task adds 1 permit every `min_interval` (1/rate seconds), using `CancellationToken` for clean shutdown
 3. Workers acquire a permit and call `forget()` to permanently consume it (preventing reacquisition)
 4. Workers that can't acquire a permit block until one is available
+5. Rate limit of 0 is rejected with a warning and ignored
 
-This ensures RPS stays close to the configured limit. Using `forget()` is critical — returning the permit to the semaphore would allow immediate reacquisition, defeating rate limiting.
+## Validation
 
-## Bug Fix (2026-06-03)
+The constructor validates:
+- `concurrency > 0`
+- `total_requests > 0`
+- `timeout > 0`
 
-| File | Issue | Fix |
-|------|-------|-----|
-| `metrics.rs:87,94` | Silent error suppression with `let _ =` on `histogram.record()` | Now logs with `tracing::warn!` on failure |
-| `runner.rs:314-317` | Rate limiting acquire discarded the permit, allowing immediate reacquisition | Now uses `permit.forget()` to permanently consume permits, enforcing actual rate limits |
-| `runner.rs:271-282` | Semaphore started with `rate` permits allowing unbounded initial burst | Changed to start with 0 permits; background task adds permits at configured rate |
-| `tool/implementations/loadtest.rs:80-108` | `LoadTestTool::execute()` discarded actual `LoadTestResults` | Now runs via `LoadTestRunner::from_args_with_config()` directly and returns serialized results |
+The `set_common*` methods validate:
+- `rate_limit > 0` (0 is ignored with a warning)
+
+## Latency Measurement
+
+- Latency is measured as time-to-first-byte (from request send to headers received)
+- Latency is recorded for **both** successful and failed requests
+- When all requests fail, the Display impl shows "no successful requests" instead of misleading 0ms values
+
+## Bug Fixes
+
+| Date | File | Issue | Fix |
+|------|------|-------|-----|
+| 2026-05-22 | `runner.rs` | `from_args_with_config()` used `new()` bypassing validation | Changed to `new_with_tui_mode()` |
+| 2026-05-22 | `runner.rs` | Non-success response bodies not consumed | Now consumes all response bodies |
+| 2026-05-28 | `metrics.rs` | `expect()` panic message was incorrect | Use `expect("Failed to create hdrhistogram")` |
+| 2026-06-03 | `metrics.rs` | Silent error suppression with `let _ =` on `histogram.record()` | Now logs with `tracing::warn!` |
+| 2026-06-03 | `runner.rs` | Rate limiting acquire discarded permit, allowing reacquisition | Now uses `permit.forget()` |
+| 2026-06-03 | `runner.rs` | Semaphore started with `rate` permits, allowing unbounded burst | Changed to start with 0 permits |
+| 2026-06-05 | `runner.rs` | `--rate-limit 0` caused panic (division by zero in Duration) | Added validation, 0 is ignored with warning |
+| 2026-06-05 | `runner.rs` | Rate limit background task leaked (infinite loop, no cancellation) | Added `CancellationToken` to break loop on shutdown |
+| 2026-06-05 | `runner.rs` | Successful response bodies not consumed — connection pool starvation | Now consumes all response bodies |
+| 2026-06-05 | `runner.rs` | Latency not recorded for failed requests — misleading percentiles | Now records latency for all requests |
+| 2026-06-05 | `runner.rs` | Unknown HTTP methods silently defaulted to GET | Now logs warning for unknown methods |
+| 2026-06-05 | `runner.rs` | Malformed auth credentials silently ignored | Now logs warning for invalid auth format |
+| 2026-06-05 | `runner.rs` | CancellationToken/abort_all() were dead code (called after workers drained) | Removed no-op calls, token used only for rate limit task |
+| 2026-06-05 | `metrics.rs` | `record_success()` was dead code — never called | Removed method |
+| 2026-06-05 | `metrics.rs` | Empty histogram produced misleading 0ms latency values | Display impl shows "no successful requests" when histogram empty |
+| 2026-06-05 | `metrics.rs` | Status codes displayed in non-deterministic HashMap order | Now sorts by status code before display |
+| 2026-06-05 | `metrics.rs` | `let _ = writeln!` inconsistent with rest of Display impl | Now uses `?` consistently |
+| 2026-06-05 | `tool/loadtest.rs` | Timeout error reported `timeout_ms: 0` instead of `60000` | Fixed to report actual timeout |
+| 2026-06-05 | `tool/loadtest.rs` | `estimated_duration_ms` (120s) inconsistent with actual timeout (60s) | Fixed to 60_000 |
+| 2026-06-05 | `distributed/worker.rs` | Load test results discarded — coordinator received no metrics | Now returns full results in JSON response |
 
 ## Testing
 

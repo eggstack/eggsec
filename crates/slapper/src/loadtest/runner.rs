@@ -60,6 +60,11 @@ impl LoadTestRunner {
                 "Total requests must be greater than 0".to_string(),
             ));
         }
+        if timeout.is_zero() {
+            return Err(SlapperError::Validation(
+                "Timeout must be greater than 0".to_string(),
+            ));
+        }
 
         Ok(Self {
             url,
@@ -137,7 +142,14 @@ impl LoadTestRunner {
         self.insecure = common.insecure;
         self.proxy = common.proxy;
         self.proxy_auth = common.proxy_auth;
-        self.rate_limit = common.rate_limit;
+
+        if let Some(rate) = common.rate_limit {
+            if rate == 0 {
+                tracing::warn!("Rate limit of 0 is invalid, ignoring rate limit setting");
+            } else {
+                self.rate_limit = Some(rate);
+            }
+        }
 
         if let Some(ua) = common.user_agent {
             self.user_agent = ua;
@@ -154,7 +166,15 @@ impl LoadTestRunner {
             .proxy_auth
             .as_ref()
             .map(|s| s.expose_secret().to_string()));
-        self.rate_limit = common.rate_limit.or(config.scan.rate_limit_per_second);
+
+        let effective_rate = common.rate_limit.or(config.scan.rate_limit_per_second);
+        if let Some(rate) = effective_rate {
+            if rate == 0 {
+                tracing::warn!("Rate limit of 0 is invalid, ignoring rate limit setting");
+            } else {
+                self.rate_limit = Some(rate);
+            }
+        }
 
         if let Some(ua) = common.user_agent {
             self.user_agent = ua;
@@ -182,6 +202,10 @@ impl LoadTestRunner {
                 let encoded =
                     general_purpose::STANDARD.encode(format!("{}:{}", parts[0], parts[1]));
                 self.add_header("Authorization".to_string(), format!("Basic {}", encoded));
+            } else {
+                tracing::warn!(
+                    "Invalid auth format (expected 'user:password'), ignoring basic auth"
+                );
             }
         }
 
@@ -212,7 +236,13 @@ impl LoadTestRunner {
             "PATCH" => Method::PATCH,
             "HEAD" => Method::HEAD,
             "OPTIONS" => Method::OPTIONS,
-            _ => Method::GET,
+            other => {
+                tracing::warn!(
+                    "Unknown HTTP method '{}', defaulting to GET",
+                    other
+                );
+                Method::GET
+            }
         };
     }
 
@@ -247,7 +277,7 @@ impl LoadTestRunner {
         }
 
         let client = client_builder.build().map_err(|e| {
-            crate::error::SlapperError::from(e).with_timeout(self.timeout.as_millis() as u64)
+            crate::error::SlapperError::from(e)
         })?;
 
         let metrics = Arc::new(Mutex::new(Metrics::new(self.url.clone())));
@@ -268,14 +298,23 @@ impl LoadTestRunner {
         let start = Instant::now();
         let issued_requests = Arc::new(AtomicU64::new(0));
 
+        let cancellation_token = CancellationToken::new();
+
         let rate_limit_sem = self.rate_limit.map(|rate| {
             let sem = Arc::new(Semaphore::new(0));
             let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
             let sem_clone = sem.clone();
+            let token = cancellation_token.clone();
             tokio::spawn(async move {
                 loop {
-                    sleep(min_interval).await;
-                    sem_clone.add_permits(1);
+                    tokio::select! {
+                        _ = sleep(min_interval) => {
+                            sem_clone.add_permits(1);
+                        }
+                        _ = token.cancelled() => {
+                            break;
+                        }
+                    }
                 }
             });
             sem
@@ -334,21 +373,23 @@ impl LoadTestRunner {
                     }
 
                     let result = req.send().await;
-                    let latency = request_start.elapsed();
 
                     match result {
                         Ok(response) => {
+                            let latency = request_start.elapsed();
                             let status = response.status();
                             let status_code = status.as_u16();
-                            if status_code >= 400 {
-                                let _ = response.bytes().await;
+                            // Always consume body to enable connection reuse
+                            if let Err(e) = response.bytes().await {
+                                tracing::trace!("Failed to drain response body: {}", e);
                             }
                             let mut metrics = metrics.lock().await;
                             metrics.record_http_response(latency, status_code);
                         }
                         Err(e) => {
+                            let latency = request_start.elapsed();
                             let mut metrics = metrics.lock().await;
-                            metrics.record_failure(e.to_string());
+                            metrics.record_failure(e.to_string(), latency);
                         }
                     }
 
@@ -370,7 +411,6 @@ impl LoadTestRunner {
         }
 
         cancellation_token.cancel();
-        workers.abort_all();
 
         let total_duration = start.elapsed();
         if let Some(ref pb) = progress {

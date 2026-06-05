@@ -85,7 +85,7 @@ impl SecurityTool for LoadTestTool {
         )
         .await
         .map_err(|e| crate::error::SlapperError::Timeout {
-            timeout_ms: 0,
+            timeout_ms: 60_000,
             operation: format!("Load test timed out after 60s: {}", e),
         })?
         .map_err(|e| crate::error::SlapperError::Runtime(format!("Load test failed: {}", e)))?;
@@ -154,7 +154,7 @@ impl SecurityTool for LoadTestTool {
             attack_surface: vec![AttackSurface::Web, AttackSurface::Api],
             severity_potential: vec![],
             prerequisites: vec![],
-            estimated_duration_ms: 120000,
+            estimated_duration_ms: 60_000,
         }]
     }
 

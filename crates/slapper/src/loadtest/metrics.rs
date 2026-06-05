@@ -38,19 +38,26 @@ impl std::fmt::Display for LoadTestResults {
             "duration: {:.2}s",
             self.total_duration_ms as f64 / 1000.0
         )?;
-        writeln!(f, "latency: min={:.2}ms mean={:.2}ms p50={:.2}ms p90={:.2}ms p95={:.2}ms p99={:.2}ms max={:.2}ms",
-            self.latency_min_ms, self.latency_mean_ms, self.latency_p50_ms,
-            self.latency_p90_ms, self.latency_p95_ms, self.latency_p99_ms, self.latency_max_ms)?;
+
+        if self.successful_requests > 0 {
+            writeln!(f, "latency: min={:.2}ms mean={:.2}ms p50={:.2}ms p90={:.2}ms p95={:.2}ms p99={:.2}ms max={:.2}ms",
+                self.latency_min_ms, self.latency_mean_ms, self.latency_p50_ms,
+                self.latency_p90_ms, self.latency_p95_ms, self.latency_p99_ms, self.latency_max_ms)?;
+        } else {
+            writeln!(f, "latency: no successful requests (all failed)")?;
+        }
 
         if !self.status_codes.is_empty() {
-            let _ = writeln!(f, "status codes");
-            for (code, count) in &self.status_codes {
+            writeln!(f, "status codes")?;
+            let mut sorted_codes: Vec<_> = self.status_codes.iter().collect();
+            sorted_codes.sort_by_key(|(code, _)| *code);
+            for (code, count) in &sorted_codes {
                 writeln!(f, "\t{}: {}", code, count)?;
             }
         }
 
         if !self.errors.is_empty() {
-            let _ = writeln!(f, "errors (first 5)");
+            writeln!(f, "errors (first 5)")?;
             for error in self.errors.iter().take(5) {
                 writeln!(f, "\t{}", preserve_all(error, 60))?;
             }
@@ -82,15 +89,6 @@ impl Metrics {
         }
     }
 
-    pub fn record_success(&mut self, latency: Duration, status_code: u16) {
-        let latency_ms = latency.as_millis() as u64;
-        if let Err(e) = self.histogram.record(latency_ms) {
-            tracing::warn!("Failed to record latency {}: {}", latency_ms, e);
-        }
-        self.successful += 1;
-        *self.status_codes.entry(status_code).or_insert(0) += 1;
-    }
-
     pub fn record_http_response(&mut self, latency: Duration, status_code: u16) {
         let latency_ms = latency.as_millis() as u64;
         if let Err(e) = self.histogram.record(latency_ms) {
@@ -108,7 +106,11 @@ impl Metrics {
         }
     }
 
-    pub fn record_failure(&mut self, error: String) {
+    pub fn record_failure(&mut self, error: String, latency: Duration) {
+        let latency_ms = latency.as_millis() as u64;
+        if let Err(e) = self.histogram.record(latency_ms) {
+            tracing::warn!("Failed to record latency {}: {}", latency_ms, e);
+        }
         self.failed += 1;
         if self.errors.len() < 1000 {
             self.errors.push(error);

@@ -38,7 +38,6 @@ async fn test_load_test_concurrency() {
 #[tokio::test]
 async fn test_load_test_with_errors() {
     let server = create_test_server().await;
-    mock_ok("/ok").mount(&server).await;
 
     let runner = slapper::loadtest::LoadTestRunner::new(
         format!("{}/notfound", server.uri()),
@@ -115,9 +114,8 @@ async fn test_load_test_redirect_following() {
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 3);
-}
-
-#[tokio::test]
+    assert_eq!(results.successful_requests, 3);
+}#[tokio::test]
 async fn test_load_test_with_basic_auth() {
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, ResponseTemplate};
@@ -149,6 +147,8 @@ async fn test_load_test_with_basic_auth() {
         rate_limit: None,
         stealth: false,
         jitter: None,
+        auth_context: None,
+        auth_role: None,
     });
 
     let results = runner.run().await.unwrap();
@@ -187,6 +187,8 @@ async fn test_load_test_with_bearer_token() {
         rate_limit: None,
         stealth: false,
         jitter: None,
+        auth_context: None,
+        auth_role: None,
     });
 
     let results = runner.run().await.unwrap();
@@ -216,7 +218,7 @@ async fn test_load_test_metrics_latency_tracking() {
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 20);
     assert_eq!(results.successful_requests, 20);
-    assert!(results.requests_per_second > 0.0);
+    assert!(results.latency_mean_ms >= 5.0, "Mean latency {}ms should reflect 10ms server delay", results.latency_mean_ms);
 }
 
 #[tokio::test]
@@ -315,6 +317,8 @@ async fn test_load_test_with_rate_limit() {
         rate_limit: Some(10),
         stealth: false,
         jitter: None,
+        auth_context: None,
+        auth_role: None,
     });
 
     let results = runner.run().await.unwrap();

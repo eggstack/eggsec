@@ -155,7 +155,7 @@ impl LoadTab {
                     .collect()
             })
             .unwrap_or_else(|| {
-                tracing::warn!("Failed to parse headers");
+                tracing::trace!("Headers field not found, using empty headers");
                 Vec::new()
             })
     }
