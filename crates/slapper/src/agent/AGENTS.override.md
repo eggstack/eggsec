@@ -22,11 +22,10 @@ Prefer small test seams over making private fields public:
 
 ## Observability
 
-`agent/logging.rs` provides `AgentLogger`:
-- Stored as `Option<AgentLogger>` field on `Agent` struct (`agent/mod.rs:140`)
-- Initialized lazily in `Agent::run()` at line 296
-- Logs to `log_dir/agent.log` with daily rotation
-- JSON format with thread IDs, file/line info
+Logging is configured centrally in `logging/init.rs` via `init_logging()`:
+- When the `agent` subcommand runs, a rolling JSON file layer (`agent.log`, daily rotation) is composed alongside the console layer
+- The `WorkerGuard` returned by `init_logging()` is held in `main.rs` for process lifetime
+- Agent-specific log directory is derived from the agent's `memory_dir`
 
 ## Config Hot-Reloading
 

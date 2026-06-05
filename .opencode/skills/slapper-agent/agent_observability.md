@@ -6,33 +6,28 @@ These skills cover the agent observability system and configuration hot-reloadin
 
 ## Skills
 
-### 1. Agent Observability (`agent/logging.rs`)
+### 1. Agent Observability (`logging/init.rs`)
 
 **Purpose**: Non-blocking, rotating JSON logs for security compliance and debugging.
 
 **Key Features**:
 - Uses `tracing-appender` for non-blocking writes
-- Daily rotating logs at `memory_dir/logs/agent.log`
+- Daily rotating logs at `memory_dir/logs/agent.log` (when agent subcommand is active)
+- Composed alongside console layer — both file and stdout active simultaneously
 - Thread-safe with worker guard pattern
 - Rich formatting with target, thread IDs, file/line numbers
 
 **Usage**:
 ```rust
-use crate::agent::logging::AgentLogger;
+// init_logging() is called once in main.rs with an optional log_dir
+// When the agent subcommand is used, the log directory is derived from
+// the agent's memory_dir and passed to enable file-based logging:
 
-// AgentLogger is stored as Option<AgentLogger> field on the Agent struct
-// and initialized lazily in Agent::run(), not in the constructor:
-
-// In Agent struct (agent/mod.rs):
-// pub struct Agent {
-//     ...
-//     logger: Option<AgentLogger>,
-// }
-
-// In Agent::run() (agent/mod.rs:296):
-let log_dir = self.config.memory_dir.join("logs");
-self.logger = Some(AgentLogger::init(log_dir)?);
-tracing::info!("Agent started scanning");
+let log_dir = agent_log_dir(&cli);
+let _guard = init_logging(
+    if cli.json { LogFormat::Json } else { LogFormat::Pretty },
+    log_dir,
+);
 ```
 
 **When to use**:
@@ -117,7 +112,7 @@ let results = fuzzer.run_chain(chain).await?;
 
 ## Related Files
 
-- `crates/slapper/src/agent/logging.rs` - AgentLogger implementation
+- `crates/slapper/src/logging/init.rs` - Centralized logging initialization with composed layers
 - `crates/slapper/src/agent/config_watcher.rs` - ConfigWatcher implementation
 - `crates/slapper/src/fuzzer/engine/chained.rs` - StatefulFuzzer implementation
 - `crates/slapper/src/agent/mod.rs` - Module exports

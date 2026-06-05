@@ -93,7 +93,7 @@ Slapper can run as an agent-readable scanning orchestrator that executes configu
 - **Constraints (`constraints/`)**: Enforces do-not-do rules, target restrictions, and scan/rate limits.
 - **Skills (`skills.rs`)**: Represents discrete capabilities the agent can employ (e.g., "scan", "fuzz", "recon").
 - **Config Watcher (`config_watcher.rs`)**: Hot-reloading of agent configuration via `ConfigWatcher`.
-- **Logging (`logging.rs`)**: `AgentLogger` with daily rotation and JSON format.
+- **Logging**: Centralized in `logging/init.rs`. Agent mode composes a rolling JSON file layer alongside console output.
 - **Alerts (`alerts/`)**: Alert routing, aggregation, and channel delivery (Slack, PagerDuty, email, webhook).
 - **Events (`events.rs`)**: Event handler trait and security event types.
 
