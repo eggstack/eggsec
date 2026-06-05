@@ -7,7 +7,6 @@
 //!
 //! - [`LoadTestRunner`] - Main load test executor
 //! - [`LoadTestResults`] - Aggregated test results with percentiles
-//! - [`Metrics`] - Real-time metrics collection during tests
 //!
 //! ## Usage
 //!
