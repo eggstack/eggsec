@@ -31,6 +31,21 @@ impl std::fmt::Display for ToolCategory {
     }
 }
 
+impl ToolCategory {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "recon" | "reconnaissance" => Some(ToolCategory::Recon),
+            "scanning" => Some(ToolCategory::Scanning),
+            "fuzzing" => Some(ToolCategory::Fuzzing),
+            "waf" => Some(ToolCategory::Waf),
+            "load testing" | "loadtest" => Some(ToolCategory::LoadTest),
+            "stress testing" | "stress" => Some(ToolCategory::Stress),
+            "pipeline" => Some(ToolCategory::Pipeline),
+            _ => None,
+        }
+    }
+}
+
 pub use crate::output::agent::AttackSurface;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

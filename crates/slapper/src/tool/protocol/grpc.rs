@@ -466,21 +466,9 @@ impl tool_service_server::ToolService for ToolServiceImpl {
         let tool_infos = if req.category.is_empty() {
             self.service.registry.list()
         } else {
-            let category = match req.category.to_lowercase().as_str() {
-                "recon" | "reconnaissance" => ToolCategory::Recon,
-                "scanning" => ToolCategory::Scanning,
-                "fuzzing" => ToolCategory::Fuzzing,
-                "waf" => ToolCategory::Waf,
-                "load testing" | "loadtest" => ToolCategory::LoadTest,
-                "stress testing" | "stress" => ToolCategory::Stress,
-                "pipeline" => ToolCategory::Pipeline,
-                _ => {
-                    return Err(Status::invalid_argument(format!(
-                        "Unknown category: {}",
-                        req.category
-                    )));
-                }
-            };
+            let category = ToolCategory::from_str(&req.category).ok_or_else(|| {
+                Status::invalid_argument(format!("Unknown category: {}", req.category))
+            })?;
             self.service.registry.list_by_category(category)
         };
 
@@ -515,16 +503,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             name: tool_arc.name().to_string(),
             category: tool_arc.category(),
             description: tool_arc.description().to_string(),
-            capabilities: tool_arc
-                .capabilities()
-                .into_iter()
-                .map(|c| crate::tool::traits::ToolCapability {
-                    name: c.name,
-                    description: c.description,
-                    parameters: c.parameters,
-                    ..Default::default()
-                })
-                .collect(),
+            capabilities: tool_arc.capabilities(),
             protocols: tool_arc
                 .supported_protocols()
                 .into_iter()
@@ -608,6 +587,8 @@ impl tool_service_server::ToolService for ToolServiceImpl {
         let request_id = tool_request.id.clone();
         let dispatcher = self.service.dispatcher.clone();
 
+        // TODO: Progress percentages are hardcoded. To provide real progress updates,
+        // the SecurityTool trait would need a progress callback or channel mechanism.
         let stream = async_stream::stream! {
             // Send initial progress event
             yield Ok(ToolStreamEvent {
