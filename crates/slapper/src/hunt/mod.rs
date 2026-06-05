@@ -53,8 +53,8 @@ impl HuntClient {
         })
     }
 
-    pub async fn get(&self, path: &str) -> Result<reqwest::Response> {
-        let url = if path.starts_with("http") {
+    fn build_url(&self, path: &str) -> String {
+        if path.starts_with("http") {
             path.to_string()
         } else {
             format!(
@@ -66,7 +66,11 @@ impl HuntClient {
                     format!("/{}", path)
                 }
             )
-        };
+        }
+    }
+
+    pub async fn get(&self, path: &str) -> Result<reqwest::Response> {
+        let url = self.build_url(path);
 
         self.client
             .get(&url)
@@ -77,19 +81,7 @@ impl HuntClient {
     }
 
     pub async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<reqwest::Response> {
-        let url = if path.starts_with("http") {
-            path.to_string()
-        } else {
-            format!(
-                "{}{}",
-                self.target.trim_end_matches('/'),
-                if path.starts_with('/') {
-                    path.to_string()
-                } else {
-                    format!("/{}", path)
-                }
-            )
-        };
+        let url = self.build_url(path);
 
         self.client
             .post(&url)
@@ -102,19 +94,7 @@ impl HuntClient {
     }
 
     pub async fn head(&self, path: &str) -> Result<reqwest::Response> {
-        let url = if path.starts_with("http") {
-            path.to_string()
-        } else {
-            format!(
-                "{}{}",
-                self.target.trim_end_matches('/'),
-                if path.starts_with('/') {
-                    path.to_string()
-                } else {
-                    format!("/{}", path)
-                }
-            )
-        };
+        let url = self.build_url(path);
 
         self.client
             .head(&url)
@@ -129,19 +109,7 @@ impl HuntClient {
         method: reqwest::Method,
         path: &str,
     ) -> Result<reqwest::Response> {
-        let url = if path.starts_with("http") {
-            path.to_string()
-        } else {
-            format!(
-                "{}{}",
-                self.target.trim_end_matches('/'),
-                if path.starts_with('/') {
-                    path.to_string()
-                } else {
-                    format!("/{}", path)
-                }
-            )
-        };
+        let url = self.build_url(path);
 
         self.client
             .request(method, &url)

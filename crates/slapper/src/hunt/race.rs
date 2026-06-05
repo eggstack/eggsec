@@ -2,6 +2,7 @@ use crate::error::Result;
 use crate::hunt::{HuntClient, HuntConfig};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RaceCondition {
@@ -79,11 +80,15 @@ async fn check_concurrent_requests(
                     "quantity": 1,
                     "amount": 100
                 });
-                client
-                    .post_json(&path, &body)
-                    .await
-                    .map(|r| r.status().as_u16())
-                    .unwrap_or(0)
+                let result = tokio::time::timeout(Duration::from_secs(60), async {
+                    client
+                        .post_json(&path, &body)
+                        .await
+                        .map(|r| r.status().as_u16())
+                        .unwrap_or(0)
+                })
+                .await;
+                result.unwrap_or(0)
             }));
         }
 

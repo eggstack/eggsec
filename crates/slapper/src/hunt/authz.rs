@@ -84,7 +84,17 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
         let path = path.to_string();
 
         handles.push(tokio::spawn(async move {
-            let _permit = sem.acquire().await.unwrap();
+            let _permit = match sem.acquire().await {
+                Ok(p) => p,
+                Err(_) => {
+                    return (
+                        path,
+                        Err(crate::error::SlapperError::Http(
+                            "Semaphore closed".to_string(),
+                        )),
+                    );
+                }
+            };
             let resp = client.get(&path).await;
             (path, resp)
         }));

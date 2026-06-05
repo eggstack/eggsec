@@ -89,7 +89,7 @@ fn detect_privilege_escalation_chain(report: &HuntReport) -> Vec<AttackChain> {
                 prerequisite: "Low-privilege access".to_string(),
                 impact: b.description.clone(),
                 evidence: b.evidence.clone(),
-                severity: b.severity.clone(),
+                severity: b.severity,
             })
             .collect();
 
