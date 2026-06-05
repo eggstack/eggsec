@@ -11,9 +11,6 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::tcp::TcpFlags;
 
 #[cfg(all(feature = "stress-testing", unix))]
-use rand::Rng;
-
-#[cfg(all(feature = "stress-testing", unix))]
 use super::metrics::StressMetrics;
 #[cfg(all(feature = "stress-testing", unix))]
 use super::utils;
@@ -27,6 +24,12 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
 
     let interface = utils::get_network_interface()?;
     let (mut tx, _rx) = utils::create_channel(&interface, "SYN flood")?;
+
+    let src_mac = interface
+        .mac
+        .map(|m| m.octets())
+        .unwrap_or([0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    let dst_mac = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
     metrics.start();
 
@@ -51,7 +54,7 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
                 } else {
                     utils::get_local_ip(&interface)?
                 };
-                build_syn_packet_v4(src_ip, src_port, dst_ip, target_addr.port(), seq_num)?
+                build_syn_packet_v4(src_ip, src_port, dst_ip, target_addr.port(), seq_num, src_mac, dst_mac)?
             }
             IpAddr::V6(dst_ip) => {
                 let src_ip = if config.spoof_source {
@@ -59,7 +62,7 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
                 } else {
                     utils::get_local_ip_v6(&interface)?
                 };
-                build_syn_packet_v6(src_ip, src_port, dst_ip, target_addr.port(), seq_num)?
+                build_syn_packet_v6(src_ip, src_port, dst_ip, target_addr.port(), seq_num, src_mac, dst_mac)?
             }
         };
 
@@ -93,13 +96,19 @@ fn build_syn_packet_v4(
     dst_ip: Ipv4Addr,
     dst_port: u16,
     seq: u32,
+    src_mac: [u8; 6],
+    dst_mac: [u8; 6],
 ) -> Result<Vec<u8>> {
     use pnet_packet::ipv4::MutableIpv4Packet;
     use pnet_packet::tcp::MutableTcpPacket;
 
-    let mut buffer = vec![0u8; 20 + 20];
+    let mut buffer = vec![0u8; 14 + 20 + 20];
 
-    let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
+    buffer[0..6].copy_from_slice(&dst_mac);
+    buffer[6..12].copy_from_slice(&src_mac);
+    buffer[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
+
+    let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[14..34])
         .ok_or_else(|| SlapperError::Runtime("Failed to create IPv4 packet".to_string()))?;
 
     ipv4_packet.set_version(4);
@@ -110,7 +119,7 @@ fn build_syn_packet_v4(
     ipv4_packet.set_source(src_ip);
     ipv4_packet.set_destination(dst_ip);
 
-    let mut tcp_packet = MutableTcpPacket::new(&mut buffer[20..])
+    let mut tcp_packet = MutableTcpPacket::new(&mut buffer[34..54])
         .ok_or_else(|| SlapperError::Runtime("Failed to create TCP packet".to_string()))?;
 
     tcp_packet.set_source(src_port);
@@ -120,7 +129,9 @@ fn build_syn_packet_v4(
     tcp_packet.set_data_offset(5);
     tcp_packet.set_flags(TcpFlags::SYN);
     tcp_packet.set_window(65535);
-    tcp_packet.set_checksum(0);
+
+    let checksum = compute_tcp_checksum_ipv4(src_ip, dst_ip, src_port, dst_port, seq, 0);
+    tcp_packet.set_checksum(checksum);
 
     Ok(buffer)
 }
@@ -132,13 +143,19 @@ fn build_syn_packet_v6(
     dst_ip: Ipv6Addr,
     dst_port: u16,
     seq: u32,
+    src_mac: [u8; 6],
+    dst_mac: [u8; 6],
 ) -> Result<Vec<u8>> {
     use pnet_packet::ipv6::MutableIpv6Packet;
     use pnet_packet::tcp::MutableTcpPacket;
 
-    let mut buffer = vec![0u8; 40 + 20];
+    let mut buffer = vec![0u8; 14 + 40 + 20];
 
-    let mut ipv6_packet = MutableIpv6Packet::new(&mut buffer[..40])
+    buffer[0..6].copy_from_slice(&dst_mac);
+    buffer[6..12].copy_from_slice(&src_mac);
+    buffer[12..14].copy_from_slice(&0x86DDu16.to_be_bytes());
+
+    let mut ipv6_packet = MutableIpv6Packet::new(&mut buffer[14..54])
         .ok_or_else(|| SlapperError::Runtime("Failed to create IPv6 packet".to_string()))?;
 
     ipv6_packet.set_version(6);
@@ -148,7 +165,7 @@ fn build_syn_packet_v6(
     ipv6_packet.set_source(src_ip);
     ipv6_packet.set_destination(dst_ip);
 
-    let mut tcp_packet = MutableTcpPacket::new(&mut buffer[40..])
+    let mut tcp_packet = MutableTcpPacket::new(&mut buffer[54..74])
         .ok_or_else(|| SlapperError::Runtime("Failed to create TCP packet".to_string()))?;
 
     tcp_packet.set_source(src_port);
@@ -158,9 +175,86 @@ fn build_syn_packet_v6(
     tcp_packet.set_data_offset(5);
     tcp_packet.set_flags(TcpFlags::SYN);
     tcp_packet.set_window(65535);
-    tcp_packet.set_checksum(0);
+
+    let checksum = compute_tcp_checksum_ipv6(src_ip, dst_ip, src_port, dst_port, seq, 0);
+    tcp_packet.set_checksum(checksum);
 
     Ok(buffer)
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
+fn compute_tcp_checksum_ipv4(
+    src_ip: Ipv4Addr,
+    dst_ip: Ipv4Addr,
+    src_port: u16,
+    dst_port: u16,
+    seq: u32,
+    ack: u32,
+) -> u16 {
+    let tcp_len = 20u32;
+    let mut pseudo = vec![0u8; 12 + 20];
+    pseudo[0..4].copy_from_slice(&src_ip.octets());
+    pseudo[4..8].copy_from_slice(&dst_ip.octets());
+    pseudo[8] = 0;
+    pseudo[9] = 6;
+    pseudo[10..12].copy_from_slice(&tcp_len.to_be_bytes());
+    pseudo[12..14].copy_from_slice(&src_port.to_be_bytes());
+    pseudo[14..16].copy_from_slice(&dst_port.to_be_bytes());
+    pseudo[16..20].copy_from_slice(&seq.to_be_bytes());
+    pseudo[20..24].copy_from_slice(&ack.to_be_bytes());
+    pseudo[24] = 0x50;
+    pseudo[25] = 0x02; // SYN flag
+    pseudo[26..28].copy_from_slice(&65535u16.to_be_bytes());
+    pseudo[28..30].copy_from_slice(&0u16.to_be_bytes());
+    pseudo[30..32].copy_from_slice(&0u16.to_be_bytes());
+    checksum_data(&pseudo)
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
+fn compute_tcp_checksum_ipv6(
+    src_ip: Ipv6Addr,
+    dst_ip: Ipv6Addr,
+    src_port: u16,
+    dst_port: u16,
+    seq: u32,
+    ack: u32,
+) -> u16 {
+    let tcp_len = 20u32;
+    let mut pseudo = vec![0u8; 40 + 20];
+    pseudo[0..16].copy_from_slice(&src_ip.octets());
+    pseudo[16..32].copy_from_slice(&dst_ip.octets());
+    pseudo[32..36].copy_from_slice(&tcp_len.to_be_bytes());
+    pseudo[36] = 0;
+    pseudo[37] = 0;
+    pseudo[38] = 0;
+    pseudo[39] = 6;
+    pseudo[40..42].copy_from_slice(&src_port.to_be_bytes());
+    pseudo[42..44].copy_from_slice(&dst_port.to_be_bytes());
+    pseudo[44..48].copy_from_slice(&seq.to_be_bytes());
+    pseudo[48..52].copy_from_slice(&ack.to_be_bytes());
+    pseudo[52] = 0x50;
+    pseudo[53] = 0x02; // SYN flag
+    pseudo[54..56].copy_from_slice(&65535u16.to_be_bytes());
+    pseudo[56..58].copy_from_slice(&0u16.to_be_bytes());
+    pseudo[58..60].copy_from_slice(&0u16.to_be_bytes());
+    checksum_data(&pseudo)
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
+fn checksum_data(data: &[u8]) -> u16 {
+    let mut sum: u32 = 0;
+    for i in (0..data.len()).step_by(2) {
+        if i + 1 < data.len() {
+            let word = ((data[i] as u32) << 8) | (data[i + 1] as u32);
+            sum += word;
+        } else {
+            sum += (data[i] as u32) << 8;
+        }
+    }
+    while sum > 0xffff {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    !sum as u16
 }
 
 #[cfg(not(all(feature = "stress-testing", unix)))]

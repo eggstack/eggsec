@@ -35,6 +35,12 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     let interface = utils::get_network_interface()?;
     let (mut tx, _rx) = utils::create_channel(&interface, "ICMP flood")?;
 
+    let src_mac = interface
+        .mac
+        .map(|m| m.octets())
+        .unwrap_or([0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    let dst_mac = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+
     let payload_size = config.payload_size.max(ICMP_PAYLOAD_SIZE);
     let payload = utils::generate_payload(payload_size);
 
@@ -60,7 +66,7 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
                 } else {
                     utils::get_local_ip(&interface)?
                 };
-                build_icmp_packet_v4(src_ip, dst_ip, identifier, &payload)?
+                build_icmp_packet_v4(src_ip, dst_ip, identifier, &payload, src_mac, dst_mac)?
             }
             IpAddr::V6(dst_ip) => {
                 let src_ip = if config.spoof_source {
@@ -68,7 +74,7 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
                 } else {
                     utils::get_local_ip_v6(&interface)?
                 };
-                build_icmp_packet_v6(src_ip, dst_ip, identifier, &payload)?
+                build_icmp_packet_v6(src_ip, dst_ip, identifier, &payload, src_mac, dst_mac)?
             }
         };
 
@@ -94,30 +100,53 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
+fn compute_icmp_checksum(data: &[u8]) -> u16 {
+    let mut sum: u32 = 0;
+    for i in (0..data.len()).step_by(2) {
+        if i + 1 < data.len() {
+            let word = ((data[i] as u32) << 8) | (data[i + 1] as u32);
+            sum += word;
+        } else {
+            sum += (data[i] as u32) << 8;
+        }
+    }
+    while sum > 0xffff {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    !sum as u16
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
 fn build_icmp_packet_v4(
     src_ip: Ipv4Addr,
     dst_ip: Ipv4Addr,
     identifier: u16,
     payload: &[u8],
+    src_mac: [u8; 6],
+    dst_mac: [u8; 6],
 ) -> Result<Vec<u8>> {
     let icmp_len = ICMP_HEADER_LEN + payload.len();
-    let total_len = 20 + icmp_len;
+    let total_len = 14 + 20 + icmp_len;
 
     let mut buffer = vec![0u8; total_len];
 
-    let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
+    buffer[0..6].copy_from_slice(&dst_mac);
+    buffer[6..12].copy_from_slice(&src_mac);
+    buffer[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
+
+    let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[14..34])
         .ok_or_else(|| SlapperError::Runtime("Failed to create IPv4 packet".to_string()))?;
 
     ipv4_packet.set_version(4);
     ipv4_packet.set_header_length(5);
-    ipv4_packet.set_total_length(total_len as u16);
+    ipv4_packet.set_total_length((20 + icmp_len) as u16);
     ipv4_packet.set_ttl(64);
     ipv4_packet.set_flags(0x40);
     ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Icmp);
     ipv4_packet.set_source(src_ip);
     ipv4_packet.set_destination(dst_ip);
 
-    let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer[20..])
+    let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer[34..])
         .ok_or_else(|| SlapperError::Runtime("Failed to create ICMP packet".to_string()))?;
 
     icmp_packet.set_icmp_type(IcmpTypes::EchoRequest);
@@ -125,7 +154,11 @@ fn build_icmp_packet_v4(
     icmp_packet.set_identifier(identifier);
     icmp_packet.set_sequence_number(1);
     icmp_packet.set_payload(payload.into());
-    icmp_packet.set_checksum(0);
+
+    drop(icmp_packet);
+
+    let checksum = compute_icmp_checksum(&buffer[34..]);
+    buffer[36..38].copy_from_slice(&checksum.to_be_bytes());
 
     Ok(buffer)
 }
@@ -136,23 +169,29 @@ fn build_icmp_packet_v6(
     dst_ip: Ipv6Addr,
     identifier: u16,
     payload: &[u8],
+    src_mac: [u8; 6],
+    dst_mac: [u8; 6],
 ) -> Result<Vec<u8>> {
     let icmp_len = ICMP_HEADER_LEN + payload.len();
-    let total_len = 40 + icmp_len;
+    let total_len = 14 + 40 + icmp_len;
 
     let mut buffer = vec![0u8; total_len];
 
-    let mut ipv6_packet = MutableIpv6Packet::new(&mut buffer[..40])
+    buffer[0..6].copy_from_slice(&dst_mac);
+    buffer[6..12].copy_from_slice(&src_mac);
+    buffer[12..14].copy_from_slice(&0x86DDu16.to_be_bytes());
+
+    let mut ipv6_packet = MutableIpv6Packet::new(&mut buffer[14..54])
         .ok_or_else(|| SlapperError::Runtime("Failed to create IPv6 packet".to_string()))?;
 
     ipv6_packet.set_version(6);
     ipv6_packet.set_payload_length(icmp_len as u16);
     ipv6_packet.set_hop_limit(64);
-    ipv6_packet.set_next_header(IpNextHeaderProtocols::Icmp);
+    ipv6_packet.set_next_header(IpNextHeaderProtocols::Icmpv6);
     ipv6_packet.set_source(src_ip);
     ipv6_packet.set_destination(dst_ip);
 
-    let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer[40..])
+    let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer[54..])
         .ok_or_else(|| SlapperError::Runtime("Failed to create ICMPv6 packet".to_string()))?;
 
     icmp_packet.set_icmp_type(IcmpTypes::EchoRequest);
@@ -160,7 +199,11 @@ fn build_icmp_packet_v6(
     icmp_packet.set_identifier(identifier);
     icmp_packet.set_sequence_number(1);
     icmp_packet.set_payload(payload.into());
-    icmp_packet.set_checksum(0);
+
+    drop(icmp_packet);
+
+    let checksum = compute_icmp_checksum(&buffer[54..]);
+    buffer[56..58].copy_from_slice(&checksum.to_be_bytes());
 
     Ok(buffer)
 }

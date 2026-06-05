@@ -55,7 +55,7 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
         pos = label_end;
     }
 
-    Some((String::from_utf8_lossy(&name).to_string(), pos + 1))
+    Some((String::from_utf8_lossy(&name).to_string(), pos))
 }
 
 pub fn parse_dns_rdata(data: &[u8], offset: usize, rtype: u16, _rdlen: usize) -> String {

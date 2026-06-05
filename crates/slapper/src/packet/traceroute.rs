@@ -256,7 +256,7 @@ impl Traceroute {
         semaphore: Arc<Semaphore>,
     ) -> TracerouteHop {
         let mut hop = TracerouteHop::new(ttl);
-        let target_port = self.config.port + ttl as u16 - 1;
+        let target_port = self.config.port.wrapping_add(ttl as u16).wrapping_sub(1);
 
         let probes: Vec<_> = (0..self.config.max_retries)
             .map(|_| {
@@ -481,7 +481,7 @@ impl Traceroute {
             .map_err(|e| ProbeError::SocketError(e.to_string()))?;
 
         let packet = vec![0u8; self.config.packet_size];
-        let dst = SocketAddr::new(target, self.config.port + ttl as u16 - 1);
+        let dst = SocketAddr::new(target, self.config.port.wrapping_add(ttl as u16).wrapping_sub(1));
 
         socket
             .send_to(&packet, dst)
@@ -491,11 +491,6 @@ impl Traceroute {
         match socket.recv_from(&mut buf) {
             Ok((len, addr)) => {
                 tracing::debug!("UDP response from {} ({} bytes)", addr, len);
-                if addr.port() == self.config.port + ttl as u16 - 1 {
-                    if buf[0] == 3 {
-                        return Err(ProbeError::PortUnreachable);
-                    }
-                }
                 Ok(addr.ip())
             }
             Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(ProbeError::Timeout),

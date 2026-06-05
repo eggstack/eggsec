@@ -89,7 +89,7 @@ mod raw_udp {
         payload: &[u8],
         len: u16,
     ) -> u16 {
-        let mut pseudo = vec![0u8; 12 + payload.len()];
+        let mut pseudo = vec![0u8; 12 + 8 + payload.len()];
         pseudo[0..4].copy_from_slice(&src_ip.octets());
         pseudo[4..8].copy_from_slice(&dst_ip.octets());
         pseudo[8] = 0;
@@ -98,7 +98,10 @@ mod raw_udp {
         pseudo[11] = (len & 0xff) as u8;
         pseudo[12..14].copy_from_slice(&src_port.to_be_bytes());
         pseudo[14..16].copy_from_slice(&dst_port.to_be_bytes());
-        pseudo[16..].copy_from_slice(payload);
+        pseudo[16..18].copy_from_slice(&len.to_be_bytes());
+        pseudo[18] = 0;
+        pseudo[19] = 0;
+        pseudo[20..20 + payload.len()].copy_from_slice(payload);
 
         let mut sum: u32 = 0;
         for i in (0..pseudo.len()).step_by(2) {

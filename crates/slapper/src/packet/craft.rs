@@ -316,12 +316,14 @@ impl PacketBuilder {
                     packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload));
                     payload_appended = true;
                 }
-                TransportBuilder::Udp(udp) => {
-                    packet.extend_from_slice(&udp.to_bytes());
-                }
-                TransportBuilder::Icmp(icmp) => {
-                    packet.extend_from_slice(&icmp.to_bytes());
-                }
+            TransportBuilder::Udp(udp) => {
+                let payload = self.payload.as_deref().unwrap_or(&[]);
+                packet.extend_from_slice(&udp.to_bytes(payload));
+            }
+            TransportBuilder::Icmp(icmp) => {
+                let payload = self.payload.as_deref().unwrap_or(&[]);
+                packet.extend_from_slice(&icmp.to_bytes(payload));
+            }
             }
         }
 
@@ -485,11 +487,12 @@ pub struct UdpBuilder {
 }
 
 impl UdpBuilder {
-    fn to_bytes(&self) -> [u8; 8] {
+    fn to_bytes(&self, payload: &[u8]) -> [u8; 8] {
         let mut bytes = [0u8; 8];
+        let len = (8 + payload.len()) as u16;
         bytes[0..2].copy_from_slice(&self.src_port.to_be_bytes());
         bytes[2..4].copy_from_slice(&self.dst_port.to_be_bytes());
-        bytes[4..6].copy_from_slice(&8u16.to_be_bytes());
+        bytes[4..6].copy_from_slice(&len.to_be_bytes());
         bytes[6..8].copy_from_slice(&0u16.to_be_bytes());
         bytes
     }
@@ -504,15 +507,35 @@ pub struct IcmpBuilder {
 }
 
 impl IcmpBuilder {
-    fn to_bytes(&self) -> [u8; 8] {
-        let mut bytes = [0u8; 8];
+    fn to_bytes(&self, payload: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0u8; 8 + payload.len()];
         bytes[0] = self.icmp_type;
         bytes[1] = self.icmp_code;
-        bytes[2..4].copy_from_slice(&0u16.to_be_bytes());
         bytes[4..6].copy_from_slice(&self.identifier.to_be_bytes());
         bytes[6..8].copy_from_slice(&self.sequence.to_be_bytes());
+        bytes[8..].copy_from_slice(payload);
+
+        let checksum = icmp_checksum(&bytes);
+        bytes[2..4].copy_from_slice(&checksum.to_be_bytes());
+
         bytes
     }
+}
+
+fn icmp_checksum(data: &[u8]) -> u16 {
+    let mut sum: u32 = 0;
+    for i in (0..data.len()).step_by(2) {
+        if i + 1 < data.len() {
+            let word = ((data[i] as u32) << 8) | (data[i + 1] as u32);
+            sum += word;
+        } else {
+            sum += (data[i] as u32) << 8;
+        }
+    }
+    while sum > 0xffff {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    !sum as u16
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

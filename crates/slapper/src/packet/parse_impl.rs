@@ -1,7 +1,7 @@
 use crate::packet::types::*;
 
 const TLS_RECORD_TYPE_HANDSHAKE: u8 = 0x16;
-const TLS_VERSION_1_0: u16 = 0x0101;
+const TLS_VERSION_1_0: u16 = 0x0301;
 const IPv4_VERSION_BYTE: u8 = 0x45;
 
 impl EthernetFrame {
@@ -596,7 +596,7 @@ impl DnsRecord {
 
 impl TlsHandshake {
     pub fn parse(data: &[u8]) -> Option<Self> {
-        if data.len() < 5 {
+        if data.len() < 6 {
             return None;
         }
 
@@ -608,7 +608,7 @@ impl TlsHandshake {
             return None;
         }
 
-        let version = match data[3] {
+        let version = match data[2] {
             0x01 => "TLS 1.0",
             0x02 => "TLS 1.1",
             0x03 => "TLS 1.2",

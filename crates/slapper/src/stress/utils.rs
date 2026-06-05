@@ -92,9 +92,18 @@ pub fn get_spoofed_source(range: &Option<String>) -> Result<Ipv4Addr> {
             let prefix: u8 = parts[1].parse()?;
 
             let base_u32 = u32::from(base);
+            if prefix == 0 {
+                return Ok(Ipv4Addr::from(base_u32 | rng.gen_range(1..=u32::MAX)));
+            }
+            if prefix >= 32 {
+                return Ok(base);
+            }
             let host_bits = 32 - prefix;
-            let offset = rng.gen_range(1..(1u32 << host_bits) - 1);
-
+            let max_offset = (1u32 << host_bits) - 1;
+            if max_offset <= 1 {
+                return Ok(base);
+            }
+            let offset = rng.gen_range(1..max_offset);
             return Ok(Ipv4Addr::from(base_u32 | offset));
         }
 

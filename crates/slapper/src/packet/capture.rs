@@ -2,7 +2,7 @@ use crate::packet::{hexdump, PacketInfo};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -327,6 +327,9 @@ impl PacketCapture {
 
         if !is_ipv6 && version == 4 {
             let ihl_words = (first & 0x0f) as usize;
+            if ihl_words < 5 {
+                return None;
+            }
             let ip_header_len = ihl_words * 4;
             let proto = *data.get(ip_start + 9)?;
             let transport_start = ip_start + ip_header_len;
