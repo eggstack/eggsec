@@ -4,7 +4,7 @@
 
 use mlua::{Lua, Result as LuaResult, Table};
 use rustc_hash::FxHashMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::sync::LazyLock;
 use std::sync::RwLock;
@@ -198,27 +198,25 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
             let results = lua.create_table()?;
             let mut idx = 1;
 
-            for pair in ports.pairs::<String, Table>() {
-                if let Ok((key, port_info)) = pair {
-                    let matches_host = host.as_ref().map_or(true, |h| key.starts_with(h));
-                    let matches_port = port.map_or(true, |p| {
-                        port_info.get::<u16>("number").map_or(false, |np| np == p)
-                    });
-                    let matches_proto = protocol.as_ref().map_or(true, |pr| {
-                        port_info
-                            .get::<String>("protocol")
-                            .map_or(false, |np| np == pr.as_str())
-                    });
-                    let matches_state = state.as_ref().map_or(true, |s| {
-                        port_info
-                            .get::<String>("state")
-                            .map_or(false, |ns| ns == s.as_str())
-                    });
+            for (key, port_info) in ports.pairs::<String, Table>().flatten() {
+                let matches_host = host.as_ref().map_or(true, |h| key.starts_with(h));
+                let matches_port = port.map_or(true, |p| {
+                    port_info.get::<u16>("number").is_ok_and(|np| np == p)
+                });
+                let matches_proto = protocol.as_ref().map_or(true, |pr| {
+                    port_info
+                        .get::<String>("protocol")
+                        .is_ok_and(|np| np == pr.as_str())
+                });
+                let matches_state = state.as_ref().map_or(true, |s| {
+                    port_info
+                        .get::<String>("state")
+                        .is_ok_and(|ns| ns == s.as_str())
+                });
 
-                    if matches_host && matches_port && matches_proto && matches_state {
-                        results.set(idx, port_info).ok();
-                        idx += 1;
-                    }
+                if matches_host && matches_port && matches_proto && matches_state {
+                    results.set(idx, port_info).ok();
+                    idx += 1;
                 }
             }
 
@@ -343,10 +341,10 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                     result.set("status", "connected")?;
                     result.set("host", host.clone())?;
                     result.set("port", port)?;
-                    let _ = socket_table.set("connected", true)?;
-                    let _ = socket_table.set("remote_host", host)?;
-                    let _ = socket_table.set("remote_port", port)?;
-                    let _ = socket_table.set(
+                    socket_table.set("connected", true)?;
+                    socket_table.set("remote_host", host)?;
+                    socket_table.set("remote_port", port)?;
+                    socket_table.set(
                         "connected_at",
                         std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
@@ -466,21 +464,18 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                                                 .as_secs(),
                                         },
                                     );
-                                    match reg.get_mut(&conn_key) {
-                                        Some(entry) => {
-                                            match entry.stream.write_all(data.as_bytes()) {
-                                                Ok(()) => {
-                                                    result.set("status", "sent")?;
-                                                    result.set("bytes", data.len())?;
-                                                }
-                                                Err(e2) => {
-                                                    result.set("status", "error")?;
-                                                    result.set("error", e2.to_string())?;
-                                                }
+                                    if let Some(entry) = reg.get_mut(&conn_key) {
+                                        match entry.stream.write_all(data.as_bytes()) {
+                                            Ok(()) => {
+                                                result.set("status", "sent")?;
+                                                result.set("bytes", data.len())?;
                                             }
-                                            return Ok(result);
+                                            Err(e2) => {
+                                                result.set("status", "error")?;
+                                                result.set("error", e2.to_string())?;
+                                            }
                                         }
-                                        None => {}
+                                        return Ok(result);
                                     }
                                 }
                             }
@@ -769,10 +764,10 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, _: ()| {
             let globals = lua.globals();
             let output: Table = globals.get("_SCRIPT_OUTPUT").unwrap_or_else(|_| {
-                let t = lua
+                
+                lua
                     .create_table()
-                    .unwrap_or_else(|_| lua.create_table().unwrap());
-                t
+                    .unwrap_or_else(|_| lua.create_table().unwrap())
             });
             let result = lua.create_table()?;
             result.set("lines", output)?;
@@ -1254,9 +1249,9 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                 .await
                 {
                     Ok(Ok(_stream)) => {
-                        let _ = socket_table.set("connected", true)?;
-                        let _ = socket_table.set("remote_host", host.clone())?;
-                        let _ = socket_table.set("remote_port", port)?;
+                        socket_table.set("connected", true)?;
+                        socket_table.set("remote_host", host.clone())?;
+                        socket_table.set("remote_port", port)?;
 
                         result.set("status", "connected")?;
                         result.set("host", host)?;
@@ -1542,7 +1537,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
                         let mut idx = 1;
                         for line in output_str.lines() {
                             if line.trim().starts_with("inet ") {
-                                let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                                let parts: Vec<&str> = line.split_whitespace().collect();
                                 if parts.len() >= 2 {
                                     addrs.set(idx, parts[1].to_string())?;
                                     idx += 1;

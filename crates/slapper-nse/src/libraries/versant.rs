@@ -268,7 +268,7 @@ pub fn register_versant_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(b"CLASSES\n").ok();
 
             let mut response = [0u8; 4096];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             let classes = lua.create_table()?;
             classes.set(1, "Object")?;
@@ -289,9 +289,9 @@ pub fn register_versant_library(lua: &Lua) -> LuaResult<()> {
 
 fn rand_simple() -> u32 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
+    
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .subsec_nanos();
-    nanos
+        .subsec_nanos()
 }

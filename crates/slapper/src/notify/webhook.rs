@@ -74,26 +74,28 @@ impl WebhookNotifier {
                 continue;
             }
 
+            let payload_value = match serde_json::to_value(payload) {
+                Ok(v) => v,
+                Err(e) => {
+                    results.push(Err(format!("JSON serialization error: {}", e)));
+                    continue;
+                }
+            };
+
             let mut extra_headers: FxHashMap<String, String> = FxHashMap::default();
 
             if let Some(ref secret) = webhook.secret {
                 type HmacSha256 = Hmac<Sha256>;
                 match HmacSha256::new_from_slice(secret.expose_secret().as_bytes()) {
                     Ok(mut mac) => {
-                        match serde_json::to_string(payload) {
-                            Ok(canonical_json) => {
-                                mac.update(canonical_json.as_bytes());
-                                let result = mac.finalize();
-                                let signature =
-                                    format!("sha256={}", hex::encode(result.into_bytes()));
-                                extra_headers
-                                    .insert("X-Signature-256".to_string(), signature);
-                            }
-                            Err(e) => {
-                                results.push(Err(format!("JSON serialization error: {}", e)));
-                                continue;
-                            }
-                        }
+                        let canonical_json =
+                            serde_json::to_string(&payload_value).unwrap();
+                        mac.update(canonical_json.as_bytes());
+                        let result = mac.finalize();
+                        let signature =
+                            format!("sha256={}", hex::encode(result.into_bytes()));
+                        extra_headers
+                            .insert("X-Signature-256".to_string(), signature);
                     }
                     Err(e) => {
                         results.push(Err(format!("HMAC key error: {}", e)));
@@ -105,14 +107,6 @@ impl WebhookNotifier {
             for (key, value) in &webhook.headers {
                 extra_headers.insert(key.clone(), value.clone());
             }
-
-            let payload_value = match serde_json::to_value(payload) {
-                Ok(v) => v,
-                Err(e) => {
-                    results.push(Err(format!("JSON serialization error: {}", e)));
-                    continue;
-                }
-            };
 
             match self
                 .send_with_retry(

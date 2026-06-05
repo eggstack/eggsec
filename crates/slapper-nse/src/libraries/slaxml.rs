@@ -124,7 +124,7 @@ fn parse_tag(tag: &str) -> (String, Vec<(String, String)>) {
     let tag = tag.trim_end_matches('/');
 
     let parts: Vec<&str> = tag.split_whitespace().collect();
-    let name = parts.get(0).unwrap_or(&"").to_string();
+    let name = parts.first().unwrap_or(&"").to_string();
 
     let mut attrs = Vec::new();
 
@@ -155,11 +155,10 @@ fn parse_tag(tag: &str) -> (String, Vec<(String, String)>) {
                 continue;
             }
 
-            if in_key && !in_quote {
-                if c.is_alphanumeric() || c == '-' || c == '_' {
+            if in_key && !in_quote
+                && (c.is_alphanumeric() || c == '-' || c == '_') {
                     key.push(c);
                 }
-            }
 
             if in_value && in_quote {
                 value.push(c);

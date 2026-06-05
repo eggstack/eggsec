@@ -128,10 +128,8 @@ pub fn register_ajp_library(lua: &Lua) -> LuaResult<()> {
 
             let header_vec: Vec<(String, String)> = if let Some(h) = headers {
                 let mut v = Vec::new();
-                for pair in h.pairs::<String, String>() {
-                    if let Ok((k, val)) = pair {
-                        v.push((k.clone(), val.clone()));
-                    }
+                for (k, val) in h.pairs::<String, String>().flatten() {
+                    v.push((k.clone(), val.clone()));
                 }
                 v
             } else {
@@ -256,10 +254,8 @@ pub fn register_ajp_library(lua: &Lua) -> LuaResult<()> {
 
                 let header_vec: Vec<(String, String)> = if let Some(h) = headers {
                     let mut v = Vec::new();
-                    for pair in h.pairs::<String, String>() {
-                        if let Ok((k, val)) = pair {
-                            v.push((k.clone(), val.clone()));
-                        }
+                    for (k, val) in h.pairs::<String, String>().flatten() {
+                        v.push((k.clone(), val.clone()));
                     }
                     v
                 } else {

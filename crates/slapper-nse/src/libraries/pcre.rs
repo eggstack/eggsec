@@ -20,7 +20,7 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
 
     let match_fn = lua.create_function(
         |_lua, (pattern, subject, opts): (String, String, Option<String>)| {
-            let case_insensitive = opts.as_ref().map_or(false, |o| o.contains('i'));
+            let case_insensitive = opts.as_ref().is_some_and(|o| o.contains('i'));
 
             let regex_pattern = if case_insensitive {
                 format!("(?i){}", pattern)
@@ -57,7 +57,7 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
 
     let match_one_fn = lua.create_function(
         |_lua, (pattern, subject, opts): (String, String, Option<String>)| {
-            let case_insensitive = opts.as_ref().map_or(false, |o| o.contains('i'));
+            let case_insensitive = opts.as_ref().is_some_and(|o| o.contains('i'));
 
             let regex_pattern = if case_insensitive {
                 format!("(?i){}", pattern)
@@ -91,7 +91,7 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
     pcre.set("match_one", match_one_fn)?;
 
     let compile_fn = lua.create_function(|_lua, (pattern, opts): (String, Option<String>)| {
-        let case_insensitive = opts.as_ref().map_or(false, |o| o.contains('i'));
+        let case_insensitive = opts.as_ref().is_some_and(|o| o.contains('i'));
 
         let regex_pattern = if case_insensitive {
             format!("(?i){}", pattern)
@@ -152,7 +152,7 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
 
     let substitute_fn = lua.create_function(
         |_lua, (pattern, subject, replacement, opts): (String, String, String, Option<String>)| {
-            let case_insensitive = opts.as_ref().map_or(false, |o| o.contains('i'));
+            let case_insensitive = opts.as_ref().is_some_and(|o| o.contains('i'));
 
             let regex_pattern = if case_insensitive {
                 format!("(?i){}", pattern)

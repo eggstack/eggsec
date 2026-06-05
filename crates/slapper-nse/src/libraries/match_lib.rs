@@ -137,11 +137,11 @@ pub fn register_match_library(lua: &Lua) -> LuaResult<()> {
                 return Ok(host);
             }
 
-            if let Ok(_) = host.parse::<std::net::Ipv4Addr>() {
+            if host.parse::<std::net::Ipv4Addr>().is_ok() {
                 return Ok(host);
             }
 
-            if let Ok(_) = host.parse::<std::net::Ipv6Addr>() {
+            if host.parse::<std::net::Ipv6Addr>().is_ok() {
                 return Ok(host);
             }
 

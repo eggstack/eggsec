@@ -11,6 +11,7 @@ pub mod traits;
 pub use cisa_kev::CisaKevClient;
 pub use nvd::NvdClient;
 pub use osv::OsvClient;
+pub use traits::CveClient;
 
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -86,18 +87,15 @@ pub struct VendorAdvisory {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum SeverityType {
     CvssV2,
     CvssV3,
     CvssV31,
+    #[default]
     None,
 }
 
-impl Default for SeverityType {
-    fn default() -> Self {
-        SeverityType::None
-    }
-}
 
 /// Source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,18 +118,15 @@ impl Default for CveSourceConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum CveSource {
+    #[default]
     Nvd,
     Osv,
     CisaKev,
     All,
 }
 
-impl Default for CveSource {
-    fn default() -> Self {
-        CveSource::Nvd
-    }
-}
 
 impl std::fmt::Display for CveSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -142,31 +137,6 @@ impl std::fmt::Display for CveSource {
             CveSource::All => write!(f, "All sources"),
         }
     }
-}
-
-/// CVE Source trait - implement for new sources
-pub trait CveClient: Send + Sync {
-    /// Get source name
-    fn source(&self) -> CveSource;
-
-    /// Lookup CVE by ID
-    fn lookup(
-        &self,
-        cve_id: &str,
-    ) -> impl std::future::Future<Output = Result<Option<CveRecord>, CveError>> + Send;
-
-    /// Search CVEs by keyword
-    fn search(
-        &self,
-        query: &str,
-    ) -> impl std::future::Future<Output = Result<Vec<CveRecord>, CveError>> + Send;
-
-    /// Get vulnerabilities for a product
-    fn get_for_product(
-        &self,
-        package: &str,
-        ecosystem: &str,
-    ) -> impl std::future::Future<Output = Result<Vec<CveRecord>, CveError>> + Send;
 }
 
 /// Cache for CVE results

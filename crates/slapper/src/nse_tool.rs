@@ -99,7 +99,7 @@ impl SecurityTool for NseTool {
             ) {
                 match executor.load_script(&script_for_executor) {
                     Ok(content) => content,
-                    Err(_) => get_builtin_script(&script_for_executor),
+                    Err(_) => slapper_nse::get_builtin_script(&script_for_executor),
                 }
             } else {
                 executor
@@ -196,44 +196,5 @@ impl SecurityTool for NseTool {
         }
 
         Ok(())
-    }
-}
-
-fn get_builtin_script(name: &str) -> String {
-    match name {
-        "default" | "discovery" => r#"
--- Default NSE discovery script
-local stdnse = require "stdnse"
-
-stdnse.verbose = 1
-
-return "NSE scan complete"
-"#
-        .to_string(),
-        "banner" => r#"
--- Banner grabbing script
-local stdnse = require "stdnse"
-
-return "Banner grab complete"
-"#
-        .to_string(),
-        "http-headers" => r#"
--- HTTP headers discovery script
-local stdnse = require "stdnse"
-
-return "HTTP headers scan complete"
-"#
-        .to_string(),
-        _ => {
-            format!(
-                r#"
--- Custom NSE script
-local stdnse = require "stdnse"
-
-return "Custom script '{}' executed"
-"#,
-                name
-            )
-        }
     }
 }

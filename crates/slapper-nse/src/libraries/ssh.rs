@@ -102,8 +102,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.login() - Authenticate to SSH server
     let login_fn = lua.create_function(
-        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, user, _password): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -177,8 +177,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.execute() - Execute a command
     let execute_fn = lua.create_function(
-        |lua, (host, port, command): (String, Option<u16>, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, command): (String, Option<u16>, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -405,8 +405,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth_pubkey() - Public key authentication
     let userauth_pubkey_fn = lua.create_function(
-        |lua, (host, port, user, key_file): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, user, _key_file): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -600,8 +600,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_upload() - Upload files via SCP
     let scp_upload_fn = lua.create_function(
-        |lua, (host, port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -658,8 +658,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.sftp() - SFTP operations
     let sftp_fn = lua.create_function(
-        |lua, (host, port, operation, path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, operation, path): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -775,8 +775,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth() - Generic user authentication
     let userauth_fn = lua.create_function(
-        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, user, _password): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {

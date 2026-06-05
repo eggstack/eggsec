@@ -14,7 +14,6 @@
 
 use mlua::{Lua, Result as LuaResult};
 use std::fs;
-use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::SandboxConfig;

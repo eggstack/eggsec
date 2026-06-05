@@ -117,7 +117,7 @@ fn pg_login(
 
         match auth_type {
             PG_AUTHENTICATION_OK => {
-                return Ok(true);
+                Ok(true)
             }
             PG_AUTHENTICATION_MD5_PASSWORD => {
                 let _salt = &response[9..13];
@@ -188,11 +188,10 @@ fn pg_query(conn: &mut PgConnection, query: &str) -> std::io::Result<String> {
             Err(_) => break,
         }
 
-        if response.len() >= 1 {
-            if response[0] == b'Z' || response[0] == b'C' || response[0] == b'E' {
+        if !response.is_empty()
+            && (response[0] == b'Z' || response[0] == b'C' || response[0] == b'E') {
                 break;
             }
-        }
     }
 
     if response.is_empty() {
@@ -200,8 +199,7 @@ fn pg_query(conn: &mut PgConnection, query: &str) -> std::io::Result<String> {
     }
 
     if response[0] == b'E' {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             String::from_utf8_lossy(&response[5..]).to_string(),
         ));
     }

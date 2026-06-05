@@ -148,12 +148,10 @@ pub fn register_url_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, params: Table| {
             let mut pairs = Vec::new();
 
-            for pair in params.pairs::<String, String>() {
-                if let Ok((key, value)) = pair {
-                    let encoded_key = urlencoding::encode(&key);
-                    let encoded_val = urlencoding::encode(&value);
-                    pairs.push(format!("{}={}", encoded_key, encoded_val));
-                }
+            for (key, value) in params.pairs::<String, String>().flatten() {
+                let encoded_key = urlencoding::encode(&key);
+                let encoded_val = urlencoding::encode(&value);
+                pairs.push(format!("{}={}", encoded_key, encoded_val));
             }
 
             Ok(pairs.join("&"))
@@ -176,7 +174,7 @@ pub fn register_url_library(lua: &Lua) -> LuaResult<()> {
         "get_tld",
         lua.create_function(|_lua, host: String| {
             let parts: Vec<&str> = host.split('.').collect();
-            if parts.len() >= 1 {
+            if !parts.is_empty() {
                 Ok(parts.last().unwrap_or(&"").to_string())
             } else {
                 Ok(String::new())

@@ -36,7 +36,7 @@ fn encode_ldap_message(message_id: i32, _op: LdapOperation, content: &[u8]) -> V
 
     // Build content first to get length
     let mut inner = Vec::new();
-    inner.extend(encode_integer(message_id as i32));
+    inner.extend(encode_integer(message_id));
     inner.extend_from_slice(content);
 
     // Length
@@ -50,7 +50,7 @@ fn encode_integer(value: i32) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.push(0x02); // Integer tag
 
-    let abs_value = value.unsigned_abs() as u32;
+    let abs_value = value.unsigned_abs();
 
     let mut encoded: Vec<u8> = Vec::new();
     if value == 0 {
@@ -71,7 +71,7 @@ fn encode_integer(value: i32) -> Vec<u8> {
     }
 
     bytes.push(encoded.len() as u8);
-    bytes.extend(encoded.into_iter());
+    bytes.extend(encoded);
     bytes
 }
 

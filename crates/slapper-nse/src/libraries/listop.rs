@@ -48,8 +48,8 @@ pub fn register_listop_library(lua: &Lua) -> LuaResult<()> {
     let slice_fn = lua.create_function(
         |lua, (list, start, end_val): (Table, Option<usize>, Option<usize>)| {
             let len = list.len().unwrap_or(0) as usize;
-            let start = start.unwrap_or(1) as usize;
-            let end_val = end_val.unwrap_or(len) as usize;
+            let start = start.unwrap_or(1);
+            let end_val = end_val.unwrap_or(len);
 
             let result = lua.create_table()?;
             let mut j = 1;

@@ -22,24 +22,22 @@ pub fn register_json_library(lua: &Lua) -> LuaResult<()> {
                 let mut is_array = true;
 
                 let mut keys: Vec<serde_json::Value> = Vec::new();
-                for pair in t.pairs::<Value, Value>() {
-                    if let Ok((k, _v)) = pair {
-                        match k {
-                            Value::Number(n) => {
-                                keys.push(serde_json::Value::Number(
-                                    serde_json::Number::from_f64(n)
-                                        .unwrap_or(serde_json::Number::from(0)),
-                                ));
-                            }
-                            Value::String(s) => {
-                                keys.push(serde_json::Value::String(
-                                    s.to_string_lossy().to_string(),
-                                ));
-                                is_array = false;
-                            }
-                            _ => {
-                                is_array = false;
-                            }
+                for (k, _v) in t.pairs::<Value, Value>().flatten() {
+                    match k {
+                        Value::Number(n) => {
+                            keys.push(serde_json::Value::Number(
+                                serde_json::Number::from_f64(n)
+                                    .unwrap_or(serde_json::Number::from(0)),
+                            ));
+                        }
+                        Value::String(s) => {
+                            keys.push(serde_json::Value::String(
+                                s.to_string_lossy().to_string(),
+                            ));
+                            is_array = false;
+                        }
+                        _ => {
+                            is_array = false;
                         }
                     }
                 }
@@ -53,15 +51,13 @@ pub fn register_json_library(lua: &Lua) -> LuaResult<()> {
                     }
                     Ok(JsonValue::Array(arr))
                 } else {
-                    for pair in t.pairs::<Value, Value>() {
-                        if let Ok((k, v)) = pair {
-                            let key = match k {
-                                Value::String(s) => s.to_string_lossy().to_string(),
-                                Value::Number(n) => n.to_string(),
-                                _ => continue,
-                            };
-                            obj.insert(key, lua_value_to_json(lua, v)?);
-                        }
+                    for (k, v) in t.pairs::<Value, Value>().flatten() {
+                        let key = match k {
+                            Value::String(s) => s.to_string_lossy().to_string(),
+                            Value::Number(n) => n.to_string(),
+                            _ => continue,
+                        };
+                        obj.insert(key, lua_value_to_json(lua, v)?);
                     }
                     Ok(JsonValue::Object(obj))
                 }

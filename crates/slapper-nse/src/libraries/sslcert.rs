@@ -145,7 +145,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
                     result.set("issuer", parse_x509_name(cert.issuer_name()))?;
                     result.set("notbefore", cert.not_before().to_string())?;
                     result.set("notafter", cert.not_after().to_string())?;
-                    result.set("version", cert.version() as i32)?;
+                    result.set("version", cert.version())?;
                     result.set("serial", "unknown")?;
 
                     if let Ok(fingerprint) = cert.digest(openssl::hash::MessageDigest::sha256()) {
@@ -171,7 +171,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
             result.set("issuer", issuer.clone())?;
             let parts: Vec<&str> = issuer.split(", ").collect();
             let issuer_parts = lua.create_table()?;
-            for (_i, part) in parts.iter().enumerate() {
+            for part in parts.iter() {
                 if let Some((key, value)) = part.split_once('=') {
                     issuer_parts.set(key.trim(), value.trim())?;
                 }
@@ -200,8 +200,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
             let domains = lua.create_table()?;
 
             for (i, part) in subject.split(", ").enumerate() {
-                if part.starts_with("CN=") {
-                    let cn = &part[3..];
+                if let Some(cn) = part.strip_prefix("CN=") {
                     domains.set(i + 1, cn)?;
                 }
             }
@@ -211,8 +210,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
                     if domain == host || domain == "*" {
                         return Ok(true);
                     }
-                    if domain.starts_with("*.") {
-                        let base = &domain[2..];
+                    if let Some(base) = domain.strip_prefix("*.") {
                         if host.ends_with(base) {
                             return Ok(true);
                         }
@@ -232,8 +230,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
 
         if let Ok(subject) = cert_table.get::<String>("subject") {
             for (i, part) in subject.split(", ").enumerate() {
-                if part.starts_with("CN=") {
-                    let cn = &part[3..];
+                if let Some(cn) = part.strip_prefix("CN=") {
                     alttable.set(i + 1, cn)?;
                 }
             }
@@ -250,7 +247,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
             result.set("subject", subject.clone())?;
             let parts: Vec<&str> = subject.split(", ").collect();
             let subject_parts = lua.create_table()?;
-            for (_i, part) in parts.iter().enumerate() {
+            for part in parts.iter() {
                 if let Some((key, value)) = part.split_once('=') {
                     subject_parts.set(key.trim(), value.trim())?;
                 }
@@ -309,7 +306,7 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
         };
 
         if let Some(_cert) = tls_stream.peer_certificate().ok().flatten() {
-            return Ok(format!("TLSv1.2"));
+            return Ok("TLSv1.2".to_string());
         }
 
         Ok(String::new())

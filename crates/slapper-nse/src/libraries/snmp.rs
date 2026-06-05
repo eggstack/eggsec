@@ -524,7 +524,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
                 let request = build_snmp_request(
                     SNMP_VERSION_1,
                     &community,
-                    idx as i32,
+                    idx,
                     0xA1, // GetNextRequest
                     &current_oid,
                 );
@@ -806,7 +806,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
                 let request = build_snmp_request(
                     SNMP_VERSION_2C,
                     &community,
-                    idx as i32,
+                    idx,
                     0xA1, // GetNextRequest
                     &current_oid,
                 );

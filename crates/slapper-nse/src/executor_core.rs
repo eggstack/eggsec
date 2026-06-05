@@ -13,6 +13,7 @@ use std::sync::Arc;
 use crate::libraries::shared;
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct SandboxMetrics {
     pub io_handles: usize,
     pub io_violations: usize,
@@ -20,16 +21,6 @@ pub struct SandboxMetrics {
     pub os_violations: usize,
 }
 
-impl Default for SandboxMetrics {
-    fn default() -> Self {
-        Self {
-            io_handles: 0,
-            io_violations: 0,
-            lfs_violations: 0,
-            os_violations: 0,
-        }
-    }
-}
 
 /// Core Lua VM state shared between sync and async executors.
 ///
@@ -168,17 +159,15 @@ impl ExecutorCore {
             .map_err(|e| e.to_string())?;
 
         let mut result = String::new();
-        for pair in script_output.pairs::<Value, Value>() {
-            if let Ok((_, v)) = pair {
-                let val_str = match v {
-                    Value::String(s) => s.to_string_lossy().to_string(),
-                    _ => v.to_string().unwrap_or_default(),
-                };
-                if !result.is_empty() {
-                    result.push('\n');
-                }
-                result.push_str(&val_str);
+        for (_, v) in script_output.pairs::<Value, Value>().flatten() {
+            let val_str = match v {
+                Value::String(s) => s.to_string_lossy().to_string(),
+                _ => v.to_string().unwrap_or_default(),
+            };
+            if !result.is_empty() {
+                result.push('\n');
             }
+            result.push_str(&val_str);
         }
         Ok(result)
     }

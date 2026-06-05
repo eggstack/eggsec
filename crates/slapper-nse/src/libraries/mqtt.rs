@@ -435,10 +435,8 @@ pub fn register_mqtt_library(lua: &Lua) -> LuaResult<()> {
         }
 
         let mut topic_list: Vec<(String, u8)> = Vec::new();
-        for pair in topics.pairs::<String, u8>() {
-            if let Ok((topic, qos)) = pair {
-                topic_list.push((topic, qos));
-            }
+        for (topic, qos) in topics.pairs::<String, u8>().flatten() {
+            topic_list.push((topic, qos));
         }
 
         let topic_refs: Vec<(&str, u8)> =
@@ -486,10 +484,8 @@ pub fn register_mqtt_library(lua: &Lua) -> LuaResult<()> {
             }
 
             let mut topic_list: Vec<String> = Vec::new();
-            for pair in topics.pairs::<String, mlua::Value>() {
-                if let Ok((topic, _)) = pair {
-                    topic_list.push(topic);
-                }
+            for (topic, _) in topics.pairs::<String, mlua::Value>().flatten() {
+                topic_list.push(topic);
             }
 
             match conn.unsubscribe(&topic_list) {

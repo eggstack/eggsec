@@ -35,8 +35,7 @@ pub fn register_punycode_library(lua: &Lua) -> LuaResult<()> {
     punycode.set("encode", encode_fn)?;
 
     let decode_fn = lua.create_function(|_lua, domain: String| {
-        if domain.starts_with("xn--") {
-            let encoded = &domain[4..];
+        if let Some(encoded) = domain.strip_prefix("xn--") {
             let mut decoded = String::new();
             let mut buffer = String::new();
 
@@ -127,8 +126,7 @@ pub fn register_punycode_library(lua: &Lua) -> LuaResult<()> {
     punycode.set("to_ascii", to_ascii_fn)?;
 
     let to_unicode_fn = lua.create_function(|_lua, domain: String| {
-        let decoded = if domain.starts_with("xn--") {
-            let encoded = &domain[4..];
+        let decoded = if let Some(encoded) = domain.strip_prefix("xn--") {
             let mut result = String::new();
             let mut buffer = String::new();
 
@@ -178,7 +176,7 @@ fn encode_codepoint(cp: u32) -> String {
 
     loop {
         let digit = (n % 35) as u8;
-        n = n / 35;
+        n /= 35;
 
         let char = if digit < 26 {
             (b'a' + digit) as char

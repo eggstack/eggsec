@@ -98,7 +98,7 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                             .filter(|s| !s.is_empty())
                             .collect::<Vec<_>>()
                     })
-                    .unwrap_or_else(|| get_default_usernames())
+                    .unwrap_or_else(get_default_usernames)
             } else {
                 get_default_usernames()
             };
@@ -126,7 +126,7 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                             .filter(|s| !s.is_empty())
                             .collect::<Vec<_>>()
                     })
-                    .unwrap_or_else(|| get_default_passwords())
+                    .unwrap_or_else(get_default_passwords)
             } else {
                 get_default_passwords()
             };
@@ -171,7 +171,7 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                 .unwrap_or(6);
 
             for len in min_len..=max_len {
-                let count = 10u32.pow(len as u32);
+                let count = 10u32.pow(len);
                 for i in 0..count.min(1000) {
                     let pin = format!("{:0>width$}", i, width = len as usize);
                     let idx = pins.len().unwrap_or(0) as usize + 1;

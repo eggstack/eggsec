@@ -53,7 +53,7 @@ impl KafkaConnection {
     ) -> Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
 
-        let message_len = 4 + 2 + 2 + 4 + request.len() + 2 + CLIENT_ID.len() as usize;
+        let message_len = 4 + 2 + 2 + 4 + request.len() + 2 + CLIENT_ID.len();
 
         buffer.extend_from_slice(&(message_len as i32).to_be_bytes());
         buffer.extend_from_slice(&api_key.to_be_bytes());

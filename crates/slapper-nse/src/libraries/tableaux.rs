@@ -13,11 +13,9 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
     let keys_fn = lua.create_function(|lua, tbl: Table| {
         let result = lua.create_table()?;
         let mut i = 1;
-        for pair_result in tbl.pairs::<mlua::Value, mlua::Value>() {
-            if let Ok((k, _)) = pair_result {
-                result.set(i, k)?;
-                i += 1;
-            }
+        for (k, _) in tbl.pairs::<mlua::Value, mlua::Value>().flatten() {
+            result.set(i, k)?;
+            i += 1;
         }
         Ok(result)
     })?;
@@ -27,11 +25,9 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
     let values_fn = lua.create_function(|lua, tbl: Table| {
         let result = lua.create_table()?;
         let mut i = 1;
-        for pair_result in tbl.pairs::<mlua::Value, mlua::Value>() {
-            if let Ok((_, v)) = pair_result {
-                result.set(i, v)?;
-                i += 1;
-            }
+        for (_, v) in tbl.pairs::<mlua::Value, mlua::Value>().flatten() {
+            result.set(i, v)?;
+            i += 1;
         }
         Ok(result)
     })?;
@@ -40,15 +36,11 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
     // tableaux.merge(t1, t2) -> merged table
     let merge_fn = lua.create_function(|lua, (t1, t2): (Table, Table)| {
         let result = lua.create_table()?;
-        for pair_result in t1.pairs::<mlua::Value, mlua::Value>() {
-            if let Ok((k, v)) = pair_result {
-                result.set(k, v)?;
-            }
+        for (k, v) in t1.pairs::<mlua::Value, mlua::Value>().flatten() {
+            result.set(k, v)?;
         }
-        for pair_result in t2.pairs::<mlua::Value, mlua::Value>() {
-            if let Ok((k, v)) = pair_result {
-                result.set(k, v)?;
-            }
+        for (k, v) in t2.pairs::<mlua::Value, mlua::Value>().flatten() {
+            result.set(k, v)?;
         }
         Ok(result)
     })?;
@@ -88,14 +80,12 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
                     }
                 }
             } else {
-                for pair_result in tbl.pairs::<Value, Value>() {
-                    if let Ok((k, v)) = pair_result {
-                        if v == item {
-                            let result = lua.create_table()?;
-                            result.set(1, true)?;
-                            result.set(2, k)?;
-                            return Ok(result);
-                        }
+                for (k, v) in tbl.pairs::<Value, Value>().flatten() {
+                    if v == item {
+                        let result = lua.create_table()?;
+                        result.set(1, true)?;
+                        result.set(2, k)?;
+                        return Ok(result);
                     }
                 }
             }
@@ -111,10 +101,8 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
     // Invert a one-to-one mapping
     let invert_fn = lua.create_function(|lua, tbl: Table| {
         let result = lua.create_table()?;
-        for pair_result in tbl.pairs::<Value, Value>() {
-            if let Ok((k, v)) = pair_result {
-                result.set(v, k)?;
-            }
+        for (k, v) in tbl.pairs::<Value, Value>().flatten() {
+            result.set(v, k)?;
         }
         Ok(result)
     })?;
@@ -124,10 +112,8 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
     // Copy one level of a table (by reference for nested tables)
     let shallow_tcopy_fn = lua.create_function(|lua, tbl: Table| {
         let result = lua.create_table()?;
-        for pair_result in tbl.pairs::<Value, Value>() {
-            if let Ok((k, v)) = pair_result {
-                result.set(k, v)?;
-            }
+        for (k, v) in tbl.pairs::<Value, Value>().flatten() {
+            result.set(k, v)?;
         }
         Ok(result)
     })?;
@@ -137,16 +123,14 @@ pub fn register_tableaux_library(lua: &Lua) -> LuaResult<()> {
     // Recursively copy a table
     fn deep_copy_table(lua: &Lua, tbl: &Table) -> LuaResult<Table> {
         let result = lua.create_table()?;
-        for pair_result in tbl.pairs::<Value, Value>() {
-            if let Ok((k, v)) = pair_result {
-                match v {
-                    Value::Table(t) => {
-                        let copied = deep_copy_table(lua, &t)?;
-                        result.set(k, Value::Table(copied))?;
-                    }
-                    _ => {
-                        result.set(k, v)?;
-                    }
+        for (k, v) in tbl.pairs::<Value, Value>().flatten() {
+            match v {
+                Value::Table(t) => {
+                    let copied = deep_copy_table(lua, &t)?;
+                    result.set(k, Value::Table(copied))?;
+                }
+                _ => {
+                    result.set(k, v)?;
                 }
             }
         }

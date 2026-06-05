@@ -388,7 +388,7 @@ pub fn register_rpc_library(lua: &Lua) -> LuaResult<()> {
 
             let programs = get_rpc_programs();
             let mut i = 1;
-            for (prog, _) in programs {
+            for prog in programs.keys() {
                 let entry = lua.create_table()?;
                 entry.set("program", *prog)?;
                 entry.set("name", get_program_name(*prog))?;

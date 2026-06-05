@@ -71,7 +71,7 @@ pub fn register_bitcoin_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, encoded: String| {
             let decoded = base64_decode(&encoded);
             if decoded.len() < 26 {
-                return Ok(lua.create_table()?);
+                return lua.create_table();
             }
 
             let addr = lua.create_table()?;

@@ -149,10 +149,8 @@ fn parse_options(opts: Option<&Table>) -> (FxHashMap<String, String>, Duration) 
             return (headers, Duration::from_secs(timeout_val));
         }
         if let Ok(headers_table) = opts.get::<Table>("headers") {
-            for pair in headers_table.pairs::<String, String>() {
-                if let Ok((k, v)) = pair {
-                    headers.insert(k, v);
-                }
+            for (k, v) in headers_table.pairs::<String, String>().flatten() {
+                headers.insert(k, v);
             }
         }
     }
@@ -197,7 +195,7 @@ fn build_response(lua: &Lua, resp: reqwest::blocking::Response) -> LuaResult<Tab
     let version = resp.version();
     result.set("version", format!("{:?}", version))?;
 
-    if status >= 300 && status < 400 {
+    if (300..400).contains(&status) {
         if let Some(location) = resp.headers().get("location") {
             if let Ok(loc) = location.to_str() {
                 result.set("location", loc.to_string())?;
@@ -239,7 +237,7 @@ fn build_response_async(lua: &Lua, resp: reqwest::Response) -> LuaResult<Table> 
     let version = resp.version();
     result.set("version", format!("{:?}", version))?;
 
-    if status >= 300 && status < 400 {
+    if (300..400).contains(&status) {
         if let Some(location) = resp.headers().get("location") {
             if let Ok(loc) = location.to_str() {
                 result.set("location", loc.to_string())?;
@@ -444,10 +442,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
                         req = req.body(body);
                     }
                     if let Ok(headers) = opts.get::<Table>("headers") {
-                        for pair in headers.pairs::<String, String>() {
-                            if let Ok((k, v)) = pair {
-                                req = req.header(&k, &v);
-                            }
+                        for (k, v) in headers.pairs::<String, String>().flatten() {
+                            req = req.header(&k, &v);
                         }
                     }
                     if let Ok(auth) = opts.get::<String>("authorization") {
@@ -512,8 +508,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
             let status: i32 = response.get("status").unwrap_or(0);
             let _headers: Table = response.get("headers").unwrap_or_else(|_| {
                 lua.create_table().unwrap_or_else(|_| {
-                    let t = lua.create_table().unwrap();
-                    t
+                    
+                    lua.create_table().unwrap()
                 })
             });
 
@@ -559,10 +555,10 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, (request, name, value): (Table, String, String)| {
             let cookie = format!("{}={}", name, value);
             let header: Table = request.get("headers").unwrap_or_else(|_| {
-                let t = lua
+                
+                lua
                     .create_table()
-                    .unwrap_or_else(|_| lua.create_table().unwrap());
-                t
+                    .unwrap_or_else(|_| lua.create_table().unwrap())
             });
             header.set("Cookie", cookie)?;
             Ok(request)
@@ -614,10 +610,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
 
                 if let Some(opts) = options {
                     if let Ok(headers) = opts.get::<Table>("headers") {
-                        for pair in headers.pairs::<String, String>() {
-                            if let Ok((k, v)) = pair {
-                                req = req.header(&k, &v);
-                            }
+                        for (k, v) in headers.pairs::<String, String>().flatten() {
+                            req = req.header(&k, &v);
                         }
                     }
                 }
@@ -647,10 +641,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
 
                 if let Some(opts) = options {
                     if let Ok(headers) = opts.get::<Table>("headers") {
-                        for pair in headers.pairs::<String, String>() {
-                            if let Ok((k, v)) = pair {
-                                req = req.header(&k, &v);
-                            }
+                        for (k, v) in headers.pairs::<String, String>().flatten() {
+                            req = req.header(&k, &v);
                         }
                     }
                 }
@@ -703,10 +695,10 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
             let port: u16 = request.get("port").unwrap_or(80);
             let path: String = request.get("path").unwrap_or_else(|_| "/".to_string());
             let headers: Table = request.get("headers").unwrap_or_else(|_| {
-                let t = lua
+                
+                lua
                     .create_table()
-                    .unwrap_or_else(|_| lua.create_table().unwrap());
-                t
+                    .unwrap_or_else(|_| lua.create_table().unwrap())
             });
 
             cloned.set("method", method)?;
@@ -726,7 +718,7 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
             let body: String = response.get("body").unwrap_or_default();
 
             let result = lua.create_table()?;
-            result.set("valid", status >= 200 && status < 400)?;
+            result.set("valid", (200..400).contains(&status))?;
             result.set("status", status)?;
             result.set("has_body", !body.is_empty())?;
 

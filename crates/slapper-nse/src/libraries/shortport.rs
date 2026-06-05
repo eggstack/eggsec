@@ -53,7 +53,7 @@ fn parse_port_spec(value: &Value) -> Vec<u16> {
 
     match value {
         Value::Number(n) => {
-            let n = *n as f64;
+            let n = *n;
             ports.push(n as u16);
         }
         Value::String(s) => {
@@ -152,20 +152,19 @@ where
                         }
 
                         let matches_proto = proto
-                            .map_or(true, |pr| port_proto.as_ref().map_or(false, |np| np == pr));
+                            .map_or(true, |pr| port_proto.as_ref().is_some_and(|np| np == pr));
                         let matches_state =
-                            state.map_or(true, |s| port_state.as_ref().map_or(false, |ns| ns == s));
+                            state.map_or(true, |s| port_state.as_ref().is_some_and(|ns| ns == s));
 
-                        if matches_proto && matches_state {
-                            if check(
+                        if matches_proto && matches_state
+                            && check(
                                 num,
                                 port_proto.as_deref(),
-                                port_state.as_ref().map(|s| s.as_str()),
-                                port_service.as_ref().map(|s| s.as_str()),
+                                port_state.as_deref(),
+                                port_service.as_deref(),
                             ) {
                                 return true;
                             }
-                        }
                     }
                 }
             }

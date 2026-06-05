@@ -156,7 +156,7 @@ fn get_crc32_table() -> Vec<u32> {
             if c & 1 != 0 {
                 c = 0xEDB88320 ^ (c >> 1);
             } else {
-                c = c >> 1;
+                c >>= 1;
             }
         }
         table.push(c);

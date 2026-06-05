@@ -77,8 +77,8 @@ pub fn register_httpspider_library(lua: &Lua) -> LuaResult<()> {
         "isresource",
         lua.create_function(|_lua, (url, ext): (String, String)| {
             if let Ok(parsed) = Url::parse(&url) {
-                if let Some(path) = parsed.path_segments() {
-                    if let Some(filename) = path.last() {
+                if let Some(mut path) = parsed.path_segments() {
+                    if let Some(filename) = path.next_back() {
                         if let Some(file_ext) = filename.rsplit('.').next() {
                             return Ok(file_ext.to_lowercase() == ext.to_lowercase());
                         }
@@ -220,7 +220,7 @@ pub fn register_httpspider_library(lua: &Lua) -> LuaResult<()> {
     // allowed - Check if HTTP status code indicates success
     httpspider.set(
         "allowed",
-        lua.create_function(|_lua, status: i32| Ok(status >= 200 && status < 400))?,
+        lua.create_function(|_lua, status: i32| Ok((200..400).contains(&status)))?,
     )?;
 
     // get_url - Construct full URL from path

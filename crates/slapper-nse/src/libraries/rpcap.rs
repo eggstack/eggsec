@@ -168,7 +168,7 @@ pub fn register_rpcap_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&stop_msg).ok();
 
             let mut response = [0u8; 256];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             result.set("status", "ok")?;
             result.set("capturing", false)?;

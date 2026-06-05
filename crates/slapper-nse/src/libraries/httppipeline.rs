@@ -74,7 +74,7 @@ pub fn register_httppipeline_library(lua: &Lua) -> LuaResult<()> {
 
         let count = requests.len()? as usize;
         if count == 0 {
-            return Ok(lua.create_table()?);
+            return lua.create_table();
         }
 
         let scheme = if port == 443 { "https" } else { "http" };

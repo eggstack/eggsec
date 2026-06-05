@@ -77,7 +77,7 @@ pub fn register_dnsbl_library(lua: &Lua) -> LuaResult<()> {
                     if ip_str.starts_with("127.") {
                         let code: u8 = ip_str
                             .split('.')
-                            .last()
+                            .next_back()
                             .and_then(|s| s.parse().ok())
                             .unwrap_or(0);
 
@@ -144,10 +144,8 @@ pub fn register_dnsbl_library(lua: &Lua) -> LuaResult<()> {
 
         let server_list: Vec<String> = if let Some(srv_table) = servers {
             let mut list = Vec::new();
-            for pair in srv_table.pairs::<i32, String>() {
-                if let Ok((_, srv)) = pair {
-                    list.push(srv);
-                }
+            for (_, srv) in srv_table.pairs::<i32, String>().flatten() {
+                list.push(srv);
             }
             if list.is_empty() {
                 DNSBL_SERVERS.iter().map(|s| s.to_string()).collect()
@@ -178,7 +176,7 @@ pub fn register_dnsbl_library(lua: &Lua) -> LuaResult<()> {
                             listed = true;
                             let code: u8 = ip_str
                                 .split('.')
-                                .last()
+                                .next_back()
                                 .and_then(|s| s.parse().ok())
                                 .unwrap_or(0);
 
@@ -269,7 +267,7 @@ pub fn register_dnsbl_library(lua: &Lua) -> LuaResult<()> {
                         listed = true;
                         let ip_str = addr.to_string();
 
-                        if let Some(code_str) = ip_str.split('.').last() {
+                        if let Some(code_str) = ip_str.split('.').next_back() {
                             if let Ok(code) = code_str.parse::<u8>() {
                                 match code {
                                     1 => {

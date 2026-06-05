@@ -112,7 +112,7 @@ pub fn register_rmi_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(b"JRMI").ok();
 
             let mut response = [0u8; 1024];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             let bindings = lua.create_table()?;
             bindings.set(1, "java.rmi.registry.Registry")?;

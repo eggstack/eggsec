@@ -89,7 +89,7 @@ impl UserData for TlsConnection {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method_mut("connect", |lua, this, (host, port): (String, u16)| {
             this.connect(&host, port)
-                .map_err(|e| mlua::Error::RuntimeError(e))?;
+                .map_err(mlua::Error::RuntimeError)?;
             let result = lua.create_table()?;
             result.set("host", host)?;
             result.set("port", port)?;
@@ -100,12 +100,12 @@ impl UserData for TlsConnection {
         });
 
         methods.add_method_mut("write", |_lua, this, data: String| {
-            this.write(&data).map_err(|e| mlua::Error::RuntimeError(e))
+            this.write(&data).map_err(mlua::Error::RuntimeError)
         });
 
         methods.add_method_mut("read", |_lua, this, size: Option<usize>| {
             this.read(size.unwrap_or(4096))
-                .map_err(|e| mlua::Error::RuntimeError(e))
+                .map_err(mlua::Error::RuntimeError)
         });
 
         methods.add_method_mut("close", |_lua, this, _: ()| {
@@ -126,8 +126,8 @@ pub fn register_tls_library(lua: &Lua) -> LuaResult<()> {
     let connect_fn = lua.create_function(|lua, (host, port): (String, u16)| {
         let mut conn = TlsConnection::new();
         conn.connect(&host, port)
-            .map_err(|e| mlua::Error::RuntimeError(e))?;
-        Ok(lua.create_userdata(conn)?)
+            .map_err(mlua::Error::RuntimeError)?;
+        lua.create_userdata(conn)
     })?;
     tls.set("connect", connect_fn)?;
 
@@ -318,7 +318,7 @@ pub fn register_tls_library(lua: &Lua) -> LuaResult<()> {
 
                             result.set("notbefore", x509.not_before().to_string())?;
                             result.set("notafter", x509.not_after().to_string())?;
-                            result.set("version", x509.version() as i32)?;
+                            result.set("version", x509.version())?;
                         }
                     }
                 }
@@ -499,7 +499,7 @@ pub fn register_tls_library(lua: &Lua) -> LuaResult<()> {
 
                             result.set("not_before", x509.not_before().to_string())?;
                             result.set("not_after", x509.not_after().to_string())?;
-                            result.set("version", x509.version() as i32)?;
+                            result.set("version", x509.version())?;
 
                             let serial = x509
                                 .serial_number()

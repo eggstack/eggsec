@@ -6,7 +6,6 @@
 use mlua::{Lua, Result as LuaResult};
 use native_tls::TlsConnector;
 use rustc_hash::FxHashMap;
-use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -31,11 +30,11 @@ fn create_ssl_connection(
         .danger_accept_invalid_certs(true)
         .danger_accept_invalid_hostnames(true)
         .build()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
 
     connector
         .connect(host, stream)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+        .map_err(|e| std::io::Error::other(e.to_string()))
 }
 
 pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {

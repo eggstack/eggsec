@@ -48,14 +48,11 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "open",
         lua.create_function(move |lua, (filename, mode): (String, Option<String>)| {
-            if sandbox_enabled {
-                let path_buf = PathBuf::from(&filename);
-                if !sandbox_for_open.is_path_allowed(path_buf.to_string_lossy().as_ref()) {
-                    IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-                    let result = lua.create_table()?;
-                    result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
-                    return Ok(result);
-                }
+            if sandbox_enabled && sandbox_for_open.get_allowed_path(&filename).is_none() {
+                IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
+                let result = lua.create_table()?;
+                result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
+                return Ok(result);
             }
 
             let mode_str = mode.unwrap_or_else(|| "r".to_string());
@@ -99,7 +96,7 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                 Ok(f) => {
                     let fd = {
                         let mut next = NEXT_FD.lock().map_err(|_| {
-                            std::io::Error::new(std::io::ErrorKind::Other, "lock error")
+                            std::io::Error::other("lock error")
                         })?;
                         let fd = *next;
                         *next += 1;
@@ -107,7 +104,7 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                     };
 
                     let mut handles = FILE_HANDLES.lock().map_err(|_| {
-                        std::io::Error::new(std::io::ErrorKind::Other, "lock error")
+                        std::io::Error::other("lock error")
                     })?;
                     handles.insert(fd, FileHandle { file: f, fd });
 
@@ -241,14 +238,11 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "lines",
         lua.create_function(move |lua, filename: String| {
-            if sandbox_enabled {
-                let path_buf = PathBuf::from(&filename);
-                if !sandbox_for_lines.is_path_allowed(path_buf.to_string_lossy().as_ref()) {
-                    IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-                    let result = lua.create_table()?;
-                    result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
-                    return Ok(result);
-                }
+            if sandbox_enabled && sandbox_for_lines.get_allowed_path(&filename).is_none() {
+                IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
+                let result = lua.create_table()?;
+                result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
+                return Ok(result);
             }
 
             let lines = lua.create_table()?;
@@ -267,8 +261,8 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "popen",
         lua.create_function(move |lua, (cmd, mode): (String, Option<String>)| {
-            if sandbox_for_popen.enabled {
-                if !sandbox_for_popen.is_command_allowed(&cmd) {
+            if sandbox_for_popen.enabled
+                && !sandbox_for_popen.is_command_allowed(&cmd) {
                     if sandbox_for_popen.log_violations {
                         tracing::warn!(
                             command = %cmd,
@@ -279,7 +273,6 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                     result.set("error", "io.popen blocked by sandbox")?;
                     return Ok(result);
                 }
-            }
 
             let mode_str = mode.unwrap_or_else(|| "r".to_string());
 

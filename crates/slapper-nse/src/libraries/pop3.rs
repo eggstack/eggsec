@@ -21,7 +21,7 @@ fn pop3_send(host: &str, port: u16, command: &str) -> Result<String, mlua::Error
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
 
-    let _ = stream
+    stream
         .write_all(command.as_bytes())
         .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
 
@@ -56,7 +56,7 @@ fn pop3_send_with_body(host: &str, port: u16, command: &str) -> Result<String, m
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
 
-    let _ = stream
+    stream
         .write_all(command.as_bytes())
         .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
 
@@ -205,8 +205,7 @@ pub fn register_pop3_library(lua: &Lua) -> LuaResult<()> {
 
             if response.starts_with("+OK") {
                 let parts: Vec<&str> = response.split("\r\n\r\n").collect();
-                let header = parts
-                    .get(0)
+                let header = parts.first()
                     .unwrap_or(&"")
                     .lines()
                     .skip(1)

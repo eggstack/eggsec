@@ -53,7 +53,7 @@ fn smtp_login(
     let mut response = vec![0u8; 1024];
     let _ = stream.read(&mut response);
 
-    stream.write_all(format!("AUTH LOGIN\r\n").as_bytes())?;
+    stream.write_all("AUTH LOGIN\r\n".to_string().as_bytes())?;
     stream.flush()?;
 
     response.clear();
@@ -162,8 +162,7 @@ fn smtp_send_mail(
     if n > 0 && String::from_utf8_lossy(&response[..n]).starts_with("250") {
         Ok(true)
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Err(std::io::Error::other(
             "Failed to send message",
         ))
     }

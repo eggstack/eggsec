@@ -227,7 +227,7 @@ impl UserData for SocketHandle {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method_mut("connect", |lua, this, (host, port): (String, u16)| {
             this.connect(&host, port)
-                .map_err(|e| mlua::Error::RuntimeError(e))?;
+                .map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("host", host)?;
@@ -237,7 +237,7 @@ impl UserData for SocketHandle {
         });
 
         methods.add_method_mut("send", |lua, this, data: String| {
-            let bytes = this.send(&data).map_err(|e| mlua::Error::RuntimeError(e))?;
+            let bytes = this.send(&data).map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("status", "sent")?;
@@ -249,7 +249,7 @@ impl UserData for SocketHandle {
             let size = size.unwrap_or(1024);
             let data = this
                 .receive(size)
-                .map_err(|e| mlua::Error::RuntimeError(e))?;
+                .map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("data", data)?;
@@ -312,7 +312,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
             if sandbox_enabled && log_violations {
                 tracing::info!("[NSE Sandbox] Socket created: TCP (sandbox enabled)");
             }
-            Ok(lua.create_userdata(sock)?)
+            lua.create_userdata(sock)
         }
     })?;
     socket.set("tcp", tcp_fn)?;
@@ -326,7 +326,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                 allowed_networks.clone(),
             );
             sock.socket_type = "udp".to_string();
-            Ok(lua.create_userdata(sock)?)
+            lua.create_userdata(sock)
         }
     })?;
     socket.set("udp", udp_fn)?;
@@ -340,7 +340,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                 allowed_networks.clone(),
             );
             sock.socket_type = "sctp".to_string();
-            Ok(lua.create_userdata(sock)?)
+            lua.create_userdata(sock)
         }
     })?;
     socket.set("sctp", sctp_fn)?;
@@ -374,7 +374,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
             let mut sock =
                 SocketHandle::new_with_sandbox(sandbox_enabled, log_violations, allowed_networks.clone());
             sock.connect(&host, port)
-                .map_err(|e| mlua::Error::RuntimeError(e))?;
+                .map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("host", host)?;
@@ -414,7 +414,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
             let mut sock =
                 SocketHandle::new_with_sandbox(sandbox_enabled, log_violations, allowed_networks.clone());
             sock.connect(&host, port)
-                .map_err(|e| mlua::Error::RuntimeError(e))?;
+                .map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("host", host)?;
@@ -430,7 +430,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
             let mut sock = ud
                 .borrow_mut::<SocketHandle>()
                 .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
-            let bytes = sock.send(&data).map_err(|e| mlua::Error::RuntimeError(e))?;
+            let bytes = sock.send(&data).map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("status", "sent")?;
@@ -449,7 +449,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                 .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
             let data = sock
                 .receive(size.unwrap_or(1024))
-                .map_err(|e| mlua::Error::RuntimeError(e))?;
+                .map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("data", data)?;
@@ -523,13 +523,13 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                     // Close existing connection and create new one
                     sock.close();
                     sock.connect_udp(&host, port)
-                        .map_err(|e| mlua::Error::RuntimeError(e))?;
+                        .map_err(mlua::Error::RuntimeError)?;
                 }
 
                 sock.host = host.clone();
                 sock.port = port;
 
-                let bytes = sock.send(&data).map_err(|e| mlua::Error::RuntimeError(e))?;
+                let bytes = sock.send(&data).map_err(mlua::Error::RuntimeError)?;
 
                 let result = lua.create_table()?;
                 result.set("status", "sent")?;
@@ -552,7 +552,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                 let size = size.unwrap_or(1024);
                 let data = sock
                     .receive(size)
-                    .map_err(|e| mlua::Error::RuntimeError(e))?;
+                    .map_err(mlua::Error::RuntimeError)?;
 
                 let result = lua.create_table()?;
                 result.set("data", data)?;

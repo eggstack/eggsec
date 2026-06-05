@@ -37,11 +37,11 @@ fn ntp_read_response(response: &[u8]) -> (u8, u8, u8, u8, String, f64, f64, f64)
     let version = (response[0] >> 3) & 0x7;
     let mode = response[0] & 0x7;
     let stratum = response[1];
-    let _poll = response[2] as i8 as i8;
+    let _poll = response[2] as i8;
     let _precision = response[3] as i8;
 
-    let root_delay = ((response[4] as u32) << 8 | (response[5] as u32) << 0) as f64 / 65536.0;
-    let root_disp = ((response[6] as u32) << 8 | (response[7] as u32) << 0) as f64 / 65536.0;
+    let root_delay = ((response[4] as u32) << 8 | (response[5] as u32)) as f64 / 65536.0;
+    let root_disp = ((response[6] as u32) << 8 | (response[7] as u32)) as f64 / 65536.0;
 
     let ref_id = if stratum == 1 {
         String::from_utf8_lossy(&response[12..16]).to_string()

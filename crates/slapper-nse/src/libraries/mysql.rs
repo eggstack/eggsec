@@ -107,16 +107,16 @@ fn mysql_login(conn: &mut MySqlConnection, user: &str, password: &str) -> std::i
         let hash_stage1: [u8; 16] = hasher.finalize().into();
 
         hasher = Md5::new();
-        hasher.update(&hash_stage1);
+        hasher.update(hash_stage1);
         let hash_stage2: [u8; 16] = hasher.finalize().into();
 
         hasher = Md5::new();
-        hasher.update(&hash_stage2);
+        hasher.update(hash_stage2);
         hasher.update(b"Scramble");
         let mut result: [u8; 16] = hasher.finalize().into();
 
         for i in 0..16 {
-            result[i] = result[i] ^ hash_stage1[i];
+            result[i] ^= hash_stage1[i];
         }
 
         response.push(0x14);
@@ -135,13 +135,13 @@ fn mysql_login(conn: &mut MySqlConnection, user: &str, password: &str) -> std::i
         Ok(true)
     } else if n > 0 && ack[4] == 0xff {
         let error_code = u16::from_le_bytes([ack[5], ack[6]]);
-        return Err(std::io::Error::new(
+        Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             format!(
                 "MySQL authentication failed with error code: {}",
                 error_code
             ),
-        ));
+        ))
     } else {
         Ok(true)
     }

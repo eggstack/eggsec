@@ -69,11 +69,9 @@ fn capture_to_lua(lua: &Lua, regex: &Regex, text: &str, caps: Option<&Table>) ->
         }
 
         if let Some(cap_table) = caps {
-            for pair in cap_table.pairs::<String, i32>() {
-                if let Ok((name, index)) = pair {
-                    if let Some(m) = captures.get(index as usize) {
-                        result.set(name, m.as_str())?;
-                    }
+            for (name, index) in cap_table.pairs::<String, i32>().flatten() {
+                if let Some(m) = captures.get(index as usize) {
+                    result.set(name, m.as_str())?;
                 }
             }
         }
@@ -177,7 +175,7 @@ pub fn register_re_library(lua: &Lua) -> LuaResult<()> {
             let opts = options.unwrap_or_default();
             let regex = match build_regex(&pattern, &opts) {
                 Ok(r) => r,
-                Err(_) => return Ok(lua.create_table()?),
+                Err(_) => return lua.create_table(),
             };
 
             let result = lua.create_table()?;
@@ -220,7 +218,7 @@ pub fn register_re_library(lua: &Lua) -> LuaResult<()> {
     let find_newlines_fn = lua.create_function(|lua, (s, pattern): (String, String)| {
         let regex = match RegexBuilder::new(&pattern).size_limit(50_000).build() {
             Ok(r) => r,
-            Err(_) => return Ok(lua.create_table()?),
+            Err(_) => return lua.create_table(),
         };
 
         let result = lua.create_table()?;

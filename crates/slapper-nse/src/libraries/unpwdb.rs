@@ -96,7 +96,7 @@ pub fn register_unpwdb_library(lua: &Lua) -> LuaResult<()> {
                             .filter(|s| !s.is_empty())
                             .collect()
                     })
-                    .unwrap_or_else(|| get_default_usernames())
+                    .unwrap_or_else(get_default_usernames)
             } else {
                 get_default_usernames()
             };
@@ -124,7 +124,7 @@ pub fn register_unpwdb_library(lua: &Lua) -> LuaResult<()> {
                             .filter(|s| !s.is_empty())
                             .collect()
                     })
-                    .unwrap_or_else(|| get_default_passwords())
+                    .unwrap_or_else(get_default_passwords)
             } else {
                 get_default_passwords()
             };

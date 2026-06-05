@@ -20,7 +20,7 @@ pub fn register_msrpctypes_library(lua: &Lua) -> LuaResult<()> {
 
     let unpack_uint8_fn = lua.create_function(|_lua, data: String| {
         if !data.is_empty() {
-            Ok(data.as_bytes()[0] as u8)
+            Ok(data.as_bytes()[0])
         } else {
             Ok(0u8)
         }

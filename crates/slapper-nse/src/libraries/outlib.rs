@@ -29,10 +29,8 @@ pub fn register_outlib_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, (t, sortfunc): (Table, Option<Function>)| {
             let mut keys: Vec<String> = Vec::new();
 
-            for pair in t.pairs::<String, mlua::Value>() {
-                if let Ok((key, _)) = pair {
-                    keys.push(key);
-                }
+            for (key, _) in t.pairs::<String, mlua::Value>().flatten() {
+                keys.push(key);
             }
 
             if let Some(_func) = sortfunc {
@@ -63,17 +61,15 @@ pub fn register_outlib_library(lua: &Lua) -> LuaResult<()> {
     let to_xml_fn = lua.create_function(|_lua, data: Table| {
         let mut xml = String::from("<output>");
 
-        for pair in data.pairs::<String, mlua::Value>() {
-            if let Ok((key, value)) = pair {
-                xml.push_str(&format!("<{}>", key));
-                match value {
-                    mlua::Value::String(s) => xml.push_str(&s.to_string_lossy()),
-                    mlua::Value::Number(n) => xml.push_str(&n.to_string()),
-                    mlua::Value::Boolean(b) => xml.push_str(&b.to_string()),
-                    _ => {}
-                }
-                xml.push_str(&format!("</{}>", key));
+        for (key, value) in data.pairs::<String, mlua::Value>().flatten() {
+            xml.push_str(&format!("<{}>", key));
+            match value {
+                mlua::Value::String(s) => xml.push_str(&s.to_string_lossy()),
+                mlua::Value::Number(n) => xml.push_str(&n.to_string()),
+                mlua::Value::Boolean(b) => xml.push_str(&b.to_string()),
+                _ => {}
             }
+            xml.push_str(&format!("</{}>", key));
         }
 
         xml.push_str("</output>");

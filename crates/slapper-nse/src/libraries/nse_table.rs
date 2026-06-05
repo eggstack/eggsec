@@ -41,16 +41,14 @@ pub fn register_table_library(lua: &Lua) {
                     mlua::Value::Table(t) => {
                         output.push("{".to_string());
                         let mut first = true;
-                        for pair in t.pairs::<mlua::Value, mlua::Value>() {
-                            if let Ok((k, v)) = pair {
-                                if !first {
-                                    output.push(",".to_string());
-                                }
-                                first = false;
-                                serialize_value(output, &k, indent + 1);
-                                output.push(" = ".to_string());
-                                serialize_value(output, &v, indent + 1);
+                        for (k, v) in t.pairs::<mlua::Value, mlua::Value>().flatten() {
+                            if !first {
+                                output.push(",".to_string());
                             }
+                            first = false;
+                            serialize_value(output, &k, indent + 1);
+                            output.push(" = ".to_string());
+                            serialize_value(output, &v, indent + 1);
                         }
                         output.push("}".to_string());
                     }
@@ -80,11 +78,9 @@ pub fn register_table_library(lua: &Lua) {
         lua.create_function(|_lua, t: Table| {
             let keys = _lua.create_table()?;
             let mut count = 0;
-            for pair in t.pairs::<mlua::Value, mlua::Value>() {
-                if let Ok((k, _)) = pair {
-                    count += 1;
-                    let _ = keys.set(count, k);
-                }
+            for (k, _) in t.pairs::<mlua::Value, mlua::Value>().flatten() {
+                count += 1;
+                let _ = keys.set(count, k);
             }
             Ok(keys)
         })
@@ -96,11 +92,9 @@ pub fn register_table_library(lua: &Lua) {
         lua.create_function(|_lua, t: Table| {
             let values = _lua.create_table()?;
             let mut count = 0;
-            for pair in t.pairs::<mlua::Value, mlua::Value>() {
-                if let Ok((_, v)) = pair {
-                    count += 1;
-                    let _ = values.set(count, v);
-                }
+            for (_, v) in t.pairs::<mlua::Value, mlua::Value>().flatten() {
+                count += 1;
+                let _ = values.set(count, v);
             }
             Ok(values)
         })
@@ -122,11 +116,9 @@ pub fn register_table_library(lua: &Lua) {
     let _ = table_lib.set(
         "contains",
         lua.create_function(|_lua, (t, value): (Table, mlua::Value)| {
-            for pair in t.pairs::<mlua::Value, mlua::Value>() {
-                if let Ok((_, v)) = pair {
-                    if v == value {
-                        return Ok(true);
-                    }
+            for (_, v) in t.pairs::<mlua::Value, mlua::Value>().flatten() {
+                if v == value {
+                    return Ok(true);
                 }
             }
             Ok(false)
@@ -139,16 +131,12 @@ pub fn register_table_library(lua: &Lua) {
         lua.create_function(|_lua, (t1, t2): (Table, Table)| {
             let result = _lua.create_table()?;
 
-            for pair in t1.pairs::<mlua::Value, mlua::Value>() {
-                if let Ok((k, v)) = pair {
-                    let _ = result.set(k, v);
-                }
+            for (k, v) in t1.pairs::<mlua::Value, mlua::Value>().flatten() {
+                let _ = result.set(k, v);
             }
 
-            for pair in t2.pairs::<mlua::Value, mlua::Value>() {
-                if let Ok((k, v)) = pair {
-                    let _ = result.set(k, v);
-                }
+            for (k, v) in t2.pairs::<mlua::Value, mlua::Value>().flatten() {
+                let _ = result.set(k, v);
             }
 
             Ok(result)

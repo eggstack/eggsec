@@ -167,27 +167,25 @@ impl NseExecutor {
         let ports = globals.get::<Table>("nmap")?.get::<Table>("_ports")?;
         let mut portrule_matched = false;
 
-        for pair in ports.pairs::<String, Table>() {
-            if let Ok((_, port_info)) = pair {
-                if let Ok(portrule) = globals.get::<mlua::Function>("portrule") {
-                    match portrule.call::<Value>(port_info.clone()) {
-                        Ok(r) if r.as_boolean().unwrap_or(false) => {
-                            if let Ok(action) = globals.get::<mlua::Function>("action") {
-                                let host = globals.get::<Table>("nmap")?;
-                                match action.call::<Value>((host.clone(), port_info.clone())) {
-                                    Ok(v) if !v.is_nil() => {
-                                        outputs.push(format!("action: {:?}", v))
-                                    }
-                                    Err(e) => outputs.push(format!("action error: {}", e)),
-                                    _ => {}
+        for (_, port_info) in ports.pairs::<String, Table>().flatten() {
+            if let Ok(portrule) = globals.get::<mlua::Function>("portrule") {
+                match portrule.call::<Value>(port_info.clone()) {
+                    Ok(r) if r.as_boolean().unwrap_or(false) => {
+                        if let Ok(action) = globals.get::<mlua::Function>("action") {
+                            let host = globals.get::<Table>("nmap")?;
+                            match action.call::<Value>((host.clone(), port_info.clone())) {
+                                Ok(v) if !v.is_nil() => {
+                                    outputs.push(format!("action: {:?}", v))
                                 }
+                                Err(e) => outputs.push(format!("action error: {}", e)),
+                                _ => {}
                             }
-                            portrule_matched = true;
-                            break;
                         }
-                        Err(e) => outputs.push(format!("portrule error: {}", e)),
-                        _ => {}
+                        portrule_matched = true;
+                        break;
                     }
+                    Err(e) => outputs.push(format!("portrule error: {}", e)),
+                    _ => {}
                 }
             }
         }

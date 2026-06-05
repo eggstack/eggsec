@@ -134,34 +134,30 @@ fn parse_dhcp_response(packet: &[u8]) -> Result<(String, String, String, String,
         }
 
         match opt_code {
-            OPT_SUBNET_MASK => {
-                if opt_len >= 4 {
+            OPT_SUBNET_MASK
+                if opt_len >= 4 => {
                     subnet_mask =
                         Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
                             .to_string();
                 }
-            }
-            OPT_ROUTER => {
-                if opt_len >= 4 {
+            OPT_ROUTER
+                if opt_len >= 4 => {
                     router =
                         Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
                             .to_string();
                 }
-            }
-            OPT_DNS => {
-                if opt_len >= 4 {
+            OPT_DNS
+                if opt_len >= 4 => {
                     dns = Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
                         .to_string();
                 }
-            }
-            OPT_LEASE_TIME => {
-                if opt_len >= 4 {
+            OPT_LEASE_TIME
+                if opt_len >= 4 => {
                     lease_time = ((packet[i + 2] as u32) << 24)
                         | ((packet[i + 3] as u32) << 16)
                         | ((packet[i + 4] as u32) << 8)
                         | (packet[i + 5] as u32);
                 }
-            }
             OPT_END => break,
             _ => {}
         }
@@ -180,7 +176,7 @@ pub fn register_dhcp_library(lua: &Lua) -> LuaResult<()> {
     let dhcp = lua.create_table()?;
 
     let discover_fn = lua.create_function(|lua, (host, mac): (String, String)| {
-        let mac_bytes = mac_to_bytes(&mac).map_err(|e| mlua::Error::RuntimeError(e))?;
+        let mac_bytes = mac_to_bytes(&mac).map_err(mlua::Error::RuntimeError)?;
         let xid = rand::random::<u32>();
 
         let packet = build_dhcp_packet(DHCP_DISCOVER, xid, &mac_bytes, None, None, &[]);
@@ -246,7 +242,7 @@ pub fn register_dhcp_library(lua: &Lua) -> LuaResult<()> {
 
     let request_fn = lua.create_function(
         |lua, (host, mac, requested_ip, server_ip): (String, String, String, Option<String>)| {
-            let mac_bytes = mac_to_bytes(&mac).map_err(|e| mlua::Error::RuntimeError(e))?;
+            let mac_bytes = mac_to_bytes(&mac).map_err(mlua::Error::RuntimeError)?;
             let xid = rand::random::<u32>();
 
             let packet = build_dhcp_packet(
@@ -362,7 +358,7 @@ pub fn register_dhcp_library(lua: &Lua) -> LuaResult<()> {
     dhcp.set("release", release_fn)?;
 
     let inform_fn = lua.create_function(|lua, (host, mac): (String, String)| {
-        let mac_bytes = mac_to_bytes(&mac).map_err(|e| mlua::Error::RuntimeError(e))?;
+        let mac_bytes = mac_to_bytes(&mac).map_err(mlua::Error::RuntimeError)?;
         let xid = rand::random::<u32>();
 
         let packet = build_dhcp_packet(DHCP_REQUEST, xid, &mac_bytes, None, None, &[]);

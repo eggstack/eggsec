@@ -73,7 +73,7 @@ pub fn register_comm_library(lua: &Lua) -> LuaResult<()> {
                             let _ = stream.set_read_timeout(Some(timeout));
                             let _ = stream.set_write_timeout(Some(timeout));
 
-                            if let Err(_) = stream.write_all(data.as_bytes()) {
+                            if stream.write_all(data.as_bytes()).is_err() {
                                 let result = lua.create_table()?;
                                 result.set("data", "")?;
                                 return Ok(result);
@@ -213,7 +213,7 @@ pub fn register_comm_library(lua: &Lua) -> LuaResult<()> {
 
                     match connect_result {
                         Ok(Ok(mut stream)) => {
-                            if let Err(_) = stream.write_all(data.as_bytes()).await {
+                            if stream.write_all(data.as_bytes()).await.is_err() {
                                 result.set("data", "")?;
                                 return Ok(result);
                             }

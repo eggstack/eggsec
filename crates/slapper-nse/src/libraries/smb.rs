@@ -956,7 +956,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
                         )?;
                     }
                     Err(e) => {
-                        result.set("name", path.split('/').last().unwrap_or(&path))?;
+                        result.set("name", path.split('/').next_back().unwrap_or(&path))?;
                         result.set("size", 0)?;
                         result.set("created", 0)?;
                         result.set("accessed", 0)?;

@@ -29,15 +29,13 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
             let mut lines = Vec::new();
             let mut severity = "ok".to_string();
 
-            for pair in output.pairs::<Value, Value>() {
-                if let Ok((k, v)) = pair {
-                    let key = k.to_string().unwrap_or_default();
-                    let val = v.to_string().unwrap_or_default();
-                    if key == "severity" || key == "status" {
-                        severity = val;
-                    } else {
-                        lines.push(format!("{}: {}", key, val));
-                    }
+            for (k, v) in output.pairs::<Value, Value>().flatten() {
+                let key = k.to_string().unwrap_or_default();
+                let val = v.to_string().unwrap_or_default();
+                if key == "severity" || key == "status" {
+                    severity = val;
+                } else {
+                    lines.push(format!("{}: {}", key, val));
                 }
             }
 
@@ -451,10 +449,10 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         output.set(key.clone(), value.clone())?;
 
         let script_output: Table = globals.get("_SCRIPT_OUTPUT").unwrap_or_else(|_| {
-            let t = lua
+            
+            lua
                 .create_table()
-                .unwrap_or_else(|_| lua.create_table().unwrap());
-            t
+                .unwrap_or_else(|_| lua.create_table().unwrap())
         });
         let len = script_output.len().unwrap_or(0) + 1;
         script_output.set(len, format!("{}: {:?}", key, value))?;
@@ -723,10 +721,8 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
 
     let seeall_fn = lua.create_function(|lua, env: Table| {
         let globals = lua.globals();
-        for pair in globals.pairs::<String, mlua::Value>() {
-            if let Ok((k, v)) = pair {
-                let _ = env.set(k, v);
-            }
+        for (k, v) in globals.pairs::<String, mlua::Value>().flatten() {
+            let _ = env.set(k, v);
         }
         Ok(env)
     })?;
@@ -781,7 +777,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         let globals = lua.globals();
         let nmap_tbl: Table = globals.get("nmap")?;
         let ports: Table = nmap_tbl.get("_ports")?;
-        let len = ports.len().unwrap_or(0) as i64;
+        let len = ports.len().unwrap_or(0);
         Ok(len)
     })?;
     stdnse.set("get_checked_port_count", get_checked_port_count_fn)?;
@@ -790,8 +786,8 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         let globals = lua.globals();
         let stdnse_tbl: Table = globals.get("stdnse")?;
         let base: Table = stdnse_tbl.get("base_coroutine").unwrap_or_else(|_| {
-            let t = lua.create_table().unwrap();
-            t
+            
+            lua.create_table().unwrap()
         });
         Ok(base)
     })?;
@@ -1270,10 +1266,8 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         let name_clone = name.clone();
 
         if let Some(exp) = export {
-            for pair in exp.pairs::<String, mlua::Value>() {
-                if let Ok((k, v)) = pair {
-                    env.set(k, v)?;
-                }
+            for (k, v) in exp.pairs::<String, mlua::Value>().flatten() {
+                env.set(k, v)?;
             }
         }
 

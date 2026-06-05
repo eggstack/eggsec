@@ -51,11 +51,11 @@ fn ftp_retr_file(host: &str, port: u16, filename: &str) -> std::io::Result<Strin
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
     let _ = stream.read(&mut vec![0u8; 4096]);
 
-    let pasv_cmd = format!("PASV\r\n");
+    let pasv_cmd = "PASV\r\n".to_string();
     let pasv_response = ftp_send_command(&mut stream, &pasv_cmd)?;
 
     let (data_ip, data_port) = ftp_get_pasv_port(&pasv_response)
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Failed to get PASV port"))?;
+        .ok_or_else(|| std::io::Error::other("Failed to get PASV port"))?;
 
     let retr_cmd = format!("RETR {}\r\n", filename);
     let _retr_response = ftp_send_command(&mut stream, &retr_cmd)?;
@@ -94,11 +94,11 @@ fn ftp_stor_file(host: &str, port: u16, filename: &str, data: &str) -> std::io::
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
     let _ = stream.read(&mut vec![0u8; 4096]);
 
-    let pasv_cmd = format!("PASV\r\n");
+    let pasv_cmd = "PASV\r\n".to_string();
     let pasv_response = ftp_send_command(&mut stream, &pasv_cmd)?;
 
     let (data_ip, data_port) = ftp_get_pasv_port(&pasv_response)
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Failed to get PASV port"))?;
+        .ok_or_else(|| std::io::Error::other("Failed to get PASV port"))?;
 
     let stor_cmd = format!("STOR {}\r\n", filename);
     let _stor_response = ftp_send_command(&mut stream, &stor_cmd)?;
@@ -136,11 +136,11 @@ fn ftp_list_directory(
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
     let _ = stream.read(&mut vec![0u8; 4096]);
 
-    let pasv_cmd = format!("PASV\r\n");
+    let pasv_cmd = "PASV\r\n".to_string();
     let pasv_response = ftp_send_command(&mut stream, &pasv_cmd)?;
 
     let (data_ip, data_port) = ftp_get_pasv_port(&pasv_response)
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Failed to get PASV port"))?;
+        .ok_or_else(|| std::io::Error::other("Failed to get PASV port"))?;
 
     let list_cmd = if path.is_empty() {
         "LIST\r\n".to_string()

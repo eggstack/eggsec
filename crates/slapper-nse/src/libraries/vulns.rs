@@ -525,7 +525,7 @@ pub fn register_vulns_library(lua: &Lua) -> LuaResult<()> {
                 .timeout(std::time::Duration::from_secs(timeout_secs))
                 .build() {
                 Ok(c) => c,
-                Err(_) => return Ok(lua.create_table()?)
+                Err(_) => return lua.create_table()
             };
 
             let results = lua.create_table()?;

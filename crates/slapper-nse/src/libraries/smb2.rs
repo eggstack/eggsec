@@ -73,7 +73,7 @@ pub fn register_smb2_library(lua: &Lua) -> LuaResult<()> {
             let mut response = vec![0u8; 1024];
             let _ = stream.read(&mut response);
 
-            if response.len() > 0 {
+            if !response.is_empty() {
                 result.set("status", "ok")?;
                 result.set("dialect", "SMB 2.1")?;
                 result.set("security_mode", "signing_enabled")?;

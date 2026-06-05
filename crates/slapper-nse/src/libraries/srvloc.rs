@@ -200,8 +200,7 @@ pub fn register_srvloc_library(lua: &Lua) -> LuaResult<()> {
 
             // Basic URL parsing for SLP URLs
             // Format: service:service-type://[host[:port]]/[path]
-            if url.starts_with("service:") {
-                let rest = &url[8..];
+            if let Some(rest) = url.strip_prefix("service:") {
                 if let Some(colon_pos) = rest.find("://") {
                     let service_type = &rest[..colon_pos];
                     result.set("service_type", service_type)?;

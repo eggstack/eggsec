@@ -215,7 +215,7 @@ pub fn register_tftp_library(lua: &Lua) -> LuaResult<()> {
                                             data_packet.extend_from_slice(&block_num.to_be_bytes());
                                             data_packet.extend_from_slice(chunk);
 
-                                            if let Err(_) = socket.send_to(&data_packet, &src) {
+                                            if socket.send_to(&data_packet, src).is_err() {
                                                 result.set("success", false)?;
                                                 result.set("error", "Failed to send data")?;
                                                 return Ok(result);

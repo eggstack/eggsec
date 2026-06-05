@@ -37,7 +37,7 @@ pub fn register_idna_library(lua: &Lua) -> LuaResult<()> {
 
     idna.set(
         "is_ascii",
-        lua.create_function(|_lua, domain: String| Ok(domain.chars().all(|c| c.is_ascii())))?,
+        lua.create_function(|_lua, domain: String| Ok(domain.is_ascii()))?,
     )?;
 
     idna.set(

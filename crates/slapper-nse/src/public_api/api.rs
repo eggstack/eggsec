@@ -332,7 +332,7 @@ pub fn nse_sslcert_get(host: &str, port: u16) -> NseResult<NseSslCertResult> {
                 .ok()
                 .and_then(|s| s.to_hex_str().ok())
                 .map(|s| s.to_string()),
-            version: Some(openssl_cert.version() as i32 + 1),
+            version: Some(openssl_cert.version() + 1),
             subject_alt_names: sans,
             valid: true,
         })

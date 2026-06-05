@@ -21,7 +21,7 @@ pub fn register_gps_library(lua: &Lua) -> LuaResult<()> {
             }
 
             let parts: Vec<&str> = nmea.split(',').collect();
-            let sentence_type = parts.get(0).unwrap_or(&"").to_string();
+            let sentence_type = parts.first().unwrap_or(&"").to_string();
 
             result.set("raw", nmea.clone())?;
             result.set("type", sentence_type.clone())?;
@@ -127,7 +127,7 @@ pub fn register_gps_library(lua: &Lua) -> LuaResult<()> {
             let result = lua.create_table()?;
             let parts: Vec<&str> = nmea.split(',').collect();
 
-            if parts.len() < 10 || parts.get(0).map(|s| *s != "$GPGGA").unwrap_or(true) {
+            if parts.len() < 10 || parts.first().map(|s| *s != "$GPGGA").unwrap_or(true) {
                 result.set("status", "error")?;
                 return Ok(result);
             }
@@ -165,7 +165,7 @@ pub fn register_gps_library(lua: &Lua) -> LuaResult<()> {
             let result = lua.create_table()?;
             let parts: Vec<&str> = nmea.split(',').collect();
 
-            if parts.len() < 10 || parts.get(0).map(|s| *s != "$GPRMC").unwrap_or(true) {
+            if parts.len() < 10 || parts.first().map(|s| *s != "$GPRMC").unwrap_or(true) {
                 result.set("status", "error")?;
                 return Ok(result);
             }
