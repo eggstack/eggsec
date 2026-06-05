@@ -13,13 +13,13 @@ pub enum LogFormat {
     Compact,
 }
 
-pub fn init_logging(format: LogFormat, json_output: bool) {
+pub fn init_logging(format: LogFormat) {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let registry = tracing_subscriber::registry().with(filter);
 
-    if json_output || matches!(format, LogFormat::Json) {
-        let _ = registry
+    let result = match format {
+        LogFormat::Json => registry
             .with(
                 fmt::layer()
                     .json()
@@ -28,9 +28,8 @@ pub fn init_logging(format: LogFormat, json_output: bool) {
                     .with_thread_ids(true)
                     .with_thread_names(true),
             )
-            .try_init();
-    } else if matches!(format, LogFormat::Compact) {
-        let _ = registry
+            .try_init(),
+        LogFormat::Compact => registry
             .with(
                 fmt::layer()
                     .compact()
@@ -38,9 +37,8 @@ pub fn init_logging(format: LogFormat, json_output: bool) {
                     .with_thread_ids(false)
                     .with_line_number(true),
             )
-            .try_init();
-    } else {
-        let _ = registry
+            .try_init(),
+        LogFormat::Pretty => registry
             .with(
                 fmt::layer()
                     .pretty()
@@ -48,6 +46,10 @@ pub fn init_logging(format: LogFormat, json_output: bool) {
                     .with_thread_ids(false)
                     .with_line_number(true),
             )
-            .try_init();
+            .try_init(),
+    };
+
+    if let Err(e) = result {
+        eprintln!("Failed to initialize logging: {e}");
     }
 }

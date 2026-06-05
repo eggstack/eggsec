@@ -25,14 +25,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    init_logging(
-        if cli.json {
-            LogFormat::Json
-        } else {
-            LogFormat::Pretty
-        },
-        cli.json,
-    );
+    init_logging(if cli.json { LogFormat::Json } else { LogFormat::Pretty });
 
     let config = slapper::config::load_config(cli.config.as_deref())?;
     let scope = slapper::config::load_scope(cli.scope.as_deref())?;
