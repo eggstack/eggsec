@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::executor::StageResult;
+use crate::loadtest::metrics::LoadTestResults;
 use crate::output::escape::{escape_csv, escape_html, escape_xml};
 use crate::output::RunManifest;
 use crate::scanner::endpoints::EndpointResult;
@@ -25,6 +26,8 @@ pub struct PipelineReport {
     pub manifest: Option<RunManifest>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vuln_assessment: Option<crate::vuln::VulnAssessment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_test_results: Option<LoadTestResults>,
 }
 
 impl std::fmt::Display for PipelineReport {
@@ -79,6 +82,20 @@ impl std::fmt::Display for PipelineReport {
             for line in &vuln.summary {
                 writeln!(f, "\t{}", line)?;
             }
+        }
+
+        if let Some(ref load) = self.load_test_results {
+            writeln!(f, "load test")?;
+            writeln!(
+                f,
+                "\t{} requests, {:.2} rps, {:.2}ms mean latency (p95: {:.2}ms)",
+                load.total_requests, load.requests_per_second, load.latency_mean_ms, load.latency_p95_ms
+            )?;
+            writeln!(
+                f,
+                "\t{} successful, {} failed",
+                load.successful_requests, load.failed_requests
+            )?;
         }
 
         Ok(())
@@ -201,6 +218,40 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
         html.push_str("</table>\n</div>\n");
     }
 
+    if let Some(ref load) = report.load_test_results {
+        html.push_str("<div class='section'>\n<h2>Load Test Results</h2>\n<table>\n");
+        html.push_str("<tr><th>Metric</th><th>Value</th></tr>\n");
+        html.push_str(&format!(
+            "<tr><td>Total Requests</td><td>{}</td></tr>\n",
+            load.total_requests
+        ));
+        html.push_str(&format!(
+            "<tr><td>Successful</td><td>{}</td></tr>\n",
+            load.successful_requests
+        ));
+        html.push_str(&format!(
+            "<tr><td>Failed</td><td>{}</td></tr>\n",
+            load.failed_requests
+        ));
+        html.push_str(&format!(
+            "<tr><td>Requests/sec</td><td>{:.2}</td></tr>\n",
+            load.requests_per_second
+        ));
+        html.push_str(&format!(
+            "<tr><td>Mean Latency</td><td>{:.2}ms</td></tr>\n",
+            load.latency_mean_ms
+        ));
+        html.push_str(&format!(
+            "<tr><td>P95 Latency</td><td>{:.2}ms</td></tr>\n",
+            load.latency_p95_ms
+        ));
+        html.push_str(&format!(
+            "<tr><td>P99 Latency</td><td>{:.2}ms</td></tr>\n",
+            load.latency_p99_ms
+        ));
+        html.push_str("</table>\n</div>\n");
+    }
+
     html.push_str("</body>\n</html>\n");
     Ok(html)
 }
@@ -257,6 +308,18 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
                 endpoint.interesting
             ));
         }
+    }
+
+    if let Some(ref load) = report.load_test_results {
+        csv.push_str("Load Test Results\n");
+        csv.push_str("Metric,Value\n");
+        csv.push_str(&format!("Total Requests,{}\n", load.total_requests));
+        csv.push_str(&format!("Successful,{}\n", load.successful_requests));
+        csv.push_str(&format!("Failed,{}\n", load.failed_requests));
+        csv.push_str(&format!("Requests/sec,{:.2}\n", load.requests_per_second));
+        csv.push_str(&format!("Mean Latency (ms),{:.2}\n", load.latency_mean_ms));
+        csv.push_str(&format!("P95 Latency (ms),{:.2}\n", load.latency_p95_ms));
+        csv.push_str(&format!("P99 Latency (ms),{:.2}\n", load.latency_p99_ms));
     }
 
     Ok(csv)

@@ -687,7 +687,7 @@ async fn process_load_test(task: Task) -> Result<serde_json::Value> {
         method: method.to_string(),
         body: None,
         headers: Vec::new(),
-        timeout: 30,
+        timeout: None,
         json: false,
         verbose: false,
         quiet: false,

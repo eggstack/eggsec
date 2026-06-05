@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadTestResults {
     pub target_url: String,
     pub total_requests: u64,
@@ -65,10 +65,10 @@ impl std::fmt::Display for LoadTestResults {
 #[derive(Debug)]
 pub struct Metrics {
     histogram: Histogram<u64>,
-    pub successful: u64,
-    pub failed: u64,
-    pub status_codes: FxHashMap<u16, u64>,
-    pub errors: Vec<String>,
+    successful: u64,
+    failed: u64,
+    status_codes: FxHashMap<u16, u64>,
+    errors: Vec<String>,
     target_url: String,
 }
 

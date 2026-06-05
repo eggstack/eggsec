@@ -350,6 +350,7 @@ impl Pipeline {
             checkpoint_error,
             manifest: None,
             vuln_assessment: context.vuln_assessment,
+            load_test_results: context.load_test_results,
         };
 
         let mut manifest =
@@ -421,6 +422,7 @@ impl Pipeline {
             checkpoint_error,
             manifest: None,
             vuln_assessment: context.vuln_assessment,
+            load_test_results: context.load_test_results,
         };
 
         let mut manifest =
@@ -648,7 +650,7 @@ impl Pipeline {
             method: "GET".to_string(),
             body: None,
             headers: Vec::new(),
-            timeout: 30,
+            timeout: None,
             json: false,
             verbose: false,
             quiet: false,
@@ -657,7 +659,10 @@ impl Pipeline {
         };
 
         let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, config)?;
-        runner.run().await?;
+        let results = runner.run().await?;
+
+        let mut context = self.context.lock().await;
+        context.update_load_test_results(results);
 
         Ok(())
     }

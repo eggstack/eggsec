@@ -64,7 +64,7 @@ impl SecurityTool for LoadTestTool {
             method: "GET".to_string(),
             body: None,
             headers: vec![],
-            timeout: 30,
+            timeout: None,
             json: true,
             verbose: false,
             quiet: false,

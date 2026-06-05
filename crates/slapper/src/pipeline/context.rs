@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
+use crate::loadtest::metrics::LoadTestResults;
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
@@ -16,6 +17,8 @@ pub struct PipelineContext {
     pub http_ports: Vec<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vuln_assessment: Option<VulnAssessment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_test_results: Option<LoadTestResults>,
 }
 
 impl PipelineContext {
@@ -64,5 +67,9 @@ impl PipelineContext {
 
     pub fn update_vuln_assessment(&mut self, assessment: VulnAssessment) {
         self.vuln_assessment = Some(assessment);
+    }
+
+    pub fn update_load_test_results(&mut self, results: LoadTestResults) {
+        self.load_test_results = Some(results);
     }
 }

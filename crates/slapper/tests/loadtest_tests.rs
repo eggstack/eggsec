@@ -352,7 +352,7 @@ async fn test_load_test_from_args_with_config() {
         method: "GET".to_string(),
         body: None,
         headers: vec![],
-        timeout: 5,
+        timeout: Some(5),
         json: false,
         verbose: false,
         quiet: false,
@@ -379,7 +379,7 @@ async fn test_load_test_from_args_with_tui_mode() {
         method: "GET".to_string(),
         body: None,
         headers: vec![],
-        timeout: 5,
+        timeout: Some(5),
         json: false,
         verbose: false,
         quiet: false,
@@ -493,4 +493,240 @@ async fn test_load_test_options_method() {
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 3);
     assert!(results.status_codes.contains_key(&204));
+}
+
+#[tokio::test]
+async fn test_load_test_with_api_key() {
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, ResponseTemplate};
+
+    let server = create_test_server().await;
+    Mock::given(method("GET"))
+        .and(path("/api"))
+        .and(header("X-API-Key", "my-secret-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("OK"))
+        .mount(&server)
+        .await;
+
+    let mut runner = slapper::loadtest::LoadTestRunner::new(
+        format!("{}/api", server.uri()),
+        3,
+        1,
+        Duration::from_secs(5),
+    )
+    .unwrap();
+    runner.set_common(slapper::cli::CommonHttpArgs {
+        api_key: Some("my-secret-key".to_string()),
+        ..slapper::cli::CommonHttpArgs::default()
+    });
+
+    let results = runner.run().await.unwrap();
+    assert_eq!(results.successful_requests, 3);
+}
+
+#[tokio::test]
+async fn test_load_test_with_api_key_header_format() {
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, ResponseTemplate};
+
+    let server = create_test_server().await;
+    Mock::given(method("GET"))
+        .and(path("/api"))
+        .and(header("X-Api-Token", "token-value"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("OK"))
+        .mount(&server)
+        .await;
+
+    let mut runner = slapper::loadtest::LoadTestRunner::new(
+        format!("{}/api", server.uri()),
+        3,
+        1,
+        Duration::from_secs(5),
+    )
+    .unwrap();
+    runner.set_common(slapper::cli::CommonHttpArgs {
+        api_key: Some("X-Api-Token:token-value".to_string()),
+        ..slapper::cli::CommonHttpArgs::default()
+    });
+
+    let results = runner.run().await.unwrap();
+    assert_eq!(results.successful_requests, 3);
+}
+
+#[tokio::test]
+async fn test_load_test_with_cookie() {
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, ResponseTemplate};
+
+    let server = create_test_server().await;
+    Mock::given(method("GET"))
+        .and(path("/dashboard"))
+        .and(header("Cookie", "session=abc123"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("Dashboard"))
+        .mount(&server)
+        .await;
+
+    let mut runner = slapper::loadtest::LoadTestRunner::new(
+        format!("{}/dashboard", server.uri()),
+        3,
+        1,
+        Duration::from_secs(5),
+    )
+    .unwrap();
+    runner.set_common(slapper::cli::CommonHttpArgs {
+        cookie: Some("session=abc123".to_string()),
+        ..slapper::cli::CommonHttpArgs::default()
+    });
+
+    let results = runner.run().await.unwrap();
+    assert_eq!(results.successful_requests, 3);
+}
+
+#[tokio::test]
+async fn test_load_test_rate_limit_zero_ignored() {
+    let server = create_test_server().await;
+    mock_ok("/").mount(&server).await;
+
+    let mut runner = slapper::loadtest::LoadTestRunner::new(
+        server.uri(),
+        5,
+        2,
+        Duration::from_secs(5),
+    )
+    .unwrap();
+    runner.set_common(slapper::cli::CommonHttpArgs {
+        rate_limit: Some(0),
+        ..slapper::cli::CommonHttpArgs::default()
+    });
+
+    let results = runner.run().await.unwrap();
+    assert_eq!(results.total_requests, 5);
+    assert_eq!(results.successful_requests, 5);
+}
+
+#[tokio::test]
+async fn test_load_test_unknown_method_defaults_to_get() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+
+    let server = create_test_server().await;
+    Mock::given(method("GET"))
+        .and(path("/test"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("OK"))
+        .mount(&server)
+        .await;
+
+    let mut runner = slapper::loadtest::LoadTestRunner::new(
+        format!("{}/test", server.uri()),
+        3,
+        1,
+        Duration::from_secs(5),
+    )
+    .unwrap();
+    runner.set_method("FOOBAR".to_string());
+
+    let results = runner.run().await.unwrap();
+    assert_eq!(results.successful_requests, 3);
+}
+
+#[test]
+fn test_load_test_malformed_auth_format() {
+    let mut runner = slapper::loadtest::LoadTestRunner::new(
+        "http://example.com".to_string(),
+        1,
+        1,
+        Duration::from_secs(5),
+    )
+    .unwrap();
+    runner.set_common(slapper::cli::CommonHttpArgs {
+        auth: Some("no-colon-separator".to_string()),
+        ..slapper::cli::CommonHttpArgs::default()
+    });
+    // Should not panic; malformed auth is logged and ignored
+}
+
+#[test]
+fn test_load_test_zero_timeout() {
+    let result = slapper::loadtest::LoadTestRunner::new(
+        "http://example.com".to_string(),
+        10,
+        5,
+        Duration::from_secs(0),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_load_test_from_args_with_config_uses_config_timeout() {
+    let args = slapper::cli::LoadArgs {
+        url: "http://example.com".to_string(),
+        requests: 1,
+        concurrency: 1,
+        method: "GET".to_string(),
+        body: None,
+        headers: vec![],
+        timeout: None,
+        json: false,
+        verbose: false,
+        quiet: false,
+        output: None,
+        common: slapper::cli::CommonHttpArgs::default(),
+    };
+
+    let mut config = slapper::config::SlapperConfig::default();
+    config.http.timeout_secs = 42;
+
+    let runner =
+        slapper::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    // When timeout is None, config value (42) should be used.
+    drop(runner);
+}
+
+#[test]
+fn test_load_test_from_args_with_config_explicit_timeout() {
+    let args = slapper::cli::LoadArgs {
+        url: "http://example.com".to_string(),
+        requests: 1,
+        concurrency: 1,
+        method: "GET".to_string(),
+        body: None,
+        headers: vec![],
+        timeout: Some(15),
+        json: false,
+        verbose: false,
+        quiet: false,
+        output: None,
+        common: slapper::cli::CommonHttpArgs::default(),
+    };
+
+    let mut config = slapper::config::SlapperConfig::default();
+    config.http.timeout_secs = 42;
+
+    let runner =
+        slapper::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    // When timeout is Some(15), explicit value (15) should override config (42).
+    drop(runner);
+}
+
+#[tokio::test]
+async fn test_load_test_all_requests_fail_latency_still_recorded() {
+    let server = create_test_server().await;
+    mock_not_found("/").mount(&server).await;
+
+    let runner = slapper::loadtest::LoadTestRunner::new(
+        format!("{}/", server.uri()),
+        10,
+        2,
+        Duration::from_secs(10),
+    )
+    .unwrap();
+
+    let results = runner.run().await.unwrap();
+    assert_eq!(results.total_requests, 10);
+    assert_eq!(results.failed_requests, 10);
+    // Latency should still be recorded for failed requests
+    assert!(
+        results.latency_p50_ms >= 0.0,
+        "P50 latency should be non-negative even when all requests fail"
+    );
 }

@@ -84,8 +84,8 @@ pub struct LoadArgs {
     pub body: Option<String>,
     #[arg(long, help = "Request headers (format: Key:Value)")]
     pub headers: Vec<String>,
-    #[arg(long, default_value_t = LOAD_TIMEOUT, help = "Request timeout in seconds")]
-    pub timeout: u64,
+    #[arg(long, help = "Request timeout in seconds (default: 30)")]
+    pub timeout: Option<u64>,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
     #[arg(long, help = "Verbose output")]

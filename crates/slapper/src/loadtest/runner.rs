@@ -88,11 +88,13 @@ impl LoadTestRunner {
     }
 
     pub fn from_args_with_tui_mode(args: LoadArgs, tui_mode: bool) -> Result<Self> {
+        let timeout = Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
+
         let mut runner = Self::new_with_tui_mode(
             args.url,
             args.requests,
             args.concurrency,
-            Duration::from_secs(args.timeout),
+            timeout,
             tui_mode,
         )?;
 
@@ -113,11 +115,10 @@ impl LoadTestRunner {
     }
 
     pub fn from_args_with_config(args: LoadArgs, config: &SlapperConfig) -> Result<Self> {
-        let timeout = if args.timeout == 30 {
-            Duration::from_secs(config.http.timeout_secs)
-        } else {
-            Duration::from_secs(args.timeout)
-        };
+        let timeout = Duration::from_secs(
+            args.timeout
+                .unwrap_or(config.http.timeout_secs),
+        );
 
         let mut runner =
             Self::new_with_tui_mode(args.url, args.requests, args.concurrency, timeout, false)?;

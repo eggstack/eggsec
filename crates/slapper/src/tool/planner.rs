@@ -360,7 +360,7 @@ impl ChainPlanner {
                     tool_id: tool.id.clone(),
                     capability: None,
                     attack_surface: vec!["performance".to_string()],
-                    estimated_duration_ms: 120000,
+                    estimated_duration_ms: 60000,
                 });
                 used.insert(tool.id.clone());
                 break;
