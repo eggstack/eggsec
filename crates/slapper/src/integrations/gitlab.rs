@@ -116,7 +116,15 @@ impl IssueTracker for GitLabClient {
             .json()
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
-        let iid = json["iid"].as_i64().unwrap_or(1);
+        let iid = match json["iid"].as_i64() {
+            Some(n) => n,
+            None => {
+                tracing::warn!(
+                    "GitLab: create_issue response missing 'iid' field, using fallback ID"
+                );
+                1
+            }
+        };
         Ok(format!("!{}", iid))
     }
 

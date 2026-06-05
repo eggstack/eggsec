@@ -30,6 +30,7 @@ impl JiraClient {
         let fields = &json["fields"];
         let description = fields["description"]["content"][0]["content"][0]["text"]
             .as_str()
+            .or_else(|| fields["description"].as_str())
             .unwrap_or("");
         if description.is_empty() {
             tracing::warn!(
@@ -140,7 +141,14 @@ impl IssueTracker for JiraClient {
             .json()
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
-        Ok(json["key"].as_str().unwrap_or("JIRA-1").to_string())
+        let key = match json["key"].as_str() {
+            Some(k) => k.to_string(),
+            None => {
+                tracing::warn!("Jira: create_issue response missing 'key' field, using fallback ID");
+                "JIRA-1".to_string()
+            }
+        };
+        Ok(key)
     }
 
     async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {

@@ -461,7 +461,6 @@ impl TabInput for IntegrationsTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() {
-            #[allow(clippy::single_char_pattern)]
             if self.focus_area == IntegrationsFocusArea::Config {
                 self.config_inputs.insert(c);
             } else if self.focus_area == IntegrationsFocusArea::Issue {

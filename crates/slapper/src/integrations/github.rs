@@ -119,7 +119,15 @@ impl IssueTracker for GitHubClient {
             .json()
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
-        let number = json["number"].as_i64().unwrap_or(1);
+        let number = match json["number"].as_i64() {
+            Some(n) => n,
+            None => {
+                tracing::warn!(
+                    "GitHub: create_issue response missing 'number' field, using fallback ID"
+                );
+                1
+            }
+        };
         Ok(format!("#{}", number))
     }
 
