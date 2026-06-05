@@ -286,8 +286,18 @@ fn get_random_spoofed_ip(range: &Option<String>) -> Ipv4Addr {
         if parts.len() == 2 {
             if let (Ok(base), Ok(prefix)) = (parts[0].parse::<Ipv4Addr>(), parts[1].parse::<u8>()) {
                 let base_u32 = u32::from(base);
+                if prefix == 0 {
+                    return Ipv4Addr::from(base_u32 | rng.gen_range(1..=u32::MAX));
+                }
+                if prefix >= 32 {
+                    return base;
+                }
                 let host_bits = 32 - prefix;
-                let offset = rng.gen_range(1..(1u32 << host_bits).saturating_sub(1).max(1));
+                let max_offset = (1u32 << host_bits) - 1;
+                if max_offset <= 1 {
+                    return base;
+                }
+                let offset = rng.gen_range(1..max_offset);
                 return Ipv4Addr::from(base_u32 | offset);
             }
         }

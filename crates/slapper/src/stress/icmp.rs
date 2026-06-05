@@ -117,6 +117,34 @@ fn compute_icmp_checksum(data: &[u8]) -> u16 {
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
+fn compute_icmpv6_checksum(src_ip: Ipv6Addr, dst_ip: Ipv6Addr, icmp_data: &[u8]) -> u16 {
+    let mut pseudo = vec![0u8; 40 + icmp_data.len()];
+    pseudo[0..16].copy_from_slice(&src_ip.octets());
+    pseudo[16..32].copy_from_slice(&dst_ip.octets());
+    let len = icmp_data.len() as u32;
+    pseudo[32..36].copy_from_slice(&len.to_be_bytes());
+    pseudo[36] = 0;
+    pseudo[37] = 0;
+    pseudo[38] = 0;
+    pseudo[39] = 58; // ICMPv6 next header
+    pseudo[40..].copy_from_slice(icmp_data);
+
+    let mut sum: u32 = 0;
+    for i in (0..pseudo.len()).step_by(2) {
+        if i + 1 < pseudo.len() {
+            let word = ((pseudo[i] as u32) << 8) | (pseudo[i + 1] as u32);
+            sum += word;
+        } else {
+            sum += (pseudo[i] as u32) << 8;
+        }
+    }
+    while sum > 0xffff {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    !sum as u16
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
 fn build_icmp_packet_v4(
     src_ip: Ipv4Addr,
     dst_ip: Ipv4Addr,
@@ -202,7 +230,7 @@ fn build_icmp_packet_v6(
 
     drop(icmp_packet);
 
-    let checksum = compute_icmp_checksum(&buffer[54..]);
+    let checksum = compute_icmpv6_checksum(src_ip, dst_ip, &buffer[54..]);
     buffer[56..58].copy_from_slice(&checksum.to_be_bytes());
 
     Ok(buffer)

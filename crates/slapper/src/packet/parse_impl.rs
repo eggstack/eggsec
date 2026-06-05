@@ -201,7 +201,7 @@ impl IpPacket {
         Some(Self {
             version,
             header_len: 40,
-            total_len: payload_len + 40,
+            total_len: payload_len.saturating_add(40),
             ttl: hop_limit,
             protocol: next_header,
             protocol_name,

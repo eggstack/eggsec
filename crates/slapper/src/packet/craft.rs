@@ -323,6 +323,7 @@ impl PacketBuilder {
             TransportBuilder::Icmp(icmp) => {
                 let payload = self.payload.as_deref().unwrap_or(&[]);
                 packet.extend_from_slice(&icmp.to_bytes(payload));
+                payload_appended = true;
             }
             }
         }

@@ -73,11 +73,42 @@ pub fn parse_dns_rdata(data: &[u8], offset: usize, rtype: u16, _rdlen: usize) ->
                 String::new()
             }
         }
-        2 | 5 | 12 | 15 | 16 => {
+        2 | 5 | 12 => {
             if let Some((name, _)) = parse_dns_name(data, offset) {
                 name
             } else {
                 String::new()
+            }
+        }
+        15 => {
+            // MX: 2-byte preference + domain name
+            if offset + 2 >= data.len() {
+                return String::new();
+            }
+            let preference = u16::from_be_bytes([data[offset], data[offset + 1]]);
+            if let Some((name, _)) = parse_dns_name(data, offset + 2) {
+                format!("{} {}", preference, name)
+            } else {
+                String::new()
+            }
+        }
+        16 => {
+            // TXT: one or more <1-byte len><text> blocks
+            let mut texts = Vec::new();
+            let mut pos = offset;
+            while pos < data.len() {
+                let txt_len = data[pos] as usize;
+                pos += 1;
+                if pos + txt_len > data.len() {
+                    break;
+                }
+                texts.push(String::from_utf8_lossy(&data[pos..pos + txt_len]).to_string());
+                pos += txt_len;
+            }
+            if texts.is_empty() {
+                String::new()
+            } else {
+                texts.join(" ")
             }
         }
         28 => {
