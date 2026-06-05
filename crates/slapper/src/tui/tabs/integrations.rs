@@ -72,6 +72,42 @@ impl IntegrationsTab {
         }
     }
 
+    fn update_config_labels(&mut self) {
+        let tracker = self.tracker_selector.selected_value().unwrap_or("");
+        let (l0, l1, l2, l3) = match tracker {
+            "github" => (
+                "Owner",
+                "Repository",
+                "API Token",
+                "",
+            ),
+            "gitlab" => (
+                "GitLab URL",
+                "Project ID",
+                "API Token",
+                "",
+            ),
+            _ => (
+                "Jira URL",
+                "Username",
+                "Project Key",
+                "API Token",
+            ),
+        };
+        if let Some(f) = self.config_inputs.fields.get_mut(0) {
+            f.label = l0.to_string();
+        }
+        if let Some(f) = self.config_inputs.fields.get_mut(1) {
+            f.label = l1.to_string();
+        }
+        if let Some(f) = self.config_inputs.fields.get_mut(2) {
+            f.label = l2.to_string();
+        }
+        if let Some(f) = self.config_inputs.fields.get_mut(3) {
+            f.label = l3.to_string();
+        }
+    }
+
     pub fn tracker_url(&self) -> &str {
         self.config_inputs
             .fields
@@ -588,6 +624,7 @@ impl TabInput for IntegrationsTab {
                 if !was_open {
                     return;
                 }
+                self.update_config_labels();
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();

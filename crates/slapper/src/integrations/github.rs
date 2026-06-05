@@ -1,5 +1,5 @@
 use crate::error::{Result, SlapperError};
-use crate::integrations::common::handle_response_error;
+use crate::integrations::common::send_with_retry;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -18,10 +18,16 @@ pub struct GitHubClient {
 
 impl GitHubClient {
     pub fn new(config: GitHubConfig) -> Self {
-        let client = reqwest::Client::builder()
+        let client = match reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("GitHub: failed to build HTTP client, using default: {}", e);
+                reqwest::Client::new()
+            }
+        };
         Self { config, client }
     }
 
@@ -99,7 +105,7 @@ impl IssueTracker for GitHubClient {
             "labels": labels
         });
 
-        let response = self
+        let req = self
             .client
             .post(&url)
             .header(
@@ -109,12 +115,9 @@ impl IssueTracker for GitHubClient {
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        let response = handle_response_error(response, "GitHub").await?;
+        let response = send_with_retry(req, "GitHub").await?;
         let json: serde_json::Value = response
             .json()
             .await
@@ -152,7 +155,7 @@ impl IssueTracker for GitHubClient {
             body.insert("state".to_string(), serde_json::json!(state));
         }
 
-        let response = self
+        let req = self
             .client
             .patch(&url)
             .header(
@@ -162,12 +165,9 @@ impl IssueTracker for GitHubClient {
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        handle_response_error(response, "GitHub").await?;
+        send_with_retry(req, "GitHub").await?;
         Ok(())
     }
 
@@ -179,7 +179,7 @@ impl IssueTracker for GitHubClient {
             "body": comment
         });
 
-        let response = self
+        let req = self
             .client
             .post(&url)
             .header(
@@ -189,12 +189,9 @@ impl IssueTracker for GitHubClient {
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        handle_response_error(response, "GitHub").await?;
+        send_with_retry(req, "GitHub").await?;
         Ok(())
     }
 
@@ -202,7 +199,7 @@ impl IssueTracker for GitHubClient {
         let issue_number = id.trim_start_matches('#');
         let url = self.api_url(&format!("/issues/{}", issue_number));
 
-        let response = self
+        let req = self
             .client
             .get(&url)
             .header(
@@ -210,12 +207,9 @@ impl IssueTracker for GitHubClient {
                 format!("Bearer {}", self.config.api_token.expose_secret()),
             )
             .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .header("X-GitHub-Api-Version", "2022-11-28");
 
-        let response = handle_response_error(response, "GitHub").await?;
+        let response = send_with_retry(req, "GitHub").await?;
         let json: serde_json::Value = response
             .json()
             .await
@@ -225,36 +219,49 @@ impl IssueTracker for GitHubClient {
     }
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
-        let url = format!(
-            "https://api.github.com/search/issues?q={}",
-            urlencoding::encode(query)
-        );
+        let mut all_issues = Vec::new();
+        let mut page = 1;
+        const PER_PAGE: u32 = 100;
 
-        let response = self
-            .client
-            .get(&url)
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.config.api_token.expose_secret()),
-            )
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+        loop {
+            let url = format!(
+                "https://api.github.com/search/issues?q={}&per_page={}&page={}",
+                urlencoding::encode(query),
+                PER_PAGE,
+                page
+            );
 
-        let response = handle_response_error(response, "GitHub").await?;
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            let req = self
+                .client
+                .get(&url)
+                .header(
+                    "Authorization",
+                    format!("Bearer {}", self.config.api_token.expose_secret()),
+                )
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28");
 
-        let issues: Vec<Issue> = json["items"]
-            .as_array()
-            .map(|arr| arr.iter().map(Self::parse_issue).collect())
-            .unwrap_or_default();
+            let response = send_with_retry(req, "GitHub").await?;
+            let json: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        Ok(issues)
+            let items: Vec<Issue> = json["items"]
+                .as_array()
+                .map(|arr| arr.iter().map(Self::parse_issue).collect())
+                .unwrap_or_default();
+
+            let count = items.len();
+            all_issues.extend(items);
+
+            if count < PER_PAGE as usize {
+                break;
+            }
+            page += 1;
+        }
+
+        Ok(all_issues)
     }
 }
 

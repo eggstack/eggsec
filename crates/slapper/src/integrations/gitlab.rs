@@ -1,5 +1,5 @@
 use crate::error::{Result, SlapperError};
-use crate::integrations::common::handle_response_error;
+use crate::integrations::common::send_with_retry;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -18,10 +18,16 @@ pub struct GitLabClient {
 
 impl GitLabClient {
     pub fn new(config: GitLabConfig) -> Self {
-        let client = reqwest::Client::builder()
+        let client = match reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("GitLab: failed to build HTTP client, using default: {}", e);
+                reqwest::Client::new()
+            }
+        };
         Self { config, client }
     }
 
@@ -101,17 +107,14 @@ impl IssueTracker for GitLabClient {
             "labels": labels
         });
 
-        let response = self
+        let req = self
             .client
             .post(&url)
             .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        let response = handle_response_error(response, "GitLab").await?;
+        let response = send_with_retry(req, "GitLab").await?;
         let json: serde_json::Value = response
             .json()
             .await
@@ -148,8 +151,7 @@ impl IssueTracker for GitLabClient {
         if let Some(state) = &update.status {
             let state_value = match state.to_lowercase().as_str() {
                 "closed" | "close" => "close",
-                "opened" | "open" => "reopen",
-                "reopen" | "reopened" => "reopen",
+                "opened" | "open" | "reopen" | "reopened" => "reopen",
                 other => {
                     tracing::warn!(
                         "GitLab: unknown state_event '{}', skipping state update",
@@ -164,17 +166,14 @@ impl IssueTracker for GitLabClient {
             );
         }
 
-        let response = self
+        let req = self
             .client
             .put(&url)
             .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        handle_response_error(response, "GitLab").await?;
+        send_with_retry(req, "GitLab").await?;
         Ok(())
     }
 
@@ -186,17 +185,14 @@ impl IssueTracker for GitLabClient {
             "body": comment
         });
 
-        let response = self
+        let req = self
             .client
             .post(&url)
             .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        handle_response_error(response, "GitLab").await?;
+        send_with_retry(req, "GitLab").await?;
         Ok(())
     }
 
@@ -204,15 +200,12 @@ impl IssueTracker for GitLabClient {
         let issue_iid = id.trim_start_matches('!');
         let url = self.api_url(&format!("/issues/{}", issue_iid));
 
-        let response = self
+        let req = self
             .client
             .get(&url)
-            .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .header("PRIVATE-TOKEN", self.config.api_token.expose_secret());
 
-        let response = handle_response_error(response, "GitLab").await?;
+        let response = send_with_retry(req, "GitLab").await?;
         let json: serde_json::Value = response
             .json()
             .await
@@ -222,31 +215,44 @@ impl IssueTracker for GitLabClient {
     }
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
-        let url = self.api_url(&format!(
-            "/issues?search={}",
-            urlencoding::encode(query)
-        ));
+        let mut all_issues = Vec::new();
+        let mut page = 1;
+        const PER_PAGE: u32 = 20;
 
-        let response = self
-            .client
-            .get(&url)
-            .header("PRIVATE-TOKEN", self.config.api_token.expose_secret())
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+        loop {
+            let url = self.api_url(&format!(
+                "/issues?search={}&per_page={}&page={}",
+                urlencoding::encode(query),
+                PER_PAGE,
+                page
+            ));
 
-        let response = handle_response_error(response, "GitLab").await?;
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            let req = self
+                .client
+                .get(&url)
+                .header("PRIVATE-TOKEN", self.config.api_token.expose_secret());
 
-        let issues: Vec<Issue> = json
-            .as_array()
-            .map(|arr| arr.iter().map(Self::parse_issue).collect())
-            .unwrap_or_default();
+            let response = send_with_retry(req, "GitLab").await?;
+            let json: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        Ok(issues)
+            let issues: Vec<Issue> = json
+                .as_array()
+                .map(|arr| arr.iter().map(Self::parse_issue).collect())
+                .unwrap_or_default();
+
+            let count = issues.len();
+            all_issues.extend(issues);
+
+            if count < PER_PAGE as usize {
+                break;
+            }
+            page += 1;
+        }
+
+        Ok(all_issues)
     }
 }
 

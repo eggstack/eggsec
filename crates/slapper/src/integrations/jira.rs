@@ -1,5 +1,5 @@
 use crate::error::{Result, SlapperError};
-use crate::integrations::common::handle_response_error;
+use crate::integrations::common::send_with_retry;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -19,10 +19,16 @@ pub struct JiraClient {
 
 impl JiraClient {
     pub fn new(config: JiraConfig) -> Self {
-        let client = reqwest::Client::builder()
+        let client = match reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("Jira: failed to build HTTP client, using default: {}", e);
+                reqwest::Client::new()
+            }
+        };
         Self { config, client }
     }
 
@@ -123,7 +129,7 @@ impl IssueTracker for JiraClient {
             }
         });
 
-        let response = self
+        let req = self
             .client
             .post(&url)
             .basic_auth(
@@ -131,12 +137,9 @@ impl IssueTracker for JiraClient {
                 Some(self.config.api_token.expose_secret()),
             )
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        let response = handle_response_error(response, "Jira").await?;
+        let response = send_with_retry(req, "Jira").await?;
         let json: serde_json::Value = response
             .json()
             .await
@@ -180,10 +183,25 @@ impl IssueTracker for JiraClient {
         if let Some(labels) = &update.labels {
             fields.insert("labels".to_string(), serde_json::json!(labels));
         }
+        if let Some(status) = &update.status {
+            let jira_status = match status.to_lowercase().as_str() {
+                "done" | "closed" | "resolved" => "Done",
+                "in progress" | "in-progress" => "In Progress",
+                "to do" | "todo" | "open" | "new" => "To Do",
+                other => {
+                    tracing::warn!("Jira: unknown status '{}', skipping status update", other);
+                    return Ok(());
+                }
+            };
+            fields.insert(
+                "status".to_string(),
+                serde_json::json!({ "name": jira_status }),
+            );
+        }
 
         let body = serde_json::json!({ "fields": fields });
 
-        let response = self
+        let req = self
             .client
             .put(&url)
             .basic_auth(
@@ -191,12 +209,9 @@ impl IssueTracker for JiraClient {
                 Some(self.config.api_token.expose_secret()),
             )
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        handle_response_error(response, "Jira").await?;
+        send_with_retry(req, "Jira").await?;
         Ok(())
     }
 
@@ -217,7 +232,7 @@ impl IssueTracker for JiraClient {
             }
         });
 
-        let response = self
+        let req = self
             .client
             .post(&url)
             .basic_auth(
@@ -225,30 +240,24 @@ impl IssueTracker for JiraClient {
                 Some(self.config.api_token.expose_secret()),
             )
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            .json(&body);
 
-        handle_response_error(response, "Jira").await?;
+        send_with_retry(req, "Jira").await?;
         Ok(())
     }
 
     async fn get_issue(&self, id: &str) -> Result<Issue> {
         let url = format!("{}/rest/api/3/issue/{}", self.config.url, id);
 
-        let response = self
+        let req = self
             .client
             .get(&url)
             .basic_auth(
                 &self.config.username,
                 Some(self.config.api_token.expose_secret()),
-            )
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            );
 
-        let response = handle_response_error(response, "Jira").await?;
+        let response = send_with_retry(req, "Jira").await?;
         let json: serde_json::Value = response
             .json()
             .await
@@ -258,35 +267,49 @@ impl IssueTracker for JiraClient {
     }
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
-        let url = format!(
-            "{}/rest/api/3/search?jql={}&maxResults=100",
-            self.config.url,
-            urlencoding::encode(query)
-        );
+        let mut all_issues = Vec::new();
+        let mut start_at = 0;
+        const PAGE_SIZE: u32 = 100;
 
-        let response = self
-            .client
-            .get(&url)
-            .basic_auth(
-                &self.config.username,
-                Some(self.config.api_token.expose_secret()),
-            )
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+        loop {
+            let url = format!(
+                "{}/rest/api/3/search?jql={}&maxResults={}&startAt={}",
+                self.config.url,
+                urlencoding::encode(query),
+                PAGE_SIZE,
+                start_at
+            );
 
-        let response = handle_response_error(response, "Jira").await?;
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| SlapperError::Network(e.to_string()))?;
+            let req = self
+                .client
+                .get(&url)
+                .basic_auth(
+                    &self.config.username,
+                    Some(self.config.api_token.expose_secret()),
+                );
 
-        let issues: Vec<Issue> = json["issues"]
-            .as_array()
-            .map(|arr| arr.iter().map(Self::parse_issue).collect())
-            .unwrap_or_default();
+            let response = send_with_retry(req, "Jira").await?;
+            let json: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        Ok(issues)
+            let total = json["total"].as_u64().unwrap_or(0);
+            let issues: Vec<Issue> = json["issues"]
+                .as_array()
+                .map(|arr| arr.iter().map(Self::parse_issue).collect())
+                .unwrap_or_default();
+
+            let fetched = issues.len() as u64;
+            all_issues.extend(issues);
+            start_at += fetched as u32;
+
+            if start_at as u64 >= total || fetched == 0 {
+                break;
+            }
+        }
+
+        Ok(all_issues)
     }
 }
 
