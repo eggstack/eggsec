@@ -148,6 +148,7 @@ pub enum TaskConfig {
         description: Option<String>,
         labels: Vec<String>,
         assignees: Vec<String>,
+        search_query: Option<String>,
     },
     #[cfg(feature = "finding-workflow")]
     Workflow {
@@ -557,6 +558,7 @@ impl TaskRunner {
                 description,
                 labels,
                 assignees,
+                search_query,
             } => {
                 super::security::run_integrations_task(
                     config,
@@ -565,6 +567,7 @@ impl TaskRunner {
                     description,
                     labels,
                     assignees,
+                    search_query,
                     progress_tx,
                     result_tx,
                 )

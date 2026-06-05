@@ -17,6 +17,7 @@ pub struct IntegrationsTab {
     pub config_inputs: InputGroup,
     pub issue_inputs: InputGroup,
     pub tracker_selector: Selector,
+    pub mode_selector: Selector,
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: IntegrationsFocusArea,
@@ -27,6 +28,7 @@ pub struct IntegrationsTab {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IntegrationsFocusArea {
     Tracker,
+    Mode,
     Config,
     Issue,
     Results,
@@ -60,10 +62,17 @@ impl IntegrationsTab {
             SelectorItem::new("GitLab", "gitlab"),
         ]);
 
+        let mode_selector = Selector::new("Mode").items(vec![
+            SelectorItem::new("Configure", "configure"),
+            SelectorItem::new("Create Issue", "create_issue"),
+            SelectorItem::new("Search Issues", "search_issues"),
+        ]);
+
         Self {
             config_inputs,
             issue_inputs,
             tracker_selector,
+            mode_selector,
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             focus_area: IntegrationsFocusArea::Tracker,
@@ -105,6 +114,9 @@ impl IntegrationsTab {
         }
         if let Some(f) = self.config_inputs.fields.get_mut(3) {
             f.label = l3.to_string();
+            if l3.is_empty() {
+                f.clear();
+            }
         }
     }
 
@@ -304,6 +316,8 @@ impl TabState for IntegrationsTab {
         self.current_mode = IntegrationsMode::Configure;
         self.tracker_selector.blur();
         self.tracker_selector.select(0);
+        self.mode_selector.blur();
+        self.mode_selector.select(0);
         self.config_inputs.blur();
         for field in &mut self.config_inputs.fields {
             field.clear();
@@ -328,6 +342,7 @@ impl TabRender for IntegrationsTab {
     fn breadcrumb(&self) -> Option<Vec<&'static str>> {
         let focus = match self.focus_area {
             IntegrationsFocusArea::Tracker => "Tracker",
+            IntegrationsFocusArea::Mode => "Mode",
             IntegrationsFocusArea::Config => "Config",
             IntegrationsFocusArea::Issue => "Issue",
             IntegrationsFocusArea::Results => "Results",
@@ -337,9 +352,9 @@ impl TabRender for IntegrationsTab {
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let input_height = match self.current_mode {
-            IntegrationsMode::Configure => 15,
-            IntegrationsMode::CreateIssue => 18,
-            IntegrationsMode::SearchIssues => 9,
+            IntegrationsMode::Configure => 18,
+            IntegrationsMode::CreateIssue => 21,
+            IntegrationsMode::SearchIssues => 12,
         };
 
         let chunks = Layout::default()
@@ -368,9 +383,18 @@ impl TabRender for IntegrationsTab {
         sel.focused = self.focus_area == IntegrationsFocusArea::Tracker;
         sel.render(f, input_area);
 
-        let fields_area = Rect {
+        let mode_area = Rect {
             y: input_area.y + 3,
-            height: input_area.height.saturating_sub(3),
+            height: 3,
+            ..input_area
+        };
+        let mut mode_sel = self.mode_selector.clone();
+        mode_sel.focused = self.focus_area == IntegrationsFocusArea::Mode;
+        mode_sel.render(f, mode_area);
+
+        let fields_area = Rect {
+            y: input_area.y + 6,
+            height: input_area.height.saturating_sub(6),
             ..input_area
         };
 
@@ -442,6 +466,11 @@ impl TabInput for IntegrationsTab {
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
+                self.mode_selector.focus();
+                IntegrationsFocusArea::Mode
+            }
+            IntegrationsFocusArea::Mode => {
+                self.mode_selector.blur();
                 self.config_inputs.focus(0);
                 IntegrationsFocusArea::Config
             }
@@ -474,10 +503,15 @@ impl TabInput for IntegrationsTab {
                 self.tracker_selector.blur();
                 IntegrationsFocusArea::Results
             }
-            IntegrationsFocusArea::Config => {
-                self.config_inputs.blur();
+            IntegrationsFocusArea::Mode => {
+                self.mode_selector.blur();
                 self.tracker_selector.focus();
                 IntegrationsFocusArea::Tracker
+            }
+            IntegrationsFocusArea::Config => {
+                self.config_inputs.blur();
+                self.mode_selector.focus();
+                IntegrationsFocusArea::Mode
             }
             IntegrationsFocusArea::Issue => {
                 self.issue_inputs.blur();
@@ -592,6 +626,7 @@ impl TabInput for IntegrationsTab {
         }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.blur(),
+            IntegrationsFocusArea::Mode => self.mode_selector.blur(),
             IntegrationsFocusArea::Config => self.config_inputs.blur(),
             IntegrationsFocusArea::Issue => self.issue_inputs.blur(),
             IntegrationsFocusArea::Results => {}
@@ -606,6 +641,7 @@ impl TabInput for IntegrationsTab {
         }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.blur(),
+            IntegrationsFocusArea::Mode => self.mode_selector.blur(),
             IntegrationsFocusArea::Config => self.config_inputs.blur(),
             IntegrationsFocusArea::Issue => self.issue_inputs.blur(),
             IntegrationsFocusArea::Results => {}
@@ -626,6 +662,18 @@ impl TabInput for IntegrationsTab {
                     return;
                 }
                 self.update_config_labels();
+            }
+            IntegrationsFocusArea::Mode => {
+                let was_open = self.mode_selector.is_open();
+                self.mode_selector.handle_enter();
+                if !was_open {
+                    return;
+                }
+                self.current_mode = match self.mode_selector.selected {
+                    0 => IntegrationsMode::Configure,
+                    1 => IntegrationsMode::CreateIssue,
+                    _ => IntegrationsMode::SearchIssues,
+                };
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();
@@ -649,6 +697,7 @@ impl TabInput for IntegrationsTab {
             return;
         }
         self.tracker_selector.blur();
+        self.mode_selector.blur();
         self.config_inputs.blur();
         self.issue_inputs.blur();
     }
@@ -657,6 +706,7 @@ impl TabInput for IntegrationsTab {
         if !self.is_running() {
             match self.focus_area {
                 IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
+                IntegrationsFocusArea::Mode => self.mode_selector.handle_up(),
                 IntegrationsFocusArea::Config => self.config_inputs.focus_prev(),
                 IntegrationsFocusArea::Issue => self.issue_inputs.focus_prev(),
                 IntegrationsFocusArea::Results => self.results_view.scroll_up(1),
@@ -668,6 +718,7 @@ impl TabInput for IntegrationsTab {
         if !self.is_running() {
             match self.focus_area {
                 IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
+                IntegrationsFocusArea::Mode => self.mode_selector.handle_down(),
                 IntegrationsFocusArea::Config => self.config_inputs.focus_next(),
                 IntegrationsFocusArea::Issue => self.issue_inputs.focus_next(),
                 IntegrationsFocusArea::Results => self.results_view.scroll_down(1),
@@ -704,6 +755,9 @@ impl TabInput for IntegrationsTab {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.items.is_empty() || self.tracker_selector.selected == 0
             }
+            IntegrationsFocusArea::Mode => {
+                self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
+            }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_left_edge(),
             IntegrationsFocusArea::Issue => self.issue_inputs.is_at_left_edge(),
             _ => true,
@@ -717,6 +771,11 @@ impl TabInput for IntegrationsTab {
                     || self.tracker_selector.selected
                         >= self.tracker_selector.items.len().saturating_sub(1)
             }
+            IntegrationsFocusArea::Mode => {
+                self.mode_selector.items.is_empty()
+                    || self.mode_selector.selected
+                        >= self.mode_selector.items.len().saturating_sub(1)
+            }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_right_edge(),
             IntegrationsFocusArea::Issue => self.issue_inputs.is_at_right_edge(),
             _ => true,
@@ -725,6 +784,7 @@ impl TabInput for IntegrationsTab {
 
     fn is_input_focused(&self) -> bool {
         (self.focus_area == IntegrationsFocusArea::Tracker && self.tracker_selector.is_focused())
+            || (self.focus_area == IntegrationsFocusArea::Mode && self.mode_selector.is_focused())
             || (self.focus_area == IntegrationsFocusArea::Config && self.config_inputs.is_focused())
             || (self.focus_area == IntegrationsFocusArea::Issue && self.issue_inputs.is_focused())
     }

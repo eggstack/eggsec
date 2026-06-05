@@ -45,7 +45,7 @@ pub(crate) async fn send_with_retry(
     let mut last_status = None;
     for attempt in 0..MAX_RETRIES {
         let req_clone = req.try_clone().ok_or_else(|| {
-            SlapperError::Network(format!("{}: request body not cloneable for retry", provider))
+            SlapperError::Network(format!("{}: request body not cloneable", provider))
         })?;
         match req_clone.send().await {
             Ok(resp) if resp.status().is_success() => return Ok(resp),
@@ -58,7 +58,7 @@ pub(crate) async fn send_with_retry(
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(0);
                 let backoff_ms = if retry_after > 0 {
-                    retry_after * 1000
+                    retry_after.saturating_mul(1000)
                 } else {
                     BASE_BACKOFF_MS * 2u64.pow(attempt)
                 };
@@ -87,8 +87,61 @@ pub(crate) async fn send_with_retry(
                     e
                 );
                 tokio::time::sleep(Duration::from_millis(backoff)).await;
-            }
-        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_utf8_short_string() {
+        assert_eq!(truncate_utf8("hello", 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_utf8_exact_boundary() {
+        assert_eq!(truncate_utf8("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_utf8_ascii() {
+        assert_eq!(truncate_utf8("hello world", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_utf8_multibyte_boundary_ok() {
+        let s = "héllo";
+        let truncated = truncate_utf8(s, 3);
+        assert!(!truncated.is_empty());
+        assert!(truncated.is_char_boundary(truncated.len()));
+    }
+
+    #[test]
+    fn test_truncate_utf8_multibyte_boundary_miss() {
+        let s = "héllo";
+        let truncated = truncate_utf8(s, 4);
+        assert!(!truncated.is_empty());
+        assert!(truncated.is_char_boundary(truncated.len()));
+    }
+
+    #[test]
+    fn test_truncate_utf8_zero_max() {
+        assert_eq!(truncate_utf8("hello", 0), "");
+    }
+
+    #[test]
+    fn test_truncate_utf8_empty_string() {
+        assert_eq!(truncate_utf8("", 5), "");
+    }
+
+    #[test]
+    fn test_truncate_utf8_4byte_chars() {
+        let s = "a";
+        assert_eq!(truncate_utf8(s, 1), "a");
+        assert_eq!(truncate_utf8(s, 0), "");
+    }
+}
     }
     match last_status {
         Some(status) => Err(SlapperError::Network(format!(

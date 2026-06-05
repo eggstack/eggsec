@@ -62,11 +62,7 @@ impl JiraClient {
         let transition_id = transitions.iter().find_map(|t| {
             let to_name = t["to"]["name"].as_str().unwrap_or("");
             let to_lower = to_name.to_lowercase();
-            if to_lower == target_lower
-                || (target_lower == "done" && to_lower == "done")
-                || (target_lower == "in progress" && to_lower == "in progress")
-                || (target_lower == "to do" && to_lower == "to do")
-            {
+            if to_lower == target_lower {
                 t["id"].as_str().map(String::from)
             } else {
                 None
@@ -397,5 +393,38 @@ mod tests {
             project_key: "SEC".to_string(),
         };
         let _client = JiraClient::new(config);
+    }
+
+    #[test]
+    fn test_transition_matching_case_insensitive() {
+        let transitions = serde_json::json!([
+            {"id": "21", "to": {"name": "In Progress"}},
+            {"id": "31", "to": {"name": "Done"}},
+            {"id": "11", "to": {"name": "To Do"}}
+        ]);
+
+        let find_transition = |target: &str| -> Option<String> {
+            let target_lower = target.to_lowercase();
+            transitions
+                .as_array()
+                .unwrap()
+                .iter()
+                .find_map(|t| {
+                    let to_lower = t["to"]["name"].as_str().unwrap_or("").to_lowercase();
+                    if to_lower == target_lower {
+                        t["id"].as_str().map(String::from)
+                    } else {
+                        None
+                    }
+                })
+        };
+
+        assert_eq!(find_transition("done"), Some("31".to_string()));
+        assert_eq!(find_transition("DONE"), Some("31".to_string()));
+        assert_eq!(find_transition("Done"), Some("31".to_string()));
+        assert_eq!(find_transition("in progress"), Some("21".to_string()));
+        assert_eq!(find_transition("In Progress"), Some("21".to_string()));
+        assert_eq!(find_transition("to do"), Some("11".to_string()));
+        assert_eq!(find_transition("nonexistent"), None);
     }
 }

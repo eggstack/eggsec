@@ -290,6 +290,7 @@ impl TaskBuilder for super::tabs::IntegrationsTab {
             description: Some(description).filter(|s| !s.is_empty()),
             labels: self.issue_labels(),
             assignees: self.issue_assignees(),
+            search_query: Some(self.search_query().to_string()).filter(|s| !s.is_empty()),
         })
     }
 }

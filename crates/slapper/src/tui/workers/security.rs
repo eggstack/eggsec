@@ -413,6 +413,7 @@ pub async fn run_integrations_task(
     description: Option<String>,
     labels: Vec<String>,
     assignees: Vec<String>,
+    search_query: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
@@ -515,11 +516,11 @@ pub async fn run_integrations_task(
             }
         }
         "search_issues" => {
-            let query = title.as_deref().unwrap_or("");
+            let query = search_query.as_deref().unwrap_or("");
             if query.is_empty() {
                 if let Err(e) = result_tx
                     .send(TaskResult::Error(
-                        "Search query required (enter in Issue Title field)".to_string(),
+                        "Search query required (enter in Search Query field)".to_string(),
                     ))
                     .await
                 {

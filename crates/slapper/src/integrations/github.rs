@@ -34,7 +34,9 @@ impl GitHubClient {
     fn api_url(&self, path: &str) -> String {
         format!(
             "https://api.github.com/repos/{}/{}{}",
-            self.config.owner, self.config.repo, path
+            urlencoding::encode(&self.config.owner),
+            urlencoding::encode(&self.config.repo),
+            path
         )
     }
 
