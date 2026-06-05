@@ -69,6 +69,49 @@ pub struct GrpcFinding {
     pub references: Vec<String>,
 }
 
+// ---------------------------------------------------------------------------
+// API key interceptor
+// ---------------------------------------------------------------------------
+
+fn extract_api_key<T>(request: &Request<T>) -> Option<String> {
+    request
+        .metadata()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer ")))
+        .map(|v| v.to_string())
+}
+
+pub struct ApiKeyInterceptor {
+    expected_key: Option<String>,
+}
+
+impl Clone for ApiKeyInterceptor {
+    fn clone(&self) -> Self {
+        Self {
+            expected_key: self.expected_key.clone(),
+        }
+    }
+}
+
+impl ApiKeyInterceptor {
+    pub fn new(expected_key: Option<String>) -> Self {
+        Self { expected_key }
+    }
+}
+
+impl tonic::service::Interceptor for ApiKeyInterceptor {
+    fn call(&mut self, request: Request<()>) -> Result<Request<()>, Status> {
+        if let Some(ref expected) = self.expected_key {
+            let provided = extract_api_key(&request).unwrap_or_default();
+            if !bool::from(expected.as_bytes().ct_eq(provided.as_bytes())) {
+                return Err(Status::unauthenticated("Invalid or missing API key"));
+            }
+        }
+        Ok(request)
+    }
+}
+
 // Service implementation
 pub struct GrpcService {
     registry: ToolRegistry,
@@ -215,11 +258,25 @@ fn proto_to_serde_json_value(value: &prost_types::Value) -> serde_json::Value {
     }
 }
 
+fn convert_response_status(status: crate::tool::response::ResponseStatus) -> i32 {
+    use response_status::Status;
+    (match status {
+        crate::tool::response::ResponseStatus::Success => Status::Success,
+        crate::tool::response::ResponseStatus::PartialSuccess => Status::PartialSuccess,
+        crate::tool::response::ResponseStatus::Failed => Status::Failed,
+        crate::tool::response::ResponseStatus::Timeout => Status::Timeout,
+        crate::tool::response::ResponseStatus::ScopeViolation => Status::ScopeViolation,
+        crate::tool::response::ResponseStatus::Cancelled => Status::Cancelled,
+    }) as i32
+}
+
 fn convert_internal_response(resp: &crate::tool::response::ToolResponse) -> ExecuteToolResponse {
     ExecuteToolResponse {
         request_id: resp.request_id.clone(),
         tool_id: resp.tool_id.clone(),
-        status: Some(ResponseStatus {}),
+        status: Some(ResponseStatus {
+            status: convert_response_status(resp.status),
+        }),
         results: Some(serde_json_to_proto_value(&resp.results)),
         metadata: Some(ResponseMetadata {
             started_at: resp.metadata.started_at.to_rfc3339(),
@@ -361,13 +418,21 @@ pub async fn start_grpc_server(host: &str, port: u16, service: GrpcService) -> R
         .build_v1()
         .map_err(|e| e.to_string())?;
 
-    let tool_service = ToolServiceImpl { service };
+    let api_key = service.api_key.clone();
+    let tool_service = ToolServiceImpl {
+        service: std::sync::Arc::new(service),
+    };
 
     tracing::info!("Starting gRPC server on {}", addr);
 
+    let interceptor_service = tool_service_server::ToolServiceServer::with_interceptor(
+        tool_service,
+        ApiKeyInterceptor::new(api_key),
+    );
+
     Server::builder()
         .add_service(reflection_service)
-        .add_service(tool_service_server::ToolServiceServer::new(tool_service))
+        .add_service(interceptor_service)
         .serve(addr)
         .await
         .map_err(|e| e.to_string())?;
@@ -376,7 +441,15 @@ pub async fn start_grpc_server(host: &str, port: u16, service: GrpcService) -> R
 }
 
 pub struct ToolServiceImpl {
-    service: GrpcService,
+    service: std::sync::Arc<GrpcService>,
+}
+
+impl Clone for ToolServiceImpl {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -540,7 +613,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             yield Ok(ToolStreamEvent {
                 request_id: request_id.clone(),
                 event: Some(tool_stream_event::Event::Progress(ProgressEvent {
-                    message: format!("Executing tool: {}", req.tool_id),
+                    message: format!("Starting tool: {}", req.tool_id),
                     percent: 0,
                 })),
             });
@@ -548,6 +621,15 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             // Execute the tool
             match dispatcher.dispatch(tool_request).await {
                 Ok(response) => {
+                    // Send progress update: execution complete, streaming findings
+                    yield Ok(ToolStreamEvent {
+                        request_id: request_id.clone(),
+                        event: Some(tool_stream_event::Event::Progress(ProgressEvent {
+                            message: "Tool execution complete, streaming findings".into(),
+                            percent: 80,
+                        })),
+                    });
+
                     // Send findings as they come (batched)
                     for finding in &response.findings {
                         yield Ok(ToolStreamEvent {
@@ -557,6 +639,15 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                             })),
                         });
                     }
+
+                    // Send progress update: finalizing
+                    yield Ok(ToolStreamEvent {
+                        request_id: request_id.clone(),
+                        event: Some(tool_stream_event::Event::Progress(ProgressEvent {
+                            message: "Finalizing response".into(),
+                            percent: 95,
+                        })),
+                    });
 
                     // Send completion event
                     yield Ok(ToolStreamEvent {

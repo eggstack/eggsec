@@ -224,7 +224,10 @@ pub struct ResponseMetadata {
     pub findings_count: u32,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct ResponseStatus {}
+pub struct ResponseStatus {
+    #[prost(enumeration = "response_status::Status", tag = "1")]
+    pub status: i32,
+}
 /// Nested message and enum types in `ResponseStatus`.
 pub mod response_status {
     #[derive(

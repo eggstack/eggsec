@@ -162,6 +162,7 @@ message ResponseMetadata {
 }
 
 message ResponseStatus {
+  Status status = 1;
   enum Status {
     STATUS_UNSPECIFIED = 0;
     STATUS_SUCCESS = 1;
