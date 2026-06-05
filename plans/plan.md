@@ -1,7 +1,7 @@
 # Slapper Implementation Plan
 
 **Created:** 2026-05-30
-**Last Updated:** 2026-06-02
+**Last Updated:** 2026-06-05
 **Status:** Implementation complete - see Remaining Items below
 
 ---
@@ -11,7 +11,8 @@
 | Category | Count |
 |----------|-------|
 | Completed (2026-06-02 session) | 17 items |
-| Remaining Items | ~20 |
+| Completed (2026-06-05 session) | 13 items |
+| Remaining Items | ~7 |
 | Known Intentional Stubs | 0 |
 
 ---
@@ -104,6 +105,14 @@
 |------|-------------|-----------|
 | CAPABILITIES documentation | Worker capabilities documented | `architecture/distributed.md` |
 
+### Documentation Fixes (2026-06-05 Session)
+
+| Item | Description | Reference |
+|------|-------------|-----------|
+| Output format count | Fixed overview.md:103 format list (was 7 wrong names, now 8 correct) | `architecture/overview.md` |
+| Stress skill fields | Added 6 missing StressConfig fields to skill doc | `.opencode/skills/slapper-stress/SKILL.md` |
+| Stale review entries | Removed false claims from review skill and review plan | Various |
+
 ---
 
 ## Remaining Items
@@ -114,29 +123,29 @@
 
 | Module | Item | Status |
 |--------|------|--------|
-| Pipeline | CSV escape lacks NFKC normalization | Pending |
-| Pipeline | Defense-Lab stage counts incorrect | Pending |
-| Pipeline | Defense-Lab profiles missing from table | Pending |
-| Output | Format count mismatch (7 vs 8) | Pending |
-| Stress | StressConfig field names wrong in docs | Pending |
-| Stress | StressConfig missing fields in docs | Pending |
+| Pipeline | CSV escape lacks NFKC normalization | Done - `escape.rs` already has NFKC |
+| Pipeline | Defense-Lab stage counts incorrect | Done - counts match docs |
+| Pipeline | Defense-Lab profiles missing from table | Done - present in all tables |
+| Output | Format count mismatch (7 vs 8) | Done - fixed overview.md:103 |
+| Stress | StressConfig field names wrong in docs | Done - stress.md already correct |
+| Stress | StressConfig missing fields in docs | Done - fixed skill file |
 
 ### Medium Priority
 
 | Module | Item | Status |
 |--------|------|--------|
-| Auth | `run_full_test()` missing 4 test types | Partial (PasswordPolicy done) |
+| Auth | `run_full_test()` missing 4 test types | Done - all 8 present |
 | Browser | SPA route discovery limited | Pending |
 | Diff | DiffEngine/BaselineComparison locations unverified | Pending |
-| Fuzzer | Silent error suppression in fuzz_endpoint | Pending |
-| Hunt | No error handling in run_hunt() | Pending |
-| Logging | 4 macros not documented | Pending |
-| Recon | Pattern/file counts unverified | Pending |
-| Scanner | UDP fingerprinting timeout handling | Pending |
+| Fuzzer | Silent error suppression in fuzz_endpoint | Done - proper error handling |
+| Hunt | No error handling in run_hunt() | Done - uses `?` propagation |
+| Logging | 4 macros not documented | Done - logging has no macros |
+| Recon | Pattern/file counts unverified | Done - counts verified (30 secrets, 80 paths, 12 IAM) |
+| Scanner | UDP fingerprinting timeout handling | Done - timeouts on send/recv |
 | Storage | Sensitive passwords not encrypted at rest | Pending |
 
-| WAF | No timeout on bypass attempts | Pending |
-| WebSocket | Silent error suppression in close() | Pending |
+| WAF | No timeout on bypass attempts | Done - 15s client timeout |
+| WebSocket | Silent error suppression in close() | Done - no close() method exists |
 
 ### Low Priority
 
@@ -145,12 +154,12 @@
 | Browser | SPA route parameters limited | Pending |
 | Compliance | Score thresholds hardcoded | Pending |
 | Findings | JSONL format limitations | Pending |
-| Fuzzer | AdaptiveRateLimiter not integrated | Pending |
+| Fuzzer | AdaptiveRateLimiter not integrated | Done - fully integrated |
 | Generated | Regeneration process not documented | Pending |
 | Hunt | No aggregation of concurrent results | Pending |
 | Integrations | IssueTracker trait should be async | Pending |
-| Notify | No retry logic for webhooks | Pending |
-| Output | report_summary.rs uses HashMap | Pending |
+| Notify | No retry logic for webhooks | Done - exponential backoff implemented |
+| Output | report_summary.rs uses HashMap | Done - already uses FxHashMap |
 | Pipeline | DEFAULT_ENDPOINTS static array | Pending |
 | TUI | Tab::all() ordering inconsistent | Pending |
 | Workflow | SLA calculation ignores resolved findings | Pending |

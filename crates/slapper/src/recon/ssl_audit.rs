@@ -184,7 +184,7 @@ impl SslAuditor {
         let response = self.client.get(&url).send().await
             .map_err(|e| SlapperError::Network(format!("Certificate check failed: {}", e)))?;
 
-        let certificate_valid = response.status().is_success() || response.status().as_u16() == 403;
+        let certificate_valid = response.status().is_success() || response.status().as_u16() == crate::constants::STATUS_FORBIDDEN;
 
         Ok(SslCheck {
             name: "Certificate".to_string(),

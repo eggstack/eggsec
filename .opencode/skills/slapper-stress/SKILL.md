@@ -17,7 +17,7 @@ The `raw_udp` module in `stress/udp.rs:20-117` is integrated:
 
 ### Stress Types
 - `StressType` enum: `Syn`, `Udp`, `Http`, `Tcp`, `Icmp`
-- `StressConfig` struct: target, port, rate_pps, duration_secs, concurrency, spoof_source
+- `StressConfig` struct: target, port, stress_type, rate_pps, duration_secs, concurrency, spoof_source, spoof_range, random_source_port, payload_size, use_proxies, proxy_pool
 - `StressMetrics`: atomic counters for packets_sent, bytes_sent, errors
 - `StressStats`: aggregated results from stress test runs
 

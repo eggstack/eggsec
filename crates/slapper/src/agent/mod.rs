@@ -828,7 +828,7 @@ impl Agent {
             crate::agent::portfolio::ScanDepth::Shallow => {
                 serde_json::json!({
                     "concurrency": 5,
-                    "timeout_ms": 30000,
+                    "timeout_ms": crate::constants::DEFAULT_TOOL_TIMEOUT_MS,
                     "payload_types": "xss,sqli",
                 })
             }

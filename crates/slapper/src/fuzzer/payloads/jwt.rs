@@ -540,7 +540,7 @@ impl JwtFuzzer {
                             ),
                             severity: Severity::Critical,
                         });
-                    } else if status == 401 || status == 403 {
+                    } else if status == 401 || status == crate::constants::STATUS_FORBIDDEN {
                         results.push(JwtTestResult {
                             vulnerability: JwtVulnerability::InvalidSignature,
                             success: false,

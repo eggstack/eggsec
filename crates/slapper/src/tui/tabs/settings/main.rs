@@ -419,7 +419,7 @@ impl SettingsTab {
     pub fn to_config(&self) -> SlapperConfig {
         let mut config = self.config.clone().unwrap_or_else(|| SlapperConfig {
             http: HttpConfig {
-                timeout_secs: 30,
+                timeout_secs: crate::constants::http::DEFAULT_TIMEOUT_SECS,
                 max_retries: crate::constants::DEFAULT_MAX_RETRIES,
                 follow_redirects: true,
                 verify_tls: true,

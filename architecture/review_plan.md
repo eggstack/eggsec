@@ -260,7 +260,7 @@ Before committing, verify and clean up:
 7. **Recon module count 17 vs 18** - `recon.md` text says 17 but array has 18
 8. **Error line reference wrong** - `error.md:56` says mod.rs:56 but actual is mod.rs:82
 9. **AI agents path missing prefix** - `ai_agents.md` says `alerts/routing.rs` should be `agent/alerts/routing.rs`
-10. **StressConfig names wrong** - `stress.md` says `rate_limit` and `threads` but actual is `rate_pps` and `concurrency`
+
 
 ### Cross-Cutting Concerns
 - **23 HIGH priority items** identified across 43 reviewed documents

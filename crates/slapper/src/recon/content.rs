@@ -68,7 +68,7 @@ impl ContentScanner {
                             .and_then(|v| v.to_str().ok())
                             .map(|s| s.to_string());
 
-                        if status == 200 || status == 401 || status == 403 {
+                        if status == 200 || status == 401 || status == crate::constants::STATUS_FORBIDDEN {
                             let (category, severity) = Self::categorize_path(path);
                             let is_sensitive = !category.is_empty();
 

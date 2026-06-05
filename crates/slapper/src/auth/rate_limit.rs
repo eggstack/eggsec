@@ -108,7 +108,7 @@ impl RateLimitTester {
                 .await;
 
             let success = match response {
-                Ok(resp) => resp.status() != 429,
+                Ok(resp) => resp.status().as_u16() != crate::constants::STATUS_RATE_LIMITED,
                 Err(_) => false,
             };
 

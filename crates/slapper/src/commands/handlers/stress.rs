@@ -218,7 +218,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             let health_config = HealthCheckConfig {
                 enabled: true,
                 interval_secs: 0,
-                timeout_ms: 10000,
+                timeout_ms: crate::constants::DEFAULT_PROXY_TIMEOUT_MS,
                 test_url: test_url.clone(),
                 max_failures: 0,
             };

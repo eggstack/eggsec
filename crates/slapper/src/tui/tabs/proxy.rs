@@ -248,7 +248,7 @@ impl ProxyTab {
                 password: p.password.clone(),
                 weight: p.weight.unwrap_or(1),
                 priority: p.priority.unwrap_or(1) as u8,
-                timeout_ms: 10000,
+                timeout_ms: crate::constants::DEFAULT_PROXY_TIMEOUT_MS,
                 enabled: p.enabled,
                 tags: Vec::new(),
             })
@@ -257,7 +257,7 @@ impl ProxyTab {
         let health_config = HealthCheckConfig {
             enabled: true,
             interval_secs: 60,
-            timeout_ms: 10000,
+            timeout_ms: crate::constants::DEFAULT_PROXY_TIMEOUT_MS,
             test_url: test_url.to_string(),
             max_failures: 3,
         };
@@ -334,7 +334,7 @@ impl ProxyTab {
             password: password.map(SensitiveString::new),
             weight: 1,
             priority: 0,
-            timeout_ms: 10000,
+            timeout_ms: crate::constants::DEFAULT_PROXY_TIMEOUT_MS,
             enabled: true,
             tags: Vec::new(),
         };
@@ -342,7 +342,7 @@ impl ProxyTab {
         let health_config = HealthCheckConfig {
             enabled: true,
             interval_secs: 60,
-            timeout_ms: 10000,
+            timeout_ms: crate::constants::DEFAULT_PROXY_TIMEOUT_MS,
             test_url: test_url.to_string(),
             max_failures: 3,
         };

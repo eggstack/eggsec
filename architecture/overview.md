@@ -100,7 +100,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`output/`](../crates/slapper/src/output/) | Report generation in 8 formats (JSON, HTML, CSV, SARIF, JUnit, Markdown, PDF) | [output.md](output.md) |
+| [`output/`](../crates/slapper/src/output/) | Report generation in 8 formats (Pretty, JSON, Compact, HTML, CSV, SARIF, JUnit, Markdown) | [output.md](output.md) |
 | [`proxy/`](../crates/slapper/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies | [proxy.md](proxy.md) |
 | [`config/`](../crates/slapper/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
 | [`storage/`](../crates/slapper/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |

@@ -323,7 +323,7 @@ impl FuzzerResultConverter<IdorTestResult> for IdorTestResult {
                 severity: self.severity,
                 tags: vec![format!("{:?}", self.vulnerability)],
             },
-            status_code: if self.success { 200 } else { 403 },
+            status_code: if self.success { 200 } else { crate::constants::STATUS_FORBIDDEN },
             response_time_ms: 0,
             response_length: None,
             response_body: None,

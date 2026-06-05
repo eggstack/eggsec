@@ -68,9 +68,10 @@ pub fn validate_rate_limit(rps: u32) -> Result<()> {
     if rps == 0 {
         return Err(anyhow!("Rate limit must be greater than 0"));
     }
-    if rps > 10000 {
+    if rps > crate::constants::MAX_REQUESTS_PER_SECOND_LIMIT {
         return Err(anyhow!(
-            "Rate limit cannot exceed 10000 requests per second"
+            "Rate limit cannot exceed {} requests per second",
+            crate::constants::MAX_REQUESTS_PER_SECOND_LIMIT
         ));
     }
     Ok(())

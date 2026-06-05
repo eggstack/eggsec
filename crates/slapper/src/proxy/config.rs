@@ -83,7 +83,7 @@ pub struct ProxyEntry {
 }
 
 fn default_timeout() -> u64 {
-    10000
+    crate::constants::DEFAULT_PROXY_TIMEOUT_MS
 }
 
 fn default_true() -> bool {
