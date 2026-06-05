@@ -190,8 +190,7 @@ impl super::App {
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Hunt => {
-                let msg = "Hunt tab: no exportable data available".to_string();
-                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
+                self.export_tab_json(|s| s.hunt.get_results(), "hunt_results", "Hunt")
             }
             super::tabs::Tab::Browser => {
                 let msg = "Browser tab: no exportable data available".to_string();

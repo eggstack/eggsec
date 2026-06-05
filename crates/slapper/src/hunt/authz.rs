@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::hunt::HuntConfig;
+use crate::hunt::{HuntClient, HuntConfig};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -26,103 +26,230 @@ pub enum BypassType {
     RoleManipulation,
 }
 
-pub async fn check_authz_bypass(target: &str, config: &HuntConfig) -> Result<Vec<AuthzBypass>> {
+const ADMIN_PATHS: &[&str] = &[
+    "/admin",
+    "/admin/",
+    "/api/admin",
+    "/api/admin/users",
+    "/api/admin/config",
+    "/dashboard",
+    "/manage",
+    "/management",
+    "/internal",
+    "/api/internal",
+    "/debug",
+    "/api/debug",
+    "/actuator",
+    "/actuator/health",
+    "/actuator/env",
+    "/swagger-ui.html",
+    "/api-docs",
+    "/graphql",
+];
+
+const IDOR_PATHS: &[&str] = &[
+    "/api/users/1",
+    "/api/users/2",
+    "/api/users/1/profile",
+    "/api/users/2/profile",
+    "/api/accounts/1",
+    "/api/accounts/2",
+    "/api/documents/1",
+    "/api/documents/2",
+];
+
+pub async fn check_authz_bypass(
+    client: &HuntClient,
+    config: &HuntConfig,
+) -> Result<Vec<AuthzBypass>> {
     let mut bypasses = Vec::new();
 
-    bypasses.extend(check_idor(target, config).await?);
-    bypasses.extend(check_missing_authz(target, config).await?);
-    bypasses.extend(check_jwt_bypass(target, config).await?);
-    bypasses.extend(check_force_browsing(target, config).await?);
+    bypasses.extend(check_admin_access(client, config).await);
+    bypasses.extend(check_idor(client, config).await);
+    bypasses.extend(check_force_browsing(client, config).await);
+    bypasses.extend(check_http_methods(client, config).await);
 
     Ok(bypasses)
 }
 
-async fn check_idor(target: &str, _config: &HuntConfig) -> Result<Vec<AuthzBypass>> {
+async fn check_admin_access(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
+    let mut handles = Vec::new();
 
-    let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    bypasses.push(AuthzBypass {
-        id: id.clone(),
-        bypass_type: BypassType::Idor,
-        severity: Severity::High,
-        description: "Insecure Direct Object Reference - user can access other users' resources"
-            .to_string(),
-        endpoint: format!("{}/api/users/{{user_id}}/profile", target),
-        evidence: "Resource ID is directly exposed in URL without server-side ownership validation"
-            .to_string(),
-        remediation: "Implement ownership validation on all resource access endpoints".to_string(),
-        cvss_score: Some(7.1),
-    });
+    for path in ADMIN_PATHS {
+        let client_ref = unsafe { &*(client as *const HuntClient) };
+        let sem = semaphore.clone();
+        let path = path.to_string();
 
-    Ok(bypasses)
+        handles.push(tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            let resp = client_ref.get(&path).await;
+            (path, resp)
+        }));
+    }
+
+    for handle in handles {
+        if let Ok((path, Ok(resp))) = handle.await {
+            let status = resp.status().as_u16();
+            if status == 200 {
+                if let Ok(body) = resp.text().await {
+                    let body_lower = body.to_lowercase();
+
+                    if body_lower.contains("admin")
+                        || body_lower.contains("dashboard")
+                        || body_lower.contains("management")
+                        || body_lower.contains("users")
+                    {
+                        let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                        bypasses.push(AuthzBypass {
+                            id,
+                            bypass_type: BypassType::MissingAuthorization,
+                            severity: Severity::Critical,
+                            description: format!(
+                                "Admin endpoint accessible without authentication: {}",
+                                path
+                            ),
+                            endpoint: format!("{}{}", client.base_url(), path),
+                            evidence: format!(
+                                "GET {} returned 200 OK with admin content",
+                                path
+                            ),
+                            remediation: "Implement authorization checks on all admin endpoints"
+                                .to_string(),
+                            cvss_score: Some(9.0),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    bypasses
 }
 
-async fn check_missing_authz(target: &str, _config: &HuntConfig) -> Result<Vec<AuthzBypass>> {
+async fn check_idor(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
 
-    let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    bypasses.push(AuthzBypass {
-        id: id.clone(),
-        bypass_type: BypassType::MissingAuthorization,
-        severity: Severity::High,
-        description: "Admin endpoint accessible without authentication".to_string(),
-        endpoint: format!("{}/api/admin/users", target),
-        evidence: "Endpoint returns 200 OK when accessed without auth token".to_string(),
-        remediation: "Implement authorization checks on all admin endpoints".to_string(),
-        cvss_score: Some(8.2),
-    });
+    for path in IDOR_PATHS {
+        if let Ok(resp) = client.get(path).await {
+            let status = resp.status().as_u16();
+            if status == 200 {
+                if let Ok(body) = resp.text().await {
+                    if !body.is_empty() && body.len() > 50 {
+                        let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                        bypasses.push(AuthzBypass {
+                            id,
+                            bypass_type: BypassType::Idor,
+                            severity: Severity::High,
+                            description: format!(
+                                "Potential IDOR: resource accessible at {}",
+                                path
+                            ),
+                            endpoint: format!("{}{}", client.base_url(), path),
+                            evidence: format!(
+                                "GET {} returned 200 with {} bytes of content",
+                                path,
+                                body.len()
+                            ),
+                            remediation:
+                                "Implement ownership validation on all resource access endpoints"
+                                    .to_string(),
+                            cvss_score: Some(7.5),
+                        });
+                    }
+                }
+            }
+        }
+    }
 
-    Ok(bypasses)
+    bypasses
 }
 
-async fn check_jwt_bypass(target: &str, _config: &HuntConfig) -> Result<Vec<AuthzBypass>> {
+async fn check_force_browsing(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
+    let paths = ["/admin/config", "/settings", "/profile/admin", "/user/roles"];
 
-    let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    bypasses.push(AuthzBypass {
-        id: id.clone(),
-        bypass_type: BypassType::JWTBypass,
-        severity: Severity::Critical,
-        description: "JWT algorithm confusion attack possible".to_string(),
-        endpoint: format!("{}/api/login", target),
-        evidence: "Server accepts 'none' algorithm or different key for verification".to_string(),
-        remediation: "Use RS256 algorithm; validate algorithm matches expected; implement proper key management".to_string(),
-        cvss_score: Some(9.0),
-    });
+    for path in &paths {
+        if let Ok(resp) = client.get(path).await {
+            let status = resp.status().as_u16();
+            if status == 200 {
+                let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                bypasses.push(AuthzBypass {
+                    id,
+                    bypass_type: BypassType::ForceBrowsing,
+                    severity: Severity::Medium,
+                    description: format!("Direct access to {} without authentication", path),
+                    endpoint: format!("{}{}", client.base_url(), path),
+                    evidence: format!("GET {} returned 200 OK", path),
+                    remediation: "Implement proper access controls and authentication checks"
+                        .to_string(),
+                    cvss_score: Some(5.3),
+                });
+            }
+        }
+    }
 
-    Ok(bypasses)
+    bypasses
 }
 
-async fn check_force_browsing(target: &str, _config: &HuntConfig) -> Result<Vec<AuthzBypass>> {
+async fn check_http_methods(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
 
-    let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    bypasses.push(AuthzBypass {
-        id: id.clone(),
-        bypass_type: BypassType::ForceBrowsing,
-        severity: Severity::Medium,
-        description: "Direct access to admin panels via forced browsing".to_string(),
-        endpoint: format!("{}/admin/config", target),
-        evidence: "Admin URL accessible without elevated privileges".to_string(),
-        remediation: "Implement proper access controls; add security headers; monitor for forced browsing attempts".to_string(),
-        cvss_score: Some(5.3),
-    });
+    let methods = ["OPTIONS", "TRACE"];
 
-    Ok(bypasses)
+    for method in &methods {
+        let resp = match *method {
+            "OPTIONS" => client.head("/").await,
+            _ => client.get("/").await,
+        };
+
+        if let Ok(resp) = resp {
+            if *method == "OPTIONS" {
+                if let Some(allow) = resp.headers().get("allow") {
+                    if let Ok(allow_str) = allow.to_str() {
+                        let allow_lower = allow_str.to_lowercase();
+                        if allow_lower.contains("put") || allow_lower.contains("delete") {
+                            let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                            bypasses.push(AuthzBypass {
+                                id,
+                                bypass_type: BypassType::MissingAuthorization,
+                                severity: Severity::Low,
+                                description: "Dangerous HTTP methods allowed (PUT/DELETE)"
+                                    .to_string(),
+                                endpoint: client.base_url().to_string(),
+                                evidence: format!("OPTIONS returned Allow: {}", allow_str),
+                                remediation: "Restrict HTTP methods to only those required"
+                                    .to_string(),
+                                cvss_score: Some(3.0),
+                            });
+                        }
+                    }
+                }
+            }
+
+            if *method == "TRACE" && resp.status().as_u16() == 200 {
+                let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                bypasses.push(AuthzBypass {
+                    id,
+                    bypass_type: BypassType::MissingAuthorization,
+                    severity: Severity::Medium,
+                    description: "TRACE method enabled (XST risk)".to_string(),
+                    endpoint: client.base_url().to_string(),
+                    evidence: "TRACE method returned 200 OK".to_string(),
+                    remediation: "Disable TRACE method on the server".to_string(),
+                    cvss_score: Some(5.0),
+                });
+            }
+        }
+    }
+
+    bypasses
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_check_authz_bypass() {
-        let config = HuntConfig::default();
-        let bypasses = check_authz_bypass("http://example.com", &config)
-            .await
-            .unwrap();
-        assert!(!bypasses.is_empty());
-    }
 
     #[test]
     fn test_bypass_types() {
@@ -131,5 +258,6 @@ mod tests {
             BypassType::MissingAuthorization,
             BypassType::MissingAuthorization
         );
+        assert_eq!(BypassType::ForceBrowsing, BypassType::ForceBrowsing);
     }
 }

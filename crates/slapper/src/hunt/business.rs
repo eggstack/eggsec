@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::hunt::HuntConfig;
+use crate::hunt::{HuntClient, HuntConfig};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -29,133 +29,312 @@ pub enum FlawType {
     IntegerOverflow,
 }
 
+const API_PATHS: &[&str] = &[
+    "/api",
+    "/api/v1",
+    "/api/v2",
+    "/graphql",
+    "/api/users",
+    "/api/products",
+    "/api/orders",
+    "/api/cart",
+    "/api/checkout",
+    "/api/payment",
+    "/api/config",
+    "/api/settings",
+    "/api/health",
+    "/api/status",
+    "/api/info",
+];
+
+const SENSITIVE_PATHS: &[&str] = &[
+    "/.env",
+    "/.git/config",
+    "/.git/HEAD",
+    "/config.json",
+    "/config.yml",
+    "/config.yaml",
+    "/database.yml",
+    "/wp-config.php",
+    "/.htaccess",
+    "/web.config",
+    "/appsettings.json",
+    "/application.properties",
+    "/settings.py",
+    "/config.py",
+    "/.aws/credentials",
+    "/credentials.json",
+    "/secrets.json",
+    "/private_key.pem",
+    "/id_rsa",
+    "/.ssh/authorized_keys",
+    "/backup",
+    "/backups",
+    "/dump",
+    "/export",
+    "/api/debug",
+    "/debug/vars",
+    "/debug/pprof",
+    "/actuator",
+    "/actuator/env",
+    "/actuator/heapdump",
+    "/metrics",
+    "/prometheus",
+];
+
 pub async fn check_business_logic(
-    target: &str,
+    client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
-    flaws.extend(check_price_manipulation(target, config).await?);
-    flaws.extend(check_privilege_escalation(target, config).await?);
-    flaws.extend(check_rate_limit_bypass(target, config).await?);
-    flaws.extend(check_cart_manipulation(target, config).await?);
-    flaws.extend(check_workflow_bypass(target, config).await?);
+    flaws.extend(check_api_discovery(client, config).await);
+    flaws.extend(check_sensitive_files(client, config).await);
+    flaws.extend(check_error_handling(client, config).await);
+    flaws.extend(check_rate_limiting(client, config).await);
 
     Ok(flaws)
 }
 
-async fn check_price_manipulation(
-    target: &str,
-    _config: &HuntConfig,
-) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_api_discovery(client: &HuntClient, _config: &HuntConfig) -> Vec<BusinessLogicFlaw> {
     let mut flaws = Vec::new();
 
-    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    flaws.push(BusinessLogicFlaw {
-        id: id.clone(),
-        flaw_type: FlawType::PriceManipulation,
-        severity: Severity::Critical,
-        description: "Price parameter manipulation vulnerability detected".to_string(),
-        location: format!("{}/checkout", target),
-        evidence: "Price parameter appears to be user-controlled without server-side validation"
-            .to_string(),
-        remediation:
-            "Always validate prices server-side; cross-reference with product database prices"
-                .to_string(),
-        cvss_score: Some(8.1),
-    });
+    for path in API_PATHS {
+        if let Ok(resp) = client.get(path).await {
+            let status = resp.status().as_u16();
+            if let Ok(body) = resp.text().await {
+                let body_lower = body.to_lowercase();
 
-    Ok(flaws)
+                if status == 200 && body.len() > 100 {
+                    let has_api_info = body_lower.contains("api")
+                        || body_lower.contains("version")
+                        || body_lower.contains("endpoint")
+                        || body_lower.contains("documentation")
+                        || body_lower.contains("swagger");
+
+                    if has_api_info {
+                        let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                        flaws.push(BusinessLogicFlaw {
+                            id,
+                            flaw_type: FlawType::InsufficientValidation,
+                            severity: Severity::Low,
+                            description: format!("API documentation/info exposed at {}", path),
+                            location: format!("{}{}", client.base_url(), path),
+                            evidence: format!(
+                                "GET {} returned 200 with {} bytes containing API documentation",
+                                path,
+                                body.len()
+                            ),
+                            remediation: "Disable API documentation in production environments"
+                                .to_string(),
+                            cvss_score: Some(3.0),
+                        });
+                    }
+                }
+
+                if status == 401 || status == 403 {
+                    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                    flaws.push(BusinessLogicFlaw {
+                        id,
+                        flaw_type: FlawType::PrivilegeEscalation,
+                        severity: Severity::Info,
+                        description: format!("Authentication required at {}", path),
+                        location: format!("{}{}", client.base_url(), path),
+                        evidence: format!("GET {} returned {} (auth required)", path, status),
+                        remediation: "Ensure proper authentication is implemented".to_string(),
+                        cvss_score: None,
+                    });
+                }
+            }
+        }
+    }
+
+    flaws
 }
 
-async fn check_privilege_escalation(
-    target: &str,
+async fn check_sensitive_files(
+    client: &HuntClient,
     _config: &HuntConfig,
-) -> Result<Vec<BusinessLogicFlaw>> {
+) -> Vec<BusinessLogicFlaw> {
     let mut flaws = Vec::new();
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
+    let mut handles = Vec::new();
 
-    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    flaws.push(BusinessLogicFlaw {
-        id: id.clone(),
-        flaw_type: FlawType::PrivilegeEscalation,
-        severity: Severity::High,
-        description: "Client-side role/permission validation detected".to_string(),
-        location: format!("{}/api/user/role", target),
-        evidence:
-            "Role parameter appears to be settable by client without server-side verification"
-                .to_string(),
-        remediation: "Implement server-side authorization; use session-based role management"
-            .to_string(),
-        cvss_score: Some(7.5),
-    });
+    for path in SENSITIVE_PATHS {
+        let client_ref = unsafe { &*(client as *const HuntClient) };
+        let sem = semaphore.clone();
+        let path = path.to_string();
 
-    Ok(flaws)
+        handles.push(tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            let resp = client_ref.get(&path).await;
+            (path, resp)
+        }));
+    }
+
+    for handle in handles {
+        if let Ok((path, Ok(resp))) = handle.await {
+            let status = resp.status().as_u16();
+            if status == 200 {
+                if let Ok(body) = resp.text().await {
+                    if !body.is_empty() && body.len() > 10 {
+                        let (severity, flaw_type) = classify_sensitive_file(&path, &body);
+
+                        let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                        flaws.push(BusinessLogicFlaw {
+                            id,
+                            flaw_type,
+                            severity,
+                            description: format!("Sensitive file accessible: {}", path),
+                            location: format!("{}{}", client.base_url(), path),
+                            evidence: format!(
+                                "GET {} returned 200 with {} bytes",
+                                path,
+                                body.len()
+                            ),
+                            remediation: "Restrict access to sensitive files and configuration"
+                                .to_string(),
+                            cvss_score: severity_cvss(severity),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    flaws
 }
 
-async fn check_rate_limit_bypass(
-    target: &str,
-    _config: &HuntConfig,
-) -> Result<Vec<BusinessLogicFlaw>> {
-    let mut flaws = Vec::new();
+fn classify_sensitive_file(path: &str, body: &str) -> (Severity, FlawType) {
+    let path_lower = path.to_lowercase();
+    let body_lower = body.to_lowercase();
 
-    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    flaws.push(BusinessLogicFlaw {
-        id: id.clone(),
-        flaw_type: FlawType::RateLimitBypass,
-        severity: Severity::Medium,
-        description: "Rate limiting can be bypassed via IP header manipulation".to_string(),
-        location: format!("{}/api/login", target),
-        evidence: "X-Forwarded-For header not properly validated".to_string(),
-        remediation: "Implement proper rate limiting at infrastructure level; validate client IP via X-Real-IP".to_string(),
-        cvss_score: Some(5.3),
-    });
-
-    Ok(flaws)
+    if path_lower.contains(".env")
+        || path_lower.contains("credentials")
+        || path_lower.contains("private_key")
+        || path_lower.contains("id_rsa")
+        || body_lower.contains("password")
+        || body_lower.contains("secret")
+        || body_lower.contains("api_key")
+    {
+        (Severity::Critical, FlawType::TrustBoundaryViolation)
+    } else if path_lower.contains(".git")
+        || path_lower.contains("config")
+        || path_lower.contains("backup")
+        || path_lower.contains("dump")
+    {
+        (Severity::High, FlawType::TrustBoundaryViolation)
+    } else {
+        (Severity::Medium, FlawType::TrustBoundaryViolation)
+    }
 }
 
-async fn check_cart_manipulation(
-    target: &str,
-    _config: &HuntConfig,
-) -> Result<Vec<BusinessLogicFlaw>> {
-    let mut flaws = Vec::new();
-
-    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    flaws.push(BusinessLogicFlaw {
-        id: id.clone(),
-        flaw_type: FlawType::CartManipulation,
-        severity: Severity::High,
-        description: "Quantity parameter accepts negative or extreme values".to_string(),
-        location: format!("{}/cart/update", target),
-        evidence: "Quantity validation only client-side".to_string(),
-        remediation:
-            "Validate quantity server-side with minimum (1) and maximum (inventory) bounds"
-                .to_string(),
-        cvss_score: Some(6.5),
-    });
-
-    Ok(flaws)
+fn severity_cvss(severity: Severity) -> Option<f32> {
+    match severity {
+        Severity::Critical => Some(9.0),
+        Severity::High => Some(7.5),
+        Severity::Medium => Some(5.0),
+        Severity::Low => Some(3.0),
+        Severity::Info => None,
+    }
 }
 
-async fn check_workflow_bypass(
-    target: &str,
-    _config: &HuntConfig,
-) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_error_handling(client: &HuntClient, _config: &HuntConfig) -> Vec<BusinessLogicFlaw> {
     let mut flaws = Vec::new();
 
-    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    flaws.push(BusinessLogicFlaw {
-        id: id.clone(),
-        flaw_type: FlawType::WorkflowBypass,
-        severity: Severity::Medium,
-        description: "Multi-step workflow can be bypassed by direct API call".to_string(),
-        location: format!("{}/checkout/complete", target),
-        evidence: "Checkout step validation relies on client-side state".to_string(),
-        remediation: "Verify all previous workflow steps server-side before allowing completion"
-            .to_string(),
-        cvss_score: Some(5.9),
-    });
+    let test_paths = [
+        "/api/test%00",
+        "/api/test%0d%0a",
+        "/api/test'or'1'='1",
+        "/api/test<script>alert(1)</script>",
+        "/api/../../../etc/passwd",
+        "/api/test%ff%ff",
+    ];
 
-    Ok(flaws)
+    for path in &test_paths {
+        if let Ok(resp) = client.get(path).await {
+            let status = resp.status().as_u16();
+            if let Ok(body) = resp.text().await {
+                let body_lower = body.to_lowercase();
+
+                if body_lower.contains("stack trace")
+                    || body_lower.contains("exception")
+                    || body_lower.contains("error in")
+                    || body_lower.contains("traceback")
+                    || body_lower.contains("syntax error")
+                    || body_lower.contains("undefined")
+                    || body_lower.contains("null pointer")
+                {
+                    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                    flaws.push(BusinessLogicFlaw {
+                        id,
+                        flaw_type: FlawType::InsufficientValidation,
+                        severity: Severity::Medium,
+                        description: "Verbose error messages expose internal details".to_string(),
+                        location: format!("{}{}", client.base_url(), path),
+                        evidence: format!(
+                            "Error response at {}: {}...",
+                            path,
+                            &body[..200.min(body.len())]
+                        ),
+                        remediation: "Implement custom error pages; disable debug mode in production"
+                            .to_string(),
+                        cvss_score: Some(5.0),
+                    });
+                }
+
+                if status == 200 && body_lower.contains("root:") {
+                    let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                    flaws.push(BusinessLogicFlaw {
+                        id,
+                        flaw_type: FlawType::TrustBoundaryViolation,
+                        severity: Severity::Critical,
+                        description: "Path traversal allows reading system files".to_string(),
+                        location: format!("{}{}", client.base_url(), path),
+                        evidence: format!("GET {} returned /etc/passwd content", path),
+                        remediation: "Validate and sanitize file path inputs".to_string(),
+                        cvss_score: Some(9.0),
+                    });
+                }
+            }
+        }
+    }
+
+    flaws
+}
+
+async fn check_rate_limiting(client: &HuntClient, _config: &HuntConfig) -> Vec<BusinessLogicFlaw> {
+    let mut flaws = Vec::new();
+    let mut status_429_count = 0;
+    let mut total_requests = 0;
+
+    for _ in 0..20 {
+        if let Ok(resp) = client.get("/api/test").await {
+            total_requests += 1;
+            if resp.status().as_u16() == 429 {
+                status_429_count += 1;
+            }
+        }
+    }
+
+    if status_429_count == 0 && total_requests >= 10 {
+        let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        flaws.push(BusinessLogicFlaw {
+            id,
+            flaw_type: FlawType::RateLimitBypass,
+            severity: Severity::Medium,
+            description: "No rate limiting detected after rapid requests".to_string(),
+            location: client.base_url().to_string(),
+            evidence: format!(
+                "Sent {} requests without receiving a single 429 response",
+                total_requests
+            ),
+            remediation: "Implement rate limiting to prevent brute force and abuse".to_string(),
+            cvss_score: Some(5.0),
+        });
+    }
+
+    flaws
 }
 
 #[cfg(test)]
@@ -176,14 +355,5 @@ mod tests {
         };
 
         assert_eq!(flaw.flaw_type, FlawType::PriceManipulation);
-    }
-
-    #[tokio::test]
-    async fn test_check_business_logic() {
-        let config = HuntConfig::default();
-        let flaws = check_business_logic("http://example.com", &config)
-            .await
-            .unwrap();
-        assert!(!flaws.is_empty());
     }
 }

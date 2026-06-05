@@ -6,6 +6,8 @@ pub mod cluster;
 pub mod config;
 pub mod doctor;
 pub mod fuzz;
+#[cfg(feature = "advanced-hunting")]
+pub mod hunt;
 pub mod load;
 pub mod network;
 pub mod notify;
@@ -30,6 +32,8 @@ pub mod sbom;
 pub use ci::*;
 pub use cluster::*;
 pub use fuzz::*;
+#[cfg(feature = "advanced-hunting")]
+pub use hunt::*;
 pub use load::*;
 pub use network::*;
 pub use plan::*;
@@ -149,6 +153,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Fingerprint(args)) => handle_fingerprint(ctx, args).await,
         #[cfg(feature = "nse")]
         Some(Commands::Nse(args)) => handle_nse(ctx, args).await,
+        #[cfg(feature = "advanced-hunting")]
+        Some(Commands::Hunt(args)) => handle_hunt(ctx, args).await,
         Some(Commands::Fuzz(args)) => handle_fuzz(ctx, args).await,
         Some(Commands::WafStress(args)) => handle_waf_stress(ctx, args).await,
         Some(Commands::Waf(args)) => handle_waf(ctx, args).await,

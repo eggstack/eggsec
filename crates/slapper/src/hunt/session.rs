@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::hunt::HuntConfig;
+use crate::hunt::{HuntClient, HuntConfig};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -22,135 +22,224 @@ pub enum SessionIssueType {
     InsufficientEntropy,
     MissingHttpOnly,
     MissingSecure,
+    MissingSameSite,
     Csrf,
     ConcurrentSessions,
 }
 
 pub async fn check_session_security(
-    target: &str,
+    client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<SessionIssue>> {
     let mut issues = Vec::new();
 
-    issues.extend(check_session_fixation(target, config).await?);
-    issues.extend(check_session_timeout(target, config).await?);
-    issues.extend(check_token_prediction(target, config).await?);
-    issues.extend(check_session_cookies(target, config).await?);
-    issues.extend(check_csrf(target, config).await?);
+    match client.get("/").await {
+        Ok(resp) => {
+            let headers = resp.headers().clone();
+
+            issues.extend(check_cookie_flags(&headers, client.base_url()));
+            issues.extend(check_security_headers(&headers, client.base_url()));
+            issues.extend(check_session_token_entropy(&headers, client.base_url()));
+
+            issues.extend(check_session_fixation(client, config).await);
+        }
+        Err(e) => {
+            tracing::warn!("Failed to connect to target for session analysis: {}", e);
+        }
+    }
 
     Ok(issues)
 }
 
-async fn check_session_fixation(_target: &str, _config: &HuntConfig) -> Result<Vec<SessionIssue>> {
+fn check_cookie_flags(
+    headers: &reqwest::header::HeaderMap,
+    target: &str,
+) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
+    let cookie_headers: Vec<_> = headers
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .collect();
 
-    let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    issues.push(SessionIssue {
-        id: id.clone(),
-        issue_type: SessionIssueType::SessionFixation,
-        severity: Severity::High,
-        description: "Session fixation vulnerability - session ID can be set before authentication"
-            .to_string(),
-        evidence: "Session ID is not regenerated after login".to_string(),
-        remediation: "Regenerate session ID after successful authentication".to_string(),
-        cvss_score: Some(7.5),
-    });
+    for cookie_str in cookie_headers {
+        let cookie_lower = cookie_str.to_lowercase();
+        let cookie_name = cookie_str.split('=').next().unwrap_or("unknown").trim();
 
-    Ok(issues)
+        if !cookie_lower.contains("httponly") {
+            let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            issues.push(SessionIssue {
+                id,
+                issue_type: SessionIssueType::MissingHttpOnly,
+                severity: Severity::Medium,
+                description: format!("Cookie '{}' missing HttpOnly flag", cookie_name),
+                evidence: format!("Set-Cookie header: {}", cookie_str),
+                remediation: "Set HttpOnly flag on session cookies to prevent JavaScript access"
+                    .to_string(),
+                cvss_score: Some(5.0),
+            });
+        }
+
+        if !cookie_lower.contains("secure") && target.starts_with("https") {
+            let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            issues.push(SessionIssue {
+                id,
+                issue_type: SessionIssueType::MissingSecure,
+                severity: Severity::Medium,
+                description: format!("Cookie '{}' missing Secure flag on HTTPS site", cookie_name),
+                evidence: format!("Set-Cookie header: {}", cookie_str),
+                remediation: "Set Secure flag on cookies for HTTPS sites to prevent HTTP transmission"
+                    .to_string(),
+                cvss_score: Some(5.0),
+            });
+        }
+
+        if !cookie_lower.contains("samesite") {
+            let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            issues.push(SessionIssue {
+                id,
+                issue_type: SessionIssueType::MissingSameSite,
+                severity: Severity::Low,
+                description: format!("Cookie '{}' missing SameSite attribute", cookie_name),
+                evidence: format!("Set-Cookie header: {}", cookie_str),
+                remediation: "Set SameSite=Strict or SameSite=Lax on cookies to prevent CSRF"
+                    .to_string(),
+                cvss_score: Some(3.0),
+            });
+        }
+    }
+
+    issues
 }
 
-async fn check_session_timeout(_target: &str, _config: &HuntConfig) -> Result<Vec<SessionIssue>> {
+fn check_security_headers(
+    headers: &reqwest::header::HeaderMap,
+    _target: &str,
+) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
-    let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    issues.push(SessionIssue {
-        id: id.clone(),
-        issue_type: SessionIssueType::SessionTimeout,
-        severity: Severity::Medium,
-        description: "Session does not expire after extended inactivity".to_string(),
-        evidence: "Session remains valid after 24+ hours of inactivity".to_string(),
-        remediation: "Implement proper session timeout (15-30 minutes of inactivity)".to_string(),
-        cvss_score: Some(5.3),
-    });
+    if !headers.contains_key("x-frame-options") {
+        let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        issues.push(SessionIssue {
+            id,
+            issue_type: SessionIssueType::Csrf,
+            severity: Severity::Low,
+            description: "Missing X-Frame-Options header (clickjacking risk)".to_string(),
+            evidence: "Response does not include X-Frame-Options header".to_string(),
+            remediation: "Add X-Frame-Options: DENY or SAMEORIGIN header".to_string(),
+            cvss_score: Some(3.0),
+        });
+    }
 
-    Ok(issues)
+    if !headers.contains_key("content-security-policy") {
+        let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        issues.push(SessionIssue {
+            id,
+            issue_type: SessionIssueType::Csrf,
+            severity: Severity::Low,
+            description: "Missing Content-Security-Policy header".to_string(),
+            evidence: "Response does not include CSP header".to_string(),
+            remediation: "Implement Content-Security-Policy header".to_string(),
+            cvss_score: Some(3.0),
+        });
+    }
+
+    issues
 }
 
-async fn check_token_prediction(_target: &str, _config: &HuntConfig) -> Result<Vec<SessionIssue>> {
+fn check_session_token_entropy(
+    headers: &reqwest::header::HeaderMap,
+    _target: &str,
+) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
-    let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    issues.push(SessionIssue {
-        id: id.clone(),
-        issue_type: SessionIssueType::TokenPrediction,
-        severity: Severity::Critical,
-        description: "Session token appears to use weak entropy".to_string(),
-        evidence: "Token format suggests sequential or time-based generation".to_string(),
-        remediation: "Use cryptographically secure random number generator for session tokens"
-            .to_string(),
-        cvss_score: Some(8.8),
-    });
+    if let Some(set_cookie) = headers.get(reqwest::header::SET_COOKIE) {
+        if let Ok(cookie_str) = set_cookie.to_str() {
+            let parts: Vec<&str> = cookie_str.split(';').collect();
+            if let Some(name_value) = parts.first() {
+                let mut name_value_iter = name_value.splitn(2, '=');
+                if let (Some(name), Some(value)) =
+                    (name_value_iter.next(), name_value_iter.next())
+                {
+                    let name = name.trim().to_lowercase();
+                    let value = value.trim();
 
-    Ok(issues)
+                    if (name.contains("session") || name.contains("sid") || name.contains("token"))
+                        && value.len() < 16
+                    {
+                        let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                        issues.push(SessionIssue {
+                            id,
+                            issue_type: SessionIssueType::InsufficientEntropy,
+                            severity: Severity::High,
+                            description: format!(
+                                "Session token '{}' appears to have insufficient entropy ({} chars)",
+                                name,
+                                value.len()
+                            ),
+                            evidence: format!("Token length: {} chars", value.len()),
+                            remediation: "Use at least 128-bit cryptographically random session tokens"
+                                .to_string(),
+                            cvss_score: Some(7.0),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    issues
 }
 
-async fn check_session_cookies(_target: &str, _config: &HuntConfig) -> Result<Vec<SessionIssue>> {
+async fn check_session_fixation(
+    client: &HuntClient,
+    _config: &HuntConfig,
+) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
-    let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    issues.push(SessionIssue {
-        id: id.clone(),
-        issue_type: SessionIssueType::MissingHttpOnly,
-        severity: Severity::Medium,
-        description: "Session cookie missing HttpOnly flag".to_string(),
-        evidence: "Cookie can be accessed via JavaScript".to_string(),
-        remediation: "Set HttpOnly flag on session cookies".to_string(),
-        cvss_score: Some(5.0),
-    });
+    let resp1 = client.get("/").await;
+    let resp2 = client.get("/").await;
 
-    let id2 = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    issues.push(SessionIssue {
-        id: id2.clone(),
-        issue_type: SessionIssueType::MissingSecure,
-        severity: Severity::Medium,
-        description: "Session cookie missing Secure flag".to_string(),
-        evidence: "Cookie can be transmitted over HTTP".to_string(),
-        remediation: "Set Secure flag on session cookies".to_string(),
-        cvss_score: Some(5.0),
-    });
+    if let (Ok(r1), Ok(r2)) = (resp1, resp2) {
+        let cookies1: Vec<String> = r1
+            .headers()
+            .get_all(reqwest::header::SET_COOKIE)
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
+            .collect();
 
-    Ok(issues)
-}
+        let cookies2: Vec<String> = r2
+            .headers()
+            .get_all(reqwest::header::SET_COOKIE)
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
+            .collect();
 
-async fn check_csrf(_target: &str, _config: &HuntConfig) -> Result<Vec<SessionIssue>> {
-    let mut issues = Vec::new();
+        if !cookies1.is_empty() && cookies1 == cookies2 {
+            let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            issues.push(SessionIssue {
+                id,
+                issue_type: SessionIssueType::SessionFixation,
+                severity: Severity::High,
+                description: "Session ID appears static across requests (potential fixation)"
+                    .to_string(),
+                evidence: format!(
+                    "Received same session cookie across {} requests",
+                    cookies1.len()
+                ),
+                remediation: "Regenerate session ID after authentication and periodically"
+                    .to_string(),
+                cvss_score: Some(6.5),
+            });
+        }
+    }
 
-    let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    issues.push(SessionIssue {
-        id: id.clone(),
-        issue_type: SessionIssueType::Csrf,
-        severity: Severity::High,
-        description: "CSRF token missing or invalid on state-changing operations".to_string(),
-        evidence: "POST requests succeed without CSRF token".to_string(),
-        remediation: "Implement CSRF tokens on all state-changing operations".to_string(),
-        cvss_score: Some(7.1),
-    });
-
-    Ok(issues)
+    issues
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_check_session_security() {
-        let config = HuntConfig::default();
-        let issues = check_session_security("http://example.com", &config)
-            .await
-            .unwrap();
-        assert!(!issues.is_empty());
-    }
 
     #[test]
     fn test_session_issue_types() {
@@ -159,5 +248,9 @@ mod tests {
             SessionIssueType::SessionFixation
         );
         assert_eq!(SessionIssueType::Csrf, SessionIssueType::Csrf);
+        assert_eq!(
+            SessionIssueType::MissingHttpOnly,
+            SessionIssueType::MissingHttpOnly
+        );
     }
 }

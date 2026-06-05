@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::hunt::HuntConfig;
+use crate::hunt::{HuntClient, HuntConfig};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -23,112 +23,208 @@ pub enum RaceType {
     SessionRace,
     CouponReuse,
     CommentRace,
+    ResponseInconsistency,
+    TimingAnomaly,
 }
 
+const STATE_CHANGING_PATHS: &[&str] = &[
+    "/api/checkout",
+    "/api/cart",
+    "/api/transfer",
+    "/api/payment",
+    "/api/order",
+    "/api/coupon",
+    "/api/discount",
+    "/api/vote",
+    "/api/like",
+    "/api/comment",
+    "/api/purchase",
+    "/api/redeem",
+    "/api/claim",
+    "/api/book",
+    "/api/reserve",
+];
+
 pub async fn check_race_conditions(
-    target: &str,
+    client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<RaceCondition>> {
     let mut conditions = Vec::new();
 
-    conditions.extend(check_tocotou(target, config).await?);
-    conditions.extend(check_concurrent_funds(target, config).await?);
-    conditions.extend(check_inventory_race(target, config).await?);
-    conditions.extend(check_coupon_race(target, config).await?);
+    conditions.extend(check_concurrent_requests(client, config).await);
+    conditions.extend(check_response_inconsistency(client, config).await);
 
     Ok(conditions)
 }
 
-async fn check_tocotou(target: &str, _config: &HuntConfig) -> Result<Vec<RaceCondition>> {
+async fn check_concurrent_requests(
+    client: &HuntClient,
+    config: &HuntConfig,
+) -> Vec<RaceCondition> {
     let mut conditions = Vec::new();
+    let concurrency = config.concurrency;
 
-    let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    conditions.push(RaceCondition {
-        id: id.clone(),
-        race_type: RaceType::TimeOfCheckTimeOfUse,
-        severity: Severity::High,
-        description: "TOCTOU vulnerability in file upload overwrites".to_string(),
-        endpoint: format!("{}/profile/upload", target),
-        evidence: "File permission check and write operation are not atomic".to_string(),
-        remediation: "Use atomic file operations; check permissions immediately before writing"
-            .to_string(),
-        cvss_score: Some(7.2),
-    });
+    for path in STATE_CHANGING_PATHS {
+        let mut handles = Vec::new();
+        let mut status_codes = Vec::new();
 
-    Ok(conditions)
+        for _ in 0..concurrency {
+            let client_ref = unsafe { &*(client as *const HuntClient) };
+            let path = path.to_string();
+
+            handles.push(tokio::spawn(async move {
+                let body = serde_json::json!({
+                    "action": "test",
+                    "quantity": 1,
+                    "amount": 100
+                });
+                client_ref
+                    .post_json(&path, &body)
+                    .await
+                    .map(|r| r.status().as_u16())
+                    .unwrap_or(0)
+            }));
+        }
+
+        for handle in handles {
+            if let Ok(status) = handle.await {
+                status_codes.push(status);
+            }
+        }
+
+        if status_codes.is_empty() {
+            continue;
+        }
+
+        let unique_statuses: std::collections::HashSet<u16> =
+            status_codes.iter().copied().collect();
+        let success_count = status_codes.iter().filter(|&&s| s == 200 || s == 201).count();
+        let error_count = status_codes.iter().filter(|&&s| s >= 400).count();
+
+        if unique_statuses.len() > 1 && success_count > 0 && error_count > 0 {
+            let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            conditions.push(RaceCondition {
+                id,
+                race_type: RaceType::ResponseInconsistency,
+                severity: Severity::High,
+                description: format!(
+                    "Inconsistent responses under concurrent load at {} ({} success, {} error)",
+                    path, success_count, error_count
+                ),
+                endpoint: format!("{}{}", client.base_url(), path),
+                evidence: format!(
+                    "Status codes: {:?}",
+                    unique_statuses.into_iter().collect::<Vec<_>>()
+                ),
+                remediation:
+                    "Implement proper locking or atomic operations for state-changing endpoints"
+                        .to_string(),
+                cvss_score: Some(7.0),
+            });
+        }
+
+        if success_count > 1 {
+            let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            conditions.push(RaceCondition {
+                id,
+                race_type: RaceType::TimeOfCheckTimeOfUse,
+                severity: Severity::Medium,
+                description: format!(
+                    "Multiple concurrent requests succeeded at {} (potential TOCTOU)",
+                    path
+                ),
+                endpoint: format!("{}{}", client.base_url(), path),
+                evidence: format!(
+                    "{} out of {} concurrent requests returned success",
+                    success_count, concurrency
+                ),
+                remediation: "Use database-level locking or idempotency keys for state-changing operations"
+                    .to_string(),
+                cvss_score: Some(6.0),
+            });
+        }
+    }
+
+    conditions
 }
 
-async fn check_concurrent_funds(target: &str, _config: &HuntConfig) -> Result<Vec<RaceCondition>> {
+async fn check_response_inconsistency(
+    client: &HuntClient,
+    _config: &HuntConfig,
+) -> Vec<RaceCondition> {
     let mut conditions = Vec::new();
 
-    let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    conditions.push(RaceCondition {
-        id: id.clone(),
-        race_type: RaceType::ConcurrentFundsTransfer,
-        severity: Severity::Critical,
-        description: "Race condition in fund transfer allows double-spending".to_string(),
-        endpoint: format!("{}/api/transfer", target),
-        evidence: "Balance check and deduction are not atomic".to_string(),
-        remediation:
-            "Use database transactions with proper isolation level; implement idempotency keys"
-                .to_string(),
-        cvss_score: Some(8.5),
-    });
+    let endpoints = ["/api/user/profile", "/api/cart", "/api/balance"];
 
-    Ok(conditions)
-}
+    for path in &endpoints {
+        let mut timings = Vec::new();
+        let mut statuses = Vec::new();
 
-async fn check_inventory_race(target: &str, _config: &HuntConfig) -> Result<Vec<RaceCondition>> {
-    let mut conditions = Vec::new();
+        for _ in 0..5 {
+            let start = std::time::Instant::now();
+            let resp = client.get(path).await;
+            let elapsed = start.elapsed().as_millis() as u64;
 
-    let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    conditions.push(RaceCondition {
-        id: id.clone(),
-        race_type: RaceType::InventoryOverSale,
-        severity: Severity::Medium,
-        description: "Inventory check before purchase is not atomic with reservation".to_string(),
-        endpoint: format!("{}/api/checkout", target),
-        evidence: "Concurrent requests can exceed available inventory".to_string(),
-        remediation: "Implement atomic inventory reservation; use database-level stock management"
-            .to_string(),
-        cvss_score: Some(6.2),
-    });
+            if let Ok(resp) = resp {
+                timings.push(elapsed);
+                statuses.push(resp.status().as_u16());
+            }
+        }
 
-    Ok(conditions)
-}
+        if timings.len() < 2 {
+            continue;
+        }
 
-async fn check_coupon_race(target: &str, _config: &HuntConfig) -> Result<Vec<RaceCondition>> {
-    let mut conditions = Vec::new();
+        let avg: u64 = timings.iter().sum::<u64>() / timings.len() as u64;
+        let max_deviation = timings
+            .iter()
+            .map(|t| (*t as i64 - avg as i64).unsigned_abs())
+            .max()
+            .unwrap_or(0);
 
-    let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    conditions.push(RaceCondition {
-        id: id.clone(),
-        race_type: RaceType::CouponReuse,
-        severity: Severity::Medium,
-        description: "Coupon can be applied multiple times due to lack of atomic validation"
-            .to_string(),
-        endpoint: format!("{}/api/apply-coupon", target),
-        evidence: "Coupon usage count is checked and incremented separately".to_string(),
-        remediation: "Use atomic coupon redemption with usage count in database transaction"
-            .to_string(),
-        cvss_score: Some(5.8),
-    });
+        if max_deviation > avg * 3 && avg > 0 {
+            let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            conditions.push(RaceCondition {
+                id,
+                race_type: RaceType::TimingAnomaly,
+                severity: Severity::Low,
+                description: format!(
+                    "Timing anomaly detected at {} (deviation: {}ms, avg: {}ms)",
+                    path, max_deviation, avg
+                ),
+                endpoint: format!("{}{}", client.base_url(), path),
+                evidence: format!("Timings: {:?}ms", timings),
+                remediation: "Investigate timing inconsistencies that may indicate race conditions"
+                    .to_string(),
+                cvss_score: Some(3.0),
+            });
+        }
 
-    Ok(conditions)
+        let unique_statuses: std::collections::HashSet<u16> = statuses.iter().copied().collect();
+        if unique_statuses.len() > 1 {
+            let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            conditions.push(RaceCondition {
+                id,
+                race_type: RaceType::ResponseInconsistency,
+                severity: Severity::Medium,
+                description: format!(
+                    "Inconsistent status codes across repeated requests at {}",
+                    path
+                ),
+                endpoint: format!("{}{}", client.base_url(), path),
+                evidence: format!("Status codes: {:?}", statuses),
+                remediation: "Ensure consistent responses for identical requests".to_string(),
+                cvss_score: Some(5.0),
+            });
+        }
+    }
+
+    conditions
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_check_race_conditions() {
-        let config = HuntConfig::default();
-        let conditions = check_race_conditions("http://example.com", &config)
-            .await
-            .unwrap();
-        assert!(!conditions.is_empty());
-    }
 
     #[test]
     fn test_race_condition_types() {
@@ -140,5 +236,6 @@ mod tests {
             RaceType::ConcurrentFundsTransfer,
             RaceType::ConcurrentFundsTransfer
         );
+        assert_eq!(RaceType::TimingAnomaly, RaceType::TimingAnomaly);
     }
 }

@@ -7,6 +7,8 @@ pub mod browser;
 pub mod ci;
 pub mod cluster;
 pub mod fuzz;
+#[cfg(feature = "advanced-hunting")]
+pub mod hunt;
 pub mod http;
 pub mod misc;
 pub mod packet;
@@ -22,6 +24,8 @@ pub mod vuln;
 pub use ci::*;
 pub use cluster::*;
 pub use fuzz::*;
+#[cfg(feature = "advanced-hunting")]
+pub use hunt::*;
 pub use http::*;
 pub use misc::*;
 pub use packet::*;
@@ -102,6 +106,11 @@ pub enum Commands {
     Scan(ScanArgs),
     #[command(about = "Resume a previous scan from session file", long_about = RESUME_ABOUT)]
     Resume(ResumeArgs),
+
+    // --- Hunt operations ---
+    #[cfg(feature = "advanced-hunting")]
+    #[command(about = "Run advanced vulnerability hunting", long_about = HUNT_ABOUT)]
+    Hunt(HuntArgs),
 
     // --- Assessment operations ---
     #[command(about = "Fuzz target with security payloads", long_about = FUZZ_ABOUT)]

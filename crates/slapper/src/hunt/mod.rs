@@ -19,7 +19,114 @@ pub mod race;
 pub mod session;
 
 use crate::error::Result;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+pub struct HuntClient {
+    pub client: Client,
+    pub target: String,
+    pub timeout: Duration,
+}
+
+impl HuntClient {
+    pub fn new(target: &str, config: &HuntConfig) -> Result<Self> {
+        let timeout = Duration::from_millis(config.timeout_ms);
+        let client = Client::builder()
+            .timeout(timeout)
+            .cookie_store(true)
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+            .pool_idle_timeout(Duration::from_secs(
+                crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
+            .tcp_nodelay(true)
+            .danger_accept_invalid_certs(true)
+            .build()
+            .map_err(|e| crate::error::SlapperError::Http(e.to_string()))?;
+
+        Ok(Self {
+            client,
+            target: target.to_string(),
+            timeout,
+        })
+    }
+
+    pub async fn get(&self, path: &str) -> Result<reqwest::Response> {
+        let url = if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!(
+                "{}{}",
+                self.target.trim_end_matches('/'),
+                if path.starts_with('/') {
+                    path.to_string()
+                } else {
+                    format!("/{}", path)
+                }
+            )
+        };
+
+        self.client
+            .get(&url)
+            .header("User-Agent", "Slapper/1.0 Security Testing")
+            .send()
+            .await
+            .map_err(|e| crate::error::SlapperError::Http(e.to_string()))
+    }
+
+    pub async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<reqwest::Response> {
+        let url = if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!(
+                "{}{}",
+                self.target.trim_end_matches('/'),
+                if path.starts_with('/') {
+                    path.to_string()
+                } else {
+                    format!("/{}", path)
+                }
+            )
+        };
+
+        self.client
+            .post(&url)
+            .header("User-Agent", "Slapper/1.0 Security Testing")
+            .header("Content-Type", "application/json")
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| crate::error::SlapperError::Http(e.to_string()))
+    }
+
+    pub async fn head(&self, path: &str) -> Result<reqwest::Response> {
+        let url = if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!(
+                "{}{}",
+                self.target.trim_end_matches('/'),
+                if path.starts_with('/') {
+                    path.to_string()
+                } else {
+                    format!("/{}", path)
+                }
+            )
+        };
+
+        self.client
+            .head(&url)
+            .header("User-Agent", "Slapper/1.0 Security Testing")
+            .send()
+            .await
+            .map_err(|e| crate::error::SlapperError::Http(e.to_string()))
+    }
+
+    pub fn base_url(&self) -> &str {
+        &self.target
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HuntReport {
@@ -68,39 +175,40 @@ impl HuntReport {
 
 pub async fn run_hunt(target: &str, config: HuntConfig) -> Result<HuntReport> {
     let mut report = HuntReport::new(target);
+    let client = HuntClient::new(target, &config)?;
 
-    if config.check_attack_chains {
-        let chains = chain::detect_attack_chains(target, &config).await?;
-        for c in chains {
-            report.add_chain(c);
-        }
-    }
-
-    if config.check_business_logic {
-        let flaws = business::check_business_logic(target, &config).await?;
-        for f in flaws {
-            report.add_business_flaw(f);
-        }
-    }
-
-    if config.check_race_conditions {
-        let races = race::check_race_conditions(target, &config).await?;
-        for r in races {
-            report.add_race_condition(r);
+    if config.check_session {
+        let issues = session::check_session_security(&client, &config).await?;
+        for i in issues {
+            report.add_session_issue(i);
         }
     }
 
     if config.check_authz_bypass {
-        let bypasses = authz::check_authz_bypass(target, &config).await?;
+        let bypasses = authz::check_authz_bypass(&client, &config).await?;
         for b in bypasses {
             report.add_authz_bypass(b);
         }
     }
 
-    if config.check_session {
-        let issues = session::check_session_security(target, &config).await?;
-        for i in issues {
-            report.add_session_issue(i);
+    if config.check_race_conditions {
+        let races = race::check_race_conditions(&client, &config).await?;
+        for r in races {
+            report.add_race_condition(r);
+        }
+    }
+
+    if config.check_business_logic {
+        let flaws = business::check_business_logic(&client, &config).await?;
+        for f in flaws {
+            report.add_business_flaw(f);
+        }
+    }
+
+    if config.check_attack_chains {
+        let chains = chain::detect_attack_chains(&report).await?;
+        for c in chains {
+            report.add_chain(c);
         }
     }
 
@@ -127,7 +235,38 @@ impl Default for HuntConfig {
             check_authz_bypass: true,
             check_session: true,
             concurrency: 10,
-            timeout_ms: 30000,
+            timeout_ms: crate::constants::DEFAULT_TOOL_TIMEOUT_MS,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hunt_client_creation() {
+        let config = HuntConfig::default();
+        let client = HuntClient::new("http://example.com", &config).unwrap();
+        assert_eq!(client.target, "http://example.com");
+    }
+
+    #[test]
+    fn test_hunt_config_defaults() {
+        let config = HuntConfig::default();
+        assert!(config.check_attack_chains);
+        assert!(config.check_business_logic);
+        assert!(config.check_race_conditions);
+        assert!(config.check_authz_bypass);
+        assert!(config.check_session);
+        assert_eq!(config.concurrency, 10);
+        assert_eq!(config.timeout_ms, crate::constants::DEFAULT_TOOL_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn test_hunt_report_new() {
+        let report = HuntReport::new("http://test.com");
+        assert_eq!(report.target, "http://test.com");
+        assert_eq!(report.total_findings, 0);
     }
 }

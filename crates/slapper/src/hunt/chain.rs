@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::hunt::HuntConfig;
+use crate::hunt::{business, authz, session, HuntReport};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -35,177 +35,262 @@ pub struct ChainStep {
     pub severity: Severity,
 }
 
-pub async fn detect_attack_chains(target: &str, config: &HuntConfig) -> Result<Vec<AttackChain>> {
+pub async fn detect_attack_chains(report: &HuntReport) -> Result<Vec<AttackChain>> {
     let mut chains = Vec::new();
 
-    chains.extend(detect_privilege_escalation(target, config).await?);
-    chains.extend(detect_data_exfiltration(target, config).await?);
-    chains.extend(detect_rce_chains(target, config).await?);
-    chains.extend(detect_lateral_movement(target, config).await?);
+    chains.extend(detect_privilege_escalation_chain(report));
+    chains.extend(detect_data_exfiltration_chain(report));
+    chains.extend(detect_session_exploitation_chain(report));
+    chains.extend(detect_rate_limit_chain(report));
 
     Ok(chains)
 }
 
-async fn detect_privilege_escalation(
-    target: &str,
-    _config: &HuntConfig,
-) -> Result<Vec<AttackChain>> {
+fn detect_privilege_escalation_chain(report: &HuntReport) -> Vec<AttackChain> {
     let mut chains = Vec::new();
 
-    let id = format!("pe-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    chains.push(AttackChain {
-        id: id.clone(),
-        name: "Horizontal to Vertical Privilege Escalation".to_string(),
-        chain_type: ChainType::PrivilegeEscalation,
-        steps: vec![
-            ChainStep {
-                step_number: 1,
-                vulnerability: "IDOR on resource access".to_string(),
-                prerequisite: "Valid user account with limited access".to_string(),
-                impact: "Access other users' resources".to_string(),
-                evidence: format!("Target: {}", target),
-                severity: Severity::High,
-            },
-            ChainStep {
-                step_number: 2,
-                vulnerability: "Privilege escalation via API parameter manipulation".to_string(),
-                prerequisite: "Horizontal privilege access".to_string(),
-                impact: "Elevate to admin privileges".to_string(),
-                evidence: format!("Target: {}", target),
-                severity: Severity::Critical,
-            },
-        ],
-        severity: Severity::Critical,
-        description: "Chain allows a low-privilege user to escalate to admin privileges through IDOR and parameter manipulation".to_string(),
-        remediation: "Implement proper authorization checks on all API endpoints; use server-side session validation".to_string(),
-        cvss_score: Some(9.1),
+    let has_idor = report.authz_bypasses.iter().any(|b| {
+        matches!(
+            b.bypass_type,
+            authz::BypassType::Idor | authz::BypassType::ForceBrowsing
+        )
     });
 
-    Ok(chains)
-}
+    let has_missing_authz = report
+        .authz_bypasses
+        .iter()
+        .any(|b| matches!(b.bypass_type, authz::BypassType::MissingAuthorization));
 
-async fn detect_data_exfiltration(target: &str, _config: &HuntConfig) -> Result<Vec<AttackChain>> {
-    let mut chains = Vec::new();
+    let has_session_issue = report.session_issues.iter().any(|i| {
+        matches!(
+            i.issue_type,
+            session::SessionIssueType::SessionFixation
+                | session::SessionIssueType::MissingHttpOnly
+                | session::SessionIssueType::InsufficientEntropy
+        )
+    });
 
-    let id = format!("de-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    chains.push(AttackChain {
-        id: id.clone(),
-        name: "Mass Data Exfiltration via SQL Injection".to_string(),
-        chain_type: ChainType::DataExfiltration,
-        steps: vec![
-            ChainStep {
-                step_number: 1,
-                vulnerability: "SQL Injection in search parameter".to_string(),
-                prerequisite: "None - exploitable without authentication".to_string(),
-                impact: "Extract all database contents".to_string(),
-                evidence: format!("Target: {}", target),
-                severity: Severity::Critical,
-            },
-            ChainStep {
-                step_number: 2,
-                vulnerability: "Lack of query result rate limiting".to_string(),
-                prerequisite: "SQL injection presence".to_string(),
-                impact: "Large volume data extraction without detection".to_string(),
-                evidence: format!("Target: {}", target),
-                severity: Severity::High,
-            },
-        ],
-        severity: Severity::Critical,
-        description:
-            "SQL injection combined with lack of rate limiting allows mass data exfiltration"
+    if has_idor && has_missing_authz {
+        let id = format!("pe-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let steps = report
+            .authz_bypasses
+            .iter()
+            .filter(|b| {
+                matches!(
+                    b.bypass_type,
+                    authz::BypassType::Idor | authz::BypassType::MissingAuthorization
+                )
+            })
+            .enumerate()
+            .map(|(i, b)| ChainStep {
+                step_number: i + 1,
+                vulnerability: format!("{:?}", b.bypass_type),
+                prerequisite: "Low-privilege access".to_string(),
+                impact: b.description.clone(),
+                evidence: b.evidence.clone(),
+                severity: b.severity.clone(),
+            })
+            .collect();
+
+        chains.push(AttackChain {
+            id,
+            name: "Privilege Escalation Chain".to_string(),
+            chain_type: ChainType::PrivilegeEscalation,
+            steps,
+            severity: Severity::Critical,
+            description:
+                "Multiple authorization bypasses can be chained for privilege escalation"
+                    .to_string(),
+            remediation: "Implement defense-in-depth authorization checks at every layer"
                 .to_string(),
-        remediation: "Use parameterized queries; implement rate limiting and anomaly detection"
-            .to_string(),
-        cvss_score: Some(10.0),
-    });
-
-    Ok(chains)
-}
-
-async fn detect_rce_chains(target: &str, _config: &HuntConfig) -> Result<Vec<AttackChain>> {
-    let mut chains = Vec::new();
-
-    let id = format!("rce-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    chains.push(AttackChain {
-        id: id.clone(),
-        name: "SSRF to RCE via Metadata Service".to_string(),
-        chain_type: ChainType::RemoteCodeExecution,
-        steps: vec![
+            cvss_score: Some(9.0),
+        });
+    } else if has_missing_authz && has_session_issue {
+        let id = format!("pe-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let steps = vec![
             ChainStep {
                 step_number: 1,
-                vulnerability: "Server-Side Request Forgery (SSRF)".to_string(),
-                prerequisite: "User-controlled URL parameter".to_string(),
-                impact: "Internal network access".to_string(),
-                evidence: format!("Target: {}", target),
+                vulnerability: "Session fixation or weak token".to_string(),
+                prerequisite: "None".to_string(),
+                impact: "Obtain valid session".to_string(),
+                evidence: "Session issue detected".to_string(),
                 severity: Severity::High,
             },
             ChainStep {
                 step_number: 2,
-                vulnerability: "Unprotected cloud metadata endpoint".to_string(),
-                prerequisite: "SSRF allowing 169.254.169.254 access".to_string(),
-                impact: "Obtain cloud credentials".to_string(),
-                severity: Severity::Critical,
-                evidence: format!("Target: {}", target),
-            },
-            ChainStep {
-                step_number: 3,
-                vulnerability: "Overly permissive IAM role".to_string(),
-                prerequisite: "Cloud credentials obtained".to_string(),
-                impact: "Remote code execution on EC2/container".to_string(),
-                evidence: format!("Target: {}", target),
+                vulnerability: "Missing authorization on admin endpoint".to_string(),
+                prerequisite: "Valid session".to_string(),
+                impact: "Access admin functionality".to_string(),
+                evidence: "Admin endpoint accessible".to_string(),
                 severity: Severity::Critical,
             },
-        ],
-        severity: Severity::Critical,
-        description: "SSRF vulnerability allows access to cloud metadata service, leading to RCE".to_string(),
-        remediation: "Block 169.254.169.254 IP range; validate all user-supplied URLs; use IAM instance profiles with minimal privileges".to_string(),
-        cvss_score: Some(9.8),
-    });
+        ];
 
-    Ok(chains)
+        chains.push(AttackChain {
+            id,
+            name: "Session to Admin Chain".to_string(),
+            chain_type: ChainType::PrivilegeEscalation,
+            steps,
+            severity: Severity::Critical,
+            description: "Session weakness combined with missing authz allows admin access"
+                .to_string(),
+            remediation: "Fix session security and implement authorization checks".to_string(),
+            cvss_score: Some(8.5),
+        });
+    }
+
+    chains
 }
 
-async fn detect_lateral_movement(target: &str, _config: &HuntConfig) -> Result<Vec<AttackChain>> {
+fn detect_data_exfiltration_chain(report: &HuntReport) -> Vec<AttackChain> {
     let mut chains = Vec::new();
 
-    let id = format!("lm-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    chains.push(AttackChain {
-        id: id.clone(),
-        name: "Internal Network Penetration via File Upload".to_string(),
-        chain_type: ChainType::LateralMovement,
-        steps: vec![
+    let has_sensitive_files = report.business_logic.iter().any(|f| {
+        matches!(
+            f.flaw_type,
+            business::FlawType::TrustBoundaryViolation
+        )
+    });
+
+    let has_idor = report.authz_bypasses.iter().any(|b| {
+        matches!(b.bypass_type, authz::BypassType::Idor)
+    });
+
+    if has_sensitive_files && has_idor {
+        let id = format!("de-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let steps = vec![
             ChainStep {
                 step_number: 1,
-                vulnerability: "Unrestricted file upload".to_string(),
-                prerequisite: "Authenticated user access".to_string(),
-                impact: "Upload malicious files to server".to_string(),
-                evidence: format!("Target: {}", target),
+                vulnerability: "IDOR on resource endpoints".to_string(),
+                prerequisite: "Authenticated access".to_string(),
+                impact: "Access other users' data".to_string(),
+                evidence: "IDOR vulnerability found".to_string(),
                 severity: Severity::High,
             },
             ChainStep {
                 step_number: 2,
-                vulnerability: "Insecure file storage/execution".to_string(),
-                prerequisite: "Malicious file uploaded".to_string(),
-                impact: "Server compromise".to_string(),
-                evidence: format!("Target: {}", target),
+                vulnerability: "Sensitive files accessible".to_string(),
+                prerequisite: "Server access".to_string(),
+                impact: "Obtain credentials and configuration".to_string(),
+                evidence: "Sensitive files found".to_string(),
                 severity: Severity::Critical,
             },
-            ChainStep {
-                step_number: 3,
-                vulnerability: "Internal service trust relationships".to_string(),
-                prerequisite: "Server compromised".to_string(),
-                impact: "Access internal databases and services".to_string(),
-                evidence: format!("Target: {}", target),
-                severity: Severity::High,
-            },
-        ],
-        severity: Severity::Critical,
-        description: "File upload vulnerability leads to server compromise and lateral movement".to_string(),
-        remediation: "Validate file types; store uploads outside webroot; scan for malware; segment internal networks".to_string(),
-        cvss_score: Some(9.3),
+        ];
+
+        chains.push(AttackChain {
+            id,
+            name: "Data Exfiltration via IDOR + Config Leak".to_string(),
+            chain_type: ChainType::DataExfiltration,
+            steps,
+            severity: Severity::Critical,
+            description: "IDOR vulnerability combined with exposed configuration enables data exfiltration".to_string(),
+            remediation: "Fix IDOR vulnerabilities and restrict access to sensitive files".to_string(),
+            cvss_score: Some(9.5),
+        });
+    }
+
+    chains
+}
+
+fn detect_session_exploitation_chain(report: &HuntReport) -> Vec<AttackChain> {
+    let mut chains = Vec::new();
+
+    let has_weak_session = report.session_issues.iter().any(|i| {
+        matches!(
+            i.issue_type,
+            session::SessionIssueType::InsufficientEntropy
+                | session::SessionIssueType::SessionFixation
+                | session::SessionIssueType::MissingHttpOnly
+                | session::SessionIssueType::MissingSecure
+        )
     });
 
-    Ok(chains)
+    let has_rate_limit_issue = report.business_logic.iter().any(|f| {
+        matches!(f.flaw_type, business::FlawType::RateLimitBypass)
+    });
+
+    if has_weak_session && has_rate_limit_issue {
+        let id = format!("se-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let steps = vec![
+            ChainStep {
+                step_number: 1,
+                vulnerability: "Weak session management".to_string(),
+                prerequisite: "Network position".to_string(),
+                impact: "Session hijacking possible".to_string(),
+                evidence: "Session security issue detected".to_string(),
+                severity: Severity::High,
+            },
+            ChainStep {
+                step_number: 2,
+                vulnerability: "No rate limiting on authentication".to_string(),
+                prerequisite: "Session weakness".to_string(),
+                impact: "Brute force attacks possible".to_string(),
+                evidence: "Rate limiting absent".to_string(),
+                severity: Severity::Medium,
+            },
+        ];
+
+        chains.push(AttackChain {
+            id,
+            name: "Session Hijacking + Brute Force".to_string(),
+            chain_type: ChainType::LateralMovement,
+            steps,
+            severity: Severity::High,
+            description: "Weak session security combined with no rate limiting enables account takeover"
+                .to_string(),
+            remediation: "Implement strong session management and rate limiting".to_string(),
+            cvss_score: Some(7.5),
+        });
+    }
+
+    chains
+}
+
+fn detect_rate_limit_chain(report: &HuntReport) -> Vec<AttackChain> {
+    let mut chains = Vec::new();
+
+    let has_no_rate_limit = report.business_logic.iter().any(|f| {
+        matches!(f.flaw_type, business::FlawType::RateLimitBypass)
+    });
+
+    let has_admin_access = report.authz_bypasses.iter().any(|b| {
+        matches!(b.bypass_type, authz::BypassType::MissingAuthorization)
+    });
+
+    if has_no_rate_limit && has_admin_access {
+        let id = format!("rl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let steps = vec![
+            ChainStep {
+                step_number: 1,
+                vulnerability: "No rate limiting".to_string(),
+                prerequisite: "None".to_string(),
+                impact: "Unlimited brute force attempts".to_string(),
+                evidence: "Rate limiting absent".to_string(),
+                severity: Severity::Medium,
+            },
+            ChainStep {
+                step_number: 2,
+                vulnerability: "Admin endpoint accessible".to_string(),
+                prerequisite: "Admin credentials".to_string(),
+                impact: "Full system compromise".to_string(),
+                evidence: "Admin endpoint accessible".to_string(),
+                severity: Severity::Critical,
+            },
+        ];
+
+        chains.push(AttackChain {
+            id,
+            name: "Brute Force to Admin".to_string(),
+            chain_type: ChainType::PrivilegeEscalation,
+            steps,
+            severity: Severity::Critical,
+            description: "No rate limiting on login combined with accessible admin panel enables brute force attack".to_string(),
+            remediation: "Implement rate limiting on authentication endpoints".to_string(),
+            cvss_score: Some(8.0),
+        });
+    }
+
+    chains
 }
 
 #[cfg(test)]
@@ -237,11 +322,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_detect_attack_chains() {
-        let config = HuntConfig::default();
-        let chains = detect_attack_chains("http://example.com", &config)
-            .await
-            .unwrap();
-        assert!(!chains.is_empty());
+    async fn test_detect_attack_chains_empty_report() {
+        let report = HuntReport::new("http://example.com");
+        let chains = detect_attack_chains(&report).await.unwrap();
+        assert!(chains.is_empty());
     }
 }

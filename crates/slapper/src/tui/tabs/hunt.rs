@@ -118,6 +118,10 @@ impl HuntTab {
         }
     }
 
+    pub fn get_results(&self) -> Option<&HuntReport> {
+        self.report.as_ref()
+    }
+
     pub fn set_report(&mut self, report: HuntReport) {
         self.report = Some(report.clone());
         self.state = AppState::Completed;
