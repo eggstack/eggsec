@@ -153,11 +153,10 @@ impl IssueTracker for GitLabClient {
                 "closed" | "close" => "close",
                 "opened" | "open" | "reopen" | "reopened" => "reopen",
                 other => {
-                    tracing::warn!(
-                        "GitLab: unknown state_event '{}', skipping state update",
+                    return Err(SlapperError::Network(format!(
+                        "GitLab: unknown state '{}', expected 'closed', 'open', or 'reopen'",
                         other
-                    );
-                    return Ok(());
+                    )));
                 }
             };
             body.insert(
@@ -218,6 +217,7 @@ impl IssueTracker for GitLabClient {
         let mut all_issues = Vec::new();
         let mut page = 1;
         const PER_PAGE: u32 = 20;
+        const MAX_PAGES: u32 = 50;
 
         loop {
             let url = self.api_url(&format!(
@@ -246,7 +246,7 @@ impl IssueTracker for GitLabClient {
             let count = issues.len();
             all_issues.extend(issues);
 
-            if count < PER_PAGE as usize {
+            if count < PER_PAGE as usize || page >= MAX_PAGES {
                 break;
             }
             page += 1;

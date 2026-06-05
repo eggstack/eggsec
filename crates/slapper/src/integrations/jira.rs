@@ -32,6 +32,79 @@ impl JiraClient {
         Self { config, client }
     }
 
+    async fn transition_issue(&self, id: &str, target_status: &str) -> Result<()> {
+        let transitions_url = format!(
+            "{}/rest/api/3/issue/{}/transitions",
+            self.config.url, id
+        );
+
+        let req = self
+            .client
+            .get(&transitions_url)
+            .basic_auth(
+                &self.config.username,
+                Some(self.config.api_token.expose_secret()),
+            );
+
+        let response = send_with_retry(req, "Jira").await?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+        let transitions = json["transitions"]
+            .as_array()
+            .ok_or_else(|| {
+                SlapperError::Network("Jira: transitions response missing 'transitions' array".to_string())
+            })?;
+
+        let target_lower = target_status.to_lowercase();
+        let transition_id = transitions.iter().find_map(|t| {
+            let to_name = t["to"]["name"].as_str().unwrap_or("");
+            let to_lower = to_name.to_lowercase();
+            if to_lower == target_lower
+                || (target_lower == "done" && to_lower == "done")
+                || (target_lower == "in progress" && to_lower == "in progress")
+                || (target_lower == "to do" && to_lower == "to do")
+            {
+                t["id"].as_str().map(String::from)
+            } else {
+                None
+            }
+        });
+
+        let transition_id = match transition_id {
+            Some(id) => id,
+            None => {
+                let available: Vec<&str> = transitions
+                    .iter()
+                    .filter_map(|t| t["to"]["name"].as_str())
+                    .collect();
+                return Err(SlapperError::Network(format!(
+                    "Jira: no transition to '{}' found. Available: {:?}",
+                    target_status, available
+                )));
+            }
+        };
+
+        let body = serde_json::json!({
+            "transition": { "id": transition_id }
+        });
+
+        let req = self
+            .client
+            .post(&transitions_url)
+            .basic_auth(
+                &self.config.username,
+                Some(self.config.api_token.expose_secret()),
+            )
+            .header("Content-Type", "application/json")
+            .json(&body);
+
+        send_with_retry(req, "Jira").await?;
+        Ok(())
+    }
+
     fn parse_issue(json: &serde_json::Value) -> Issue {
         let fields = &json["fields"];
         let description = fields["description"]["content"][0]["content"][0]["text"]
@@ -84,6 +157,14 @@ impl JiraClient {
             })
             .map(String::from);
 
+        let url = json["self"].as_str().map(String::from);
+
+        let created_at = fields["created"].as_str().and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+        });
+
         Issue {
             id: json["key"].as_str().map(String::from),
             title: fields["summary"].as_str().unwrap_or("").to_string(),
@@ -92,8 +173,8 @@ impl JiraClient {
             severity,
             assignees,
             status,
-            url: None,
-            created_at: None,
+            url,
+            created_at,
         }
     }
 }
@@ -157,8 +238,6 @@ impl IssueTracker for JiraClient {
     }
 
     async fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
-        let url = format!("{}/rest/api/3/issue/{}", self.config.url, id);
-
         let mut fields = serde_json::Map::new();
 
         if let Some(title) = &update.title {
@@ -183,35 +262,26 @@ impl IssueTracker for JiraClient {
         if let Some(labels) = &update.labels {
             fields.insert("labels".to_string(), serde_json::json!(labels));
         }
-        if let Some(status) = &update.status {
-            let jira_status = match status.to_lowercase().as_str() {
-                "done" | "closed" | "resolved" => "Done",
-                "in progress" | "in-progress" => "In Progress",
-                "to do" | "todo" | "open" | "new" => "To Do",
-                other => {
-                    tracing::warn!("Jira: unknown status '{}', skipping status update", other);
-                    return Ok(());
-                }
-            };
-            fields.insert(
-                "status".to_string(),
-                serde_json::json!({ "name": jira_status }),
-            );
+
+        if !fields.is_empty() {
+            let url = format!("{}/rest/api/3/issue/{}", self.config.url, id);
+            let body = serde_json::json!({ "fields": fields });
+            let req = self
+                .client
+                .put(&url)
+                .basic_auth(
+                    &self.config.username,
+                    Some(self.config.api_token.expose_secret()),
+                )
+                .header("Content-Type", "application/json")
+                .json(&body);
+            send_with_retry(req, "Jira").await?;
         }
 
-        let body = serde_json::json!({ "fields": fields });
+        if let Some(status) = &update.status {
+            self.transition_issue(id, status).await?;
+        }
 
-        let req = self
-            .client
-            .put(&url)
-            .basic_auth(
-                &self.config.username,
-                Some(self.config.api_token.expose_secret()),
-            )
-            .header("Content-Type", "application/json")
-            .json(&body);
-
-        send_with_retry(req, "Jira").await?;
         Ok(())
     }
 
@@ -268,8 +338,9 @@ impl IssueTracker for JiraClient {
 
     async fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
         let mut all_issues = Vec::new();
-        let mut start_at = 0;
-        const PAGE_SIZE: u32 = 100;
+        let mut start_at: u64 = 0;
+        const PAGE_SIZE: u64 = 100;
+        const MAX_RESULTS: u64 = 1000;
 
         loop {
             let url = format!(
@@ -302,9 +373,9 @@ impl IssueTracker for JiraClient {
 
             let fetched = issues.len() as u64;
             all_issues.extend(issues);
-            start_at += fetched as u32;
+            start_at += fetched;
 
-            if start_at as u64 >= total || fetched == 0 {
+            if start_at >= total || fetched == 0 || start_at >= MAX_RESULTS {
                 break;
             }
         }

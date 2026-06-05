@@ -209,16 +209,16 @@ impl IntegrationsTab {
             }
             "github" => {
                 config.github = Some(GitHubConfig {
-                    owner: self.tracker_token().to_string(),
-                    repo: self.tracker_project().to_string(),
-                    api_token: SensitiveString::new(self.tracker_password().to_string()),
+                    owner: self.tracker_url().to_string(),
+                    repo: self.tracker_token().to_string(),
+                    api_token: SensitiveString::new(self.tracker_project().to_string()),
                 });
             }
             "gitlab" => {
                 config.gitlab = Some(GitLabConfig {
                     url: self.tracker_url().to_string(),
-                    project_id: self.tracker_project().to_string(),
-                    api_token: SensitiveString::new(self.tracker_password().to_string()),
+                    project_id: self.tracker_token().to_string(),
+                    api_token: SensitiveString::new(self.tracker_project().to_string()),
                 });
             }
             _ => {}
@@ -360,8 +360,9 @@ impl TabRender for IntegrationsTab {
                     tc!(border)
                 },
             ));
-        let input_area = config_block.inner(input_area);
-        f.render_widget(config_block, input_area);
+        let block_area = input_area;
+        let input_area = config_block.inner(block_area);
+        f.render_widget(config_block, block_area);
 
         let mut sel = self.tracker_selector.clone();
         sel.focused = self.focus_area == IntegrationsFocusArea::Tracker;
@@ -628,9 +629,11 @@ impl TabInput for IntegrationsTab {
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();
+                return;
             }
             IntegrationsFocusArea::Issue => {
                 self.issue_inputs.blur();
+                return;
             }
             IntegrationsFocusArea::Results => {
                 return;

@@ -57,8 +57,8 @@ pub(crate) async fn send_with_retry(
                     .and_then(|v| v.to_str().ok())
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(0);
-                let backoff = if retry_after > 0 {
-                    retry_after
+                let backoff_ms = if retry_after > 0 {
+                    retry_after * 1000
                 } else {
                     BASE_BACKOFF_MS * 2u64.pow(attempt)
                 };
@@ -68,9 +68,9 @@ pub(crate) async fn send_with_retry(
                     status,
                     attempt + 1,
                     MAX_RETRIES,
-                    backoff
+                    backoff_ms
                 );
-                tokio::time::sleep(Duration::from_millis(backoff)).await;
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
                 last_status = Some(status);
             }
             Ok(resp) => {

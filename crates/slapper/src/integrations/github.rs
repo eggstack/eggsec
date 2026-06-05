@@ -222,11 +222,16 @@ impl IssueTracker for GitHubClient {
         let mut all_issues = Vec::new();
         let mut page = 1;
         const PER_PAGE: u32 = 100;
+        const MAX_PAGES: u32 = 10;
 
         loop {
+            let scoped_query = format!(
+                "repo:{}/{} {}",
+                self.config.owner, self.config.repo, query
+            );
             let url = format!(
                 "https://api.github.com/search/issues?q={}&per_page={}&page={}",
-                urlencoding::encode(query),
+                urlencoding::encode(&scoped_query),
                 PER_PAGE,
                 page
             );
@@ -255,7 +260,7 @@ impl IssueTracker for GitHubClient {
             let count = items.len();
             all_issues.extend(items);
 
-            if count < PER_PAGE as usize {
+            if count < PER_PAGE as usize || page >= MAX_PAGES {
                 break;
             }
             page += 1;
