@@ -170,6 +170,10 @@ optional = true
 version = "0.14"
 optional = true
 
+[dependencies.tokio-stream]
+version = "0.1"
+optional = true
+
 [dependencies.headless_chrome]
 version = "1"
 optional = true
@@ -228,7 +232,7 @@ rest-api = ["tool-api", "axum", "tower", "tower-http", "async-stream"]
 ws-api = ["axum/ws"]
 
 # gRPC API server for external tool integration
-grpc-api = ["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build"]
+grpc-api = ["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build", "async-stream", "tokio-stream"]
 
 # Low-level network stress testing
 stress-testing = ["pnet", "pnet_packet", "socket2", "nix", "libc", "surge-ping", "slapper-nse?/stress-testing"]
