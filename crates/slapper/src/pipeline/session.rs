@@ -1,3 +1,4 @@
+use crate::config::SlapperConfig;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
@@ -11,16 +12,22 @@ pub struct PipelineSession {
     pub remaining_stages: Vec<Stage>,
     pub context: PipelineContext,
     pub spoof_config: crate::scanner::spoof::SpoofConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrent_stages: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<SlapperConfig>,
 }
 
-pub fn save(path: &str, session: &PipelineSession) -> Result<()> {
+pub async fn save(path: &str, session: &PipelineSession) -> Result<()> {
     let json = serde_json::to_string_pretty(session)?;
-    std::fs::write(path, json)?;
+    tokio::fs::write(path, json).await?;
     Ok(())
 }
 
-pub fn load(path: &str) -> Result<PipelineSession> {
-    let json = std::fs::read_to_string(path)?;
+pub async fn load(path: &str) -> Result<PipelineSession> {
+    let json = tokio::fs::read_to_string(path).await?;
     let session: PipelineSession = serde_json::from_str(&json)?;
     Ok(session)
 }

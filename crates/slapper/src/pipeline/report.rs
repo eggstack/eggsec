@@ -324,3 +324,95 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
 
     Ok(csv)
 }
+
+pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String> {
+    let mut md = String::new();
+    md.push_str("# Security Assessment Report\n\n");
+    md.push_str(&format!("**Target:** `{}`\n\n", &report.target));
+    md.push_str(&format!("**Duration:** {}ms\n\n", report.total_duration_ms));
+
+    md.push_str("## Stages\n\n");
+    md.push_str("| Stage | Status | Duration |\n");
+    md.push_str("|-------|--------|----------|\n");
+    for result in &report.stage_results {
+        let status = if result.success { "✓" } else { "✗" };
+        md.push_str(&format!(
+            "| {} | {} | {}ms |\n",
+            result.stage, status, result.duration_ms
+        ));
+    }
+    md.push('\n');
+
+    if !report.open_ports.is_empty() {
+        md.push_str("## Open Ports\n\n");
+        md.push_str("| Port | Status | Service |\n");
+        md.push_str("|------|--------|--------|\n");
+        for port in &report.open_ports {
+            md.push_str(&format!(
+                "| {} | {} | {} |\n",
+                port.port, port.status, &port.service
+            ));
+        }
+        md.push('\n');
+    }
+
+    if !report.services.is_empty() {
+        md.push_str("## Services\n\n");
+        md.push_str("| Port | Service | Product | Version |\n");
+        md.push_str("|------|---------|---------|--------|\n");
+        for service in &report.services {
+            let product = service.product.as_deref().unwrap_or("-");
+            let version = service.version.as_deref().unwrap_or("-");
+            md.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                service.port, &service.service, product, version
+            ));
+        }
+        md.push('\n');
+    }
+
+    let interesting_endpoints: Vec<_> = report.endpoints.iter().filter(|e| e.interesting).collect();
+    if !interesting_endpoints.is_empty() {
+        md.push_str("## Interesting Endpoints\n\n");
+        for endpoint in &interesting_endpoints {
+            let size = endpoint
+                .content_length
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            md.push_str(&format!(
+                "- `{}` (status: {}, size: {})\n",
+                &endpoint.path, endpoint.status_code, size
+            ));
+        }
+        md.push('\n');
+    }
+
+    if let Some(ref vuln) = report.vuln_assessment {
+        md.push_str("## Vulnerability Assessment\n\n");
+        for line in &vuln.summary {
+            md.push_str(&format!("{}\n", line));
+        }
+        md.push('\n');
+    }
+
+    if let Some(ref load) = report.load_test_results {
+        md.push_str("## Load Test Results\n\n");
+        md.push_str(&format!("- **Total Requests:** {}\n", load.total_requests));
+        md.push_str(&format!("- **Successful:** {}\n", load.successful_requests));
+        md.push_str(&format!("- **Failed:** {}\n", load.failed_requests));
+        md.push_str(&format!(
+            "- **Requests/sec:** {:.2}\n",
+            load.requests_per_second
+        ));
+        md.push_str(&format!(
+            "- **Mean Latency:** {:.2}ms\n",
+            load.latency_mean_ms
+        ));
+        md.push_str(&format!(
+            "- **P95 Latency:** {:.2}ms\n",
+            load.latency_p95_ms
+        ));
+    }
+
+    Ok(md)
+}

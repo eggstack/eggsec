@@ -97,6 +97,7 @@ fn test_pipeline_report_failure_helpers() {
         checkpoint_error: None,
         manifest: None,
         vuln_assessment: None,
+        load_test_results: None,
     };
 
     assert!(report.has_failures());

@@ -143,12 +143,12 @@ pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -
 
 pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -> Result<()> {
     let session =
-        crate::pipeline::session::load(&args.session).map_err(|e| anyhow::anyhow!("{}", e))?;
+        crate::pipeline::session::load(&args.session).await.map_err(|e| anyhow::anyhow!("{}", e))?;
     ctx.ensure_scope(&session.target)?;
     let target = session.target.clone();
     let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());
     ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
-    match crate::pipeline::resume_cli(args)
+    match crate::pipeline::resume_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
     {

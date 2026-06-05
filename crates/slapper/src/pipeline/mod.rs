@@ -20,7 +20,7 @@
 //! let args = ScanArgs {
 //!     target: "example.com".to_string(),
 //!     stages: Some("port,fingerprint,endpoint,fuzz".to_string()),
-//!     concurrency: 20,
+//!     concurrency: Some(20),
 //!     ..Default::default()
 //! };
 //!
@@ -69,10 +69,13 @@ async fn write_output(
         Some(crate::cli::OutputFormat::Html)
         | Some(crate::cli::OutputFormat::Pretty)
         | Some(crate::cli::OutputFormat::Compact)
-        | Some(crate::cli::OutputFormat::Markdown)
         | None => {
             let html = report::generate_html(report)?;
             tokio::fs::write(output_path, html).await?;
+        }
+        Some(crate::cli::OutputFormat::Markdown) => {
+            let md = report::generate_markdown(report)?;
+            tokio::fs::write(output_path, md).await?;
         }
         Some(crate::cli::OutputFormat::Json) => {
             let json = serde_json::to_string_pretty(report)?;
@@ -224,9 +227,9 @@ pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn resume_cli(args: ResumeArgs) -> Result<()> {
-    let session = session::load(&args.session)?;
-    let pipeline = Pipeline::from_session(session);
+pub async fn resume_cli(args: ResumeArgs, config: &SlapperConfig) -> Result<()> {
+    let session = session::load(&args.session).await?;
+    let pipeline = Pipeline::from_session(session).with_config(config.clone());
     let report = pipeline.run().await?;
 
     println!("{}", report);

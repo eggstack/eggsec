@@ -18,7 +18,7 @@ pub async fn run_pipeline(
         target: target.clone(),
         profile,
         stages: None,
-        concurrency: 10,
+        concurrency: None,
         concurrent_stages: false,
         json: false,
         output: if output_file.is_empty() {

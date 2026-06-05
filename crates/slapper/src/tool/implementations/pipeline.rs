@@ -68,7 +68,7 @@ impl SecurityTool for PipelineTool {
             target: target.clone(),
             profile: profile_enum,
             stages: None,
-            concurrency: 10,
+            concurrency: None,
             concurrent_stages: false,
             json: true,
             output: None,

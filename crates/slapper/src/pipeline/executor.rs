@@ -89,15 +89,10 @@ impl Pipeline {
             Stage::from_profile(args.profile)
         };
 
-        let concurrency = if let Some(cfg) = config {
-            if args.concurrency == 10 {
-                cfg.scan.default_concurrency
-            } else {
-                args.concurrency
-            }
-        } else {
-            args.concurrency
-        };
+        let default_concurrency = config
+            .map(|c| c.scan.default_concurrency)
+            .unwrap_or(10);
+        let concurrency = args.concurrency.unwrap_or(default_concurrency);
 
         let spoof_config = SpoofConfig::from_args(
             args.source_ip.clone(),
@@ -116,7 +111,10 @@ impl Pipeline {
             args.max_rate,
             args.ttl,
         )
-        .unwrap_or_default();
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "Failed to parse spoof config, using defaults");
+            SpoofConfig::default()
+        });
 
         let session_path = args
             .output
@@ -144,11 +142,26 @@ impl Pipeline {
         pipeline.stages = session.remaining_stages;
         pipeline.context = Arc::new(Mutex::new(session.context));
         pipeline.spoof_config = session.spoof_config;
+        if let Some(concurrency) = session.concurrency {
+            pipeline.concurrency = concurrency;
+        }
+        if let Some(concurrent_stages) = session.concurrent_stages {
+            pipeline.concurrent_stages = concurrent_stages;
+        }
+        if let Some(config) = session.config {
+            pipeline.risk_budget = pipeline.profile.max_risk_budget();
+            pipeline.config = Some(config);
+        }
         pipeline
     }
 
     pub fn with_spoof_config(mut self, spoof_config: SpoofConfig) -> Self {
         self.spoof_config = spoof_config;
+        self
+    }
+
+    pub fn with_config(mut self, config: SlapperConfig) -> Self {
+        self.config = Some(config);
         self
     }
 
@@ -322,8 +335,11 @@ impl Pipeline {
                     remaining_stages: self.stages[stage_results.len()..].to_vec(),
                     context: self.context.lock().await.clone(),
                     spoof_config: self.spoof_config.clone(),
+                    concurrency: Some(self.concurrency),
+                    concurrent_stages: Some(self.concurrent_stages),
+                    config: self.config.clone(),
                 };
-                if let Err(e) = save(path, &session) {
+                if let Err(e) = save(path, &session).await {
                     tracing::warn!(
                         path = %path,
                         error = %e,
@@ -366,6 +382,23 @@ impl Pipeline {
         self.validate_feature_gates()?;
         let start = Instant::now();
 
+        let progress = if self.tui_mode || self.stages.is_empty() {
+            None
+        } else {
+            let pb = Arc::new(ProgressBar::new(self.stages.len() as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] {msg}")
+                    .unwrap_or_else(|_| ProgressStyle::default_bar())
+                    .progress_chars("#>-"),
+            );
+            pb.set_message(format!(
+                "running {} stages concurrently",
+                self.stages.len()
+            ));
+            Some(pb)
+        };
+
         let risk_budget = self.risk_budget;
         let stage_futures: Vec<_> = self
             .stages
@@ -391,6 +424,11 @@ impl Pipeline {
             .collect();
 
         let stage_results = futures::future::join_all(stage_futures).await;
+
+        if let Some(ref pb) = progress {
+            pb.finish_and_clear();
+        }
+
         let context = self.context.lock().await.clone();
 
         let mut checkpoint_error = None;
@@ -401,8 +439,11 @@ impl Pipeline {
                 remaining_stages: Vec::new(),
                 context: context.clone(),
                 spoof_config: self.spoof_config.clone(),
+                concurrency: Some(self.concurrency),
+                concurrent_stages: Some(self.concurrent_stages),
+                config: self.config.clone(),
             };
-            if let Err(e) = save(path, &session) {
+            if let Err(e) = save(path, &session).await {
                 tracing::warn!(
                     path = %path,
                     error = %e,
