@@ -144,9 +144,7 @@ impl AgentFinding {
 
     pub fn with_cvss(mut self, cvss: f32) -> Self {
         self.cvss = Some(cvss);
-        if self.cvss.is_some() {
-            self.severity = Severity::from_cvss(cvss);
-        }
+        self.severity = Severity::from_cvss(cvss);
         self
     }
 

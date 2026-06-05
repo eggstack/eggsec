@@ -3,7 +3,7 @@
 //! Provides customizable report generation with support for compliance
 //! templates (PCI-DSS, SOC2, HIPAA) and custom templates.
 
-use handlebars::{Handlebars, RenderError};
+use handlebars::{Handlebars, Helper, Context, RenderContext, Output, RenderError};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -133,28 +133,55 @@ pub enum ComplianceStatus {
     NotApplicable,
 }
 
+fn split_helper(
+    h: &Helper<'_, '_>,
+    _r: &Handlebars<'_>,
+    _ctx: &Context,
+    _rc: &mut RenderContext<'_, '_>,
+    out: &mut dyn Output,
+) -> HelperResult {
+    let param = h.param(0).and_then(|v| v.value().as_str()).unwrap_or("");
+    let delimiter = h.param(1).and_then(|v| v.value().as_str()).unwrap_or("");
+    let items: Vec<&str> = if delimiter.is_empty() {
+        param.split_whitespace().collect()
+    } else {
+        param.split(delimiter).collect()
+    };
+    out.write("[")?;
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            out.write(",")?;
+        }
+        out.write(&format!("\"{}\"", item.replace('\\', "\\\\").replace('"', "\\\"")))?;
+    }
+    out.write("]")?;
+    Ok(())
+}
+
 impl ReportTemplateEngine {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         let mut registry = Handlebars::new();
         registry.set_strict_mode(true);
 
+        registry.register_helper("split", Box::new(split_helper));
+
         registry
             .register_template_string("executive", EXECUTIVE_TEMPLATE)
-            .expect("template registration should never fail");
+            .map_err(|e| SlapperError::Template(e.to_string()))?;
         registry
             .register_template_string("technical", TECHNICAL_TEMPLATE)
-            .expect("template registration should never fail");
+            .map_err(|e| SlapperError::Template(e.to_string()))?;
         registry
             .register_template_string("developer", DEVELOPER_TEMPLATE)
-            .expect("template registration should never fail");
+            .map_err(|e| SlapperError::Template(e.to_string()))?;
         registry
             .register_template_string("compliance", COMPLIANCE_TEMPLATE)
-            .expect("template registration should never fail");
+            .map_err(|e| SlapperError::Template(e.to_string()))?;
 
-        Self {
+        Ok(Self {
             registry,
             custom_templates: FxHashMap::default(),
-        }
+        })
     }
 
     pub fn register_template(&mut self, name: &str, template: &str) -> Result<()> {
@@ -220,7 +247,7 @@ impl ReportTemplateEngine {
 
 impl Default for ReportTemplateEngine {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("embedded template constants should never fail to register")
     }
 }
 
@@ -551,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_template_engine_new() {
-        let engine = ReportTemplateEngine::new();
+        let engine = ReportTemplateEngine::new().unwrap();
         let templates = engine.list_templates();
         assert!(templates.contains(&"executive".to_string()));
         assert!(templates.contains(&"technical".to_string()));
@@ -559,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_register_custom_template() {
-        let mut engine = ReportTemplateEngine::new();
+        let mut engine = ReportTemplateEngine::new().unwrap();
         let result = engine.register_template("custom", "<html>{{test}}</html>");
         assert!(result.is_ok());
         let templates = engine.list_templates();
@@ -568,7 +595,7 @@ mod tests {
 
     #[test]
     fn test_compliance_templates() {
-        let engine = ReportTemplateEngine::new();
+        let engine = ReportTemplateEngine::new().unwrap();
         let pcidss = engine.get_compliance_template(ComplianceStandard::PCIDSS);
         assert_eq!(pcidss.standard, ComplianceStandard::PCIDSS);
 

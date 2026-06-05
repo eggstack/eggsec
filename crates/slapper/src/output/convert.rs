@@ -1,6 +1,3 @@
-#![allow(clippy::single_char_add_str)]
-#![allow(clippy::unnecessary_to_owned)]
-
 use serde::{Deserialize, Serialize};
 use std::fs;
 
@@ -30,7 +27,8 @@ pub struct FindingData {
     pub location: String,
     pub evidence: Option<String>,
     pub remediation: Option<String>,
-    pub cve_ids: Vec<String>,
+    #[serde(alias = "cve_ids")]
+    pub cwe_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,8 +146,12 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
         for network in &report.wireless_networks {
             html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{} dBm</td><td>{}</td></tr>\n",
-                network.ssid, network.bssid, network.channel,
-                network.security_type, network.signal_strength, network.last_seen
+                super::escape::escape_html(&network.ssid),
+                super::escape::escape_html(&network.bssid),
+                network.channel,
+                super::escape::escape_html(&network.security_type),
+                network.signal_strength,
+                super::escape::escape_html(&network.last_seen)
             ));
         }
         html.push_str("</table>\n");
@@ -199,7 +201,7 @@ pub fn convert_to_csv(report: &ScanReportData) -> String {
             super::escape::escape_csv(&finding.title),
             super::escape::escape_csv(&finding.location),
             super::escape::escape_csv(&finding.description),
-            super::escape::escape_csv(&finding.cve_ids.join(";"))
+            super::escape::escape_csv(&finding.cwe_ids.join(";"))
         ));
     }
 
@@ -247,7 +249,7 @@ impl From<&FindingData> for super::markdown::Finding {
             evidence: f.evidence.clone(),
             remediation: f.remediation.clone(),
             references: Vec::new(),
-            cve_ids: f.cve_ids.clone(),
+            cwe_ids: f.cwe_ids.clone(),
         }
     }
 }
@@ -280,7 +282,7 @@ impl From<&super::AgentFinding> for FindingData {
             location: f.endpoint.clone(),
             evidence: f.evidence.request.clone(),
             remediation: Some(f.remediation.summary.clone()),
-            cve_ids: f.cwe_ids.clone(),
+            cwe_ids: f.cwe_ids.clone(),
         }
     }
 }
@@ -302,7 +304,7 @@ mod tests {
                 location: "/".to_string(),
                 evidence: None,
                 remediation: None,
-                cve_ids: vec![],
+                cwe_ids: vec![],
             }],
             open_ports: vec![],
             services: vec![],

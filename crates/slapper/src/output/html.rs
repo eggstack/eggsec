@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use super::escape::escape_html;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlConfig {
@@ -136,11 +137,11 @@ impl HtmlReport {
     </script>
 </body>
 </html>"#,
-            self.config.title,
+            escape_html(&self.config.title),
             theme,
-            self.summary.timestamp,
-            self.summary.target,
-            self.summary.scan_type,
+            escape_html(&self.summary.timestamp),
+            escape_html(&self.summary.target),
+            escape_html(&self.summary.scan_type),
             self.summary.duration_seconds,
             self.summary.total_requests,
             self.summary.critical_count,
@@ -150,7 +151,7 @@ impl HtmlReport {
             self.summary.info_count,
             self.findings.len(),
             findings_html,
-            chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
+            escape_html(&self.summary.timestamp),
             self.summary.critical_count,
             self.summary.high_count,
             self.summary.medium_count,
@@ -179,10 +180,10 @@ impl HtmlReport {
             })
             .unwrap_or_default();
 
-        let cve_block = if !finding.cve_ids.is_empty() {
+        let cve_block = if !finding.cwe_ids.is_empty() {
             format!(
-                r#"<div class="cve-ids">CVE: {}</div>"#,
-                finding.cve_ids.join(", ")
+                r#"<div class="cve-ids">CWE: {}</div>"#,
+                finding.cwe_ids.join(", ")
             )
         } else {
             String::new()

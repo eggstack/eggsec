@@ -102,8 +102,9 @@ impl PdfGenerator {
             current_layer.use_text(&severity_str, 10.0, Mm(25.0), Mm(y_position), &font);
             y_position -= 5.0;
 
-            let description = if finding.description.len() > 100 {
-                format!("{}...", &finding.description[..100])
+            let description = if finding.description.chars().count() > 100 {
+                let truncated: String = finding.description.chars().take(100).collect();
+                format!("{}...", truncated)
             } else {
                 finding.description.clone()
             };
@@ -144,7 +145,7 @@ impl PdfGenerator {
         Ok(true)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn generate_html(findings: &[AgentFinding], config: &PdfConfig) -> String {
         let findings_html: String = findings
             .iter()

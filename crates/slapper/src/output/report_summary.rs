@@ -1,7 +1,7 @@
 use crate::findings::Finding;
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Structured report summary with aggregated statistics and risk narrative.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,10 +29,11 @@ impl ReportSummary {
         let mut by_confidence: FxHashMap<String, usize> = FxHashMap::default();
         let mut by_type: FxHashMap<String, usize> = FxHashMap::default();
         let mut asset_counts: FxHashMap<String, usize> = FxHashMap::default();
+        let mut seen_remediations: FxHashSet<String> = FxHashSet::default();
         let mut remediations: Vec<String> = Vec::new();
 
         for finding in findings {
-            let sev = format!("{:?}", finding.severity);
+            let sev = finding.severity.as_str().to_string();
             *by_severity.entry(sev).or_insert(0) += 1;
 
             let conf = format!("{:?}", finding.confidence);
@@ -46,7 +47,7 @@ impl ReportSummary {
                 .or_insert(0) += 1;
 
             if let Some(ref remediation) = finding.remediation {
-                if !remediations.contains(remediation) {
+                if seen_remediations.insert(remediation.clone()) {
                     remediations.push(remediation.clone());
                 }
             }
@@ -56,7 +57,7 @@ impl ReportSummary {
             .into_iter()
             .map(|(asset, count)| AssetCount { asset, count })
             .collect();
-        top_affected_assets.sort_by(|a, b| b.count.cmp(&a.count));
+        top_affected_assets.sort_by_key(|b| std::cmp::Reverse(b.count));
         top_affected_assets.truncate(10);
 
         let risk_narrative = generate_risk_narrative(findings);
@@ -184,8 +185,8 @@ mod tests {
 
         let summary = ReportSummary::from_findings(&findings);
         assert_eq!(summary.total_findings, 4);
-        assert_eq!(summary.by_severity.get("Critical").unwrap(), &1);
-        assert_eq!(summary.by_severity.get("High").unwrap(), &2);
+        assert_eq!(summary.by_severity.get("critical").unwrap(), &1);
+        assert_eq!(summary.by_severity.get("high").unwrap(), &2);
     }
 
     #[test]

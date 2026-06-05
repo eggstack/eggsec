@@ -185,16 +185,18 @@ impl SarifBuilder {
             );
         }
 
-        for endpoint in &report.endpoints {
-            let rule_id = "ENDPOINT".to_string();
+        if !report.endpoints.is_empty() {
             self = self.add_rule(
-                &rule_id,
+                "ENDPOINT",
                 "Discovered Endpoint",
                 "note",
-                &format!("Found endpoint: {}", endpoint.path),
+                "Found endpoint during scan",
             );
+        }
+
+        for endpoint in &report.endpoints {
             self = self.add_result(
-                &rule_id,
+                "ENDPOINT",
                 "note",
                 &format!(
                     "{} - {} ({})",

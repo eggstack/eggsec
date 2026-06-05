@@ -133,9 +133,14 @@ impl ScanQueue {
         None
     }
 
-    pub fn complete(&mut self, id: &str, _success: bool) {
-        if let Some(running) = &self.running {
+    pub fn complete(&mut self, id: &str, success: bool) {
+        if let Some(ref mut running) = self.running {
             if running.id == id {
+                running.status = if success {
+                    ScheduleStatus::Completed
+                } else {
+                    ScheduleStatus::Failed("Scan failed".to_string())
+                };
                 self.running = None;
             }
         }

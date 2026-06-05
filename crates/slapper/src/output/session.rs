@@ -72,7 +72,7 @@ impl ScanSession {
             let entry = entry.map_err(|e| e.to_string())?;
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
-                if let Ok(session) = Self::load(path.to_str().unwrap_or("")) {
+                if let Ok(session) = Self::load(&path.to_string_lossy()) {
                     sessions.push(SessionInfo {
                         path: path.to_string_lossy().to_string(),
                         created_at: session.created_at,

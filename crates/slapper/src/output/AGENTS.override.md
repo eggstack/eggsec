@@ -10,8 +10,7 @@ Specialized guidance for the report generation module.
 | `Severity` | `types.rs` | Re-exported via `output::agent::Severity` and `output::trend::Severity` |
 | `ScanReportData` | `convert.rs` | Intermediate format for format conversions |
 | `FindingSummary` | `agent.rs` | Aggregated finding statistics by severity/confidence/type |
-| `DiffResult` | `diff.rs` | Result of comparing two finding sets |
-| `DiffFinding` | `diff.rs:17` | Individual finding in diff comparison (fields: `id`, `title`, `severity`, `description`, `first_seen`, `last_seen`) |
+| `DiffSummary` | `diff.rs` | Lightweight diff envelope for run manifests (fields: `total_new`, `total_resolved`, `total_escalated`, `total_deescalated`, `net_change`) |
 | `TrendAnalysis` | `trend.rs` | Historical trend analysis with direction |
 | `TrendAnalyzer` | `trend.rs:147` | Uses `LruCache<String, ScanResult>` with `NonZeroUsize::new(1000)` |
 | `ReportSummary` | `report_summary.rs` | Summary with `risk_narrative: String` field |
@@ -82,13 +81,12 @@ let report = JUnitBuilder::new("Security Tests")
 ```rust
 use crate::output::template::{ReportTemplateEngine, ComplianceStandard};
 
-let engine = ReportTemplateEngine::new();
+let engine = ReportTemplateEngine::new().unwrap();
 let pcidss = engine.get_compliance_template(ComplianceStandard::PCIDSS);
 ```
 
 ## Additional Notes
 
-- **`has_regressions()` threshold**: Checks `severity >= Severity::High` (both High AND Critical), not just Critical. Code at `diff.rs:137-141`.
 - **PDF generation**: Feature-gated behind `pdf` feature flag.
 
 ## Severity Counts

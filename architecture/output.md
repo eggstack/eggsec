@@ -116,34 +116,21 @@ Provides cron-based scan scheduling with queue management:
 - `CronScheduler` - Parses cron expressions and manages scheduled scans
 - `ScanQueue` - Priority queue for scan scheduling with status tracking
 
-### Diff Engine (`diff.rs`)
+### Diff Summary (`diff.rs`)
 
-Detailed comparison with escalation tracking:
+Provides a summary struct for diff results used by `RunManifest`:
 
 ```rust
-pub struct DiffFinding {
-    pub id: String,
-    pub title: String,
-    pub severity: Severity,
-    pub description: String,
-    pub first_seen: String,
-    pub last_seen: String,
+pub struct DiffSummary {
+    pub total_new: usize,
+    pub total_resolved: usize,
+    pub total_escalated: usize,
+    pub total_deescalated: usize,
+    pub net_change: i32,
 }
-
-pub struct DiffResult {
-    pub new_findings: Vec<DiffFinding>,
-    pub resolved_findings: Vec<DiffFinding>,
-    pub escalated_findings: Vec<DiffFinding>,
-    pub deescalated_findings: Vec<DiffFinding>,
-    pub unchanged_findings: Vec<DiffFinding>,
-    pub summary: DiffSummary,
-}
-
-pub struct DiffEngine;
-pub fn has_regressions(diff: &DiffResult) -> bool;  // checks >= Severity::High (High AND Critical)
 ```
 
-`DiffFinding` tracks individual findings across scans with `first_seen` and `last_seen` timestamps. Severity escalation/de-escalation is determined by comparing `Severity::as_int()` values between old and new findings.
+`DiffSummary` is a lightweight metadata envelope used by `RunManifest` to record the delta between two assessment runs.
 
 ### Report Summary (`report_summary.rs`)
 
@@ -265,8 +252,7 @@ Constructs a `RunManifest` from a completed `PipelineReport`. The conversion log
 | `FindingSummary` | `agent.rs` | Aggregated statistics by severity/confidence/type |
 | `ScanReportData` | `convert.rs` | Intermediate format for conversions |
 | `SeverityCounts` | `report.rs` | Severity breakdown with risk scoring |
-| `DiffResult` | `diff.rs` | Finding set comparison result |
-| `DiffFinding` | `diff.rs` | Individual finding with first/last seen timestamps |
+| `DiffSummary` | `diff.rs` | Lightweight diff envelope for run manifests |
 | `ReportSummary` | `report_summary.rs` | Aggregated statistics and risk narrative |
 | `TrendAnalysis` | `trend.rs` | Historical trend data |
 | `CronScheduler` | `schedule.rs` | Cron-based scan scheduling |

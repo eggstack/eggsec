@@ -1,6 +1,5 @@
 use crate::output::agent::AgentFinding;
-use rustc_hash::FxHashMap;
-use uuid::Uuid;
+use rustc_hash::FxHashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DedupStrategy {
@@ -24,14 +23,14 @@ impl std::str::FromStr for DedupStrategy {
 
 pub struct DedupEngine {
     strategy: DedupStrategy,
-    seen: FxHashMap<String, Uuid>,
+    seen: FxHashSet<String>,
 }
 
 impl DedupEngine {
     pub fn new(strategy: DedupStrategy) -> Self {
         Self {
             strategy,
-            seen: FxHashMap::default(),
+            seen: FxHashSet::default(),
         }
     }
 
@@ -48,7 +47,7 @@ impl DedupEngine {
             .iter()
             .filter(|f| {
                 let key = format!("{}:{}:{}", f.severity, f.title, f.target);
-                self.seen.insert(key, Uuid::new_v4()).is_none()
+                self.seen.insert(key)
             })
             .cloned()
             .collect()
@@ -59,7 +58,7 @@ impl DedupEngine {
             .iter()
             .filter(|f| {
                 let key = format!("{}:{}", f.severity, f.title);
-                self.seen.insert(key, Uuid::new_v4()).is_none()
+                self.seen.insert(key)
             })
             .cloned()
             .collect()

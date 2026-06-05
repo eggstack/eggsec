@@ -136,6 +136,9 @@ impl AttackGraphBuilder {
         let nodes_json = serde_json::to_string(&graph.nodes)?;
         let edges_json = serde_json::to_string(&graph.edges)?;
 
+        let nodes_json = nodes_json.replace("</", "<\\/");
+        let edges_json = edges_json.replace("</", "<\\/");
+
         Ok(format!(
             r#"<!DOCTYPE html>
 <html>

@@ -38,7 +38,6 @@ impl CsvExporter {
         let mut buf = BufWriter::new(writer);
 
         if findings.is_empty() {
-            buf.write_all(b"\n").await?;
             return buf.flush().await;
         }
 

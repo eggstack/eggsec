@@ -13,7 +13,8 @@ pub struct Finding {
     pub evidence: Option<String>,
     pub remediation: Option<String>,
     pub references: Vec<String>,
-    pub cve_ids: Vec<String>,
+    #[serde(alias = "cve_ids")]
+    pub cwe_ids: Vec<String>,
 }
 
 impl From<&AgentFinding> for Finding {
@@ -27,7 +28,7 @@ impl From<&AgentFinding> for Finding {
             evidence: f.evidence.request.clone(),
             remediation: Some(f.remediation.summary.clone()),
             references: f.remediation.references.clone(),
-            cve_ids: f.cwe_ids.clone(),
+            cwe_ids: f.cwe_ids.clone(),
         }
     }
 }
@@ -108,8 +109,8 @@ impl MarkdownReport {
                     writeln!(md, "**Remediation:** {}\n\n", remediation)?;
                 }
 
-                if !finding.cve_ids.is_empty() {
-                    writeln!(md, "**CVE IDs:** {}\n\n", finding.cve_ids.join(", "))?;
+                if !finding.cwe_ids.is_empty() {
+                    writeln!(md, "**CWE IDs:** {}\n\n", finding.cwe_ids.join(", "))?;
                 }
 
                 if !finding.references.is_empty() {

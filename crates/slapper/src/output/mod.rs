@@ -98,5 +98,3 @@ pub use trend::{
     Severity as TrendSeverity, TrendAnalysis, TrendAnalyzer, TrendDirection,
 };
 
-pub use markdown::Finding as DeprecatedMarkdownFinding;
-pub use trend::Finding as DeprecatedTrendFinding;

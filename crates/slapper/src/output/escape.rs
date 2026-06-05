@@ -1,5 +1,5 @@
 pub fn escape_html(s: &str) -> String {
-    let mut buf = String::with_capacity(s.len() * 6);
+    let mut buf = String::with_capacity(s.len() + 64);
     for c in s.chars() {
         match c {
             '&' => buf.push_str("&amp;"),
@@ -50,7 +50,7 @@ mod tests {
 }
 
 pub fn escape_xml(s: &str) -> String {
-    let mut buf = String::with_capacity(s.len() * 6);
+    let mut buf = String::with_capacity(s.len() + 64);
     for c in s.chars() {
         match c {
             '&' => buf.push_str("&amp;"),
