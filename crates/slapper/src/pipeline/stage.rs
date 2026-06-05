@@ -82,9 +82,9 @@ impl Stage {
             ScanProfile::Vuln => vec![
                 Stage::PortScan,
                 Stage::Fingerprint,
-                Stage::Vuln,
                 Stage::EndpointScan,
                 Stage::Recon,
+                Stage::Vuln,
                 Stage::Fuzz,
             ],
             ScanProfile::Auth => vec![

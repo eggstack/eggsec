@@ -25,17 +25,6 @@ pub struct StageResult {
     pub error: Option<String>,
 }
 
-impl StageResult {
-    pub fn new(stage: Stage, duration_ms: u64, success: bool, error: Option<String>) -> Self {
-        Self {
-            stage,
-            duration_ms,
-            success,
-            error,
-        }
-    }
-}
-
 pub struct Pipeline {
     target: String,
     stages: Vec<Stage>,
@@ -200,9 +189,9 @@ impl Pipeline {
     /// - Wave 3: EndpointScan (needs http_ports from Fingerprint)
     /// - Wave 4: Fuzz, Waf, LoadTest, Vuln (need base_url from EndpointScan)
     fn dependency_waves(&self) -> Vec<Vec<Stage>> {
-        use std::collections::HashMap;
+        use rustc_hash::FxHashMap;
 
-        let wave_assignment: HashMap<Stage, usize> = [
+        let wave_assignment: FxHashMap<Stage, usize> = [
             (Stage::PortScan, 0),
             (Stage::Recon, 0),
             (Stage::Fingerprint, 1),
@@ -348,7 +337,21 @@ impl Pipeline {
 
             let allowed = self.validate_stage_risk(*stage)?;
             let result = if allowed {
-                self.execute_stage(stage).await
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(300),
+                    self.execute_stage(stage),
+                )
+                .await
+                {
+                    Ok(r) => r,
+                    Err(_) => {
+                        tracing::warn!(stage = %stage, "Stage timed out after 300s");
+                        Err(crate::error::SlapperError::Timeout {
+                            timeout_ms: 300_000,
+                            operation: format!("Pipeline stage '{}' timed out", stage),
+                        })
+                    }
+                }
             } else {
                 tracing::info!(stage = %stage, "Stage skipped due to risk budget");
                 Ok(())
@@ -417,8 +420,6 @@ impl Pipeline {
     }
 
     async fn run_concurrent(&self) -> Result<PipelineReport> {
-        self.validate_defense_lab_scope()?;
-        self.validate_feature_gates()?;
         let start = Instant::now();
 
         let progress = if self.tui_mode || self.stages.is_empty() {
@@ -837,39 +838,43 @@ impl Pipeline {
         use crate::vuln::asset::assess_asset;
         use crate::vuln::prioritizer::prioritize_findings;
 
-        let context = self.context.lock().await;
-        let mut assessment = VulnAssessment::new("pipeline");
-
         let mut findings: Vec<(String, String, Severity, Option<f32>)> = Vec::new();
+        let target_str = self.target.clone();
 
-        for endpoint in &context.endpoints {
-            if endpoint.interesting {
-                let severity = match endpoint.status_code {
-                    200 => Severity::Medium,
-                    301 | 302 => Severity::Low,
-                    401 | crate::constants::STATUS_FORBIDDEN => Severity::Medium,
-                    500..=599 => Severity::High,
-                    _ => Severity::Info,
-                };
-                findings.push((
-                    format!("endpoint-{}", endpoint.path),
-                    format!("Interesting endpoint: {}", endpoint.path),
-                    severity,
-                    None,
-                ));
+        {
+            let context = self.context.lock().await;
+
+            for endpoint in &context.endpoints {
+                if endpoint.interesting {
+                    let severity = match endpoint.status_code {
+                        200 => Severity::Medium,
+                        301 | 302 => Severity::Low,
+                        401 | crate::constants::STATUS_FORBIDDEN => Severity::Medium,
+                        500..=599 => Severity::High,
+                        _ => Severity::Info,
+                    };
+                    findings.push((
+                        format!("endpoint-{}", endpoint.path),
+                        format!("Interesting endpoint: {}", endpoint.path),
+                        severity,
+                        None,
+                    ));
+                }
+            }
+
+            for (port, service) in &context.services {
+                if service.service == "HTTP" || service.service == "HTTPS" {
+                    findings.push((
+                        format!("service-{}", port),
+                        format!("{} service on port {}", service.service, port),
+                        Severity::Info,
+                        None,
+                    ));
+                }
             }
         }
 
-        for (port, service) in &context.services {
-            if service.service == "HTTP" || service.service == "HTTPS" {
-                findings.push((
-                    format!("service-{}", port),
-                    format!("{} service on port {}", service.service, port),
-                    Severity::Info,
-                    None,
-                ));
-            }
-        }
+        let mut assessment = VulnAssessment::new("pipeline");
 
         if findings.is_empty() {
             assessment.summary.push("No findings to assess".to_string());
@@ -885,12 +890,9 @@ impl Pipeline {
             assessment.prioritized_findings = prioritized;
         }
 
-        let target_str = self.target.clone();
         let asset = assess_asset(&target_str, "web_server");
         assessment.summary.push(format!("Asset criticality: {:.1}", asset.overall_score));
         assessment.asset_criticality = Some(asset);
-
-        drop(context);
 
         let mut context = self.context.lock().await;
         context.update_vuln_assessment(assessment);

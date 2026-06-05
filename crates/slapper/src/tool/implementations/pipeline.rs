@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use chrono::Utc;
+use std::sync::Arc;
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
@@ -52,8 +51,8 @@ impl SecurityTool for PipelineTool {
 
         let params = &request.params;
 
-        let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =
-            std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let findings: Arc<parking_lot::Mutex<Vec<Finding>>> =
+            Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
 
         let profile = params

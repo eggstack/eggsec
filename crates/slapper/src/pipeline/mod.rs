@@ -70,8 +70,12 @@ async fn write_output(
             let html = report::generate_html(report)?;
             tokio::fs::write(output_path, html).await?;
         }
-        Some(crate::cli::OutputFormat::Pretty) | Some(crate::cli::OutputFormat::Compact) => {
+        Some(crate::cli::OutputFormat::Pretty) => {
             let json = serde_json::to_string_pretty(report)?;
+            tokio::fs::write(output_path, json).await?;
+        }
+        Some(crate::cli::OutputFormat::Compact) => {
+            let json = serde_json::to_string(report)?;
             tokio::fs::write(output_path, json).await?;
         }
         Some(crate::cli::OutputFormat::Markdown) => {
@@ -101,7 +105,11 @@ async fn write_output(
     }
 
     if let Some(ref manifest) = report.manifest {
-        let manifest_path = format!("{}.manifest.json", output_path.trim_end_matches(".json"));
+        let base = std::path::Path::new(output_path)
+            .with_extension("")
+            .to_string_lossy()
+            .to_string();
+        let manifest_path = format!("{}.manifest.json", base);
         let manifest_json = serde_json::to_string_pretty(manifest)?;
         tokio::fs::write(&manifest_path, manifest_json).await?;
     }
