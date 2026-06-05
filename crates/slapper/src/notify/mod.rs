@@ -4,44 +4,19 @@ pub use webhook::{FindingSummary, NotificationPayload, ScanStats, WebhookNotifie
 
 pub use crate::config::{WebhookConfig, WebhookEvent};
 
+use crate::config::NotificationConfig;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotifyConfig {
-    pub webhooks: Vec<WebhookConfig>,
-    pub slack_webhook: Option<String>,
-    pub discord_webhook: Option<String>,
-    pub teams_webhook: Option<String>,
-    pub notify_on_complete: bool,
-    pub notify_on_findings: bool,
-    pub notify_on_error: bool,
-}
-
-impl Default for NotifyConfig {
-    fn default() -> Self {
-        Self {
-            webhooks: Vec::new(),
-            slack_webhook: None,
-            discord_webhook: None,
-            teams_webhook: None,
-            notify_on_complete: true,
-            notify_on_findings: true,
-            notify_on_error: true,
-        }
-    }
-}
 
 pub struct NotifyManager {
     notifier: WebhookNotifier,
     slack_webhook: Option<String>,
     discord_webhook: Option<String>,
     teams_webhook: Option<String>,
-    config: NotifyConfig,
+    config: NotificationConfig,
 }
 
 impl NotifyManager {
-    pub fn new(config: NotifyConfig) -> Self {
+    pub fn new(config: NotificationConfig) -> Self {
         let notifier = match WebhookNotifier::new(config.webhooks.clone()) {
             Ok(n) => n,
             Err(e) => {
@@ -74,11 +49,12 @@ impl NotifyManager {
             })
             .collect();
 
-        Self::new(NotifyConfig {
+        Self::new(NotificationConfig {
             webhooks,
             slack_webhook: notify_settings.slack_webhook.clone(),
             discord_webhook: notify_settings.discord_webhook.clone(),
             teams_webhook: notify_settings.teams_webhook.clone(),
+            platform_event_filter: notify_settings.platform_event_filter.clone(),
             notify_on_complete: notify_settings.notify_on_complete,
             notify_on_findings: notify_settings.notify_on_findings,
             notify_on_error: notify_settings.notify_on_error,
@@ -106,6 +82,8 @@ impl NotifyManager {
         findings: Option<Vec<FindingSummary>>,
         stats: Option<ScanStats>,
     ) {
+        // Findings always trigger a notification even if notify_on_complete is disabled,
+        // since finding delivery is controlled separately by notify_on_findings.
         if !self.config.notify_on_complete && findings.is_none() {
             return;
         }
@@ -162,6 +140,8 @@ impl NotifyManager {
     }
 
     async fn dispatch(&self, payload: &NotificationPayload) {
+        // Notifications are fire-and-forget: failures are logged but never propagated
+        // to avoid aborting scans over transient webhook issues.
         for result in self.notifier.notify(payload).await {
             if let Err(e) = result {
                 tracing::warn!("Webhook notification failed: {}", e);
@@ -169,19 +149,34 @@ impl NotifyManager {
         }
 
         if let Some(ref slack_url) = self.slack_webhook {
-            if let Err(e) = self.notifier.notify_slack(slack_url, payload).await {
+            let filter = self.config.platform_event_filter.as_deref();
+            if let Err(e) = self
+                .notifier
+                .notify_slack(slack_url, payload, filter)
+                .await
+            {
                 tracing::warn!("Slack notification failed: {}", e);
             }
         }
 
         if let Some(ref discord_url) = self.discord_webhook {
-            if let Err(e) = self.notifier.notify_discord(discord_url, payload).await {
+            let filter = self.config.platform_event_filter.as_deref();
+            if let Err(e) = self
+                .notifier
+                .notify_discord(discord_url, payload, filter)
+                .await
+            {
                 tracing::warn!("Discord notification failed: {}", e);
             }
         }
 
         if let Some(ref teams_url) = self.teams_webhook {
-            if let Err(e) = self.notifier.notify_teams(teams_url, payload).await {
+            let filter = self.config.platform_event_filter.as_deref();
+            if let Err(e) = self
+                .notifier
+                .notify_teams(teams_url, payload, filter)
+                .await
+            {
                 tracing::warn!("Teams notification failed: {}", e);
             }
         }
@@ -197,7 +192,7 @@ impl NotifyManager {
 
 impl Default for NotifyManager {
     fn default() -> Self {
-        Self::new(NotifyConfig::default())
+        Self::new(NotificationConfig::default())
     }
 }
 
@@ -207,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_notify_config_defaults() {
-        let config = NotifyConfig::default();
+        let config = NotificationConfig::default();
         assert!(config.webhooks.is_empty());
         assert!(config.slack_webhook.is_none());
         assert!(config.discord_webhook.is_none());
@@ -225,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_notify_manager_is_enabled_with_webhook() {
-        let config = NotifyConfig {
+        let config = NotificationConfig {
             webhooks: vec![WebhookConfig {
                 name: Some("test".to_string()),
                 url: "https://example.com".to_string(),
@@ -241,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_notify_manager_is_enabled_with_slack() {
-        let config = NotifyConfig {
+        let config = NotificationConfig {
             slack_webhook: Some("https://hooks.slack.com/test".to_string()),
             ..Default::default()
         };
@@ -251,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_notify_manager_is_enabled_with_discord() {
-        let config = NotifyConfig {
+        let config = NotificationConfig {
             discord_webhook: Some("https://discord.com/api/webhooks/test".to_string()),
             ..Default::default()
         };
@@ -261,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_notify_manager_is_enabled_with_teams() {
-        let config = NotifyConfig {
+        let config = NotificationConfig {
             teams_webhook: Some("https://outlook.office.com/webhook/test".to_string()),
             ..Default::default()
         };
@@ -271,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_notify_manager_created_with_empty_webhooks() {
-        let config = NotifyConfig {
+        let config = NotificationConfig {
             webhooks: vec![],
             slack_webhook: Some("https://hooks.slack.com/test".to_string()),
             ..Default::default()
@@ -282,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_notify_config_serialization() {
-        let config = NotifyConfig {
+        let config = NotificationConfig {
             webhooks: vec![WebhookConfig {
                 name: Some("my-hook".to_string()),
                 url: "https://example.com/hook".to_string(),
@@ -293,13 +288,14 @@ mod tests {
             slack_webhook: Some("https://hooks.slack.com/test".to_string()),
             discord_webhook: None,
             teams_webhook: None,
+            platform_event_filter: None,
             notify_on_complete: true,
             notify_on_findings: false,
             notify_on_error: true,
         };
 
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized: NotifyConfig = serde_json::from_str(&json).unwrap();
+        let deserialized: NotificationConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.webhooks.len(), 1);
         assert_eq!(deserialized.webhooks[0].name, Some("my-hook".to_string()));
         assert_eq!(

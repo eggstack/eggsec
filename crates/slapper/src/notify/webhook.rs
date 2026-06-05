@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::config::{WebhookConfig, WebhookEvent};
 use crate::utils::create_http_client;
@@ -73,7 +74,36 @@ impl WebhookNotifier {
                 continue;
             }
 
-            match self.send_webhook(webhook, payload).await {
+            let mut extra_headers: HashMap<String, String> = HashMap::new();
+
+            if let Some(ref secret) = webhook.secret {
+                type HmacSha256 = Hmac<Sha256>;
+                let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
+                    .map_err(|e| format!("HMAC error: {}", e))
+                    .unwrap();
+                let canonical_json =
+                    serde_json::to_string(payload)
+                        .map_err(|e| format!("JSON error: {}", e))
+                        .unwrap();
+                mac.update(canonical_json.as_bytes());
+                let result = mac.finalize();
+                let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+                extra_headers.insert("X-Signature-256".to_string(), signature);
+            }
+
+            for (key, value) in &webhook.headers {
+                extra_headers.insert(key.clone(), value.clone());
+            }
+
+            match self
+                .send_with_retry(
+                    &webhook.url,
+                    &serde_json::to_value(payload).unwrap(),
+                    "Webhook",
+                    &extra_headers,
+                )
+                .await
+            {
                 Ok(_) => results.push(Ok(())),
                 Err(e) => results.push(Err(e)),
             }
@@ -82,103 +112,52 @@ impl WebhookNotifier {
         results
     }
 
-    async fn send_webhook(
-        &self,
-        webhook: &WebhookConfig,
-        payload: &NotificationPayload,
-    ) -> Result<(), String> {
-        const MAX_RETRIES: u32 = 3;
-        const BASE_DELAY_MS: u64 = 1000;
-
-        let mut last_error = String::new();
-
-        for attempt in 0..MAX_RETRIES {
-            if attempt > 0 {
-                let delay_ms = BASE_DELAY_MS * 2u64.pow(attempt - 1);
-                tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
-            }
-
-            match self.try_send_webhook(webhook, payload).await {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    last_error = e;
-                    if attempt < MAX_RETRIES - 1 {
-                        tracing::warn!(
-                            "Webhook delivery attempt {} failed, retrying: {}",
-                            attempt + 1,
-                            last_error
-                        );
-                    }
-                }
-            }
-        }
-
-        Err(last_error)
-    }
-
-    async fn try_send_webhook(
-        &self,
-        webhook: &WebhookConfig,
-        payload: &NotificationPayload,
-    ) -> Result<(), String> {
-        let client = &self.client;
-
-        let mut request = client.post(&webhook.url);
-
-        if let Some(ref secret) = webhook.secret {
-            type HmacSha256 = Hmac<Sha256>;
-            let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
-                .map_err(|e| format!("HMAC error: {}", e))?;
-            let canonical_json =
-                serde_json::to_string(payload).map_err(|e| format!("JSON error: {}", e))?;
-            mac.update(canonical_json.as_bytes());
-            let result = mac.finalize();
-            let signature = format!("sha256={}", hex::encode(result.into_bytes()));
-            request = request.header("X-Signature-256", signature);
-        }
-
-        for (key, value) in &webhook.headers {
-            request = request.header(key.as_str(), value.as_str());
-        }
-
-        let response = request
-            .json(payload)
-            .send()
-            .await
-            .map_err(|e| format!("Webhook request failed: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("Webhook returned status {}", response.status()));
-        }
-
-        Ok(())
-    }
-
     pub async fn notify_slack(
         &self,
         webhook_url: &str,
         payload: &NotificationPayload,
+        event_filter: Option<&[WebhookEvent]>,
     ) -> Result<(), String> {
+        if let Some(events) = event_filter {
+            if !events.contains(&payload.event) {
+                return Ok(());
+            }
+        }
         let slack_payload = self.build_slack_payload(payload);
-        self.send_with_retry(webhook_url, &slack_payload, "Slack").await
+        self.send_with_retry(webhook_url, &slack_payload, "Slack", &HashMap::new())
+            .await
     }
 
     pub async fn notify_discord(
         &self,
         webhook_url: &str,
         payload: &NotificationPayload,
+        event_filter: Option<&[WebhookEvent]>,
     ) -> Result<(), String> {
+        if let Some(events) = event_filter {
+            if !events.contains(&payload.event) {
+                return Ok(());
+            }
+        }
         let discord_payload = self.build_discord_payload(payload);
-        self.send_with_retry(webhook_url, &discord_payload, "Discord").await
+        self.send_with_retry(webhook_url, &discord_payload, "Discord", &HashMap::new())
+            .await
     }
 
     pub async fn notify_teams(
         &self,
         webhook_url: &str,
         payload: &NotificationPayload,
+        event_filter: Option<&[WebhookEvent]>,
     ) -> Result<(), String> {
+        if let Some(events) = event_filter {
+            if !events.contains(&payload.event) {
+                return Ok(());
+            }
+        }
         let teams_payload = self.build_teams_payload(payload);
-        self.send_with_retry(webhook_url, &teams_payload, "Teams").await
+        self.send_with_retry(webhook_url, &teams_payload, "Teams", &HashMap::new())
+            .await
     }
 
     async fn send_with_retry(
@@ -186,6 +165,7 @@ impl WebhookNotifier {
         url: &str,
         payload: &serde_json::Value,
         platform: &str,
+        extra_headers: &HashMap<String, String>,
     ) -> Result<(), String> {
         const MAX_RETRIES: u32 = 3;
         const BASE_DELAY_MS: u64 = 1000;
@@ -198,13 +178,12 @@ impl WebhookNotifier {
                 tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
             }
 
-            match self
-                .client
-                .post(url)
-                .json(payload)
-                .send()
-                .await
-            {
+            let mut request = self.client.post(url);
+            for (key, value) in extra_headers {
+                request = request.header(key.as_str(), value.as_str());
+            }
+
+            match request.json(payload).send().await {
                 Ok(response) => {
                     if response.status().is_success() {
                         return Ok(());

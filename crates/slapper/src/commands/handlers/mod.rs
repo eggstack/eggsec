@@ -15,6 +15,8 @@ pub mod plan;
 pub mod recon;
 pub mod report;
 pub mod scan;
+#[cfg(feature = "rest-api")]
+pub mod serve;
 pub mod storage;
 pub mod stress;
 pub mod vuln;
@@ -47,6 +49,8 @@ pub use auth_test::*;
 pub use browser::*;
 pub use notify::*;
 pub use report::*;
+#[cfg(feature = "rest-api")]
+pub use serve::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
 pub use storage::*;

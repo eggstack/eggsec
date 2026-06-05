@@ -115,6 +115,9 @@ pub struct NotificationConfig {
     #[serde(default)]
     pub teams_webhook: Option<String>,
 
+    #[serde(default)]
+    pub platform_event_filter: Option<Vec<WebhookEvent>>,
+
     #[serde(default = "default_true")]
     pub notify_on_complete: bool,
 
@@ -132,6 +135,7 @@ impl Default for NotificationConfig {
             slack_webhook: None,
             discord_webhook: None,
             teams_webhook: None,
+            platform_event_filter: None,
             notify_on_complete: true,
             notify_on_findings: true,
             notify_on_error: true,

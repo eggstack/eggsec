@@ -21,7 +21,7 @@ pub async fn send_webhook_notifications(
 
     if let Some(ref slack_url) = config.slack {
         println!("Sending test to Slack: {}", slack_url);
-        if let Err(e) = notifier.notify_slack(slack_url, payload).await {
+        if let Err(e) = notifier.notify_slack(slack_url, payload, None).await {
             println!("  ✗ Slack failed: {}", e);
             errors.push("Slack");
         } else {
@@ -31,7 +31,7 @@ pub async fn send_webhook_notifications(
 
     if let Some(ref discord_url) = config.discord {
         println!("Sending test to Discord: {}", discord_url);
-        if let Err(e) = notifier.notify_discord(discord_url, payload).await {
+        if let Err(e) = notifier.notify_discord(discord_url, payload, None).await {
             println!("  ✗ Discord failed: {}", e);
             errors.push("Discord");
         } else {
@@ -41,7 +41,7 @@ pub async fn send_webhook_notifications(
 
     if let Some(ref teams_url) = config.teams {
         println!("Sending test to Teams: {}", teams_url);
-        if let Err(e) = notifier.notify_teams(teams_url, payload).await {
+        if let Err(e) = notifier.notify_teams(teams_url, payload, None).await {
             println!("  ✗ Teams failed: {}", e);
             errors.push("Teams");
         } else {
