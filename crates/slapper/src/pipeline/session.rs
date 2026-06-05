@@ -1,3 +1,4 @@
+use crate::cli::ScanProfile;
 use crate::config::SlapperConfig;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,7 @@ use super::stage::Stage;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineSession {
     pub target: String,
+    pub profile: ScanProfile,
     pub completed_stages: Vec<Stage>,
     pub remaining_stages: Vec<Stage>,
     pub context: PipelineContext,
@@ -21,8 +23,16 @@ pub struct PipelineSession {
 }
 
 pub async fn save(path: &str, session: &PipelineSession) -> Result<()> {
+    use tokio::io::AsyncWriteExt;
     let json = serde_json::to_string_pretty(session)?;
-    tokio::fs::write(path, json).await?;
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .open(path)
+        .await?;
+    file.write_all(json.as_bytes()).await?;
     Ok(())
 }
 

@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
+use serde::{Deserialize, Serialize};
 
 pub mod auth;
 #[cfg(feature = "headless-browser")]
@@ -285,7 +286,7 @@ impl std::fmt::Display for FuzzMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 pub enum ScanProfile {
     Quick,
     Endpoint,

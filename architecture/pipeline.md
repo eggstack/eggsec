@@ -16,6 +16,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 - `LoadTest` - HTTP load testing and benchmarking
 - `Waf` - WAF detection and bypass testing
 - `Recon` - Passive reconnaissance (DNS, WHOIS, SSL, subdomains)
+- `Vuln` - Vulnerability assessment with CVSS scoring and asset criticality
 
 **Selection**: Stages are selected from a profile (for example `quick`, `web`, `full`) or from an explicit comma-separated list via `--stages`.
 
@@ -31,7 +32,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 | `recon` | PortScan → Fingerprint → EndpointScan → Recon → Fuzz |
 | `stealth` | PortScan → Fingerprint → EndpointScan → Fuzz |
 | `deep` | PortScan → Fingerprint → EndpointScan → Fuzz |
-| `vuln` | PortScan → Fingerprint → EndpointScan → Recon → Fuzz |
+| `vuln` | PortScan → Fingerprint → Vuln → EndpointScan → Recon → Fuzz |
 | `auth` | PortScan → Fingerprint → EndpointScan → Fuzz |
 | `defense-lab` | PortScan → Fingerprint → EndpointScan → Waf → Fuzz |
 | `synvoid-local` | PortScan → Fingerprint → EndpointScan → Waf |
@@ -46,18 +47,19 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 The `executor.rs` file is responsible for running the pipeline from start to finish.
 
 - **Sequential Execution**: Stages run in linear order (`for stage in &self.stages`).
-- **Concurrent Execution**: `run_concurrent()` method at `executor.rs:259-297` runs stages in parallel using `futures::future::join_all()`.
+- **Concurrent Execution**: `run_concurrent()` method at `executor.rs:380-474` runs stages in dependency waves using `futures::future::join_all()` within each wave.
 - **Result Passing**: Output from one stage (for example open ports and detected HTTP services) is persisted into `PipelineContext` and consumed by later stages.
 - **Failure Recording**: Stage errors are recorded per stage in `StageResult` and surfaced in the report. CLI entrypoints return `ScanFailed` if any stage failed.
 - **Tool Integration**: `PipelineTool` implements `SecurityTool` for AI agent tool registry.
 
-#### Pipeline Struct Fields (`executor.rs:38-50`)
+#### Pipeline Struct Fields (`executor.rs:39-52`)
 
 ```rust
 pub struct Pipeline {
     target: String,
     stages: Vec<Stage>,
     profile: ScanProfile,
+    risk_budget: ProbeRisk,
     concurrency: usize,
     concurrent_stages: bool,
     common: CommonHttpArgs,
@@ -85,6 +87,8 @@ pub struct PipelineContext {
     pub endpoints: Vec<EndpointResult>,
     pub port_results: Vec<PortResult>,
     pub http_ports: Vec<u16>,
+    pub vuln_assessment: Option<VulnAssessment>,
+    pub load_test_results: Option<LoadTestResults>,
 }
 ```
 
@@ -107,7 +111,7 @@ Session checkpoints are written only when output path is explicitly a session-li
 - `generate_csv()` - CSV report (**free function**, not a method)
 - SARIF/JUnit via `output/` module
 
-#### PipelineReport Struct (`report.rs:24-38`)
+#### PipelineReport Struct (`report.rs:13-31`)
 
 ```rust
 pub struct PipelineReport {
@@ -121,18 +125,22 @@ pub struct PipelineReport {
     pub checkpoint_error: Option<String>,   // Session save error, if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest: Option<RunManifest>,      // Run manifest for regression workflows
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vuln_assessment: Option<VulnAssessment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_test_results: Option<LoadTestResults>,
 }
 ```
 
-**Note**: `generate_html(report: &PipelineReport)` and `generate_csv(report: &PipelineReport)` at `report.rs:113,211` are free functions that take `&PipelineReport` as a parameter, NOT methods on the struct. Call them as `report::generate_html(&report)`.
+**Note**: `generate_html(report: &PipelineReport)` at `report.rs:127` and `generate_csv(report: &PipelineReport)` at `report.rs:259` are free functions that take `&PipelineReport` as a parameter, NOT methods on the struct. Call them as `report::generate_html(&report)`.
 
-**Key Field:** `checkpoint_error: Option<String>` at `report.rs:33` - captures any error from session checkpoint saves during pipeline execution. Logged at warn level when set. Skipped during serialization.
+**Key Field:** `checkpoint_error: Option<String>` at `report.rs:22` - captures any error from session checkpoint saves during pipeline execution. Logged at warn level when set. Skipped during serialization.
 
 ## CLI Entry Points (`mod.rs`)
 
 - `run_cli(args, config)` - Standard CLI pipeline execution
 - `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction)
-- `resume_cli(args)` - Resume from session checkpoint
+- `resume_cli(args, config)` - Resume from session checkpoint
 
 ## Implemented Defense-Lab Profiles
 

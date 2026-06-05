@@ -139,6 +139,8 @@ impl Pipeline {
 
     pub fn from_session(session: PipelineSession) -> Self {
         let mut pipeline = Self::new(&session.target);
+        pipeline.profile = session.profile;
+        pipeline.risk_budget = session.profile.max_risk_budget();
         pipeline.stages = session.remaining_stages;
         pipeline.context = Arc::new(Mutex::new(session.context));
         pipeline.spoof_config = session.spoof_config;
@@ -149,7 +151,6 @@ impl Pipeline {
             pipeline.concurrent_stages = concurrent_stages;
         }
         if let Some(config) = session.config {
-            pipeline.risk_budget = pipeline.profile.max_risk_budget();
             pipeline.config = Some(config);
         }
         pipeline
@@ -188,6 +189,49 @@ impl Pipeline {
         &self.stages
     }
 
+    /// Partition stages into dependency waves for concurrent execution.
+    ///
+    /// Stages within a wave can run in parallel; waves execute sequentially
+    /// so that each wave's data dependencies are satisfied by the previous wave.
+    ///
+    /// Wave assignment:
+    /// - Wave 1: PortScan, Recon (independent)
+    /// - Wave 2: Fingerprint (needs open_ports from PortScan)
+    /// - Wave 3: EndpointScan (needs http_ports from Fingerprint)
+    /// - Wave 4: Fuzz, Waf, LoadTest, Vuln (need base_url from EndpointScan)
+    fn dependency_waves(&self) -> Vec<Vec<Stage>> {
+        use std::collections::HashMap;
+
+        let wave_assignment: HashMap<Stage, usize> = [
+            (Stage::PortScan, 0),
+            (Stage::Recon, 0),
+            (Stage::Fingerprint, 1),
+            (Stage::EndpointScan, 2),
+            (Stage::Fuzz, 3),
+            (Stage::Waf, 3),
+            (Stage::LoadTest, 3),
+            (Stage::Vuln, 3),
+        ]
+        .into_iter()
+        .collect();
+
+        let max_wave = self
+            .stages
+            .iter()
+            .map(|s| wave_assignment.get(s).copied().unwrap_or(0))
+            .max()
+            .unwrap_or(0);
+
+        let mut waves: Vec<Vec<Stage>> = vec![Vec::new(); max_wave + 1];
+        for stage in &self.stages {
+            let wave_idx = wave_assignment.get(stage).copied().unwrap_or(0);
+            waves[wave_idx].push(*stage);
+        }
+
+        waves.retain(|w| !w.is_empty());
+        waves
+    }
+
     /// Validate that defense-lab profiles target private/loopback addresses only.
     fn validate_defense_lab_scope(&self) -> Result<()> {
         if !self.profile.requires_private_scope() {
@@ -208,13 +252,7 @@ impl Pipeline {
 
         let is_private = if let Ok(ip) = host.parse::<std::net::IpAddr>() {
             match ip {
-                std::net::IpAddr::V4(v4) => {
-                    v4.is_loopback()
-                        || v4.is_private()
-                        || v4.octets()[0] == 10
-                        || (v4.octets()[0] == 172 && (15..=31).contains(&v4.octets()[1]))
-                        || (v4.octets()[0] == 192 && v4.octets()[1] == 168)
-                }
+                std::net::IpAddr::V4(v4) => v4.is_loopback() || v4.is_private(),
                 std::net::IpAddr::V6(v6) => {
                     v6.is_loopback()
                         || (v6.segments()[0] & 0xfe00) == 0xfc00
@@ -331,6 +369,7 @@ impl Pipeline {
             if let Some(ref path) = self.session_path {
                 let session = PipelineSession {
                     target: self.target.clone(),
+                    profile: self.profile,
                     completed_stages: stage_results.iter().map(|r| r.stage).collect(),
                     remaining_stages: self.stages[stage_results.len()..].to_vec(),
                     context: self.context.lock().await.clone(),
@@ -388,42 +427,58 @@ impl Pipeline {
             let pb = Arc::new(ProgressBar::new(self.stages.len() as u64));
             pb.set_style(
                 ProgressStyle::default_bar()
-                    .template("{spinner:.green} [{elapsed_precise}] {msg}")
+                    .template("{spinner:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} stages: {msg}")
                     .unwrap_or_else(|_| ProgressStyle::default_bar())
                     .progress_chars("#>-"),
             );
-            pb.set_message(format!(
-                "running {} stages concurrently",
-                self.stages.len()
-            ));
             Some(pb)
         };
 
-        let risk_budget = self.risk_budget;
-        let stage_futures: Vec<_> = self
-            .stages
-            .iter()
-            .map(|stage| async move {
-                let stage_start = Instant::now();
-                let stage_risk = stage.to_probe_risk();
-                let allowed = stage_risk.risk_level() <= risk_budget.risk_level();
-                let result = if allowed {
-                    self.execute_stage(stage).await
-                } else {
-                    tracing::info!(stage = %stage, "Stage skipped due to risk budget");
-                    Ok(())
-                };
-                let stage_result = StageResult {
-                    stage: *stage,
-                    duration_ms: stage_start.elapsed().as_millis() as u64,
-                    success: result.is_ok(),
-                    error: result.as_ref().err().map(|e| e.to_string()),
-                };
-                stage_result
-            })
-            .collect();
+        let waves = self.dependency_waves();
+        let mut stage_results = Vec::new();
 
-        let stage_results = futures::future::join_all(stage_futures).await;
+        for (wave_idx, wave) in waves.iter().enumerate() {
+            if let Some(ref pb) = progress {
+                pb.set_message(format!(
+                    "wave {}/{}: {}",
+                    wave_idx + 1,
+                    waves.len(),
+                    wave.iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+
+            let risk_budget = self.risk_budget;
+            let stage_futures: Vec<_> = wave
+                .iter()
+                .map(|stage| async move {
+                    let stage_start = Instant::now();
+                    let stage_risk = stage.to_probe_risk();
+                    let allowed = stage_risk.risk_level() <= risk_budget.risk_level();
+                    let result = if allowed {
+                        self.execute_stage(stage).await
+                    } else {
+                        tracing::info!(stage = %stage, "Stage skipped due to risk budget");
+                        Ok(())
+                    };
+                    StageResult {
+                        stage: *stage,
+                        duration_ms: stage_start.elapsed().as_millis() as u64,
+                        success: result.is_ok(),
+                        error: result.as_ref().err().map(|e| e.to_string()),
+                    }
+                })
+                .collect();
+
+            let wave_results = futures::future::join_all(stage_futures).await;
+            stage_results.extend(wave_results);
+
+            if let Some(ref pb) = progress {
+                pb.inc(wave.len() as u64);
+            }
+        }
 
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
@@ -435,6 +490,7 @@ impl Pipeline {
         if let Some(ref path) = self.session_path {
             let session = PipelineSession {
                 target: self.target.clone(),
+                profile: self.profile,
                 completed_stages: stage_results.iter().map(|r| r.stage).collect(),
                 remaining_stages: Vec::new(),
                 context: context.clone(),
@@ -488,7 +544,7 @@ impl Pipeline {
     }
 
     async fn run_port_scan(&self) -> Result<()> {
-        let ports = crate::utils::parsing::parse_ports(&get_extended_ports())?;
+        let ports = crate::utils::parsing::parse_ports(EXTENDED_SCAN_PORTS)?;
 
         if self.spoof_config.enabled {
             eprintln!(
@@ -841,10 +897,6 @@ impl Pipeline {
 
         Ok(())
     }
-}
-
-fn get_extended_ports() -> String {
-    EXTENDED_SCAN_PORTS.to_string()
 }
 
 fn get_default_endpoints() -> Vec<String> {

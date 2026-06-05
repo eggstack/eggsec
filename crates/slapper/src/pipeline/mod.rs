@@ -66,12 +66,13 @@ async fn write_output(
     format: Option<crate::cli::OutputFormat>,
 ) -> Result<()> {
     match format {
-        Some(crate::cli::OutputFormat::Html)
-        | Some(crate::cli::OutputFormat::Pretty)
-        | Some(crate::cli::OutputFormat::Compact)
-        | None => {
+        Some(crate::cli::OutputFormat::Html) | None => {
             let html = report::generate_html(report)?;
             tokio::fs::write(output_path, html).await?;
+        }
+        Some(crate::cli::OutputFormat::Pretty) | Some(crate::cli::OutputFormat::Compact) => {
+            let json = serde_json::to_string_pretty(report)?;
+            tokio::fs::write(output_path, json).await?;
         }
         Some(crate::cli::OutputFormat::Markdown) => {
             let md = report::generate_markdown(report)?;

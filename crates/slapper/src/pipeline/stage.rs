@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::cli::ScanProfile;
 use crate::probe::{ProbeIntent, ProbeRisk};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Stage {
     PortScan,
     Fingerprint,

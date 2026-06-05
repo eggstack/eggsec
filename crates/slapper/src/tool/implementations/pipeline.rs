@@ -97,30 +97,28 @@ impl SecurityTool for PipelineTool {
                 tracing::warn!(error = %e, "Failed to load config for pipeline, using defaults");
             })
             .unwrap_or_default();
+
+        let stage_count = crate::pipeline::stage::Stage::from_profile(profile_enum).len();
+        let timeout_secs = (stage_count as u64 * 120).clamp(60, 600);
+
         tokio::time::timeout(
-            std::time::Duration::from_secs(60),
+            std::time::Duration::from_secs(timeout_secs),
             crate::pipeline::run_cli_with_callback(args, &config, move |f| {
                 let mut findings = findings_clone.lock();
                 findings.push(f);
             }),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout {
-            timeout_ms: 0,
-            operation: format!("Pipeline timed out after 60s: {}", e),
+        .map_err(|_| crate::error::SlapperError::Timeout {
+            timeout_ms: timeout_secs * 1000,
+            operation: format!(
+                "Pipeline timed out after {}s (profile: {}, {} stages)",
+                timeout_secs, profile, stage_count
+            ),
         })?
         .map_err(|e| crate::error::SlapperError::Runtime(format!("Pipeline failed: {}", e)))?;
 
-        let findings = match std::sync::Arc::try_unwrap(findings) {
-            Ok(inner) => inner.into_inner(),
-            Err(e) => {
-                tracing::warn!(
-                    "Callback still referenced, using empty result: Arc still has {} references",
-                    Arc::strong_count(&e)
-                );
-                Vec::new()
-            }
-        };
+        let findings = findings.lock().clone();
         let findings_count = findings.len();
 
         let completed_at = Utc::now();

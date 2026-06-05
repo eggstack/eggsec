@@ -36,14 +36,14 @@ impl std::fmt::Display for PipelineReport {
         writeln!(f, "target: {}", truncate(&self.target, 60))?;
         writeln!(f, "duration: {}ms", self.total_duration_ms)?;
 
-        let _ = writeln!(f, "stages");
+        writeln!(f, "stages")?;
         for result in &self.stage_results {
             let status = if result.success { "✓" } else { "✗" };
             writeln!(f, "\t{} {} {}ms", status, result.stage, result.duration_ms)?;
         }
 
         if !self.open_ports.is_empty() {
-            let _ = writeln!(f, "open ports");
+            writeln!(f, "open ports")?;
             for port in self.open_ports.iter().take(10) {
                 writeln!(f, "\t{}/{}\t{}", port.port, port.status, port.service)?;
             }
@@ -53,7 +53,7 @@ impl std::fmt::Display for PipelineReport {
         }
 
         if !self.services.is_empty() {
-            let _ = writeln!(f, "services");
+            writeln!(f, "services")?;
             for service in self.services.iter().take(5) {
                 let product = service.product.as_deref().unwrap_or("-");
                 writeln!(f, "\t{}\t{}\t{}", service.port, service.service, product)?;
@@ -66,7 +66,7 @@ impl std::fmt::Display for PipelineReport {
         let interesting_endpoints: Vec<_> =
             self.endpoints.iter().filter(|e| e.interesting).collect();
         if !interesting_endpoints.is_empty() {
-            let _ = writeln!(f, "interesting endpoints");
+            writeln!(f, "interesting endpoints")?;
             for endpoint in interesting_endpoints.iter().take(10) {
                 writeln!(f, "\t[!] {}", endpoint.path)?;
             }
@@ -78,7 +78,7 @@ impl std::fmt::Display for PipelineReport {
         }
 
         if let Some(ref vuln) = self.vuln_assessment {
-            let _ = writeln!(f, "vulnerability assessment");
+            writeln!(f, "vulnerability assessment")?;
             for line in &vuln.summary {
                 writeln!(f, "\t{}", line)?;
             }
@@ -411,6 +411,10 @@ pub fn generate_markdown(report: &PipelineReport) -> crate::error::Result<String
         md.push_str(&format!(
             "- **P95 Latency:** {:.2}ms\n",
             load.latency_p95_ms
+        ));
+        md.push_str(&format!(
+            "- **P99 Latency:** {:.2}ms\n",
+            load.latency_p99_ms
         ));
     }
 
