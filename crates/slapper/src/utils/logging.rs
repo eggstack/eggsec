@@ -1,5 +1,3 @@
-use std::io::{Result, Write};
-
 fn is_ansi_terminator(b: u8) -> bool {
     matches!(b, 0x40..=0x7E)
 }
@@ -62,34 +60,6 @@ pub fn sanitize_for_logging(input: &str) -> String {
     sanitize_bytes(input, 500)
 }
 
-pub fn sanitize_for_logging_with_max(input: &str, max_len: usize) -> String {
-    sanitize_bytes(input, max_len)
-}
-
-pub struct Sanitizer<W: Write> {
-    writer: W,
-    max_len: usize,
-}
-
-impl<W: Write> Sanitizer<W> {
-    pub fn new(writer: W) -> Self {
-        Self {
-            writer,
-            max_len: 500,
-        }
-    }
-
-    pub fn with_max_len(mut self, max_len: usize) -> Self {
-        self.max_len = max_len;
-        self
-    }
-
-    pub fn write_sanitized(&mut self, input: &str) -> Result<()> {
-        let sanitized = sanitize_bytes(input, self.max_len);
-        self.writer.write_all(sanitized.as_bytes())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,7 +102,7 @@ mod tests {
     #[test]
     fn test_truncates_long_input() {
         let input = "a".repeat(1000);
-        let result = sanitize_for_logging_with_max(&input, 500);
+        let result = sanitize_for_logging(&input);
         assert_eq!(result.len(), 500);
     }
 

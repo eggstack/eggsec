@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
@@ -9,6 +11,18 @@ fn generate_shell_completion(shell: Shell) -> Result<()> {
     let mut cmd = Cli::command();
     clap_complete::generate(shell, &mut cmd, "slapper", &mut std::io::stdout());
     Ok(())
+}
+
+fn agent_log_dir(cli: &Cli) -> Option<PathBuf> {
+    #[cfg(feature = "rest-api")]
+    {
+        if let Some(slapper::cli::Commands::Agent(ref args)) = cli.command {
+            let memory_dir = shellexpand::tilde(&args.memory_dir);
+            return Some(PathBuf::from(memory_dir.as_ref()).join("logs"));
+        }
+    }
+    let _ = &cli;
+    None
 }
 
 #[tokio::main]
@@ -25,7 +39,11 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    init_logging(if cli.json { LogFormat::Json } else { LogFormat::Pretty });
+    let log_dir = agent_log_dir(&cli);
+    let _guard = init_logging(
+        if cli.json { LogFormat::Json } else { LogFormat::Pretty },
+        log_dir,
+    );
 
     let config = slapper::config::load_config(cli.config.as_deref())?;
     let scope = slapper::config::load_scope(cli.scope.as_deref())?;

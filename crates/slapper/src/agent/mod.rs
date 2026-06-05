@@ -12,7 +12,6 @@ pub mod channels;
 pub mod config_watcher;
 pub mod constraints;
 pub mod events;
-pub mod logging;
 pub mod memory;
 pub mod portfolio;
 
@@ -181,7 +180,6 @@ pub struct Agent {
     shutdown_notify: tokio::sync::Notify,
     #[allow(dead_code)]
     config_watcher: Option<ConfigWatcher>,
-    logger: Option<logging::AgentLogger>,
     // Runtime status tracking
     started_at: Option<DateTime<Utc>>,
     last_tick_at: Option<DateTime<Utc>>,
@@ -288,7 +286,6 @@ impl Agent {
             running: Arc::new(tokio::sync::RwLock::new(false)),
             shutdown_notify: tokio::sync::Notify::new(),
             config_watcher,
-            logger: None,
             started_at: None,
             last_tick_at: None,
             last_scan_started_at: None,
@@ -335,7 +332,6 @@ impl Agent {
             running: Arc::new(tokio::sync::RwLock::new(false)),
             shutdown_notify: tokio::sync::Notify::new(),
             config_watcher: None,
-            logger: None,
             started_at: None,
             last_tick_at: None,
             last_scan_started_at: None,
@@ -460,8 +456,6 @@ impl Agent {
         }
 
         self.started_at = Some(Utc::now());
-        let log_dir = self.config.memory_dir.join("logs");
-        self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
         tracing::info!("Starting security agent");
 
@@ -520,8 +514,6 @@ impl Agent {
         };
 
         self.started_at = Some(Utc::now());
-        let log_dir = self.config.memory_dir.join("logs");
-        self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
         tracing::info!("Running agent in single-pass mode");
 
