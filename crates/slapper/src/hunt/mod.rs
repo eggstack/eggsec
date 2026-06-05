@@ -32,6 +32,13 @@ pub struct HuntClient {
 
 impl HuntClient {
     pub fn new(target: &str, config: &HuntConfig) -> Result<Self> {
+        if !target.starts_with("http://") && !target.starts_with("https://") {
+            return Err(crate::error::SlapperError::Http(format!(
+                "Invalid target URL: must start with http:// or https://, got: {}",
+                target
+            )));
+        }
+
         let timeout = Duration::from_millis(config.timeout_ms);
         let client = Client::builder()
             .timeout(timeout)
@@ -144,7 +151,7 @@ impl HuntReport {
     }
 
     pub fn add_chain(&mut self, chain: chain::AttackChain) {
-        self.total_findings += chain.steps.len();
+        self.total_findings += 1;
         self.attack_chains.push(chain);
     }
 
@@ -169,7 +176,9 @@ impl HuntReport {
     }
 }
 
+#[tracing::instrument(skip(config), fields(target = %target))]
 pub async fn run_hunt(target: &str, config: HuntConfig) -> Result<HuntReport> {
+    tracing::info!("Starting vulnerability hunt");
     let mut report = HuntReport::new(target);
     let client = HuntClient::new(target, &config)?;
 

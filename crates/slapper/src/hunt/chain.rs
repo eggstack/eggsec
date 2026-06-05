@@ -36,7 +36,9 @@ pub struct ChainStep {
     pub severity: Severity,
 }
 
+#[tracing::instrument(skip(report), fields(target = %report.target))]
 pub async fn detect_attack_chains(report: &HuntReport) -> Result<Vec<AttackChain>> {
+    tracing::info!("Detecting attack chains");
     let mut chains = Vec::new();
 
     chains.extend(detect_privilege_escalation_chain(report));

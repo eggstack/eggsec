@@ -83,10 +83,12 @@ const SENSITIVE_PATHS: &[&str] = &[
     "/prometheus",
 ];
 
+#[tracing::instrument(skip(client, config), fields(target = %client.base_url()))]
 pub async fn check_business_logic(
     client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<BusinessLogicFlaw>> {
+    tracing::info!("Checking business logic");
     let mut flaws = Vec::new();
 
     flaws.extend(check_api_discovery(client, config).await);
@@ -316,11 +318,23 @@ async fn check_error_handling(client: &HuntClient, _config: &HuntConfig) -> Vec<
 
 async fn check_rate_limiting(client: &HuntClient, _config: &HuntConfig) -> Vec<BusinessLogicFlaw> {
     let mut flaws = Vec::new();
+
+    // Find a valid path to test rate limiting against
+    let test_path = if let Ok(resp) = client.get("/api").await {
+        if resp.status().is_success() {
+            "/api"
+        } else {
+            "/"
+        }
+    } else {
+        "/"
+    };
+
     let mut status_429_count = 0;
     let mut total_requests = 0;
 
     for _ in 0..20 {
-        if let Ok(resp) = client.get("/api/test").await {
+        if let Ok(resp) = client.get(test_path).await {
             total_requests += 1;
             if resp.status().as_u16() == 429 {
                 status_429_count += 1;

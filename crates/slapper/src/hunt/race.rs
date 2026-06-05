@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::hunt::{HuntClient, HuntConfig};
 use crate::types::Severity;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -47,10 +48,12 @@ const STATE_CHANGING_PATHS: &[&str] = &[
     "/api/reserve",
 ];
 
+#[tracing::instrument(skip(client, config), fields(target = %client.base_url()))]
 pub async fn check_race_conditions(
     client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<RaceCondition>> {
+    tracing::info!("Checking race conditions");
     let mut conditions = Vec::new();
 
     conditions.extend(check_concurrent_requests(client, config).await);
@@ -65,6 +68,7 @@ async fn check_concurrent_requests(
 ) -> Vec<RaceCondition> {
     let mut conditions = Vec::new();
     let concurrency = config.concurrency;
+    let timeout = Duration::from_millis(config.timeout_ms);
 
     for path in STATE_CHANGING_PATHS {
         let mut handles = Vec::new();
@@ -80,7 +84,7 @@ async fn check_concurrent_requests(
                     "quantity": 1,
                     "amount": 100
                 });
-                let result = tokio::time::timeout(Duration::from_secs(60), async {
+                let result = tokio::time::timeout(timeout, async {
                     client
                         .post_json(&path, &body)
                         .await
@@ -102,8 +106,7 @@ async fn check_concurrent_requests(
             continue;
         }
 
-        let unique_statuses: std::collections::HashSet<u16> =
-            status_codes.iter().copied().collect();
+        let unique_statuses: FxHashSet<u16> = status_codes.iter().copied().collect();
         let success_count = status_codes.iter().filter(|&&s| s == 200 || s == 201).count();
         let error_count = status_codes.iter().filter(|&&s| s >= 400).count();
 
@@ -206,7 +209,7 @@ async fn check_response_inconsistency(
             });
         }
 
-        let unique_statuses: std::collections::HashSet<u16> = statuses.iter().copied().collect();
+        let unique_statuses: FxHashSet<u16> = statuses.iter().copied().collect();
         if unique_statuses.len() > 1 {
             let id = format!("rc-{}", &uuid::Uuid::new_v4().to_string()[..8]);
             conditions.push(RaceCondition {

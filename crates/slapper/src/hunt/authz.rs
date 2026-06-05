@@ -59,10 +59,12 @@ const IDOR_PATHS: &[&str] = &[
     "/api/documents/2",
 ];
 
+#[tracing::instrument(skip(client, config), fields(target = %client.base_url()))]
 pub async fn check_authz_bypass(
     client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<AuthzBypass>> {
+    tracing::info!("Checking authorization bypass");
     let mut bypasses = Vec::new();
 
     bypasses.extend(check_admin_access(client, config).await);
@@ -139,11 +141,35 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
     bypasses
 }
 
-async fn check_idor(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
+async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
+    let mut handles = Vec::new();
 
     for path in IDOR_PATHS {
-        if let Ok(resp) = client.get(path).await {
+        let client = client.clone();
+        let sem = semaphore.clone();
+        let path = path.to_string();
+
+        handles.push(tokio::spawn(async move {
+            let _permit = match sem.acquire().await {
+                Ok(p) => p,
+                Err(_) => {
+                    return (
+                        path,
+                        Err(crate::error::SlapperError::Http(
+                            "Semaphore closed".to_string(),
+                        )),
+                    );
+                }
+            };
+            let resp = client.get(&path).await;
+            (path, resp)
+        }));
+    }
+
+    for handle in handles {
+        if let Ok((path, Ok(resp))) = handle.await {
             let status = resp.status().as_u16();
             if status == 200 {
                 if let Ok(body) = resp.text().await {

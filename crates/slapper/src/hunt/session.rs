@@ -28,10 +28,12 @@ pub enum SessionIssueType {
     ConcurrentSessions,
 }
 
+#[tracing::instrument(skip(client, config), fields(target = %client.base_url()))]
 pub async fn check_session_security(
     client: &HuntClient,
     config: &HuntConfig,
 ) -> Result<Vec<SessionIssue>> {
+    tracing::info!("Checking session security");
     let mut issues = Vec::new();
 
     match client.get("/").await {
@@ -194,21 +196,38 @@ fn check_session_token_entropy(
 
 async fn check_session_fixation(
     client: &HuntClient,
-    _config: &HuntConfig,
+    config: &HuntConfig,
 ) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
     let request_count = 5;
-    let mut all_cookies: Vec<Vec<String>> = Vec::new();
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
+    let mut handles = Vec::new();
 
     for _ in 0..request_count {
-        if let Ok(resp) = client.get("/").await {
-            let cookies: Vec<String> = resp
-                .headers()
-                .get_all(reqwest::header::SET_COOKIE)
-                .iter()
-                .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
-                .collect();
+        let client = client.clone();
+        let sem = semaphore.clone();
+
+        handles.push(tokio::spawn(async move {
+            let _permit = match sem.acquire().await {
+                Ok(p) => p,
+                Err(_) => return Vec::new(),
+            };
+            match client.get("/").await {
+                Ok(resp) => resp
+                    .headers()
+                    .get_all(reqwest::header::SET_COOKIE)
+                    .iter()
+                    .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
+                    .collect(),
+                Err(_) => Vec::new(),
+            }
+        }));
+    }
+
+    let mut all_cookies: Vec<Vec<String>> = Vec::new();
+    for handle in handles {
+        if let Ok(cookies) = handle.await {
             all_cookies.push(cookies);
         }
     }
