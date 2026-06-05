@@ -144,8 +144,10 @@ impl IssueTracker for JiraClient {
         let key = match json["key"].as_str() {
             Some(k) => k.to_string(),
             None => {
-                tracing::warn!("Jira: create_issue response missing 'key' field, using fallback ID");
-                "JIRA-1".to_string()
+                tracing::warn!("Jira: create_issue response missing 'key' field");
+                return Err(SlapperError::Network(
+                    "Jira: create_issue response missing 'key' field".to_string(),
+                ));
             }
         };
         Ok(key)

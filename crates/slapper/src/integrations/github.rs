@@ -123,9 +123,11 @@ impl IssueTracker for GitHubClient {
             Some(n) => n,
             None => {
                 tracing::warn!(
-                    "GitHub: create_issue response missing 'number' field, using fallback ID"
+                    "GitHub: create_issue response missing 'number' field"
                 );
-                1
+                return Err(SlapperError::Network(
+                    "GitHub: create_issue response missing 'number' field".to_string(),
+                ));
             }
         };
         Ok(format!("#{}", number))

@@ -10,7 +10,7 @@ Issue tracker connectors for Jira, GitHub, and GitLab. Provides a common `IssueT
 |------|----------|-------------|
 | `IntegrationConfig` | `integrations/mod.rs` | Top-level config holding optional Jira/GitHub/GitLab configs |
 | `IssueTracker` | `integrations/mod.rs` | Trait: `create_issue`, `update_issue`, `add_comment`, `get_issue`, `search_issues` |
-| `Issue` | `integrations/mod.rs` | Universal issue representation (title, description, labels, severity, assignees) |
+| `Issue` | `integrations/mod.rs` | Universal issue representation (id, title, description, labels, severity, assignees, status, url, created_at) |
 | `IssueUpdate` | `integrations/mod.rs` | Partial update payload for issues |
 | `JiraConfig` | `integrations/jira.rs` | Jira connection configuration |
 | `GitHubConfig` | `integrations/github.rs` | GitHub connection configuration |

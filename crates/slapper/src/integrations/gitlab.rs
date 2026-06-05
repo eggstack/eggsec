@@ -120,9 +120,11 @@ impl IssueTracker for GitLabClient {
             Some(n) => n,
             None => {
                 tracing::warn!(
-                    "GitLab: create_issue response missing 'iid' field, using fallback ID"
+                    "GitLab: create_issue response missing 'iid' field"
                 );
-                1
+                return Err(SlapperError::Network(
+                    "GitLab: create_issue response missing 'iid' field".to_string(),
+                ));
             }
         };
         Ok(format!("!{}", iid))
@@ -144,12 +146,22 @@ impl IssueTracker for GitLabClient {
             body.insert("labels".to_string(), serde_json::json!(labels));
         }
         if let Some(state) = &update.status {
-            let state_value = if state.to_lowercase() == "closed" {
-                "close".to_string()
-            } else {
-                state.to_string()
+            let state_value = match state.to_lowercase().as_str() {
+                "closed" | "close" => "close",
+                "opened" | "open" => "reopen",
+                "reopen" | "reopened" => "reopen",
+                other => {
+                    tracing::warn!(
+                        "GitLab: unknown state_event '{}', skipping state update",
+                        other
+                    );
+                    return Ok(());
+                }
             };
-            body.insert("state_event".to_string(), serde_json::json!(state_value));
+            body.insert(
+                "state_event".to_string(),
+                serde_json::json!(state_value),
+            );
         }
 
         let response = self
