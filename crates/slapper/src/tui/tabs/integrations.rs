@@ -1,4 +1,4 @@
-use crate::integrations::{IntegrationConfig, Issue};
+use crate::integrations::IntegrationConfig;
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
@@ -239,20 +239,6 @@ impl IntegrationsTab {
         config
     }
 
-    pub fn build_issue(&self) -> Issue {
-        Issue {
-            id: None,
-            title: self.issue_title().to_string(),
-            description: self.issue_description().to_string(),
-            labels: self.issue_labels(),
-            severity: None,
-            assignees: self.issue_assignees(),
-            status: None,
-            url: None,
-            created_at: None,
-        }
-    }
-
     pub fn get_mode(&self) -> &str {
         match self.current_mode {
             IntegrationsMode::Configure => "configure",
@@ -352,9 +338,9 @@ impl TabRender for IntegrationsTab {
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let input_height = match self.current_mode {
-            IntegrationsMode::Configure => 18,
-            IntegrationsMode::CreateIssue => 21,
-            IntegrationsMode::SearchIssues => 12,
+            IntegrationsMode::Configure => 20,
+            IntegrationsMode::CreateIssue => 20,
+            IntegrationsMode::SearchIssues => 11,
         };
 
         let chunks = Layout::default()
@@ -379,9 +365,14 @@ impl TabRender for IntegrationsTab {
         let input_area = config_block.inner(block_area);
         f.render_widget(config_block, block_area);
 
+        let tracker_area = Rect {
+            y: input_area.y,
+            height: 3,
+            ..input_area
+        };
         let mut sel = self.tracker_selector.clone();
         sel.focused = self.focus_area == IntegrationsFocusArea::Tracker;
-        sel.render(f, input_area);
+        sel.render(f, tracker_area);
 
         let mode_area = Rect {
             y: input_area.y + 3,
@@ -416,7 +407,7 @@ impl TabRender for IntegrationsTab {
                     fields
                 } else {
                     tracing::warn!(
-                        "SearchIssues mode: expected at least 4 fields, got {}",
+                        "SearchIssues mode: expected at least 5 fields, got {}",
                         self.issue_inputs.fields.len()
                     );
                     &[]

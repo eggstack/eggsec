@@ -87,6 +87,18 @@ pub(crate) async fn send_with_retry(
                     e
                 );
                 tokio::time::sleep(Duration::from_millis(backoff)).await;
+            }
+        }
+    }
+    match last_status {
+        Some(status) => Err(SlapperError::Network(format!(
+            "{} API error {} after {} retries",
+            provider, status, MAX_RETRIES
+        ))),
+        None => Err(SlapperError::Network(format!(
+            "{}: all {} retries failed",
+            provider, MAX_RETRIES
+        ))),
     }
 }
 
@@ -137,20 +149,11 @@ mod tests {
 
     #[test]
     fn test_truncate_utf8_4byte_chars() {
-        let s = "a";
-        assert_eq!(truncate_utf8(s, 1), "a");
+        let s = "\u{1FA63}";
+        assert_eq!(truncate_utf8(s, 1), "");
+        assert_eq!(truncate_utf8(s, 2), "");
+        assert_eq!(truncate_utf8(s, 3), "");
+        assert_eq!(truncate_utf8(s, 4), s);
         assert_eq!(truncate_utf8(s, 0), "");
-    }
-}
-    }
-    match last_status {
-        Some(status) => Err(SlapperError::Network(format!(
-            "{} API error {} after {} retries",
-            provider, status, MAX_RETRIES
-        ))),
-        None => Err(SlapperError::Network(format!(
-            "{}: all {} retries failed",
-            provider, MAX_RETRIES
-        ))),
     }
 }
