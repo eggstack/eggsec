@@ -26,14 +26,17 @@ impl CisaKevClient {
     }
 
     async fn fetch_catalog(&self) -> Result<(), CveError> {
-        let mut last_fetch = self.last_fetch.write().await;
-
-        if let Some(last) = *last_fetch {
-            if last.elapsed() < std::time::Duration::from_secs(86400) {
-                return Ok(());
+        // Check if recent fetch exists (read lock only, dropped before network I/O)
+        {
+            let last_fetch = self.last_fetch.read().await;
+            if let Some(last) = *last_fetch {
+                if last.elapsed() < std::time::Duration::from_secs(86400) {
+                    return Ok(());
+                }
             }
         }
 
+        // Network I/O happens outside any lock
         let response = self
             .client
             .get(&self.base_url)
@@ -53,8 +56,9 @@ impl CisaKevClient {
             .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
+        // Acquire write locks only after network I/O completes
         *self.catalog.write().await = Some(catalog.vulnerabilities);
-        *last_fetch = Some(std::time::Instant::now());
+        *self.last_fetch.write().await = Some(std::time::Instant::now());
 
         Ok(())
     }

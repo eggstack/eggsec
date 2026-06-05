@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct HostInfo {
@@ -281,26 +281,26 @@ impl Default for ScanContext {
 }
 
 pub struct NseState {
-    pub context: Arc<Mutex<ScanContext>>,
+    pub context: Arc<parking_lot::Mutex<ScanContext>>,
     pub scripts_path: Vec<std::path::PathBuf>,
 }
 
 impl NseState {
     pub fn new() -> Self {
         Self {
-            context: Arc::new(Mutex::new(ScanContext::new())),
+            context: Arc::new(parking_lot::Mutex::new(ScanContext::new())),
             scripts_path: Vec::new(),
         }
     }
 
     pub fn with_target(target: &str) -> Self {
         Self {
-            context: Arc::new(Mutex::new(ScanContext::with_target(target))),
+            context: Arc::new(parking_lot::Mutex::new(ScanContext::with_target(target))),
             scripts_path: Vec::new(),
         }
     }
 
-    pub fn get_context(&self) -> Arc<Mutex<ScanContext>> {
+    pub fn get_context(&self) -> Arc<parking_lot::Mutex<ScanContext>> {
         self.context.clone()
     }
 

@@ -72,7 +72,19 @@ pub fn generate_xml(results: &[NseOutput]) -> String {
         let _ = writeln!(xml, "    </hostnames>");
 
         let _ = writeln!(xml, "    <ports>");
-        let _ = writeln!(xml, "      <port protocol=\"tcp\" portid=\"80\">");
+        let port_line = result
+            .ports
+            .as_deref()
+            .unwrap_or("80/tcp   open  http");
+        let port_id = port_line
+            .split('/')
+            .next()
+            .unwrap_or("80");
+        let _ = writeln!(
+            xml,
+            "      <port protocol=\"tcp\" portid=\"{}\">",
+            port_id
+        );
         let _ = writeln!(xml, "        <state state=\"open\" reason=\"syn-ack\"/>");
         let _ = writeln!(
             xml,
@@ -114,10 +126,11 @@ pub fn generate_grepable(results: &[NseOutput]) -> String {
 
     for result in results {
         let _ = writeln!(output, "Host: {} () Status: Up", result.target);
+        let ports_str = result.ports.as_deref().unwrap_or("80/open/tcp//http///");
         let _ = writeln!(
             output,
-            "Host: {} ()     Ports: 80/open/tcp//http///",
-            result.target
+            "Host: {} ()     Ports: {}",
+            result.target, ports_str
         );
 
         let script_output = result.output.replace('\n', "\\n");

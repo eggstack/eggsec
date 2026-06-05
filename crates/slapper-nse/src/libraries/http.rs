@@ -70,7 +70,7 @@ static ASYNC_HTTP_CLIENT: LazyLock<AsyncClient> = LazyLock::new(|| {
         builder = builder.danger_accept_invalid_hostnames(true);
     }
 
-    builder.build().expect("Failed to create async HTTP client")
+    builder.build().unwrap_or_else(|_| AsyncClient::new())
 });
 
 static ASYNC_HTTPS_CLIENT: LazyLock<AsyncClient> = LazyLock::new(|| {
@@ -92,7 +92,7 @@ static ASYNC_HTTPS_CLIENT: LazyLock<AsyncClient> = LazyLock::new(|| {
 
     builder
         .build()
-        .expect("Failed to create async HTTPS client")
+        .unwrap_or_else(|_| AsyncClient::new())
 });
 
 fn get_client(url: &str) -> &'static Client {

@@ -253,6 +253,26 @@ struct NvdWeakness {
     description: Vec<NvdDescription>,
 }
 
+fn extract_references(cve: &NvdCve) -> Vec<String> {
+    cve.references
+        .as_ref()
+        .map(|r| r.iter().map(|r| r.url.clone()).collect())
+        .unwrap_or_default()
+}
+
+fn extract_weaknesses(cve: &NvdCve) -> Vec<String> {
+    cve.weaknesses
+        .as_ref()
+        .map(|w| {
+            w.iter()
+                .flat_map(|w| w.description.iter())
+                .filter(|d| d.lang == "en")
+                .map(|d| d.value.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
     let description = cve
         .descriptions
@@ -261,31 +281,21 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
         .map(|d| d.value.clone())
         .unwrap_or_default();
 
+    let references = extract_references(&cve);
+    let weaknesses = extract_weaknesses(&cve);
+
     let (severity, severity_type) = if let Some(metrics) = &cve.metrics {
         if let Some(v31) = &metrics.cvss_v31 {
             if let Some(cvss) = v31.first() {
-                let score = cvss.cvss_data.base_score;
                 return CveRecord {
                     id: cve.id,
                     description,
-                    severity: score,
+                    severity: cvss.cvss_data.base_score,
                     severity_type: SeverityType::CvssV31,
                     published: cve.published,
                     modified: cve.last_modified,
-                    references: cve
-                        .references
-                        .map(|r| r.into_iter().map(|r| r.url).collect())
-                        .unwrap_or_default(),
-                    weaknesses: cve
-                        .weaknesses
-                        .map(|w| {
-                            w.into_iter()
-                                .flat_map(|w| w.description)
-                                .filter(|d| d.lang == "en")
-                                .map(|d| d.value)
-                                .collect()
-                        })
-                        .unwrap_or_default(),
+                    references,
+                    weaknesses,
                     configurations: Vec::new(),
                     known_exploited: false,
                     vendor_advisories: Vec::new(),
@@ -295,28 +305,15 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
 
         if let Some(v30) = &metrics.cvss_v30 {
             if let Some(cvss) = v30.first() {
-                let score = cvss.cvss_data.base_score;
                 return CveRecord {
                     id: cve.id,
                     description,
-                    severity: score,
+                    severity: cvss.cvss_data.base_score,
                     severity_type: SeverityType::CvssV3,
                     published: cve.published,
                     modified: cve.last_modified,
-                    references: cve
-                        .references
-                        .map(|r| r.into_iter().map(|r| r.url).collect())
-                        .unwrap_or_default(),
-                    weaknesses: cve
-                        .weaknesses
-                        .map(|w| {
-                            w.into_iter()
-                                .flat_map(|w| w.description)
-                                .filter(|d| d.lang == "en")
-                                .map(|d| d.value)
-                                .collect()
-                        })
-                        .unwrap_or_default(),
+                    references,
+                    weaknesses,
                     configurations: Vec::new(),
                     known_exploited: false,
                     vendor_advisories: Vec::new(),
@@ -326,28 +323,15 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
 
         if let Some(v2) = &metrics.cvss_v2 {
             if let Some(cvss) = v2.first() {
-                let score = cvss.cvss_data.base_score;
                 return CveRecord {
                     id: cve.id,
                     description,
-                    severity: score,
+                    severity: cvss.cvss_data.base_score,
                     severity_type: SeverityType::CvssV2,
                     published: cve.published,
                     modified: cve.last_modified,
-                    references: cve
-                        .references
-                        .map(|r| r.into_iter().map(|r| r.url).collect())
-                        .unwrap_or_default(),
-                    weaknesses: cve
-                        .weaknesses
-                        .map(|w| {
-                            w.into_iter()
-                                .flat_map(|w| w.description)
-                                .filter(|d| d.lang == "en")
-                                .map(|d| d.value)
-                                .collect()
-                        })
-                        .unwrap_or_default(),
+                    references,
+                    weaknesses,
                     configurations: Vec::new(),
                     known_exploited: false,
                     vendor_advisories: Vec::new(),
@@ -367,20 +351,8 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
         severity_type,
         published: cve.published,
         modified: cve.last_modified,
-        references: cve
-            .references
-            .map(|r| r.into_iter().map(|r| r.url).collect())
-            .unwrap_or_default(),
-        weaknesses: cve
-            .weaknesses
-            .map(|w| {
-                w.into_iter()
-                    .flat_map(|w| w.description)
-                    .filter(|d| d.lang == "en")
-                    .map(|d| d.value)
-                    .collect()
-            })
-            .unwrap_or_default(),
+        references,
+        weaknesses,
         configurations: Vec::new(),
         known_exploited: false,
         vendor_advisories: Vec::new(),

@@ -1240,7 +1240,7 @@ fn mysql_password_hash(password: &str, salt: &[u8]) -> Vec<u8> {
     let hash1_result: [u8; 20] = hash1.finalize().into();
 
     let mut hash2 = Sha1::new();
-    hash2.update(&hash1_result);
+    hash2.update(hash1_result);
     let hash2_result: [u8; 20] = hash2.finalize().into();
 
     let mut combined = Vec::with_capacity(salt.len() + 20);
