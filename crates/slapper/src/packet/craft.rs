@@ -49,13 +49,58 @@ fn compute_tcp_checksum(
     pseudo[32..tcp_header_len].copy_from_slice(options);
     pseudo[tcp_header_len..].copy_from_slice(payload);
 
+    checksum_data(&pseudo)
+}
+
+fn compute_tcp_checksum_v6(
+    src_ip: Ipv6Addr,
+    dst_ip: Ipv6Addr,
+    src_port: u16,
+    dst_port: u16,
+    seq: u32,
+    ack: u32,
+    data_offset: u8,
+    flags: u8,
+    window: u16,
+    urgent: u16,
+    options: &[u8],
+    payload: &[u8],
+) -> u16 {
+    let tcp_header_len = 20 + options.len();
+    let tcp_segment_len = tcp_header_len + payload.len();
+    let mut pseudo = vec![0u8; 40 + tcp_segment_len];
+
+    pseudo[0..16].copy_from_slice(&src_ip.octets());
+    pseudo[16..32].copy_from_slice(&dst_ip.octets());
+    pseudo[32..36].copy_from_slice(&(tcp_segment_len as u32).to_be_bytes());
+    pseudo[36] = 0;
+    pseudo[37] = 0;
+    pseudo[38] = 0;
+    pseudo[39] = 6; // TCP next header
+
+    pseudo[40..42].copy_from_slice(&src_port.to_be_bytes());
+    pseudo[42..44].copy_from_slice(&dst_port.to_be_bytes());
+    pseudo[44..48].copy_from_slice(&seq.to_be_bytes());
+    pseudo[48..52].copy_from_slice(&ack.to_be_bytes());
+    pseudo[52] = data_offset;
+    pseudo[53] = flags;
+    pseudo[54..56].copy_from_slice(&window.to_be_bytes());
+    pseudo[56..58].copy_from_slice(&0u16.to_be_bytes());
+    pseudo[58..60].copy_from_slice(&urgent.to_be_bytes());
+    pseudo[60..tcp_header_len + 40].copy_from_slice(options);
+    pseudo[tcp_header_len + 40..].copy_from_slice(payload);
+
+    checksum_data(&pseudo)
+}
+
+fn checksum_data(data: &[u8]) -> u16 {
     let mut sum: u32 = 0;
-    for i in (0..pseudo.len()).step_by(2) {
-        if i + 1 < pseudo.len() {
-            let word = ((pseudo[i] as u32) << 8) | (pseudo[i + 1] as u32);
+    for i in (0..data.len()).step_by(2) {
+        if i + 1 < data.len() {
+            let word = ((data[i] as u32) << 8) | (data[i + 1] as u32);
             sum += word;
         } else {
-            sum += (pseudo[i] as u32) << 8;
+            sum += (data[i] as u32) << 8;
         }
     }
     while sum > 0xffff {
@@ -262,11 +307,14 @@ impl PacketBuilder {
                 IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             ));
 
+        let mut payload_appended = false;
+
         if let Some(ref trans) = self.transport {
             match trans {
                 TransportBuilder::Tcp(tcp) => {
                     let payload = self.payload.as_deref().unwrap_or(&[]);
                     packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload));
+                    payload_appended = true;
                 }
                 TransportBuilder::Udp(udp) => {
                     packet.extend_from_slice(&udp.to_bytes());
@@ -277,8 +325,10 @@ impl PacketBuilder {
             }
         }
 
-        if let Some(ref payload) = self.payload {
-            packet.extend_from_slice(payload);
+        if !payload_appended {
+            if let Some(ref payload) = self.payload {
+                packet.extend_from_slice(payload);
+            }
         }
 
         packet
@@ -322,7 +372,7 @@ impl Ipv4Builder {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = [0u8; 20];
         bytes[0] = 0x45;
-        bytes[1] = self.flags << 5;
+        bytes[1] = (self.flags & 0x07) << 5;
         bytes[2..4].copy_from_slice(&20u16.to_be_bytes());
         bytes[4..6].copy_from_slice(&self.id.to_be_bytes());
         bytes[6] = 0;
@@ -391,8 +441,8 @@ impl TcpBuilder {
             bytes[20..].copy_from_slice(&self.options);
         }
 
-        if let (IpAddr::V4(src), IpAddr::V4(dst)) = (src_ip, dst_ip) {
-            let checksum = compute_tcp_checksum(
+        let checksum = match (src_ip, dst_ip) {
+            (IpAddr::V4(src), IpAddr::V4(dst)) => compute_tcp_checksum(
                 src,
                 dst,
                 self.src_port,
@@ -405,9 +455,24 @@ impl TcpBuilder {
                 self.urgent,
                 &self.options,
                 payload,
-            );
-            bytes[16..18].copy_from_slice(&checksum.to_be_bytes());
-        }
+            ),
+            (IpAddr::V6(src), IpAddr::V6(dst)) => compute_tcp_checksum_v6(
+                src,
+                dst,
+                self.src_port,
+                self.dst_port,
+                self.seq,
+                self.ack,
+                data_offset,
+                self.flags.to_byte(),
+                self.window,
+                self.urgent,
+                &self.options,
+                payload,
+            ),
+            _ => 0,
+        };
+        bytes[16..18].copy_from_slice(&checksum.to_be_bytes());
 
         bytes
     }
