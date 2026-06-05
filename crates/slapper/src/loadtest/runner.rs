@@ -1,6 +1,7 @@
 use crate::error::{Result, SlapperError};
 use crate::utils::stealth::tool_user_agent;
 use base64::{engine::general_purpose, Engine as _};
+use bytes::Bytes;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Client, Method};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,7 +24,7 @@ pub struct LoadTestRunner {
     concurrency: usize,
     timeout: Duration,
     method: Method,
-    body: Option<String>,
+    body: Option<Bytes>,
     headers: Vec<(String, String)>,
     insecure: bool,
     proxy: Option<String>,
@@ -83,10 +84,6 @@ impl LoadTestRunner {
         })
     }
 
-    pub fn from_args(args: LoadArgs) -> Result<Self> {
-        Self::from_args_with_tui_mode(args, false)
-    }
-
     pub fn from_args_with_tui_mode(args: LoadArgs, tui_mode: bool) -> Result<Self> {
         let timeout = Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
 
@@ -140,53 +137,66 @@ impl LoadTestRunner {
     }
 
     pub fn set_common(&mut self, common: CommonHttpArgs) {
-        self.insecure = common.insecure;
-        self.proxy = common.proxy;
-        self.proxy_auth = common.proxy_auth;
-
-        if let Some(rate) = common.rate_limit {
-            if rate == 0 {
-                tracing::warn!("Rate limit of 0 is invalid, ignoring rate limit setting");
-            } else {
-                self.rate_limit = Some(rate);
-            }
-        }
-
-        if let Some(ua) = common.user_agent {
-            self.user_agent = ua;
-        }
-
+        self.apply_common(
+            common.insecure,
+            common.proxy,
+            common.proxy_auth,
+            common.rate_limit,
+            common.user_agent,
+        );
         self.apply_auth_headers(common.auth, common.bearer, common.cookie, common.api_key);
     }
 
     pub fn set_common_with_config(&mut self, common: CommonHttpArgs, config: &SlapperConfig) {
-        self.insecure = common.insecure || !config.http.verify_tls;
-        self.proxy = common.proxy.or(config.http.proxy.clone());
-        self.proxy_auth = common.proxy_auth.or(config
+        let insecure = common.insecure || !config.http.verify_tls;
+        let proxy = common.proxy.or(config.http.proxy.clone());
+        let proxy_auth = common.proxy_auth.or(config
             .http
             .proxy_auth
             .as_ref()
             .map(|s| s.expose_secret().to_string()));
-
         let effective_rate = common.rate_limit.or(config.scan.rate_limit_per_second);
-        if let Some(rate) = effective_rate {
+        let user_agent = common
+            .user_agent
+            .or_else(|| config.http.default_user_agent.clone());
+
+        self.apply_common(insecure, proxy, proxy_auth, effective_rate, user_agent);
+        self.apply_auth_headers(common.auth, common.bearer, common.cookie, common.api_key);
+
+        for (key, value) in &config.http.default_headers {
+            self.add_header(key.clone(), value.clone());
+        }
+    }
+
+    fn apply_common(
+        &mut self,
+        insecure: bool,
+        proxy: Option<String>,
+        proxy_auth: Option<String>,
+        rate_limit: Option<u32>,
+        user_agent: Option<String>,
+    ) {
+        self.insecure = insecure;
+        self.proxy = proxy;
+        self.proxy_auth = proxy_auth;
+
+        if let Some(rate) = rate_limit {
             if rate == 0 {
                 tracing::warn!("Rate limit of 0 is invalid, ignoring rate limit setting");
+            } else if rate > 100_000 {
+                tracing::warn!(
+                    "Rate limit {} req/s exceeds recommended maximum of 100,000; \
+                     rate limiting may be ineffective at this level",
+                    rate
+                );
+                self.rate_limit = Some(rate);
             } else {
                 self.rate_limit = Some(rate);
             }
         }
 
-        if let Some(ua) = common.user_agent {
+        if let Some(ua) = user_agent {
             self.user_agent = ua;
-        } else if let Some(ref ua) = config.http.default_user_agent {
-            self.user_agent = ua.clone();
-        }
-
-        self.apply_auth_headers(common.auth, common.bearer, common.cookie, common.api_key);
-
-        for (key, value) in &config.http.default_headers {
-            self.add_header(key.clone(), value.clone());
         }
     }
 
@@ -248,7 +258,7 @@ impl LoadTestRunner {
     }
 
     pub fn set_body(&mut self, body: String) {
-        self.body = Some(body);
+        self.body = Some(Bytes::from(body));
     }
 
     pub fn add_header(&mut self, key: String, value: String) {

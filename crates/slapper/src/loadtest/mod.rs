@@ -46,7 +46,7 @@ use crate::error::Result;
 use crate::cli::LoadArgs;
 use crate::config::SlapperConfig;
 
-pub use metrics::{LoadTestResults, Metrics};
+pub use metrics::LoadTestResults;
 pub use runner::LoadTestRunner;
 
 /// Run load test from CLI
@@ -64,32 +64,39 @@ pub use runner::LoadTestRunner;
 /// - Network connectivity issues occur
 /// - Output file cannot be written
 pub async fn run_cli(args: LoadArgs, config: &SlapperConfig) -> Result<()> {
-    if args.verbose && !args.quiet {
+    let verbose = args.verbose;
+    let quiet = args.quiet;
+    let json = args.json;
+    let output_file = args.output.clone();
+    let url = args.url.clone();
+    let concurrency = args.concurrency;
+
+    if verbose && !quiet {
         eprintln!(
             "Starting load test against {} with {} concurrent connections",
-            args.url, args.concurrency
+            url, concurrency
         );
     }
 
-    let runner = LoadTestRunner::from_args_with_config(args.clone(), config)?;
+    let runner = LoadTestRunner::from_args_with_config(args, config)?;
     let results = runner.run().await?;
 
-    let output = if args.json {
+    let output_str = if json {
         serde_json::to_string_pretty(&results)?
     } else {
         format!("\n{}", results)
     };
 
-    if let Some(ref output_file) = args.output {
-        tokio::fs::write(output_file, &output).await?;
-        if args.verbose && !args.quiet {
-            eprintln!("Results written to {}", output_file);
+    if let Some(ref path) = output_file {
+        tokio::fs::write(path, &output_str).await?;
+        if verbose && !quiet {
+            eprintln!("Results written to {}", path);
         }
-    } else if !args.quiet {
-        println!("{}", output);
+    } else if !quiet {
+        println!("{}", output_str);
     }
 
-    if args.verbose && !args.quiet {
+    if verbose && !quiet {
         eprintln!(
             "Load test complete: {} requests, {} errors",
             results.total_requests, results.failed_requests
