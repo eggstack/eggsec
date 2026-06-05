@@ -43,7 +43,6 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
                 if let Err(e) = crate::commands::webhook::send_webhook_notifications(
                     &test_config,
                     &test_payload,
-                    None,
                 )
                 .await
                 {
@@ -91,7 +90,6 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
                 if let Err(e) = crate::commands::webhook::send_webhook_notifications(
                     &send_config,
                     &payload,
-                    None,
                 )
                 .await
                 {

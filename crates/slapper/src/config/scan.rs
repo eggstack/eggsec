@@ -199,6 +199,11 @@ impl WebhookConfig {
                 ));
             }
         }
+        if self.events.is_empty() {
+            return Err(ConfigError::Validation(
+                "webhook.events cannot be empty — webhook will never trigger".to_string(),
+            ));
+        }
         Ok(())
     }
 }

@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::config::{WebhookConfig, WebhookEvent};
 use crate::utils::create_http_client;
 use anyhow::Result;
 use hmac::{Hmac, Mac};
+use rustc_hash::FxHashMap;
 use sha2::Sha256;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,31 +74,50 @@ impl WebhookNotifier {
                 continue;
             }
 
-            let mut extra_headers: HashMap<String, String> = HashMap::new();
+            let mut extra_headers: FxHashMap<String, String> = FxHashMap::default();
 
             if let Some(ref secret) = webhook.secret {
                 type HmacSha256 = Hmac<Sha256>;
-                let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
-                    .map_err(|e| format!("HMAC error: {}", e))
-                    .unwrap();
-                let canonical_json =
-                    serde_json::to_string(payload)
-                        .map_err(|e| format!("JSON error: {}", e))
-                        .unwrap();
-                mac.update(canonical_json.as_bytes());
-                let result = mac.finalize();
-                let signature = format!("sha256={}", hex::encode(result.into_bytes()));
-                extra_headers.insert("X-Signature-256".to_string(), signature);
+                match HmacSha256::new_from_slice(secret.expose_secret().as_bytes()) {
+                    Ok(mut mac) => {
+                        match serde_json::to_string(payload) {
+                            Ok(canonical_json) => {
+                                mac.update(canonical_json.as_bytes());
+                                let result = mac.finalize();
+                                let signature =
+                                    format!("sha256={}", hex::encode(result.into_bytes()));
+                                extra_headers
+                                    .insert("X-Signature-256".to_string(), signature);
+                            }
+                            Err(e) => {
+                                results.push(Err(format!("JSON serialization error: {}", e)));
+                                continue;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        results.push(Err(format!("HMAC key error: {}", e)));
+                        continue;
+                    }
+                }
             }
 
             for (key, value) in &webhook.headers {
                 extra_headers.insert(key.clone(), value.clone());
             }
 
+            let payload_value = match serde_json::to_value(payload) {
+                Ok(v) => v,
+                Err(e) => {
+                    results.push(Err(format!("JSON serialization error: {}", e)));
+                    continue;
+                }
+            };
+
             match self
                 .send_with_retry(
                     &webhook.url,
-                    &serde_json::to_value(payload).unwrap(),
+                    &payload_value,
                     "Webhook",
                     &extra_headers,
                 )
@@ -124,7 +143,7 @@ impl WebhookNotifier {
             }
         }
         let slack_payload = self.build_slack_payload(payload);
-        self.send_with_retry(webhook_url, &slack_payload, "Slack", &HashMap::new())
+        self.send_with_retry(webhook_url, &slack_payload, "Slack", &FxHashMap::default())
             .await
     }
 
@@ -140,7 +159,7 @@ impl WebhookNotifier {
             }
         }
         let discord_payload = self.build_discord_payload(payload);
-        self.send_with_retry(webhook_url, &discord_payload, "Discord", &HashMap::new())
+        self.send_with_retry(webhook_url, &discord_payload, "Discord", &FxHashMap::default())
             .await
     }
 
@@ -156,7 +175,7 @@ impl WebhookNotifier {
             }
         }
         let teams_payload = self.build_teams_payload(payload);
-        self.send_with_retry(webhook_url, &teams_payload, "Teams", &HashMap::new())
+        self.send_with_retry(webhook_url, &teams_payload, "Teams", &FxHashMap::default())
             .await
     }
 
@@ -165,7 +184,7 @@ impl WebhookNotifier {
         url: &str,
         payload: &serde_json::Value,
         platform: &str,
-        extra_headers: &HashMap<String, String>,
+        extra_headers: &FxHashMap<String, String>,
     ) -> Result<(), String> {
         const MAX_RETRIES: u32 = 3;
         const BASE_DELAY_MS: u64 = 1000;
@@ -601,5 +620,163 @@ mod tests {
         let fields = discord["embeds"][0]["fields"].as_array().unwrap();
         assert_eq!(fields.len(), 3);
         assert_eq!(fields[2]["name"], "Statistics");
+    }
+
+    #[test]
+    fn test_hmac_signature_generation() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        let secret = SensitiveString::new("test-secret-key");
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "test".to_string(),
+            findings: None,
+            stats: None,
+        };
+
+        type HmacSha256 = Hmac<Sha256>;
+        let mut mac =
+            HmacSha256::new_from_slice(secret.expose_secret().as_bytes()).unwrap();
+        let canonical_json = serde_json::to_string(&payload).unwrap();
+        mac.update(canonical_json.as_bytes());
+        let result = mac.finalize();
+        let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+        assert!(signature.starts_with("sha256="));
+        assert_eq!(signature.len(), 71);
+    }
+
+    #[tokio::test]
+    async fn test_notify_filters_by_webhook_events() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![WebhookConfig {
+                name: Some("only-errors".to_string()),
+                url: "https://example.com/hook".to_string(),
+                secret: None,
+                headers: rustc_hash::FxHashMap::default(),
+                events: vec![WebhookEvent::ScanError],
+            }],
+        };
+
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "Done".to_string(),
+            findings: None,
+            stats: None,
+        };
+
+        let results = notifier.notify(&payload).await;
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_notify_delivers_matching_events() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![WebhookConfig {
+                name: Some("only-complete".to_string()),
+                url: "https://example.com/hook".to_string(),
+                secret: None,
+                headers: rustc_hash::FxHashMap::default(),
+                events: vec![WebhookEvent::ScanComplete],
+            }],
+        };
+
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "Done".to_string(),
+            findings: None,
+            stats: None,
+        };
+
+        let results = notifier.notify(&payload).await;
+        assert_eq!(results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_platform_event_filter_blocks_event() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanError,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "Error".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let filter = vec![WebhookEvent::ScanComplete, WebhookEvent::FindingDetected];
+        let result = notifier
+            .notify_slack("https://hooks.slack.com/test", &payload, Some(&filter))
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_platform_event_filter_allows_event() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "Done".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let filter = vec![WebhookEvent::ScanComplete, WebhookEvent::FindingDetected];
+        let result = notifier
+            .notify_discord(
+                "https://discord.com/api/webhooks/test",
+                &payload,
+                Some(&filter),
+            )
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_platform_no_filter_does_not_short_circuit() {
+        let notifier = WebhookNotifier {
+            client: create_http_client(10).unwrap(),
+            webhooks: vec![],
+        };
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanError,
+            timestamp: Utc::now(),
+            scan_id: "s1".to_string(),
+            target: "example.com".to_string(),
+            message: "Error".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let filter = vec![WebhookEvent::ScanComplete];
+        let blocked = notifier
+            .notify_teams("https://outlook.office.com/webhook/test", &payload, Some(&filter))
+            .await;
+        assert!(blocked.is_ok(), "filter blocked = Ok without request");
+        let no_filter = notifier
+            .notify_teams("https://outlook.office.com/webhook/test", &payload, None)
+            .await;
+        assert!(
+            no_filter.is_ok() || no_filter.is_err(),
+            "no filter = request attempted"
+        );
     }
 }

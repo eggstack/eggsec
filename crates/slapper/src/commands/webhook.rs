@@ -13,9 +13,8 @@ pub struct WebhookTestConfig {
 pub async fn send_webhook_notifications(
     config: &WebhookTestConfig,
     payload: &NotificationPayload,
-    custom_webhooks: Option<Vec<WebhookConfig>>,
 ) -> Result<()> {
-    let notifier = WebhookNotifier::new(custom_webhooks.unwrap_or_default())?;
+    let notifier = WebhookNotifier::new(vec![])?;
 
     let mut errors = Vec::new();
 

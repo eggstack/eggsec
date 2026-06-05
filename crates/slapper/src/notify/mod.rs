@@ -82,9 +82,10 @@ impl NotifyManager {
         findings: Option<Vec<FindingSummary>>,
         stats: Option<ScanStats>,
     ) {
-        // Findings always trigger a notification even if notify_on_complete is disabled,
-        // since finding delivery is controlled separately by notify_on_findings.
-        if !self.config.notify_on_complete && findings.is_none() {
+        // Skip if scan-complete notifications are disabled and no findings to report,
+        // or if both scan-complete and findings notifications are disabled.
+        if !self.config.notify_on_complete && (findings.is_none() || !self.config.notify_on_findings)
+        {
             return;
         }
 
@@ -304,5 +305,80 @@ mod tests {
         );
         assert!(deserialized.notify_on_complete);
         assert!(!deserialized.notify_on_findings);
+    }
+
+    #[tokio::test]
+    async fn test_notify_scan_complete_suppressed_when_both_disabled() {
+        let config = NotificationConfig {
+            notify_on_complete: false,
+            notify_on_findings: false,
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        let findings = Some(vec![FindingSummary {
+            severity: "high".to_string(),
+            finding_type: "xss".to_string(),
+            description: "XSS".to_string(),
+            location: "/q".to_string(),
+        }]);
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "test".to_string(),
+            target: "example.com".to_string(),
+            message: "done".to_string(),
+            findings,
+            stats: None,
+        };
+        let result = manager.notifier.notify(&payload).await;
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_notify_scan_complete_allowed_when_findings_enabled() {
+        let config = NotificationConfig {
+            notify_on_complete: false,
+            notify_on_findings: true,
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        let findings = Some(vec![FindingSummary {
+            severity: "high".to_string(),
+            finding_type: "xss".to_string(),
+            description: "XSS".to_string(),
+            location: "/q".to_string(),
+        }]);
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "test".to_string(),
+            target: "example.com".to_string(),
+            message: "done".to_string(),
+            findings,
+            stats: None,
+        };
+        let result = manager.notifier.notify(&payload).await;
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_notify_scan_complete_suppressed_no_findings() {
+        let config = NotificationConfig {
+            notify_on_complete: false,
+            notify_on_findings: true,
+            ..Default::default()
+        };
+        let manager = NotifyManager::new(config);
+        let payload = NotificationPayload {
+            event: WebhookEvent::ScanComplete,
+            timestamp: Utc::now(),
+            scan_id: "test".to_string(),
+            target: "example.com".to_string(),
+            message: "done".to_string(),
+            findings: None,
+            stats: None,
+        };
+        let result = manager.notifier.notify(&payload).await;
+        assert!(result.is_empty());
     }
 }

@@ -89,6 +89,9 @@ pub async fn handle_fingerprint(
 pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> Result<()> {
     ctx.ensure_scope(&args.target)?;
     args.json |= ctx.json;
+    let target = args.target.clone();
+    let scan_id = format!("nse-{}", chrono::Utc::now().timestamp());
+    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
     let config = slapper_nse::NseConfig::new(
         &args.target,
         &args.script,
@@ -97,7 +100,20 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
         args.json,
         args.verbose,
     );
-    slapper_nse::run_cli(config).await
+    match slapper_nse::run_cli(config).await {
+        Ok(()) => {
+            ctx.notify_manager
+                .notify_scan_complete(&scan_id, &target, "NSE scan completed", None, None)
+                .await;
+            Ok(())
+        }
+        Err(e) => {
+            ctx.notify_manager
+                .notify_error(&scan_id, &target, &e.to_string())
+                .await;
+            Err(e)
+        }
+    }
 }
 
 pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -> Result<()> {
@@ -129,7 +145,24 @@ pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -
     let session =
         crate::pipeline::session::load(&args.session).map_err(|e| anyhow::anyhow!("{}", e))?;
     ctx.ensure_scope(&session.target)?;
-    crate::pipeline::resume_cli(args)
+    let target = session.target.clone();
+    let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());
+    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    match crate::pipeline::resume_cli(args)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
+    {
+        Ok(()) => {
+            ctx.notify_manager
+                .notify_scan_complete(&scan_id, &target, "Resumed scan completed", None, None)
+                .await;
+            Ok(())
+        }
+        Err(e) => {
+            ctx.notify_manager
+                .notify_error(&scan_id, &target, &e.to_string())
+                .await;
+            Err(e)
+        }
+    }
 }

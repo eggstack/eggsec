@@ -32,9 +32,26 @@ pub async fn handle_waf_stress(
 ) -> Result<()> {
     ctx.ensure_scope_url(&args.url)?;
     args.json |= ctx.json;
-    crate::fuzzer::run_waf_stress(args)
+    let target = args.url.clone();
+    let scan_id = format!("waf-stress-{}", chrono::Utc::now().timestamp());
+    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    match crate::fuzzer::run_waf_stress(args)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
+    {
+        Ok(()) => {
+            ctx.notify_manager
+                .notify_scan_complete(&scan_id, &target, "WAF stress test completed", None, None)
+                .await;
+            Ok(())
+        }
+        Err(e) => {
+            ctx.notify_manager
+                .notify_error(&scan_id, &target, &e.to_string())
+                .await;
+            Err(e)
+        }
+    }
 }
 
 pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> Result<()> {
@@ -65,11 +82,49 @@ pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> 
 pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlArgs) -> Result<()> {
     ctx.ensure_scope_url(&args.url)?;
     args.json |= ctx.json;
-    crate::commands::run_graphql(args).await
+    let target = args.url.clone();
+    let scan_id = format!("graphql-{}", chrono::Utc::now().timestamp());
+    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    match crate::commands::run_graphql(args)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
+    {
+        Ok(()) => {
+            ctx.notify_manager
+                .notify_scan_complete(&scan_id, &target, "GraphQL scan completed", None, None)
+                .await;
+            Ok(())
+        }
+        Err(e) => {
+            ctx.notify_manager
+                .notify_error(&scan_id, &target, &e.to_string())
+                .await;
+            Err(e)
+        }
+    }
 }
 
 pub async fn handle_oauth(ctx: &CommandContext, mut args: crate::cli::OAuthArgs) -> Result<()> {
     ctx.ensure_scope_url(&args.url)?;
     args.json |= ctx.json;
-    crate::commands::run_oauth(args).await
+    let target = args.url.clone();
+    let scan_id = format!("oauth-{}", chrono::Utc::now().timestamp());
+    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    match crate::commands::run_oauth(args)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
+    {
+        Ok(()) => {
+            ctx.notify_manager
+                .notify_scan_complete(&scan_id, &target, "OAuth scan completed", None, None)
+                .await;
+            Ok(())
+        }
+        Err(e) => {
+            ctx.notify_manager
+                .notify_error(&scan_id, &target, &e.to_string())
+                .await;
+            Err(e)
+        }
+    }
 }
