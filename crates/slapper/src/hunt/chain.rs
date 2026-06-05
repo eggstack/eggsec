@@ -16,6 +16,7 @@ pub struct AttackChain {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ChainType {
     PrivilegeEscalation,
     DataExfiltration,

@@ -15,6 +15,7 @@ pub struct SessionIssue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum SessionIssueType {
     SessionFixation,
     SessionTimeout,
@@ -197,41 +198,57 @@ async fn check_session_fixation(
 ) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
-    let resp1 = client.get("/").await;
-    let resp2 = client.get("/").await;
+    let request_count = 5;
+    let mut all_cookies: Vec<Vec<String>> = Vec::new();
 
-    if let (Ok(r1), Ok(r2)) = (resp1, resp2) {
-        let cookies1: Vec<String> = r1
-            .headers()
-            .get_all(reqwest::header::SET_COOKIE)
-            .iter()
-            .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
-            .collect();
-
-        let cookies2: Vec<String> = r2
-            .headers()
-            .get_all(reqwest::header::SET_COOKIE)
-            .iter()
-            .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
-            .collect();
-
-        if !cookies1.is_empty() && cookies1 == cookies2 {
-            let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-            issues.push(SessionIssue {
-                id,
-                issue_type: SessionIssueType::SessionFixation,
-                severity: Severity::High,
-                description: "Session ID appears static across requests (potential fixation)"
-                    .to_string(),
-                evidence: format!(
-                    "Received same session cookie across {} requests",
-                    cookies1.len()
-                ),
-                remediation: "Regenerate session ID after authentication and periodically"
-                    .to_string(),
-                cvss_score: Some(6.5),
-            });
+    for _ in 0..request_count {
+        if let Ok(resp) = client.get("/").await {
+            let cookies: Vec<String> = resp
+                .headers()
+                .get_all(reqwest::header::SET_COOKIE)
+                .iter()
+                .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
+                .collect();
+            all_cookies.push(cookies);
         }
+    }
+
+    if all_cookies.is_empty() || all_cookies.iter().all(|c| c.is_empty()) {
+        return issues;
+    }
+
+    let first = &all_cookies[0];
+    if first.is_empty() {
+        return issues;
+    }
+
+    let all_identical = all_cookies.iter().all(|c| c == first);
+
+    let has_session_cookie = first.iter().any(|cookie| {
+        let lower = cookie.to_lowercase();
+        lower.contains("session")
+            || lower.contains("sid")
+            || lower.contains("token")
+            || lower.contains("auth")
+            || lower.contains("jwt")
+    });
+
+    if all_identical && has_session_cookie {
+        let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        issues.push(SessionIssue {
+            id,
+            issue_type: SessionIssueType::SessionFixation,
+            severity: Severity::High,
+            description: "Session ID appears static across multiple requests (potential fixation)"
+                .to_string(),
+            evidence: format!(
+                "Received identical session cookie across {} consecutive requests",
+                request_count
+            ),
+            remediation: "Regenerate session ID after authentication and periodically"
+                .to_string(),
+            cvss_score: Some(6.5),
+        });
     }
 
     issues

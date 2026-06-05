@@ -16,6 +16,7 @@ pub struct AuthzBypass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum BypassType {
     Idor,
     MissingAuthorization,
@@ -72,19 +73,19 @@ pub async fn check_authz_bypass(
     Ok(bypasses)
 }
 
-async fn check_admin_access(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
+async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
 
     for path in ADMIN_PATHS {
-        let client_ref = unsafe { &*(client as *const HuntClient) };
+        let client = client.clone();
         let sem = semaphore.clone();
         let path = path.to_string();
 
         handles.push(tokio::spawn(async move {
             let _permit = sem.acquire().await.unwrap();
-            let resp = client_ref.get(&path).await;
+            let resp = client.get(&path).await;
             (path, resp)
         }));
     }
@@ -201,6 +202,11 @@ async fn check_http_methods(client: &HuntClient, _config: &HuntConfig) -> Vec<Au
     for method in &methods {
         let resp = match *method {
             "OPTIONS" => client.head("/").await,
+            "TRACE" => {
+                client
+                    .request(reqwest::Method::TRACE, "/")
+                    .await
+            }
             _ => client.get("/").await,
         };
 

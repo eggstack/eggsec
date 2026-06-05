@@ -23,6 +23,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct HuntClient {
     pub client: Client,
     pub target: String,
@@ -117,6 +118,33 @@ impl HuntClient {
 
         self.client
             .head(&url)
+            .header("User-Agent", "Slapper/1.0 Security Testing")
+            .send()
+            .await
+            .map_err(|e| crate::error::SlapperError::Http(e.to_string()))
+    }
+
+    pub async fn request(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+    ) -> Result<reqwest::Response> {
+        let url = if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!(
+                "{}{}",
+                self.target.trim_end_matches('/'),
+                if path.starts_with('/') {
+                    path.to_string()
+                } else {
+                    format!("/{}", path)
+                }
+            )
+        };
+
+        self.client
+            .request(method, &url)
             .header("User-Agent", "Slapper/1.0 Security Testing")
             .send()
             .await

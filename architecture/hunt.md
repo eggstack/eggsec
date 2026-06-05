@@ -8,10 +8,10 @@ Advanced threat hunting module for detecting attack chains, business logic flaws
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `HuntClient` | `hunt/mod.rs:24` | HTTP client wrapper with target URL, timeout, and convenience methods |
-| `HuntReport` | `hunt/mod.rs:130` | Aggregated hunt results across all categories; tracks per-category findings and total count |
-| `HuntConfig` | `hunt/mod.rs:200` | Configuration controlling which hunt categories to run |
-| `AttackChain` | `hunt/chain.rs:6` | Multi-step attack chain (privilege escalation, data exfiltration, lateral movement) |
+| `HuntClient` | `hunt/mod.rs:27` | HTTP client wrapper with target URL, timeout, and convenience methods |
+| `HuntReport` | `hunt/mod.rs:160` | Aggregated hunt results across all categories; tracks per-category findings and total count |
+| `HuntConfig` | `hunt/mod.rs:247` | Configuration controlling which hunt categories to run |
+| `AttackChain` | `hunt/chain.rs:7` | Multi-step attack chain (privilege escalation, data exfiltration, lateral movement) |
 | `BusinessLogicFlaw` | `hunt/business.rs:7` | Business logic vulnerability (sensitive files, error handling, rate limiting) |
 | `RaceCondition` | `hunt/race.rs:7` | Race condition / concurrency vulnerability |
 | `AuthzBypass` | `hunt/authz.rs:7` | Authorization bypass vulnerability |

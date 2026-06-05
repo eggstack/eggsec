@@ -16,6 +16,7 @@ pub struct BusinessLogicFlaw {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum FlawType {
     PriceManipulation,
     PrivilegeEscalation,
@@ -154,20 +155,20 @@ async fn check_api_discovery(client: &HuntClient, _config: &HuntConfig) -> Vec<B
 
 async fn check_sensitive_files(
     client: &HuntClient,
-    _config: &HuntConfig,
+    config: &HuntConfig,
 ) -> Vec<BusinessLogicFlaw> {
     let mut flaws = Vec::new();
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
 
     for path in SENSITIVE_PATHS {
-        let client_ref = unsafe { &*(client as *const HuntClient) };
+        let client = client.clone();
         let sem = semaphore.clone();
         let path = path.to_string();
 
         handles.push(tokio::spawn(async move {
             let _permit = sem.acquire().await.unwrap();
-            let resp = client_ref.get(&path).await;
+            let resp = client.get(&path).await;
             (path, resp)
         }));
     }

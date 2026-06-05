@@ -16,6 +16,7 @@ pub struct RaceCondition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum RaceType {
     TimeOfCheckTimeOfUse,
     ConcurrentFundsTransfer,
@@ -69,7 +70,7 @@ async fn check_concurrent_requests(
         let mut status_codes = Vec::new();
 
         for _ in 0..concurrency {
-            let client_ref = unsafe { &*(client as *const HuntClient) };
+            let client = client.clone();
             let path = path.to_string();
 
             handles.push(tokio::spawn(async move {
@@ -78,7 +79,7 @@ async fn check_concurrent_requests(
                     "quantity": 1,
                     "amount": 100
                 });
-                client_ref
+                client
                     .post_json(&path, &body)
                     .await
                     .map(|r| r.status().as_u16())

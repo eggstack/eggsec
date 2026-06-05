@@ -31,7 +31,7 @@ pub struct HuntArgs {
     #[arg(long, default_value_t = HUNT_TIMEOUT, help = "Per-request timeout in seconds")]
     pub timeout: u64,
 
-    #[arg(long, help = "Output format (json, pretty, csv, html, markdown, sarif, junit)")]
+    #[arg(long, help = "Output format (json, pretty)")]
     pub format: Option<String>,
 
     #[arg(long, help = "Output file path (defaults to stdout for pretty/json)")]

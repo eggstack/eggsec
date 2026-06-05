@@ -189,8 +189,14 @@ impl super::App {
                 let msg = "Packet tab: no exportable data available".to_string();
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
+            #[cfg(feature = "advanced-hunting")]
             super::tabs::Tab::Hunt => {
                 self.export_tab_json(|s| s.hunt.get_results(), "hunt_results", "Hunt")
+            }
+            #[cfg(not(feature = "advanced-hunting"))]
+            super::tabs::Tab::Hunt => {
+                let msg = "Hunt tab requires advanced-hunting feature".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Browser => {
                 let msg = "Browser tab: no exportable data available".to_string();
