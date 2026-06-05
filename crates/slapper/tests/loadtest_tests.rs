@@ -115,7 +115,9 @@ async fn test_load_test_redirect_following() {
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 3);
     assert_eq!(results.successful_requests, 3);
-}#[tokio::test]
+}
+
+#[tokio::test]
 async fn test_load_test_with_basic_auth() {
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, ResponseTemplate};

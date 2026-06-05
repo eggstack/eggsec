@@ -320,8 +320,6 @@ impl LoadTestRunner {
             sem
         });
 
-        let cancellation_token = CancellationToken::new();
-
         let worker_count = self.concurrency.min(self.total_requests as usize);
         let mut workers = JoinSet::new();
 

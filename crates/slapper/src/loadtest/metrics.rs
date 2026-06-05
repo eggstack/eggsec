@@ -38,14 +38,9 @@ impl std::fmt::Display for LoadTestResults {
             "duration: {:.2}s",
             self.total_duration_ms as f64 / 1000.0
         )?;
-
-        if self.successful_requests > 0 {
-            writeln!(f, "latency: min={:.2}ms mean={:.2}ms p50={:.2}ms p90={:.2}ms p95={:.2}ms p99={:.2}ms max={:.2}ms",
-                self.latency_min_ms, self.latency_mean_ms, self.latency_p50_ms,
-                self.latency_p90_ms, self.latency_p95_ms, self.latency_p99_ms, self.latency_max_ms)?;
-        } else {
-            writeln!(f, "latency: no successful requests (all failed)")?;
-        }
+        writeln!(f, "latency: min={:.2}ms mean={:.2}ms p50={:.2}ms p90={:.2}ms p95={:.2}ms p99={:.2}ms max={:.2}ms",
+            self.latency_min_ms, self.latency_mean_ms, self.latency_p50_ms,
+            self.latency_p90_ms, self.latency_p95_ms, self.latency_p99_ms, self.latency_max_ms)?;
 
         if !self.status_codes.is_empty() {
             writeln!(f, "status codes")?;
