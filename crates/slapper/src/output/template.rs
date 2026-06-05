@@ -152,7 +152,14 @@ fn split_helper(
         if i > 0 {
             out.write(",")?;
         }
-        out.write(&format!("\"{}\"", item.replace('\\', "\\\\").replace('"', "\\\"")))?;
+        out.write(&format!(
+            "\"{}\"",
+            item.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+                .replace('\t', "\\t")
+        ))?;
     }
     out.write("]")?;
     Ok(())
@@ -611,5 +618,41 @@ mod tests {
         let styling = TemplateStyling::default();
         assert_eq!(styling.primary_color, "#1a73e8");
         assert_eq!(styling.secondary_color, "#f8f9fa");
+    }
+
+    #[test]
+    fn test_split_helper_basic() {
+        let mut registry = Handlebars::new();
+        registry.register_helper("split", Box::new(split_helper));
+        registry
+            .register_template_string("test", "{{#each (split items \",\")}}[{{this}}]{{/each}}")
+            .unwrap();
+        let mut data = serde_json::Map::new();
+        data.insert(
+            "items".to_string(),
+            serde_json::Value::String("a,b,c".to_string()),
+        );
+        let result = registry.render("test", &data).unwrap();
+        assert_eq!(result, "[a][b][c]");
+    }
+
+    #[test]
+    fn test_split_helper_with_newlines() {
+        let mut registry = Handlebars::new();
+        registry.register_helper("split", Box::new(split_helper));
+        registry
+            .register_template_string(
+                "test",
+                "{{#each (split items \"//\")}}[{{this}}]{{/each}}",
+            )
+            .unwrap();
+        let mut data = serde_json::Map::new();
+        data.insert(
+            "items".to_string(),
+            serde_json::Value::String("step1\nstep2".to_string()),
+        );
+        let result = registry.render("test", &data).unwrap();
+        assert!(result.contains("[step1]"));
+        assert!(result.contains("[step2]"));
     }
 }

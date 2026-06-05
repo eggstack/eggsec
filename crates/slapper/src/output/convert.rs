@@ -176,11 +176,16 @@ pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::
         writeln!(md, "| SSID | BSSID | Channel | Security | Signal | Last Seen |")?;
         writeln!(md, "|------|-------|---------|----------|--------|-----------|")?;
         for network in &report.wireless_networks {
+            let escape_pipe = |s: &str| s.replace('|', "\\|");
             writeln!(
                 md,
                 "| {} | {} | {} | {} | {} dBm | {} |",
-                network.ssid, network.bssid, network.channel,
-                network.security_type, network.signal_strength, network.last_seen
+                escape_pipe(&network.ssid),
+                escape_pipe(&network.bssid),
+                network.channel,
+                escape_pipe(&network.security_type),
+                network.signal_strength,
+                escape_pipe(&network.last_seen)
             )?;
         }
         writeln!(md)?;

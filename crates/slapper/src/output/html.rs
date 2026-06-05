@@ -181,9 +181,10 @@ impl HtmlReport {
             .unwrap_or_default();
 
         let cve_block = if !finding.cwe_ids.is_empty() {
+            let escaped_ids: Vec<String> = finding.cwe_ids.iter().map(|id| escape_html(id)).collect();
             format!(
                 r#"<div class="cve-ids">CWE: {}</div>"#,
-                finding.cwe_ids.join(", ")
+                escaped_ids.join(", ")
             )
         } else {
             String::new()

@@ -26,6 +26,8 @@ pub fn escape_csv(s: &str) -> String {
     if normalized.contains(',')
         || normalized.contains('"')
         || normalized.contains('\n')
+        || normalized.contains('\r')
+        || normalized.contains('\t')
         || starts_with_formula
     {
         format!("\"{}\"", normalized.replace('"', "\"\""))
@@ -46,6 +48,20 @@ mod tests {
     #[test]
     fn test_fullwidth_plus_bypass() {
         assert!(escape_csv("\u{FF0B}2+2").starts_with('"'));
+    }
+
+    #[test]
+    fn test_csv_quotes_tab_mid_field() {
+        let result = escape_csv("hello\tworld");
+        assert!(result.starts_with('"'));
+        assert!(result.contains('\t'));
+    }
+
+    #[test]
+    fn test_csv_quotes_cr_mid_field() {
+        let result = escape_csv("hello\rworld");
+        assert!(result.starts_with('"'));
+        assert!(result.contains('\r'));
     }
 }
 

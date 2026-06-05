@@ -463,4 +463,54 @@ mod tests {
             .expect("valid datetime");
         assert_eq!(next, expected);
     }
+
+    #[test]
+    fn test_queue_complete_success() {
+        let mut queue = ScanQueue::new(10);
+        let scan = ScheduledScan {
+            id: "s1".to_string(),
+            target: "example.com".to_string(),
+            scan_type: ScanType::PortScan,
+            scheduled_at: "2026-01-01T00:00:00Z".to_string(),
+            status: ScheduleStatus::Pending,
+            priority: Priority::Normal,
+            options: ScanOptions {
+                ports: None,
+                concurrency: None,
+                timeout: None,
+                wordlist: None,
+            },
+        };
+        queue.enqueue(scan);
+        let started = queue.start_next().expect("should start");
+        assert_eq!(started.id, "s1");
+        assert!(queue.get_running().is_some());
+
+        queue.complete("s1", true);
+        assert!(queue.get_running().is_none());
+    }
+
+    #[test]
+    fn test_queue_complete_failure() {
+        let mut queue = ScanQueue::new(10);
+        let scan = ScheduledScan {
+            id: "s2".to_string(),
+            target: "example.com".to_string(),
+            scan_type: ScanType::PortScan,
+            scheduled_at: "2026-01-01T00:00:00Z".to_string(),
+            status: ScheduleStatus::Pending,
+            priority: Priority::Normal,
+            options: ScanOptions {
+                ports: None,
+                concurrency: None,
+                timeout: None,
+                wordlist: None,
+            },
+        };
+        queue.enqueue(scan);
+        let _ = queue.start_next().expect("should start");
+
+        queue.complete("s2", false);
+        assert!(queue.get_running().is_none());
+    }
 }

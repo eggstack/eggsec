@@ -190,4 +190,22 @@ mod tests {
         assert_eq!(NodeType::Vulnerability, NodeType::Vulnerability);
         assert_eq!(NodeType::EntryPoint, NodeType::EntryPoint);
     }
+
+    #[test]
+    fn test_to_html_escapes_script_tag() {
+        let graph = AttackGraph {
+            nodes: vec![GraphNode {
+                id: "n1".to_string(),
+                label: "</script><script>alert(1)</script>".to_string(),
+                node_type: NodeType::Vulnerability,
+                severity: Severity::High,
+                properties: FxHashMap::default(),
+            }],
+            edges: vec![],
+            clusters: vec![],
+        };
+        let html = AttackGraphBuilder::to_html(&graph).unwrap();
+        assert!(!html.contains("</script><script>"));
+        assert!(html.contains("<\\/script>"));
+    }
 }

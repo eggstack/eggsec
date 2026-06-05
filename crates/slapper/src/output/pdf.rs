@@ -102,11 +102,12 @@ impl PdfGenerator {
             current_layer.use_text(&severity_str, 10.0, Mm(25.0), Mm(y_position), &font);
             y_position -= 5.0;
 
-            let description = if finding.description.chars().count() > 100 {
-                let truncated: String = finding.description.chars().take(100).collect();
+            let mut char_iter = finding.description.chars();
+            let truncated: String = char_iter.by_ref().take(100).collect();
+            let description = if char_iter.next().is_some() {
                 format!("{}...", truncated)
             } else {
-                finding.description.clone()
+                truncated
             };
             current_layer.use_text(&description, 9.0, Mm(25.0), Mm(y_position), &font);
             y_position -= 10.0;
@@ -227,5 +228,20 @@ mod tests {
         let findings = vec![];
         let html = PdfGenerator::generate_html(&findings, &PdfConfig::default());
         assert!(html.contains("Security Scan Report"));
+    }
+
+    #[test]
+    fn test_html_includes_finding_details() {
+        let findings = vec![AgentFinding::new(
+            "test",
+            crate::types::Severity::High,
+            "XSS Vulnerability",
+            "/api/users",
+            "example.com",
+        )
+        .with_description("Reflected XSS in search parameter".to_string())];
+        let html = PdfGenerator::generate_html(&findings, &PdfConfig::default());
+        assert!(html.contains("XSS Vulnerability"));
+        assert!(html.contains("Reflected XSS in search parameter"));
     }
 }
