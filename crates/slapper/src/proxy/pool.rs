@@ -72,10 +72,9 @@ impl ProxyPool {
     }
 
     pub fn add(&self, proxy: ProxyEntry) {
-        let stats_key = Self::stats_key(&proxy);
-        let proxy_key = proxy.to_url();
-        self.stats.insert(stats_key, ProxyStats::default());
-        self.proxies.insert(proxy_key, proxy);
+        let key = Self::stats_key(&proxy);
+        self.stats.insert(key.clone(), ProxyStats::default());
+        self.proxies.insert(key, proxy);
     }
 
     pub fn remove(&self, key: &str) -> Option<ProxyEntry> {

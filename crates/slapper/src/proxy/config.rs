@@ -188,6 +188,7 @@ impl ProxyEntry {
 
     fn parse_proxy_list(content: &str) -> Result<Vec<Self>> {
         let mut proxies = Vec::new();
+        let mut skipped = 0;
 
         for line in content.lines() {
             let line = line.trim();
@@ -195,9 +196,17 @@ impl ProxyEntry {
                 continue;
             }
 
-            if let Ok(proxy) = Self::parse_line(line) {
-                proxies.push(proxy);
+            match Self::parse_line(line) {
+                Ok(proxy) => proxies.push(proxy),
+                Err(e) => {
+                    tracing::warn!("Skipping invalid proxy line '{}': {}", line, e);
+                    skipped += 1;
+                }
             }
+        }
+
+        if skipped > 0 {
+            tracing::info!("Skipped {} invalid proxy lines", skipped);
         }
 
         Ok(proxies)
@@ -235,14 +244,28 @@ impl ProxyEntry {
             (None, None)
         };
 
-        let parts: Vec<&str> = host_port.rsplitn(2, ':').collect();
-        let (address, port) = if parts.len() == 2 {
-            (parts[1].to_string(), parts[0].parse()?)
+        let (address, port) = if let Some(stripped) = host_port.strip_prefix('[') {
+            if let Some(close_bracket) = stripped.find("]:") {
+                (
+                    format!("[{}]", &stripped[..close_bracket]),
+                    stripped[close_bracket + 2..].parse()?,
+                )
+            } else {
+                return Err(SlapperError::Proxy(format!(
+                    "Invalid proxy format: {}",
+                    line
+                )));
+            }
         } else {
-            return Err(SlapperError::Proxy(format!(
-                "Invalid proxy format: {}",
-                line
-            )));
+            let parts: Vec<&str> = host_port.rsplitn(2, ':').collect();
+            if parts.len() == 2 {
+                (parts[1].to_string(), parts[0].parse()?)
+            } else {
+                return Err(SlapperError::Proxy(format!(
+                    "Invalid proxy format: {}",
+                    line
+                )));
+            }
         };
 
         Ok(Self {
@@ -487,6 +510,30 @@ mod tests {
         assert_eq!(entry.proxy_type, ProxyType::Socks5);
         assert_eq!(entry.address, "10.0.0.1");
         assert_eq!(entry.port, 9050);
+    }
+
+    #[test]
+    fn test_proxy_entry_parse_line_ipv6() {
+        let entry = ProxyEntry::parse_line("[::1]:1080").unwrap();
+        assert_eq!(entry.proxy_type, ProxyType::Socks5);
+        assert_eq!(entry.address, "[::1]");
+        assert_eq!(entry.port, 1080);
+
+        let entry = ProxyEntry::parse_line("socks5://[::1]:1080").unwrap();
+        assert_eq!(entry.proxy_type, ProxyType::Socks5);
+        assert_eq!(entry.address, "[::1]");
+        assert_eq!(entry.port, 1080);
+
+        let entry = ProxyEntry::parse_line("http://[fd00::1]:8080").unwrap();
+        assert_eq!(entry.proxy_type, ProxyType::Http);
+        assert_eq!(entry.address, "[fd00::1]");
+        assert_eq!(entry.port, 8080);
+
+        let entry = ProxyEntry::parse_line("socks5://user:pass@[fe80::1]:1080").unwrap();
+        assert_eq!(entry.username, Some("user".to_string()));
+        assert!(entry.password.is_some());
+        assert_eq!(entry.address, "[fe80::1]");
+        assert_eq!(entry.port, 1080);
     }
 
     #[test]

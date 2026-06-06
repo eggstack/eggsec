@@ -136,18 +136,22 @@ impl ProxyManager {
 
         connect_through_with_domain(&proxy, domain, port)
             .await
-            .map(|stream| ProxiedConnection {
-                proxy_chain: vec![proxy],
-                local_addr: stream.local_addr().unwrap_or_else(|_| {
+            .map(|stream| {
+                let local_addr = stream.local_addr().unwrap_or_else(|_| {
+                    tracing::warn!("Failed to get local address for proxied connection to {}", domain);
                     std::net::SocketAddr::new(
                         std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
                         0,
                     )
-                }),
-                target_addr: std::net::SocketAddr::new(
-                    std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
-                    port,
-                ),
+                });
+                ProxiedConnection {
+                    proxy_chain: vec![proxy],
+                    local_addr,
+                    target_addr: std::net::SocketAddr::new(
+                        std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST),
+                        port,
+                    ),
+                }
             })
     }
 

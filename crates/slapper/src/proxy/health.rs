@@ -133,7 +133,6 @@ impl HealthChecker {
         use std::sync::Arc;
         use tokio::sync::Semaphore;
 
-        let enabled_total = proxies.iter().filter(|p| p.enabled).count();
         let semaphore = Arc::new(Semaphore::new(concurrency));
         let mut handles = Vec::new();
 
@@ -171,12 +170,13 @@ impl HealthChecker {
             })
             .collect::<Vec<_>>();
 
+        let checked_total = results.len();
         let healthy = results.iter().filter(|r| r.is_healthy).count();
 
         Ok(ProxyHealth {
-            total: enabled_total,
+            total: checked_total,
             healthy,
-            unhealthy: enabled_total.saturating_sub(healthy),
+            unhealthy: checked_total.saturating_sub(healthy),
             results,
         })
     }
