@@ -9,10 +9,11 @@ use rcgen::{
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct CertGenerator {
-    cache: RwLock<HashMap<String, CachedCert>>,
+    cache: Arc<RwLock<HashMap<String, CachedCert>>>,
     validity_duration: Duration,
 }
 
@@ -24,7 +25,7 @@ struct CachedCert {
 impl CertGenerator {
     pub fn new() -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
+            cache: Arc::new(RwLock::new(HashMap::new())),
             validity_duration: Duration::from_secs(86400),
         }
     }
@@ -133,7 +134,7 @@ impl Default for CertGenerator {
 impl Clone for CertGenerator {
     fn clone(&self) -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
+            cache: Arc::clone(&self.cache),
             validity_duration: self.validity_duration,
         }
     }

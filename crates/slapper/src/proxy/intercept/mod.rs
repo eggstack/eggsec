@@ -104,13 +104,16 @@ fn validate_target(host: &str, port: u16) -> Result<()> {
                 || (octets[0] == 172 && (15..=31).contains(&octets[1]))
                 || (octets[0] == 192 && octets[1] == 168)
                 || octets[0] == 127
-                || octets[0] == 0
+                || (octets[0] >= 224 && octets[0] <= 239)
+                || octets.iter().all(|&o| o == 255)
         }
         IpAddr::V6(ipv6) => {
             let segments = ipv6.segments();
             (segments[0] & 0xfe00) == 0xfe80
                 || ((segments[0] & 0xfe00) == 0xfc00)
                 || ipv6.is_loopback()
+                || (segments[0] & 0xff00) == 0xff00
+                || ipv6.is_unspecified()
         }
     };
 
@@ -165,7 +168,7 @@ async fn handle_connect_request(
 
     let rule_action = {
         let rules = rules.read();
-        rules.evaluate(host, "", "")
+        rules.evaluate(host, "/", "")
     };
 
     match rule_action {

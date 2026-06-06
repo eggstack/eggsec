@@ -71,7 +71,7 @@ impl ProxyPool {
         }
     }
 
-    pub fn add(&mut self, proxy: ProxyEntry) {
+    pub fn add(&self, proxy: ProxyEntry) {
         let stats_key = Self::stats_key(&proxy);
         let proxy_key = proxy.to_url();
         self.stats.insert(stats_key, ProxyStats::default());
@@ -257,7 +257,7 @@ impl ProxyPoolBuilder {
     }
 
     pub fn build(self) -> ProxyPool {
-        let mut pool = ProxyPool::new(self.config);
+        let pool = ProxyPool::new(self.config);
         for proxy in self.proxies {
             pool.add(proxy);
         }

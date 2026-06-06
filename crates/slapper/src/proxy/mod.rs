@@ -46,7 +46,7 @@ impl ProxyManager {
     }
 
     pub async fn add_proxy(&self, proxy: ProxyEntry) -> Result<()> {
-        let mut pool = self.pool.write().await;
+        let pool = self.pool.write().await;
         pool.add(proxy);
         Ok(())
     }
@@ -55,7 +55,7 @@ impl ProxyManager {
         let proxies = ProxyEntry::load_from_file(path)?;
         let count = proxies.len();
 
-        let mut pool = self.pool.write().await;
+        let pool = self.pool.write().await;
         for proxy in proxies {
             pool.add(proxy);
         }
@@ -140,16 +140,14 @@ impl ProxyManager {
                 proxy_chain: vec![proxy],
                 local_addr: stream.local_addr().unwrap_or_else(|_| {
                     std::net::SocketAddr::new(
-                        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+                        std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
                         0,
                     )
                 }),
-                target_addr: format!("{}:{}", domain, port).parse().unwrap_or_else(|_| {
-                    std::net::SocketAddr::new(
-                        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
-                        0,
-                    )
-                }),
+                target_addr: std::net::SocketAddr::new(
+                    std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
+                    port,
+                ),
             })
     }
 

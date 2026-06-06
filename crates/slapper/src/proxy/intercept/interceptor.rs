@@ -49,6 +49,7 @@ pub struct InterceptProxy {
     config: InterceptConfig,
     rules: Arc<RwLock<RuleSet>>,
     event_tx: Option<mpsc::Sender<InterceptEvent>>,
+    decision_rx: Option<mpsc::Receiver<InterceptDecision>>,
 }
 
 impl InterceptProxy {
@@ -57,6 +58,7 @@ impl InterceptProxy {
             config,
             rules: Arc::new(RwLock::new(RuleSet::default())),
             event_tx: None,
+            decision_rx: None,
         }
     }
 
@@ -67,6 +69,11 @@ impl InterceptProxy {
 
     pub fn with_event_channel(mut self, tx: mpsc::Sender<InterceptEvent>) -> Self {
         self.event_tx = Some(tx);
+        self
+    }
+
+    pub fn with_decision_channel(mut self, rx: mpsc::Receiver<InterceptDecision>) -> Self {
+        self.decision_rx = Some(rx);
         self
     }
 
@@ -85,16 +92,15 @@ impl InterceptProxy {
     }
 
     pub async fn wait_for_decision(&self, _event: &InterceptEvent) -> Result<InterceptDecision> {
-        if self.event_tx.is_none() {
-            return Ok(InterceptDecision::Allow);
+        if self.event_tx.is_some() {
+            if let Some(ref rx) = self.decision_rx {
+                let decision = tokio::time::timeout(self.config.timeout, rx.recv())
+                    .await
+                    .map_err(|_| crate::error::SlapperError::Proxy("Intercept timeout".to_string()))?
+                    .map_err(|_| crate::error::SlapperError::Proxy("Decision channel closed".to_string()))?;
+                return Ok(decision);
+            }
         }
-
-        tokio::time::timeout(self.config.timeout, async {
-            tokio::time::sleep(Duration::MAX).await
-        })
-        .await
-        .map_err(|_| crate::error::SlapperError::Proxy("Intercept timeout".to_string()))?;
-
         Ok(InterceptDecision::Allow)
     }
 

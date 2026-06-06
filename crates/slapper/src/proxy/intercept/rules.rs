@@ -1,6 +1,13 @@
 //! Request/response modification rules
 //!
 //! Defines rules for intercepting and modifying HTTP traffic.
+//!
+//! ## Modification Types
+//!
+//! This module defines rule-based [`RequestModification`] and [`ResponseModification`]
+//! types used in YAML configuration for declarative rule modifications. These differ
+//! from the runtime modification types in [`super::interceptor`] which use `FxHashMap`
+//! for in-memory modifications during request/response processing.
 
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
@@ -166,6 +173,7 @@ impl Default for RuleSet {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RequestModification {
     pub header_name: Option<String>,
     pub header_value: Option<String>,
@@ -174,6 +182,7 @@ pub struct RequestModification {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ResponseModification {
     pub header_name: Option<String>,
     pub header_value: Option<String>,

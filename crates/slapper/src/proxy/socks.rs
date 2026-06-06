@@ -371,6 +371,9 @@ pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<Pr
     })
 }
 
+/// Connects through a Tor proxy using SOCKS5.
+/// Currently a pass-through to [`connect_through`] since Tor handles .onion
+/// address resolution via standard SOCKS5 domain resolution.
 pub async fn connect_through_tor(
     proxy: ProxyEntry,
     target: SocketAddr,
