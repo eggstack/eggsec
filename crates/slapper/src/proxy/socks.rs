@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use crate::utils::connect_with_nodelay_timeout;
@@ -12,6 +10,7 @@ use super::config::{ProxyEntry, ProxyType};
 use super::ProxiedConnection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum SocksVersion {
     V4,
     V4a,

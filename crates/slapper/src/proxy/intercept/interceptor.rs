@@ -83,23 +83,21 @@ impl InterceptProxy {
 
     pub fn should_intercept(&self, host: &str, path: &str) -> bool {
         let rules = self.rules.read();
-        matches!(rules.evaluate(host, path, ""), RuleAction::Intercept)
+        matches!(rules.evaluate(host, path), RuleAction::Intercept)
     }
 
     pub fn should_monitor(&self, host: &str, path: &str) -> bool {
         let rules = self.rules.read();
-        matches!(rules.evaluate(host, path, ""), RuleAction::Monitor | RuleAction::Intercept)
+        matches!(rules.evaluate(host, path), RuleAction::Monitor | RuleAction::Intercept)
     }
 
     pub async fn wait_for_decision(&self, _event: &InterceptEvent) -> Result<InterceptDecision> {
-        if self.event_tx.is_some() {
-            if let Some(ref rx) = self.decision_rx {
-                let decision = tokio::time::timeout(self.config.timeout, rx.recv())
-                    .await
-                    .map_err(|_| crate::error::SlapperError::Proxy("Intercept timeout".to_string()))?
-                    .map_err(|_| crate::error::SlapperError::Proxy("Decision channel closed".to_string()))?;
-                return Ok(decision);
-            }
+        if let Some(ref rx) = self.decision_rx {
+            let decision = tokio::time::timeout(self.config.timeout, rx.recv())
+                .await
+                .map_err(|_| crate::error::SlapperError::Proxy("Intercept timeout".to_string()))?
+                .map_err(|_| crate::error::SlapperError::Proxy("Decision channel closed".to_string()))?;
+            return Ok(decision);
         }
         Ok(InterceptDecision::Allow)
     }

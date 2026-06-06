@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use base64::{engine::general_purpose, Engine as _};
@@ -12,6 +10,7 @@ use tokio::time::timeout;
 use super::config::{ProxyEntry, ProxyType};
 use super::ProxiedConnection;
 
+#[allow(dead_code)]
 pub struct HttpConnectProxy {
     proxy_addr: SocketAddr,
     username: Option<SensitiveString>,
@@ -21,6 +20,7 @@ pub struct HttpConnectProxy {
     timeout: Duration,
 }
 
+#[allow(dead_code)]
 impl HttpConnectProxy {
     pub fn new(proxy_addr: SocketAddr) -> Self {
         Self {

@@ -304,8 +304,8 @@ pub struct ProxyConfig {
     #[serde(default)]
     pub health_check_url: Option<String>,
 
-    #[serde(default = "default_health_interval")]
-    pub health_check_check_interval_secs: u64,
+    #[serde(default = "default_health_interval", alias = "health_check_check_interval_secs")]
+    pub health_check_frequency_secs: u64,
 
     #[serde(default = "default_max_failures")]
     pub max_failures_before_disable: u32,
@@ -326,7 +326,7 @@ impl Default for ProxyConfig {
             health_check_timeout_ms: default_health_timeout(),
             test_url: Some("https://api.ipify.org?format=json".to_string()),
             health_check_url: None,
-            health_check_check_interval_secs: default_health_interval(),
+            health_check_frequency_secs: default_health_interval(),
             max_failures_before_disable: default_max_failures(),
             chain_proxies: false,
             max_chain_length: 3,
@@ -387,7 +387,7 @@ impl From<&ProxyConfig> for HealthCheckConfig {
     fn from(config: &ProxyConfig) -> Self {
         Self {
             enabled: config.health_check_enabled,
-            interval_secs: config.health_check_check_interval_secs,
+            interval_secs: config.health_check_frequency_secs,
             timeout_ms: config.health_check_timeout_ms,
             test_url: config
                 .health_check_url
@@ -554,7 +554,7 @@ mod tests {
     fn test_proxy_config_default() {
         let config = ProxyConfig::default();
         assert_eq!(config.health_check_enabled, true);
-        assert_eq!(config.health_check_interval_secs, 60);
+        assert_eq!(config.health_check_frequency_secs, 60);
         assert_eq!(config.health_check_timeout_ms, 5000);
         assert_eq!(config.max_failures_before_disable, 3);
         assert_eq!(config.max_chain_length, 3);

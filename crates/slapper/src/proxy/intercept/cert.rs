@@ -22,6 +22,13 @@ struct CachedCert {
     generated_at: u64,
 }
 
+fn unix_timestamp_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
 impl CertGenerator {
     pub fn new() -> Self {
         Self {
@@ -88,10 +95,7 @@ impl CertGenerator {
         let cache = self.cache.read();
 
         cache.get(host).and_then(|cached| {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
+            let now = unix_timestamp_secs();
 
             if now - cached.generated_at < self.validity_duration.as_secs() {
                 Some(cached.certificate.clone())
@@ -103,10 +107,7 @@ impl CertGenerator {
 
     fn cache_cert(&self, host: &str, cert: &Certificate) {
         if let mut cache = self.cache.write() {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
+            let now = unix_timestamp_secs();
 
             cache.insert(
                 host.to_string(),

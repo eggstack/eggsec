@@ -247,7 +247,7 @@ impl ProxyManager {
                     proxies.len()
                 );
 
-                match health_checker.check_all(&proxies).await {
+                match health_checker.check_concurrent(&proxies, 10).await {
                     Ok(results) => {
                         let pool = pool.write().await;
                         for result in results.results {
@@ -321,7 +321,7 @@ fn is_private_ip(ip: std::net::IpAddr) -> bool {
         }
         std::net::IpAddr::V6(ipv6) => {
             let segments = ipv6.segments();
-            (segments[0] & 0xfe00) == 0xfe80
+            (segments[0] & 0xffc0) == 0xfe80
                 || ((segments[0] & 0xfe00) == 0xfc00)
                 || ipv6.is_loopback()
                 || (segments[0] & 0xff00) == 0xff00

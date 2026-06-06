@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::Result;
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -222,11 +220,13 @@ impl ProxyPool {
     }
 }
 
+#[allow(dead_code)]
 pub struct ProxyPoolBuilder {
     proxies: Vec<ProxyEntry>,
     config: ProxyConfig,
 }
 
+#[allow(dead_code)]
 impl ProxyPoolBuilder {
     pub fn new() -> Self {
         Self {

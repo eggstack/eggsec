@@ -120,7 +120,7 @@ impl RuleSet {
         self.rules.sort_by(|a, b| b.priority.cmp(&a.priority));
     }
 
-    pub fn evaluate(&self, host: &str, path: &str, _content: &str) -> RuleAction {
+    pub fn evaluate(&self, host: &str, path: &str) -> RuleAction {
         for rule in &self.rules {
             if rule.matches(host, path) {
                 return rule.action.clone();
@@ -268,9 +268,9 @@ mod tests {
             RuleAction::Intercept,
         ));
 
-        assert!(matches!(rules.evaluate("evil.com", "/any", ""), RuleAction::Block));
-        assert!(matches!(rules.evaluate("example.com", "/admin/panel", ""), RuleAction::Intercept));
-        assert!(matches!(rules.evaluate("example.com", "/public", ""), RuleAction::Allow));
+        assert!(matches!(rules.evaluate("evil.com", "/any"), RuleAction::Block));
+        assert!(matches!(rules.evaluate("example.com", "/admin/panel"), RuleAction::Intercept));
+        assert!(matches!(rules.evaluate("example.com", "/public"), RuleAction::Allow));
     }
 
     #[test]

@@ -168,7 +168,7 @@ async fn handle_connect_request(
 
     let rule_action = {
         let rules = rules.read();
-        rules.evaluate(host, "/", "")
+        rules.evaluate(host, "/")
     };
 
     match rule_action {
@@ -233,7 +233,7 @@ async fn handle_http_request(
 
     let rule_action = {
         let rules = rules.read();
-        rules.evaluate(host, path, &request_str)
+        rules.evaluate(host, path)
     };
 
     match rule_action {
