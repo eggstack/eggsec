@@ -16,6 +16,7 @@ pub struct HttpConnectProxy {
     proxy_addr: SocketAddr,
     username: Option<SensitiveString>,
     password: Option<SensitiveString>,
+    #[deprecated(note = "use_ssl is not implemented - HTTPS proxy type determines TLS in the caller")]
     use_ssl: bool,
     timeout: Duration,
 }

@@ -386,6 +386,21 @@ pub async fn connect_through_with_domain(
     domain: &str,
     port: u16,
 ) -> Result<TcpStream> {
+    match proxy.proxy_type {
+        ProxyType::Socks5 | ProxyType::Tor => {}
+        ProxyType::Socks4 => {
+            return Err(SlapperError::Proxy(
+                "SOCKS4 does not support domain resolution. Use an IP address or configure a SOCKS5 proxy.".to_string(),
+            ));
+        }
+        _ => {
+            return Err(SlapperError::Proxy(format!(
+                "Domain resolution not supported for proxy type {:?}",
+                proxy.proxy_type
+            )));
+        }
+    }
+
     let proxy_addr = proxy.socket_addr()?;
 
     let socks = SocksProxy::new(SocksVersion::V5, proxy_addr)

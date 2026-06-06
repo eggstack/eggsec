@@ -270,6 +270,12 @@ impl ProxyManager {
 
 async fn resolve_target(target: &str) -> Result<SocketAddr> {
     if let Ok(addr) = target.parse::<SocketAddr>() {
+        if is_private_ip(addr.ip()) {
+            return Err(SlapperError::Proxy(format!(
+                "Target address is a private/internal IP: {}",
+                addr
+            )));
+        }
         return Ok(addr);
     }
 
@@ -283,14 +289,44 @@ async fn resolve_target(target: &str) -> Result<SocketAddr> {
             .await
             .map_err(|e| SlapperError::Proxy(format!("DNS lookup failed: {}", e)))?;
 
-        addrs
-            .next()
-            .ok_or_else(|| SlapperError::Proxy(format!("Failed to resolve {}", target)))
+        if let Some(addr) = addrs.next() {
+            if is_private_ip(addr.ip()) {
+                return Err(SlapperError::Proxy(format!(
+                    "Resolved address is a private/internal IP: {}",
+                    addr
+                )));
+            }
+            Ok(addr)
+        } else {
+            Err(SlapperError::Proxy(format!("Failed to resolve {}", target)))
+        }
     } else {
         Err(SlapperError::Proxy(format!(
             "Target must include port: {}",
             target
         )))
+    }
+}
+
+fn is_private_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
+            octets[0] == 10
+                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || octets[0] == 127
+                || (octets[0] >= 224 && octets[0] <= 239)
+                || octets.iter().all(|&o| o == 255)
+        }
+        std::net::IpAddr::V6(ipv6) => {
+            let segments = ipv6.segments();
+            (segments[0] & 0xfe00) == 0xfe80
+                || ((segments[0] & 0xfe00) == 0xfc00)
+                || ipv6.is_loopback()
+                || (segments[0] & 0xff00) == 0xff00
+                || ipv6.is_unspecified()
+        }
     }
 }
 
