@@ -33,10 +33,6 @@ Risk classification for guardrails and opt-in:
 | `Stress` | Stress/load testing |
 | `ExploitAdjacent` | Near-exploitation testing |
 
-### ProbeMetadata
-
-Struct combining `id`, `name`, `intent`, `risk`, `requires_explicit_scope`, `requires_budget`, `compatibility_source`.
-
 ## Serialization
 
 All enums serialize to kebab-case JSON (e.g., `"discovery"`, `"safe-active"`).

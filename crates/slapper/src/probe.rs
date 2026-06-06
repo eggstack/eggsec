@@ -59,7 +59,10 @@ impl ProbeRisk {
     pub fn requires_opt_in(self) -> bool {
         matches!(
             self,
-            ProbeRisk::Intrusive | ProbeRisk::Stress | ProbeRisk::ExploitAdjacent
+            ProbeRisk::Credentialed
+                | ProbeRisk::Intrusive
+                | ProbeRisk::Stress
+                | ProbeRisk::ExploitAdjacent
         )
     }
 }
@@ -126,7 +129,7 @@ mod tests {
     fn probe_risk_requires_opt_in() {
         assert!(!ProbeRisk::Passive.requires_opt_in());
         assert!(!ProbeRisk::SafeActive.requires_opt_in());
-        assert!(!ProbeRisk::Credentialed.requires_opt_in());
+        assert!(ProbeRisk::Credentialed.requires_opt_in());
         assert!(ProbeRisk::Intrusive.requires_opt_in());
         assert!(ProbeRisk::Stress.requires_opt_in());
         assert!(ProbeRisk::ExploitAdjacent.requires_opt_in());
