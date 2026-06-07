@@ -110,7 +110,7 @@ fn validate_target(host: &str, port: u16) -> Result<()> {
         IpAddr::V6(ipv6) => {
             let segments = ipv6.segments();
             (segments[0] & 0xffc0) == 0xfe80
-                || ((segments[0] & 0xfe00) == 0xfc00)
+                || ((segments[0] & 0xffc0) == 0xfc00)
                 || ipv6.is_loopback()
                 || (segments[0] & 0xff00) == 0xff00
                 || ipv6.is_unspecified()

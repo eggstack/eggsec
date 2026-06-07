@@ -129,42 +129,49 @@ impl HttpConnectProxy {
         let mut buf = [0u8; 8192];
         let mut seen_cr_lf_cr_lf = 0;
 
-        loop {
-            let bytes_read = reader.read(&mut buf).await?;
-            if bytes_read == 0 {
-                if response.is_empty() {
-                    return Err(SlapperError::Proxy("Empty response from proxy".to_string()));
+        let result = timeout(self.timeout, async {
+            loop {
+                let bytes_read = reader.read(&mut buf).await?;
+                if bytes_read == 0 {
+                    if response.is_empty() {
+                        return Err(SlapperError::Proxy("Empty response from proxy".to_string()));
+                    }
+                    break;
                 }
-                break;
-            }
 
-            for &byte in &buf[..bytes_read] {
-                let ch = byte as char;
-                response.push(ch);
+                for &byte in &buf[..bytes_read] {
+                    let ch = byte as char;
+                    response.push(ch);
 
-                match ch {
-                    '\r' => {
-                        if seen_cr_lf_cr_lf == 0 || seen_cr_lf_cr_lf == 2 {
-                            seen_cr_lf_cr_lf += 1;
-                        } else {
-                            seen_cr_lf_cr_lf = 1;
+                    match ch {
+                        '\r' => {
+                            if seen_cr_lf_cr_lf == 0 || seen_cr_lf_cr_lf == 2 {
+                                seen_cr_lf_cr_lf += 1;
+                            } else {
+                                seen_cr_lf_cr_lf = 1;
+                            }
+                        }
+                        '\n' => {
+                            if seen_cr_lf_cr_lf == 1 {
+                                seen_cr_lf_cr_lf = 2;
+                            } else if seen_cr_lf_cr_lf == 3 {
+                                return Ok(response);
+                            }
+                        }
+                        _ => {
+                            seen_cr_lf_cr_lf = 0;
                         }
                     }
-                    '\n' => {
-                        if seen_cr_lf_cr_lf == 1 {
-                            seen_cr_lf_cr_lf = 2;
-                        } else if seen_cr_lf_cr_lf == 3 {
-                            return Ok(response);
-                        }
-                    }
-                    _ => {
-                        seen_cr_lf_cr_lf = 0;
-                    }
                 }
             }
+            Ok(response)
+        }).await;
+
+        match result {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(SlapperError::Proxy("Timeout reading proxy response".to_string())),
         }
-
-        Ok(response)
     }
 
     fn parse_response(&self, response: &str) -> Result<()> {
