@@ -159,9 +159,11 @@ async fn handle_storage_stats(args: crate::cli::storage::StorageStatsArgs) -> Re
             let running = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Running).count();
             let completed = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Completed).count();
             let failed = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Failed).count();
+            let cancelled = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Cancelled).count();
             println!("  Running: {}", running);
             println!("  Completed: {}", completed);
             println!("  Failed: {}", failed);
+            println!("  Cancelled: {}", cancelled);
             println!("  (Note: total findings count requires a COUNT query)");
         }
         Ok(())

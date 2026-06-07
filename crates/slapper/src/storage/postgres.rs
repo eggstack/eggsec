@@ -284,6 +284,22 @@ impl Database {
             Ok(vec![])
         }
     }
+
+    pub async fn update_scan_findings_count(&self, scan_id: &str) -> Result<()> {
+        #[cfg(feature = "database")]
+        {
+            sqlx::query(
+                "UPDATE scans SET findings_count = (SELECT COUNT(*)::int FROM findings WHERE scan_id = $1) WHERE id = $1",
+            )
+            .bind(scan_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                SlapperError::Config(format!("Failed to update scan findings count: {}", e))
+            })?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "database")]
