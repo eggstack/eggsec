@@ -240,6 +240,7 @@ mod tests {
         assert!(!rule.matches("other.com", "/admin/panel"));
     }
 
+    #[test]
     fn test_wildcard_host_matching() {
         let rule = InterceptRule::new(
             "*.example.com".to_string(),

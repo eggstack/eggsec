@@ -125,6 +125,10 @@ impl InterceptProxy {
     pub fn modify_response(&self, response: &mut InterceptResponse, modification: &ResponseModification) {
         if let Some(ref headers) = modification.headers {
             for (k, v) in headers {
+                if !validate_header_value(k) || !validate_header_value(v) {
+                    tracing::warn!("Blocked CRLF injection attempt in response header: {}={}", k, v);
+                    continue;
+                }
                 response.headers.insert(k.clone(), v.clone());
             }
         }

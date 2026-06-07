@@ -22,7 +22,7 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
-use tokio_rustls::rustls::{ServerConfig, NoClientAuth};
+use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 
 pub struct ProxyServer {
@@ -109,7 +109,7 @@ fn validate_target(host: &str, port: u16) -> Result<()> {
         }
         IpAddr::V6(ipv6) => {
             let segments = ipv6.segments();
-            (segments[0] & 0xfe00) == 0xfe80
+            (segments[0] & 0xffc0) == 0xfe80
                 || ((segments[0] & 0xfe00) == 0xfc00)
                 || ipv6.is_loopback()
                 || (segments[0] & 0xff00) == 0xff00

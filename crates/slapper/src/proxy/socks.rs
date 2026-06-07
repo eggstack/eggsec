@@ -266,7 +266,7 @@ impl SocksProxy {
             0x03 => {
                 let mut len = [0u8; 1];
                 stream.read_exact(&mut len).await?;
-                len[0] as usize + 1
+                len[0] as usize
             }
             _ => {
                 return Err(SlapperError::Proxy(
@@ -312,7 +312,7 @@ impl SocksProxy {
             0x03 => {
                 let mut len = [0u8; 1];
                 stream.read_exact(&mut len).await?;
-                len[0] as usize + 1
+                len[0] as usize
             }
             _ => {
                 return Err(SlapperError::Proxy(
