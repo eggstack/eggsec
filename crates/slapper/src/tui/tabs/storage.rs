@@ -186,15 +186,15 @@ impl StorageTab {
     }
 
     pub fn set_scans(&mut self, scans: Vec<StoredScan>) {
-        self.scans = scans.clone();
+        self.scans = scans;
         self.state = AppState::Completed;
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
-            format!("Recent Scans ({}):", scans.len()),
+            format!("Recent Scans ({}):", self.scans.len()),
             Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
-        for scan in &scans {
+        for scan in &self.scans {
             self.results_view.add_line(Line::from(format!(
                 "  {} - {} - {:?} ({} findings)",
                 scan.id, scan.target, scan.status, scan.findings_count
@@ -203,15 +203,15 @@ impl StorageTab {
     }
 
     pub fn set_findings(&mut self, findings: Vec<StoredFinding>) {
-        self.findings = findings.clone();
+        self.findings = findings;
         self.state = AppState::Completed;
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
-            format!("Findings ({}):", findings.len()),
+            format!("Findings ({}):", self.findings.len()),
             Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
-        for finding in &findings {
+        for finding in &self.findings {
             self.results_view.add_line(Line::from(format!(
                 "  [{}] {} - {:?} ({})",
                 finding.finding.severity, finding.finding.title, finding.status, finding.finding.id

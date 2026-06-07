@@ -1,11 +1,10 @@
 use crate::error::Result;
+use crate::error::SlapperError;
 use crate::findings::lifecycle::{FindingStatus, StoredFinding};
 use crate::storage::models::StoredScan;
 use crate::storage::StorageConfig;
 use crate::Severity;
 
-#[cfg(feature = "database")]
-use crate::error::SlapperError;
 #[cfg(feature = "database")]
 use crate::storage::models::ScanStatus;
 
@@ -17,8 +16,6 @@ use sqlx::Row;
 pub struct Database {
     #[cfg(feature = "database")]
     pool: PgPool,
-    #[cfg(not(feature = "database"))]
-    config: StorageConfig,
 }
 
 impl Database {
@@ -46,13 +43,19 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            Ok(Self {
-                config: config.clone(),
-            })
+            let _ = config;
+            Err(SlapperError::Config(
+                "database feature not enabled".to_string(),
+            ))
         }
     }
 
-    pub async fn insert_scan(&self, _scan: &StoredScan) -> Result<()> {
+    #[cfg(feature = "database")]
+    pub fn pool_ref(&self) -> &PgPool {
+        &self.pool
+    }
+
+    pub async fn insert_scan(&self, scan: &StoredScan) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query(
@@ -77,7 +80,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_scan(&self, _id: &str) -> Result<Option<StoredScan>> {
+    pub async fn get_scan(&self, id: &str) -> Result<Option<StoredScan>> {
         #[cfg(feature = "database")]
         {
             let row = sqlx::query("SELECT * FROM scans WHERE id = $1")
@@ -98,11 +101,12 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
+            let _ = id;
             Ok(None)
         }
     }
 
-    pub async fn list_scans(&self, _limit: usize) -> Result<Vec<StoredScan>> {
+    pub async fn list_scans(&self, limit: usize) -> Result<Vec<StoredScan>> {
         #[cfg(feature = "database")]
         {
             let rows = sqlx::query("SELECT * FROM scans ORDER BY started_at DESC LIMIT $1")
@@ -126,11 +130,12 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
+            let _ = limit;
             Ok(vec![])
         }
     }
 
-    pub async fn insert_finding(&self, _stored: &StoredFinding) -> Result<()> {
+    pub async fn insert_finding(&self, stored: &StoredFinding) -> Result<()> {
         #[cfg(feature = "database")]
         {
             let finding_json = serde_json::to_value(&stored.finding).map_err(|e| {
@@ -164,7 +169,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_finding(&self, _id: &str) -> Result<Option<StoredFinding>> {
+    pub async fn get_finding(&self, id: &str) -> Result<Option<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let row = sqlx::query("SELECT * FROM findings WHERE id = $1")
@@ -177,11 +182,12 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
+            let _ = id;
             Ok(None)
         }
     }
 
-    pub async fn update_finding_status(&self, _id: &str, _status: FindingStatus) -> Result<()> {
+    pub async fn update_finding_status(&self, id: &str, status: FindingStatus) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query("UPDATE findings SET status = $1, updated_at = NOW() WHERE id = $2")
@@ -198,9 +204,9 @@ impl Database {
 
     pub async fn list_findings(
         &self,
-        _scan_id: &str,
-        _offset: usize,
-        _limit: usize,
+        scan_id: &str,
+        offset: usize,
+        limit: usize,
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
@@ -220,15 +226,15 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = (_offset, _limit);
+            let _ = (scan_id, offset, limit);
             Ok(vec![])
         }
     }
 
     pub async fn list_all_findings(
         &self,
-        _offset: usize,
-        _limit: usize,
+        offset: usize,
+        limit: usize,
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
@@ -247,14 +253,14 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
-            let _ = (_offset, _limit);
+            let _ = (offset, limit);
             Ok(vec![])
         }
     }
 
     pub async fn get_findings_by_severity(
         &self,
-        _severity: Severity,
+        severity: Severity,
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
@@ -274,6 +280,7 @@ impl Database {
         }
         #[cfg(not(feature = "database"))]
         {
+            let _ = severity;
             Ok(vec![])
         }
     }
@@ -281,11 +288,11 @@ impl Database {
 
 #[cfg(feature = "database")]
 fn parse_scan_status(s: String) -> ScanStatus {
-    match s.as_str() {
-        "Running" => ScanStatus::Running,
-        "Completed" => ScanStatus::Completed,
-        "Failed" => ScanStatus::Failed,
-        "Cancelled" => ScanStatus::Cancelled,
+    match s.to_lowercase().as_str() {
+        "running" => ScanStatus::Running,
+        "completed" => ScanStatus::Completed,
+        "failed" => ScanStatus::Failed,
+        "cancelled" => ScanStatus::Cancelled,
         other => {
             tracing::warn!(status = other, "Unknown scan status, defaulting to Running");
             ScanStatus::Running
@@ -328,7 +335,14 @@ fn row_to_stored_finding(row: &sqlx::postgres::PgRow) -> Result<StoredFinding> {
     };
 
     let status_history: Vec<crate::findings::lifecycle::StatusChange> =
-        serde_json::from_value(history_json).unwrap_or_default();
+        serde_json::from_value(history_json).unwrap_or_else(|e| {
+            tracing::warn!(
+                finding_id = row.get::<String, _>("id"),
+                error = %e,
+                "Failed to deserialize status_history, using empty history"
+            );
+            vec![]
+        });
 
     let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
     let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
@@ -347,10 +361,49 @@ fn row_to_stored_finding(row: &sqlx::postgres::PgRow) -> Result<StoredFinding> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_database_creation() {
+    #[test]
+    fn test_storage_config_defaults() {
         let config = StorageConfig::default();
-        let db = Database::new(&config).await.unwrap();
-        assert_eq!(db.config.port, 5432);
+        assert_eq!(config.host, "localhost");
+        assert_eq!(config.port, 5432);
+        assert_eq!(config.database, "slapper");
+        assert_eq!(config.username, "postgres");
+        assert_eq!(config.max_connections, 10);
+    }
+
+    #[cfg(feature = "database")]
+    mod database_tests {
+        use super::*;
+        use crate::storage::models::ScanStatus;
+
+        #[test]
+        fn test_scan_status_parse_roundtrip() {
+            let statuses = [
+                ScanStatus::Running,
+                ScanStatus::Completed,
+                ScanStatus::Failed,
+                ScanStatus::Cancelled,
+            ];
+            for status in &statuses {
+                let s = status.to_string();
+                let parsed = parse_scan_status(s.clone());
+                assert_eq!(*status, parsed, "Roundtrip failed for {}", s);
+            }
+        }
+
+        #[test]
+        fn test_scan_status_parse_unknown() {
+            let parsed = parse_scan_status("unknown_status".to_string());
+            assert_eq!(parsed, ScanStatus::Running);
+        }
+
+        #[test]
+        fn test_scan_status_parse_case_insensitive() {
+            assert_eq!(parse_scan_status("running".to_string()), ScanStatus::Running);
+            assert_eq!(parse_scan_status("Running".to_string()), ScanStatus::Running);
+            assert_eq!(parse_scan_status("RUNNING".to_string()), ScanStatus::Running);
+            assert_eq!(parse_scan_status("completed".to_string()), ScanStatus::Completed);
+            assert_eq!(parse_scan_status("COMPLETED".to_string()), ScanStatus::Completed);
+        }
     }
 }
