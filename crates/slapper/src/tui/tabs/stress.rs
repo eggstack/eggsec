@@ -253,7 +253,7 @@ impl TabRender for StressTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(chunks.get(0).copied().unwrap_or(area));
+            .split(chunks.first().copied().unwrap_or(area));
 
         let input_block = Block::default()
             .title(" Stress Test Configuration ")
@@ -265,7 +265,7 @@ impl TabRender for StressTab {
                     tc!(border)
                 }),
             );
-        if let Some(chunk) = chunks.get(0) {
+        if let Some(chunk) = chunks.first() {
             f.render_widget(input_block, *chunk);
         }
 

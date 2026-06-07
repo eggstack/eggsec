@@ -225,8 +225,8 @@ impl TabRender for WirelessTab {
             .constraints([Constraint::Length(3)])
             .split(input_inner);
 
-        if let Some(chunk) = input_chunks.first() {
-            self.inputs.fields[0].render(f, *chunk, insert_mode);
+        if let (Some(chunk), Some(field)) = (input_chunks.first(), self.inputs.fields.first()) {
+            field.render(f, *chunk, insert_mode);
         }
 
         let results_block = Block::default()
@@ -332,12 +332,18 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Results {
             self.scroll_results_up();
         }
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Results {
             self.scroll_results_down();
         }
@@ -351,11 +357,98 @@ impl TabInput for WirelessTab {
         false
     }
 
+    fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == WirelessFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == WirelessFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == WirelessFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == WirelessFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == WirelessFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == WirelessFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            WirelessFocusArea::Inputs => {
+                self.inputs.blur();
+                self.focus_area = WirelessFocusArea::Inputs;
+                if !self.inputs.fields.is_empty() {
+                    self.inputs.focus(0);
+                }
+            }
+            WirelessFocusArea::Results => {
+                self.results_view.scroll_to_top();
+            }
+        }
+    }
+
+    fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            WirelessFocusArea::Inputs => {
+                self.inputs.blur();
+                self.focus_area = WirelessFocusArea::Results;
+            }
+            WirelessFocusArea::Results => {
+                self.results_view.scroll_to_bottom();
+            }
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
+        if self.focus_area == WirelessFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
     fn is_input_focused(&self) -> bool {
         self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused()
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Results {
             for _ in 0..page_size {
                 self.results_view.scroll_up(1);
@@ -364,6 +457,9 @@ impl TabInput for WirelessTab {
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Results {
             for _ in 0..page_size {
                 self.results_view.scroll_down(1);

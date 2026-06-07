@@ -322,7 +322,7 @@ impl TabRender for OAuthTab {
 
         f.render_widget(options_block, options_area);
         if let (Some(c0), Some(c1), Some(c2), Some(c3)) =
-            (options_chunks.get(0), options_chunks.get(1), options_chunks.get(2), options_chunks.get(3))
+            (options_chunks.first(), options_chunks.get(1), options_chunks.get(2), options_chunks.get(3))
         {
             self.redirect_test_checkbox.render(f, *c0);
             self.scope_test_checkbox.render(f, *c1);

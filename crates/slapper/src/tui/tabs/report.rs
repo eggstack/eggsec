@@ -284,7 +284,7 @@ impl TabRender for ReportTab {
             .split(area);
 
         // View selector
-        let Some(view_area) = chunks.get(0) else {
+        let Some(view_area) = chunks.first() else {
             return;
         };
         let mut selector = self.view_selector.clone();

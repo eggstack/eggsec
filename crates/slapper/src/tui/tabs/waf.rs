@@ -345,7 +345,7 @@ impl TabRender for WafTab {
             .constraints([Constraint::Length(19), Constraint::Min(0)])
             .split(area);
 
-        let config_area = chunks.get(0).copied().unwrap_or(area);
+        let config_area = chunks.first().copied().unwrap_or(area);
         let results_area = chunks.get(1).copied().unwrap_or(area);
 
         use crate::tui::components::FormBuilder;
@@ -392,7 +392,7 @@ impl TabRender for WafTab {
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
                 .split(results_inner);
 
-            if let Some(results_chunks_0) = results_chunks.get(0).copied() {
+            if let Some(results_chunks_0) = results_chunks.first().copied() {
                 if !self.detection_view.is_empty() {
                     self.detection_view.render(f, results_chunks_0, None);
                 } else {

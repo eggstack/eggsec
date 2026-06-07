@@ -646,3 +646,26 @@ All TUI uniform look & feel items have been implemented:
 - Scrollbar theme styling applied in `scrollable.rs`
 
 If visual consistency issues are found, verify the actual `.rs` files before creating new fix items.
+
+## Session Fixes (2026-06-07)
+
+### wireless.rs Fixes
+
+- **wireless.rs:229**: Direct `fields[0]` access without bounds check — changed to `if let (Some(chunk), Some(field)) = (input_chunks.first(), self.inputs.fields.first())`
+- **wireless.rs:334-337**: `handle_up()` missing `is_running()` guard — added guard
+- **wireless.rs:340-343**: `handle_down()` missing `is_running()` guard — added guard
+- **wireless.rs:358-363**: `page_up()` missing `is_running()` guard — added guard
+- **wireless.rs:366-372**: `page_down()` missing `is_running()` guard — added guard
+- **wireless.rs:262-373**: Added missing trait implementations: `handle_word_forward`, `handle_word_backward`, `handle_home`, `handle_end`, `handle_top`, `handle_bottom`, `handle_copy`
+
+### components/input.rs Fixes
+
+- **input.rs:149-168**: `move_left()`/`move_right()` returned `true` even when cursor didn't move — moved `true` inside `if let Some` block so it only returns true on actual movement
+
+### fuzz.rs Fixes
+
+- **fuzz.rs:1109-1171**: 6 orphaned test functions defined outside `mod tests` block — moved all tests inside `mod tests` and fixed direct `fields[0]` access to use `.first()`
+
+### Clippy .get(0) → .first() Fixes
+
+Changed `.get(0)` to `.first()` across 13 files (19 occurrences): fuzz.rs, graphql.rs, load.rs, oauth.rs, packet.rs, proxy.rs, report.rs, resume.rs, scan.rs, settings/render.rs, stress.rs, waf.rs, waf_stress.rs

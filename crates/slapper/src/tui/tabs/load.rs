@@ -423,7 +423,7 @@ impl TabRender for LoadTab {
             ])
             .split(area);
 
-        if let Some(selector_area) = chunks.get(0) {
+        if let Some(selector_area) = chunks.first() {
             self.test_type_selector.render(f, *selector_area);
 
             if let Some(dropdown) = self.test_type_selector.dropdown_info(*selector_area) {
@@ -510,7 +510,7 @@ impl TabRender for LoadTab {
             ])
             .split(area);
 
-        let selector_area = *chunks.get(0).unwrap_or(&area);
+        let selector_area = *chunks.first().unwrap_or(&area);
 
         if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area) {
             dropdown.render(f);

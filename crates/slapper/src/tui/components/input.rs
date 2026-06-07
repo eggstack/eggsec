@@ -150,22 +150,20 @@ impl InputField {
         if self.cursor_pos > 0 {
             if let Some(prev) = self.value[..self.cursor_pos].chars().next_back() {
                 self.cursor_pos -= prev.len_utf8();
+                return true;
             }
-            true
-        } else {
-            false
         }
+        false
     }
 
     pub fn move_right(&mut self) -> bool {
         if self.cursor_pos < self.value.len() {
             if let Some(next) = self.value[self.cursor_pos..].chars().next() {
                 self.cursor_pos += next.len_utf8();
+                return true;
             }
-            true
-        } else {
-            false
         }
+        false
     }
 
     pub fn move_home(&mut self) {

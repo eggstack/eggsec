@@ -327,7 +327,7 @@ impl TabRender for ScanTab {
             .split(input_inner);
 
         if self.inputs.fields.len() >= 2 {
-            if let Some(field) = self.inputs.fields.get(0) {
+            if let Some(field) = self.inputs.fields.first() {
                 field.render(f, inner_chunks[0], insert_mode);
             }
             if let Some(field) = self.inputs.fields.get(1) {
@@ -352,7 +352,7 @@ impl TabRender for ScanTab {
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .split(main_area);
 
-        let stages_area = main_chunks.get(0).copied().unwrap_or(main_area);
+        let stages_area = main_chunks.first().copied().unwrap_or(main_area);
         let output_area = main_chunks.get(1).copied().unwrap_or(main_area);
 
         let mut stage_lines: Vec<Line> = Vec::new();

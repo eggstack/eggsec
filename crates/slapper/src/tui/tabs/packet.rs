@@ -540,7 +540,7 @@ impl TabRender for PacketTab {
             ])
             .split(area);
 
-        let selector_area = chunks.get(0).copied().unwrap_or(area);
+        let selector_area = chunks.first().copied().unwrap_or(area);
         let input_area = chunks.get(1).copied().unwrap_or(area);
         let results_area = chunks.get(2).copied().unwrap_or(area);
 
@@ -612,7 +612,7 @@ impl TabRender for PacketTab {
                 Constraint::Min(0),
             ])
             .split(area);
-        let selector_area = chunks.get(0).copied().unwrap_or(area);
+        let selector_area = chunks.first().copied().unwrap_or(area);
         if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
             dropdown.render(f);
         }

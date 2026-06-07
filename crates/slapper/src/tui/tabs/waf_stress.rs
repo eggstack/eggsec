@@ -161,7 +161,7 @@ impl TabRender for WafStressTab {
             .constraints([Constraint::Length(12), Constraint::Min(0)])
             .split(area);
 
-        let input_area = match chunks.get(0) {
+        let input_area = match chunks.first() {
             Some(area) => *area,
             None => return,
         };

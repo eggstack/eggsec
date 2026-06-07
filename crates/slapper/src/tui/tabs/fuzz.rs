@@ -506,7 +506,7 @@ impl TabRender for FuzzTab {
             .split(config_inner);
 
         if self.inputs.fields.len() > 6 && config_chunks.len() >= 7 {
-            if let Some(chunk) = config_chunks.get(0) {
+            if let Some(chunk) = config_chunks.first() {
                 self.inputs.fields[0].render(f, *chunk, insert_mode);
             }
             if let Some(chunk) = config_chunks.get(1) {
@@ -1104,68 +1104,68 @@ mod tests {
         // (Note: handle_enter would need mock is_running() = false)
         assert!(tab.mutation_checkbox.focused);
     }
-}
 
-#[test]
-fn test_left_from_payload_selector_goes_to_inputs() {
-    let mut tab = FuzzTab::default();
-    tab.focus_area = FuzzFocusArea::PayloadSelector;
-    if !tab.inputs.fields.is_empty() {
-        tab.inputs.fields[0].cursor_pos = 0;
+    #[test]
+    fn test_left_from_payload_selector_goes_to_inputs() {
+        let mut tab = FuzzTab::default();
+        tab.focus_area = FuzzFocusArea::PayloadSelector;
+        if let Some(field) = tab.inputs.fields.first_mut() {
+            field.cursor_pos = 0;
+        }
+
+        let result = tab.handle_left();
+        assert!(result);
+        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
     }
 
-    let result = tab.handle_left();
-    assert!(result);
-    assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
-}
+    #[test]
+    fn test_right_from_inputs_to_payload_selector() {
+        let mut tab = FuzzTab::default();
+        tab.focus_area = FuzzFocusArea::Inputs;
+        let result = tab.handle_right();
+        assert!(!result || result);
+    }
 
-#[test]
-fn test_right_from_inputs_to_payload_selector() {
-    let mut tab = FuzzTab::default();
-    tab.focus_area = FuzzFocusArea::Inputs;
-    let result = tab.handle_right();
-    assert!(!result || result);
-}
+    #[test]
+    fn test_right_from_payload_to_mode_selector() {
+        let mut tab = FuzzTab::default();
+        tab.focus_area = FuzzFocusArea::PayloadSelector;
 
-#[test]
-fn test_right_from_payload_to_mode_selector() {
-    let mut tab = FuzzTab::default();
-    tab.focus_area = FuzzFocusArea::PayloadSelector;
+        let result = tab.handle_right();
+        assert!(result);
+        assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
+    }
 
-    let result = tab.handle_right();
-    assert!(result);
-    assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
-}
+    #[test]
+    fn test_right_from_mode_to_target_selector() {
+        let mut tab = FuzzTab::default();
+        tab.focus_area = FuzzFocusArea::ModeSelector;
 
-#[test]
-fn test_right_from_mode_to_target_selector() {
-    let mut tab = FuzzTab::default();
-    tab.focus_area = FuzzFocusArea::ModeSelector;
+        let result = tab.handle_right();
+        assert!(result);
+        assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
+    }
 
-    let result = tab.handle_right();
-    assert!(result);
-    assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
-}
+    #[test]
+    fn test_right_from_target_to_mutation_checkbox() {
+        let mut tab = FuzzTab::default();
+        tab.focus_area = FuzzFocusArea::TargetSelector;
 
-#[test]
-fn test_right_from_target_to_mutation_checkbox() {
-    let mut tab = FuzzTab::default();
-    tab.focus_area = FuzzFocusArea::TargetSelector;
+        let result = tab.handle_right();
+        assert!(result);
+        assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
+    }
 
-    let result = tab.handle_right();
-    assert!(result);
-    assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
-}
+    #[test]
+    fn test_right_from_mutation_to_inputs() {
+        let mut tab = FuzzTab::default();
+        tab.focus_area = FuzzFocusArea::MutationCheckbox;
 
-#[test]
-fn test_right_from_mutation_to_inputs() {
-    let mut tab = FuzzTab::default();
-    tab.focus_area = FuzzFocusArea::MutationCheckbox;
-
-    let result = tab.handle_right();
-    assert!(result);
-    assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
-    if !tab.inputs.fields.is_empty() {
-        assert_eq!(tab.inputs.fields[0].cursor_pos, 0);
+        let result = tab.handle_right();
+        assert!(result);
+        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
+        if let Some(field) = tab.inputs.fields.first() {
+            assert_eq!(field.cursor_pos, 0);
+        }
     }
 }

@@ -1881,3 +1881,63 @@ Comprehensive audit using 8 parallel subagents across all tabs, core modules, an
 3. `handle_escape` didn't transition focus area back to Inputs on scan/fingerprint tabs
 4. `proxy.rs` had no page navigation for results view
 5. Unicode width miscalculation in selector radio rendering
+
+## Session Fixes (2026-06-07)
+
+### TUI Deep Dive Audit - All 28 Tabs + Components
+
+Comprehensive audit using 4 parallel subagents across all tabs and components.
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `wireless.rs` | 229 | Direct `self.inputs.fields[0]` access without bounds check — panics if fields empty | Changed to `if let (Some(chunk), Some(field)) = (input_chunks.first(), self.inputs.fields.first())` |
+| `wireless.rs` | 334-337 | `handle_up()` missing `is_running()` guard — scrolls during running state | Added `!self.is_running()` guard |
+| `wireless.rs` | 340-343 | `handle_down()` missing `is_running()` guard — same | Added guard |
+| `wireless.rs` | 358-363 | `page_up()` missing `is_running()` guard | Added guard |
+| `wireless.rs` | 366-372 | `page_down()` missing `is_running()` guard | Added guard |
+| `wireless.rs` | 262-373 | Missing trait implementations for handle_word_forward/backward/home/end/top/bottom/copy | Added full implementations matching other tabs |
+| `components/input.rs` | 149-168 | `move_left()`/`move_right()` return `true` even when cursor doesn't move (on multi-byte char boundary) | Moved `true` inside `if let Some` block — only returns true on actual movement |
+
+#### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fuzz.rs` | 1109-1171 | 6 orphaned test functions defined outside `mod tests` block | Moved all tests inside `mod tests` block; fixed direct `fields[0]` access to use `.first()` |
+
+#### LOW Priority Fixes (clippy .get(0) → .first())
+
+| File | Lines | Fix |
+|------|-------|-----|
+| `fuzz.rs` | 509 | `config_chunks.get(0)` → `config_chunks.first()` |
+| `graphql.rs` | 279 | `options_chunks.get(0)` → `options_chunks.first()` |
+| `load.rs` | 426, 513 | `chunks.get(0)` → `chunks.first()` |
+| `oauth.rs` | 325 | `options_chunks.get(0)` → `options_chunks.first()` |
+| `packet.rs` | 543, 615 | `chunks.get(0)` → `chunks.first()` |
+| `proxy.rs` | 444, 492 | `chunks.get(0)` → `chunks.first()` |
+| `report.rs` | 287 | `chunks.get(0)` → `chunks.first()` |
+| `resume.rs` | 115 | `chunks.get(0)` → `chunks.first()` |
+| `scan.rs` | 330, 355 | `.fields.get(0)` and `main_chunks.get(0)` → `.first()` |
+| `settings/render.rs` | 31 | `chunks.get(0)` → `chunks.first()` |
+| `stress.rs` | 256, 268 | `chunks.get(0)` → `chunks.first()` |
+| `waf.rs` | 348, 395 | `chunks.get(0)` and `results_chunks.get(0)` → `.first()` |
+| `waf_stress.rs` | 164 | `chunks.get(0)` → `chunks.first()` |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 9 |
+| Total bugs fixed | 9 |
+| Files modified | 16 |
+| HIGH priority fixes | 7 |
+| MEDIUM priority fixes | 1 |
+| LOW priority fixes | 1 (19 clippy occurrences) |
+| Tabs audited | 28 + components |
+
+**Key systemic bugs fixed**:
+1. `wireless.rs` had no `is_running()` guards on navigation handlers — user could scroll during running scan
+2. `wireless.rs` had direct `fields[0]` access without bounds check — potential panic
+3. `input.rs` `move_left()`/`move_right()` returned `true` on no-op — callers incorrectly consumed keypresses without cursor movement
+4. `fuzz.rs` had 6 orphaned tests outside `mod tests` — structurally misplaced, some using direct `fields[0]` access

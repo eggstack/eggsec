@@ -28,7 +28,7 @@ impl TabRender for super::SettingsTab {
             .constraints([Constraint::Length(20), Constraint::Min(0)])
             .split(area);
 
-        let nav_area = chunks.get(0).copied().unwrap_or(area);
+        let nav_area = chunks.first().copied().unwrap_or(area);
         let content_area = chunks.get(1).copied().unwrap_or(area);
 
         let nav_items = vec![
