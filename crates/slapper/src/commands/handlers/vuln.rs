@@ -57,8 +57,8 @@ async fn handle_vuln_prioritize(args: crate::cli::vuln::VulnPrioritizeArgs) -> R
 
     let risk = RiskScore::new(
         args.cvss.unwrap_or(0.0),
-        args.asset_criticality.unwrap_or(0.0),
         args.exploitability.unwrap_or(0.0),
+        args.asset_criticality.unwrap_or(0.0),
     );
     println!("  Calculated Risk Score: {:.2}", risk.total());
     println!("  Priority: {:?}", risk.priority());

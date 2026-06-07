@@ -1,16 +1,6 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
-macro_rules! min {
-    ($a:expr, $b:expr) => {
-        if $a < $b {
-            $a
-        } else {
-            $b
-        }
-    };
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CvssScore {
     pub base_score: f32,
@@ -40,13 +30,16 @@ impl CvssScore {
     }
 
     pub fn severity(&self) -> &'static str {
-        match self.base_score as u8 {
-            0 => "NONE",
-            1..=3 => "LOW",
-            4..=6 => "MEDIUM",
-            7..=8 => "HIGH",
-            9..=10 => "CRITICAL",
-            _ => "UNKNOWN",
+        if self.base_score <= 0.0 {
+            "NONE"
+        } else if self.base_score <= 3.9 {
+            "LOW"
+        } else if self.base_score <= 6.9 {
+            "MEDIUM"
+        } else if self.base_score <= 8.9 {
+            "HIGH"
+        } else {
+            "CRITICAL"
         }
     }
 
@@ -86,7 +79,7 @@ impl CvssScore {
             if impact == 0.0 {
                 0.0
             } else {
-                let score = min!(impact + exploitability, 10.0);
+                let score = (impact + exploitability).min(10.0);
                 f32::floor(score * 10.0) / 10.0
             }
         } else {
@@ -95,7 +88,7 @@ impl CvssScore {
             if impact == 0.0 {
                 0.0
             } else {
-                let score = min!(1.08 * (impact + exploitability), 10.0);
+                let score = (1.08 * (impact + exploitability)).min(10.0);
                 f32::floor(score * 10.0) / 10.0
             }
         }
@@ -284,7 +277,7 @@ fn compute_base_score(v: &ParsedVector) -> f32 {
         if impact == 0.0 {
             0.0
         } else {
-            let score = min!(impact + exploitability, 10.0);
+            let score = (impact + exploitability).min(10.0);
             f32::floor(score * 10.0) / 10.0
         }
     } else {
@@ -293,7 +286,7 @@ fn compute_base_score(v: &ParsedVector) -> f32 {
         if impact == 0.0 {
             0.0
         } else {
-            let score = min!(1.08 * (impact + exploitability), 10.0);
+            let score = (1.08 * (impact + exploitability)).min(10.0);
             f32::floor(score * 10.0) / 10.0
         }
     }
@@ -305,7 +298,7 @@ fn compute_temporal_score(base_score: f32, v: &ParsedVector) -> f32 {
     let rc = temporal_metric_weight(&v.rc);
 
     let score = base_score * e * rl * rc;
-    let score = min!(score, 10.0);
+    let score = score.min(10.0);
     f32::floor(score * 10.0) / 10.0
 }
 
@@ -341,16 +334,16 @@ fn compute_environmental_score(v: &ParsedVector) -> f32 {
     }
 
     let score = if scope == "U" {
-        min!(impact + exploitability, 10.0)
+        (impact + exploitability).min(10.0)
     } else {
-        min!(1.08 * (impact + exploitability), 10.0)
+        (1.08 * (impact + exploitability)).min(10.0)
     };
 
     let e = temporal_metric_weight(&v.e);
     let rl = temporal_metric_weight(&v.rl);
     let rc = temporal_metric_weight(&v.rc);
 
-    let score = min!(score * e * rl * rc, 10.0);
+    let score = (score * e * rl * rc).min(10.0);
     f32::floor(score * 10.0) / 10.0
 }
 

@@ -63,7 +63,7 @@ impl RiskScore {
         }
     }
 
-    pub fn new(cvss: f32, asset_criticality: f32, exploitability: f32) -> Self {
+    pub fn new(cvss: f32, exploitability: f32, asset_criticality: f32) -> Self {
         Self::calculate(cvss, exploitability, asset_criticality)
     }
 

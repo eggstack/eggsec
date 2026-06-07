@@ -40,8 +40,8 @@ pub fn triage_finding(
     severity: Severity,
     cvss_score: Option<f32>,
 ) -> TriageResult {
-    let duplicate_keywords = ["test", "example", "demo", "sample", "localhost"];
-    let false_positive_keywords = ["information", "low", "informational", "no risk"];
+    let duplicate_keywords = ["example", "demo", "sample", "localhost"];
+    let false_positive_keywords = ["informational", "no risk"];
 
     let title_lower = title.to_lowercase();
     let description_lower = description.to_lowercase();
@@ -50,9 +50,10 @@ pub fn triage_finding(
         .iter()
         .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
-    let is_false_positive = false_positive_keywords
-        .iter()
-        .any(|kw| title_lower.contains(kw) && severity == Severity::Info);
+    let is_false_positive = severity == Severity::Info
+        && false_positive_keywords
+            .iter()
+            .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
     let (status, confidence, reason) = if is_duplicate {
         (
@@ -66,12 +67,20 @@ pub fn triage_finding(
             0.85,
             "Finding matches false positive pattern".to_string(),
         )
-    } else if cvss_score.is_some() && cvss_score.unwrap() >= 9.0 {
-        (
-            TriageStatus::TruePositive,
-            0.99,
-            "Critical CVSS score confirms true positive".to_string(),
-        )
+    } else if let Some(score) = cvss_score {
+        if score >= 9.0 {
+            (
+                TriageStatus::TruePositive,
+                0.99,
+                "Critical CVSS score confirms true positive".to_string(),
+            )
+        } else {
+            (
+                TriageStatus::NeedsReview,
+                0.5,
+                "Manual review required".to_string(),
+            )
+        }
     } else {
         (
             TriageStatus::NeedsReview,
@@ -96,8 +105,8 @@ mod tests {
     fn test_triage_duplicate() {
         let result = triage_finding(
             "f1",
-            "Test vulnerability",
-            "This is a test",
+            "Example vulnerability",
+            "This is a demo finding",
             Severity::High,
             Some(7.0),
         );
