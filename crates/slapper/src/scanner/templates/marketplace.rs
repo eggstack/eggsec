@@ -84,7 +84,7 @@ impl TemplateMarketplace {
         );
 
         if let Some(tag) = tag_filter {
-            url.push_str(&format!("&tag={}", tag));
+            url.push_str(&format!("&tag={}", urlencoding::encode(tag)));
         }
 
         let response = self
@@ -169,6 +169,13 @@ impl TemplateMarketplace {
     }
 
     fn save_to_cache(&self, template_id: &str, content: &str) -> Result<()> {
+        if template_id.contains('/') || template_id.contains('\\') || template_id.contains("..") {
+            return Err(SlapperError::Validation(format!(
+                "Invalid template ID: {}",
+                template_id
+            )));
+        }
+
         std::fs::create_dir_all(&self.local_cache).map_err(|e| {
             SlapperError::Config(format!("Failed to create cache directory: {}", e))
         })?;

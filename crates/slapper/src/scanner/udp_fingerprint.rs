@@ -311,10 +311,21 @@ impl TokenBucket {
                 }
             } else {
                 tokio::time::sleep(self.refill_interval).await;
-                let refill = self
-                    .max_tokens
-                    .min(self.tokens.load(Ordering::Acquire) + self.max_tokens / 10 + 1);
-                self.tokens.store(refill, Ordering::Release);
+                let _ = self.refill();
+            }
+        }
+    }
+
+    fn refill(&self) -> bool {
+        loop {
+            let current = self.tokens.load(Ordering::Acquire);
+            let refill = self.max_tokens.min(current + self.max_tokens / 10 + 1);
+            if self
+                .tokens
+                .compare_exchange(current, refill, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return true;
             }
         }
     }

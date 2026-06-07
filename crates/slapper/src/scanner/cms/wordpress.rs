@@ -30,13 +30,8 @@ const WORDPRESS_VULNERABILITIES: &[(&str, &str, Severity, &str, Option<&str>)] =
     ),
 ];
 
-pub async fn enumerate_plugins(url: &str) -> Option<Vec<String>> {
+pub async fn enumerate_plugins(url: &str, client: &Client) -> Option<Vec<String>> {
     let plugins_url = format!("{}/wp-json/wp/v2/plugins", url.trim_end_matches('/'));
-
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .ok()?;
 
     match client.get(&plugins_url).send().await {
         Ok(resp) if resp.status().is_success() => {
@@ -59,13 +54,8 @@ pub async fn enumerate_plugins(url: &str) -> Option<Vec<String>> {
     None
 }
 
-pub async fn enumerate_themes(url: &str) -> Option<Vec<String>> {
+pub async fn enumerate_themes(url: &str, client: &Client) -> Option<Vec<String>> {
     let themes_url = format!("{}/wp-json/wp/v2/themes", url.trim_end_matches('/'));
-
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .ok()?;
 
     match client.get(&themes_url).send().await {
         Ok(resp) if resp.status().is_success() => {

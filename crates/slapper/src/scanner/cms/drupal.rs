@@ -23,12 +23,8 @@ const DRUPAL_VULNERABILITIES: &[(&str, &str, Severity, &str, Option<&str>)] = &[
     ),
 ];
 
-use crate::utils::create_insecure_http_client;
-
-pub async fn enumerate_modules(url: &str) -> Option<Vec<String>> {
+pub async fn enumerate_modules(url: &str, client: &Client) -> Option<Vec<String>> {
     let modules_url = format!("{}/web/modules", url.trim_end_matches('/'));
-
-    let client = create_insecure_http_client(10)?;
 
     match client.get(&modules_url).send().await {
         Ok(resp) => {

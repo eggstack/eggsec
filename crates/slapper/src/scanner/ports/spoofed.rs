@@ -293,9 +293,18 @@ pub(crate) async fn scan_ports_spoofed(
                                 packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                         }
+                        let src_ip_u32: u32 = u32::from(src_ip);
+                        sent_packets.insert(port, src_ip_u32);
                     }
                     Err(e) => {
-                        tracing::debug!("Failed to build spoofed UDP packets: {}", e);
+                        tracing::debug!("Failed to build fragmented TCP packets: {}", e);
+                        if let Some(ref pb) = progress {
+                            pb.inc(1);
+                        }
+                        if let Some(ref tx) = progress_tx {
+                            let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
+                            let _ = tx.send((count, total_ports)).await;
+                        }
                         drop(permit);
                         return;
                     }
@@ -321,6 +330,13 @@ pub(crate) async fn scan_ports_spoofed(
                             port,
                             e
                         );
+                        if let Some(ref pb) = progress {
+                            pb.inc(1);
+                        }
+                        if let Some(ref tx) = progress_tx {
+                            let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
+                            let _ = tx.send((count, total_ports)).await;
+                        }
                         drop(permit);
                         return;
                     }
@@ -470,7 +486,7 @@ pub(crate) async fn scan_ports_spoofed(
                 pb.inc(1);
             }
             if let Some(ref tx) = progress_tx {
-                let count = scanned_count.fetch_add(1, Ordering::Relaxed);
+                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
                 if tx.send((count, total_ports)).await.is_err() {
                     tracing::warn!("Progress receiver dropped");
                 }

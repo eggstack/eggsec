@@ -261,40 +261,24 @@ impl CmsScanner {
     async fn enumerate_components(&self, url: &str, cms_type: CmsType) -> (Vec<String>, Vec<String>) {
         match cms_type {
             CmsType::WordPress => {
-                let plugins = match wordpress::enumerate_plugins(url).await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        tracing::debug!("WordPress plugin enumeration failed: {}", e);
-                        Vec::new()
-                    }
-                };
-                let themes = match wordpress::enumerate_themes(url).await {
-                    Ok(t) => t,
-                    Err(e) => {
-                        tracing::debug!("WordPress theme enumeration failed: {}", e);
-                        Vec::new()
-                    }
-                };
+                let plugins = wordpress::enumerate_plugins(url, &self.http_client)
+                    .await
+                    .unwrap_or_default();
+                let themes = wordpress::enumerate_themes(url, &self.http_client)
+                    .await
+                    .unwrap_or_default();
                 (plugins, themes)
             }
             CmsType::Drupal => {
-                let modules = match drupal::enumerate_modules(url).await {
-                    Ok(m) => m,
-                    Err(e) => {
-                        tracing::debug!("Drupal module enumeration failed: {}", e);
-                        Vec::new()
-                    }
-                };
+                let modules = drupal::enumerate_modules(url, &self.http_client)
+                    .await
+                    .unwrap_or_default();
                 (modules, Vec::new())
             }
             CmsType::Joomla => {
-                let extensions = match joomla::enumerate_extensions(url).await {
-                    Ok(e) => e,
-                    Err(e) => {
-                        tracing::debug!("Joomla extension enumeration failed: {}", e);
-                        Vec::new()
-                    }
-                };
+                let extensions = joomla::enumerate_extensions(url, &self.http_client)
+                    .await
+                    .unwrap_or_default();
                 (extensions, Vec::new())
             }
             CmsType::Unknown => (Vec::new(), Vec::new()),
@@ -357,8 +341,11 @@ fn version_lt(current: &str, fixed: &str) -> bool {
 
 impl Default for CmsScanner {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            panic!("CmsScanner initialization failed: {}", e)
+        Self::new().unwrap_or_else(|_| Self {
+            http_client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("Failed to build fallback HTTP client"),
         })
     }
 }

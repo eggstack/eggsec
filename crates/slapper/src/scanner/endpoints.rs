@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tracing;
 
 use crate::cli::EndpointScanArgs;
@@ -714,7 +713,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         })?;
 
     let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
-    let scanned_count = Arc::new(Mutex::new(0u64));
+    let scanned_count = Arc::new(AtomicU64::new(0));
     let results_count = Arc::new(AtomicU64::new(0));
     let total_endpoints = config.endpoints.len() as u64;
 
@@ -819,11 +818,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                 pb.inc(1);
             }
             if let Some(ref tx) = progress_tx {
-                let count = {
-                    let mut c = scanned_count.lock().await;
-                    *c += 1;
-                    *c
-                };
+                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
                 if tx.send((count, total_endpoints)).await.is_err() {
                     tracing::warn!("Progress receiver dropped");
                 }

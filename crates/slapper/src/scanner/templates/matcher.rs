@@ -102,8 +102,6 @@ impl TemplateMatcher {
             }
         }
 
-        let _ = &matcher.method;
-
         for (header, value) in &matcher.headers {
             let header_key = header.to_ascii_lowercase();
             let resp_header = response.headers.get(&header_key).map(String::as_str);

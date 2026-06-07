@@ -5,7 +5,6 @@ use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -434,8 +433,7 @@ async fn probe_service(
         }
     }
 
-    let mut buffer: SmallVec<[u8; 256]> = SmallVec::new();
-    buffer.resize(4096, 0);
+    let mut buffer = vec![0u8; 4096];
     let read_result = timeout(timeout_duration, stream.read(&mut buffer)).await;
 
     match read_result {
@@ -509,7 +507,7 @@ fn extract_product_version(response: &str, service: &str) -> (Option<String>, Op
             let server = response
                 .lines()
                 .find(|l| l.to_lowercase().starts_with("server:"))
-                .and_then(|l| l.split(':').nth(1).map(|s| s.trim().to_string()));
+                .and_then(|l| l.split_once(':').map(|x| x.1.trim().to_string()));
 
             if let Some(server) = server {
                 let parts: Vec<&str> = server.split('/').collect();

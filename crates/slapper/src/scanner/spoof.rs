@@ -194,10 +194,8 @@ impl SpoofConfig {
     pub fn header_value(&self) -> Result<Option<String>> {
         if self.enabled {
             if !self.decoy_ips.is_empty() {
-                let idx = rand::random::<usize>() % (self.decoy_ips.len() + 1);
-                if idx < self.decoy_ips.len() {
-                    return Ok(Some(self.decoy_ips[idx].to_string()));
-                }
+                let idx = rand::random::<usize>() % self.decoy_ips.len();
+                return Ok(Some(self.decoy_ips[idx].to_string()));
             }
             if let Some(ip) = self.source_ip {
                 return Ok(Some(ip.to_string()));
