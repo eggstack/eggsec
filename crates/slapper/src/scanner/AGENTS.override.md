@@ -68,6 +68,15 @@ let map: FxHashMap<String, String> = FxHashMap::default();
 | CMS enumerate functions created new clients | Accept `&Client` parameter |
 | `endpoints.rs` used async Mutex for counter | Replaced with `AtomicU64` |
 
+## Bug Fixes Applied (2026-06-07, round 3)
+
+| Issue | Fix |
+|-------|-----|
+| `max_rate=0` caused division by zero panic in rate limiting | Added validation in `from_args` |
+| Simultaneous decoy mode logged "staggered" message | Fixed log message to match actual mode |
+| Staggered decoy mode logged generic message | Fixed log message to "staggered decoy packet" |
+| `TemplateMarketplace::default()` panicked on client failure | Falls back to `reqwest::Client::new()` |
+
 
 
 (End file - 72 lines)

@@ -97,3 +97,12 @@ Discovered information is often fed into the **Fuzzer** or **Vulnerability Manag
 | `endpoints.rs:717` | Used `tokio::sync::Mutex` for simple counter | Replaced with `AtomicU64` for zero-overhead atomic increments |
 | `endpoints.rs:768` | Silent error suppression on network failures | Changed to explicit `match` with debug logging |
 | `udp_fingerprint.rs:144` | Silent task join failures | Changed to explicit `match` with debug logging |
+
+## Bug Fixes (2026-06-07, round 3)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `spoof.rs:126` | `max_rate=0` caused division by zero panic in spoofed scan rate limiting | Added validation: `max_rate` must be > 0 |
+| `ports/spoofed.rs:384` | Simultaneous decoy mode logged "staggered decoy packet" | Fixed to "simultaneous decoy packet" |
+| `ports/spoofed.rs:425` | Staggered decoy mode logged generic "decoy packet" | Fixed to "staggered decoy packet" |
+| `templates/marketplace.rs:279` | `Default::default()` panicked if reqwest client construction failed | Falls back to `reqwest::Client::new()` instead of panicking |
