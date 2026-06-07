@@ -9,6 +9,7 @@ The recon module is organized as follows:
 ### Core Files (in src/recon/)
 - `mod.rs` - Module root with `FullReconResult` struct and `FULL_RECON_PIPELINE_MODULES`
 - `runner.rs` - Main orchestration via `run_full_recon()` with parallel task execution
+- `spinner.rs` - Terminal progress indicator for recon operations
 
 ### Network/Infra
 - `dns_records.rs` - DNS record enumeration (A, AAAA, MX, TXT, CNAME, NS, SOA, CAA)
@@ -23,12 +24,12 @@ The recon module is organized as follows:
 - `content.rs` - Content discovery for 80+ sensitive paths
 - `js.rs` - JavaScript analysis for endpoints, secrets, API keys
 - `cors.rs` - CORS misconfiguration detection
-- `api_schema.rs` - OpenAPI/GraphQL schema discovery (feature-gated)
+- `api_schema.rs` - OpenAPI/GraphQL schema discovery
 
 ### Subdomain Discovery
 - `subdomain.rs` - Subdomain enumeration via crt.sh, Threatminer, DNS verification
 - `wayback.rs` - Wayback Machine historical URL discovery
-- `takeover.rs` - Subdomain takeover detection with 31 service fingerprints
+- `takeover.rs` - Subdomain takeover detection with 30 service fingerprints
 
 ### Security
 - `cve.rs` - CVE mapping with built-in database + NVD API integration
@@ -49,7 +50,7 @@ The recon module is organized as follows:
 - `email_security.rs` - Email security (SPF, DKIM, DMARC, STARTTLS, BIMI)
 
 ### Containers
-- `containers.rs` - Docker/Kubernetes security scanning (feature-gated)
+- `containers.rs` - Docker/Kubernetes security scanning (feature-gated on `container` feature)
 
 ## Performance Notes
 

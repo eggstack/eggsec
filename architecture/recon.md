@@ -7,6 +7,7 @@ The Reconnaissance module focuses on passive and active information gathering ab
 ### Network & Infrastructure
 
 - **DNS (`dns_records.rs`)**: Comprehensive DNS enumeration, including A, AAAA, MX, TXT, CNAME, NS, SOA, and CAA records.
+- **Reverse DNS (`reverse_dns.rs`)**: Reverse DNS lookup for IP addresses.
 - **Subdomain Discovery (`subdomain.rs`)**: Finding subdomains using crt.sh, Threatminer, and DNS verification.
 - **WHOIS (`whois.rs`)**: Extracting ownership and network registration information.
 - **ASN Lookup (`asn.rs`)**: ASN lookup via ARIN RDAP (standalone, not in full pipeline).
@@ -19,7 +20,7 @@ The Reconnaissance module focuses on passive and active information gathering ab
 - **JavaScript Analysis (`js.rs`)**: Analyzing page content and JavaScript files for endpoints, API keys, and secrets.
 - **Wayback Machine (`wayback.rs`)**: Retrieving historical URLs for a domain to find forgotten or retired endpoints.
 - **CORS Testing (`cors.rs`)**: Identifying misconfigured Cross-Origin Resource Sharing policies.
-- **API Schema (`api_schema.rs`)**: OpenAPI/Swagger and GraphQL schema discovery (feature-gated).
+- **API Schema (`api_schema.rs`)**: OpenAPI/Swagger and GraphQL schema discovery.
 
 ### Vulnerability Mapping
 
@@ -34,12 +35,16 @@ The Reconnaissance module focuses on passive and active information gathering ab
 - **IAM Analysis**: Privilege escalation pattern detection with 12 known patterns.
 - **Metadata Testing**: IMDSv1/v2 testing for AWS/GCP/Azure.
 - **Storage Testing**: S3 bucket security tests.
-- **Container Discovery**: Detecting Kubernetes and Docker environments (feature-gated).
+- **Container Discovery (`containers.rs`)**: Detecting Kubernetes and Docker environments (feature-gated on `container` feature).
 
 ### Email
 
 - **Email Discovery (`email.rs`)**: Extracting email addresses, phone numbers, and social media from web content.
-- **Email Security (`email_security.rs`)**: Analyzing SPF, DKIM, DMARC, STARTTLS, and BIMI records.
+- **Email Security (`email_security.rs`)**: Analyzing SPF, DKIM, DMARC, STARTTLS, and BIMI records (standalone, not in full pipeline).
+
+### Utilities
+
+- **Progress Spinner (`spinner.rs`)**: Terminal progress indicator for recon operations.
 
 ### Standalone Modules (not in public API)
 
