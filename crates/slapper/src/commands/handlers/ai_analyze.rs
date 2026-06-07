@@ -138,7 +138,7 @@ fn parse_ai_analysis(
                     Severity::Info => 5,
                 },
                 action: format!("Address {}: {}", severity.as_str().to_uppercase(), title),
-                effort: if severity.as_int() >= 4 {
+                effort: if severity >= Severity::High {
                     "high"
                 } else {
                     "medium"

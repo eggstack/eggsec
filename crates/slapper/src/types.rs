@@ -26,11 +26,13 @@ impl Severity {
     /// Parse a severity from a string, defaulting to `Info` for unknown values.
     ///
     /// Prefer `s.parse::<Severity>()` for new code.
+    #[must_use]
     pub fn parse_or_default(s: &str) -> Self {
         s.parse().unwrap_or(Severity::Info)
     }
 
     /// Derive severity from a CVSS score.
+    #[must_use]
     pub fn from_cvss(score: f32) -> Self {
         match score {
             s if s >= 9.0 => Severity::Critical,
@@ -42,6 +44,7 @@ impl Severity {
     }
 
     /// Return the lowercase string representation.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Severity::Critical => "critical",
@@ -53,6 +56,7 @@ impl Severity {
     }
 
     /// Return an integer ranking (higher = more severe).
+    #[must_use]
     pub fn as_int(&self) -> i32 {
         match self {
             Severity::Critical => 4,
@@ -64,6 +68,7 @@ impl Severity {
     }
 
     /// Return a color emoji for terminal display.
+    #[must_use]
     pub fn cvss_color(&self) -> &'static str {
         match self {
             Severity::Critical => "\u{1f534}",
@@ -96,6 +101,7 @@ impl std::str::FromStr for Severity {
             "high" => Ok(Severity::High),
             "medium" | "moderate" => Ok(Severity::Medium),
             "low" => Ok(Severity::Low),
+            "info" => Ok(Severity::Info),
             _ => Ok(Severity::Info),
         }
     }
@@ -132,19 +138,23 @@ impl SensitiveString {
         Self(s.into())
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Borrow the inner secret.
+    #[must_use]
     pub fn expose_secret(&self) -> &str {
         &self.0
     }
@@ -568,5 +578,38 @@ mod tests {
     #[test]
     fn severity_default_is_info() {
         assert_eq!(Severity::default(), Severity::Info);
+    }
+
+    #[test]
+    fn severity_display_from_str_roundtrip() {
+        for sev in [
+            Severity::Critical,
+            Severity::High,
+            Severity::Medium,
+            Severity::Low,
+            Severity::Info,
+        ] {
+            let s = format!("{}", sev);
+            let parsed: Severity = s.parse().unwrap();
+            assert_eq!(parsed, sev, "round-trip failed for {:?}", sev);
+        }
+    }
+
+    #[test]
+    fn output_format_serde_roundtrip() {
+        for fmt in [
+            OutputFormat::Pretty,
+            OutputFormat::Json,
+            OutputFormat::Compact,
+            OutputFormat::Html,
+            OutputFormat::Csv,
+            OutputFormat::Sarif,
+            OutputFormat::Junit,
+            OutputFormat::Markdown,
+        ] {
+            let json = serde_json::to_string(&fmt).unwrap();
+            let deserialized: OutputFormat = serde_json::from_str(&json).unwrap();
+            assert_eq!(deserialized, fmt, "serde round-trip failed for {:?}", fmt);
+        }
     }
 }
