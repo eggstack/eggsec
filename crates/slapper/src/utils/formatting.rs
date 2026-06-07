@@ -1,6 +1,7 @@
 pub fn strip_controls(s: &str, max_len: usize) -> String {
     let cleaned: String = s.chars().filter(|c| !c.is_control() || *c == ' ').collect();
-    if cleaned.len() > max_len {
+    let char_count = cleaned.chars().count();
+    if char_count > max_len {
         let truncated: String = cleaned.chars().take(max_len.saturating_sub(3)).collect();
         format!("{}...", truncated)
     } else {
