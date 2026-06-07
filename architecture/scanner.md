@@ -74,6 +74,26 @@ Discovered information is often fed into the **Fuzzer** or **Vulnerability Manag
 |------|-------|-----|
 | `cms/joomla.rs:88-89` | String slice bounds could panic on malformed XML | Added bounds check before slicing |
 | `templates/matcher.rs:185-189` | Invalid regex silently returned false | Added `tracing::debug` warning on invalid regex |
-| `cms/mod.rs:330` | Default impl could panic on init failure | Changed `unwrap()` to `unwrap_or_else` with panic |
+| `cms/mod.rs:330` | Default impl could panic on init failure | Changed `unwrap()` to `unwrap_or_else` with fallback client |
+
+## Bug Fixes (2026-06-07)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `ports/spoofed.rs:288-295` | Fragmented packets never populated `sent_packets` map, causing all responses to be silently dropped | Added `sent_packets.insert()` after sending fragments |
+| `ports/spoofed.rs:472-473` | Off-by-one in spoofed progress (pre-increment vs post-increment) | Changed to `fetch_add(1, ...) + 1` to match non-spoofed scan |
+| `ports/spoofed.rs:298-301,320-326` | Early-return error paths skipped progress bar and progress_tx notification | Added progress updates before early returns |
+| `ports/spoofed.rs:298` | Wrong error message said "UDP packets" for TCP fragments | Changed to "fragmented TCP packets" |
+| `spoof.rs:197` | `header_value()` confusing modulo logic with off-by-one edge case | Simplified to `rand % len` with direct return |
+| `udp_fingerprint.rs:301-320` | `TokenBucket` race condition in refill (non-atomic read-modify-write) | Refactored to use `compare_exchange` loop in `refill()` |
+| `templates/marketplace.rs:176` | `template_id` path traversal via unsanitized IDs | Added validation rejecting `/`, `\`, `..` in template IDs |
+| `templates/marketplace.rs:87` | Tag parameter not URL-encoded, allowing query injection | Used `urlencoding::encode()` for tag values |
+| `fingerprint.rs:510` | Server header parsing lost port info with `split(':')` | Changed to `split_once(':')` to preserve `host:port` |
+| `fingerprint.rs:437-438` | Unnecessary `SmallVec` + `resize` for buffer allocation | Replaced with `vec![0u8; 4096]` |
+| `templates/matcher.rs:105` | Dead `let _ = &matcher.method` binding | Removed unused binding |
+| `cms/mod.rs:358-363` | `Default` impl panicked on init failure | Uses fallback HTTP client instead of panicking |
+| `cms/wordpress.rs:36-39,65-68` | `enumerate_plugins/themes` created new `Client` per call | Accept `&Client` parameter, reuse caller's client |
+| `cms/drupal.rs:31`, `cms/joomla.rs:31` | Enumerate functions ignored TLS verification setting | Accept `&Client` parameter from caller |
+| `endpoints.rs:717` | Used `tokio::sync::Mutex` for simple counter | Replaced with `AtomicU64` for zero-overhead atomic increments |
 | `endpoints.rs:768` | Silent error suppression on network failures | Changed to explicit `match` with debug logging |
 | `udp_fingerprint.rs:144` | Silent task join failures | Changed to explicit `match` with debug logging |
