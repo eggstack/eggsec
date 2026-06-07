@@ -20,6 +20,7 @@ pub fn encode(s: &str) -> String {
 
 pub fn decode(s: &str) -> Result<String> {
     let mut decoded = String::new();
+    let mut bytes_buf: Vec<u8> = Vec::new();
     let mut chars = s.chars().peekable();
 
     while let Some(c) = chars.next() {
@@ -31,7 +32,7 @@ pub fn decode(s: &str) -> Result<String> {
                 ));
             }
             match u8::from_str_radix(&hex, 16) {
-                Ok(byte) => decoded.push(byte as char),
+                Ok(byte) => bytes_buf.push(byte),
                 Err(_) => {
                     return Err(SlapperError::Parse(format!(
                         "Invalid hex in URL encoding: {}",
@@ -39,10 +40,34 @@ pub fn decode(s: &str) -> Result<String> {
                     )))
                 }
             }
-        } else if c == '+' {
-            decoded.push(' ');
         } else {
-            decoded.push(c);
+            if !bytes_buf.is_empty() {
+                match std::str::from_utf8(&bytes_buf) {
+                    Ok(valid) => decoded.push_str(valid),
+                    Err(_) => {
+                        return Err(SlapperError::Parse(
+                            "Invalid UTF-8 in URL encoding".to_string(),
+                        ))
+                    }
+                }
+                bytes_buf.clear();
+            }
+            if c == '+' {
+                decoded.push(' ');
+            } else {
+                decoded.push(c);
+            }
+        }
+    }
+
+    if !bytes_buf.is_empty() {
+        match std::str::from_utf8(&bytes_buf) {
+            Ok(valid) => decoded.push_str(valid),
+            Err(_) => {
+                return Err(SlapperError::Parse(
+                    "Invalid UTF-8 in URL encoding".to_string(),
+                ))
+            }
         }
     }
 

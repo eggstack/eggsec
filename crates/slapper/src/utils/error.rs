@@ -59,8 +59,9 @@ pub fn sanitize_error_message(error: &str) -> String {
         .replace_all(&sanitized, "[Windows path hidden]")
         .to_string();
 
-    if sanitized.len() > 200 {
-        sanitized.truncate(197);
+    if sanitized.chars().count() > 200 {
+        let truncated: String = sanitized.chars().take(197).collect();
+        sanitized = truncated;
         sanitized.push_str("...");
     }
 

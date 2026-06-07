@@ -1,8 +1,9 @@
 use anyhow::{anyhow, Result};
+use std::collections::BTreeSet;
 use std::net::{IpAddr, ToSocketAddrs};
 
 pub fn parse_ports(port_spec: &str) -> Result<Vec<u16>> {
-    let mut ports = Vec::new();
+    let mut ports = BTreeSet::new();
 
     for part in port_spec.split(',') {
         let part = part.trim();
@@ -18,11 +19,11 @@ pub fn parse_ports(port_spec: &str) -> Result<Vec<u16>> {
             }
             ports.extend(start..=end);
         } else {
-            ports.push(part.parse()?);
+            ports.insert(part.parse()?);
         }
     }
 
-    Ok(ports)
+    Ok(ports.into_iter().collect())
 }
 
 pub fn parse_headers(headers: &[String]) -> Vec<(String, String)> {
@@ -83,9 +84,8 @@ fn is_private_ip(ip: &IpAddr) -> bool {
         }
         IpAddr::V6(ipv6) => {
             ipv6.is_loopback()
-                || ipv6.segments()[0] == 0xfc00 >> 8
-                || ipv6.segments()[0] == 0xfd00 >> 8
-                || ipv6.segments()[0] == 0xfe80 >> 8
+                || (0xfc00..=0xfdff).contains(&ipv6.segments()[0])
+                || (0xfe80..=0xfebf).contains(&ipv6.segments()[0])
         }
     }
 }
@@ -119,6 +119,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_ports_deduplicates_overlapping_ranges() {
+        let ports = parse_ports("80-82,81-83").unwrap();
+        assert_eq!(ports, vec![80, 81, 82, 83]);
+    }
+
+    #[test]
+    fn test_parse_ports_deduplicates_exact_duplicates() {
+        let ports = parse_ports("80,80,80").unwrap();
+        assert_eq!(ports, vec![80]);
+    }
+
+    #[test]
     fn test_resolve_host_blocks_private() {
         let result = resolve_host("localhost");
         assert!(result.is_err());
@@ -127,6 +139,33 @@ mod tests {
         let result = resolve_host("192.168.1.1");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("private"));
+    }
+
+    #[test]
+    fn test_is_private_ip_ipv6() {
+        use std::str::FromStr;
+
+        // fc00::/7 (unique-local)
+        let ip = IpAddr::from_str("fc00::1").unwrap();
+        assert!(is_private_ip(&ip), "fc00::1 should be private");
+        let ip = IpAddr::from_str("fd00::1").unwrap();
+        assert!(is_private_ip(&ip), "fd00::1 should be private");
+        let ip = IpAddr::from_str("fdff::1").unwrap();
+        assert!(is_private_ip(&ip), "fdff::1 should be private");
+
+        // fe80::/10 (link-local)
+        let ip = IpAddr::from_str("fe80::1").unwrap();
+        assert!(is_private_ip(&ip), "fe80::1 should be private");
+        let ip = IpAddr::from_str("febf::1").unwrap();
+        assert!(is_private_ip(&ip), "febf::1 should be private");
+
+        // Public addresses that should NOT match
+        let ip = IpAddr::from_str("2001:db8::1").unwrap();
+        assert!(!is_private_ip(&ip), "2001:db8::1 should not be private");
+        let ip = IpAddr::from_str("fe00::1").unwrap();
+        assert!(!is_private_ip(&ip), "fe00::1 should not be private");
+        let ip = IpAddr::from_str("fec0::1").unwrap();
+        assert!(!is_private_ip(&ip), "fec0::1 should not be private");
     }
 
     #[test]

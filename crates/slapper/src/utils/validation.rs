@@ -84,16 +84,8 @@ pub fn validate_git_repo_path(repo_path: &str) -> Result<()> {
         return Err(anyhow!("Path does not exist: {}", repo_path));
     }
 
-    let canonical = path
-        .canonicalize()
+    path.canonicalize()
         .map_err(|e| anyhow!("Failed to canonicalize path: {} - {}", repo_path, e))?;
-
-    if !canonical.exists() {
-        return Err(anyhow!(
-            "Path does not exist after canonicalization: {}",
-            repo_path
-        ));
-    }
 
     Ok(())
 }

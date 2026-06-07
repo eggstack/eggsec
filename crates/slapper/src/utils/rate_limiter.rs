@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -119,6 +120,7 @@ impl AdaptiveRateLimiter {
             }
 
             self.success_count = 0;
+            self.error_count = 0;
         }
     }
 
@@ -168,14 +170,14 @@ impl AdaptiveRateLimiter {
 }
 
 pub struct PerTargetRateLimiter {
-    limiters: Arc<Mutex<std::collections::HashMap<String, AdaptiveRateLimiter>>>,
+    limiters: Arc<Mutex<FxHashMap<String, AdaptiveRateLimiter>>>,
     default_rate: u32,
 }
 
 impl PerTargetRateLimiter {
     pub fn new(default_rate: u32) -> Self {
         Self {
-            limiters: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            limiters: Arc::new(Mutex::new(FxHashMap::default())),
             default_rate,
         }
     }

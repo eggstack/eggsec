@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -7,10 +7,11 @@ use tokio::sync::RwLock;
 pub struct CacheEntry<T> {
     pub value: T,
     pub expires_at: Instant,
+    pub inserted_at: Instant,
 }
 
 pub struct ApiCache {
-    entries: Arc<RwLock<HashMap<String, CacheEntry<serde_json::Value>>>>,
+    entries: Arc<RwLock<FxHashMap<String, CacheEntry<serde_json::Value>>>>,
     ttl: Duration,
     max_entries: usize,
 }
@@ -18,7 +19,7 @@ pub struct ApiCache {
 impl ApiCache {
     pub fn new(ttl_secs: u64, max_entries: usize) -> Self {
         Self {
-            entries: Arc::new(RwLock::new(HashMap::new())),
+            entries: Arc::new(RwLock::new(FxHashMap::default())),
             ttl: Duration::from_secs(ttl_secs),
             max_entries,
         }
@@ -42,8 +43,15 @@ impl ApiCache {
             self.evict_oldest(&mut entries).await;
         }
 
-        let expires_at = Instant::now() + self.ttl;
-        entries.insert(key, CacheEntry { value, expires_at });
+        let now = Instant::now();
+        entries.insert(
+            key,
+            CacheEntry {
+                value,
+                expires_at: now + self.ttl,
+                inserted_at: now,
+            },
+        );
     }
 
     pub async fn set_ttl(&self, key: String, value: serde_json::Value, ttl_secs: u64) {
@@ -53,14 +61,21 @@ impl ApiCache {
             self.evict_oldest(&mut entries).await;
         }
 
-        let expires_at = Instant::now() + Duration::from_secs(ttl_secs);
-        entries.insert(key, CacheEntry { value, expires_at });
+        let now = Instant::now();
+        entries.insert(
+            key,
+            CacheEntry {
+                value,
+                expires_at: now + Duration::from_secs(ttl_secs),
+                inserted_at: now,
+            },
+        );
     }
 
-    async fn evict_oldest(&self, entries: &mut HashMap<String, CacheEntry<serde_json::Value>>) {
+    async fn evict_oldest(&self, entries: &mut FxHashMap<String, CacheEntry<serde_json::Value>>) {
         let oldest_key = entries
             .iter()
-            .min_by_key(|(_, v)| v.expires_at)
+            .min_by_key(|(_, v)| v.inserted_at)
             .map(|(k, _)| k.clone());
 
         if let Some(key) = oldest_key {
