@@ -1,6 +1,7 @@
 use crate::error::Result;
 use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use crate::utils::create_insecure_http_client;
 
@@ -90,13 +91,25 @@ impl CorsAnalyzer {
             }
         };
 
-        let response = match self.client.execute(request).await {
-            Ok(resp) => resp,
-            Err(e) => {
+        let response = match tokio::time::timeout(
+            Duration::from_secs(15),
+            self.client.execute(request),
+        )
+        .await
+        {
+            Ok(Ok(resp)) => resp,
+            Ok(Err(e)) => {
                 tracing::debug!(
                     "CORS test request failed for {}: {}",
                     test_origin,
                     e
+                );
+                return None;
+            }
+            Err(_) => {
+                tracing::debug!(
+                    "CORS test request timed out for {}",
+                    test_origin
                 );
                 return None;
             }

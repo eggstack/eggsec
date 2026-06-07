@@ -37,8 +37,10 @@ pub struct CloudScanner {
 }
 
 fn response_indicates_resource_exists(status: u16) -> bool {
-    // Object stores commonly return 403 for private-but-existing resources.
-    status != 404
+    matches!(
+        status,
+        200 | 201 | 204 | 301 | 302 | 307 | 308 | 403 | 405
+    )
 }
 
 impl CloudScanner {

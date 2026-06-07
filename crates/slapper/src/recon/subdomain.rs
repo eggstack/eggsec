@@ -77,6 +77,8 @@ impl SubdomainEnumerator {
                 subdomains.insert(sub);
             }
             sources.push("crt.sh".to_string());
+        } else {
+            tracing::debug!("crt.sh query failed for {}", domain);
         }
 
         if let Ok(threatminer_subdomains) = self.query_threatminer(domain).await {
@@ -84,6 +86,8 @@ impl SubdomainEnumerator {
                 subdomains.insert(sub);
             }
             sources.push("threatminer".to_string());
+        } else {
+            tracing::debug!("ThreatMiner query failed for {}", domain);
         }
 
         let subdomain_infos = self.verify_subdomains(domain, &subdomains).await;

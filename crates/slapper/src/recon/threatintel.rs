@@ -79,6 +79,8 @@ impl ThreatIntelClient {
         if let Some(ref key) = self.virustotal_key {
             if let Ok(reputation) = self.check_virustotal_ip(ip, key.expose_secret()).await {
                 intel.ip_reputation = Some(reputation);
+            } else {
+                tracing::debug!("VirusTotal IP lookup failed for {}", ip);
             }
         }
 
@@ -87,12 +89,16 @@ impl ThreatIntelClient {
                 if intel.ip_reputation.is_none() {
                     intel.ip_reputation = Some(reputation);
                 }
+            } else {
+                tracing::debug!("Shodan IP lookup failed for {}", ip);
             }
         }
 
         if let Some(ref key) = self.alienvault_key {
             if let Ok(pdns) = self.check_alienvault_pdns(ip, key.expose_secret()).await {
                 intel.passive_dns = pdns;
+            } else {
+                tracing::debug!("AlienVault PDNS lookup failed for {}", ip);
             }
         }
 
@@ -111,6 +117,8 @@ impl ThreatIntelClient {
                 .await
             {
                 intel.domain_reputation = Some(reputation);
+            } else {
+                tracing::debug!("VirusTotal domain lookup failed for {}", domain);
             }
         }
 
@@ -120,6 +128,8 @@ impl ThreatIntelClient {
                 .await
             {
                 intel.passive_dns = pdns;
+            } else {
+                tracing::debug!("AlienVault domain PDNS lookup failed for {}", domain);
             }
         }
 

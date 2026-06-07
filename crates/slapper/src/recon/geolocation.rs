@@ -141,13 +141,14 @@ impl GeoLocator {
         let maxmind_path = data_dir.join("GeoLite2-City.mmdb");
 
         if !ip66_path.exists() && !maxmind_path.exists() {
-            if settings
-                .as_ref()
-                .map(|s| s.account_id.is_some() && s.license_key.is_some())
-                .unwrap_or(false)
-            {
-                self.download_maxmind_db(settings.as_ref().expect("settings checked above"))
-                    .await?;
+            if let Some(ref s) = settings {
+                if s.account_id.is_some() && s.license_key.is_some() {
+                    self.download_maxmind_db(settings.as_ref().unwrap())
+                        .await?;
+                } else {
+                    tracing::info!("Downloading free IP66 database...");
+                    self.download_ip66_db(&ip66_path).await?;
+                }
             } else {
                 tracing::info!("Downloading free IP66 database...");
                 self.download_ip66_db(&ip66_path).await?;
