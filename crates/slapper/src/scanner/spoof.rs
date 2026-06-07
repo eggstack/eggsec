@@ -126,6 +126,14 @@ impl SpoofConfig {
             }
         }
 
+        if let Some(rate) = max_rate {
+            if rate == 0 {
+                return Err(SlapperError::Validation(
+                    "max_rate must be greater than 0".to_string(),
+                ));
+            }
+        }
+
         let mut decoy_ips = Vec::new();
 
         if let Some(decoy_str) = decoy {

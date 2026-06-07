@@ -276,7 +276,20 @@ impl TemplateMarketplace {
 
 impl Default for TemplateMarketplace {
     fn default() -> Self {
-        Self::new("https://templates.slapper.io").unwrap()
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        Self {
+            base_url: "https://templates.slapper.io".to_string(),
+            http_client: client,
+            local_cache: directories::ProjectDirs::from("com", "slapper", "slapper")
+                .map(|d| d.cache_dir().join("template_marketplace"))
+                .unwrap_or_else(|| PathBuf::from(".template_cache")),
+            verifier: None,
+            verify_downloaded: true,
+        }
     }
 }
 
