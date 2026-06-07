@@ -76,15 +76,31 @@ impl CorsAnalyzer {
     async fn test_origin(&self, url: &str, test_origin: &str) -> Option<CorsFinding> {
         let test_url = format!("{}/", url.trim_end_matches('/'));
 
-        let request = self
+        let request = match self
             .client
             .get(&test_url)
             .header("Origin", test_origin)
             .header("Access-Control-Request-Method", "GET")
             .build()
-            .ok()?;
+        {
+            Ok(req) => req,
+            Err(e) => {
+                tracing::debug!("Failed to build CORS test request for {}: {}", test_origin, e);
+                return None;
+            }
+        };
 
-        let response = self.client.execute(request).await.ok()?;
+        let response = match self.client.execute(request).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::debug!(
+                    "CORS test request failed for {}: {}",
+                    test_origin,
+                    e
+                );
+                return None;
+            }
+        };
 
         let acao = response
             .headers()

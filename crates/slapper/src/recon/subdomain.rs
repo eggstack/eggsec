@@ -244,7 +244,13 @@ impl SubdomainEnumerator {
             let resolver = self.resolver.clone();
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed during subdomain brute-force");
+                        return None;
+                    }
+                };
 
                 if let Ok(lookup) = resolver.lookup_ip(&subdomain).await {
                     let ips: Vec<String> = lookup.iter().map(|ip| ip.to_string()).collect();
