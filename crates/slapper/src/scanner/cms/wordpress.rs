@@ -122,12 +122,29 @@ pub async fn scan_wordpress(target: &CmsTarget, client: &Client) -> Result<CmsSc
 async fn check_xml_rpc(target: &CmsTarget, client: &Client) -> bool {
     let xml_rpc_url = format!("{}/xmlrpc.php", target.url.trim_end_matches('/'));
 
-    let body = serde_json::json!({
-        "method": "system.listMethods"
-    });
+    let body = r#"<?xml version="1.0"?>
+<methodCall>
+  <methodName>system.listMethods</methodName>
+</methodCall>"#;
 
-    match client.post(&xml_rpc_url).json(&body).send().await {
-        Ok(resp) => resp.status().as_u16() == 200,
+    match client
+        .post(&xml_rpc_url)
+        .header("Content-Type", "text/xml")
+        .body(body)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let text = match resp.text().await {
+                Ok(text) => text,
+                Err(e) => {
+                    tracing::debug!("Failed to read XML-RPC response: {}", e);
+                    return false;
+                }
+            };
+            resp.status().as_u16() == 200
+                && (text.contains("XML-RPC") || text.contains("methodResponse"))
+        }
         Err(_) => false,
     }
 }

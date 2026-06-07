@@ -303,7 +303,9 @@ pub(crate) async fn scan_ports_spoofed(
                         }
                         if let Some(ref tx) = progress_tx {
                             let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            let _ = tx.send((count, total_ports)).await;
+                            if tx.send((count, total_ports)).await.is_err() {
+                                tracing::warn!("Progress receiver dropped");
+                            }
                         }
                         drop(permit);
                         return;
@@ -335,7 +337,9 @@ pub(crate) async fn scan_ports_spoofed(
                         }
                         if let Some(ref tx) = progress_tx {
                             let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            let _ = tx.send((count, total_ports)).await;
+                            if tx.send((count, total_ports)).await.is_err() {
+                                tracing::warn!("Progress receiver dropped");
+                            }
                         }
                         drop(permit);
                         return;

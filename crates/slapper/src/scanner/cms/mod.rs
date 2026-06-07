@@ -345,7 +345,7 @@ impl Default for CmsScanner {
             http_client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-                .expect("Failed to build fallback HTTP client"),
+                .unwrap_or_else(|_| reqwest::Client::new()),
         })
     }
 }
