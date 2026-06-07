@@ -106,3 +106,11 @@ Discovered information is often fed into the **Fuzzer** or **Vulnerability Manag
 | `ports/spoofed.rs:384` | Simultaneous decoy mode logged "staggered decoy packet" | Fixed to "simultaneous decoy packet" |
 | `ports/spoofed.rs:425` | Staggered decoy mode logged generic "decoy packet" | Fixed to "staggered decoy packet" |
 | `templates/marketplace.rs:279` | `Default::default()` panicked if reqwest client construction failed | Falls back to `reqwest::Client::new()` instead of panicking |
+
+## Bug Fixes (2026-06-07, round 4)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `cms/wordpress.rs:122-133` | `check_xml_rpc` sent JSON body to XML-RPC endpoint | Sends proper XML-RPC format, validates response contains XML-RPC indicators |
+| `ports/spoofed.rs:306,338` | Error-path progress sends used silent `let _ =` pattern | Logs warning on failure to match success-path behavior |
+| `cms/mod.rs:348` | `CmsScanner` Default fallback still used `expect()` | Changed to `unwrap_or_else` with `reqwest::Client::new()` fallback |

@@ -77,6 +77,14 @@ let map: FxHashMap<String, String> = FxHashMap::default();
 | Staggered decoy mode logged generic message | Fixed log message to "staggered decoy packet" |
 | `TemplateMarketplace::default()` panicked on client failure | Falls back to `reqwest::Client::new()` |
 
+## Bug Fixes Applied (2026-06-07, round 4)
+
+| Issue | Fix |
+|-------|-----|
+| `check_xml_rpc` sent JSON body to XML-RPC endpoint | Sends proper XML-RPC format with `text/xml` Content-Type |
+| Error-path progress sends used silent `let _ =` | Logs warning on failure to match success-path behavior |
+| `CmsScanner::default()` fallback used `expect()` | Changed to `unwrap_or_else` with `reqwest::Client::new()` |
+
 
 
 (End file - 72 lines)
