@@ -1,6 +1,7 @@
 mod config;
 mod health;
 mod http_connect;
+pub mod intercept;
 mod pool;
 mod rotator;
 mod socks;

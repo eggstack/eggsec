@@ -3,10 +3,7 @@
 //! Generates on-the-fly SSL certificates for intercepting HTTPS traffic.
 
 use crate::error::{Result, SlapperError};
-use rcgen::{
-    BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose,
-    KeyPair, SanType,
-};
+use rcgen::{CertificateParams, KeyPair, IsCa, BasicConstraints, KeyUsagePurpose, ExtendedKeyUsagePurpose};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,7 +15,8 @@ pub struct CertGenerator {
 }
 
 struct CachedCert {
-    certificate: Certificate,
+    der_bytes: Vec<u8>,
+    key_der_bytes: Vec<u8>,
     generated_at: u64,
 }
 
@@ -42,77 +40,81 @@ impl CertGenerator {
         self
     }
 
-    pub fn generate_for_host(&self, host: &str) -> Result<Certificate> {
+    pub fn generate_for_host(&self, host: &str) -> Result<CertMaterial> {
         if let Some(cached) = self.get_cached(host) {
             return Ok(cached);
         }
 
-        let cert = self.generate_cert(host)?;
-        self.cache_cert(host, &cert);
-        Ok(cert)
+        let material = self.generate_cert(host)?;
+        self.cache_cert(host, &material);
+        Ok(material)
     }
 
-    fn generate_cert(&self, host: &str) -> Result<Certificate> {
-        let mut params = CertificateParams::default();
+    fn generate_cert(&self, host: &str) -> Result<CertMaterial> {
+        let mut alt_names = vec![host.to_string()];
 
-        params.subject = vec![(DnType::CommonName, host.into())];
-        params.issuer = vec![(DnType::CommonName, "Slapper Proxy CA".into())];
+        if host == "localhost" || host == "127.0.0.1" {
+            alt_names.push("127.0.0.1".to_string());
+        }
 
-        params.is_ca = BasicConstraints::Constrained(0);
+        let mut params = CertificateParams::new(alt_names)
+            .map_err(|e| SlapperError::Proxy(format!("Certificate params failed: {}", e)))?;
+
+        params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
         params.key_usages = vec![
-            rcgen::KeyUsage::DigitalSignature,
-            rcgen::KeyUsage::KeyEncipherment,
+            KeyUsagePurpose::DigitalSignature,
+            KeyUsagePurpose::KeyEncipherment,
         ];
 
-        params.ext_key_usages = vec![
+        params.extended_key_usages = vec![
             ExtendedKeyUsagePurpose::ServerAuth,
             ExtendedKeyUsagePurpose::ClientAuth,
         ];
 
-        let mut alt_names = vec![SanType::DnsName(host.to_string())];
-
-        if host == "localhost" || host == "127.0.0.1" {
-            alt_names.push(SanType::IpAddress(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)));
-        }
-
-        if let Ok(ip) = host.parse() {
-            alt_names.push(SanType::IpAddress(ip));
-        }
-
-        params.subject_alt_names = alt_names;
-
-        let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)
+        let key_pair = KeyPair::generate()
             .map_err(|e| SlapperError::Proxy(format!("Key generation failed: {}", e)))?;
 
-        params.key_pair = Some(key_pair);
+        let cert = params
+            .self_signed(&key_pair)
+            .map_err(|e| SlapperError::Proxy(format!("Certificate creation failed: {}", e)))?;
 
-        Certificate::from_params(params)
-            .map_err(|e| SlapperError::Proxy(format!("Certificate creation failed: {}", e)))
+        let der_bytes = cert.der().to_vec();
+        let key_der_bytes = key_pair.serialize_der();
+
+        Ok(CertMaterial {
+            cert_der: der_bytes,
+            key_der: key_der_bytes,
+        })
     }
 
-    fn get_cached(&self, host: &str) -> Option<Certificate> {
+    fn get_cached(&self, host: &str) -> Option<CertMaterial> {
         let cache = self.cache.read();
 
         cache.get(host).and_then(|cached| {
             let now = unix_timestamp_secs();
 
-            if now - cached.generated_at < self.validity_duration.as_secs() {
-                Some(cached.certificate.clone())
+            let age = now.saturating_sub(cached.generated_at);
+            if age < self.validity_duration.as_secs() {
+                Some(CertMaterial {
+                    cert_der: cached.der_bytes.clone(),
+                    key_der: cached.key_der_bytes.clone(),
+                })
             } else {
                 None
             }
         })
     }
 
-    fn cache_cert(&self, host: &str, cert: &Certificate) {
-        if let mut cache = self.cache.write() {
+    fn cache_cert(&self, host: &str, material: &CertMaterial) {
+        if let Some(mut cache) = self.cache.try_write() {
             let now = unix_timestamp_secs();
 
             cache.insert(
                 host.to_string(),
                 CachedCert {
-                    certificate: cert.clone(),
+                    der_bytes: material.cert_der.clone(),
+                    key_der_bytes: material.key_der.clone(),
                     generated_at: now,
                 },
             );
@@ -120,10 +122,16 @@ impl CertGenerator {
     }
 
     pub fn clear_cache(&self) {
-        if let mut cache = self.cache.write() {
+        if let Some(mut cache) = self.cache.try_write() {
             cache.clear();
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct CertMaterial {
+    pub cert_der: Vec<u8>,
+    pub key_der: Vec<u8>,
 }
 
 impl Default for CertGenerator {
@@ -159,9 +167,15 @@ mod tests {
         let cert1 = generator.generate_for_host("example.com").unwrap();
         let cert2 = generator.generate_for_host("example.com").unwrap();
 
-        assert_eq!(
-            cert1.serialize_der().unwrap(),
-            cert2.serialize_der().unwrap()
-        );
+        assert_eq!(cert1.cert_der, cert2.cert_der);
+        assert_eq!(cert1.key_der, cert2.key_der);
+    }
+
+    #[test]
+    fn test_cert_material_has_data() {
+        let generator = CertGenerator::new();
+        let material = generator.generate_for_host("example.com").unwrap();
+        assert!(!material.cert_der.is_empty());
+        assert!(!material.key_der.is_empty());
     }
 }

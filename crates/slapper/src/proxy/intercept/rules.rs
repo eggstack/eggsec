@@ -12,20 +12,15 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RuleAction {
+    #[default]
     Allow,
     Block,
     Intercept,
     Monitor,
     Modify,
-}
-
-impl Default for RuleAction {
-    fn default() -> Self {
-        Self::Allow
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -93,11 +88,7 @@ impl InterceptRule {
             return true;
         }
 
-        if pattern.ends_with("/*") {
-            let prefix = &pattern[..pattern.len() - 2];
-            path.starts_with(prefix)
-        } else if pattern.ends_with("**") {
-            let prefix = &pattern[..pattern.len() - 2];
+        if let Some(prefix) = pattern.strip_suffix("/*").or_else(|| pattern.strip_suffix("**")) {
             path.starts_with(prefix)
         } else {
             path == pattern
@@ -105,7 +96,7 @@ impl InterceptRule {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct RuleSet {
     rules: Vec<InterceptRule>,
 }
@@ -117,13 +108,13 @@ impl RuleSet {
 
     pub fn add(&mut self, rule: InterceptRule) {
         self.rules.push(rule);
-        self.rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        self.rules.sort_by_key(|b| std::cmp::Reverse(b.priority));
     }
 
     pub fn evaluate(&self, host: &str, path: &str) -> RuleAction {
         for rule in &self.rules {
             if rule.matches(host, path) {
-                return rule.action.clone();
+                return rule.action;
             }
         }
 
@@ -190,6 +181,7 @@ pub struct ResponseModification {
     pub new_status: Option<u16>,
 }
 
+#[allow(dead_code)]
 pub fn parse_rule_from_yaml(yaml: &str) -> Result<InterceptRule> {
     #[derive(Deserialize)]
     struct YamlRule {

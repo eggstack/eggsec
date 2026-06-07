@@ -12,18 +12,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum InterceptMode {
+    #[default]
     Monitor,
     Intercept,
     Allow,
-}
-
-impl Default for InterceptMode {
-    fn default() -> Self {
-        Self::Monitor
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -62,7 +57,7 @@ impl InterceptProxy {
         }
     }
 
-    pub fn with_rules(mut self, rules: RuleSet) -> Self {
+    pub fn with_rules(self, rules: RuleSet) -> Self {
         *self.rules.write() = rules;
         self
     }
@@ -91,12 +86,12 @@ impl InterceptProxy {
         matches!(rules.evaluate(host, path), RuleAction::Monitor | RuleAction::Intercept)
     }
 
-    pub async fn wait_for_decision(&self, _event: &InterceptEvent) -> Result<InterceptDecision> {
-        if let Some(ref rx) = self.decision_rx {
+    pub async fn wait_for_decision(&mut self, _event: &InterceptEvent) -> Result<InterceptDecision> {
+        if let Some(ref mut rx) = self.decision_rx {
             let decision = tokio::time::timeout(self.config.timeout, rx.recv())
                 .await
                 .map_err(|_| crate::error::SlapperError::Proxy("Intercept timeout".to_string()))?
-                .map_err(|_| crate::error::SlapperError::Proxy("Decision channel closed".to_string()))?;
+                .ok_or_else(|| crate::error::SlapperError::Proxy("Decision channel closed".to_string()))?;
             return Ok(decision);
         }
         Ok(InterceptDecision::Allow)
@@ -105,7 +100,7 @@ impl InterceptProxy {
     pub fn modify_request(&self, request: &mut InterceptRequest, modification: &RequestModification) {
         if let Some(ref headers) = modification.headers {
             for (k, v) in headers {
-                if !validate_header_value(&k) || !validate_header_value(v) {
+                if !validate_header_value(k) || !validate_header_value(v) {
                     tracing::warn!("Blocked CRLF injection attempt in header: {}={}", k, v);
                     continue;
                 }
@@ -172,38 +167,18 @@ pub enum InterceptDecision {
     Drop,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RequestModification {
     pub headers: Option<FxHashMap<String, String>>,
     pub path: Option<String>,
     pub body: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ResponseModification {
     pub headers: Option<FxHashMap<String, String>>,
     pub body: Option<String>,
     pub status_code: Option<u16>,
-}
-
-impl Default for RequestModification {
-    fn default() -> Self {
-        Self {
-            headers: None,
-            path: None,
-            body: None,
-        }
-    }
-}
-
-impl Default for ResponseModification {
-    fn default() -> Self {
-        Self {
-            headers: None,
-            body: None,
-            status_code: None,
-        }
-    }
 }
 
 fn validate_header_value(value: &str) -> bool {
