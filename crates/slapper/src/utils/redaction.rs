@@ -51,6 +51,16 @@ static RE_SENSITIVE_KEY: LazyLock<Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+/// Redact sensitive information from a string.
+///
+/// Handles:
+/// - Bearer tokens
+/// - Basic auth credentials
+/// - API keys in common `key=value` patterns
+/// - JWT tokens (three base64 segments separated by dots)
+/// - Cookie header values
+/// - Private key PEM blocks
+/// - Common secret-like key names (`secret`, `password`, `token`, etc.)
 pub fn redact_sensitive(input: &str) -> String {
     let mut result = input.to_string();
 

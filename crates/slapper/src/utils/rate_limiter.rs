@@ -62,6 +62,7 @@ pub struct AdaptiveRateLimiter {
 
 impl AdaptiveRateLimiter {
     pub fn new(base_rate: u32) -> Self {
+        let base_rate = base_rate.max(1);
         Self {
             base_rate,
             current_rate: base_rate as f64,
