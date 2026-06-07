@@ -187,11 +187,21 @@ impl EmailDiscoveryClient {
         for (platform, re) in SOCIAL_PATTERNS.iter() {
             for cap in re.captures_iter(content) {
                 if let Some(handle) = cap.get(1) {
-                    let url = format!(
-                        "https://{}.com/{}",
-                        platform.to_lowercase(),
-                        handle.as_str()
-                    );
+                    let url = match *platform {
+                        "LinkedIn" => {
+                            let full_match = cap.get(0).map(|m| m.as_str()).unwrap_or("");
+                            if full_match.contains("/in/") {
+                                format!("https://linkedin.com/in/{}", handle.as_str())
+                            } else {
+                                format!("https://linkedin.com/company/{}", handle.as_str())
+                            }
+                        }
+                        _ => format!(
+                            "https://{}.com/{}",
+                            platform.to_lowercase(),
+                            handle.as_str()
+                        ),
+                    };
                     socials.insert(SocialMedia {
                         platform: platform.to_string(),
                         url,

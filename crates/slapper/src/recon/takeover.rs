@@ -101,7 +101,7 @@ static FINGERPRINTS: LazyLock<Vec<TakeoverFingerprint>> = LazyLock::new(|| {
             service: "WordPress.com",
             cnames: &["wordpress.com", "wp.com"],
             nxdomain_cnames: &["wordpress.com"],
-            http_indicators: &["Do you want to register", "wordpress.com"],
+            http_indicators: &["Do you want to register"],
             severity: Severity::Medium,
         },
         TakeoverFingerprint {
@@ -122,7 +122,7 @@ static FINGERPRINTS: LazyLock<Vec<TakeoverFingerprint>> = LazyLock::new(|| {
             service: "Surge.sh",
             cnames: &["surge.sh"],
             nxdomain_cnames: &["surge.sh"],
-            http_indicators: &["project not found", "surge.sh"],
+            http_indicators: &["project not found"],
             severity: Severity::Medium,
         },
         TakeoverFingerprint {
@@ -150,7 +150,7 @@ static FINGERPRINTS: LazyLock<Vec<TakeoverFingerprint>> = LazyLock::new(|| {
             service: "Statamic",
             cnames: &["statamic.com"],
             nxdomain_cnames: &["statamic.com"],
-            http_indicators: &["Statamic", "Site Not Found"],
+            http_indicators: &["Statamic"],
             severity: Severity::Medium,
         },
         TakeoverFingerprint {
@@ -178,7 +178,7 @@ static FINGERPRINTS: LazyLock<Vec<TakeoverFingerprint>> = LazyLock::new(|| {
             service: "Pingdom",
             cnames: &["stats.pingdom.com"],
             nxdomain_cnames: &["pingdom.com"],
-            http_indicators: &["pingdom"],
+            http_indicators: &["stats.pingdom.com/status/"],
             severity: Severity::Low,
         },
         TakeoverFingerprint {
@@ -241,7 +241,7 @@ static FINGERPRINTS: LazyLock<Vec<TakeoverFingerprint>> = LazyLock::new(|| {
             service: "Thinkific",
             cnames: &["thinkific.com"],
             nxdomain_cnames: &["thinkific.com"],
-            http_indicators: &["Cloudflare", "ray ID", "thinkific"],
+            http_indicators: &["thinkific"],
             severity: Severity::Low,
         },
         TakeoverFingerprint {
@@ -255,7 +255,7 @@ static FINGERPRINTS: LazyLock<Vec<TakeoverFingerprint>> = LazyLock::new(|| {
             service: "Intercom",
             cnames: &["custom.intercom.help"],
             nxdomain_cnames: &["intercom.help"],
-            http_indicators: &["This page does not exist", "Intercom"],
+            http_indicators: &["This page does not exist"],
             severity: Severity::Medium,
         },
     ]

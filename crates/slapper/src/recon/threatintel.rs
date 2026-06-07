@@ -415,7 +415,7 @@ impl ThreatIntelClient {
         if let Some(pdns) = otx_resp.get("passive_dns").and_then(|p| p.as_array()) {
             records.reserve(pdns.len().min(20));
             for record in pdns.iter().take(20) {
-                if let Some(ip) = record.get("address").and_then(|a| a.as_str()) {
+                if let Some(ip) = record.get("hostname").and_then(|a| a.as_str()) {
                     records.push(PassiveDnsRecord {
                         record_type: "A".to_string(),
                         value: ip.to_string(),

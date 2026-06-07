@@ -8,7 +8,7 @@ use crate::recon::{
     takeover, techdetect, threatintel, wayback, whois, FullReconResult,
 };
 use crate::types::SensitiveString;
-use crate::utils::sanitize_for_logging;
+use crate::utils::{create_insecure_http_client, sanitize_for_logging};
 use parking_lot::Mutex;
 use reqwest::Url;
 use std::net::IpAddr;
@@ -456,12 +456,35 @@ async fn run_secrets_check(
     if content.sensitive_files.is_empty() {
         return None;
     }
+    let client = match create_insecure_http_client(10) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!("failed to create HTTP client for secrets scanning: {}", e);
+            return None;
+        }
+    };
+    let scanner = secrets::SecretScanner::new();
     let mut all_findings = Vec::new();
     for sensitive_file in &content.sensitive_files {
-        match secrets::SecretScanner::new().scan_file(&sensitive_file.url) {
-            Ok(file_findings) => all_findings.extend(file_findings),
-            Err(e) => {
-                tracing::debug!("failed to scan file for secrets {}: {}", sensitive_file.url, e);
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            client.get(&sensitive_file.url).send(),
+        )
+        .await
+        {
+            Ok(Ok(resp)) => {
+                if let Ok(body) = resp.text().await {
+                    let findings = scanner.scan(&body);
+                    if !findings.is_empty() {
+                        all_findings.extend(findings);
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                tracing::debug!("failed to fetch {} for secrets scanning: {}", sensitive_file.url, e);
+            }
+            Err(_) => {
+                tracing::debug!("timeout fetching {} for secrets scanning", sensitive_file.url);
             }
         }
     }

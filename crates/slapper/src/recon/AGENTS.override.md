@@ -120,6 +120,18 @@ The recon module is organized as follows:
   `cnames.first()`. Now checks if error contains the specific `nxdomain_cname` pattern.
 - **content.rs:259** - `categorize_path` returned empty for many sensitive paths (id_rsa, .htaccess,
   backup, Gemfile, Pipfile, .DS_Store, graphql, etc.). Added categories for these paths.
+- **runner.rs:461** - `run_secrets_check` passed web URLs (e.g., `https://example.com/.env`) to
+  `scan_file()` which expects local filesystem paths. Now fetches URL content via HTTP and scans
+  with `scan_content()`.
+- **threatintel.rs:418** - Domain passive DNS used wrong JSON field `"address"` instead of
+  `"hostname"` for AlienVault OTX, causing empty results for domain lookups.
+- **email.rs:190-194** - LinkedIn social media URLs dropped `/in/` and `/company/` path components.
+  Now reconstructs URLs with correct path prefixes.
+- **takeover.rs** - Removed overly generic HTTP indicators ("Cloudflare", "ray ID", "wordpress.com",
+  "surge.sh", "Site Not Found", "Intercom", "pingdom") that caused false positives.
+- **js.rs:25-91** - Secret type labels contained raw regex patterns instead of human-readable names.
+  Now uses labels like "API Key", "AWS Secret", "Bearer Token", etc.
+- **dns_enhanced.rs:48,89** - Duplicate "ns1" entry in default wordlist removed.
 
 ## Error Handling Patterns
 

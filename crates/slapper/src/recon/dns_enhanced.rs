@@ -86,7 +86,6 @@ impl DnsEnumerator {
             "dns",
             "monitor",
             "server",
-            "ns1",
             "correo",
             "m",
             "ftp2",

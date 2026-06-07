@@ -25,36 +25,36 @@ static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 static SECRET_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
     vec![
         (
-            r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#,
+            "API Key",
             Regex::new(
                 r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#,
             )
             .expect("valid API key secret pattern"),
         ),
         (
-            r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
+            "AWS Secret",
             Regex::new(
                 r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
             )
             .expect("valid AWS secret pattern"),
         ),
         (
-            r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
+            "Password/Private Key",
             Regex::new(
                 r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
             )
             .expect("valid password/private key pattern"),
         ),
         (
-            r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#,
+            "Bearer Token",
             Regex::new(r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#).expect("valid bearer token pattern"),
         ),
         (
-            r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#,
+            "Basic Auth",
             Regex::new(r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#).expect("valid basic auth pattern"),
         ),
         (
-            r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#,
+            "JWT Token",
             Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#)
                 .expect("valid JWT pattern"),
         ),
@@ -64,27 +64,27 @@ static SECRET_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| 
 static API_KEY_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
     vec![
         (
-            r#"(?i)sk-[a-zA-Z0-9]{20,}"#,
+            "OpenAI API Key",
             Regex::new(r#"(?i)sk-[a-zA-Z0-9]{20,}"#).expect("valid OpenAI API key pattern"),
         ),
         (
-            r#"(?i)AIza[0-9A-Za-z\-_]{35}"#,
+            "Google API Key",
             Regex::new(r#"(?i)AIza[0-9A-Za-z\-_]{35}"#).expect("valid Google API key pattern"),
         ),
         (
-            r#"(?i)ya29\.[0-9A-Za-z\-_]+"#,
+            "Google OAuth Token",
             Regex::new(r#"(?i)ya29\.[0-9A-Za-z\-_]+"#).expect("valid Google OAuth pattern"),
         ),
         (
-            r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#,
+            "GitHub PAT",
             Regex::new(r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#).expect("valid GitHub PAT pattern"),
         ),
         (
-            r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#,
+            "GitLab PAT",
             Regex::new(r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#).expect("valid GitLab PAT pattern"),
         ),
         (
-            r#"(?i)AKIA[0-9A-Z]{16}"#,
+            "AWS Access Key",
             Regex::new(r#"(?i)AKIA[0-9A-Z]{16}"#).expect("valid AWS access key pattern"),
         ),
     ]
