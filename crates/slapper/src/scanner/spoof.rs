@@ -429,7 +429,7 @@ pub fn build_fragmented_packets(
     let total_chunks = tcp_data.chunks(fragment_size).count();
 
     for (i, chunk) in tcp_data.chunks(fragment_size).enumerate() {
-        let mut buffer = vec![0u8; 20 + fragment_size];
+        let mut buffer = vec![0u8; 20 + chunk.len()];
 
         let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
             .ok_or_else(|| SlapperError::Runtime("Failed to create IPv4 packet".to_string()))?;
