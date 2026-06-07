@@ -11,7 +11,7 @@ pub struct CvssScore {
 
 impl CvssScore {
     pub fn from_vector(vector: &str) -> Result<Self> {
-        let parsed = parse_vector(vector)?;
+        let parsed = parse_vector(vector);
         let base_score = compute_base_score(&parsed);
 
         let temporal_score = compute_temporal_score(base_score, &parsed);
@@ -196,7 +196,7 @@ struct ParsedVector {
     ma: String,
 }
 
-fn parse_vector(vector: &str) -> Result<ParsedVector> {
+fn parse_vector(vector: &str) -> ParsedVector {
     let mut v = ParsedVector {
         av: "N".to_string(),
         ac: "L".to_string(),
@@ -256,7 +256,7 @@ fn parse_vector(vector: &str) -> Result<ParsedVector> {
         }
     }
 
-    Ok(v)
+    v
 }
 
 fn compute_base_score(v: &ParsedVector) -> f32 {
