@@ -114,3 +114,9 @@ Discovered information is often fed into the **Fuzzer** or **Vulnerability Manag
 | `cms/wordpress.rs:122-133` | `check_xml_rpc` sent JSON body to XML-RPC endpoint | Sends proper XML-RPC format, validates response contains XML-RPC indicators |
 | `ports/spoofed.rs:306,338` | Error-path progress sends used silent `let _ =` pattern | Logs warning on failure to match success-path behavior |
 | `cms/mod.rs:348` | `CmsScanner` Default fallback still used `expect()` | Changed to `unwrap_or_else` with `reqwest::Client::new()` fallback |
+
+## Bug Fixes (2026-06-07, round 5)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `spoof.rs:432` | `build_fragmented_packets` over-allocated buffer (always 28 bytes) causing trailing zeros on wire for last fragment | Changed to `vec![0u8; 20 + chunk.len()]` for exact per-fragment sizing |

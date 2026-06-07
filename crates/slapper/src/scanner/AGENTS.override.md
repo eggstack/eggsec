@@ -85,6 +85,12 @@ let map: FxHashMap<String, String> = FxHashMap::default();
 | Error-path progress sends used silent `let _ =` | Logs warning on failure to match success-path behavior |
 | `CmsScanner::default()` fallback used `expect()` | Changed to `unwrap_or_else` with `reqwest::Client::new()` |
 
+## Bug Fixes Applied (2026-06-07, round 5)
+
+| Issue | Fix |
+|-------|-----|
+| `build_fragmented_packets` over-allocated buffer causing trailing zeros on wire | Allocated exact `20 + chunk.len()` per fragment |
+
 
 
 (End file - 72 lines)
