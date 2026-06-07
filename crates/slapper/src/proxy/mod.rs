@@ -313,7 +313,7 @@ fn is_private_ip(ip: std::net::IpAddr) -> bool {
         std::net::IpAddr::V4(ipv4) => {
             let octets = ipv4.octets();
             octets[0] == 10
-                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 172 && (16..=31).contains(&octets[1]))
                 || (octets[0] == 192 && octets[1] == 168)
                 || octets[0] == 127
                 || (octets[0] >= 224 && octets[0] <= 239)

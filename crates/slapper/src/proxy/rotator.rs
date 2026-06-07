@@ -158,6 +158,8 @@ impl ProxyRotator {
             return None;
         }
 
+        let saved_index = self.round_robin_index.load(Ordering::Relaxed);
+
         let mut chain = Vec::with_capacity(chain_length);
         let mut available = proxies.to_vec();
 
@@ -171,6 +173,7 @@ impl ProxyRotator {
         if chain.len() == chain_length {
             Some(chain)
         } else {
+            self.round_robin_index.store(saved_index, Ordering::Relaxed);
             None
         }
     }

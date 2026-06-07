@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn test_pool_add_and_get() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let proxy = make_proxy("127.0.0.1", 1080);
         let key = proxy.to_url();
         pool.add(proxy.clone());
@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn test_pool_remove() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let proxy = make_proxy("127.0.0.1", 1080);
         let key = proxy.to_url();
         pool.add(proxy);
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn test_pool_get_all() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         pool.add(make_proxy("1.1.1.1", 1080));
         pool.add(make_proxy("2.2.2.2", 1080));
         pool.add(make_proxy("3.3.3.3", 1080));
@@ -376,7 +376,7 @@ mod tests {
     #[test]
     fn test_pool_get_healthy_filters_unhealthy() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let p1 = make_proxy("1.1.1.1", 1080);
         let p2 = make_proxy("2.2.2.2", 1080);
         let k1 = p1.to_log_key();
@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn test_pool_get_healthy_filters_disabled() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let mut p1 = make_proxy("1.1.1.1", 1080);
         p1.enabled = false;
         pool.add(p1);
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn test_pool_get_by_priority() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let mut p1 = make_proxy("1.1.1.1", 1080);
         p1.priority = 5;
         let mut p2 = make_proxy("2.2.2.2", 1080);
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn test_pool_get_sorted_by_priority() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let mut p1 = make_proxy("1.1.1.1", 1080);
         p1.priority = 5;
         let mut p2 = make_proxy("2.2.2.2", 1080);
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn test_pool_get_by_type() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         pool.add(ProxyEntry::new(
             ProxyType::Socks5,
             "1.1.1.1".to_string(),
@@ -457,7 +457,7 @@ mod tests {
     #[test]
     fn test_pool_record_success_and_failure() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let proxy = make_proxy("1.1.1.1", 1080);
         let key = proxy.to_log_key();
         pool.add(proxy.clone());
@@ -477,7 +477,7 @@ mod tests {
     fn test_pool_consecutive_failures_marks_unhealthy() {
         let mut config = ProxyConfig::default();
         config.max_failures_before_disable = 2;
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let proxy = make_proxy("1.1.1.1", 1080);
         let key = proxy.to_log_key();
         pool.add(proxy.clone());
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn test_pool_mark_healthy_resets_failures() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let proxy = make_proxy("1.1.1.1", 1080);
         let key = proxy.to_log_key();
         pool.add(proxy);
@@ -510,7 +510,7 @@ mod tests {
     #[test]
     fn test_pool_clear() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         pool.add(make_proxy("1.1.1.1", 1080));
         pool.add(make_proxy("2.2.2.2", 1080));
 
@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn test_pool_get_sorted_by_latency() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let p1 = make_proxy("1.1.1.1", 1080);
         let p2 = make_proxy("2.2.2.2", 1080);
         pool.add(p1.clone());
@@ -578,7 +578,7 @@ mod tests {
     #[test]
     fn test_pool_get_sorted_by_success_rate() {
         let config = ProxyConfig::default();
-        let mut pool = ProxyPool::new(config);
+        let pool = ProxyPool::new(config);
         let p1 = make_proxy("1.1.1.1", 1080);
         let p2 = make_proxy("2.2.2.2", 1080);
         pool.add(p1.clone());

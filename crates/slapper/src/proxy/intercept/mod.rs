@@ -101,7 +101,7 @@ fn validate_target(host: &str, port: u16) -> Result<()> {
         IpAddr::V4(ipv4) => {
             let octets = ipv4.octets();
             octets[0] == 10
-                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 172 && (16..=31).contains(&octets[1]))
                 || (octets[0] == 192 && octets[1] == 168)
                 || octets[0] == 127
                 || (octets[0] >= 224 && octets[0] <= 239)
@@ -177,11 +177,10 @@ async fn handle_connect_request(
             stream.write_all(response).await?;
             return Ok(());
         }
-        RuleAction::Intercept => {
+        RuleAction::Intercept | RuleAction::Monitor | RuleAction::Allow => {
             let response = b"HTTP/1.1 200 Connection Established\r\n\r\n";
             stream.write_all(response).await?;
         }
-        RuleAction::Monitor | RuleAction::Allow => {}
     }
 
     validate_target(host, port)?;
@@ -216,8 +215,8 @@ async fn handle_connect_request(
     let upstream_to_client = tokio::io::copy(&mut upstream_read, &mut client_write);
 
     match timeout(Duration::from_secs(30), client_to_upstream.join(upstream_to_client)).await {
-        Ok(Ok(_)) => Ok(()),
-        Ok(Err(e)) => Err(SlapperError::Proxy(format!("Proxy IO error: {}", e))),
+        Ok((Ok(_), Ok(_))) => Ok(()),
+        Ok((Err(e), _)) | Ok((_, Err(e))) => Err(SlapperError::Proxy(format!("Proxy IO error: {}", e))),
         Err(_) => Ok(()),
     }
 }
