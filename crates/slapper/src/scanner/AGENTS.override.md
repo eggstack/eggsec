@@ -54,6 +54,20 @@ let map: FxHashMap<String, String> = FxHashMap::default();
 | `fingerprint.rs:347-391` - Vec allocation in hot path | Changed to `&'static [&str]` slice |
 | `spoofed.rs:285,303` - silent errors from build_tcp_packet and send_to | Added `tracing::debug` for failed packet builds |
 
+## Bug Fixes Applied (2026-06-07)
+
+| Issue | Fix |
+|-------|-----|
+| Fragmented packets never populated `sent_packets` - all responses silently dropped | Added `sent_packets.insert()` after sending fragments |
+| Off-by-one in spoofed progress reporting | Changed to `fetch_add(1, ...) + 1` |
+| Early-return error paths skipped progress update | Added progress increment before returns |
+| `TokenBucket` race condition in refill | Refactored to `compare_exchange` loop |
+| `template_id` path traversal in marketplace | Added `/`, `\`, `..` validation |
+| Tag parameter not URL-encoded | Used `urlencoding::encode()` |
+| Server header parsing lost port info | Changed to `split_once(':')` |
+| CMS enumerate functions created new clients | Accept `&Client` parameter |
+| `endpoints.rs` used async Mutex for counter | Replaced with `AtomicU64` |
+
 
 
 (End file - 72 lines)
