@@ -125,11 +125,15 @@ impl SubdomainEnumerator {
                     let name = name.trim();
                     if name.ends_with(&format!(".{}", domain)) || name == domain {
                         let subdomain = if let Some(stripped) = name.strip_prefix("www.") {
-                            stripped.to_string()
+                            if stripped == domain {
+                                name.to_string()
+                            } else {
+                                stripped.to_string()
+                            }
                         } else {
                             name.to_string()
                         };
-                        if subdomain.ends_with(&format!(".{}", domain)) {
+                        if subdomain == domain || subdomain.ends_with(&format!(".{}", domain)) {
                             subdomains.insert(subdomain);
                         }
                     }
@@ -229,7 +233,7 @@ impl SubdomainEnumerator {
         let mut results = Vec::new();
         for handle in handles {
             if let Ok(info) = handle.await {
-                if !info.ip_addresses.is_empty() || info.has_mx || info.has_txt {
+                if !info.ip_addresses.is_empty() || info.has_mx || info.has_txt || info.has_cname {
                     results.push(info);
                 }
             }

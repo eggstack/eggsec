@@ -128,23 +128,18 @@ impl ContainerScanner {
                     });
                 }
 
-                if let Some(liveness_probe) = &container.liveness_probe {
-                    if liveness_probe.http_get.is_none()
-                        && liveness_probe.tcp_socket.is_none()
-                        && liveness_probe.exec.is_none()
-                    {
-                        issues.push(ContainerFinding {
-                            category: "PSD002".to_string(),
-                            severity: Severity::Low,
-                            title: "Missing liveness probe".to_string(),
-                            description: format!(
-                                "Container {} does not have a liveness probe configured",
-                                container.name
-                            ),
-                            recommendation: "Add a liveness probe to detect application crashes"
-                                .to_string(),
-                        });
-                    }
+                if container.liveness_probe.is_none() {
+                    issues.push(ContainerFinding {
+                        category: "PSD002".to_string(),
+                        severity: Severity::Low,
+                        title: "Missing liveness probe".to_string(),
+                        description: format!(
+                            "Container {} does not have a liveness probe configured",
+                            container.name
+                        ),
+                        recommendation: "Add a liveness probe to detect application crashes"
+                            .to_string(),
+                    });
                 }
             }
 

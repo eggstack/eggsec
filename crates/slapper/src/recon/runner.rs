@@ -55,6 +55,9 @@ async fn resolve_target(
     };
 
     let parsed = Url::parse(&url).ok();
+    if parsed.is_none() {
+        tracing::warn!("failed to parse target as URL: {}", sanitize_for_logging(target));
+    }
     let host = parsed.as_ref().and_then(|u| {
         u.host().map(|h| match h {
             Host::Domain(d) => d.to_string(),
@@ -455,8 +458,11 @@ async fn run_secrets_check(
     }
     let mut all_findings = Vec::new();
     for sensitive_file in &content.sensitive_files {
-        if let Ok(file_findings) = secrets::SecretScanner::new().scan_file(&sensitive_file.url) {
-            all_findings.extend(file_findings);
+        match secrets::SecretScanner::new().scan_file(&sensitive_file.url) {
+            Ok(file_findings) => all_findings.extend(file_findings),
+            Err(e) => {
+                tracing::debug!("failed to scan file for secrets {}: {}", sensitive_file.url, e);
+            }
         }
     }
     if all_findings.is_empty() {
@@ -485,7 +491,8 @@ pub async fn run_full_recon(
     let target = &args.target;
     let concurrency = args
         .concurrency
-        .unwrap_or(config.recon.dns_concurrency.max(10));
+        .unwrap_or(config.recon.dns_concurrency)
+        .max(1);
 
     if verbose {
         eprintln!("Starting recon on {}", sanitize_for_logging(target));
@@ -716,9 +723,15 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
         s.push_str(&format!("domain: {}\n", domain));
     }
     if let Some(ref geo) = recon.geolocation {
-        if let (Some(country), Some(city)) = (&geo.country, &geo.city) {
-            if !country.is_empty() || !city.is_empty() {
+        let country = geo.country.as_deref().unwrap_or("");
+        let city = geo.city.as_deref().unwrap_or("");
+        if !country.is_empty() || !city.is_empty() {
+            if !country.is_empty() && !city.is_empty() {
                 s.push_str(&format!("geo: {}, {}\n", country, city));
+            } else if !country.is_empty() {
+                s.push_str(&format!("geo: {}\n", country));
+            } else {
+                s.push_str(&format!("geo: {}\n", city));
             }
         }
     }
@@ -754,6 +767,38 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
             }
         }
     }
+    if let Some(ref dns) = recon.dns_records {
+        if !dns.a.is_empty() || !dns.aaaa.is_empty() || !dns.mx.is_empty()
+            || !dns.txt.is_empty() || !dns.ns.is_empty() || dns.soa.is_some()
+        {
+            s.push_str("dns\n");
+            if !dns.a.is_empty() {
+                s.push_str(&format!("\ta: {}\n", dns.a.join(", ")));
+            }
+            if !dns.aaaa.is_empty() {
+                s.push_str(&format!("\taaaa: {}\n", dns.aaaa.join(", ")));
+            }
+            if !dns.ns.is_empty() {
+                s.push_str(&format!("\tns: {}\n", dns.ns.join(", ")));
+            }
+            if !dns.mx.is_empty() {
+                let mx_str: Vec<String> = dns
+                    .mx
+                    .iter()
+                    .map(|m| format!("{} {}", m.preference, m.exchange))
+                    .collect();
+                s.push_str(&format!("\tmx: {}\n", mx_str.join(", ")));
+            }
+            if !dns.txt.is_empty() {
+                for txt in &dns.txt {
+                    s.push_str(&format!("\ttxt: {}\n", txt));
+                }
+            }
+            if let Some(ref soa) = dns.soa {
+                s.push_str(&format!("\tsoa: {} {} {}\n", soa.mname, soa.rname, soa.serial));
+            }
+        }
+    }
     if let Some(ref content) = recon.content {
         if !content.sensitive_files.is_empty() {
             s.push_str("sensitive\n");
@@ -783,19 +828,21 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
         }
     }
     if let Some(ref ssl) = recon.ssl_analysis {
-        s.push_str("ssl\n");
-        if let Some(ref cert) = ssl.certificate {
-            s.push_str(&format!("\tsubject: {}\n", cert.subject));
-            s.push_str(&format!("\tissuer: {}\n", cert.issuer));
-            s.push_str(&format!("\texpires: {}\n", cert.valid_until));
-        }
-        if !ssl.issues.is_empty() {
-            for issue in &ssl.issues {
-                s.push_str(&format!(
-                    "\t[{}] {}\n",
-                    issue.severity.to_uppercase(),
-                    issue.description
-                ));
+        if ssl.certificate.is_some() || !ssl.issues.is_empty() {
+            s.push_str("ssl\n");
+            if let Some(ref cert) = ssl.certificate {
+                s.push_str(&format!("\tsubject: {}\n", cert.subject));
+                s.push_str(&format!("\tissuer: {}\n", cert.issuer));
+                s.push_str(&format!("\texpires: {}\n", cert.valid_until));
+            }
+            if !ssl.issues.is_empty() {
+                for issue in &ssl.issues {
+                    s.push_str(&format!(
+                        "\t[{}] {}\n",
+                        issue.severity.to_uppercase(),
+                        issue.description
+                    ));
+                }
             }
         }
     }
@@ -819,7 +866,13 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
         if !cors.findings.is_empty() {
             s.push_str("cors\n");
             for finding in &cors.findings {
-                if finding.allows_origin {
+                if finding.is_vulnerable {
+                    s.push_str(&format!(
+                        "\t[VULN] {} ({})\n",
+                        finding.origin,
+                        finding.vulnerability_type.as_deref().unwrap_or("unknown")
+                    ));
+                } else if finding.allows_origin {
                     s.push_str(&format!("\t[+] {}\n", finding.origin));
                 }
             }
@@ -834,18 +887,20 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
         }
     }
     if let Some(ref intel) = recon.threat_intel {
-        s.push_str("threat\n");
-        if let Some(ref ip_rep) = intel.ip_reputation {
-            s.push_str(&format!(
-                "\tip-reputation: {} ({})\n",
-                ip_rep.score, ip_rep.category
-            ));
-        }
-        if let Some(ref dom_rep) = intel.domain_reputation {
-            s.push_str(&format!(
-                "\tdomain-reputation: {} ({})\n",
-                dom_rep.score, dom_rep.category
-            ));
+        if intel.ip_reputation.is_some() || intel.domain_reputation.is_some() {
+            s.push_str("threat\n");
+            if let Some(ref ip_rep) = intel.ip_reputation {
+                s.push_str(&format!(
+                    "\tip-reputation: {} ({})\n",
+                    ip_rep.score, ip_rep.category
+                ));
+            }
+            if let Some(ref dom_rep) = intel.domain_reputation {
+                s.push_str(&format!(
+                    "\tdomain-reputation: {} ({})\n",
+                    dom_rep.score, dom_rep.category
+                ));
+            }
         }
     }
     if let Some(ref takeovers) = recon.takeover {

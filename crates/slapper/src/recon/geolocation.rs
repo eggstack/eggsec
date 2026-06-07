@@ -366,7 +366,7 @@ impl GeoLocator {
             country_code,
             region,
             city: city_name,
-            isp: isp.clone(),
+            isp: None,
             org: isp,
             timezone,
             coordinates,

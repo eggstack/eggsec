@@ -127,8 +127,21 @@ impl StorageTester {
     }
 
     async fn check_s3_public_write(&self, url: &str) -> bool {
-        match self.client.put(url).body("test").send().await {
-            Ok(resp) => resp.status().is_success(),
+        match self
+            .client
+            .request(reqwest::Method::OPTIONS, url)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let allows_write = resp
+                    .headers()
+                    .get("allow")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v.to_uppercase().contains("PUT"))
+                    .unwrap_or(false);
+                allows_write
+            }
             Err(_) => false,
         }
     }

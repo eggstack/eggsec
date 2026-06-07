@@ -68,12 +68,12 @@ impl SslAnalyzer {
         let connect_url = if port == 443 {
             format!("https://{}", host)
         } else {
-            format!("http://{}:{}", host, port)
+            format!("https://{}:{}", host, port)
         };
 
         if let Ok(response) = self.client.get(&connect_url).send().await {
             if response.status().as_u16() != 0 {
-                analysis.has_ssl = port == 443 || connect_url.contains("https");
+                analysis.has_ssl = connect_url.starts_with("https://");
 
                 if let Some(cert) = response
                     .extensions()

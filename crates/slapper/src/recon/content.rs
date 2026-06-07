@@ -252,8 +252,43 @@ impl ContentScanner {
             || path_lower.contains("console")
             || path_lower.contains("swagger")
             || path_lower.contains("actuator")
+            || path_lower.contains("graphiql")
+            || path_lower.contains("graphql")
         {
             return ("admin_interface".to_string(), "high".to_string());
+        }
+
+        if path_lower.contains("backup")
+            || path_lower.contains("/db")
+            || path_lower.contains("backups")
+        {
+            return ("backup".to_string(), "high".to_string());
+        }
+
+        if path_lower.contains("gemfile")
+            || path_lower.contains("pipfile")
+            || path_lower.contains("setup.py")
+            || path_lower.contains("yarn.lock")
+            || path_lower.contains("pom.xml")
+            || path_lower.contains("build.gradle")
+        {
+            return ("dependency".to_string(), "medium".to_string());
+        }
+
+        if path_lower.contains(".htaccess")
+            || path_lower.contains(".htpasswd")
+            || path_lower.contains("web.config")
+            || path_lower.contains(".user.ini")
+        {
+            return ("server_config".to_string(), "high".to_string());
+        }
+
+        if path_lower.contains(".ds_store")
+            || path_lower.contains(".metadata_never_index")
+            || path_lower.contains("thumbs.db")
+            || path_lower.contains("desktop.ini")
+        {
+            return ("os_metadata".to_string(), "low".to_string());
         }
 
         (String::new(), String::new())

@@ -414,13 +414,15 @@ impl TakeoverDetector {
                     || err_str.contains("NXDOMAIN")
                 {
                     for cname_pattern in fingerprint.nxdomain_cnames {
-                        if let Some(cname) = fingerprint.cnames.first() {
-                            if err_str.contains(*cname) || cname_pattern.contains(*cname) {
-                                return HttpCheckResult::Vulnerable(format!(
-                                    "DNS resolution failed for {} pointing to {}",
-                                    subdomain, cname
-                                ));
-                            }
+                        if err_str.contains(*cname_pattern) {
+                            let cname_display = fingerprint
+                                .cnames
+                                .first()
+                                .unwrap_or(&"unknown");
+                            return HttpCheckResult::Vulnerable(format!(
+                                "DNS resolution failed for {} pointing to {}",
+                                subdomain, cname_display
+                            ));
                         }
                     }
                 }

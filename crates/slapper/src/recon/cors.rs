@@ -208,6 +208,13 @@ impl CorsAnalyzer {
             if test_origin == "null" && !header.is_empty() {
                 return (true, Some("Null origin reflection".to_string()));
             }
+
+            if header == test_origin && acac && test_origin != "null" && test_origin != "*" {
+                return (
+                    true,
+                    Some("Origin reflection with credentials".to_string()),
+                );
+            }
         }
 
         (false, None)

@@ -609,7 +609,7 @@ impl EmailSecurityAnalyzer {
         }
 
         for mx in &mx_result.records {
-            for port in &[25, 587] {
+            for port in &[25, 587, 465] {
                 let result = self.test_starttls(&mx.exchange, *port).await;
                 if result.supports_starttls {
                     supports_starttls = true;
@@ -642,14 +642,68 @@ impl EmailSecurityAnalyzer {
     }
 
     async fn test_starttls(&self, hostname: &str, port: u16) -> StartTlsServerResult {
-        use std::time::Duration;
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufStream};
         use tokio::net::TcpStream;
+        use std::time::Duration;
 
         let timeout = Duration::from_secs(5);
-        let supports_starttls = matches!(
-            tokio::time::timeout(timeout, TcpStream::connect((hostname, port))).await,
-            Ok(Ok(_stream))
-        );
+        let connect_result =
+            tokio::time::timeout(timeout, TcpStream::connect((hostname, port))).await;
+
+        let stream = match connect_result {
+            Ok(Ok(stream)) => stream,
+            _ => {
+                return StartTlsServerResult {
+                    hostname: hostname.to_string(),
+                    port,
+                    supports_starttls: false,
+                    certificate_valid: false,
+                    tls_version: None,
+                };
+            }
+        };
+
+        let mut buf_stream = BufStream::new(stream);
+
+        let mut greeting = String::new();
+        let read_result =
+            tokio::time::timeout(timeout, buf_stream.read_line(&mut greeting)).await;
+
+        if read_result.is_err() || greeting.is_empty() {
+            return StartTlsServerResult {
+                hostname: hostname.to_string(),
+                port,
+                supports_starttls: false,
+                certificate_valid: false,
+                tls_version: None,
+            };
+        }
+
+        let ehlo_cmd = format!("EHLO slapper-test\r\n");
+        let _ = tokio::time::timeout(
+            timeout,
+            buf_stream.write_all(ehlo_cmd.as_bytes()),
+        )
+        .await;
+
+        let mut supports_starttls = false;
+        let mut ehlo_response = String::new();
+        loop {
+            let mut line = String::new();
+            match tokio::time::timeout(timeout, buf_stream.read_line(&mut line)).await {
+                Ok(Ok(0)) => break,
+                Ok(Ok(_)) => {
+                    if line.contains("250-STARTTLS") || line.contains("250 STARTTLS") {
+                        supports_starttls = true;
+                    }
+                    ehlo_response.push_str(&line);
+                    if line.starts_with("250 ") || line == "\r\n" {
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
 
         StartTlsServerResult {
             hostname: hostname.to_string(),

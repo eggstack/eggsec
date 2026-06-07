@@ -274,7 +274,7 @@ fn build_patterns() -> Vec<SecretPattern> {
             description: "GitHub credentials in URL",
         },
         SecretPattern {
-            pattern: Regex::new(r#"xox[baprs]-[0-9]{10,12}-[0-9]{10,12}[a-zA-Z0-9-]*"#)
+            pattern: Regex::new(r#"(?i)discord[^\"]*['\"][A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}"#)
                 .expect("invalid Discord token regex"),
             secret_type: SecretType::DiscordToken,
             confidence: Confidence::High,

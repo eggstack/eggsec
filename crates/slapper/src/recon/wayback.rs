@@ -88,10 +88,15 @@ impl WaybackClient {
         let lines: Vec<&str> = text.lines().collect();
         snapshots.reserve(lines.len().saturating_sub(1));
         for line in lines.iter().skip(1) {
-            let parts: Vec<&str> = line.split(',').collect();
+            let trimmed = line.trim();
+            if trimmed.is_empty() || !trimmed.starts_with('[') {
+                continue;
+            }
+            let inner = trimmed.trim_start_matches('[').trim_end_matches(']');
+            let parts: Vec<&str> = inner.split(',').map(|s| s.trim().trim_matches('"')).collect();
             if parts.len() >= 2 {
-                let timestamp = parts.first().unwrap_or(&"").to_string();
-                let original = parts.get(1).unwrap_or(&"").to_string();
+                let timestamp = parts[0].to_string();
+                let original = parts[1].to_string();
                 let mimetype = parts.get(2).map(|s| s.to_string());
                 let status_code = parts.get(3).and_then(|s| s.parse::<u16>().ok());
 

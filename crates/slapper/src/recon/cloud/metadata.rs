@@ -95,9 +95,10 @@ impl MetadataTester {
             .send()
             .await;
 
-        result.imdsv2_required = token_response.is_ok();
+        let imdsv2_available = token_response.is_ok();
+        result.imdsv2_required = imdsv2_available;
 
-        if result.imdsv1_accessible && !result.imdsv2_required {
+        if result.imdsv1_accessible && !imdsv2_available {
             result.findings.push(MetadataFinding {
                 severity: Severity::High,
                 title: "IMDSv1 accessible without IMDSv2 enforcement".to_string(),

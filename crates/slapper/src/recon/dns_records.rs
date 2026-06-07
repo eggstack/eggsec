@@ -26,9 +26,9 @@ pub struct SoaRecord {
     pub mname: String,
     pub rname: String,
     pub serial: u32,
-    pub refresh: u32,
-    pub retry: u32,
-    pub expire: u32,
+    pub refresh: i32,
+    pub retry: i32,
+    pub expire: i32,
     pub minimum: u32,
 }
 
@@ -87,6 +87,37 @@ pub async fn enumerate_dns_records(domain: &str) -> Result<DnsRecords> {
         for record in lookup.answers() {
             if let hickory_resolver::proto::rr::RData::CNAME(cname) = &record.data {
                 records.cname.push(cname.to_string());
+            }
+        }
+    }
+
+    if let Ok(lookup) = resolver
+        .lookup(domain, hickory_resolver::proto::rr::RecordType::SOA)
+        .await
+    {
+        for record in lookup.answers() {
+            if let hickory_resolver::proto::rr::RData::SOA(soa) = &record.data {
+                records.soa = Some(SoaRecord {
+                    mname: soa.mname.to_string(),
+                    rname: soa.rname.to_string(),
+                    serial: soa.serial,
+                    refresh: soa.refresh,
+                    retry: soa.retry,
+                    expire: soa.expire,
+                    minimum: soa.minimum,
+                });
+                break;
+            }
+        }
+    }
+
+    if let Ok(lookup) = resolver
+        .lookup(domain, hickory_resolver::proto::rr::RecordType::CAA)
+        .await
+    {
+        for record in lookup.answers() {
+            if let hickory_resolver::proto::rr::RData::CAA(caa) = &record.data {
+                records.caa.push(caa.to_string());
             }
         }
     }

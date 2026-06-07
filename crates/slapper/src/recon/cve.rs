@@ -293,9 +293,10 @@ impl CveMapper {
     }
 
     async fn query_nvd_api(&self, product: &str, api_key: &str) -> Result<Vec<VulnerabilityInfo>> {
+        let encoded_product = urlencoding::encode(product);
         let url = format!(
             "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={}&resultsPerPage=10",
-            product
+            encoded_product
         );
 
         let response = self

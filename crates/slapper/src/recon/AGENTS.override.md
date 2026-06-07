@@ -72,15 +72,54 @@ The recon module is organized as follows:
 
 ## Bug Fixes
 
-- **geolocation.rs:308** - CIDR mask calculation was incorrect (`!((1u32 << (32 - prefix)) - 1)`).
-  Fixed to proper CIDR mask: `u32::MAX << (32 - prefix)`
-- **smtp_auth.rs:248,256,285** - Base64 API used incorrect trait method syntax.
-  Changed from `base64::Engine::encode(&base64::engine::general_purpose::STANDARD, ...)` to
-  `base64::engine::general_purpose::STANDARD.encode(...)`
-- **subdomain.rs:111,151** - Silent error suppression with `unwrap_or_default()`.
-  Changed to explicit match with `tracing::debug`
-- **api_schema.rs:115** - Silent error suppression on response body read.
-  Changed to explicit match with `tracing::debug`
+- **secrets.rs:277-283** - Discord token regex was actually a Slack token pattern (`xox[baprs]-...`).
+  Replaced with actual Discord bot token format detection.
+- **cloud/storage_test.rs:129-133** - `check_s3_public_write` performed a destructive PUT request that
+  actually wrote data to target buckets. Changed to OPTIONS request checking the `allow` header.
+- **email_security.rs:644-661** - `test_starttls` only tested TCP connectivity, not actual STARTTLS.
+  Now sends EHLO, reads the server greeting, and checks for `250-STARTTLS` in the response.
+- **email_security.rs:611-612** - `check_starttls` only tested ports 25 and 587, never port 465.
+  Added port 465 to the test list. `supports_smtps` was always false.
+- **ssl.rs:68-72,76** - Non-443 ports used `http://` instead of `https://`, making SSL analysis
+  meaningless for non-standard TLS ports. Now always uses `https://`.
+- **cloud/metadata.rs:98** - `imdsv2_required` was set to `true` when the token endpoint responded,
+  which meant "IMDSv2 is available" not "IMDSv2 is required". Logic corrected.
+- **runner.rs:458** - `run_secrets_check` silently discarded file-read errors via `if let Ok`.
+  Now logs with `tracing::debug!` on error.
+- **runner.rs:486-488** - User's `dns_concurrency` setting was silently overridden to minimum 10.
+  Now only enforces minimum of 1.
+- **runner.rs:57** - `resolve_target` silently swallowed URL parse failures with `.ok()`.
+  Now logs a warning when the target cannot be parsed as a URL.
+- **cve.rs:296-299** - NVD API query did not URL-encode product names (e.g., "C++", ".NET").
+  Now uses `urlencoding::encode()`.
+- **containers.rs:131-148** - Liveness probe check was inverted: checked if probe was `Some` but had
+  no method, instead of checking if probe was `None`. Fixed to `container.liveness_probe.is_none()`.
+- **dns_records.rs:35-95** - SOA and CAA record types were declared in the struct but never queried.
+  Added actual DNS lookups for `RecordType::SOA` and `RecordType::CAA`.
+- **runner.rs:726** - Geo output skipped when only country OR city was present (required both).
+  Now displays whichever is available.
+- **runner.rs:792** - SSL section emitted empty "ssl\n" when no certificate and no issues.
+  Now only emits when there's data to show.
+- **runner.rs:825** - CORS output only printed `allows_origin` findings, dropping `is_vulnerable`
+  findings (e.g., null origin reflection). Now prints vulnerable findings with `[VULN]` tag.
+- **runner.rs:843** - Threat section emitted bare "threat\n" even when both ip_reputation and
+  domain_reputation were None. Now only emits when there's data.
+- **runner.rs** - Missing DNS records output in `print_recon_results_string`. Added full DNS
+  record output (A, AAAA, NS, MX, TXT, SOA).
+- **wayback.rs:91** - CDX API `output=json` response was parsed as plain CSV. JSON array brackets
+  and surrounding quotes caused malformed timestamps/URLs. Now properly strips `["` and `"]`.
+- **cors.rs:193** - Origin reflection with credentials not detected. A server that echoes an
+  arbitrary Origin back with `Access-Control-Allow-Credentials: true` is now flagged.
+- **subdomain.rs:127** - crt.sh www-stripping dropped the bare domain (e.g., `www.example.com`
+  stripped to `example.com` then rejected by `ends_with(.domain)` check). Now keeps bare domain.
+- **subdomain.rs:232** - CNAME-only subdomains filtered out (only checked ip_addresses, mx, txt).
+  Added `has_cname` to the filter condition.
+- **geolocation.rs:348** - MaxMind `lookup_maxmind` set both `isp` and `org` to the `is_anycast`
+  boolean string ("Anycast"/"No"). Now sets `isp` to None (MaxMind City DB doesn't have ISP).
+- **takeover.rs:416** - NXDOMAIN detection iterated `nxdomain_cnames` but always checked
+  `cnames.first()`. Now checks if error contains the specific `nxdomain_cname` pattern.
+- **content.rs:259** - `categorize_path` returned empty for many sensitive paths (id_rsa, .htaccess,
+  backup, Gemfile, Pipfile, .DS_Store, graphql, etc.). Added categories for these paths.
 
 ## Error Handling Patterns
 
