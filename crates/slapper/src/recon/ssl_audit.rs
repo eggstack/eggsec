@@ -140,9 +140,15 @@ impl SslAuditor {
         })
     }
 
-    async fn probe_protocol(&self, url: &str, protocol: &str) -> bool {
+    /// Attempt to connect with a specific TLS protocol version.
+    ///
+    /// NOTE: reqwest does not expose TLS protocol version control through its public API.
+    /// This function currently creates a standard client and cannot differentiate between
+    /// protocol versions. A future improvement could use raw `rustls` or `native_tls`
+    /// connections to test specific protocol support.
+    async fn probe_protocol(&self, url: &str, _protocol: &str) -> bool {
         let client = match create_insecure_client_with_options(self.timeout.as_secs() as u64, |builder| {
-            builder.use_rustls_tls()
+            builder
         }) {
             Ok(c) => c,
             Err(_) => return false,
@@ -161,13 +167,13 @@ impl SslAuditor {
             format!("https://{}:{}", target, port)
         };
 
-        let supportsWeakCiphers = false;
+        let supports_weak_ciphers = false;
 
         Ok(SslCheck {
             name: "Cipher Suites".to_string(),
             description,
-            passed: !supportsWeakCiphers,
-            severity: if supportsWeakCiphers { Severity::High } else { Severity::Info },
+            passed: !supports_weak_ciphers,
+            severity: if supports_weak_ciphers { Severity::High } else { Severity::Info },
             details: Some("Cipher suite analysis complete".to_string()),
         })
     }
@@ -304,7 +310,13 @@ impl SslAuditor {
 
 impl Default for SslAuditor {
     fn default() -> Self {
-        Self::new().unwrap()
+        Self::new().unwrap_or_else(|e| {
+            tracing::warn!("Failed to create SslAuditor: {}, using fallback", e);
+            Self {
+                timeout: Duration::from_secs(30),
+                client: Arc::new(reqwest::Client::new()),
+            }
+        })
     }
 }
 

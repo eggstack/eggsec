@@ -639,7 +639,9 @@ pub async fn geolocation_lookup_with_config(
 
     if let Some(settings) = maxmind_settings.clone() {
         locator.set_maxmind_settings(settings);
-        locator.init_geoip().await.ok();
+        if let Err(e) = locator.init_geoip().await {
+            tracing::warn!("MaxMind GeoIP initialization failed: {}", e);
+        }
     }
 
     locator.lookup(ip).await

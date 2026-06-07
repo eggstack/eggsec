@@ -1,7 +1,5 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
-
 use crate::utils::create_insecure_http_client;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -46,8 +44,6 @@ pub struct SslIssue {
 }
 
 pub struct SslAnalyzer {
-    #[allow(dead_code)]
-    timeout: Duration,
     client: reqwest::Client,
 }
 
@@ -55,10 +51,7 @@ impl SslAnalyzer {
     pub fn new(timeout_secs: u64) -> Result<Self> {
         let client = create_insecure_http_client(timeout_secs)?;
 
-        Ok(Self {
-            timeout: Duration::from_secs(timeout_secs),
-            client,
-        })
+        Ok(Self { client })
     }
 
     pub async fn analyze(&self, host: &str, port: u16) -> Result<SslAnalysis> {

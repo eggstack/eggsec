@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::Result;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::proto::rr::RecordType;

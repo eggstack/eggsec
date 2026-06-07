@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_container_scanner_creation() {
         let scanner = ContainerScanner::new();
-        assert!(scanner.is_ok() || std::mem::size_of_val(&scanner) > 0);
+        assert!(scanner.is_ok());
     }
 
     #[test]

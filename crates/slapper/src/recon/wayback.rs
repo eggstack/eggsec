@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::Result;
 use crate::types::SensitiveString;
 use reqwest::Client;
@@ -25,12 +23,14 @@ pub struct WaybackSnapshot {
     pub status_code: Option<u16>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WaybackApiResponse {
     #[serde(default)]
     items: Vec<WaybackApiItem>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WaybackApiItem {
     #[serde(rename = "timestamp")]

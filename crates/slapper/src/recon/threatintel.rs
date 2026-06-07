@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use reqwest::Client;

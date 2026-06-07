@@ -95,10 +95,21 @@ impl CloudScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed while waiting for S3 bucket scan");
+                        return None;
+                    }
+                };
 
-                match client.get(&bucket_url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&bucket_url).send(),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let is_public = status == 200;
 
@@ -110,7 +121,7 @@ impl CloudScanner {
                             bucket_type: "S3".to_string(),
                         })
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 
@@ -139,10 +150,21 @@ impl CloudScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed while waiting for Azure blob scan");
+                        return None;
+                    }
+                };
 
-                match client.get(&blob_url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&blob_url).send(),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let is_public = status == 200;
 
@@ -154,7 +176,7 @@ impl CloudScanner {
                             bucket_type: "Azure Blob".to_string(),
                         })
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 
@@ -183,10 +205,21 @@ impl CloudScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed while waiting for GCP storage scan");
+                        return None;
+                    }
+                };
 
-                match client.get(&bucket_url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&bucket_url).send(),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let is_public = status == 200;
 
@@ -198,7 +231,7 @@ impl CloudScanner {
                             bucket_type: "GCP Storage".to_string(),
                         })
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 
@@ -227,11 +260,22 @@ impl CloudScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed while waiting for Firebase scan");
+                        return None;
+                    }
+                };
 
                 let url = format!("{}/.json", firebase_url);
-                match client.get(&url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&url).send(),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let is_public = status == 200;
 
@@ -243,7 +287,7 @@ impl CloudScanner {
                             bucket_type: "Firebase".to_string(),
                         })
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 
@@ -272,10 +316,21 @@ impl CloudScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed while waiting for Heroku scan");
+                        return None;
+                    }
+                };
 
-                match client.get(&heroku_url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&heroku_url).send(),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let is_public = status != 404;
 
@@ -287,7 +342,7 @@ impl CloudScanner {
                             bucket_type: "Heroku".to_string(),
                         })
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 
@@ -316,10 +371,21 @@ impl CloudScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed while waiting for GitHub scan");
+                        return None;
+                    }
+                };
 
-                match client.get(&github_url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&github_url).send(),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let exists = status == 200;
 
@@ -331,7 +397,7 @@ impl CloudScanner {
                             bucket_type: "GitHub".to_string(),
                         })
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 

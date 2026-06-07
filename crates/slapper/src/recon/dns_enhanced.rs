@@ -273,7 +273,13 @@ pub fn compare_dns_records(previous: &[DnsRecord], current: &[DnsRecord]) -> Dns
 }
 
 pub fn resolve_domain(domain: &str) -> Option<Vec<IpAddr>> {
-    dns_lookup::lookup_host(domain).ok()
+    match dns_lookup::lookup_host(domain) {
+        Ok(addrs) => Some(addrs),
+        Err(e) => {
+            tracing::debug!("DNS lookup failed for {}: {}", domain, e);
+            None
+        }
+    }
 }
 
 #[cfg(test)]
