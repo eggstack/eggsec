@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::LazyLock;
 
 pub static COMMON_PORTS: &[(u16, &str)] = &[
@@ -51,7 +51,7 @@ pub static COMMON_PORTS: &[(u16, &str)] = &[
     (27017, "MongoDB"),
 ];
 
-pub static PORT_SERVICE_MAP: LazyLock<HashMap<u16, &'static str>> =
+pub static PORT_SERVICE_MAP: LazyLock<FxHashMap<u16, &'static str>> =
     LazyLock::new(|| COMMON_PORTS.iter().cloned().collect());
 
 pub fn get_service_name(port: u16) -> &'static str {

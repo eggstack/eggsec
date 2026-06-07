@@ -4,74 +4,89 @@
 //! before they are stored as evidence in findings. This prevents accidental
 //! leakage of credentials, tokens, and private keys in scan reports.
 
-/// Redact sensitive information from a string.
-///
-/// Handles:
-/// - Bearer tokens
-/// - Basic auth credentials
-/// - API keys in common `key=value` patterns
-/// - JWT tokens (three base64 segments separated by dots)
-/// - Cookie header values
-/// - Private key PEM blocks
-/// - Common secret-like key names (`secret`, `password`, `token`, etc.)
+use regex::Regex;
+use std::sync::LazyLock;
+
+static RE_BEARER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(bearer\s+)[A-Za-z0-9\-._~+/]+=*").unwrap());
+
+static RE_BASIC_AUTH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(basic\s+)[A-Za-z0-9+/]+=*").unwrap());
+
+static RE_API_KEY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new("(?i)(api[_-]?key\\s*[=:]\\s*['\"]?)[A-Za-z0-9\\-._]{16,}['\"]?").unwrap()
+});
+
+static RE_AWS_KEY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(AKIA[0-9A-Z]{16})").unwrap());
+
+static RE_JWT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"eyJ[A-Za-z0-9\-._]+\.eyJ[A-Za-z0-9\-._]+\.[A-Za-z0-9\-._]+").unwrap()
+});
+
+static RE_COOKIE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(cookie\s*:\s*)[^\r\n]+").unwrap());
+
+static RE_PRIVATE_KEY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+    )
+    .unwrap()
+});
+
+static RE_SECRET_VALUE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        "(?i)(secret|password|passwd|token|access_token|auth_token|client_secret|secret_key)\\s*[=:]\\s*['\"]?[^\\s'\"&]+['\"]?",
+    )
+    .unwrap()
+});
+
+static RE_CONNECTION_STRING: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(mysql|postgres|postgresql|mongodb|redis)://[^\s]+").unwrap()
+});
+
+static RE_SENSITIVE_KEY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\b(password|passwd|secret|token|access_token|auth_token|client_secret|secret_key|api_key|apikey|credential|cookie|auth)\b",
+    )
+    .unwrap()
+});
 pub fn redact_sensitive(input: &str) -> String {
     let mut result = input.to_string();
 
-    // Bearer tokens
-    result = regex::Regex::new(r"(?i)(bearer\s+)[A-Za-z0-9\-._~+/]+=*")
-        .expect("valid regex")
+    result = RE_BEARER
         .replace_all(&result, "${1}[REDACTED]")
         .to_string();
 
-    // Basic auth
-    result = regex::Regex::new(r"(?i)(basic\s+)[A-Za-z0-9+/]+=*")
-        .expect("valid regex")
+    result = RE_BASIC_AUTH
         .replace_all(&result, "${1}[REDACTED]")
         .to_string();
 
-    // API keys in common patterns: api_key=... or api-key: ... (extended)
-    result = regex::Regex::new("(?i)(api[_-]?key\\s*[=:]\\s*['\"]?)[A-Za-z0-9\\-._]{16,}['\"]?")
-        .expect("valid regex")
+    result = RE_API_KEY
         .replace_all(&result, "${1}[REDACTED]")
         .to_string();
 
-    // AWS access key IDs
-    result = regex::Regex::new(r"(?i)(AKIA[0-9A-Z]{16})")
-        .expect("valid regex")
+    result = RE_AWS_KEY
         .replace_all(&result, "[REDACTED AWS KEY]")
         .to_string();
 
-    // JWT tokens (three base64url segments separated by dots)
-    result = regex::Regex::new(r"eyJ[A-Za-z0-9\-._]+\.eyJ[A-Za-z0-9\-._]+\.[A-Za-z0-9\-._]+")
-        .expect("valid regex")
+    result = RE_JWT
         .replace_all(&result, "[REDACTED]")
         .to_string();
 
-    // Cookie header values
-    result = regex::Regex::new(r"(?i)(cookie\s*:\s*)[^\r\n]+")
-        .expect("valid regex")
+    result = RE_COOKIE
         .replace_all(&result, "${1}[REDACTED]")
         .to_string();
 
-    // Private key PEM blocks
-    result = regex::Regex::new(
-        r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
-    )
-    .expect("valid regex")
-    .replace_all(&result, "[REDACTED PRIVATE KEY]")
-    .to_string();
+    result = RE_PRIVATE_KEY
+        .replace_all(&result, "[REDACTED PRIVATE KEY]")
+        .to_string();
 
-    // Common secret-like key names with values (extended)
-    result = regex::Regex::new(
-        "(?i)(secret|password|passwd|token|access_token|auth_token|client_secret|secret_key)\\s*[=:]\\s*['\"]?[^\\s'\"&]+['\"]?",
-    )
-    .expect("valid regex")
-    .replace_all(&result, "${1}=[REDACTED]")
-    .to_string();
+    result = RE_SECRET_VALUE
+        .replace_all(&result, "${1}=[REDACTED]")
+        .to_string();
 
-    // Database connection strings
-    result = regex::Regex::new(r"(?i)(mysql|postgres|postgresql|mongodb|redis)://[^\s]+")
-        .expect("valid regex")
+    result = RE_CONNECTION_STRING
         .replace_all(&result, "[REDACTED CONNECTION STRING]")
         .to_string();
 
@@ -111,11 +126,7 @@ pub fn redact_json(input: &serde_json::Value) -> serde_json::Value {
 /// matching "token".
 fn is_sensitive_key(key: &str) -> bool {
     let lower = key.to_lowercase();
-    let re = regex::Regex::new(
-        r"(?i)\b(password|passwd|secret|token|access_token|auth_token|client_secret|secret_key|api_key|apikey|credential|cookie|auth)\b",
-    )
-    .expect("valid regex");
-    re.is_match(&lower)
+    RE_SENSITIVE_KEY.is_match(&lower)
 }
 
 #[cfg(test)]
