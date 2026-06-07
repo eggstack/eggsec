@@ -12,12 +12,35 @@ pub struct RiskScore {
     pub priority_level: PriorityLevel,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PriorityLevel {
     P0,
     P1,
     P2,
     P3,
+}
+
+impl PartialOrd for PriorityLevel {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PriorityLevel {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_int().cmp(&other.as_int())
+    }
+}
+
+impl PriorityLevel {
+    fn as_int(&self) -> i32 {
+        match self {
+            Self::P0 => 4,
+            Self::P1 => 3,
+            Self::P2 => 2,
+            Self::P3 => 1,
+        }
+    }
 }
 
 impl RiskScore {
@@ -146,5 +169,22 @@ mod tests {
         assert_eq!(prioritized[0].finding_id, "f2");
         assert_eq!(prioritized[1].finding_id, "f3");
         assert_eq!(prioritized[2].finding_id, "f1");
+    }
+
+    #[test]
+    fn test_priority_level_ordering() {
+        assert!(PriorityLevel::P0 > PriorityLevel::P1);
+        assert!(PriorityLevel::P1 > PriorityLevel::P2);
+        assert!(PriorityLevel::P2 > PriorityLevel::P3);
+    }
+
+    #[test]
+    fn test_priority_level_sort() {
+        let mut levels = vec![PriorityLevel::P3, PriorityLevel::P0, PriorityLevel::P2, PriorityLevel::P1];
+        levels.sort();
+        assert_eq!(
+            levels,
+            vec![PriorityLevel::P3, PriorityLevel::P2, PriorityLevel::P1, PriorityLevel::P0]
+        );
     }
 }

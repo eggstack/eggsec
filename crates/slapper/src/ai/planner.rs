@@ -1,6 +1,7 @@
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
 use crate::tool::planner::{ChainPlanner, ExecutionPlan, PlanRequest};
+use crate::types::Severity;
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -242,8 +243,8 @@ impl AiPlanner {
         findings: &[crate::ai::types::ScanFinding],
         target: &str,
     ) -> Result<AdaptivePlanSuggestion> {
-        let critical_count = findings.iter().filter(|f| f.severity.as_int() >= 4).count();
-        let high_count = findings.iter().filter(|f| f.severity.as_int() >= 3).count();
+        let critical_count = findings.iter().filter(|f| f.severity == Severity::Critical).count();
+        let high_count = findings.iter().filter(|f| f.severity == Severity::High).count();
 
         let prompt = format!(
             "Analyze this execution plan and suggest improvements.\n\

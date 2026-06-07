@@ -86,8 +86,8 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
     }
 
     // Output results
-    match args.format.as_str() {
-        "json" => {
+    match args.format.parse::<crate::types::OutputFormat>() {
+        Ok(crate::types::OutputFormat::Json) => {
             let output = serde_json::to_string_pretty(&findings)?;
             if let Some(ref output_path) = args.output {
                 std::fs::write(output_path, &output)?;
@@ -95,7 +95,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
                 println!("{}", output);
             }
         }
-        "sarif" => {
+        Ok(crate::types::OutputFormat::Sarif) => {
             let mut builder = crate::output::sarif::SarifBuilder::new();
             for f in &findings {
                 let level = match f.severity {

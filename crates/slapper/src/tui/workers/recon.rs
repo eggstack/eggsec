@@ -26,13 +26,7 @@ pub async fn run_pipeline(
         } else {
             Some(output_file)
         },
-        format: match output_format.as_str() {
-            "html" => Some(crate::cli::OutputFormat::Html),
-            "csv" => Some(crate::cli::OutputFormat::Csv),
-            "pretty" => Some(crate::cli::OutputFormat::Pretty),
-            "compact" => Some(crate::cli::OutputFormat::Compact),
-            _ => Some(crate::cli::OutputFormat::Json),
-        },
+        format: output_format.parse::<crate::cli::OutputFormat>().ok(),
         web_types: None,
         common: CommonHttpArgs::default(),
         source_ip: None,

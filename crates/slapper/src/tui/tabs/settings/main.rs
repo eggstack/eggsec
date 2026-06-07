@@ -621,14 +621,14 @@ impl SettingsTab {
         let report = crate::output::convert::load_scan_report(input)
             .map_err(|e| format!("Failed to load report: {}", e))?;
 
-        let converted = match output_format {
-            "junit" => crate::output::convert::convert_to_junit(&report)
+        let converted = match output_format.parse::<crate::types::OutputFormat>() {
+            Ok(crate::types::OutputFormat::Junit) => crate::output::convert::convert_to_junit(&report)
                 .unwrap_or_else(|e| format!("Error: {}", e)),
-            "csv" => crate::output::convert::convert_to_csv(&report),
-            "html" => crate::output::convert::convert_to_html(&report),
-            "sarif" => crate::output::convert::convert_to_sarif(&report)
+            Ok(crate::types::OutputFormat::Csv) => crate::output::convert::convert_to_csv(&report),
+            Ok(crate::types::OutputFormat::Html) => crate::output::convert::convert_to_html(&report),
+            Ok(crate::types::OutputFormat::Sarif) => crate::output::convert::convert_to_sarif(&report)
                 .unwrap_or_else(|e| format!("Error: {}", e)),
-            "markdown" => crate::output::convert::convert_to_markdown(&report)
+            Ok(crate::types::OutputFormat::Markdown) => crate::output::convert::convert_to_markdown(&report)
                 .unwrap_or_else(|e| format!("Error: {}", e)),
             _ => crate::output::convert::convert_to_html(&report),
         };

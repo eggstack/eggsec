@@ -249,9 +249,12 @@ impl From<&str> for SensitiveString {
 
 /// Check if a config file has overly permissive permissions.
 ///
-/// Logs a warning if the file is readable by group or other (mode bits > 0o600).
-/// Config files containing `SensitiveString` values should have restrictive
-/// permissions to protect secrets from unauthorized access.
+/// Logs a warning if the file is writable by group or other, or readable by
+/// group or other (mode bits outside of `0o600`). Config files containing
+/// `SensitiveString` values should have restrictive permissions to protect
+/// secrets from unauthorized access.
+///
+/// Checks write permissions first (more dangerous), then read permissions.
 ///
 /// # Arguments
 ///
@@ -279,10 +282,30 @@ pub fn check_config_file_permissions(path: &Path) {
     };
 
     let mode = metadata.permissions().mode();
-    let world_readable = mode & 0o007;
-    let group_readable = mode & 0o070;
+    let world_readable = mode & 0o004;
+    let group_readable = mode & 0o040;
+    let world_writable = mode & 0o002;
+    let group_writable = mode & 0o020;
 
-    if world_readable != 0 {
+    if world_writable != 0 {
+        tracing::warn!(
+            "Config file '{}' has world-writable permissions ({:o}). \
+             Secrets may be modified or deleted by other users. Consider running: \
+             chmod 600 '{}'",
+            path.display(),
+            mode,
+            path.display()
+        );
+    } else if group_writable != 0 {
+        tracing::warn!(
+            "Config file '{}' has group-writable permissions ({:o}). \
+             Secrets may be modified by other users on multi-user systems. \
+             Consider running: chmod 600 '{}'",
+            path.display(),
+            mode,
+            path.display()
+        );
+    } else if world_readable != 0 {
         tracing::warn!(
             "Config file '{}' has world-readable permissions ({:o}). \
              Secrets may be accessible to other users. Consider running: \
@@ -338,18 +361,35 @@ impl std::fmt::Display for OutputFormat {
     }
 }
 
+impl std::str::FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "pretty" => Ok(OutputFormat::Pretty),
+            "json" => Ok(OutputFormat::Json),
+            "compact" => Ok(OutputFormat::Compact),
+            "html" => Ok(OutputFormat::Html),
+            "csv" => Ok(OutputFormat::Csv),
+            "sarif" => Ok(OutputFormat::Sarif),
+            "junit" => Ok(OutputFormat::Junit),
+            "markdown" => Ok(OutputFormat::Markdown),
+            _ => Err(format!("unknown output format: {}", s)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn severity_ordering() {
-        // Declaration order: Critical(0) < High(1) < Medium(2) < Low(3) < Info(4)
-        // Semantic order (as_int): Critical(4) > High(3) > Medium(2) > Low(1) > Info(0)
-        // Use as_int() for severity comparisons, not the derived Ord.
+        // Semantic order: Critical > High > Medium > Low > Info
+        // Ord impl delegates to as_int(): Critical=4, High=3, Medium=2, Low=1, Info=0
         assert_eq!(Severity::Critical.as_int(), 4);
         assert_eq!(Severity::Info.as_int(), 0);
-        assert!(Severity::Critical.as_int() > Severity::High.as_int());
+        assert!(Severity::Critical > Severity::High);
     }
 
     #[test]
@@ -430,5 +470,103 @@ mod tests {
         let from_str: SensitiveString = "hello".into();
         let from_string: SensitiveString = String::from("hello").into();
         assert_eq!(from_str, from_string);
+    }
+
+    #[test]
+    fn severity_ord_matches_semantic_order() {
+        assert!(Severity::Critical > Severity::High);
+        assert!(Severity::High > Severity::Medium);
+        assert!(Severity::Medium > Severity::Low);
+        assert!(Severity::Low > Severity::Info);
+    }
+
+    #[test]
+    fn severity_sorts_correctly() {
+        let mut sevs = vec![
+            Severity::Info,
+            Severity::Low,
+            Severity::Critical,
+            Severity::Medium,
+            Severity::High,
+        ];
+        sevs.sort();
+        assert_eq!(
+            sevs,
+            vec![
+                Severity::Info,
+                Severity::Low,
+                Severity::Medium,
+                Severity::High,
+                Severity::Critical,
+            ]
+        );
+    }
+
+    #[test]
+    fn severity_cvss_boundary_values() {
+        assert_eq!(Severity::from_cvss(8.99), Severity::High);
+        assert_eq!(Severity::from_cvss(9.0), Severity::Critical);
+        assert_eq!(Severity::from_cvss(6.99), Severity::Medium);
+        assert_eq!(Severity::from_cvss(7.0), Severity::High);
+        assert_eq!(Severity::from_cvss(3.99), Severity::Low);
+        assert_eq!(Severity::from_cvss(4.0), Severity::Medium);
+        assert_eq!(Severity::from_cvss(0.09), Severity::Info);
+        assert_eq!(Severity::from_cvss(0.1), Severity::Low);
+    }
+
+    #[test]
+    fn sensitive_string_empty() {
+        let s = SensitiveString::new("");
+        assert!(s.is_empty());
+        assert_eq!(s.len(), 0);
+        assert_eq!(s.expose_secret(), "");
+        assert_eq!(s.as_bytes(), b"");
+    }
+
+    #[test]
+    fn sensitive_string_into_secret_leaves_owned() {
+        let s = SensitiveString::new("token");
+        let secret = s.into_secret();
+        assert_eq!(secret, "token");
+    }
+
+    #[test]
+    fn sensitive_string_for_logging_redacted() {
+        let s = SensitiveString::new("supersecret");
+        assert_eq!(format!("{}", s.for_logging(true)), "[REDACTED]");
+        assert_eq!(format!("{}", s.for_logging(false)), "supersecret");
+    }
+
+    #[test]
+    fn sensitive_string_len() {
+        let s = SensitiveString::new("abcde");
+        assert_eq!(s.len(), 5);
+    }
+
+    #[test]
+    fn output_format_display() {
+        assert_eq!(format!("{}", OutputFormat::Pretty), "pretty");
+        assert_eq!(format!("{}", OutputFormat::Json), "json");
+        assert_eq!(format!("{}", OutputFormat::Sarif), "sarif");
+        assert_eq!(format!("{}", OutputFormat::Markdown), "markdown");
+    }
+
+    #[test]
+    fn output_format_default_is_pretty() {
+        assert_eq!(OutputFormat::default(), OutputFormat::Pretty);
+    }
+
+    #[test]
+    fn output_format_from_str() {
+        assert_eq!("json".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+        assert_eq!("HTML".parse::<OutputFormat>().unwrap(), OutputFormat::Html);
+        assert_eq!("SARIF".parse::<OutputFormat>().unwrap(), OutputFormat::Sarif);
+        assert_eq!("markdown".parse::<OutputFormat>().unwrap(), OutputFormat::Markdown);
+        assert!("unknown".parse::<OutputFormat>().is_err());
+    }
+
+    #[test]
+    fn severity_default_is_info() {
+        assert_eq!(Severity::default(), Severity::Info);
     }
 }

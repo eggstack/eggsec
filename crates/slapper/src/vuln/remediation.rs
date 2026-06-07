@@ -12,12 +12,35 @@ pub struct Remediation {
     pub priority: RemediationPriority,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RemediationPriority {
     Critical,
     High,
     Medium,
     Low,
+}
+
+impl PartialOrd for RemediationPriority {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RemediationPriority {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_int().cmp(&other.as_int())
+    }
+}
+
+impl RemediationPriority {
+    fn as_int(&self) -> i32 {
+        match self {
+            Self::Critical => 4,
+            Self::High => 3,
+            Self::Medium => 2,
+            Self::Low => 1,
+        }
+    }
 }
 
 impl Remediation {
@@ -127,5 +150,32 @@ mod tests {
     fn test_remediation_for_info() {
         let rem = Remediation::for_finding("f2", "Info finding", Severity::Info);
         assert_eq!(rem.effort_hours, 0.0);
+    }
+
+    #[test]
+    fn test_remediation_priority_ordering() {
+        assert!(RemediationPriority::Critical > RemediationPriority::High);
+        assert!(RemediationPriority::High > RemediationPriority::Medium);
+        assert!(RemediationPriority::Medium > RemediationPriority::Low);
+    }
+
+    #[test]
+    fn test_remediation_priority_sort() {
+        let mut priorities = vec![
+            RemediationPriority::Low,
+            RemediationPriority::Critical,
+            RemediationPriority::Medium,
+            RemediationPriority::High,
+        ];
+        priorities.sort();
+        assert_eq!(
+            priorities,
+            vec![
+                RemediationPriority::Low,
+                RemediationPriority::Medium,
+                RemediationPriority::High,
+                RemediationPriority::Critical,
+            ]
+        );
     }
 }
