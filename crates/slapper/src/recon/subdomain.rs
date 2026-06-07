@@ -173,7 +173,19 @@ impl SubdomainEnumerator {
             let resolver = self.resolver.clone();
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed during subdomain verification");
+                        return SubdomainInfo {
+                            subdomain: subdomain.clone(),
+                            ip_addresses: Vec::new(),
+                            has_mx: false,
+                            has_cname: false,
+                            has_txt: false,
+                        };
+                    }
+                };
                 let mut info = SubdomainInfo {
                     subdomain: subdomain.clone(),
                     ip_addresses: Vec::new(),

@@ -119,7 +119,13 @@ impl CveMapper {
         let product_lower = product.to_lowercase();
 
         {
-            let cache = self.cache.lock().unwrap();
+            let cache = match self.cache.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("CVE cache lock poisoned: {}", e);
+                    return None;
+                }
+            };
             if let Some(vulns) = cache.get(product) {
                 return Some(vulns.clone());
             }
@@ -137,19 +143,21 @@ impl CveMapper {
         }
 
         if !matched_cves.is_empty() {
-            self.cache
-                .lock()
-                .unwrap()
-                .insert(product.to_string(), matched_cves.clone());
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.insert(product.to_string(), matched_cves.clone());
+            } else {
+                tracing::warn!("CVE cache lock poisoned when inserting");
+            }
             return Some(matched_cves);
         }
 
         if let Some(nvd_key) = &self.nvd_api_key {
             if let Ok(vulns) = self.query_nvd_api(product, nvd_key).await {
-                self.cache
-                    .lock()
-                    .unwrap()
-                    .insert(product.to_string(), vulns.clone());
+                if let Ok(mut cache) = self.cache.lock() {
+                    cache.insert(product.to_string(), vulns.clone());
+                } else {
+                    tracing::warn!("CVE cache lock poisoned when inserting NVD result");
+                }
                 return Some(vulns);
             }
         }

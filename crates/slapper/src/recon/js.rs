@@ -179,19 +179,32 @@ impl JsAnalyzer {
         analysis.javascript_files = javascript_files;
 
         for js_file in &analysis.javascript_files {
-            if let Ok(js_content) = self.client.get(&js_file.url).send().await {
-                if let Ok(text) = js_content.text().await {
-                    let endpoints = self.extract_endpoints(&text);
-                    analysis.extracted_endpoints.extend(endpoints);
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                self.client.get(&js_file.url).send(),
+            )
+            .await
+            {
+                Ok(Ok(js_content)) => {
+                    if let Ok(text) = js_content.text().await {
+                        let endpoints = self.extract_endpoints(&text);
+                        analysis.extracted_endpoints.extend(endpoints);
 
-                    let secrets = self.extract_secrets(&text);
-                    analysis.potential_secrets.extend(secrets);
+                        let secrets = self.extract_secrets(&text);
+                        analysis.potential_secrets.extend(secrets);
 
-                    let api_keys = self.extract_api_keys(&text);
-                    analysis.api_keys.extend(api_keys);
+                        let api_keys = self.extract_api_keys(&text);
+                        analysis.api_keys.extend(api_keys);
 
-                    let urls = self.extract_urls(&text);
-                    analysis.urls_found.extend(urls);
+                        let urls = self.extract_urls(&text);
+                        analysis.urls_found.extend(urls);
+                    }
+                }
+                Ok(Err(e)) => {
+                    tracing::debug!("Failed to fetch JS file {}: {}", js_file.url, e);
+                }
+                Err(_) => {
+                    tracing::debug!("Timeout fetching JS file {}", js_file.url);
                 }
             }
         }

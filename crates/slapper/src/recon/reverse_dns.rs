@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_extract_asn_cloudflare() {
         let (asn, org) = extract_asn_from_hostname("1dot1dot1dot1.cloudflare-dns.com");
-        assert!(asn.is_some() || org.is_some() || asn.is_none() && org.is_none());
+        assert!(asn.is_some() || org.is_some());
     }
 
     #[test]

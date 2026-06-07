@@ -386,8 +386,13 @@ impl TakeoverDetector {
     ) -> HttpCheckResult {
         let url = format!("https://{}", subdomain);
 
-        match self.client.get(&url).send().await {
-            Ok(response) => {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            self.client.get(&url).send(),
+        )
+        .await
+        {
+            Ok(Ok(response)) => {
                 if let Ok(body) = response.text().await {
                     for indicator in fingerprint.http_indicators {
                         if body.contains(indicator) {
@@ -402,7 +407,7 @@ impl TakeoverDetector {
                     HttpCheckResult::Unknown("Failed to read response body".to_string())
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 let err_str = e.to_string();
                 if err_str.contains("dns error")
                     || err_str.contains("resolve")
@@ -420,6 +425,9 @@ impl TakeoverDetector {
                     }
                 }
                 HttpCheckResult::Unknown(err_str)
+            }
+            Err(_) => {
+                HttpCheckResult::Unknown(format!("Request timed out for {}", subdomain))
             }
         }
     }

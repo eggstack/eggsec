@@ -57,10 +57,16 @@ impl ContentScanner {
             let semaphore = Arc::clone(&semaphore);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.ok();
+                let _permit = match semaphore.acquire().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed during content scan");
+                        return None;
+                    }
+                };
 
-                match client.get(&url).send().await {
-                    Ok(response) => {
+                match tokio::time::timeout(std::time::Duration::from_secs(30), client.get(&url).send()).await {
+                    Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let content_type = response
                             .headers()
@@ -84,7 +90,7 @@ impl ContentScanner {
                             None
                         }
                     }
-                    Err(_) => None,
+                    _ => None,
                 }
             });
 
