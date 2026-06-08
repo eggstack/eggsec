@@ -2,7 +2,7 @@
 
 ## Overview
 
-Centralized constants in `crates/slapper/src/constants.rs` for magic numbers, strings, and default values.
+Centralized constants for the Slapper workspace. Defined in `crates/slapper-core/src/constants.rs` and re-exported by `crates/slapper/src/constants.rs`.
 
 ## Top-Level Constants
 

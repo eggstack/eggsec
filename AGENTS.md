@@ -20,8 +20,10 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 ### Build & Test Commands
 
 ```bash
+cargo check -p slapper-core
 cargo check --lib -p slapper
 cargo check -p slapper-nse
+cargo test -p slapper-core
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
@@ -78,7 +80,8 @@ Use these sections as the canonical reference points when updating guidance or s
 ### Key Types
 
 - `SlapperConfig` - Main configuration (`config::load_config()`)
-- `Severity` - Unified severity (in `types.rs`, re-exported everywhere)
+- `Severity` - Unified severity (defined in `slapper-core::types`, re-exported by `types.rs`)
+- `SensitiveString` - Zeroized credential wrapper (defined in `slapper-core::types`, re-exported by `types.rs`)
 - `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `tui/app/tab_error.rs`
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine

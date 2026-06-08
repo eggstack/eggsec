@@ -5658,6 +5658,7 @@ dependencies = [
  "serde_yaml_neo",
  "sha2",
  "shellexpand",
+ "slapper-core",
  "slapper-nse",
  "smallvec",
  "socket2 0.5.10",
@@ -5691,6 +5692,28 @@ dependencies = [
  "walkdir",
  "webpki-roots 0.26.11",
  "wiremock",
+ "zeroize",
+]
+
+[[package]]
+name = "slapper-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hex",
+ "ipnetwork 0.20.0",
+ "regex",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "serde_yaml_neo",
+ "sha2",
+ "subtle",
+ "thiserror 2.0.18",
+ "toml",
+ "tracing",
+ "url",
  "zeroize",
 ]
 

@@ -4,6 +4,7 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 
 ## Table of Contents
 
+- [Crate Layout](#crate-layout)
 - [System Architecture](#system-architecture)
 - [Module Index](#module-index) (Deep dive links for each component)
 - [User Interfaces](#user-interfaces)
@@ -16,6 +17,18 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 - [Key Types](#key-types)
 - [Module Dependency Map](#module-dependency-map)
 - [Cross-Cutting Concerns](#cross-cutting-concerns)
+
+---
+
+## Crate Layout
+
+Slapper is organized as a Cargo workspace. The first-level crate boundary is:
+
+- **`slapper-core`**: dependency-light domain types (`Severity`, `SensitiveString`), constants, and shared primitives. Designed for fast independent compilation with a small dependency set.
+- **`slapper`**: main engine, CLI dispatch, assessment modules, TUI/API adapters, feature-gated integrations, and the canonical `SlapperError` type.
+- **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
+
+New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate.
 
 ---
 
@@ -452,8 +465,8 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Type | Location | Purpose |
 |------|----------|---------|
 | `SlapperConfig` | `config/settings.rs` | Main configuration struct |
-| `Severity` | `types.rs` | Canonical severity rating (Critical→Info) |
-| `SensitiveString` | `types.rs` | Zeroized credential wrapper |
+| `Severity` | `slapper-core::types` (re-exported by `types.rs`) | Canonical severity rating (Critical→Info) |
+| `SensitiveString` | `slapper-core::types` (re-exported by `types.rs`) | Zeroized credential wrapper |
 | `OutputFormat` | `types.rs` | Report format enum (8 variants) |
 | `PayloadType` | `fuzzer/payloads/mod.rs` | 30 payload categories |
 | `SlapperError` | `error/mod.rs` | Canonical error type |
@@ -495,31 +508,35 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 ### High-Level Dependencies
 
 ```
-                    ┌─────────────┐
-                    │   config    │
-                    └──────┬──────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         │                 │                 │
-         ▼                 ▼                 ▼
-    ┌─────────┐      ┌──────────┐      ┌─────────┐
-    │ scanner │      │  recon   │      │ fuzzer  │
-    └────┬────┘      └────┬─────┘      └────┬────┘
-         │                │                 │
-         └────────────────┼─────────────────┘
-                          │
-                          ▼
-                   ┌─────────────┐
-                   │    tool     │
-                   │ (registry)  │
-                   └──────┬──────┘
-                          │
-         ┌────────────────┼────────────────┐
-         │                │                │
-         ▼                ▼                ▼
-    ┌─────────┐     ┌──────────┐     ┌─────────┐
-    │   waf   │     │ pipeline │     │ agent   │
-    └─────────┘     └──────────┘     └─────────┘
+                ┌──────────────┐
+                │ slapper-core │
+                └──────┬───────┘
+                       │
+                ┌──────┴───────┐
+                │   slapper    │
+                └──────┬───────┘
+                       │
+         ┌─────────────┼─────────────────┐
+         │             │                 │
+         ▼             ▼                 ▼
+    ┌─────────┐  ┌──────────┐    ┌─────────────┐
+    │  config │  │  scanner │    │  slapper-nse│
+    └────┬────┘  └────┬─────┘    └─────────────┘
+         │            │
+         └────────────┼─────────────────┘
+                      │
+                      ▼
+               ┌─────────────┐
+               │    tool     │
+               │ (registry)  │
+               └──────┬──────┘
+                      │
+         ┌────────────┼────────────────┐
+         │            │                │
+         ▼            ▼                ▼
+    ┌─────────┐ ┌──────────┐    ┌─────────┐
+    │   waf   │ │ pipeline │    │  agent  │
+    └─────────┘ └──────────┘    └─────────┘
 ```
 
 ### Module Group Dependencies
@@ -620,4 +637,4 @@ See [plans/plan.md](../plans/plan.md) for implementation history and completed w
 
 ---
 
-*Last updated: 2026-06-02*
+*Last updated: 2026-06-08*
