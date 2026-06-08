@@ -1,5 +1,7 @@
 use crate::error::Result;
 use reqwest::Client;
+use std::time::Duration;
+use tokio::time::timeout;
 
 use super::{BypassResult, BypassTechnique, TestType, WafProfile};
 use crate::waf::detector::WafDetectionResult;
@@ -246,11 +248,18 @@ impl EvasionBypass {
     ) -> Result<BypassResult> {
         let test_url = format!("{}?q={}", url, urlencoding::encode(payload));
 
-        let response = client
-            .get(&test_url)
-            .header("User-Agent", crate::waf::bypass::headers::get_random_ua())
-            .send()
-            .await?;
+        let response = timeout(
+            Duration::from_secs(crate::constants::waf::SMUGGLING_TIMEOUT_SECS),
+            client
+                .get(&test_url)
+                .header("User-Agent", crate::waf::bypass::headers::get_random_ua())
+                .send(),
+        )
+        .await
+        .map_err(|_| crate::error::SlapperError::Timeout {
+            timeout_ms: crate::constants::waf::SMUGGLING_TIMEOUT_MS,
+            operation: format!("evasion bypass request to {}", url),
+        })??;
 
         let status = response.status().as_u16();
         let body = match response.text().await {

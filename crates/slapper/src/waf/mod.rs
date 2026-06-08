@@ -221,11 +221,12 @@ impl WafEngine {
             tracing::info!("Attempting WAF bypasses...");
         }
 
-        let bypass_results = if let Some(engine) = self.bypass_engine.as_ref() {
-            engine.run_bypasses(&detection).await?
-        } else {
-            return Ok(());
-        };
+        let bypass_results = self
+            .bypass_engine
+            .as_ref()
+            .ok_or_else(|| crate::error::SlapperError::Internal("bypass engine not initialized".to_string()))?
+            .run_bypasses(&detection)
+            .await?;
 
         #[cfg(feature = "ai-integration")]
         let bypass_results = self.run_ai_bypasses(&detection, bypass_results).await?;
@@ -254,9 +255,10 @@ impl WafEngine {
             })
             .collect::<Vec<_>>();
 
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
         let scan_results = ScanResults::new(
             self.args.url.clone(),
-            start.elapsed().as_millis() as u64,
+            duration_ms,
             Some(detection.clone()),
             findings,
         );

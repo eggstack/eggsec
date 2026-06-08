@@ -212,7 +212,6 @@ impl HeaderBypass {
                 String::new()
             }
         };
-        let body_len = body.len() as i64;
 
         let success =
             self.is_bypass_successful(status, detection, DEFAULT_HEADER_PROBE_PAYLOAD, &body);
@@ -228,7 +227,7 @@ impl HeaderBypass {
             ),
             payload: Some(DEFAULT_HEADER_PROBE_PAYLOAD.to_string()),
             status_code: status,
-            response_diff: Some(body_len),
+            response_diff: None,
             error: None,
         })
     }

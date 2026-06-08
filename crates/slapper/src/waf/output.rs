@@ -58,10 +58,14 @@ pub fn print_detection_json(detection: &WafDetectionResult) {
 pub fn format_results(
     detection: &WafDetectionResult,
     bypass_results: &[BypassResult],
-    _selected_profile: Option<&String>,
+    selected_profile: Option<&String>,
 ) -> String {
     let mut output = format_detection(detection);
     output.push_str("\n\n");
+
+    if let Some(profile_name) = selected_profile {
+        output.push_str(&format!("profile: {}\n\n", profile_name));
+    }
 
     let successful: Vec<_> = bypass_results.iter().filter(|r| r.success).collect();
     let failed: Vec<_> = bypass_results.iter().filter(|r| !r.success).collect();

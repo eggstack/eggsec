@@ -4,13 +4,18 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafDetectionResult {
+    #[serde(default)]
     pub waf_name: Option<String>,
     pub confidence: u8,
     #[serde(default)]
     pub request_error: Option<String>,
+    #[serde(default)]
     pub matched_headers: Vec<String>,
+    #[serde(default)]
     pub matched_cookies: Vec<String>,
+    #[serde(default)]
     pub matched_patterns: Vec<String>,
+    #[serde(default)]
     pub server_header: Option<String>,
     pub status_code: u16,
 }

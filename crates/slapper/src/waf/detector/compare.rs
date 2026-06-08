@@ -1,6 +1,4 @@
-use crate::constants::waf;
 use crate::error::Result;
-use crate::utils::create_insecure_client_with_options;
 use rustc_hash::FxHashMap;
 
 use super::types::ResponseDiff;
@@ -8,25 +6,22 @@ use super::WafDetector;
 
 impl WafDetector {
     pub async fn compare_responses(
+        &self,
         url: &str,
         normal_req: &str,
         malicious_req: &str,
     ) -> Result<ResponseDiff> {
-        let ua = crate::waf::bypass::headers::get_random_ua().to_string();
-        let client = create_insecure_client_with_options(waf::SMUGGLING_TIMEOUT_SECS, |builder| {
-            builder
-                .redirect(reqwest::redirect::Policy::limited(waf::MAX_REDIRECTS))
-                .user_agent(ua)
-        })?;
-        let normalized_url = super::WafDetector::normalize_url_static(url);
+        let normalized_url = Self::normalize_url_static(url);
 
-        let normal_response = client
+        let normal_response = self
+            .client
             .get(&normalized_url)
             .query(&[("q", normal_req)])
             .send()
             .await?;
 
-        let malicious_response = client
+        let malicious_response = self
+            .client
             .get(&normalized_url)
             .query(&[("q", malicious_req)])
             .send()

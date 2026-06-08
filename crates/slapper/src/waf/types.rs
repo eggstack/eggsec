@@ -133,7 +133,6 @@ impl OwaspCategory {
             _ => OwaspCategory::A05_2021_SecurityMisconfiguration,
         }
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
