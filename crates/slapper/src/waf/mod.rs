@@ -147,7 +147,7 @@ impl WafEngine {
 
                 if let Some(profile) = get_profile_by_name(&waf_lower) {
                     self.selected_profile = Some(profile.name.clone());
-                    return Some(profile);
+                    return Some(profile.clone());
                 }
 
                 for sig in get_waf_signatures().keys() {
@@ -170,7 +170,7 @@ impl WafEngine {
             return Some(profile);
         } else if let Some(profile) = get_profile_by_name(profile_name) {
             self.selected_profile = Some(profile.name.clone());
-            return Some(profile);
+            return Some(profile.clone());
         }
 
         tracing::warn!(

@@ -257,7 +257,7 @@ impl EvasionBypass {
         )
         .await
         .map_err(|_| crate::error::SlapperError::Timeout {
-            timeout_ms: crate::constants::waf::SMUGGLING_TIMEOUT_MS,
+            timeout_ms: crate::constants::waf::SMUGGLING_TIMEOUT_SECS * 1000,
             operation: format!("evasion bypass request to {}", url),
         })??;
 

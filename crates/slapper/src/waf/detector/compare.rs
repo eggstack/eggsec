@@ -11,21 +11,43 @@ impl WafDetector {
         normal_req: &str,
         malicious_req: &str,
     ) -> Result<ResponseDiff> {
+        if !self.circuit_breaker.is_available() {
+            return Err(crate::error::SlapperError::Internal(
+                "Circuit breaker open".to_string(),
+            ));
+        }
+
         let normalized_url = Self::normalize_url_static(url);
 
-        let normal_response = self
+        let normal_response = match self
             .client
             .get(&normalized_url)
             .query(&[("q", normal_req)])
             .send()
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                self.circuit_breaker.record_failure();
+                return Err(e.into());
+            }
+        };
 
-        let malicious_response = self
+        let malicious_response = match self
             .client
             .get(&normalized_url)
             .query(&[("q", malicious_req)])
             .send()
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                self.circuit_breaker.record_failure();
+                return Err(e.into());
+            }
+        };
+
+        self.circuit_breaker.record_success();
 
         let normal_status = normal_response.status().as_u16();
         let normal_headers: FxHashMap<String, String> = normal_response

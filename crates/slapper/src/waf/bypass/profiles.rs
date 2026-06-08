@@ -55,12 +55,12 @@ pub fn get_profile_by_detection_sig(sig: &str) -> Option<&'static WafProfile> {
     SIGNATURE_TO_PROFILE.get(&sig.to_lowercase()).copied()
 }
 
-pub fn get_profile_by_name(name: &str) -> Option<WafProfile> {
+pub fn get_profile_by_name(name: &str) -> Option<&'static WafProfile> {
     let name_lower = name.to_lowercase();
     get_waf_profiles()
         .iter()
-        .find(|p| p.name.to_lowercase() == name_lower)
-        .cloned()
+        .find(|&profile| profile.name.to_lowercase() == name_lower)
+        .map(|v| v as _)
 }
 
 fn get_cloudflare_profile() -> WafProfile {

@@ -251,7 +251,6 @@ mod tests {
     #[test]
     fn bypass_fails_when_response_diff_indicates_blocked() {
         use crate::waf::detector::types::ResponseDiff;
-        use rustc_hash::FxHashMap;
 
         let detection = detection_with_status(403);
         let diff = ResponseDiff {

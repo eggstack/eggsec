@@ -1,5 +1,7 @@
 use crate::constants::waf;
 use crate::error::Result;
+use std::time::Duration;
+use tokio::time::timeout;
 
 use super::WafDetector;
 
@@ -7,10 +9,19 @@ impl WafDetector {
     pub async fn check_waf_block(&self, url: &str, test_payload: &str) -> Result<bool> {
         let test_url = format!("{}?test={}", url, urlencoding::encode(test_payload));
 
-        let response = match self.client.get(&test_url).send().await {
-            Ok(r) => r,
-            Err(e) => {
+        let response = match timeout(
+            Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS),
+            self.client.get(&test_url).send(),
+        )
+        .await
+        {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => {
                 tracing::warn!("WAF block check request failed for {}: {}", url, e);
+                return Ok(false);
+            }
+            Err(_) => {
+                tracing::warn!("WAF block check request timed out for {}", url);
                 return Ok(false);
             }
         };

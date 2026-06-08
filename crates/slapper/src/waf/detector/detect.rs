@@ -105,7 +105,7 @@ impl WafDetector {
                 }
             }
 
-            for cookie_pattern_lower in &sig_lower.cookies {
+            for (ci, cookie_pattern_lower) in sig_lower.cookies.iter().enumerate() {
                 for cookie_header in &cookie_headers_lower {
                     let cookie_name = cookie_header
                         .split(';')
@@ -116,14 +116,8 @@ impl WafDetector {
                         .unwrap_or("")
                         .trim();
                     if cookie_name == cookie_pattern_lower.as_str() {
-                        if let Some(pos) = sig_lower
-                            .cookies
-                            .iter()
-                            .position(|c| c == cookie_pattern_lower)
-                        {
-                            score = score.saturating_add(waf::COOKIE_MATCH_SCORE);
-                            sig_matched_cookies.push(signature.cookies[pos].clone());
-                        }
+                        score = score.saturating_add(waf::COOKIE_MATCH_SCORE);
+                        sig_matched_cookies.push(signature.cookies[ci].clone());
                         break;
                     }
                 }
@@ -194,8 +188,6 @@ impl WafDetector {
             }
             None => (None, 0),
         };
-
-        self.circuit_breaker.record_success();
 
         Ok(WafDetectionResult {
             waf_name,
