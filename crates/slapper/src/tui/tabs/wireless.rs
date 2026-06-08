@@ -99,7 +99,14 @@ impl WirelessTab {
 
         for network in &results.networks {
             let ssid_display = if network.ssid.len() > 18 {
-                format!("{}...", &network.ssid[..15])
+                let truncate_pos = network
+                    .ssid
+                    .char_indices()
+                    .take_while(|(i, _)| *i < 15)
+                    .last()
+                    .map(|(i, c)| i + c.len_utf8())
+                    .unwrap_or(15);
+                format!("{}...", &network.ssid[..truncate_pos])
             } else {
                 network.ssid.clone()
             };
@@ -403,8 +410,6 @@ impl TabInput for WirelessTab {
         }
         match self.focus_area {
             WirelessFocusArea::Inputs => {
-                self.inputs.blur();
-                self.focus_area = WirelessFocusArea::Inputs;
                 if !self.inputs.fields.is_empty() {
                     self.inputs.focus(0);
                 }

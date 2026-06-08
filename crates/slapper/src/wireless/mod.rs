@@ -86,11 +86,28 @@ impl WirelessScanner {
             .as_ref()
             .ok_or_else(|| SlapperError::Config("No wireless interface specified".to_string()))?;
 
+        let start = std::time::Instant::now();
+
         let output = Command::new("iwlist")
             .args([interface, "scan"])
             .output()
             .await
             .map_err(|e| SlapperError::Network(format!("iwlist scan failed: {}", e)))?;
+
+        let elapsed_secs = start.elapsed().as_secs();
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let msg = if stderr.trim().is_empty() {
+                format!(
+                    "iwlist scan failed with exit code {}",
+                    output.status.code().unwrap_or(-1)
+                )
+            } else {
+                format!("iwlist scan failed: {}", stderr.trim())
+            };
+            return Err(SlapperError::Network(msg));
+        }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let mut networks = self.parse_scan_output(&stdout);
@@ -104,7 +121,7 @@ impl WirelessScanner {
         Ok(WirelessScanResult {
             interface: interface.clone(),
             networks,
-            scan_duration_secs: duration_secs,
+            scan_duration_secs: elapsed_secs.max(duration_secs),
             recommendations,
         })
     }
@@ -167,10 +184,14 @@ impl WirelessScanner {
             }
 
             if line.contains("Signal level") {
-                if let Some(level) = line.split("Signal level:").nth(1) {
-                    let level_str = level.split_whitespace().next().unwrap_or("-100");
-                    current_signal = level_str.parse().unwrap_or(-100);
-                }
+                let level_str = if let Some(rest) = line.split("Signal level=").nth(1) {
+                    rest.split_whitespace().next().unwrap_or("-100")
+                } else if let Some(rest) = line.split("Signal level:").nth(1) {
+                    rest.split_whitespace().next().unwrap_or("-100")
+                } else {
+                    "-100"
+                };
+                current_signal = level_str.parse().unwrap_or(-100);
             }
 
             if line.contains("WPA2") || line.contains("WPA3") {
@@ -212,7 +233,7 @@ impl WirelessScanner {
         networks
     }
 
-    pub fn analyze_networks(&self, networks: &[WirelessNetwork]) -> Vec<WirelessVulnerability> {
+    pub fn analyze_networks(networks: &[WirelessNetwork]) -> Vec<WirelessVulnerability> {
         let mut vulnerabilities = Vec::new();
 
         for network in networks {
@@ -318,9 +339,7 @@ impl Default for WirelessScanner {
 pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::convert::ScanReportData {
     use crate::output::convert::{FindingData, WirelessNetworkReportData};
 
-    let scanner = WirelessScanner::new();
-    let findings: Vec<FindingData> = scanner
-        .analyze_networks(&result.networks)
+    let findings: Vec<FindingData> = WirelessScanner::analyze_networks(&result.networks)
         .iter()
         .map(|v| FindingData {
             title: v.vulnerability_type.clone(),
@@ -330,7 +349,7 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
             location: format!("{} ({})", v.ssid, v.bssid),
             evidence: None,
             remediation: Some(v.recommendation.clone()),
-            cve_ids: Vec::new(),
+            cwe_ids: Vec::new(),
         })
         .collect();
 
@@ -424,7 +443,6 @@ mod tests {
 
     #[test]
     fn test_network_analysis() {
-        let scanner = WirelessScanner::new();
         let networks = vec![
             WirelessNetwork {
                 ssid: "OpenNetwork".to_string(),
@@ -444,7 +462,7 @@ mod tests {
             },
         ];
 
-        let vulns = scanner.analyze_networks(&networks);
+        let vulns = WirelessScanner::analyze_networks(&networks);
         assert_eq!(vulns.len(), 1);
         assert_eq!(vulns[0].vulnerability_type, "Open Network");
     }
