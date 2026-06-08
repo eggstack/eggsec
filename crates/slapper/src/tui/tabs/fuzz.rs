@@ -899,6 +899,7 @@ impl TabInput for FuzzTab {
         self.payload_selector.collapse();
         self.mode_selector.collapse();
         self.target_selector.collapse();
+        self.focus_area = FuzzFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

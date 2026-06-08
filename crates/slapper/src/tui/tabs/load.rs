@@ -683,6 +683,7 @@ impl TabInput for LoadTab {
             self.test_type_selector.blur();
         }
         self.inputs.blur();
+        self.focus_area = LoadFocusArea::Selector;
     }
 
     fn handle_up(&mut self) {

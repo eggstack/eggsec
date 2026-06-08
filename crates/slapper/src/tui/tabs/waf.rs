@@ -593,8 +593,8 @@ impl TabInput for WafTab {
         }
         if self.focus_area == WafFocusArea::Techniques {
             self.focused_checkbox_index = 0;
-            self.focus_area = WafFocusArea::Inputs;
         }
+        self.focus_area = WafFocusArea::Inputs;
         self.inputs.blur();
     }
 

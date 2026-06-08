@@ -533,6 +533,7 @@ impl TabInput for HuntTab {
         }
         self.inputs.blur();
         self.focused_checkbox_index = 0;
+        self.focus_area = HuntFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

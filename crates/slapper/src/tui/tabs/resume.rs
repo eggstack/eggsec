@@ -313,6 +313,7 @@ impl TabInput for ResumeTab {
             return;
         }
         self.inputs.blur();
+        self.focus_area = ResumeFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

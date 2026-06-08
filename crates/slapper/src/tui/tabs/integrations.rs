@@ -692,6 +692,7 @@ impl TabInput for IntegrationsTab {
         self.mode_selector.blur();
         self.config_inputs.blur();
         self.issue_inputs.blur();
+        self.focus_area = IntegrationsFocusArea::Tracker;
     }
 
     fn handle_up(&mut self) {

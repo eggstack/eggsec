@@ -375,6 +375,7 @@ impl TabInput for NseTab {
         }
         self.inputs.blur();
         self.script_selector.blur();
+        self.focus_area = NseFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

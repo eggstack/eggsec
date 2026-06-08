@@ -466,6 +466,7 @@ impl TabInput for BrowserTab {
         }
         self.inputs.blur();
         self.focused_checkbox_index = 0;
+        self.focus_area = BrowserFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

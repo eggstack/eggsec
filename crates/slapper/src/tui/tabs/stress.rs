@@ -474,6 +474,7 @@ impl TabInput for StressTab {
         }
         self.inputs.blur();
         self.type_selector.blur();
+        self.focus_area = StressFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

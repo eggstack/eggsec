@@ -637,6 +637,7 @@ impl TabInput for StorageTab {
         self.config_inputs.blur();
         self.mode_selector.blur();
         self.query_inputs.blur();
+        self.focus_area = StorageFocusArea::Config;
     }
 
     fn handle_up(&mut self) {

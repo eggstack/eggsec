@@ -428,6 +428,7 @@ impl TabInput for ComplianceTab {
         }
         self.inputs.blur();
         self.framework_selector.blur();
+        self.focus_area = ComplianceFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {
