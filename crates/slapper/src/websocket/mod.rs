@@ -74,6 +74,7 @@ pub async fn run_live_tests(config: &WebSocketTestConfig) -> WebSocketTestReport
                 }],
             }
         }
+    }
 }
 
 #[cfg(feature = "websocket")]
