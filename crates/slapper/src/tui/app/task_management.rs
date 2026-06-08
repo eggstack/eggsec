@@ -207,7 +207,7 @@ impl TaskBuilder for super::tabs::PacketTab {
                         return None;
                     }
                 };
-                let count = self.max_packets() as u32;
+                let count = (self.max_packets() as u64).min(u32::MAX as u64) as u32;
 
                 Some(workers::TaskConfig::PacketSend {
                     target: target.to_string(),

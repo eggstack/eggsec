@@ -492,15 +492,15 @@ impl InputField {
                     };
                     let prefix_len = if start > 0 { 3 } else { 0 };
                     if cursor_char_pos >= start && cursor_char_pos < start + available {
-                        (cursor_char_pos - start + prefix_len) as u16
+                        (cursor_char_pos - start + prefix_len).min(u16::MAX as usize) as u16
                     } else {
-                        available as u16
+                        available.min(u16::MAX as usize) as u16
                     }
                 } else {
-                    cursor_char_pos as u16
+                    cursor_char_pos.min(u16::MAX as usize) as u16
                 }
             } else {
-                cursor_char_pos as u16
+                cursor_char_pos.min(u16::MAX as usize) as u16
             };
 
             let cursor_x = area.x.saturating_add(display_cursor).saturating_add(1);
