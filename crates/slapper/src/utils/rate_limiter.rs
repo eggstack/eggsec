@@ -91,6 +91,10 @@ impl AdaptiveRateLimiter {
             self.cooldown_until = None;
         }
 
+        if self.current_rate < 1.0 {
+            self.current_rate = self.min_rate as f64;
+        }
+
         let delay = Duration::from_secs_f64(1.0 / self.current_rate);
         tokio::time::sleep(delay).await;
     }

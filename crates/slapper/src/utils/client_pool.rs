@@ -38,10 +38,15 @@ impl ClientPool {
             builders.push(builder);
         }
 
-        let clients: Vec<Client> = builders
-            .into_iter()
-            .filter_map(|b| b.build().ok())
-            .collect();
+        let mut clients = Vec::new();
+        for builder in builders {
+            match builder.build() {
+                Ok(client) => clients.push(client),
+                Err(e) => {
+                    tracing::warn!("Failed to build HTTP client: {}", e);
+                }
+            }
+        }
 
         Self {
             clients: Arc::new(clients),

@@ -1,4 +1,7 @@
 pub fn strip_controls(s: &str, max_len: usize) -> String {
+    if max_len == 0 {
+        return String::new();
+    }
     let cleaned: String = s.chars().filter(|c| !c.is_control() || *c == ' ').collect();
     let char_count = cleaned.chars().count();
     if char_count > max_len {

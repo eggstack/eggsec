@@ -10,6 +10,7 @@ pub enum CircuitState {
     HalfOpen,
 }
 
+#[derive(Clone)]
 pub struct CircuitBreaker {
     failure_threshold: u64,
     success_threshold: u64,
@@ -74,8 +75,6 @@ impl CircuitBreaker {
                 self.failure_count.store(0, Ordering::Relaxed);
                 self.success_count.store(0, Ordering::Relaxed);
             }
-        } else {
-            self.failure_count.store(0, Ordering::Relaxed);
         }
     }
 
@@ -118,21 +117,6 @@ impl CircuitBreaker {
 impl Default for CircuitBreaker {
     fn default() -> Self {
         Self::new(5, 3, Duration::from_secs(30))
-    }
-}
-
-impl Clone for CircuitBreaker {
-    fn clone(&self) -> Self {
-        Self {
-            failure_threshold: self.failure_threshold,
-            success_threshold: self.success_threshold,
-            timeout: self.timeout,
-            failure_count: self.failure_count.clone(),
-            success_count: self.success_count.clone(),
-            state: self.state.clone(),
-            total_calls: self.total_calls.clone(),
-            total_failures: self.total_failures.clone(),
-        }
     }
 }
 

@@ -23,24 +23,41 @@ pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
 
 pub fn get_shared_http_client() -> Client {
     HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
-        Client::builder()
+        // First try with full options
+        if let Ok(client) = Client::builder()
             .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
             .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
             .tcp_nodelay(true)
             .build()
-            .expect("Failed to create shared HTTP client")
+        {
+            return client;
+        }
+        
+        // Fallback to minimal client
+        tracing::warn!("Failed to create HTTP client with full options, using minimal client");
+        Client::new()
     })
 }
 
 pub fn get_shared_insecure_http_client() -> Client {
     INSECURE_HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
-        Client::builder()
+        // First try with full options
+        if let Ok(client) = Client::builder()
             .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
             .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
             .tcp_nodelay(true)
             .danger_accept_invalid_certs(true)
             .build()
-            .expect("Failed to create shared insecure HTTP client")
+        {
+            return client;
+        }
+        
+        // Fallback to minimal insecure client
+        tracing::warn!("Failed to create insecure HTTP client with full options, using minimal client");
+        Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .expect("Failed to create minimal insecure HTTP client")
     })
 }
 

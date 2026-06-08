@@ -12,6 +12,17 @@ pub fn parse_socket_addr(addr: &str) -> Result<SocketAddr, SlapperError> {
 }
 
 pub fn extract_target_from_url(url: &str) -> Option<String> {
+    // Try to parse with url crate first to handle auth in URLs
+    if let Ok(parsed) = url::Url::parse(url) {
+        if let Some(host) = parsed.host_str() {
+            if let Some(port) = parsed.port() {
+                return Some(format!("{}:{}", host, port));
+            }
+            return Some(host.to_string());
+        }
+    }
+    
+    // Fallback for URLs without scheme
     url.trim_start_matches("http://")
         .trim_start_matches("https://")
         .split('/')

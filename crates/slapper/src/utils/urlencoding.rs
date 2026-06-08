@@ -7,6 +7,9 @@ pub fn encode(s: &str) -> String {
             'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
                 encoded.push(c);
             }
+            '+' => {
+                encoded.push_str("%2B");
+            }
             _ => {
                 for byte in c.to_string().as_bytes() {
                     use std::fmt::Write;

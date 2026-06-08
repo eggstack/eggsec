@@ -7,13 +7,28 @@ pub fn validate_path(base: &Path, user_path: &Path) -> Result<PathBuf> {
         .canonicalize()
         .map_err(|e| anyhow!("Failed to canonicalize base path: {}", e))?;
 
-    // Only canonicalize user path if it exists, otherwise use the path as-is
+    // Try to canonicalize the user path if it exists
     let canonical = if user_path.exists() {
         user_path
             .canonicalize()
             .map_err(|e| anyhow!("Failed to canonicalize path: {}", e))?
     } else {
-        user_path.to_path_buf()
+        // For non-existent paths, resolve parent directory and join
+        if let Some(parent) = user_path.parent() {
+            if parent.exists() {
+                let parent_canonical = parent
+                    .canonicalize()
+                    .map_err(|e| anyhow!("Failed to canonicalize parent path: {}", e))?;
+                let file_name = user_path
+                    .file_name()
+                    .ok_or_else(|| anyhow!("Invalid path: no file name"))?;
+                parent_canonical.join(file_name)
+            } else {
+                user_path.to_path_buf()
+            }
+        } else {
+            user_path.to_path_buf()
+        }
     };
 
     if !canonical.starts_with(&base_canonical) {
