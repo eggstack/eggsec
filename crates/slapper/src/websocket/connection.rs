@@ -16,6 +16,8 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
     use futures::SinkExt;
     use std::time::Instant;
 
+    tracing::info!("Testing WebSocket connection to {}", url);
+
     let start = Instant::now();
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(timeout_secs),
@@ -26,6 +28,7 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
     match result {
         Ok(Ok((mut ws, response))) => {
             let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
+            tracing::info!("WebSocket connection to {} established (latency: {:.1}ms)", url, latency_ms);
             let headers: Vec<(String, String)> = response
                 .headers()
                 .iter()
@@ -56,14 +59,17 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
                 })
                 .unwrap_or_default();
 
-            let _ = ws
+            if let Err(e) = ws
                 .send(tokio_tungstenite::tungstenite::Message::Close(
                     Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                         reason: "test complete".into(),
                     }),
                 ))
-                .await;
+                .await
+            {
+                tracing::warn!("Failed to send WebSocket close frame: {}", e);
+            }
 
             ConnectionTestResult {
                 url: url.to_string(),
@@ -75,24 +81,30 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
                 error: None,
             }
         }
-        Ok(Err(e)) => ConnectionTestResult {
-            url: url.to_string(),
-            connected: false,
-            response_headers: Vec::new(),
-            subprotocols: Vec::new(),
-            extensions: Vec::new(),
-            latency_ms: None,
-            error: Some(e.to_string()),
-        },
-        Err(_) => ConnectionTestResult {
-            url: url.to_string(),
-            connected: false,
-            response_headers: Vec::new(),
-            subprotocols: Vec::new(),
-            extensions: Vec::new(),
-            latency_ms: None,
-            error: Some(format!("Connection timed out after {}s", timeout_secs)),
-        },
+        Ok(Err(e)) => {
+            tracing::warn!("WebSocket connection to {} failed: {}", url, e);
+            ConnectionTestResult {
+                url: url.to_string(),
+                connected: false,
+                response_headers: Vec::new(),
+                subprotocols: Vec::new(),
+                extensions: Vec::new(),
+                latency_ms: None,
+                error: Some(e.to_string()),
+            }
+        }
+        Err(_) => {
+            tracing::warn!("WebSocket connection to {} timed out after {}s", url, timeout_secs);
+            ConnectionTestResult {
+                url: url.to_string(),
+                connected: false,
+                response_headers: Vec::new(),
+                subprotocols: Vec::new(),
+                extensions: Vec::new(),
+                latency_ms: None,
+                error: Some(format!("Connection timed out after {}s", timeout_secs)),
+            }
+        }
     }
 }
 

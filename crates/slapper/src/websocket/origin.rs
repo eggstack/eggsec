@@ -10,6 +10,8 @@ pub struct OriginTestResult {
 
 #[cfg(feature = "websocket")]
 pub async fn test_origins(url: &str, timeout_secs: u64) -> Vec<OriginTestResult> {
+    tracing::info!("Testing WebSocket origin validation on {}", url);
+
     let malicious_origins = vec![
         "https://evil.com",
         "http://localhost",
@@ -29,6 +31,8 @@ pub async fn test_origins(url: &str, timeout_secs: u64) -> Vec<OriginTestResult>
 
 #[cfg(feature = "websocket")]
 async fn test_single_origin(url: &str, origin: &str, timeout_secs: u64) -> OriginTestResult {
+    use futures::SinkExt;
+
     let request = match tokio_tungstenite::tungstenite::http::Request::builder()
         .uri(url)
         .header("Origin", origin)
@@ -65,7 +69,17 @@ async fn test_single_origin(url: &str, origin: &str, timeout_secs: u64) -> Origi
                 format!("Origin '{}' rejected (HTTP {})", origin, status)
             };
 
-            drop(ws);
+            if let Err(e) = ws
+                .send(tokio_tungstenite::tungstenite::Message::Close(
+                    Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                        code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                        reason: "test complete".into(),
+                    }),
+                ))
+                .await
+            {
+                tracing::warn!("Failed to send close frame for origin test: {}", e);
+            }
 
             OriginTestResult {
                 origin: origin.to_string(),
@@ -84,6 +98,8 @@ async fn test_single_origin(url: &str, origin: &str, timeout_secs: u64) -> Origi
             } else {
                 format!("Origin '{}' connection failed: {}", origin, err_str)
             };
+
+            tracing::debug!("Origin test for '{}' failed: {}", origin, details);
 
             OriginTestResult {
                 origin: origin.to_string(),

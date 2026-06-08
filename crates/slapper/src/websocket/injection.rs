@@ -16,6 +16,7 @@ pub async fn test_injection(
     payloads: &[String],
     timeout_secs: u64,
 ) -> Vec<InjectionTestResult> {
+    tracing::info!("Testing WebSocket injection with {} payloads on {}", payloads.len(), url);
     let mut results = Vec::new();
 
     for payload in payloads {
@@ -112,7 +113,14 @@ async fn test_single_injection(
                 _ => None,
             };
 
-            let vulnerability_detected = detect_injection_vulnerability(payload, &response_content);
+            let vulnerability_detected = detect_injection_vulnerability(payload, response_content.as_deref());
+
+            if vulnerability_detected {
+                tracing::warn!(
+                    "WebSocket injection vulnerability detected with payload: {}",
+                    payload
+                );
+            }
 
             InjectionTestResult {
                 payload: payload.to_string(),
@@ -155,7 +163,7 @@ async fn test_single_injection(
 }
 
 #[cfg(feature = "websocket")]
-fn detect_injection_vulnerability(payload: &str, response: &Option<String>) -> bool {
+fn detect_injection_vulnerability(payload: &str, response: Option<&str>) -> bool {
     let response = match response {
         Some(r) => r,
         None => return false,
@@ -243,7 +251,7 @@ mod tests {
     fn test_detect_injection_sql_error() {
         assert!(detect_injection_vulnerability(
             "'",
-            &Some("You have an error in your SQL syntax".to_string())
+            Some("You have an error in your SQL syntax")
         ));
     }
 
@@ -251,7 +259,7 @@ mod tests {
     fn test_detect_injection_xss_reflection() {
         assert!(detect_injection_vulnerability(
             "<script>alert(1)</script>",
-            &Some("Received: <script>alert(1)</script>".to_string())
+            Some("Received: <script>alert(1)</script>")
         ));
     }
 
@@ -259,7 +267,7 @@ mod tests {
     fn test_detect_injection_java_exception() {
         assert!(detect_injection_vulnerability(
             "'",
-            &Some("java.lang.NullPointerException at com.app".to_string())
+            Some("java.lang.NullPointerException at com.app")
         ));
     }
 
@@ -267,7 +275,7 @@ mod tests {
     fn test_detect_injection_python_traceback() {
         assert!(detect_injection_vulnerability(
             "'",
-            &Some("Traceback (most recent call last):".to_string())
+            Some("Traceback (most recent call last):")
         ));
     }
 
@@ -275,7 +283,7 @@ mod tests {
     fn test_detect_injection_path_traversal() {
         assert!(detect_injection_vulnerability(
             "../../../etc/passwd",
-            &Some("root:x:0:0:root:/root:/bin/bash".to_string())
+            Some("root:x:0:0:root:/root:/bin/bash")
         ));
     }
 
@@ -283,7 +291,7 @@ mod tests {
     fn test_no_false_positive_normal_error() {
         assert!(!detect_injection_vulnerability(
             "'",
-            &Some("rate limit exceeded".to_string())
+            Some("rate limit exceeded")
         ));
     }
 
@@ -291,15 +299,15 @@ mod tests {
     fn test_no_false_positive_sql_in_name() {
         assert!(!detect_injection_vulnerability(
             "'",
-            &Some("Using SQL Server driver".to_string())
+            Some("Using SQL Server driver")
         ));
         assert!(!detect_injection_vulnerability(
             "'",
-            &Some("Using ODBC driver for connections".to_string())
+            Some("Using ODBC driver for connections")
         ));
         assert!(!detect_injection_vulnerability(
             "'",
-            &Some("JDBC connection pool initialized".to_string())
+            Some("JDBC connection pool initialized")
         ));
     }
 
@@ -307,7 +315,7 @@ mod tests {
     fn test_no_false_positive_generic_exception_word() {
         assert!(!detect_injection_vulnerability(
             "'",
-            &Some("This is an exception to the rule".to_string())
+            Some("This is an exception to the rule")
         ));
     }
 
@@ -315,12 +323,12 @@ mod tests {
     fn test_no_false_positive_path_in_text() {
         assert!(!detect_injection_vulnerability(
             "../../../etc/passwd",
-            &Some("The request path is invalid".to_string())
+            Some("The request path is invalid")
         ));
     }
 
     #[test]
     fn test_no_response() {
-        assert!(!detect_injection_vulnerability("'", &None));
+        assert!(!detect_injection_vulnerability("'", None));
     }
 }

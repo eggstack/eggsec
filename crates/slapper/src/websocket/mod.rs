@@ -45,28 +45,35 @@ pub struct WebSocketTestConfig {
 
 #[cfg(feature = "websocket")]
 pub async fn run_live_tests(config: &WebSocketTestConfig) -> WebSocketTestReport {
-    let global_timeout = std::time::Duration::from_secs(config.timeout_secs * 10);
+    tracing::info!("Starting WebSocket live tests against {}", config.url);
+
+    let global_timeout = std::time::Duration::from_secs(config.timeout_secs.saturating_mul(10));
 
     match tokio::time::timeout(global_timeout, run_live_tests_inner(config)).await {
         Ok(report) => report,
-        Err(_) => WebSocketTestReport {
-            target: config.url.clone(),
-            connection_test: None,
-            injection_tests: Vec::new(),
-            origin_tests: Vec::new(),
-            fuzz_tests: Vec::new(),
-            findings: vec![WebSocketFinding {
-                category: "Timeout".to_string(),
-                severity: Severity::Medium,
-                title: "WebSocket tests timed out".to_string(),
-                description: format!(
-                    "Global timeout of {}s exceeded",
-                    global_timeout.as_secs()
-                ),
-                recommendation: "Increase timeout or reduce number of test categories".to_string(),
-            }],
-        },
-    }
+        Err(_) => {
+            tracing::warn!(
+                "WebSocket live tests timed out after {}s",
+                global_timeout.as_secs()
+            );
+            WebSocketTestReport {
+                target: config.url.clone(),
+                connection_test: None,
+                injection_tests: Vec::new(),
+                origin_tests: Vec::new(),
+                fuzz_tests: Vec::new(),
+                findings: vec![WebSocketFinding {
+                    category: "Timeout".to_string(),
+                    severity: Severity::Medium,
+                    title: "WebSocket tests timed out".to_string(),
+                    description: format!(
+                        "Global timeout of {}s exceeded",
+                        global_timeout.as_secs()
+                    ),
+                    recommendation: "Increase timeout or reduce number of test categories".to_string(),
+                }],
+            }
+        }
 }
 
 #[cfg(feature = "websocket")]
@@ -99,6 +106,10 @@ async fn run_live_tests_inner(config: &WebSocketTestConfig) -> WebSocketTestRepo
         origin_tests = origin::test_origins(&config.url, config.timeout_secs).await;
         for test in &origin_tests {
             if test.accepted {
+                tracing::warn!(
+                    "CSWSH vulnerability: origin '{}' accepted without validation",
+                    test.origin
+                );
                 findings.push(WebSocketFinding {
                     category: "CSWSH".to_string(),
                     severity: Severity::High,
@@ -122,6 +133,10 @@ async fn run_live_tests_inner(config: &WebSocketTestConfig) -> WebSocketTestRepo
         .await;
         for test in &injection_tests {
             if test.vulnerability_detected {
+                tracing::warn!(
+                    "Injection vulnerability detected with payload: {}",
+                    test.payload
+                );
                 findings.push(WebSocketFinding {
                     category: "Injection".to_string(),
                     severity: Severity::Critical,
@@ -141,6 +156,7 @@ async fn run_live_tests_inner(config: &WebSocketTestConfig) -> WebSocketTestRepo
         let dos_tests = fuzz::test_dos(&config.url, config.timeout_secs).await;
         for test in &dos_tests {
             if test.vulnerability_detected {
+                tracing::warn!("DoS vulnerability detected: {}", test.details);
                 findings.push(WebSocketFinding {
                     category: "DoS".to_string(),
                     severity: Severity::Medium,
@@ -157,6 +173,7 @@ async fn run_live_tests_inner(config: &WebSocketTestConfig) -> WebSocketTestRepo
         let fuzz_results = fuzz::test_message_fuzz(&config.url, config.timeout_secs).await;
         for test in &fuzz_results {
             if test.vulnerability_detected {
+                tracing::warn!("Message fuzzing vulnerability detected: {}", test.details);
                 findings.push(WebSocketFinding {
                     category: "Message Fuzzing".to_string(),
                     severity: Severity::Medium,

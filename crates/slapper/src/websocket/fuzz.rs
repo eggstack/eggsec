@@ -13,6 +13,7 @@ pub struct FuzzTestResult {
 
 #[cfg(feature = "websocket")]
 pub async fn test_dos(url: &str, timeout_secs: u64) -> Vec<FuzzTestResult> {
+    tracing::info!("Running WebSocket DoS tests on {}", url);
     let mut results = Vec::new();
 
     results.push(test_large_message(url, timeout_secs).await);
@@ -24,6 +25,7 @@ pub async fn test_dos(url: &str, timeout_secs: u64) -> Vec<FuzzTestResult> {
 
 #[cfg(feature = "websocket")]
 pub async fn test_message_fuzz(url: &str, timeout_secs: u64) -> Vec<FuzzTestResult> {
+    tracing::info!("Running WebSocket message fuzzing on {}", url);
     let mut results = Vec::new();
 
     let fuzz_cases = vec![
@@ -369,6 +371,13 @@ async fn test_single_message_fuzz(
                         || lower.contains("referenceerror:")
                 })
                 .unwrap_or(false);
+
+            if vulnerability_detected {
+                tracing::warn!(
+                    "WebSocket fuzz vulnerability detected with payload '{}': server returned error response",
+                    name
+                );
+            }
 
             FuzzTestResult {
                 test_name: name.to_string(),
