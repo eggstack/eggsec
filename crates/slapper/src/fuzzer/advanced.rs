@@ -411,13 +411,23 @@ impl AdvancedFuzzer for WebSocketFuzzer {
     async fn fuzz(&mut self, _client: &reqwest::Client) -> Vec<FuzzResult> {
         let mut results = Vec::new();
 
-        let tests = self.generate_all_tests();
-        for r in tests {
-            results.push(r.into_fuzz_result());
+        #[cfg(not(feature = "websocket"))]
+        {
+            let tests = self.generate_all_tests();
+            for r in tests {
+                results.push(r.into_fuzz_result());
+            }
         }
 
         #[cfg(feature = "websocket")]
         {
+            let tests = self.generate_all_tests();
+            for r in tests {
+                if r.vulnerability != crate::fuzzer::payloads::websocket::WebSocketVulnerability::Injection {
+                    results.push(r.into_fuzz_result());
+                }
+            }
+
             let injection_payloads: Vec<String> = self
                 .generate_injection_tests()
                 .iter()
