@@ -140,7 +140,6 @@ impl WirelessScanner {
             let line = line.trim();
 
             if line.starts_with("Cell ") {
-                current_auth_suite = None;
                 if let (Some(ssid), Some(bssid)) = (current_ssid.take(), current_bssid.take()) {
                     networks.push(WirelessNetwork {
                         ssid,
@@ -151,16 +150,19 @@ impl WirelessScanner {
                         last_seen: String::new(),
                     });
                 }
+                current_auth_suite = None;
+                current_channel = 0u8;
+                current_security = SecurityType::Unknown;
+                current_signal = -100i32;
             }
 
             if line.contains("Address:") {
-                current_bssid = Some(
-                    line.split("Address:")
-                        .nth(1)
-                        .unwrap_or("")
-                        .trim()
-                        .to_string(),
-                );
+                if let Some(addr) = line.split("Address:").nth(1) {
+                    let bssid = addr.trim().to_string();
+                    if !bssid.is_empty() && bssid.contains(':') {
+                        current_bssid = Some(bssid);
+                    }
+                }
             }
 
             if line.starts_with("ESSID:") {
@@ -194,18 +196,16 @@ impl WirelessScanner {
                 current_signal = level_str.parse().unwrap_or(-100);
             }
 
-            if line.contains("WPA2") || line.contains("WPA3") {
-                current_security = if line.contains("WPA3") {
-                    SecurityType::WPA3
-                } else {
-                    SecurityType::WPA2
-                };
+            if line.contains("Encryption key:") && line.contains("off") {
+                current_security = SecurityType::Open;
+            } else if line.contains("WPA3") {
+                current_security = SecurityType::WPA3;
+            } else if line.contains("WPA2") {
+                current_security = SecurityType::WPA2;
             } else if line.contains("WPA") {
                 current_security = SecurityType::WPA;
             } else if line.contains("WEP") {
                 current_security = SecurityType::WEP;
-            } else if line.contains("Encryption key:") && line.contains("off") {
-                current_security = SecurityType::Open;
             }
 
             if line.contains("Authentication Suites") {
@@ -465,5 +465,41 @@ mod tests {
         let vulns = WirelessScanner::analyze_networks(&networks);
         assert_eq!(vulns.len(), 1);
         assert_eq!(vulns[0].vulnerability_type, "Open Network");
+    }
+
+    #[test]
+    fn test_parse_scan_output_resets_state_per_cell() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"Network1\"\nChannel:6\nSignal level=-50 dBi\nEncryption key:on\nWPA2\n\nCell 02 - Address: 00:11:22:33:44:66\nESSID:\"Network2\"\nChannel:11\nSignal level=-70 dBi\nEncryption key:on\nWPA3\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 2);
+        assert_eq!(networks[0].ssid, "Network1");
+        assert_eq!(networks[0].channel, 6);
+        assert_eq!(networks[0].signal_strength, -50);
+        assert_eq!(networks[0].security_type, SecurityType::WPA2);
+        assert_eq!(networks[1].ssid, "Network2");
+        assert_eq!(networks[1].channel, 11);
+        assert_eq!(networks[1].signal_strength, -70);
+        assert_eq!(networks[1].security_type, SecurityType::WPA3);
+    }
+
+    #[test]
+    fn test_parse_scan_output_open_network() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"OpenNet\"\nChannel:1\nSignal level=-60 dBi\nEncryption key:off\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].ssid, "OpenNet");
+        assert_eq!(networks[0].security_type, SecurityType::Open);
+    }
+
+    #[test]
+    fn test_parse_scan_output_enterprise_network() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"EnterpriseNet\"\nChannel:36\nSignal level=-45 dBi\nEncryption key:on\nWPA2\nAuthentication Suites (1): 802.1X\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].ssid, "EnterpriseNet");
+        assert_eq!(networks[0].security_type, SecurityType::Enterprise);
     }
 }
