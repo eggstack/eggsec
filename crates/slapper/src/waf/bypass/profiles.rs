@@ -249,7 +249,7 @@ fn get_imperva_profile() -> WafProfile {
             "x-cdn".to_string(),
             "x-iinfo".to_string(),
             "incapsula".to_string(),
-            "__cfduid".to_string(),
+            "incap_ses".to_string(),
         ],
         bypasses: vec![
             ProfileBypass {
@@ -292,8 +292,8 @@ fn get_f5_asm_profile() -> WafProfile {
         name: "F5 ASM".to_string(),
         detection_signatures: vec![
             "bigip".to_string(),
-            "X-Correlation-Id".to_string(),
-            "TS".to_string(),
+            "x-correlation-id".to_string(),
+            "ts".to_string(),
         ],
         bypasses: vec![
             ProfileBypass {

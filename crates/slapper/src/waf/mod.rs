@@ -163,7 +163,7 @@ impl WafEngine {
                         }
                     }
                 }
-                eprintln!("[WARN] Auto-detected WAF '{}' but no matching profile found, using generic profile", waf_name);
+                tracing::warn!("Auto-detected WAF '{}' but no matching profile found, using generic profile", waf_name);
             }
             let profile = get_auto_profile();
             self.selected_profile = Some(profile.name.clone());
@@ -173,8 +173,8 @@ impl WafEngine {
             return Some(profile);
         }
 
-        eprintln!(
-            "[WARN] Unknown profile '{}', falling back to auto profile",
+        tracing::warn!(
+            "Unknown profile '{}', falling back to auto profile",
             profile_name
         );
         let profile = get_auto_profile();
@@ -186,7 +186,7 @@ impl WafEngine {
         let start = Instant::now();
 
         if self.args.verbose {
-            eprintln!("Detecting WAF on {}", sanitize_for_logging(&self.args.url));
+            tracing::info!("Detecting WAF on {}", sanitize_for_logging(&self.args.url));
         }
 
         let detection = self.detector.detect(&self.args.url).await?;
@@ -200,9 +200,9 @@ impl WafEngine {
 
             if self.args.verbose {
                 if let Some(ref waf_name) = detection.waf_name {
-                    eprintln!("WAF detected: {}", waf_name);
+                    tracing::info!("WAF detected: {}", waf_name);
                 } else {
-                    eprintln!("No WAF detected");
+                    tracing::info!("No WAF detected");
                 }
             }
             return Ok(());
@@ -218,7 +218,7 @@ impl WafEngine {
         self.bypass_engine = Some(BypassEngine::new(&self.args, profile, test_type)?);
 
         if self.args.verbose {
-            eprintln!("Attempting WAF bypasses...");
+            tracing::info!("Attempting WAF bypasses...");
         }
 
         let bypass_results = if let Some(engine) = self.bypass_engine.as_ref() {
@@ -264,7 +264,7 @@ impl WafEngine {
         if self.args.verbose {
             let successful = bypass_results.iter().filter(|r| r.success).count();
             let total = bypass_results.len();
-            eprintln!(
+            tracing::info!(
                 "WAF bypass complete: {} successful out of {} attempts",
                 successful, total
             );
@@ -279,12 +279,13 @@ impl WafEngine {
         if let Some(ref output_file) = self.args.output {
             tokio::fs::write(output_file, &output).await?;
             if self.args.verbose {
-                eprintln!("Results written to {}", output_file);
+                tracing::info!("Results written to {}", output_file);
             }
         } else {
-            self.print_results(&detection, &bypass_results);
             if self.args.json {
                 println!("{}", output);
+            } else {
+                self.print_results(&detection, &bypass_results);
             }
         }
 
@@ -329,7 +330,7 @@ impl WafEngine {
                         .await
                     {
                         if let Some(suggestion) = suggestion {
-                            eprintln!(
+                            tracing::info!(
                                 "[AI] Suggested bypass for {:?}: {}",
                                 br.technique, suggestion
                             );

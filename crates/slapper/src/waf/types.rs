@@ -134,9 +134,6 @@ impl OwaspCategory {
         }
     }
 
-    pub fn from_waf_bypass(_bypass_successful: bool) -> Self {
-        OwaspCategory::A05_2021_SecurityMisconfiguration
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,8 +269,8 @@ impl std::fmt::Display for ScanSummary {
         writeln!(f, "Scan Summary")?;
         writeln!(
             f,
-            "Total Findings: {}  Critical: {}  High: {}  Medium: {}  Low: {}",
-            self.total_findings, self.critical, self.high, self.medium, self.low
+            "Total Findings: {}  Critical: {}  High: {}  Medium: {}  Low: {}  Info: {}",
+            self.total_findings, self.critical, self.high, self.medium, self.low, self.info
         )?;
         writeln!(f, "Bypass Success Rate: {:.1}%", self.bypass_success_rate)?;
         Ok(())

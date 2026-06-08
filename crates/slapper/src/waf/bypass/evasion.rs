@@ -330,10 +330,11 @@ pub fn apply_zero_width(input: &str) -> String {
     let zero_width_chars = ['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'];
     let mut result = String::new();
     let mut rng = rand::thread_rng();
+    let char_count = input.chars().count();
 
     for (i, c) in input.chars().enumerate() {
         result.push(c);
-        if i < input.len() - 1 && rand::Rng::gen_ratio(&mut rng, 1, 3) {
+        if char_count > 1 && i < char_count - 1 && rand::Rng::gen_ratio(&mut rng, 1, 3) {
             let zw = zero_width_chars[rand::Rng::gen_range(&mut rng, 0..zero_width_chars.len())];
             result.push(zw);
         }
@@ -380,10 +381,11 @@ pub fn apply_whitespace_variation(input: &str) -> String {
 }
 
 pub fn apply_unicode_encoding(input: &str) -> String {
-    let mut result = String::new();
+    use std::fmt::Write;
+    let mut result = String::with_capacity(input.len() * 6);
     for c in input.chars() {
         if c.is_ascii_alphanumeric() {
-            result.push_str(&format!("\\u{:04x}", c as u32));
+            let _ = write!(result, "\\u{:04x}", c as u32);
         } else {
             result.push(c);
         }

@@ -89,4 +89,6 @@ pub mod waf {
     pub const WEAK_BLOCK_INDICATOR_PATTERNS: [&str; 4] =
         ["security", "unauthorized", "suspicious", "rate limit"];
     pub const UNKNOWN_WAF_WEAK_PATTERN_THRESHOLD: usize = 2;
+    pub const SMUGGLING_TIMEOUT_SECS: u64 = 15;
+    pub const SMUGGLING_TIMEOUT_MS: u64 = 15_000;
 }

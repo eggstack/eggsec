@@ -51,7 +51,7 @@ pub fn print_detection(detection: &WafDetectionResult) {
 pub fn print_detection_json(detection: &WafDetectionResult) {
     match serde_json::to_string_pretty(detection) {
         Ok(json) => println!("{}", json),
-        Err(e) => eprintln!("Failed to serialize detection result: {}", e),
+        Err(e) => tracing::warn!("Failed to serialize detection result: {}", e),
     }
 }
 
@@ -107,7 +107,7 @@ pub fn print_results_json(detection: &WafDetectionResult, bypass_results: &[Bypa
     });
     match serde_json::to_string_pretty(&output) {
         Ok(json) => println!("{}", json),
-        Err(e) => eprintln!("Failed to serialize results: {}", e),
+        Err(e) => tracing::warn!("Failed to serialize results: {}", e),
     }
 }
 

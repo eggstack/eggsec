@@ -1,10 +1,4 @@
-use crate::constants::waf::BLOCKED_STATUS_CODES;
-
 pub use crate::waf::data::{get_waf_signatures, WafSignature};
-
-pub fn get_blocked_status_codes() -> Vec<u16> {
-    BLOCKED_STATUS_CODES.to_vec()
-}
 
 pub fn get_common_waf_response_patterns() -> Vec<&'static str> {
     vec![
@@ -147,16 +141,6 @@ mod tests {
                 key
             );
         }
-    }
-
-    #[test]
-    fn test_blocked_status_codes() {
-        let codes = get_blocked_status_codes();
-        assert!(codes.contains(&403));
-        assert!(codes.contains(&406));
-        assert!(codes.contains(&429));
-        assert!(codes.contains(&503));
-        assert_eq!(codes.len(), 4);
     }
 
     #[test]

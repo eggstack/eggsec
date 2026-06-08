@@ -28,7 +28,7 @@ impl HeaderBypass {
         client: &Client,
         url: &str,
         detection: &WafDetectionResult,
-        _test_type: TestType,
+        _test_type: TestType, // Header bypasses are test-type-agnostic; accepted for API consistency
     ) -> Result<Vec<BypassResult>> {
         let mut results = Vec::new();
         let normalized_url = crate::waf::WafDetector::normalize_url_static(url);

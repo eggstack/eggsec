@@ -8,6 +8,7 @@ mod tests;
 
 pub use types::{ResponseDiff, WafDetectionResult};
 
+use crate::constants::waf;
 use crate::error::Result;
 use crate::utils::circuit_breaker::CircuitBreaker;
 use crate::utils::create_insecure_client_with_options;
@@ -27,9 +28,9 @@ pub struct WafDetector {
 impl WafDetector {
     pub fn new() -> Result<Self> {
         let ua = crate::waf::bypass::headers::get_random_ua().to_string();
-        let client = create_insecure_client_with_options(15, |builder| {
+        let client = create_insecure_client_with_options(waf::SMUGGLING_TIMEOUT_SECS, |builder| {
             builder
-                .redirect(reqwest::redirect::Policy::limited(5))
+                .redirect(reqwest::redirect::Policy::limited(waf::MAX_REDIRECTS))
                 .user_agent(ua)
         })?;
 

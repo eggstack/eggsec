@@ -64,13 +64,6 @@ pub fn get_waf_test_payloads() -> Vec<WafPayload> {
     ]
 }
 
-pub fn get_sql_keywords() -> Vec<&'static str> {
-    vec![
-        "SELECT", "INSERT", "UPDATE", "DELETE", "DROP", "UNION", "OR", "AND", "WHERE", "FROM",
-        "JOIN", "LIKE", "BETWEEN", "ORDER", "GROUP", "HAVING", "LIMIT", "OFFSET", "AS",
-    ]
-}
-
 pub fn get_xss_payloads() -> Vec<&'static str> {
     vec![
         "<script>alert(1)</script>",

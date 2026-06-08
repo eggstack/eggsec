@@ -1,3 +1,4 @@
+use crate::constants::waf;
 use crate::error::Result;
 use crate::utils::create_insecure_client_with_options;
 use rustc_hash::FxHashMap;
@@ -12,9 +13,9 @@ impl WafDetector {
         malicious_req: &str,
     ) -> Result<ResponseDiff> {
         let ua = crate::waf::bypass::headers::get_random_ua().to_string();
-        let client = create_insecure_client_with_options(15, |builder| {
+        let client = create_insecure_client_with_options(waf::SMUGGLING_TIMEOUT_SECS, |builder| {
             builder
-                .redirect(reqwest::redirect::Policy::limited(5))
+                .redirect(reqwest::redirect::Policy::limited(waf::MAX_REDIRECTS))
                 .user_agent(ua)
         })?;
         let normalized_url = super::WafDetector::normalize_url_static(url);
@@ -61,16 +62,19 @@ impl WafDetector {
         };
         let malicious_length = malicious_body.len();
 
-        let header_diffs: Vec<String> = normal_headers
+        let mut all_keys: Vec<&String> = normal_headers
             .keys()
-            .filter(|k| malicious_headers.get(*k) != normal_headers.get(*k))
+            .chain(malicious_headers.keys())
+            .collect();
+        all_keys.sort();
+        all_keys.dedup();
+        let header_diffs: Vec<String> = all_keys
+            .iter()
+            .filter(|k| malicious_headers.get(**k) != normal_headers.get(**k))
             .map(|k| {
-                format!(
-                    "{}: {} -> {}",
-                    k,
-                    normal_headers.get(k).unwrap_or(&"".to_string()),
-                    malicious_headers.get(k).unwrap_or(&"".to_string())
-                )
+                let normal_val = normal_headers.get(*k).map(String::as_str).unwrap_or("");
+                let malicious_val = malicious_headers.get(*k).map(String::as_str).unwrap_or("");
+                format!("{}: {} -> {}", k, normal_val, malicious_val)
             })
             .collect();
 
