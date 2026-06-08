@@ -13,6 +13,9 @@ pub fn strip_controls(s: &str, max_len: usize) -> String {
 }
 
 pub fn preserve_all(s: &str, max_len: usize) -> String {
+    if max_len == 0 {
+        return String::new();
+    }
     let char_count = s.chars().count();
     if char_count > max_len {
         let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
