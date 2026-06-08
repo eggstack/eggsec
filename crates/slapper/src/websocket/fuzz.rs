@@ -354,9 +354,19 @@ async fn test_single_message_fuzz(
             let vulnerability_detected = server_response
                 .as_ref()
                 .map(|r| {
-                    r.to_lowercase().contains("error")
-                        || r.to_lowercase().contains("exception")
-                        || r.to_lowercase().contains("stack trace")
+                    let lower = r.to_lowercase();
+                    lower.contains("unhandled exception")
+                        || lower.contains("internal server error")
+                        || lower.contains("server error")
+                        || lower.contains("500 ")
+                        || lower.contains("exception:")
+                        || lower.contains("stacktrace:")
+                        || lower.contains("stack trace:")
+                        || lower.contains("traceback")
+                        || lower.contains("nullpointerexception")
+                        || lower.contains("syntaxerror:")
+                        || lower.contains("typeerror:")
+                        || lower.contains("referenceerror:")
                 })
                 .unwrap_or(false);
 

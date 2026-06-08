@@ -166,15 +166,15 @@ fn detect_injection_vulnerability(payload: &str, response: &Option<String>) -> b
     if payload.contains('\'') {
         let sql_error_indicators = [
             "syntax error",
-            "mysql",
-            "postgresql",
-            "sqlite",
+            "mysql error",
+            "postgresql error",
+            "sqlite error",
             "unclosed quotation mark",
             "quoted string not properly terminated",
             "sql command not properly ended",
             "you have an error in your sql",
-            "odbc",
-            "jdbc",
+            "odbc driver error",
+            "jdbc driver error",
         ];
         if sql_error_indicators
             .iter()
@@ -184,7 +184,7 @@ fn detect_injection_vulnerability(payload: &str, response: &Option<String>) -> b
         }
     }
 
-    if payload.contains("<script>") && response.contains("<script>") {
+    if payload.to_lowercase().contains("<script>") && response_lower.contains("<script>") {
         return true;
     }
 
@@ -292,6 +292,14 @@ mod tests {
         assert!(!detect_injection_vulnerability(
             "'",
             &Some("Using SQL Server driver".to_string())
+        ));
+        assert!(!detect_injection_vulnerability(
+            "'",
+            &Some("Using ODBC driver for connections".to_string())
+        ));
+        assert!(!detect_injection_vulnerability(
+            "'",
+            &Some("JDBC connection pool initialized".to_string())
         ));
     }
 

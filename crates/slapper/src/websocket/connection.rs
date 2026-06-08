@@ -13,6 +13,7 @@ pub struct ConnectionTestResult {
 
 #[cfg(feature = "websocket")]
 pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResult {
+    use futures::SinkExt;
     use std::time::Instant;
 
     let start = Instant::now();
@@ -23,7 +24,7 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
     .await;
 
     match result {
-        Ok(Ok((ws, response))) => {
+        Ok(Ok((mut ws, response))) => {
             let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
             let headers: Vec<(String, String)> = response
                 .headers()
@@ -55,7 +56,14 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
                 })
                 .unwrap_or_default();
 
-            drop(ws);
+            let _ = ws
+                .send(tokio_tungstenite::tungstenite::Message::Close(
+                    Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                        code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                        reason: "test complete".into(),
+                    }),
+                ))
+                .await;
 
             ConnectionTestResult {
                 url: url.to_string(),

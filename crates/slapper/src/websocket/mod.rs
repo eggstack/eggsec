@@ -45,6 +45,32 @@ pub struct WebSocketTestConfig {
 
 #[cfg(feature = "websocket")]
 pub async fn run_live_tests(config: &WebSocketTestConfig) -> WebSocketTestReport {
+    let global_timeout = std::time::Duration::from_secs(config.timeout_secs * 10);
+
+    match tokio::time::timeout(global_timeout, run_live_tests_inner(config)).await {
+        Ok(report) => report,
+        Err(_) => WebSocketTestReport {
+            target: config.url.clone(),
+            connection_test: None,
+            injection_tests: Vec::new(),
+            origin_tests: Vec::new(),
+            fuzz_tests: Vec::new(),
+            findings: vec![WebSocketFinding {
+                category: "Timeout".to_string(),
+                severity: Severity::Medium,
+                title: "WebSocket tests timed out".to_string(),
+                description: format!(
+                    "Global timeout of {}s exceeded",
+                    global_timeout.as_secs()
+                ),
+                recommendation: "Increase timeout or reduce number of test categories".to_string(),
+            }],
+        },
+    }
+}
+
+#[cfg(feature = "websocket")]
+async fn run_live_tests_inner(config: &WebSocketTestConfig) -> WebSocketTestReport {
     let mut findings = Vec::new();
     let mut injection_tests = Vec::new();
     let mut origin_tests = Vec::new();

@@ -39,6 +39,7 @@ pub struct WebSocketTestResult {
 }
 
 pub struct WebSocketFuzzer {
+    #[allow(dead_code)]
     pub(crate) url: String,
     subprotocols: Vec<String>,
 }
