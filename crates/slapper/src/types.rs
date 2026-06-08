@@ -32,6 +32,9 @@ impl Severity {
     }
 
     /// Derive severity from a CVSS score.
+    ///
+    /// Score ranges: `>=9.0` → Critical, `>=7.0` → High, `>=4.0` → Medium,
+    /// `>=0.1` → Low, otherwise → Info. NaN and negative values map to `Info`.
     #[must_use]
     pub fn from_cvss(score: f32) -> Self {
         match score {
@@ -134,6 +137,7 @@ impl Ord for Severity {
 pub struct SensitiveString(String);
 
 impl SensitiveString {
+    #[must_use]
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
     }
@@ -182,6 +186,7 @@ impl SensitiveString {
     ///
     /// Returns `"[REDACTED]"` when `redact` is true, otherwise returns the actual value.
     /// WARNING: Only use `redact=true` when you control the logging output destination.
+    #[must_use]
     pub fn for_logging(&self, redact: bool) -> impl std::fmt::Display + '_ {
         struct SecretViewer<'a> {
             value: &'a str,
@@ -244,6 +249,24 @@ impl PartialEq for SensitiveString {
 }
 
 impl Eq for SensitiveString {}
+
+impl PartialEq<str> for SensitiveString {
+    fn eq(&self, other: &str) -> bool {
+        self.0.as_bytes().ct_eq(other.as_bytes()).into()
+    }
+}
+
+impl<'a> PartialEq<&'a str> for SensitiveString {
+    fn eq(&self, other: &&'a str) -> bool {
+        self.0.as_bytes().ct_eq(other.as_bytes()).into()
+    }
+}
+
+impl PartialEq<String> for SensitiveString {
+    fn eq(&self, other: &String) -> bool {
+        self.0.as_bytes().ct_eq(other.as_bytes()).into()
+    }
+}
 
 impl From<String> for SensitiveString {
     fn from(s: String) -> Self {
@@ -354,6 +377,16 @@ pub enum OutputFormat {
     Sarif,
     Junit,
     Markdown,
+}
+
+impl OutputFormat {
+    /// Parse an output format from a string, defaulting to `Pretty` for unknown values.
+    ///
+    /// Prefer `s.parse::<OutputFormat>()` for new code that wants error handling.
+    #[must_use]
+    pub fn parse_or_default(s: &str) -> Self {
+        s.parse().unwrap_or(OutputFormat::Pretty)
+    }
 }
 
 impl std::fmt::Display for OutputFormat {
@@ -611,5 +644,37 @@ mod tests {
             let deserialized: OutputFormat = serde_json::from_str(&json).unwrap();
             assert_eq!(deserialized, fmt, "serde round-trip failed for {:?}", fmt);
         }
+    }
+
+    #[test]
+    fn sensitive_string_eq_str() {
+        let s = SensitiveString::new("secret");
+        assert_eq!(s, "secret");
+        assert_ne!(s, "other");
+    }
+
+    #[test]
+    fn sensitive_string_eq_string() {
+        let s = SensitiveString::new("secret");
+        assert_eq!(s, String::from("secret"));
+        assert_ne!(s, String::from("other"));
+    }
+
+    #[test]
+    fn output_format_parse_or_default() {
+        assert_eq!(OutputFormat::parse_or_default("json"), OutputFormat::Json);
+        assert_eq!(OutputFormat::parse_or_default("HTML"), OutputFormat::Html);
+        assert_eq!(OutputFormat::parse_or_default("unknown"), OutputFormat::Pretty);
+        assert_eq!(OutputFormat::parse_or_default(""), OutputFormat::Pretty);
+    }
+
+    #[test]
+    fn severity_from_cvss_nan() {
+        assert_eq!(Severity::from_cvss(f32::NAN), Severity::Info);
+    }
+
+    #[test]
+    fn severity_from_cvss_negative() {
+        assert_eq!(Severity::from_cvss(-1.0), Severity::Info);
     }
 }
