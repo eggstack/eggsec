@@ -12,7 +12,7 @@ pub use crate::fuzzer::payloads::ssti::{SstiFuzzer, SstiTestResult, TemplateEngi
 pub use crate::fuzzer::payloads::websocket::{
     WebSocketFuzzer, WebSocketTestResult, WebSocketVulnerability,
 };
-use crate::fuzzer::payloads::{Payload, PayloadType};
+use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 use reqwest::Client;
 
 pub trait AdvancedFuzzer {
@@ -414,6 +414,181 @@ impl AdvancedFuzzer for WebSocketFuzzer {
         let tests = self.generate_all_tests();
         for r in tests {
             results.push(r.into_fuzz_result());
+        }
+
+        #[cfg(feature = "websocket")]
+        {
+            let injection_payloads: Vec<String> = self
+                .generate_injection_tests()
+                .iter()
+                .map(|t| t.message.clone())
+                .collect();
+
+            let config = crate::websocket::WebSocketTestConfig {
+                url: self.url.clone(),
+                timeout_secs: 10,
+                injection_payloads,
+                test_connection: true,
+                test_origins: true,
+                test_injection: true,
+                test_dos: true,
+                test_message_fuzz: true,
+            };
+
+            let report = crate::websocket::run_live_tests(&config).await;
+
+            if let Some(conn) = &report.connection_test {
+                results.push(FuzzResult {
+                    payload: Payload {
+                        payload_type: PayloadType::Websocket,
+                        payload: conn.url.clone(),
+                        description: "WebSocket connection test".to_string(),
+                        severity: if conn.connected {
+                            Severity::Info
+                        } else {
+                            Severity::High
+                        },
+                        tags: vec!["websocket".to_string(), "connection".to_string()],
+                    },
+                    status_code: if conn.connected { 101 } else { 0 },
+                    response_time_ms: conn.latency_ms.unwrap_or(0.0) as u64,
+                    response_length: None,
+                    response_body: conn.error.clone(),
+                    is_waf_blocked: false,
+                    is_anomaly: !conn.connected,
+                    is_redos_suspected: false,
+                    leaks_found: Vec::new(),
+                    error: conn.error.clone(),
+                    owasp_category: None,
+                    detected_severity: if conn.connected {
+                        Severity::Info
+                    } else {
+                        Severity::High
+                    },
+                });
+            }
+
+            for test in &report.origin_tests {
+                results.push(FuzzResult {
+                    payload: Payload {
+                        payload_type: PayloadType::Websocket,
+                        payload: test.origin.clone(),
+                        description: format!("Origin validation: {}", test.details),
+                        severity: if test.accepted {
+                            Severity::High
+                        } else {
+                            Severity::Info
+                        },
+                        tags: vec![
+                            "websocket".to_string(),
+                            "origin".to_string(),
+                            "cswsh".to_string(),
+                        ],
+                    },
+                    status_code: test.status_code.unwrap_or(0),
+                    response_time_ms: 0,
+                    response_length: None,
+                    response_body: Some(test.details.clone()),
+                    is_waf_blocked: false,
+                    is_anomaly: test.accepted,
+                    is_redos_suspected: false,
+                    leaks_found: if test.accepted {
+                        vec![format!("Origin '{}' accepted", test.origin)]
+                    } else {
+                        Vec::new()
+                    },
+                    error: None,
+                    owasp_category: Some(
+                        crate::waf::types::OwaspCategory::A01_2021_BrokenAccessControl.to_string(),
+                    ),
+                    detected_severity: if test.accepted {
+                        Severity::High
+                    } else {
+                        Severity::Info
+                    },
+                });
+            }
+
+            for test in &report.injection_tests {
+                results.push(FuzzResult {
+                    payload: Payload {
+                        payload_type: PayloadType::Websocket,
+                        payload: test.payload.clone(),
+                        description: test.details.clone(),
+                        severity: if test.vulnerability_detected {
+                            Severity::Critical
+                        } else {
+                            Severity::Info
+                        },
+                        tags: vec![
+                            "websocket".to_string(),
+                            "injection".to_string(),
+                        ],
+                    },
+                    status_code: if test.sent { 200 } else { 0 },
+                    response_time_ms: 0,
+                    response_length: test.response_content.as_ref().map(|r| r.len() as u64),
+                    response_body: test.response_content.clone(),
+                    is_waf_blocked: false,
+                    is_anomaly: test.vulnerability_detected,
+                    is_redos_suspected: false,
+                    leaks_found: if test.vulnerability_detected {
+                        vec![test.details.clone()]
+                    } else {
+                        Vec::new()
+                    },
+                    error: None,
+                    owasp_category: Some(
+                        crate::waf::types::OwaspCategory::A03_2021_Injection.to_string(),
+                    ),
+                    detected_severity: if test.vulnerability_detected {
+                        Severity::Critical
+                    } else {
+                        Severity::Info
+                    },
+                });
+            }
+
+            for test in &report.fuzz_tests {
+                results.push(FuzzResult {
+                    payload: Payload {
+                        payload_type: PayloadType::Websocket,
+                        payload: test.test_name.clone(),
+                        description: test.details.clone(),
+                        severity: if test.vulnerability_detected {
+                            Severity::Medium
+                        } else {
+                            Severity::Info
+                        },
+                        tags: vec![
+                            "websocket".to_string(),
+                            "fuzzing".to_string(),
+                        ],
+                    },
+                    status_code: if test.sent { 200 } else { 0 },
+                    response_time_ms: 0,
+                    response_length: test.server_response.as_ref().map(|r| r.len() as u64),
+                    response_body: test.server_response.clone(),
+                    is_waf_blocked: false,
+                    is_anomaly: test.vulnerability_detected,
+                    is_redos_suspected: false,
+                    leaks_found: if test.vulnerability_detected {
+                        vec![test.details.clone()]
+                    } else {
+                        Vec::new()
+                    },
+                    error: None,
+                    owasp_category: Some(
+                        crate::waf::types::OwaspCategory::A05_2021_SecurityMisconfiguration
+                            .to_string(),
+                    ),
+                    detected_severity: if test.vulnerability_detected {
+                        Severity::Medium
+                    } else {
+                        Severity::Info
+                    },
+                });
+            }
         }
 
         results

@@ -38,19 +38,8 @@ pub struct WebSocketTestResult {
     pub description: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum WebSocketOpcode {
-    Continuation,
-    Text,
-    Binary,
-    Close,
-    Ping,
-    Pong,
-}
-
 pub struct WebSocketFuzzer {
-    #[allow(dead_code)]
-    url: String,
+    pub(crate) url: String,
     subprotocols: Vec<String>,
 }
 
@@ -158,21 +147,21 @@ impl WebSocketFuzzer {
         let mut results = Vec::new();
 
         let dos_payloads = vec![
-            (WebSocketOpcode::Ping, vec![0u8; 65536], "Large ping frame"),
+            ("Ping", vec![0u8; 65536], "Large ping frame"),
             (
-                WebSocketOpcode::Text,
+                "Text",
                 "a".repeat(100000).into_bytes(),
                 "Large text message",
             ),
             (
-                WebSocketOpcode::Binary,
+                "Binary",
                 vec![0u8; 100000],
                 "Large binary frame",
             ),
-            (WebSocketOpcode::Close, vec![], "Rapid close frames"),
-            (WebSocketOpcode::Ping, vec![], "Rapid ping flood"),
+            ("Close", vec![], "Rapid close frames"),
+            ("Ping", vec![], "Rapid ping flood"),
             (
-                WebSocketOpcode::Text,
+                "Text",
                 "ping".repeat(10000).into_bytes(),
                 "Message flood",
             ),
@@ -182,7 +171,7 @@ impl WebSocketFuzzer {
             results.push(WebSocketTestResult {
                 vulnerability: WebSocketVulnerability::DoS,
                 success: false,
-                message: format!("{:?}: {:?}", opcode, &payload[..payload.len().min(100)]),
+                message: format!("{}: {:?}", opcode, &payload[..payload.len().min(100)]),
                 response_snippet: String::new(),
                 severity: Severity::Medium,
                 description: format!("DoS test: {}", desc),
