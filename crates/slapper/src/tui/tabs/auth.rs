@@ -57,7 +57,7 @@ impl AuthTab {
         }
     }
 
-    fn set_error(&mut self, error: TabError) {
+    fn set_error_state(&mut self, error: TabError) {
         self.state = AppState::Error(error.message());
         self.error = Some(error);
     }
@@ -73,7 +73,7 @@ impl TabState for AuthTab {
     }
 
     fn set_error(&mut self, error: TabError) {
-        AuthTab::set_error(self, error);
+        AuthTab::set_error_state(self, error);
     }
 }
 

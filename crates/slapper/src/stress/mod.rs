@@ -135,8 +135,12 @@ impl StressTest {
                     udp::run_udp_flood(&self.config, Arc::new(self.metrics.clone())).await?
                 }
                 StressType::Icmp => icmp::run_icmp_flood(&self.config, &self.metrics).await?,
-                StressType::Http | StressType::Tcp => {
-                    http::run_http_flood(&self.config, &self.metrics).await?
+                StressType::Http => http::run_http_flood(&self.config, &self.metrics).await?,
+                StressType::Tcp => {
+                    return Err(SlapperError::Runtime(
+                        "TCP flood is not yet implemented. Use HTTP flood for application-layer testing."
+                            .to_string(),
+                    ));
                 }
             };
 

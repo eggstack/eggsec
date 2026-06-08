@@ -653,6 +653,7 @@ impl TabInput for IntegrationsTab {
                     return;
                 }
                 self.update_config_labels();
+                return;
             }
             IntegrationsFocusArea::Mode => {
                 let was_open = self.mode_selector.is_open();

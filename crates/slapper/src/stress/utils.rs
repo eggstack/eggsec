@@ -120,8 +120,8 @@ pub fn get_spoofed_source(range: &Option<String>) -> Result<Ipv4Addr> {
 
     Ok(Ipv4Addr::new(
         rng.gen_range(1..254),
-        rng.gen_range(0..254),
-        rng.gen_range(0..254),
+        rng.gen_range(0..255),
+        rng.gen_range(0..255),
         rng.gen_range(1..254),
     ))
 }

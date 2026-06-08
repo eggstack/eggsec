@@ -193,13 +193,13 @@ impl TabInput for ResumeTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            ResumeFocusArea::Inputs => {
-                self.inputs.blur();
-                ResumeFocusArea::Results
-            }
             ResumeFocusArea::Results => {
                 self.inputs.focus(0);
                 ResumeFocusArea::Inputs
+            }
+            ResumeFocusArea::Inputs => {
+                self.inputs.blur();
+                ResumeFocusArea::Results
             }
         };
     }

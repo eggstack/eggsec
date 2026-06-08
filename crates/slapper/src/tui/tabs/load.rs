@@ -411,7 +411,7 @@ impl TabRender for LoadTab {
         let results_height = if area.height <= 24 {
             ((area.height as f32 * 0.4) as u16).max(3)
         } else {
-            0
+            (area.height / 4).max(8)
         };
 
         let chunks = Layout::default()

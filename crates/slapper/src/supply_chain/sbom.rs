@@ -330,9 +330,17 @@ impl SbomGenerator {
     }
 
     fn extract_package_name(&self, content: &str) -> Option<String> {
+        let mut in_package = false;
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("name") {
+            if trimmed == "[package]" {
+                in_package = true;
+                continue;
+            }
+            if trimmed.starts_with('[') && in_package {
+                break;
+            }
+            if in_package && trimmed.starts_with("name") {
                 return trimmed
                     .split_once('=')
                     .map(|x| x.1)
@@ -343,9 +351,17 @@ impl SbomGenerator {
     }
 
     fn extract_version(&self, content: &str) -> Option<String> {
+        let mut in_package = false;
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("version") {
+            if trimmed == "[package]" {
+                in_package = true;
+                continue;
+            }
+            if trimmed.starts_with('[') && in_package {
+                break;
+            }
+            if in_package && trimmed.starts_with("version") {
                 return trimmed
                     .split_once('=')
                     .map(|x| x.1)
@@ -447,7 +463,7 @@ mod tests {
     #[test]
     fn test_extract_package_name() {
         let gen = SbomGenerator::new();
-        let content = "name = \"my-crate\"\nversion = \"1.0.0\"";
+        let content = "[package]\nname = \"my-crate\"\nversion = \"1.0.0\"";
         let name = gen.extract_package_name(content);
         assert_eq!(name, Some("my-crate".to_string()));
     }
@@ -455,7 +471,7 @@ mod tests {
     #[test]
     fn test_extract_version() {
         let gen = SbomGenerator::new();
-        let content = "name = \"my-crate\"\nversion = \"1.0.0\"";
+        let content = "[package]\nname = \"my-crate\"\nversion = \"1.0.0\"";
         let version = gen.extract_version(content);
         assert_eq!(version, Some("1.0.0".to_string()));
     }
@@ -573,5 +589,34 @@ criterion = "0.5"
             description: "Test vulnerability".to_string(),
         };
         assert_eq!(vuln.cve_id, "CVE-2024-1234");
+    }
+
+    #[test]
+    fn test_extract_package_name_from_toml_with_deps() {
+        let gen = SbomGenerator::new();
+        let content = r#"[package]
+name = "my-crate"
+version = "1.0.0"
+
+[dependencies]
+serde = "1.0"
+
+[dependencies.serde]
+name = "serde_derive"
+version = "1.0"
+"#;
+        let name = gen.extract_package_name(content);
+        assert_eq!(name, Some("my-crate".to_string()));
+    }
+
+    #[test]
+    fn test_extract_package_name_without_package_section() {
+        let gen = SbomGenerator::new();
+        let content = r#"[dependencies]
+name = "some-dep"
+version = "1.0"
+"#;
+        let name = gen.extract_package_name(content);
+        assert_eq!(name, None);
     }
 }

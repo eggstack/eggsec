@@ -255,7 +255,12 @@ fn count_package_json_deps(path: &Path) -> anyhow::Result<usize> {
 
 fn count_go_mod_deps(path: &Path) -> anyhow::Result<usize> {
     let content = std::fs::read_to_string(path)?;
-    Ok(content.lines().filter(|l| l.starts_with('\t')).count())
+    Ok(content
+        .lines()
+        .filter(|l| l.starts_with('\t'))
+        .filter(|l| !l.trim().is_empty())
+        .filter(|l| !l.trim().starts_with("//"))
+        .count())
 }
 
 fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
@@ -268,8 +273,13 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
         for (i, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
 
-            // Check for ADD instead of COPY
-            if trimmed.starts_with("ADD ") && !trimmed.contains("http") {
+            // Check for ADD instead of COPY (exclude URLs and archive auto-extraction)
+            let is_archive = trimmed.contains(".tar")
+                || trimmed.contains(".gz")
+                || trimmed.contains(".zip")
+                || trimmed.contains(".xz")
+                || trimmed.contains(".bz2");
+            if trimmed.starts_with("ADD ") && !trimmed.contains("http") && !is_archive {
                 findings.push(SupplyChainFinding {
                     severity: Severity::Low,
                     category: "dockerfile".to_string(),
@@ -335,8 +345,12 @@ fn check_github_actions(path: &Path) -> Vec<SupplyChainFinding> {
     let mut findings = Vec::new();
 
     if let Ok(content) = std::fs::read_to_string(path) {
-        // Check for overly broad permissions
-        if content.contains("permissions: write-all") || content.contains("permissions: read-all") {
+        // Check for overly broad permissions (inline and block YAML forms)
+        let has_broad_permissions = content.contains("permissions: write-all")
+            || content.contains("permissions: read-all")
+            || content.contains("permissions:\n  write-all: true")
+            || content.contains("permissions:\n  read-all: true");
+        if has_broad_permissions {
             findings.push(SupplyChainFinding {
                 severity: Severity::Medium,
                 category: "github_actions".to_string(),
@@ -636,5 +650,54 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let names = collect_package_names(dir.path()).unwrap();
         assert!(names.is_empty());
+    }
+
+    #[test]
+    fn go_mod_dep_count_with_comments() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("go.mod"),
+            "module example.com/mymod\n\ngo 1.21\n\nrequire (\n\t// indirect\n\tgolang.org/x/text v0.14.0\n\t\n\tgithub.com/gin-gonic/gin v1.9.1\n)\n",
+        )
+        .unwrap();
+
+        let result = scan_repo(dir.path()).unwrap();
+        assert_eq!(result.manifests[0].dependency_count, Some(2));
+    }
+
+    #[test]
+    fn github_actions_block_permissions() {
+        let dir = TempDir::new().unwrap();
+        let gh_dir = dir.path().join(".github/workflows");
+        fs::create_dir_all(&gh_dir).unwrap();
+        fs::write(
+            gh_dir.join("ci.yml"),
+            "name: CI\non: push\npermissions:\n  write-all: true\njobs:\n  test:\n    runs-on: ubuntu-latest\n",
+        )
+        .unwrap();
+
+        let result = scan_repo(dir.path()).unwrap();
+        assert!(result.github_actions_found);
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.title.contains("permissions")));
+    }
+
+    #[test]
+    fn dockerfile_add_with_archive() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Dockerfile"),
+            "FROM ubuntu\nADD archive.tar.gz /app/\nCOPY file.txt /app/\n",
+        )
+        .unwrap();
+
+        let result = scan_repo(dir.path()).unwrap();
+        assert!(result.dockerfile_found);
+        assert!(!result
+            .findings
+            .iter()
+            .any(|f| f.title.contains("ADD")));
     }
 }

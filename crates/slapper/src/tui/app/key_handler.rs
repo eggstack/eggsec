@@ -414,10 +414,8 @@ impl KeyHandler {
                 }
                 app.close_quick_switch();
             }
-            (KeyModifiers::NONE, KeyCode::Up) => {
-                if app.quick_switch_selected > 0 {
-                    app.quick_switch_selected -= 1;
-                }
+            (KeyModifiers::NONE, KeyCode::Up) if app.quick_switch_selected > 0 => {
+                app.quick_switch_selected -= 1;
             }
             (KeyModifiers::NONE, KeyCode::Down) => {
                 let results = app.get_quick_switch_results();

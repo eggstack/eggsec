@@ -70,7 +70,7 @@ impl super::App {
             Some(r) => r,
             None => return,
         };
-        tracing::warn!("Unhandled TaskResult variant: {:?}", result);
+        tracing::debug!("Unhandled TaskResult variant: {:?}", result);
     }
 
     fn handle_security_result(&mut self, result: TaskResult) -> Option<TaskResult> {

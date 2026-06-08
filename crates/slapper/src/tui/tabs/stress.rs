@@ -13,7 +13,7 @@ use ratatui::{
     Frame,
 };
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StressType {
     Http,
     Syn,
@@ -584,8 +584,6 @@ impl StressTab {
     }
 
     pub fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
-        }
+        self.state = AppState::Idle;
     }
 }

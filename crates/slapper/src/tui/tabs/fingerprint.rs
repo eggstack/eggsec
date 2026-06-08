@@ -364,18 +364,14 @@ impl TabInput for FingerprintTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == FingerprintFocusArea::Inputs {
-                self.inputs.move_word_forward();
-            }
+        if !self.is_running() && self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == FingerprintFocusArea::Inputs {
-                self.inputs.move_word_backward();
-            }
+        if !self.is_running() && self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.move_word_backward();
         }
     }
 

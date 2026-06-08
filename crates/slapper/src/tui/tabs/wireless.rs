@@ -325,15 +325,28 @@ impl TabInput for WirelessTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == WirelessFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
     fn handle_enter(&mut self) {
         if self.is_running() {
+            return;
+        }
+        if self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused() {
+            self.inputs.blur();
             return;
         }
         self.start();
     }
 
     fn handle_escape(&mut self) {
-        self.stop();
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         self.focus_area = WirelessFocusArea::Inputs;
         self.inputs.blur();
     }
@@ -357,10 +370,16 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if !self.is_running() && self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused() {
+            return self.inputs.move_left();
+        }
         false
     }
 
     fn handle_right(&mut self) -> bool {
+        if !self.is_running() && self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused() {
+            return self.inputs.move_right();
+        }
         false
     }
 

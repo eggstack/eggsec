@@ -72,7 +72,7 @@ impl WafTab {
         self.detection_result.as_ref()
     }
 
-    pub fn get_bypass_results(&self) -> Option<&Vec<BypassResult>> {
+    pub fn get_bypass_results(&self) -> Option<&[BypassResult]> {
         if self.bypass_results.is_empty() {
             None
         } else {

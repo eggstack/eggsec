@@ -204,7 +204,6 @@ async fn run_udp_flood_spoofed(
     };
 
     let socket = Arc::new(socket);
-    let metrics = Arc::new(metrics);
 
     let mut handles = Vec::new();
 
@@ -271,8 +270,13 @@ async fn run_udp_flood_spoofed(
 
     futures::future::join_all(handles).await;
 
-    if let Ok(guard) = socket.lock() {
-        unsafe { libc::close(*guard) };
+    match socket.lock() {
+        Ok(guard) => {
+            unsafe { libc::close(*guard) };
+        }
+        Err(poisoned) => {
+            unsafe { libc::close(*poisoned.into_inner()) };
+        }
     }
 
     Ok(metrics.to_stats())
@@ -407,7 +411,7 @@ async fn create_udp_socket(port: Option<u16>) -> Result<UdpSocket> {
 #[cfg(not(feature = "stress-testing"))]
 pub async fn run_udp_flood(
     _config: &super::StressConfig,
-    _metrics: &super::metrics::StressMetrics,
+    _metrics: std::sync::Arc<super::metrics::StressMetrics>,
 ) -> crate::error::Result<super::StressStats> {
     Err(SlapperError::Runtime(
         "UDP flood requires 'stress-testing' feature enabled".to_string(),

@@ -583,15 +583,7 @@ impl TabInput for OAuthTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_left(),
-            OAuthFocusArea::Options => {
-                let checkboxes = [
-                    &self.redirect_test_checkbox,
-                    &self.scope_test_checkbox,
-                    &self.state_test_checkbox,
-                    &self.grant_test_checkbox,
-                ];
-                checkboxes.is_empty() || self.checkbox_focus_index == 0
-            }
+            OAuthFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
     }
@@ -600,14 +592,7 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_right(),
             OAuthFocusArea::Options => {
-                let checkboxes = [
-                    &self.redirect_test_checkbox,
-                    &self.scope_test_checkbox,
-                    &self.state_test_checkbox,
-                    &self.grant_test_checkbox,
-                ];
-                checkboxes.is_empty()
-                    || self.checkbox_focus_index >= checkboxes.len().saturating_sub(1)
+                self.checkbox_focus_index >= 3
             }
             _ => true,
         }

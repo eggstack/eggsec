@@ -633,20 +633,21 @@ impl TabInput for ProxyTab {
     fn handle_enter(&mut self) {
         if !self.is_running() {
             if self.view_selector.is_focused() {
-                if self.view_selector.is_open() {
+                let was_open = self.view_selector.is_open();
+                if was_open {
                     self.view_selector.confirm();
+                    self.current_view = match self.view_selector.selected {
+                        0 => ProxyView::List,
+                        1 => ProxyView::Add,
+                        2 => ProxyView::HealthCheck,
+                        3 => ProxyView::Test,
+                        _ => ProxyView::List,
+                    };
+                    if matches!(self.current_view, ProxyView::List) {
+                        self.update_list_view();
+                    }
                 } else {
                     self.view_selector.handle_enter();
-                }
-                self.current_view = match self.view_selector.selected {
-                    0 => ProxyView::List,
-                    1 => ProxyView::Add,
-                    2 => ProxyView::HealthCheck,
-                    3 => ProxyView::Test,
-                    _ => ProxyView::List,
-                };
-                if matches!(self.current_view, ProxyView::List) {
-                    self.update_list_view();
                 }
             } else if self.inputs.is_focused() {
                 self.inputs.blur();
