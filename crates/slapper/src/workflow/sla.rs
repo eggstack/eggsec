@@ -34,13 +34,17 @@ impl SlaPolicy {
     }
 
     pub fn get_policy(severity: Severity) -> Self {
-        Self::default_policies()
-            .into_iter()
-            .find(|p| p.severity == severity)
-            .unwrap_or(SlaPolicy {
-                severity,
-                target_hours: 8760,
-            })
+        let target_hours = match severity {
+            Severity::Critical => 24,
+            Severity::High => 168,
+            Severity::Medium => 720,
+            Severity::Low => 2160,
+            Severity::Info => 8760,
+        };
+        SlaPolicy {
+            severity,
+            target_hours,
+        }
     }
 }
 
@@ -89,5 +93,44 @@ mod tests {
         let created = chrono::Utc::now() - chrono::Duration::hours(200);
         let status = calculate_sla("finding-1", Severity::High, created);
         assert!(status.is_violated);
+    }
+
+    #[test]
+    fn test_sla_policy_all_severities() {
+        assert_eq!(SlaPolicy::get_policy(Severity::Critical).target_hours, 24);
+        assert_eq!(SlaPolicy::get_policy(Severity::High).target_hours, 168);
+        assert_eq!(SlaPolicy::get_policy(Severity::Medium).target_hours, 720);
+        assert_eq!(SlaPolicy::get_policy(Severity::Low).target_hours, 2160);
+        assert_eq!(SlaPolicy::get_policy(Severity::Info).target_hours, 8760);
+    }
+
+    #[test]
+    fn test_sla_not_violated_when_just_created() {
+        let created = chrono::Utc::now();
+        let status = calculate_sla("finding-1", Severity::Critical, created);
+        assert!(!status.is_violated);
+        assert!(status.hours_remaining > 0);
+    }
+
+    #[test]
+    fn test_sla_violated_when_past_due() {
+        let created = chrono::Utc::now() - chrono::Duration::hours(25);
+        let status = calculate_sla("finding-1", Severity::Critical, created);
+        assert!(status.is_violated);
+        assert!(status.hours_remaining < 0);
+    }
+
+    #[test]
+    fn test_sla_hours_remaining_calculation() {
+        let created = chrono::Utc::now() - chrono::Duration::hours(10);
+        let status = calculate_sla("finding-1", Severity::Critical, created);
+        assert!(!status.is_violated);
+        assert!(status.hours_remaining >= 13 && status.hours_remaining <= 15);
+    }
+
+    #[test]
+    fn test_default_policies_count() {
+        let policies = SlaPolicy::default_policies();
+        assert_eq!(policies.len(), 5);
     }
 }

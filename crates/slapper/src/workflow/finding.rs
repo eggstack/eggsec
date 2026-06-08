@@ -16,20 +16,15 @@ pub struct Finding {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FindingStatus {
+    #[default]
     Open,
     InProgress,
     Resolved,
     Verified,
     FalsePositive,
-}
-
-impl Default for FindingStatus {
-    fn default() -> Self {
-        Self::Open
-    }
 }
 
 impl std::fmt::Display for FindingStatus {
@@ -122,5 +117,68 @@ mod tests {
     #[test]
     fn test_finding_status_default() {
         assert_eq!(FindingStatus::default(), FindingStatus::Open);
+    }
+
+    #[test]
+    fn test_finding_has_uuid() {
+        let finding = Finding::new("Test", Severity::High);
+        assert!(!finding.id.is_empty());
+        let finding2 = Finding::new("Test", Severity::High);
+        assert_ne!(finding.id, finding2.id);
+    }
+
+    #[test]
+    fn test_finding_timestamps() {
+        let before = chrono::Utc::now();
+        let finding = Finding::new("Test", Severity::High);
+        let after = chrono::Utc::now();
+        assert!(finding.created_at >= before && finding.created_at <= after);
+        assert!(finding.updated_at >= before && finding.updated_at <= after);
+    }
+
+    #[test]
+    fn test_finding_assign_updates_timestamp() {
+        let mut finding = Finding::new("Test", Severity::High);
+        let original_updated = finding.updated_at;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        finding.assign("user@example.com");
+        assert!(finding.updated_at > original_updated);
+    }
+
+    #[test]
+    fn test_finding_update_status_updates_timestamp() {
+        let mut finding = Finding::new("Test", Severity::High);
+        let original_updated = finding.updated_at;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        finding.update_status(FindingStatus::InProgress).unwrap();
+        assert!(finding.updated_at > original_updated);
+    }
+
+    #[test]
+    fn test_full_status_workflow() {
+        let mut finding = Finding::new("Test", Severity::High);
+        assert_eq!(finding.status, FindingStatus::Open);
+
+        finding.update_status(FindingStatus::InProgress).unwrap();
+        assert_eq!(finding.status, FindingStatus::InProgress);
+
+        finding.update_status(FindingStatus::Resolved).unwrap();
+        assert_eq!(finding.status, FindingStatus::Resolved);
+
+        finding.update_status(FindingStatus::Verified).unwrap();
+        assert_eq!(finding.status, FindingStatus::Verified);
+
+        finding.update_status(FindingStatus::Open).unwrap();
+        assert_eq!(finding.status, FindingStatus::Open);
+    }
+
+    #[test]
+    fn test_false_positive_workflow() {
+        let mut finding = Finding::new("Test", Severity::High);
+        finding.update_status(FindingStatus::FalsePositive).unwrap();
+        assert_eq!(finding.status, FindingStatus::FalsePositive);
+
+        finding.update_status(FindingStatus::Open).unwrap();
+        assert_eq!(finding.status, FindingStatus::Open);
     }
 }

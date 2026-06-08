@@ -87,4 +87,54 @@ mod tests {
         );
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_all_invalid_transitions() {
+        let invalid = [
+            (FindingStatus::Open, FindingStatus::Resolved),
+            (FindingStatus::Open, FindingStatus::Verified),
+            (FindingStatus::InProgress, FindingStatus::Verified),
+            (FindingStatus::InProgress, FindingStatus::FalsePositive),
+            (FindingStatus::Resolved, FindingStatus::InProgress),
+            (FindingStatus::Resolved, FindingStatus::FalsePositive),
+            (FindingStatus::Verified, FindingStatus::InProgress),
+            (FindingStatus::Verified, FindingStatus::Resolved),
+            (FindingStatus::Verified, FindingStatus::FalsePositive),
+            (FindingStatus::FalsePositive, FindingStatus::InProgress),
+            (FindingStatus::FalsePositive, FindingStatus::Resolved),
+            (FindingStatus::FalsePositive, FindingStatus::Verified),
+        ];
+
+        for (from, to) in invalid {
+            assert!(
+                !StatusWorkflow::can_transition(&from, &to),
+                "Transition from {:?} to {:?} should be invalid",
+                from,
+                to
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_valid_transitions() {
+        let valid = [
+            (FindingStatus::Open, FindingStatus::InProgress),
+            (FindingStatus::Open, FindingStatus::FalsePositive),
+            (FindingStatus::InProgress, FindingStatus::Resolved),
+            (FindingStatus::InProgress, FindingStatus::Open),
+            (FindingStatus::Resolved, FindingStatus::Verified),
+            (FindingStatus::Resolved, FindingStatus::Open),
+            (FindingStatus::Verified, FindingStatus::Open),
+            (FindingStatus::FalsePositive, FindingStatus::Open),
+        ];
+
+        for (from, to) in valid {
+            assert!(
+                StatusWorkflow::can_transition(&from, &to),
+                "Transition from {:?} to {:?} should be valid",
+                from,
+                to
+            );
+        }
+    }
 }

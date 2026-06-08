@@ -37,30 +37,29 @@ impl WorkflowReport {
 
     pub fn calculate_metrics(&mut self) {
         self.total_findings = self.findings.len();
-        self.open_findings = self
-            .findings
-            .iter()
-            .filter(|f| f.status == FindingStatus::Open)
-            .count();
-        self.in_progress_findings = self
-            .findings
-            .iter()
-            .filter(|f| f.status == FindingStatus::InProgress)
-            .count();
-        self.resolved_findings = self
-            .findings
-            .iter()
-            .filter(|f| f.status == FindingStatus::Resolved || f.status == FindingStatus::Verified)
-            .count();
-        self.sla_violations = self
-            .findings
-            .iter()
-            .filter(|f| f.status == FindingStatus::Open)
-            .filter(|f| {
-                let status = calculate_sla(&f.id, f.severity, f.created_at);
-                status.is_violated
-            })
-            .count();
+        self.open_findings = 0;
+        self.in_progress_findings = 0;
+        self.resolved_findings = 0;
+        self.sla_violations = 0;
+
+        for finding in &self.findings {
+            match finding.status {
+                FindingStatus::Open => {
+                    self.open_findings += 1;
+                    let sla = calculate_sla(&finding.id, finding.severity, finding.created_at);
+                    if sla.is_violated {
+                        self.sla_violations += 1;
+                    }
+                }
+                FindingStatus::InProgress => {
+                    self.in_progress_findings += 1;
+                }
+                FindingStatus::Resolved | FindingStatus::Verified => {
+                    self.resolved_findings += 1;
+                }
+                FindingStatus::FalsePositive => {}
+            }
+        }
     }
 }
 
