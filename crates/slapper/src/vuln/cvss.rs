@@ -157,16 +157,31 @@ fn cia_requirement_weight(val: &str) -> f32 {
     }
 }
 
-fn temporal_metric_weight(metric: &str) -> f32 {
+fn exploit_code_maturity_weight(metric: &str) -> f32 {
     match metric {
         "H" => 0.91,
-        "M" => 0.94,
-        "L" => 0.97,
+        "F" => 0.97,
+        "P" => 0.94,
+        "U" => 1.0,
+        _ => 1.0,
+    }
+}
+
+fn remediation_level_weight(metric: &str) -> f32 {
+    match metric {
         "U" => 0.95,
-        "W" => 0.96,
-        "O" => 0.98,
-        "C" => 1.0,
-        "R" => 0.96,
+        "T" => 0.96,
+        "W" => 0.97,
+        "O" => 0.97,
+        _ => 1.0,
+    }
+}
+
+fn report_confidence_weight(metric: &str) -> f32 {
+    match metric {
+        "C" => 0.96,
+        "R" => 1.0,
+        "U" => 1.0,
         _ => 1.0,
     }
 }
@@ -293,9 +308,9 @@ fn compute_base_score(v: &ParsedVector) -> f32 {
 }
 
 fn compute_temporal_score(base_score: f32, v: &ParsedVector) -> f32 {
-    let e = temporal_metric_weight(&v.e);
-    let rl = temporal_metric_weight(&v.rl);
-    let rc = temporal_metric_weight(&v.rc);
+    let e = exploit_code_maturity_weight(&v.e);
+    let rl = remediation_level_weight(&v.rl);
+    let rc = report_confidence_weight(&v.rc);
 
     let score = base_score * e * rl * rc;
     let score = score.min(10.0);
@@ -339,9 +354,9 @@ fn compute_environmental_score(v: &ParsedVector) -> f32 {
         (1.08 * (impact + exploitability)).min(10.0)
     };
 
-    let e = temporal_metric_weight(&v.e);
-    let rl = temporal_metric_weight(&v.rl);
-    let rc = temporal_metric_weight(&v.rc);
+    let e = exploit_code_maturity_weight(&v.e);
+    let rl = remediation_level_weight(&v.rl);
+    let rc = report_confidence_weight(&v.rc);
 
     let score = (score * e * rl * rc).min(10.0);
     f32::ceil(score * 10.0) / 10.0

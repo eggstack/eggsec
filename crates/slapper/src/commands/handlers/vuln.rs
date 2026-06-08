@@ -1,6 +1,6 @@
 use crate::cli::vuln::{VulnArgs, VulnCommand};
 use crate::commands::handlers::CommandContext;
-use crate::vuln::{CvssScore, ExploitInfo, Remediation, RiskScore, TriageResult};
+use crate::vuln::{CvssScore, ExploitInfo, Remediation, RiskScore};
 use anyhow::Result;
 
 pub async fn handle_vuln(_ctx: &CommandContext, args: VulnArgs) -> Result<()> {
@@ -18,7 +18,7 @@ async fn handle_vuln_score(args: crate::cli::vuln::VulnScoreArgs) -> Result<()> 
         Ok(score) => {
             println!("CVSS Score for: {}", args.vector);
             println!("  Base Score: {}", score.base_score());
-            println!("  Severity: {:?}", score.severity());
+            println!("  Severity: {}", score.severity());
             println!("  Temporal Score: {:.2}", score.temporal_score());
         }
         Err(e) => {
@@ -74,8 +74,16 @@ async fn handle_vuln_triage(args: crate::cli::vuln::VulnTriageArgs) -> Result<()
     if let Some(cvss) = args.cvss {
         println!("  CVSS: {}", cvss);
     }
-    let result = TriageResult::new(args.id.clone(), crate::vuln::triage::TriageStatus::New);
+    let result = crate::vuln::triage::triage_finding(
+        args.id.as_deref().unwrap_or("find-1"),
+        &args.title,
+        args.description.as_deref().unwrap_or(""),
+        args.severity,
+        args.cvss,
+    );
     println!("  Triage Status: {:?}", result.status());
+    println!("  Confidence: {:.0}%", result.confidence * 100.0);
+    println!("  Reason: {}", result.reason);
     Ok(())
 }
 
