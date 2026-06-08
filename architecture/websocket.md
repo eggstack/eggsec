@@ -57,7 +57,7 @@ The `WebSocketFuzzer` integrates via the `AdvancedFuzzer` trait in `fuzzer/advan
 
 ## Tests
 
-7 tests in `fuzzer/payloads/websocket.rs:406-474`, all under `#[cfg(test)]`:
+7 tests in `fuzzer/payloads/websocket.rs:407-493`, all under `#[cfg(test)]`:
 - `test_get_payloads_returns_non_empty`
 - `test_get_payloads_count_reasonable`
 - `test_payloads_are_non_empty_strings`
