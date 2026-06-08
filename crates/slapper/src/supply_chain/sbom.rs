@@ -201,10 +201,22 @@ impl SbomGenerator {
                 if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('-') {
                     continue;
                 }
-                let parts: Vec<&str> = if trimmed.contains("==") {
-                    trimmed.splitn(2, "==").collect()
-                } else if trimmed.contains(">=") {
-                    trimmed.splitn(2, ">=").collect()
+                let parts: Vec<&str> = if let Some(pos) = trimmed.find("===") {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 3..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find("==") {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find("~=") {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find("!=") {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find(">=") {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find("<=") {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find('>') {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 1..).unwrap_or("*")]
+                } else if let Some(pos) = trimmed.find('<') {
+                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 1..).unwrap_or("*")]
                 } else {
                     vec![trimmed, "*"]
                 };
@@ -258,13 +270,19 @@ impl SbomGenerator {
                 "timestamp": report.generated_at,
             },
             "components": report.components.iter().map(|c| {
-                serde_json::json!({
+                let mut component = serde_json::json!({
                     "type": "library",
                     "name": c.name,
                     "version": c.version,
                     "purl": c.purl,
                     "ecosystem": c.ecosystem,
-                })
+                });
+                if !c.licenses.is_empty() {
+                    component["licenses"] = serde_json::json!(c.licenses.iter().map(|l| {
+                        serde_json::json!({"license": {"id": l}})
+                    }).collect::<Vec<_>>());
+                }
+                component
             }).collect::<Vec<_>>(),
         });
 
@@ -323,6 +341,12 @@ impl SbomGenerator {
                 "ExternalRef: PACKAGE-MANAGER purl {}\n",
                 component.purl
             ));
+            if !component.licenses.is_empty() {
+                output.push_str(&format!(
+                    "PackageLicenseDeclared: {}\n",
+                    component.licenses.join(" AND ")
+                ));
+            }
             output.push('\n');
         }
 
@@ -340,7 +364,7 @@ impl SbomGenerator {
             if trimmed.starts_with('[') && in_package {
                 break;
             }
-            if in_package && trimmed.starts_with("name") {
+            if in_package && (trimmed.starts_with("name ") || trimmed.starts_with("name=")) {
                 return trimmed
                     .split_once('=')
                     .map(|x| x.1)
@@ -361,7 +385,7 @@ impl SbomGenerator {
             if trimmed.starts_with('[') && in_package {
                 break;
             }
-            if in_package && trimmed.starts_with("version") {
+            if in_package && (trimmed.starts_with("version ") || trimmed.starts_with("version=")) {
                 return trimmed
                     .split_once('=')
                     .map(|x| x.1)
@@ -393,21 +417,14 @@ impl SbomGenerator {
                 continue;
             }
 
-            if trimmed.starts_with("name = ") {
-                current_name = Some(
-                    trimmed
-                        .trim_start_matches("name = ")
-                        .trim_matches('"')
-                        .to_string(),
-                );
-            } else if trimmed.starts_with("version = ") {
-                current_version = Some(
-                    trimmed
-                        .trim_start_matches("version = ")
-                        .trim_matches('"')
-                        .to_string(),
-                );
-            } else if trimmed.starts_with("source = ") {
+            if let Some((key, value)) = trimmed.split_once('=') {
+                let key = key.trim();
+                let value = value.trim().trim_matches('"');
+                if key == "name" {
+                    current_name = Some(value.to_string());
+                } else if key == "version" {
+                    current_version = Some(value.to_string());
+                }
             }
         }
 
@@ -521,6 +538,35 @@ criterion = "0.5"
     }
 
     #[test]
+    fn test_generate_from_requirements_parsing() {
+        let gen = SbomGenerator::new();
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("requirements.txt"),
+            "requests==2.28.0\nflask>=2.0\ndjango~=3.2\npytest!=7.0\nnumpy<=1.24\nscipy>1.0\npandas<2.0\ntorch===1.13.0\n",
+        )
+        .unwrap();
+        let report = gen.generate_from_requirements(dir.path().to_str().unwrap(), SbomFormat::CycloneDx).unwrap();
+        assert_eq!(report.components.len(), 8);
+        let requests = report.components.iter().find(|c| c.name == "requests").unwrap();
+        assert_eq!(requests.version, "2.28.0");
+        let flask = report.components.iter().find(|c| c.name == "flask").unwrap();
+        assert_eq!(flask.version, "2.0");
+        let django = report.components.iter().find(|c| c.name == "django").unwrap();
+        assert_eq!(django.version, "3.2");
+        let pytest = report.components.iter().find(|c| c.name == "pytest").unwrap();
+        assert_eq!(pytest.version, "7.0");
+        let numpy = report.components.iter().find(|c| c.name == "numpy").unwrap();
+        assert_eq!(numpy.version, "1.24");
+        let scipy = report.components.iter().find(|c| c.name == "scipy").unwrap();
+        assert_eq!(scipy.version, "1.0");
+        let pandas = report.components.iter().find(|c| c.name == "pandas").unwrap();
+        assert_eq!(pandas.version, "2.0");
+        let torch = report.components.iter().find(|c| c.name == "torch").unwrap();
+        assert_eq!(torch.version, "1.13.0");
+    }
+
+    #[test]
     fn test_export_spdx_format() {
         let report = SbomReport {
             format: SbomFormat::Spdx,
@@ -589,6 +635,50 @@ criterion = "0.5"
             description: "Test vulnerability".to_string(),
         };
         assert_eq!(vuln.cve_id, "CVE-2024-1234");
+    }
+
+    #[test]
+    fn test_export_spdx_with_licenses() {
+        let report = SbomReport {
+            format: SbomFormat::Spdx,
+            project_name: "test-project".to_string(),
+            version: "1.0.0".to_string(),
+            generated_at: "2024-01-01T00:00:00Z".to_string(),
+            components: vec![SbomComponent {
+                name: "serde".to_string(),
+                version: "1.0".to_string(),
+                ecosystem: "cargo".to_string(),
+                purl: "pkg:cargo/serde@1.0".to_string(),
+                licenses: vec!["MIT".to_string(), "Apache-2.0".to_string()],
+                is_direct: true,
+            }],
+            vulnerabilities: Vec::new(),
+        };
+        let gen = SbomGenerator::new();
+        let spdx = gen.export_spdx(&report).unwrap();
+        assert!(spdx.contains("PackageLicenseDeclared: MIT AND Apache-2.0"));
+    }
+
+    #[test]
+    fn test_export_cyclonedx_with_licenses() {
+        let report = SbomReport {
+            format: SbomFormat::CycloneDx,
+            project_name: "test-project".to_string(),
+            version: "1.0.0".to_string(),
+            generated_at: "2024-01-01T00:00:00Z".to_string(),
+            components: vec![SbomComponent {
+                name: "serde".to_string(),
+                version: "1.0".to_string(),
+                ecosystem: "cargo".to_string(),
+                purl: "pkg:cargo/serde@1.0".to_string(),
+                licenses: vec!["MIT".to_string()],
+                is_direct: true,
+            }],
+            vulnerabilities: Vec::new(),
+        };
+        let gen = SbomGenerator::new();
+        let json = gen.export_cyclonedx(&report).unwrap();
+        assert!(json.contains("MIT"));
     }
 
     #[test]

@@ -173,7 +173,7 @@ pub fn collect_package_names(project_path: &Path) -> anyhow::Result<Vec<String>>
         for line in content.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with('[') {
-                in_deps = trimmed == "[dependencies]" || trimmed.starts_with("[dependencies.");
+                in_deps = trimmed == "[dependencies]";
                 continue;
             }
             if in_deps && !trimmed.is_empty() && !trimmed.starts_with('#') {
@@ -225,7 +225,7 @@ fn count_cargo_toml_deps(path: &Path) -> anyhow::Result<usize> {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') {
-            in_deps = trimmed == "[dependencies]" || trimmed.starts_with("[dependencies.");
+            in_deps = trimmed == "[dependencies]";
         } else if in_deps
             && !trimmed.is_empty()
             && !trimmed.starts_with('#')
@@ -472,6 +472,19 @@ mod tests {
     }
 
     #[test]
+    fn count_cargo_toml_with_subtables() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\nserde = \"1.0\"\ntokio = { version = \"1\", features = [\"full\"] }\n\n[dependencies.serde]\nfeatures = [\"derive\"]\n",
+        )
+        .unwrap();
+
+        let result = scan_repo(dir.path()).unwrap();
+        assert_eq!(result.manifests[0].dependency_count, Some(2));
+    }
+
+    #[test]
     fn count_package_json_deps_only() {
         let dir = TempDir::new().unwrap();
         fs::write(
@@ -608,6 +621,21 @@ mod tests {
         fs::write(
             dir.path().join("Cargo.toml"),
             "[dependencies]\nserde = \"1.0\"\ntokio = \"1\"\n\n[dev-dependencies]\nassert_cmd = \"2\"\n",
+        )
+        .unwrap();
+
+        let names = collect_package_names(dir.path()).unwrap();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"serde".to_string()));
+        assert!(names.contains(&"tokio".to_string()));
+    }
+
+    #[test]
+    fn collect_package_names_cargo_with_subtables() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\nserde = \"1.0\"\ntokio = { version = \"1\", features = [\"full\"] }\n\n[dependencies.serde]\nfeatures = [\"derive\"]\n",
         )
         .unwrap();
 
