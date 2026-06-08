@@ -138,9 +138,8 @@ impl Database {
     pub async fn insert_finding(&self, stored: &StoredFinding) -> Result<()> {
         #[cfg(feature = "database")]
         {
-            let finding_json = serde_json::to_value(&stored.finding).map_err(|e| {
-                SlapperError::Config(format!("Failed to serialize finding: {}", e))
-            })?;
+            let finding_json = serde_json::to_value(&stored.finding)
+                .map_err(|e| SlapperError::Config(format!("Failed to serialize finding: {}", e)))?;
             let history_json = serde_json::to_value(&stored.status_history).map_err(|e| {
                 SlapperError::Config(format!("Failed to serialize status history: {}", e))
             })?;
@@ -238,14 +237,15 @@ impl Database {
     ) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
-            let rows = sqlx::query(
-                "SELECT * FROM findings ORDER BY created_at DESC OFFSET $1 LIMIT $2",
-            )
-            .bind(offset as i64)
-            .bind(limit as i64)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| SlapperError::Config(format!("Failed to list all findings: {}", e)))?;
+            let rows =
+                sqlx::query("SELECT * FROM findings ORDER BY created_at DESC OFFSET $1 LIMIT $2")
+                    .bind(offset as i64)
+                    .bind(limit as i64)
+                    .fetch_all(&self.pool)
+                    .await
+                    .map_err(|e| {
+                        SlapperError::Config(format!("Failed to list all findings: {}", e))
+                    })?;
 
             rows.iter()
                 .map(|r| row_to_stored_finding(r))
@@ -258,10 +258,7 @@ impl Database {
         }
     }
 
-    pub async fn get_findings_by_severity(
-        &self,
-        severity: Severity,
-    ) -> Result<Vec<StoredFinding>> {
+    pub async fn get_findings_by_severity(&self, severity: Severity) -> Result<Vec<StoredFinding>> {
         #[cfg(feature = "database")]
         {
             let rows = sqlx::query(
@@ -415,11 +412,26 @@ mod tests {
 
         #[test]
         fn test_scan_status_parse_case_insensitive() {
-            assert_eq!(parse_scan_status("running".to_string()), ScanStatus::Running);
-            assert_eq!(parse_scan_status("Running".to_string()), ScanStatus::Running);
-            assert_eq!(parse_scan_status("RUNNING".to_string()), ScanStatus::Running);
-            assert_eq!(parse_scan_status("completed".to_string()), ScanStatus::Completed);
-            assert_eq!(parse_scan_status("COMPLETED".to_string()), ScanStatus::Completed);
+            assert_eq!(
+                parse_scan_status("running".to_string()),
+                ScanStatus::Running
+            );
+            assert_eq!(
+                parse_scan_status("Running".to_string()),
+                ScanStatus::Running
+            );
+            assert_eq!(
+                parse_scan_status("RUNNING".to_string()),
+                ScanStatus::Running
+            );
+            assert_eq!(
+                parse_scan_status("completed".to_string()),
+                ScanStatus::Completed
+            );
+            assert_eq!(
+                parse_scan_status("COMPLETED".to_string()),
+                ScanStatus::Completed
+            );
         }
     }
 }

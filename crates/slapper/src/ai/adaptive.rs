@@ -71,8 +71,14 @@ impl AdaptiveScanEngine {
     }
 
     fn fallback_strategy(findings: &[ScanFinding]) -> String {
-        let critical_count = findings.iter().filter(|f| f.severity == Severity::Critical).count();
-        let high_count = findings.iter().filter(|f| f.severity == Severity::High).count();
+        let critical_count = findings
+            .iter()
+            .filter(|f| f.severity == Severity::Critical)
+            .count();
+        let high_count = findings
+            .iter()
+            .filter(|f| f.severity == Severity::High)
+            .count();
 
         if critical_count > 0 {
             "deep".to_string()

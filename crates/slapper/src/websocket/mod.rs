@@ -70,7 +70,8 @@ pub async fn run_live_tests(config: &WebSocketTestConfig) -> WebSocketTestReport
                         "Global timeout of {}s exceeded",
                         global_timeout.as_secs()
                     ),
-                    recommendation: "Increase timeout or reduce number of test categories".to_string(),
+                    recommendation: "Increase timeout or reduce number of test categories"
+                        .to_string(),
                 }],
             }
         }
@@ -126,12 +127,9 @@ async fn run_live_tests_inner(config: &WebSocketTestConfig) -> WebSocketTestRepo
     }
 
     if config.test_injection && !config.injection_payloads.is_empty() {
-        injection_tests = injection::test_injection(
-            &config.url,
-            &config.injection_payloads,
-            config.timeout_secs,
-        )
-        .await;
+        injection_tests =
+            injection::test_injection(&config.url, &config.injection_payloads, config.timeout_secs)
+                .await;
         for test in &injection_tests {
             if test.vulnerability_detected {
                 tracing::warn!(

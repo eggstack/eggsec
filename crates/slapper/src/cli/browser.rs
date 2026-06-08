@@ -28,7 +28,10 @@ pub struct BrowserArgs {
     #[arg(long, default_value_t = crate::constants::DEFAULT_BROWSER_TIMEOUT_MS, help = "Navigation timeout in milliseconds")]
     pub timeout: u64,
 
-    #[arg(long, help = "Custom XSS payload (default: <img src=x onerror=alert(1)>)")]
+    #[arg(
+        long,
+        help = "Custom XSS payload (default: <img src=x onerror=alert(1)>)"
+    )]
     pub xss_payload: Option<String>,
 
     #[arg(long, help = "Output results as JSON")]

@@ -1,6 +1,6 @@
 use crate::error::Result;
-use serde::{Deserialize, Serialize};
 use crate::utils::create_insecure_http_client;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SslAnalysis {

@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Slapper is a Rust-based security testing toolkit. See `README.md` for features and `ARCHITECTURE.md` for design details.
+Slapper is a Rust-based security testing toolkit organized as a workspace with 5 crates: `slapper-core`, `slapper`, `slapper-nse`, `slapper-tui`, and `slapper-cli`. See `README.md` for features and `ARCHITECTURE.md` for design details.
 
 ## Implementation Plan
 
@@ -22,13 +22,15 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 ```bash
 cargo check -p slapper-core
 cargo check --lib -p slapper
+cargo check -p slapper-tui
+cargo check -p slapper-cli
 cargo check -p slapper-nse
 cargo test -p slapper-core
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
 cargo clippy --lib -p slapper
-cargo build --release -p slapper
+cargo build --release -p slapper-cli
 ```
 
 ### Module Override Files
@@ -41,7 +43,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `ai/` | `crates/slapper/src/ai/AGENTS.override.md` |
 | `fuzzer/` | `crates/slapper/src/fuzzer/AGENTS.override.md` |
 | `scanner/` | `crates/slapper/src/scanner/AGENTS.override.md` |
-| `tui/` | `crates/slapper/src/tui/AGENTS.override.md` |
+| `tui/` | `crates/slapper-tui/src/AGENTS.override.md` |
 | `waf/` | `crates/slapper/src/waf/AGENTS.override.md` |
 | `recon/` | `crates/slapper/src/recon/AGENTS.override.md` |
 | `tool/` | `crates/slapper/src/tool/AGENTS.override.md` |
@@ -63,6 +65,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `architecture/tui.md` - TUI event loop, key handling, overlays, tab routing, session persistence, and quick switch behavior
 - `architecture/config.md` - config loading, scope enforcement, and TUI settings save semantics
 - `architecture/output.md` - report formatting, exports, and rendering integration
+- `architecture/compile_time_baseline.md` - workspace crate layout and compile-time baseline
 
 ### Feature Flags
 
@@ -82,7 +85,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `SlapperConfig` - Main configuration (`config::load_config()`)
 - `Severity` - Unified severity (defined in `slapper-core::types`, re-exported by `types.rs`)
 - `SensitiveString` - Zeroized credential wrapper (defined in `slapper-core::types`, re-exported by `types.rs`)
-- `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `tui/app/tab_error.rs`
+- `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `slapper-tui` (`tui/app/tab_error.rs`)
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
 - `PayloadType` - Enum of 30 payload categories
@@ -230,6 +233,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/output.md` | Output & reporting module |
 | `architecture/nse_integration.md` | NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 28 tabs (+ conditional feature tabs), event loop, components |
+| `architecture/compile_time_baseline.md` | Workspace crate layout and compile-time baseline |
 | `architecture/defense_lab.md` | Defense-lab mode and regression validation |
 | `architecture/stress.md` | Stress testing module (raw sockets, IP spoofing) |
 | `architecture/utils.md` | Utility functions (23 submodules) |
@@ -244,6 +248,8 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ```bash
 cargo check --lib -p slapper
+cargo check -p slapper-tui
+cargo check -p slapper-cli
 cargo check -p slapper-nse
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper

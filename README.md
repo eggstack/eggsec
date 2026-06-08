@@ -74,6 +74,18 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ## Quick Start
 
+### Workspace Layout
+
+Slapper is organized as a Cargo workspace with five crates:
+
+| Crate | Purpose |
+|-------|---------|
+| `slapper-core` | Dependency-light types, constants, shared primitives |
+| `slapper` | Assessment engine library (no binary) |
+| `slapper-nse` | Optional Nmap NSE compatibility runtime |
+| `slapper-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |
+| `slapper-cli` | CLI binary entry point |
+
 ### Prerequisites
 
 ```bash
@@ -90,7 +102,7 @@ sudo dnf install libpcap-devel openssl-devel libusb1-devel
 # Clone and build
 git clone https://github.com/dbowm91/slapper.git
 cd slapper
-cargo build --release
+cargo build --release -p slapper-cli
 
 # Generate a config file
 ./target/release/slapper --generate-config > slapper.toml
@@ -193,19 +205,19 @@ For the full command reference with all options, see [docs/cli.md](docs/cli.md).
 
 ```bash
 # Default build - load testing, scanning, fuzzing, WAF testing
-cargo build --release
+cargo build --release -p slapper-cli
 
 # With stress testing (controlled flood testing, proxy pool)
-cargo build --release --features stress-testing
+cargo build --release -p slapper-cli --features stress-testing
 
 # With packet inspection (live capture)
-cargo build --release --features packet-inspection
+cargo build --release -p slapper-cli --features packet-inspection
 
 # With NSE support
-cargo build --release --features nse
+cargo build --release -p slapper-cli --features nse
 
 # Full build - all features
-cargo build --release --features full
+cargo build --release -p slapper-cli --features full
 ```
 
 ## System Dependencies

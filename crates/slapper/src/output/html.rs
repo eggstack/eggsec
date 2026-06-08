@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::escape::escape_html;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlConfig {
@@ -181,7 +181,8 @@ impl HtmlReport {
             .unwrap_or_default();
 
         let cve_block = if !finding.cwe_ids.is_empty() {
-            let escaped_ids: Vec<String> = finding.cwe_ids.iter().map(|id| escape_html(id)).collect();
+            let escaped_ids: Vec<String> =
+                finding.cwe_ids.iter().map(|id| escape_html(id)).collect();
             format!(
                 r#"<div class="cve-ids">CWE: {}</div>"#,
                 escaped_ids.join(", ")

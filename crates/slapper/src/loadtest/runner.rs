@@ -85,15 +85,11 @@ impl LoadTestRunner {
     }
 
     pub fn from_args_with_tui_mode(args: LoadArgs, tui_mode: bool) -> Result<Self> {
-        let timeout = Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
+        let timeout =
+            Duration::from_secs(args.timeout.unwrap_or(crate::cli::timeout::LOAD_TIMEOUT));
 
-        let mut runner = Self::new_with_tui_mode(
-            args.url,
-            args.requests,
-            args.concurrency,
-            timeout,
-            tui_mode,
-        )?;
+        let mut runner =
+            Self::new_with_tui_mode(args.url, args.requests, args.concurrency, timeout, tui_mode)?;
 
         runner.set_method(args.method.clone());
 
@@ -112,10 +108,7 @@ impl LoadTestRunner {
     }
 
     pub fn from_args_with_config(args: LoadArgs, config: &SlapperConfig) -> Result<Self> {
-        let timeout = Duration::from_secs(
-            args.timeout
-                .unwrap_or(config.http.timeout_secs),
-        );
+        let timeout = Duration::from_secs(args.timeout.unwrap_or(config.http.timeout_secs));
 
         let mut runner =
             Self::new_with_tui_mode(args.url, args.requests, args.concurrency, timeout, false)?;
@@ -248,10 +241,7 @@ impl LoadTestRunner {
             "HEAD" => Method::HEAD,
             "OPTIONS" => Method::OPTIONS,
             other => {
-                tracing::warn!(
-                    "Unknown HTTP method '{}', defaulting to GET",
-                    other
-                );
+                tracing::warn!("Unknown HTTP method '{}', defaulting to GET", other);
                 Method::GET
             }
         };
@@ -287,9 +277,9 @@ impl LoadTestRunner {
             client_builder = client_builder.proxy(proxy);
         }
 
-        let client = client_builder.build().map_err(|e| {
-            crate::error::SlapperError::from(e)
-        })?;
+        let client = client_builder
+            .build()
+            .map_err(|e| crate::error::SlapperError::from(e))?;
 
         let metrics = Arc::new(Mutex::new(Metrics::new(self.url.clone())));
 

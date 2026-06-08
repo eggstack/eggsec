@@ -6,9 +6,7 @@
 use regex::Regex;
 use std::sync::LazyLock;
 
-static PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(/[\w\.-]+){2,}").unwrap()
-});
+static PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(/[\w\.-]+){2,}").unwrap());
 
 static STACK_TRACE_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(at\s+[\w.$]+\([^)]*\)\s*(in\s+)?[^\n]+)").unwrap());

@@ -90,9 +90,7 @@ static ASYNC_HTTPS_CLIENT: LazyLock<AsyncClient> = LazyLock::new(|| {
         builder = builder.danger_accept_invalid_hostnames(true);
     }
 
-    builder
-        .build()
-        .unwrap_or_else(|_| AsyncClient::new())
+    builder.build().unwrap_or_else(|_| AsyncClient::new())
 });
 
 fn get_client(url: &str) -> &'static Client {
@@ -507,10 +505,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, response: Table| {
             let status: i32 = response.get("status").unwrap_or(0);
             let _headers: Table = response.get("headers").unwrap_or_else(|_| {
-                lua.create_table().unwrap_or_else(|_| {
-                    
-                    lua.create_table().unwrap()
-                })
+                lua.create_table()
+                    .unwrap_or_else(|_| lua.create_table().unwrap())
             });
 
             Ok(status == 401)
@@ -555,9 +551,7 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, (request, name, value): (Table, String, String)| {
             let cookie = format!("{}={}", name, value);
             let header: Table = request.get("headers").unwrap_or_else(|_| {
-                
-                lua
-                    .create_table()
+                lua.create_table()
                     .unwrap_or_else(|_| lua.create_table().unwrap())
             });
             header.set("Cookie", cookie)?;
@@ -695,9 +689,7 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
             let port: u16 = request.get("port").unwrap_or(80);
             let path: String = request.get("path").unwrap_or_else(|_| "/".to_string());
             let headers: Table = request.get("headers").unwrap_or_else(|_| {
-                
-                lua
-                    .create_table()
+                lua.create_table()
                     .unwrap_or_else(|_| lua.create_table().unwrap())
             });
 

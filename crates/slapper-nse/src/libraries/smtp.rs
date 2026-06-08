@@ -162,9 +162,7 @@ fn smtp_send_mail(
     if n > 0 && String::from_utf8_lossy(&response[..n]).starts_with("250") {
         Ok(true)
     } else {
-        Err(std::io::Error::other(
-            "Failed to send message",
-        ))
+        Err(std::io::Error::other("Failed to send message"))
     }
 }
 

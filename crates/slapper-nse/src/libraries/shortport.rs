@@ -151,20 +151,22 @@ where
                             continue;
                         }
 
-                        let matches_proto = proto
-                            .map_or(true, |pr| port_proto.as_ref().is_some_and(|np| np == pr));
+                        let matches_proto =
+                            proto.map_or(true, |pr| port_proto.as_ref().is_some_and(|np| np == pr));
                         let matches_state =
                             state.map_or(true, |s| port_state.as_ref().is_some_and(|ns| ns == s));
 
-                        if matches_proto && matches_state
+                        if matches_proto
+                            && matches_state
                             && check(
                                 num,
                                 port_proto.as_deref(),
                                 port_state.as_deref(),
                                 port_service.as_deref(),
-                            ) {
-                                return true;
-                            }
+                            )
+                        {
+                            return true;
+                        }
                     }
                 }
             }

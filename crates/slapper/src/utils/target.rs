@@ -21,7 +21,7 @@ pub fn extract_target_from_url(url: &str) -> Option<String> {
             return Some(host.to_string());
         }
     }
-    
+
     // Fallback for URLs without scheme
     url.trim_start_matches("http://")
         .trim_start_matches("https://")

@@ -95,31 +95,29 @@ pub fn register_bin_library(lua: &Lua) -> LuaResult<()> {
                             }
                         }
                     }
-                    's'
-                        if values_idx < num_values as usize => {
-                            if let Ok(s) = values.get::<String>(values_idx + 1) {
-                                result.extend_from_slice(s.as_bytes());
-                                if count > s.len() {
-                                    for _ in s.len()..count {
-                                        result.push(0);
-                                    }
+                    's' if values_idx < num_values as usize => {
+                        if let Ok(s) = values.get::<String>(values_idx + 1) {
+                            result.extend_from_slice(s.as_bytes());
+                            if count > s.len() {
+                                for _ in s.len()..count {
+                                    result.push(0);
                                 }
                             }
-                            values_idx += 1;
                         }
+                        values_idx += 1;
+                    }
                     'x' => {
                         for _ in 0..count {
                             result.push(0);
                         }
                     }
-                    'z'
-                        if values_idx < num_values as usize => {
-                            if let Ok(s) = values.get::<String>(values_idx + 1) {
-                                result.extend_from_slice(s.as_bytes());
-                                result.push(0);
-                            }
-                            values_idx += 1;
+                    'z' if values_idx < num_values as usize => {
+                        if let Ok(s) = values.get::<String>(values_idx + 1) {
+                            result.extend_from_slice(s.as_bytes());
+                            result.push(0);
                         }
+                        values_idx += 1;
+                    }
                     _ => {}
                 }
                 i += 1;

@@ -72,6 +72,6 @@ impl SeverityCounts {
             + (self.high as f64 * 7.0)
             + (self.medium as f64 * 4.0)
             + (self.low as f64 * 1.0))
-        .min(100.0)
+            .min(100.0)
     }
 }

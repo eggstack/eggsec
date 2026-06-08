@@ -1,0 +1,652 @@
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
+    widgets::{Block, BorderType, Borders, Paragraph, Tabs},
+    Frame,
+};
+
+use crate::tc;
+
+use super::App;
+use crate::components::{centered_rect, confirm_popup, help_popup_for_tab};
+
+/// Layout constants — shared with `runner.rs` for mouse hit-testing.
+pub const LAYOUT_MARGIN: u16 = 1;
+pub const TAB_BAR_HEIGHT: u16 = 3;
+
+pub fn draw(f: &mut Frame, app: &mut App) {
+    let area = f.area();
+    app.last_tab_area_width = area.width.saturating_sub(LAYOUT_MARGIN * 2);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(LAYOUT_MARGIN)
+        .constraints([
+            Constraint::Length(TAB_BAR_HEIGHT),
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(f.area());
+
+    let tab_area = chunks.first().copied().unwrap_or(area);
+    let breadcrumb_area = chunks.get(1).copied().unwrap_or(area);
+    let content_area = chunks.get(2).copied().unwrap_or(area);
+    let status_area = chunks.get(3).copied().unwrap_or(area);
+    draw_tabs(f, app, tab_area);
+    draw_breadcrumb(f, app, breadcrumb_area);
+    draw_content(f, app, content_area);
+    draw_status_bar(f, app, status_area);
+
+    if app.show_help {
+        let help = help_popup_for_tab(app.current_tab);
+        help.render(f, f.area());
+
+        // Add context help below the popup
+        let context_help = app.get_current_help();
+        let context_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(help.height + 2), Constraint::Min(0)])
+            .split(f.area());
+
+        let context_paragraph = Paragraph::new(context_help).style(
+            Style::default()
+                .fg(tc!(text_dim))
+                .add_modifier(Modifier::ITALIC),
+        );
+        f.render_widget(
+            context_paragraph,
+            context_chunks.get(1).copied().unwrap_or(area),
+        );
+    }
+
+    if let Some(ref mut palette) = app.command_palette {
+        if palette.visible {
+            draw_command_palette(f, app);
+        }
+    }
+
+    if app.show_search {
+        draw_search_popup(f, app);
+    }
+
+    if app.show_search && !app.search_query.is_empty() {
+        if let Some(ref search) = app.global_search {
+            if !search.is_empty() {
+                crate::search::draw_search_results(f, app);
+            }
+        }
+    }
+
+    if app.show_http_options {
+        draw_http_options_popup(f, app);
+    }
+
+    if app.show_quick_switch {
+        draw_quick_switch(f, app);
+    }
+
+    if let Some(action) = app.pending_action {
+        let (title, message) = action.message();
+        let popup = confirm_popup(&title, &message);
+        popup.render(f, f.area());
+    }
+}
+
+fn draw_http_options_popup(f: &mut Frame, app: &App) {
+    use ratatui::widgets::{Clear, Paragraph};
+
+    let popup_width = 50;
+    let popup_height = 18;
+
+    let area = f.area();
+    let popup_area = centered_rect(popup_width, popup_height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title("Global HTTP Options (press h to close)")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(tc!(primary)));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let opts = &app.http_options;
+    let redacted = |v: Option<&str>| {
+        if v.is_some() {
+            "********".to_string()
+        } else {
+            "(not set)".to_string()
+        }
+    };
+    let content = vec![
+        format!(
+            "  --insecure: {}",
+            if opts.insecure { "true" } else { "false" }
+        ),
+        format!(
+            "  --proxy: {}",
+            opts.proxy.as_deref().unwrap_or("(not set)")
+        ),
+        format!("  --proxy-auth: {}", redacted(opts.proxy_auth.as_deref())),
+        format!("  --auth: {}", redacted(opts.auth.as_deref())),
+        format!("  --bearer: {}", redacted(opts.bearer.as_deref())),
+        format!("  --cookie: {}", redacted(opts.cookie.as_deref())),
+        format!("  --api-key: {}", redacted(opts.api_key.as_deref())),
+        format!(
+            "  --user-agent: {}",
+            opts.user_agent.as_deref().unwrap_or("(not set)")
+        ),
+        format!(
+            "  --stealth: {}",
+            if opts.stealth { "true" } else { "false" }
+        ),
+        format!(
+            "  --rate-limit: {}",
+            opts.rate_limit
+                .map(|r| r.to_string())
+                .unwrap_or("(not set)".to_string())
+        ),
+        format!(
+            "  --jitter: {}",
+            opts.jitter.as_deref().unwrap_or("(not set)")
+        ),
+    ];
+
+    let paragraph = Paragraph::new(content.join("\n")).style(Style::default().fg(tc!(text)));
+    f.render_widget(paragraph, inner);
+}
+
+fn draw_command_palette(f: &mut Frame, app: &mut App) {
+    use ratatui::widgets::{Clear, List, ListItem, Paragraph};
+
+    let palette = match app.command_palette.as_mut() {
+        Some(pal) if pal.visible => pal,
+        _ => return,
+    };
+    let area = f.area();
+
+    let popup_area = centered_rect(palette.popup_width, palette.popup_height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title("Command Palette (Ctrl+P to close, Up/Down to navigate, Enter to select)")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(tc!(highlight)));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
+        .split(inner);
+
+    let content_height = chunks.get(2).copied().unwrap_or(inner).height;
+    palette.update_content_height(content_height);
+
+    // Query input
+    let query_paragraph = Paragraph::new(format!("Query: {}", palette.query))
+        .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
+    f.render_widget(query_paragraph, chunks.first().copied().unwrap_or(inner));
+
+    // Pagination
+    let visible_height = palette.visible_results_height();
+    let total = palette.results.len();
+    let start = palette.scroll_offset;
+    let end = (start + visible_height).min(total);
+    let status_text = if total > 0 {
+        format!("{}/{}", end.min(total), total)
+    } else {
+        "0/0".to_string()
+    };
+    let status_paragraph =
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
+    f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
+
+    // Results (only visible items)
+    let mut items: Vec<ListItem> = Vec::new();
+    for global_idx in start..end {
+        let result = &palette.results[global_idx];
+        let style = if global_idx == palette.selected_index {
+            Style::default()
+                .fg(tc!(background))
+                .bg(tc!(highlight))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(text))
+        };
+
+        let shortcut_text = result
+            .shortcut
+            .as_ref()
+            .map(|s| format!(" [{}]", s))
+            .unwrap_or_default();
+
+        let command_text = format!(
+            "{} - {}{}",
+            result.command, result.description, shortcut_text
+        );
+        items.push(ListItem::new(command_text).style(style));
+    }
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(tc!(border))),
+        )
+        .style(Style::default().fg(tc!(text)));
+    f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
+}
+
+fn draw_search_popup(f: &mut Frame, app: &App) {
+    use ratatui::widgets::{Clear, Paragraph};
+
+    let popup_width = 60;
+    let popup_height = 5;
+
+    let area = f.area();
+    let popup_area = centered_rect(popup_width, popup_height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title("Search (press Esc to close, Enter to search)")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(tc!(accent)));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let search_content = if app.search_query.is_empty() {
+        "Type to search...".to_string()
+    } else {
+        format!("Searching: {}", app.search_query)
+    };
+
+    let paragraph = Paragraph::new(search_content).style(Style::default().fg(tc!(text)));
+    f.render_widget(paragraph, inner);
+}
+
+fn draw_quick_switch(f: &mut Frame, app: &mut App) {
+    use ratatui::widgets::{Clear, List, ListItem, Paragraph};
+
+    let popup_width = 60;
+    let popup_height = 18;
+
+    let area = f.area();
+    let popup_area = centered_rect(popup_width, popup_height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title("Tab Search (Ctrl+X to close, Enter to select, Up/Down to navigate)")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(tc!(primary)));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
+        .split(inner);
+
+    let query_paragraph = Paragraph::new(format!("Filter: {}", app.quick_switch_query))
+        .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
+    f.render_widget(query_paragraph, chunks.first().copied().unwrap_or(inner));
+
+    let results = app.get_quick_switch_results();
+    let selected_display = if results.is_empty() {
+        0
+    } else {
+        app.quick_switch_selected.min(results.len() - 1) + 1
+    };
+    let status_text = format!("{}/{}", selected_display, results.len());
+    let status_paragraph =
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
+    f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
+
+    let visible_rows = chunks
+        .get(2)
+        .copied()
+        .unwrap_or(inner)
+        .height
+        .saturating_sub(2)
+        .max(1) as usize;
+    let selected = app
+        .quick_switch_selected
+        .min(results.len().saturating_sub(1));
+    let start = selected.saturating_sub(visible_rows.saturating_sub(1));
+    let end = (start + visible_rows).min(results.len());
+
+    let mut items: Vec<ListItem> = Vec::new();
+    for (offset, tab) in results[start..end].iter().enumerate() {
+        let i = start + offset;
+        let style = if i == selected {
+            Style::default()
+                .fg(tc!(background))
+                .bg(tc!(highlight))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(text))
+        };
+        let item_text = format!("{} - {}", tab.title(), tab.description());
+        items.push(ListItem::new(item_text).style(style));
+    }
+
+    if items.is_empty() {
+        items.push(
+            ListItem::new("(No matching tabs found)").style(Style::default().fg(tc!(text_dim))),
+        );
+    }
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(tc!(border))),
+        )
+        .style(Style::default().fg(tc!(text)));
+    f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
+}
+
+fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
+    use crate::tabs::{Tab, TabWindow};
+    use ratatui::text::Line;
+
+    let window = TabWindow::for_width(area.width, app.current_tab, app.tab_scroll_offset);
+
+    // Build visible titles directly from Tab::all() to ensure consistency
+    let all_tabs: Vec<Line> = Tab::all().iter().map(|t| Line::from(t.title())).collect();
+    let visible_titles: Vec<Line> = all_tabs[window.start..window.end].to_vec();
+
+    let tabs = Tabs::new(visible_titles)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!("Slapper{}", window.range_text())),
+        )
+        .select(window.selected_visible)
+        .style(Style::default().fg(tc!(tab_active)))
+        .highlight_style(
+            Style::default()
+                .fg(tc!(highlight))
+                .add_modifier(Modifier::BOLD),
+        );
+
+    f.render_widget(tabs, area);
+}
+
+fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
+    use ratatui::text::{Line, Span};
+
+    let parts = app
+        .current_tab
+        .as_tab_render(app)
+        .breadcrumb()
+        .unwrap_or_else(|| app.current_tab.default_breadcrumb());
+
+    let mut spans = Vec::new();
+    let total_parts = parts.len();
+
+    for (i, part) in parts.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" > ", Style::default().fg(tc!(text_dim))));
+        }
+
+        let is_last = i == total_parts - 1;
+        let style = if is_last {
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD)
+        } else if i == 0 {
+            Style::default().fg(tc!(text)).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(primary))
+        };
+
+        spans.push(Span::styled(*part, style));
+    }
+
+    let block = Block::default()
+        .borders(Borders::NONE)
+        .border_style(Style::default().fg(tc!(border)));
+
+    let paragraph = Paragraph::new(Line::from(spans))
+        .block(block)
+        .style(Style::default().fg(tc!(text)));
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_content(f: &mut Frame, app: &App, area: Rect) {
+    use crate::tabs::TabRender;
+    let insert_mode = app.mode == crate::InputMode::Insert;
+
+    if app.current_tab == crate::tabs::Tab::History {
+        let h = app.history.lock();
+        h.render(f, area, insert_mode);
+        h.render_overlays(f, area);
+        return;
+    }
+
+    let tab_render = app.current_tab.as_tab_render(app);
+    tab_render.render(f, area, insert_mode);
+    tab_render.render_overlays(f, area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{create_shared_history, App};
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
+        let mut out = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn quick_switch_renders_selected_tail_item_in_viewport() {
+        let mut app = App::new_for_testing(create_shared_history());
+        app.show_quick_switch = true;
+        app.quick_switch_query.clear();
+        app.quick_switch_selected = app.get_quick_switch_results().len().saturating_sub(1);
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        assert!(
+            text.contains("Dashboard - View scan results dashboard"),
+            "Expected selected tail quick-switch item to be visible in rendered popup"
+        );
+    }
+}
+
+fn get_tab_status(state: &crate::tabs::AppState) -> (String, ratatui::style::Color) {
+    use crate::tabs::AppState;
+    match state {
+        AppState::Idle => ("Ready - Press Enter to start".to_string(), tc!(status_idle)),
+        AppState::Running => ("Running - Ctrl+C to stop".to_string(), tc!(status_running)),
+        AppState::Completed => ("Completed".to_string(), tc!(success)),
+        AppState::Error(e) => (e.to_string(), tc!(error)),
+    }
+}
+
+fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
+    match app.current_tab {
+        crate::tabs::Tab::Settings => (
+            "Press 's' to save settings, 'r' to reset".to_string(),
+            tc!(status_idle),
+        ),
+        crate::tabs::Tab::History => (
+            "↑↓ Navigate | 'd' Delete | 'r' Clear all".to_string(),
+            tc!(status_idle),
+        ),
+        crate::tabs::Tab::Dashboard => (
+            "Dashboard - View scan results overview".to_string(),
+            tc!(status_idle),
+        ),
+        _ => {
+            let state = app.current_tab.as_tab_state(app).state();
+            get_tab_status(&state)
+        }
+    }
+}
+
+/// Returns the appropriate help text based on current mode and overlay state.
+/// The text is adjusted for terminal width.
+fn get_help_text(app: &App, area: Rect) -> String {
+    let is_narrow = area.width < 80;
+
+    // Check overlays first (highest precedence)
+    if app.pending_action.is_some() {
+        return "[Enter] Confirm [Esc] Cancel".to_string();
+    }
+
+    if app
+        .get_command_palette()
+        .map(|p| p.visible)
+        .unwrap_or(false)
+    {
+        return if is_narrow {
+            "[Enter] Run [↑↓] Sel [Esc] Close".to_string()
+        } else {
+            "[Enter] Run [Up/Down] Select [Esc] Close".to_string()
+        };
+    }
+
+    if app.show_search {
+        return if is_narrow {
+            "[Enter] Search [Bksp] Edit [Esc] Close".to_string()
+        } else {
+            "[Enter] Search [Backspace] Edit [Esc] Close".to_string()
+        };
+    }
+
+    if app.show_help {
+        return if is_narrow {
+            "[Esc] Close | [h/l] Pane Nav".to_string()
+        } else {
+            "[Esc] Close Help | [h/l] Pane Navigation".to_string()
+        };
+    }
+
+    match app.mode {
+        super::InputMode::Normal => {
+            if is_narrow {
+                format!(
+                    "[n/p] Tabs [hjkl] Move [/] Search [^X] Quick{} [q] Quit",
+                    if app.is_paused() { " [P]" } else { "" }
+                )
+            } else {
+                format!(
+                    "[n/p] Tabs [hjkl] Move [/] Search [Ctrl+X] Quick Switch [Space] Help [q] Quit{}",
+                    if app.is_paused() { " [Ctrl+Y] Resume" } else { "" }
+                )
+            }
+        }
+        super::InputMode::Insert => {
+            if is_narrow {
+                "[Esc] Normal [Tab] Next [Arw] Move [^V] Paste".to_string()
+            } else {
+                "[Esc] Normal Mode | [Tab/S-Tab] Focus | [Arrows] Move | [Ctrl+V] Paste".to_string()
+            }
+        }
+    }
+}
+
+fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
+    let (status_text, status_color) = if let Some(notif) = &app.notification {
+        if !notif.is_expired() {
+            let color = match notif.severity {
+                super::app::NotificationSeverity::Info => tc!(status_idle),
+                super::app::NotificationSeverity::Success => tc!(success),
+                super::app::NotificationSeverity::Warning => tc!(warning),
+                super::app::NotificationSeverity::Error => tc!(error),
+            };
+            (notif.message.clone(), color)
+        } else {
+            // Notification expired, fall back to normal status
+            get_normal_status(app)
+        }
+    } else {
+        get_normal_status(app)
+    };
+
+    let help_text = get_help_text(app, area);
+
+    let use_compact = area.width < 100;
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(if use_compact {
+            [
+                Constraint::Length(8),
+                Constraint::Percentage(60),
+                Constraint::Percentage(40),
+            ]
+        } else {
+            [
+                Constraint::Length(10),
+                Constraint::Percentage(55),
+                Constraint::Percentage(40),
+            ]
+        })
+        .split(area);
+
+    // Mode indicator (NORMAL/INSERT)
+    let mode_text = match app.mode {
+        super::InputMode::Normal => "NORMAL",
+        super::InputMode::Insert => "INSERT",
+    };
+    let mode_color = match app.mode {
+        super::InputMode::Normal => tc!(mode_normal),
+
+        super::InputMode::Insert => tc!(mode_insert),
+    };
+    let mode_indicator_widget = ratatui::widgets::Paragraph::new(format!(" {} ", mode_text)).style(
+        Style::default()
+            .fg(tc!(background))
+            .bg(mode_color)
+            .add_modifier(Modifier::BOLD),
+    );
+    f.render_widget(
+        mode_indicator_widget,
+        chunks.first().copied().unwrap_or(area),
+    );
+
+    let status =
+        ratatui::widgets::Paragraph::new(status_text).style(Style::default().fg(status_color));
+    f.render_widget(status, chunks.get(1).copied().unwrap_or(area));
+
+    let help =
+        ratatui::widgets::Paragraph::new(help_text).style(Style::default().fg(tc!(text_dim)));
+    f.render_widget(help, chunks.get(2).copied().unwrap_or(area));
+}

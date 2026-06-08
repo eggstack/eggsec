@@ -64,9 +64,7 @@ static RE_SENSITIVE_KEY: LazyLock<Regex> = LazyLock::new(|| {
 pub fn redact_sensitive(input: &str) -> String {
     let mut result = input.to_string();
 
-    result = RE_BEARER
-        .replace_all(&result, "${1}[REDACTED]")
-        .to_string();
+    result = RE_BEARER.replace_all(&result, "${1}[REDACTED]").to_string();
 
     result = RE_BASIC_AUTH
         .replace_all(&result, "${1}[REDACTED]")
@@ -80,13 +78,9 @@ pub fn redact_sensitive(input: &str) -> String {
         .replace_all(&result, "[REDACTED AWS KEY]")
         .to_string();
 
-    result = RE_JWT
-        .replace_all(&result, "[REDACTED]")
-        .to_string();
+    result = RE_JWT.replace_all(&result, "[REDACTED]").to_string();
 
-    result = RE_COOKIE
-        .replace_all(&result, "${1}[REDACTED]")
-        .to_string();
+    result = RE_COOKIE.replace_all(&result, "${1}[REDACTED]").to_string();
 
     result = RE_PRIVATE_KEY
         .replace_all(&result, "[REDACTED PRIVATE KEY]")

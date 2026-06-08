@@ -220,7 +220,11 @@ async fn test_load_test_metrics_latency_tracking() {
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 20);
     assert_eq!(results.successful_requests, 20);
-    assert!(results.latency_mean_ms >= 5.0, "Mean latency {}ms should reflect 10ms server delay", results.latency_mean_ms);
+    assert!(
+        results.latency_mean_ms >= 5.0,
+        "Mean latency {}ms should reflect 10ms server delay",
+        results.latency_mean_ms
+    );
 }
 
 #[tokio::test]
@@ -300,13 +304,9 @@ async fn test_load_test_with_rate_limit() {
     let server = create_test_server().await;
     mock_ok("/").mount(&server).await;
 
-    let mut runner = slapper::loadtest::LoadTestRunner::new(
-        server.uri(),
-        20,
-        5,
-        Duration::from_secs(10),
-    )
-    .unwrap();
+    let mut runner =
+        slapper::loadtest::LoadTestRunner::new(server.uri(), 20, 5, Duration::from_secs(10))
+            .unwrap();
     runner.set_common(slapper::cli::CommonHttpArgs {
         auth: None,
         bearer: None,
@@ -463,7 +463,11 @@ async fn test_load_test_error_cap() {
 
     let results = runner.run().await.unwrap();
     assert_eq!(results.total_requests, 1500);
-    assert!(results.errors.len() <= 1000, "Errors should be capped at 1000, got {}", results.errors.len());
+    assert!(
+        results.errors.len() <= 1000,
+        "Errors should be capped at 1000, got {}",
+        results.errors.len()
+    );
 }
 
 #[tokio::test]
@@ -474,10 +478,7 @@ async fn test_load_test_options_method() {
     let server = create_test_server().await;
     Mock::given(method("OPTIONS"))
         .and(path("/cors"))
-        .respond_with(
-            ResponseTemplate::new(204)
-                .insert_header("Access-Control-Allow-Origin", "*"),
-        )
+        .respond_with(ResponseTemplate::new(204).insert_header("Access-Control-Allow-Origin", "*"))
         .mount(&server)
         .await;
 
@@ -587,13 +588,8 @@ async fn test_load_test_rate_limit_zero_ignored() {
     let server = create_test_server().await;
     mock_ok("/").mount(&server).await;
 
-    let mut runner = slapper::loadtest::LoadTestRunner::new(
-        server.uri(),
-        5,
-        2,
-        Duration::from_secs(5),
-    )
-    .unwrap();
+    let mut runner =
+        slapper::loadtest::LoadTestRunner::new(server.uri(), 5, 2, Duration::from_secs(5)).unwrap();
     runner.set_common(slapper::cli::CommonHttpArgs {
         rate_limit: Some(0),
         ..slapper::cli::CommonHttpArgs::default()
@@ -676,8 +672,7 @@ fn test_load_test_from_args_with_config_uses_config_timeout() {
     let mut config = slapper::config::SlapperConfig::default();
     config.http.timeout_secs = 42;
 
-    let runner =
-        slapper::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    let runner = slapper::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
     // When timeout is None, config value (42) should be used.
     drop(runner);
 }
@@ -702,8 +697,7 @@ fn test_load_test_from_args_with_config_explicit_timeout() {
     let mut config = slapper::config::SlapperConfig::default();
     config.http.timeout_secs = 42;
 
-    let runner =
-        slapper::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
+    let runner = slapper::loadtest::LoadTestRunner::from_args_with_config(args, &config).unwrap();
     // When timeout is Some(15), explicit value (15) should override config (42).
     drop(runner);
 }

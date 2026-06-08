@@ -127,9 +127,7 @@ impl IssueTracker for GitHubClient {
         let number = match json["number"].as_i64() {
             Some(n) => n,
             None => {
-                tracing::warn!(
-                    "GitHub: create_issue response missing 'number' field"
-                );
+                tracing::warn!("GitHub: create_issue response missing 'number' field");
                 return Err(SlapperError::Network(
                     "GitHub: create_issue response missing 'number' field".to_string(),
                 ));
@@ -227,10 +225,7 @@ impl IssueTracker for GitHubClient {
         const MAX_PAGES: u32 = 10;
 
         loop {
-            let scoped_query = format!(
-                "repo:{}/{} {}",
-                self.config.owner, self.config.repo, query
-            );
+            let scoped_query = format!("repo:{}/{} {}", self.config.owner, self.config.repo, query);
             let url = format!(
                 "https://api.github.com/search/issues?q={}&per_page={}&page={}",
                 urlencoding::encode(&scoped_query),

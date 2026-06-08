@@ -22,9 +22,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                 ReportFormat::Sarif => {
                     convert::convert_to_sarif(&report).map_err(|e| anyhow::anyhow!(e))?
                 }
-                ReportFormat::Html => {
-                    convert::convert_to_html(&report)
-                }
+                ReportFormat::Html => convert::convert_to_html(&report),
                 ReportFormat::Markdown => {
                     convert::convert_to_markdown(&report).map_err(|e| anyhow::anyhow!(e))?
                 }

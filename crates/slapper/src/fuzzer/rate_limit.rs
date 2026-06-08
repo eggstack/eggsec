@@ -83,7 +83,11 @@ impl AdaptiveRateLimiter {
         self.consecutive_successes.store(0, Ordering::SeqCst);
 
         let should_backoff = status_code
-            .map(|code| code == crate::constants::STATUS_RATE_LIMITED || code == crate::constants::STATUS_SERVER_ERROR || code >= 500)
+            .map(|code| {
+                code == crate::constants::STATUS_RATE_LIMITED
+                    || code == crate::constants::STATUS_SERVER_ERROR
+                    || code >= 500
+            })
             .unwrap_or(true);
 
         if should_backoff {

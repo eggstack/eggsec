@@ -41,7 +41,13 @@ pub fn triage_finding(
     cvss_score: Option<f32>,
 ) -> TriageResult {
     let duplicate_keywords = ["example", "demo", "sample", "localhost"];
-    let false_positive_keywords = ["informational", "no risk", "not vulnerable", "safe", "no impact"];
+    let false_positive_keywords = [
+        "informational",
+        "no risk",
+        "not vulnerable",
+        "safe",
+        "no impact",
+    ];
 
     let title_lower = title.to_lowercase();
     let description_lower = description.to_lowercase();
@@ -50,10 +56,9 @@ pub fn triage_finding(
         .iter()
         .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
-    let is_false_positive =
-        false_positive_keywords
-            .iter()
-            .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
+    let is_false_positive = false_positive_keywords
+        .iter()
+        .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
     let (status, confidence, reason) = if is_duplicate {
         (

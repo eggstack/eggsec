@@ -66,10 +66,15 @@ impl WorkflowReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::finding::FindingStatus;
     use crate::types::Severity;
+    use crate::workflow::finding::FindingStatus;
 
-    fn make_finding(id: &str, severity: Severity, status: FindingStatus, hours_ago: i64) -> Finding {
+    fn make_finding(
+        id: &str,
+        severity: Severity,
+        status: FindingStatus,
+        hours_ago: i64,
+    ) -> Finding {
         Finding {
             id: id.to_string(),
             title: format!("Finding {id}"),
@@ -93,13 +98,30 @@ mod tests {
     fn test_sla_violations_count_only_open_findings() {
         let mut report = WorkflowReport::new();
         // Critical SLA is 24h. Created 48h ago -> violated.
-        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 48));
+        report.findings.push(make_finding(
+            "f1",
+            Severity::Critical,
+            FindingStatus::Open,
+            48,
+        ));
         // High SLA is 168h. Created 200h ago -> violated.
-        report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 200));
+        report
+            .findings
+            .push(make_finding("f2", Severity::High, FindingStatus::Open, 200));
         // This one is resolved, should be ignored even if overdue.
-        report.findings.push(make_finding("f3", Severity::Critical, FindingStatus::Resolved, 100));
+        report.findings.push(make_finding(
+            "f3",
+            Severity::Critical,
+            FindingStatus::Resolved,
+            100,
+        ));
         // InProgress, should be ignored.
-        report.findings.push(make_finding("f4", Severity::Medium, FindingStatus::InProgress, 800));
+        report.findings.push(make_finding(
+            "f4",
+            Severity::Medium,
+            FindingStatus::InProgress,
+            800,
+        ));
 
         report.calculate_metrics();
 
@@ -114,9 +136,16 @@ mod tests {
     fn test_sla_violations_zero_when_all_within_sla() {
         let mut report = WorkflowReport::new();
         // Critical SLA is 24h. Created 1h ago -> not violated.
-        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 1));
+        report.findings.push(make_finding(
+            "f1",
+            Severity::Critical,
+            FindingStatus::Open,
+            1,
+        ));
         // High SLA is 168h. Created 10h ago -> not violated.
-        report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
+        report
+            .findings
+            .push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
 
         report.calculate_metrics();
 
@@ -129,15 +158,37 @@ mod tests {
     fn test_sla_violations_mixed_statuses() {
         let mut report = WorkflowReport::new();
         // Open and violated
-        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 48));
+        report.findings.push(make_finding(
+            "f1",
+            Severity::Critical,
+            FindingStatus::Open,
+            48,
+        ));
         // Open and NOT violated
-        report.findings.push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
+        report
+            .findings
+            .push(make_finding("f2", Severity::High, FindingStatus::Open, 10));
         // Resolved and violated (should not count)
-        report.findings.push(make_finding("f3", Severity::Critical, FindingStatus::Resolved, 48));
+        report.findings.push(make_finding(
+            "f3",
+            Severity::Critical,
+            FindingStatus::Resolved,
+            48,
+        ));
         // FalsePositive and violated (should not count)
-        report.findings.push(make_finding("f4", Severity::High, FindingStatus::FalsePositive, 200));
+        report.findings.push(make_finding(
+            "f4",
+            Severity::High,
+            FindingStatus::FalsePositive,
+            200,
+        ));
         // Verified and violated (should not count as open)
-        report.findings.push(make_finding("f5", Severity::Medium, FindingStatus::Verified, 800));
+        report.findings.push(make_finding(
+            "f5",
+            Severity::Medium,
+            FindingStatus::Verified,
+            800,
+        ));
 
         report.calculate_metrics();
 
@@ -158,11 +209,36 @@ mod tests {
     #[test]
     fn test_calculate_metrics_computes_all_fields() {
         let mut report = WorkflowReport::new();
-        report.findings.push(make_finding("f1", Severity::Critical, FindingStatus::Open, 1));
-        report.findings.push(make_finding("f2", Severity::High, FindingStatus::InProgress, 10));
-        report.findings.push(make_finding("f3", Severity::Medium, FindingStatus::Resolved, 20));
-        report.findings.push(make_finding("f4", Severity::Low, FindingStatus::Verified, 30));
-        report.findings.push(make_finding("f5", Severity::Info, FindingStatus::FalsePositive, 40));
+        report.findings.push(make_finding(
+            "f1",
+            Severity::Critical,
+            FindingStatus::Open,
+            1,
+        ));
+        report.findings.push(make_finding(
+            "f2",
+            Severity::High,
+            FindingStatus::InProgress,
+            10,
+        ));
+        report.findings.push(make_finding(
+            "f3",
+            Severity::Medium,
+            FindingStatus::Resolved,
+            20,
+        ));
+        report.findings.push(make_finding(
+            "f4",
+            Severity::Low,
+            FindingStatus::Verified,
+            30,
+        ));
+        report.findings.push(make_finding(
+            "f5",
+            Severity::Info,
+            FindingStatus::FalsePositive,
+            40,
+        ));
 
         report.calculate_metrics();
 

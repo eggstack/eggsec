@@ -43,7 +43,10 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
             match worker.start().await {
                 Ok(()) => {
-                    println!("Worker '{}' connected and ready. Press Ctrl+C to stop.", worker_id);
+                    println!(
+                        "Worker '{}' connected and ready. Press Ctrl+C to stop.",
+                        worker_id
+                    );
                 }
                 Err(e) => {
                     anyhow::bail!("Failed to connect to coordinator: {}. Make sure the coordinator is running with 'slapper cluster coordinator --psk <key>'", e);
@@ -135,10 +138,14 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                                 println!("  No workers connected.");
                             } else {
                                 for w in workers {
-                                    let id = w.get("worker_id").and_then(|v| v.as_str()).unwrap_or("?");
-                                    let hostname = w.get("hostname").and_then(|v| v.as_str()).unwrap_or("?");
-                                    let status = w.get("status").and_then(|v| v.as_str()).unwrap_or("?");
-                                    let last_hb = w.get("last_heartbeat_secs").and_then(|v| v.as_i64());
+                                    let id =
+                                        w.get("worker_id").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let hostname =
+                                        w.get("hostname").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let status =
+                                        w.get("status").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let last_hb =
+                                        w.get("last_heartbeat_secs").and_then(|v| v.as_i64());
                                     let hb_ago = last_hb.map(|ts| {
                                         let now = chrono::Utc::now().timestamp();
                                         now - ts
@@ -146,15 +153,23 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                                     let hb_str = hb_ago
                                         .map(|ago| format!("{}s ago", ago))
                                         .unwrap_or_else(|| "never".to_string());
-                                    println!("  {} ({}) — status: {}, last heartbeat: {}", id, hostname, status, hb_str);
+                                    println!(
+                                        "  {} ({}) — status: {}, last heartbeat: {}",
+                                        id, hostname, status, hb_str
+                                    );
                                 }
                             }
                         }
 
                         if let Some(queue) = data.get("queue") {
-                            let pending = queue.get("pending").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let in_progress = queue.get("in_progress").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let completed = queue.get("completed").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let pending =
+                                queue.get("pending").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let in_progress = queue
+                                .get("in_progress")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let completed =
+                                queue.get("completed").and_then(|v| v.as_u64()).unwrap_or(0);
                             println!("\nTask Queue:");
                             println!("  Pending:     {}", pending);
                             println!("  In Progress: {}", in_progress);

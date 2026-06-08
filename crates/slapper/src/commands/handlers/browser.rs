@@ -10,16 +10,21 @@ pub async fn handle_browser(ctx: &CommandContext, mut args: crate::cli::BrowserA
         discover_spa_routes: !args.no_spa,
         check_client_security: !args.no_client_checks,
         timeout_ms: args.timeout,
-        xss_payload: args.xss_payload
+        xss_payload: args
+            .xss_payload
             .unwrap_or_else(|| crate::browser::BrowserConfig::default().xss_payload),
     };
 
     let target = args.target.clone();
     let scan_id = format!("browser-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
 
     let report = match tokio::time::timeout(
-        std::time::Duration::from_millis(args.timeout + crate::constants::BROWSER_TIMEOUT_BUFFER_MS),
+        std::time::Duration::from_millis(
+            args.timeout + crate::constants::BROWSER_TIMEOUT_BUFFER_MS,
+        ),
         crate::browser::run_browser_scan(&target, config),
     )
     .await
@@ -103,7 +108,10 @@ pub async fn handle_browser(ctx: &CommandContext, mut args: crate::cli::BrowserA
         .notify_scan_complete(
             &scan_id,
             &target,
-            &format!("Browser scan completed with {} findings", report.total_findings),
+            &format!(
+                "Browser scan completed with {} findings",
+                report.total_findings
+            ),
             None,
             None,
         )

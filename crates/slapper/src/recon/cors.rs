@@ -86,34 +86,28 @@ impl CorsAnalyzer {
         {
             Ok(req) => req,
             Err(e) => {
-                tracing::debug!("Failed to build CORS test request for {}: {}", test_origin, e);
-                return None;
-            }
-        };
-
-        let response = match tokio::time::timeout(
-            Duration::from_secs(15),
-            self.client.execute(request),
-        )
-        .await
-        {
-            Ok(Ok(resp)) => resp,
-            Ok(Err(e)) => {
                 tracing::debug!(
-                    "CORS test request failed for {}: {}",
+                    "Failed to build CORS test request for {}: {}",
                     test_origin,
                     e
                 );
                 return None;
             }
-            Err(_) => {
-                tracing::debug!(
-                    "CORS test request timed out for {}",
-                    test_origin
-                );
-                return None;
-            }
         };
+
+        let response =
+            match tokio::time::timeout(Duration::from_secs(15), self.client.execute(request)).await
+            {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => {
+                    tracing::debug!("CORS test request failed for {}: {}", test_origin, e);
+                    return None;
+                }
+                Err(_) => {
+                    tracing::debug!("CORS test request timed out for {}", test_origin);
+                    return None;
+                }
+            };
 
         let acao = response
             .headers()
@@ -210,10 +204,7 @@ impl CorsAnalyzer {
             }
 
             if header == test_origin && acac && test_origin != "null" && test_origin != "*" {
-                return (
-                    true,
-                    Some("Origin reflection with credentials".to_string()),
-                );
+                return (true, Some("Origin reflection with credentials".to_string()));
             }
         }
 

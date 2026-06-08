@@ -6,7 +6,9 @@ pub async fn handle_hunt(ctx: &CommandContext, mut args: crate::cli::HuntArgs) -
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("hunt-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
 
     let config = crate::hunt::HuntConfig {
         check_attack_chains: !args.skip_chains,
@@ -24,16 +26,11 @@ pub async fn handle_hunt(ctx: &CommandContext, mut args: crate::cli::HuntArgs) -
     {
         Ok(report) => {
             let output = match args.format.as_deref() {
-                Some("json") | None => {
-                    serde_json::to_string_pretty(&report)
-                        .map_err(|e| anyhow::anyhow!("JSON serialization failed: {}", e))?
-                }
+                Some("json") | None => serde_json::to_string_pretty(&report)
+                    .map_err(|e| anyhow::anyhow!("JSON serialization failed: {}", e))?,
                 Some("pretty") => format_hunt_report(&report),
                 Some(other) => {
-                    anyhow::bail!(
-                        "Unsupported format: {}. Use json, pretty.",
-                        other
-                    );
+                    anyhow::bail!("Unsupported format: {}. Use json, pretty.", other);
                 }
             };
 

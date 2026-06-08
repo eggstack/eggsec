@@ -5,7 +5,7 @@ TUI module workflows and patterns for the terminal UI.
 ## Module Structure
 
 ```
-crates/slapper/src/tui/
+crates/slapper-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
 │   ├── runner.rs        # Event loop, input handling
@@ -208,7 +208,7 @@ let chunks = Layout::default()
 
 ### Running TUI Tests
 ```bash
-cargo test --lib -p slapper tui::
+cargo test --lib -p slapper-tui tui::
 ```
 
 ### Writing Tests
@@ -235,7 +235,7 @@ mod tests {
 ## Common Tasks
 
 ### Adding a New Tab
-1. Create tab module in `tabs/`
+1. Create tab module in `crates/slapper-tui/src/tabs/`
 2. Implement `TabState`, `TabInput`, `TabRender` traits
 3. Add tab to `Tab` enum in `tabs/mod.rs`
 4. Add rendering in `ui.rs` `draw_content()`
@@ -245,7 +245,7 @@ mod tests {
 1. Check for fixed `Constraint::Length` values
 2. Replace with dynamic constraints based on `area.height`
 3. Test at 80x24 and smaller terminals
-4. Run `cargo test --lib -p slapper tui::`
+4. Run `cargo test --lib -p slapper-tui tui::`
 
 ### Adding Notifications
 1. Set `app.notification = Some(Notification::new(...))`
@@ -418,7 +418,7 @@ let scroll_offset = if self.lines.is_empty() {
 ```
 
 ## Resources
-- `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
+- `crates/slapper-tui/src/AGENTS.override.md` - Detailed TUI patterns
 - `architecture/tui.md` - TUI architecture, event loop, overlays, and session handling
 - `architecture/config.md` - Config loading and TUI settings save semantics
 

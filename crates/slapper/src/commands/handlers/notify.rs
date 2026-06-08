@@ -87,11 +87,9 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
                 println!("Configure webhooks in config file or use:");
                 println!("  slapper notify send --slack <url> --message 'your message'");
             } else {
-                if let Err(e) = crate::commands::webhook::send_webhook_notifications(
-                    &send_config,
-                    &payload,
-                )
-                .await
+                if let Err(e) =
+                    crate::commands::webhook::send_webhook_notifications(&send_config, &payload)
+                        .await
                 {
                     tracing::warn!("Failed to send webhook notifications: {}", e);
                 }

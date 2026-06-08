@@ -315,7 +315,11 @@ pub struct ScanArgs {
         help = "Custom stages (comma-separated): port, fingerprint, endpoint, fuzz, load, waf, recon, graphql, oauth, jwt"
     )]
     pub stages: Option<String>,
-    #[arg(short = 'c', long, help = "Concurrent requests (default: 10 or config scan.default_concurrency)")]
+    #[arg(
+        short = 'c',
+        long,
+        help = "Concurrent requests (default: 10 or config scan.default_concurrency)"
+    )]
     pub concurrency: Option<usize>,
     #[arg(
         long,

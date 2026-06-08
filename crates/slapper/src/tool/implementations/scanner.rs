@@ -92,7 +92,10 @@ impl SecurityTool for ScannerTool {
         let target = &request.target.value;
 
         let concurrency = request.options.concurrency.unwrap_or(50);
-        let timeout = request.options.timeout_ms.unwrap_or(crate::constants::DEFAULT_TOOL_TIMEOUT_MS);
+        let timeout = request
+            .options
+            .timeout_ms
+            .unwrap_or(crate::constants::DEFAULT_TOOL_TIMEOUT_MS);
 
         let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =
             std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));

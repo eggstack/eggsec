@@ -56,13 +56,7 @@ pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -
                 }
             }
             ctx.notify_manager
-                .notify_scan_complete(
-                    &scan_id,
-                    &args.target,
-                    "Stress test completed",
-                    None,
-                    None,
-                )
+                .notify_scan_complete(&scan_id, &args.target, "Stress test completed", None, None)
                 .await;
             Ok(())
         }

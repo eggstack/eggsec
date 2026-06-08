@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::hunt::{business, authz, session, HuntReport};
+use crate::hunt::{authz, business, session, HuntReport};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 
@@ -101,9 +101,8 @@ fn detect_privilege_escalation_chain(report: &HuntReport) -> Vec<AttackChain> {
             chain_type: ChainType::PrivilegeEscalation,
             steps,
             severity: Severity::Critical,
-            description:
-                "Multiple authorization bypasses can be chained for privilege escalation"
-                    .to_string(),
+            description: "Multiple authorization bypasses can be chained for privilege escalation"
+                .to_string(),
             remediation: "Implement defense-in-depth authorization checks at every layer"
                 .to_string(),
             cvss_score: Some(9.0),
@@ -148,16 +147,15 @@ fn detect_privilege_escalation_chain(report: &HuntReport) -> Vec<AttackChain> {
 fn detect_data_exfiltration_chain(report: &HuntReport) -> Vec<AttackChain> {
     let mut chains = Vec::new();
 
-    let has_sensitive_files = report.business_logic.iter().any(|f| {
-        matches!(
-            f.flaw_type,
-            business::FlawType::TrustBoundaryViolation
-        )
-    });
+    let has_sensitive_files = report
+        .business_logic
+        .iter()
+        .any(|f| matches!(f.flaw_type, business::FlawType::TrustBoundaryViolation));
 
-    let has_idor = report.authz_bypasses.iter().any(|b| {
-        matches!(b.bypass_type, authz::BypassType::Idor)
-    });
+    let has_idor = report
+        .authz_bypasses
+        .iter()
+        .any(|b| matches!(b.bypass_type, authz::BypassType::Idor));
 
     if has_sensitive_files && has_idor {
         let id = format!("de-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -186,8 +184,11 @@ fn detect_data_exfiltration_chain(report: &HuntReport) -> Vec<AttackChain> {
             chain_type: ChainType::DataExfiltration,
             steps,
             severity: Severity::Critical,
-            description: "IDOR vulnerability combined with exposed configuration enables data exfiltration".to_string(),
-            remediation: "Fix IDOR vulnerabilities and restrict access to sensitive files".to_string(),
+            description:
+                "IDOR vulnerability combined with exposed configuration enables data exfiltration"
+                    .to_string(),
+            remediation: "Fix IDOR vulnerabilities and restrict access to sensitive files"
+                .to_string(),
             cvss_score: Some(9.5),
         });
     }
@@ -208,9 +209,10 @@ fn detect_session_exploitation_chain(report: &HuntReport) -> Vec<AttackChain> {
         )
     });
 
-    let has_rate_limit_issue = report.business_logic.iter().any(|f| {
-        matches!(f.flaw_type, business::FlawType::RateLimitBypass)
-    });
+    let has_rate_limit_issue = report
+        .business_logic
+        .iter()
+        .any(|f| matches!(f.flaw_type, business::FlawType::RateLimitBypass));
 
     if has_weak_session && has_rate_limit_issue {
         let id = format!("se-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -239,8 +241,9 @@ fn detect_session_exploitation_chain(report: &HuntReport) -> Vec<AttackChain> {
             chain_type: ChainType::LateralMovement,
             steps,
             severity: Severity::High,
-            description: "Weak session security combined with no rate limiting enables account takeover"
-                .to_string(),
+            description:
+                "Weak session security combined with no rate limiting enables account takeover"
+                    .to_string(),
             remediation: "Implement strong session management and rate limiting".to_string(),
             cvss_score: Some(7.5),
         });
@@ -252,13 +255,15 @@ fn detect_session_exploitation_chain(report: &HuntReport) -> Vec<AttackChain> {
 fn detect_rate_limit_chain(report: &HuntReport) -> Vec<AttackChain> {
     let mut chains = Vec::new();
 
-    let has_no_rate_limit = report.business_logic.iter().any(|f| {
-        matches!(f.flaw_type, business::FlawType::RateLimitBypass)
-    });
+    let has_no_rate_limit = report
+        .business_logic
+        .iter()
+        .any(|f| matches!(f.flaw_type, business::FlawType::RateLimitBypass));
 
-    let has_admin_access = report.authz_bypasses.iter().any(|b| {
-        matches!(b.bypass_type, authz::BypassType::MissingAuthorization)
-    });
+    let has_admin_access = report
+        .authz_bypasses
+        .iter()
+        .any(|b| matches!(b.bypass_type, authz::BypassType::MissingAuthorization));
 
     if has_no_rate_limit && has_admin_access {
         let id = format!("rl-{}", &uuid::Uuid::new_v4().to_string()[..8]);

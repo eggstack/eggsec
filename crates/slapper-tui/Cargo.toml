@@ -1,0 +1,68 @@
+[package]
+name = "slapper-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Terminal UI adapter for Slapper"
+
+[dependencies]
+slapper-core = { path = "../slapper-core" }
+slapper = { path = "../slapper" }
+
+ratatui = "0.30"
+crossterm = { version = "0.29", features = ["event-stream"] }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+parking_lot = { workspace = true }
+futures = "0.3"
+rustc-hash = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+toml = "0.8"
+arboard = "3.4"
+directories = "5"
+url = "2"
+
+# Feature-gated dependencies forwarded from slapper
+pnet = { version = "0.35", optional = true }
+pnet_packet = { version = "0.35", optional = true }
+slapper-nse = { path = "../slapper-nse", optional = true }
+
+[features]
+default = []
+nse = ["dep:slapper-nse", "slapper/nse"]
+headless-browser = ["slapper/headless-browser"]
+compliance = ["slapper/compliance"]
+database = ["slapper/database"]
+external-integrations = ["slapper/external-integrations"]
+finding-workflow = ["slapper/finding-workflow"]
+vuln-management = ["slapper/vuln-management"]
+wireless = ["slapper/wireless"]
+stress-testing = ["dep:pnet", "dep:pnet_packet", "slapper/stress-testing"]
+packet-inspection = ["dep:pnet", "dep:pnet_packet", "slapper/packet-inspection"]
+advanced-hunting = ["slapper/advanced-hunting"]
+tool-api = ["slapper/tool-api"]
+rest-api = ["slapper/rest-api"]
+full = [
+    "nse",
+    "headless-browser",
+    "compliance",
+    "database",
+    "external-integrations",
+    "finding-workflow",
+    "vuln-management",
+    "wireless",
+    "stress-testing",
+    "packet-inspection",
+    "advanced-hunting",
+    "tool-api",
+    "rest-api",
+]

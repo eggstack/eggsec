@@ -95,11 +95,7 @@ impl SbomGenerator {
         )))
     }
 
-    pub fn generate_from_npm(
-        &self,
-        project_path: &str,
-        format: SbomFormat,
-    ) -> Result<SbomReport> {
+    pub fn generate_from_npm(&self, project_path: &str, format: SbomFormat) -> Result<SbomReport> {
         let package_json = Path::new(project_path).join("package.json");
         let package_lock = Path::new(project_path).join("package-lock.json");
 
@@ -202,21 +198,45 @@ impl SbomGenerator {
                     continue;
                 }
                 let parts: Vec<&str> = if let Some(pos) = trimmed.find("===") {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 3..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 3..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find("==") {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 2..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find("~=") {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 2..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find("!=") {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 2..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find(">=") {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 2..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find("<=") {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 2..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 2..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find('>') {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 1..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 1..).unwrap_or("*"),
+                    ]
                 } else if let Some(pos) = trimmed.find('<') {
-                    vec![trimmed.get(..pos).unwrap_or(trimmed), trimmed.get(pos + 1..).unwrap_or("*")]
+                    vec![
+                        trimmed.get(..pos).unwrap_or(trimmed),
+                        trimmed.get(pos + 1..).unwrap_or("*"),
+                    ]
                 } else {
                     vec![trimmed, "*"]
                 };
@@ -546,23 +566,57 @@ criterion = "0.5"
             "requests==2.28.0\nflask>=2.0\ndjango~=3.2\npytest!=7.0\nnumpy<=1.24\nscipy>1.0\npandas<2.0\ntorch===1.13.0\n",
         )
         .unwrap();
-        let report = gen.generate_from_requirements(dir.path().to_str().unwrap(), SbomFormat::CycloneDx).unwrap();
+        let report = gen
+            .generate_from_requirements(dir.path().to_str().unwrap(), SbomFormat::CycloneDx)
+            .unwrap();
         assert_eq!(report.components.len(), 8);
-        let requests = report.components.iter().find(|c| c.name == "requests").unwrap();
+        let requests = report
+            .components
+            .iter()
+            .find(|c| c.name == "requests")
+            .unwrap();
         assert_eq!(requests.version, "2.28.0");
-        let flask = report.components.iter().find(|c| c.name == "flask").unwrap();
+        let flask = report
+            .components
+            .iter()
+            .find(|c| c.name == "flask")
+            .unwrap();
         assert_eq!(flask.version, "2.0");
-        let django = report.components.iter().find(|c| c.name == "django").unwrap();
+        let django = report
+            .components
+            .iter()
+            .find(|c| c.name == "django")
+            .unwrap();
         assert_eq!(django.version, "3.2");
-        let pytest = report.components.iter().find(|c| c.name == "pytest").unwrap();
+        let pytest = report
+            .components
+            .iter()
+            .find(|c| c.name == "pytest")
+            .unwrap();
         assert_eq!(pytest.version, "7.0");
-        let numpy = report.components.iter().find(|c| c.name == "numpy").unwrap();
+        let numpy = report
+            .components
+            .iter()
+            .find(|c| c.name == "numpy")
+            .unwrap();
         assert_eq!(numpy.version, "1.24");
-        let scipy = report.components.iter().find(|c| c.name == "scipy").unwrap();
+        let scipy = report
+            .components
+            .iter()
+            .find(|c| c.name == "scipy")
+            .unwrap();
         assert_eq!(scipy.version, "1.0");
-        let pandas = report.components.iter().find(|c| c.name == "pandas").unwrap();
+        let pandas = report
+            .components
+            .iter()
+            .find(|c| c.name == "pandas")
+            .unwrap();
         assert_eq!(pandas.version, "2.0");
-        let torch = report.components.iter().find(|c| c.name == "torch").unwrap();
+        let torch = report
+            .components
+            .iter()
+            .find(|c| c.name == "torch")
+            .unwrap();
         assert_eq!(torch.version, "1.13.0");
     }
 

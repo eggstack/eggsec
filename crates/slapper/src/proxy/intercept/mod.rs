@@ -58,7 +58,8 @@ impl ProxyServer {
     }
 
     pub async fn start(&self) -> Result<()> {
-        let listener = TcpListener::bind(self.addr).await
+        let listener = TcpListener::bind(self.addr)
+            .await
             .map_err(|e| SlapperError::Network(format!("Failed to bind proxy: {}", e)))?;
 
         tracing::info!("Proxy listening on {}", self.addr);
@@ -71,7 +72,9 @@ impl ProxyServer {
                     let cert_gen = self.cert_generator.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(stream, client_addr, rules, mode, cert_gen).await {
+                        if let Err(e) =
+                            handle_connection(stream, client_addr, rules, mode, cert_gen).await
+                        {
                             tracing::debug!("Connection error: {}", e);
                         }
                     });
@@ -107,9 +110,9 @@ fn is_private_ip(ip: IpAddr) -> bool {
 }
 
 fn validate_target(host: &str, port: u16) -> Result<()> {
-    let ip: IpAddr = host.parse().map_err(|_| {
-        SlapperError::ScopeViolation(format!("Invalid host address: {}", host))
-    })?;
+    let ip: IpAddr = host
+        .parse()
+        .map_err(|_| SlapperError::ScopeViolation(format!("Invalid host address: {}", host)))?;
 
     if is_private_ip(ip) {
         return Err(SlapperError::ScopeViolation(format!(
@@ -153,7 +156,10 @@ async fn handle_connect_request(
         .ok_or_else(|| SlapperError::Proxy("Invalid CONNECT request".to_string()))?;
 
     let (host, port) = if let Some(idx) = host_port.rfind(':') {
-        (&host_port[..idx], host_port[idx + 1..].parse().unwrap_or(443))
+        (
+            &host_port[..idx],
+            host_port[idx + 1..].parse().unwrap_or(443),
+        )
     } else {
         (host_port, 443u16)
     };
@@ -177,28 +183,33 @@ async fn handle_connect_request(
         }
     }
 
-    let upstream = timeout(Duration::from_secs(30), TcpStream::connect(format!("{}:{}", host, port)))
-        .await
-        .map_err(|e| SlapperError::Network(format!("Connection timeout to upstream: {}", e)))?
-        .map_err(|e| SlapperError::Network(format!("Failed to connect to upstream: {}", e)))?;
+    let upstream = timeout(
+        Duration::from_secs(30),
+        TcpStream::connect(format!("{}:{}", host, port)),
+    )
+    .await
+    .map_err(|e| SlapperError::Network(format!("Connection timeout to upstream: {}", e)))?
+    .map_err(|e| SlapperError::Network(format!("Failed to connect to upstream: {}", e)))?;
 
-    let material = cert_gen.generate_for_host(host)
+    let material = cert_gen
+        .generate_for_host(host)
         .map_err(|e| SlapperError::Proxy(format!("Cert generation failed: {}", e)))?;
 
     let tls_acceptor = create_tls_acceptor(&material)
         .map_err(|e| SlapperError::Proxy(format!("TLS config failed: {}", e)))?;
 
-    let mut client_stream = match timeout(Duration::from_secs(30), tls_acceptor.accept(stream)).await {
-        Ok(Ok(s)) => s,
-        Ok(Err(e)) => {
-            tracing::debug!("TLS accept failed: {}", e);
-            return Ok(());
-        }
-        Err(_) => {
-            tracing::debug!("TLS accept timeout");
-            return Ok(());
-        }
-    };
+    let mut client_stream =
+        match timeout(Duration::from_secs(30), tls_acceptor.accept(stream)).await {
+            Ok(Ok(s)) => s,
+            Ok(Err(e)) => {
+                tracing::debug!("TLS accept failed: {}", e);
+                return Ok(());
+            }
+            Err(_) => {
+                tracing::debug!("TLS accept timeout");
+                return Ok(());
+            }
+        };
 
     let (mut client_read, mut client_write) = tokio::io::split(&mut client_stream);
     let (mut upstream_read, mut upstream_write) = tokio::io::split(upstream);

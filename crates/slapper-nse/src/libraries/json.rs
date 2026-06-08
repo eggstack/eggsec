@@ -31,9 +31,7 @@ pub fn register_json_library(lua: &Lua) -> LuaResult<()> {
                             ));
                         }
                         Value::String(s) => {
-                            keys.push(serde_json::Value::String(
-                                s.to_string_lossy().to_string(),
-                            ));
+                            keys.push(serde_json::Value::String(s.to_string_lossy().to_string()));
                             is_array = false;
                         }
                         _ => {

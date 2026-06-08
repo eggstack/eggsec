@@ -21,10 +21,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 pub use brute_force::BruteForceTester;
-pub use credential_stuffing::{CredentialStuffer, CredentialPair};
+pub use credential_stuffing::{CredentialPair, CredentialStuffer};
 pub use lockout::LockoutDetector;
 pub use mfa::MfaTester;
-pub use password_policy::{PasswordPolicyTester, PasswordPolicyResult};
+pub use password_policy::{PasswordPolicyResult, PasswordPolicyTester};
 pub use rate_limit::RateLimitTester;
 pub use session::SessionTester;
 pub use timing::TimingTester;
@@ -80,7 +80,12 @@ pub struct AuthEngine {
 }
 
 impl AuthEngine {
-    pub fn new(max_attempts: usize, concurrency: usize, timeout_secs: u64, stop_on_lockout: bool) -> Result<Self> {
+    pub fn new(
+        max_attempts: usize,
+        concurrency: usize,
+        timeout_secs: u64,
+        stop_on_lockout: bool,
+    ) -> Result<Self> {
         Ok(Self {
             max_attempts,
             stop_on_lockout,
@@ -133,8 +138,11 @@ impl AuthEngine {
         };
 
         report.tests_run.push(AuthTestType::BruteForce);
-        let brute_tester = BruteForceTester::new(self.max_attempts, self.concurrency, self.timeout_secs)?;
-        if let (Some(ref usernames), Some(ref passwords)) = (&self.username_list, &self.password_list) {
+        let brute_tester =
+            BruteForceTester::new(self.max_attempts, self.concurrency, self.timeout_secs)?;
+        if let (Some(ref usernames), Some(ref passwords)) =
+            (&self.username_list, &self.password_list)
+        {
             if let Some(username) = usernames.first() {
                 if let Ok(result) = brute_tester.test(target, username, passwords).await {
                     report.brute_force = Some(result);
@@ -143,16 +151,21 @@ impl AuthEngine {
         }
 
         report.tests_run.push(AuthTestType::CredentialStuffing);
-        let stuffer = CredentialStuffer::new(self.max_attempts, self.concurrency, self.timeout_secs)?;
-        let credentials: Vec<CredentialPair> = self.username_list
+        let stuffer =
+            CredentialStuffer::new(self.max_attempts, self.concurrency, self.timeout_secs)?;
+        let credentials: Vec<CredentialPair> = self
+            .username_list
             .as_ref()
             .zip(self.password_list.as_ref())
             .map(|(users, passes)| {
-                users.iter()
-                    .flat_map(|u| passes.iter().map(move |p| CredentialPair {
-                        username: u.clone(),
-                        password: p.clone(),
-                    }))
+                users
+                    .iter()
+                    .flat_map(|u| {
+                        passes.iter().map(move |p| CredentialPair {
+                            username: u.clone(),
+                            password: p.clone(),
+                        })
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -162,10 +175,15 @@ impl AuthEngine {
 
         report.tests_run.push(AuthTestType::AccountLockout);
         let lockout_detector = LockoutDetector::new(self.timeout_secs)?;
-        let username = self.username_list.as_ref()
+        let username = self
+            .username_list
+            .as_ref()
             .and_then(|u| u.first().map(|s| s.as_str()))
             .unwrap_or("admin");
-        if let Ok(result) = lockout_detector.detect(target, username, self.max_attempts).await {
+        if let Ok(result) = lockout_detector
+            .detect(target, username, self.max_attempts)
+            .await
+        {
             report.lockout_detection = Some(result);
         }
 

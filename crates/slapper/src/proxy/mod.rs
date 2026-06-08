@@ -139,7 +139,10 @@ impl ProxyManager {
             .await
             .map(|stream| {
                 let local_addr = stream.local_addr().unwrap_or_else(|_| {
-                    tracing::warn!("Failed to get local address for proxied connection to {}", domain);
+                    tracing::warn!(
+                        "Failed to get local address for proxied connection to {}",
+                        domain
+                    );
                     std::net::SocketAddr::new(
                         std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
                         0,

@@ -101,7 +101,9 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
             let result = tokio::time::timeout(timeout, client.get(&path)).await;
             let resp = match result {
                 Ok(r) => r,
-                Err(_) => Err(crate::error::SlapperError::Http("Request timed out".to_string())),
+                Err(_) => Err(crate::error::SlapperError::Http(
+                    "Request timed out".to_string(),
+                )),
             };
             (path, resp)
         }));
@@ -129,10 +131,7 @@ async fn check_admin_access(client: &HuntClient, config: &HuntConfig) -> Vec<Aut
                                 path
                             ),
                             endpoint: format!("{}{}", client.base_url(), path),
-                            evidence: format!(
-                                "GET {} returned 200 OK with admin content",
-                                path
-                            ),
+                            evidence: format!("GET {} returned 200 OK with admin content", path),
                             remediation: "Implement authorization checks on all admin endpoints"
                                 .to_string(),
                             cvss_score: Some(9.0),
@@ -172,7 +171,9 @@ async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass
             let result = tokio::time::timeout(timeout, client.get(&path)).await;
             let resp = match result {
                 Ok(r) => r,
-                Err(_) => Err(crate::error::SlapperError::Http("Request timed out".to_string())),
+                Err(_) => Err(crate::error::SlapperError::Http(
+                    "Request timed out".to_string(),
+                )),
             };
             (path, resp)
         }));
@@ -189,10 +190,7 @@ async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass
                             id,
                             bypass_type: BypassType::Idor,
                             severity: Severity::High,
-                            description: format!(
-                                "Potential IDOR: resource accessible at {}",
-                                path
-                            ),
+                            description: format!("Potential IDOR: resource accessible at {}", path),
                             endpoint: format!("{}{}", client.base_url(), path),
                             evidence: format!(
                                 "GET {} returned 200 with {} bytes of content",
@@ -215,7 +213,12 @@ async fn check_idor(client: &HuntClient, config: &HuntConfig) -> Vec<AuthzBypass
 
 async fn check_force_browsing(client: &HuntClient, _config: &HuntConfig) -> Vec<AuthzBypass> {
     let mut bypasses = Vec::new();
-    let paths = ["/admin/config", "/settings", "/profile/admin", "/user/roles"];
+    let paths = [
+        "/admin/config",
+        "/settings",
+        "/profile/admin",
+        "/user/roles",
+    ];
 
     for path in &paths {
         if let Ok(resp) = client.get(path).await {
@@ -248,11 +251,7 @@ async fn check_http_methods(client: &HuntClient, _config: &HuntConfig) -> Vec<Au
     for method in &methods {
         let resp = match *method {
             "OPTIONS" => client.head("/").await,
-            "TRACE" => {
-                client
-                    .request(reqwest::Method::TRACE, "/")
-                    .await
-            }
+            "TRACE" => client.request(reqwest::Method::TRACE, "/").await,
             _ => client.get("/").await,
         };
 

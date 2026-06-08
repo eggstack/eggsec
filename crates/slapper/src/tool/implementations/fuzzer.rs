@@ -57,7 +57,10 @@ impl SecurityTool for FuzzerTool {
             .to_string();
 
         let concurrency = request.options.concurrency.unwrap_or(10);
-        let timeout = request.options.timeout_ms.unwrap_or(crate::constants::DEFAULT_TOOL_TIMEOUT_MS);
+        let timeout = request
+            .options
+            .timeout_ms
+            .unwrap_or(crate::constants::DEFAULT_TOOL_TIMEOUT_MS);
 
         // Parse additional fuzzing options from params
         let mutate = params

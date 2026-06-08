@@ -209,7 +209,11 @@ mod tests {
     #[test]
     fn test_php_payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 25, "php should have at least 25 payloads, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 25,
+            "php should have at least 25 payloads, got {}",
+            payloads.len()
+        );
     }
 
     #[test]

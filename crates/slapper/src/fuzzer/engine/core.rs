@@ -11,8 +11,8 @@ use super::super::state::HttpSession;
 use super::super::targets::get_target_payloads;
 
 use crate::cli::{FuzzArgs, FuzzMode, WafStressArgs};
-use crate::utils::sanitize_for_logging;
 use crate::types::Severity;
+use crate::utils::sanitize_for_logging;
 
 use super::super::detection::{PatternMatcher, TimingAnalyzer};
 use super::types::{FuzzResult, FuzzSession};
@@ -170,32 +170,28 @@ impl FuzzEngine {
 
         let filter_chain = crate::fuzzer::FilterChain::new();
 
-        let auth_context_entry =
-            if let (Some(ref path), Some(ref role)) = (&args.common.auth_context, &args.common.auth_role)
-            {
-                match crate::auth_context::load_auth_context_file(std::path::Path::new(path)) {
-                    Ok(ctx) => match crate::auth_context::get_context_entry(&ctx, role) {
-                        Ok(entry) => {
-                            tracing::info!(
-                                "Loaded auth context role '{}' from {}",
-                                role,
-                                path
-                            );
-                            Some(entry.clone())
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to resolve auth role: {}", e);
-                            None
-                        }
-                    },
+        let auth_context_entry = if let (Some(ref path), Some(ref role)) =
+            (&args.common.auth_context, &args.common.auth_role)
+        {
+            match crate::auth_context::load_auth_context_file(std::path::Path::new(path)) {
+                Ok(ctx) => match crate::auth_context::get_context_entry(&ctx, role) {
+                    Ok(entry) => {
+                        tracing::info!("Loaded auth context role '{}' from {}", role, path);
+                        Some(entry.clone())
+                    }
                     Err(e) => {
-                        tracing::warn!("Failed to load auth context file: {}", e);
+                        tracing::warn!("Failed to resolve auth role: {}", e);
                         None
                     }
+                },
+                Err(e) => {
+                    tracing::warn!("Failed to load auth context file: {}", e);
+                    None
                 }
-            } else {
-                None
-            };
+            }
+        } else {
+            None
+        };
 
         Ok(Self {
             args,
@@ -225,9 +221,13 @@ impl FuzzEngine {
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(args.timeout))
             .danger_accept_invalid_certs(args.common.insecure)
-            .redirect(reqwest::redirect::Policy::limited(crate::constants::http::DEFAULT_MAX_REDIRECTS as usize))
+            .redirect(reqwest::redirect::Policy::limited(
+                crate::constants::http::DEFAULT_MAX_REDIRECTS as usize,
+            ))
             .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+            .pool_idle_timeout(Duration::from_secs(
+                crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .tcp_nodelay(true);
 
         if let Some(proxy_url) = &args.common.proxy {

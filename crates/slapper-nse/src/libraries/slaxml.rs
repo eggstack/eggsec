@@ -155,10 +155,9 @@ fn parse_tag(tag: &str) -> (String, Vec<(String, String)>) {
                 continue;
             }
 
-            if in_key && !in_quote
-                && (c.is_alphanumeric() || c == '-' || c == '_') {
-                    key.push(c);
-                }
+            if in_key && !in_quote && (c.is_alphanumeric() || c == '-' || c == '_') {
+                key.push(c);
+            }
 
             if in_value && in_quote {
                 value.push(c);

@@ -66,9 +66,7 @@ pub enum CommandMessage {
         task: crate::distributed::queue::Task,
     },
     #[serde(rename = "status_request")]
-    StatusRequest {
-        id: String,
-    },
+    StatusRequest { id: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

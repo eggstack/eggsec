@@ -37,10 +37,7 @@ impl std::fmt::Display for ClientIssueType {
     }
 }
 
-pub async fn check_client_security(
-    tab: &headless_chrome::Tab,
-) -> Result<Vec<ClientIssue>> {
-
+pub async fn check_client_security(tab: &headless_chrome::Tab) -> Result<Vec<ClientIssue>> {
     let js_script = r#"
         (function() {
             const issues = [];
@@ -238,9 +235,14 @@ fn get_remediation(issue_type: &str) -> String {
         }
         "SourceMapsExposed" => "Remove source maps from production build".to_string(),
         "DebugMode" => "Disable debug mode in production".to_string(),
-        "CSPSourceMap" => "Remove 'unsafe-eval' and 'unsafe-inline' from CSP; use nonces".to_string(),
+        "CSPSourceMap" => {
+            "Remove 'unsafe-eval' and 'unsafe-inline' from CSP; use nonces".to_string()
+        }
         "CORSWildcard" => "Replace wildcard CORS origin with specific allowed origins".to_string(),
-        "CorsMisconfiguration" => "Restrict CORS to specific trusted origins; never reflect arbitrary Origin headers".to_string(),
+        "CorsMisconfiguration" => {
+            "Restrict CORS to specific trusted origins; never reflect arbitrary Origin headers"
+                .to_string()
+        }
         _ => "Implement proper security controls".to_string(),
     }
 }
@@ -260,7 +262,10 @@ mod tests {
             .wait_until_navigated()
             .unwrap();
         let issues = check_client_security(&tab).await.unwrap();
-        assert!(issues.len() <= 10, "should return a bounded number of issues");
+        assert!(
+            issues.len() <= 10,
+            "should return a bounded number of issues"
+        );
     }
 
     #[test]
@@ -270,7 +275,10 @@ mod tests {
             ClientIssueType::LocalStorageSensitive
         );
         assert_eq!(ClientIssueType::CORSWildcard, ClientIssueType::CORSWildcard);
-        assert_eq!(ClientIssueType::CorsMisconfiguration, ClientIssueType::CorsMisconfiguration);
+        assert_eq!(
+            ClientIssueType::CorsMisconfiguration,
+            ClientIssueType::CorsMisconfiguration
+        );
     }
 
     #[test]
@@ -319,11 +327,20 @@ mod tests {
 
     #[test]
     fn test_issue_type_display() {
-        assert_eq!(ClientIssueType::LocalStorageSensitive.to_string(), "Local Storage Sensitive");
-        assert_eq!(ClientIssueType::CorsMisconfiguration.to_string(), "CORS Misconfiguration");
+        assert_eq!(
+            ClientIssueType::LocalStorageSensitive.to_string(),
+            "Local Storage Sensitive"
+        );
+        assert_eq!(
+            ClientIssueType::CorsMisconfiguration.to_string(),
+            "CORS Misconfiguration"
+        );
         assert_eq!(ClientIssueType::CSPSourceMap.to_string(), "CSP Source Map");
         assert_eq!(ClientIssueType::DebugMode.to_string(), "Debug Mode");
-        assert_eq!(ClientIssueType::SourceMapsExposed.to_string(), "Source Maps Exposed");
+        assert_eq!(
+            ClientIssueType::SourceMapsExposed.to_string(),
+            "Source Maps Exposed"
+        );
         assert_eq!(ClientIssueType::CORSWildcard.to_string(), "CORS Wildcard");
     }
 }

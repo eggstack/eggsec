@@ -72,7 +72,10 @@ pub struct ClusterAddTaskArgs {
     pub coordinator: String,
     #[arg(long, help = "Pre-shared key for authentication")]
     pub psk: Option<String>,
-    #[arg(long, help = "Task type (PortScan, ServiceFingerprint, EndpointDiscovery, Fuzz, WafTest, LoadTest, Recon)")]
+    #[arg(
+        long,
+        help = "Task type (PortScan, ServiceFingerprint, EndpointDiscovery, Fuzz, WafTest, LoadTest, Recon)"
+    )]
     pub task_type: String,
     #[arg(long, help = "Target to scan")]
     pub target: String,

@@ -1,5 +1,5 @@
 use crate::container::Severity;
-use crate::error::{SlapperError, Result};
+use crate::error::{Result, SlapperError};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -196,9 +196,15 @@ impl DockerScanner {
     }
 
     fn is_valid_image_name(image_name: &str) -> bool {
-        image_name
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == ':' || c == '@' || c == '-' || c == '_' || c == '.' || c == '/')
+        image_name.chars().all(|c| {
+            c.is_alphanumeric()
+                || c == ':'
+                || c == '@'
+                || c == '-'
+                || c == '_'
+                || c == '.'
+                || c == '/'
+        })
     }
 
     async fn inspect_image(&self, image_name: &str) -> Result<serde_json::Value> {

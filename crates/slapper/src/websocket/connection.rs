@@ -28,7 +28,11 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
     match result {
         Ok(Ok((mut ws, response))) => {
             let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
-            tracing::info!("WebSocket connection to {} established (latency: {:.1}ms)", url, latency_ms);
+            tracing::info!(
+                "WebSocket connection to {} established (latency: {:.1}ms)",
+                url,
+                latency_ms
+            );
             let headers: Vec<(String, String)> = response
                 .headers()
                 .iter()
@@ -94,7 +98,11 @@ pub async fn test_connection(url: &str, timeout_secs: u64) -> ConnectionTestResu
             }
         }
         Err(_) => {
-            tracing::warn!("WebSocket connection to {} timed out after {}s", url, timeout_secs);
+            tracing::warn!(
+                "WebSocket connection to {} timed out after {}s",
+                url,
+                timeout_secs
+            );
             ConnectionTestResult {
                 url: url.to_string(),
                 connected: false,

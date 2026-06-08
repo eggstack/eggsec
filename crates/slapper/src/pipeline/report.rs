@@ -8,8 +8,6 @@ use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
 
-
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PipelineReport {
     pub target: String,
@@ -89,7 +87,10 @@ impl std::fmt::Display for PipelineReport {
             writeln!(
                 f,
                 "\t{} requests, {:.2} rps, {:.2}ms mean latency (p95: {:.2}ms)",
-                load.total_requests, load.requests_per_second, load.latency_mean_ms, load.latency_p95_ms
+                load.total_requests,
+                load.requests_per_second,
+                load.latency_mean_ms,
+                load.latency_p95_ms
             )?;
             writeln!(
                 f,

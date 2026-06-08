@@ -374,8 +374,7 @@ mod tests {
 
     #[test]
     fn test_cvss_score_from_vector() {
-        let score =
-            CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").unwrap();
+        let score = CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").unwrap();
         // NVD CVSS 3.1 calculator: 9.8
         assert_eq!(score.base_score, 9.8);
     }
@@ -401,14 +400,12 @@ mod tests {
 
     #[test]
     fn test_environmental_score_with_requirements() {
-        let high_req = CvssScore::from_vector(
-            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/CR:H/IR:H/AR:H",
-        )
-        .unwrap();
-        let low_req = CvssScore::from_vector(
-            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/CR:L/IR:L/AR:L",
-        )
-        .unwrap();
+        let high_req =
+            CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/CR:H/IR:H/AR:H")
+                .unwrap();
+        let low_req =
+            CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/CR:L/IR:L/AR:L")
+                .unwrap();
         assert!(high_req.environmental_score >= low_req.environmental_score);
     }
 
@@ -436,16 +433,14 @@ mod tests {
             CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").unwrap();
         assert_eq!(critical.severity(), "CRITICAL");
 
-        let low =
-            CvssScore::from_vector("CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:L/A:N").unwrap();
+        let low = CvssScore::from_vector("CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:L/A:N").unwrap();
         assert_eq!(low.severity(), "LOW");
     }
 
     #[test]
     fn test_zero_impact_scope_changed() {
         // All CIA = None, impact should be 0
-        let score =
-            CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:N").unwrap();
+        let score = CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:N").unwrap();
         assert_eq!(score.base_score, 0.0);
     }
 
@@ -453,8 +448,7 @@ mod tests {
     fn test_roundup_vs_floor() {
         // Verify Roundup function: 4.02 -> 4.1 (not 4.0)
         // AV:L/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N = 3.3 per NVD
-        let score =
-            CvssScore::from_vector("CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N").unwrap();
+        let score = CvssScore::from_vector("CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N").unwrap();
         assert_eq!(score.base_score, 3.3);
     }
 }

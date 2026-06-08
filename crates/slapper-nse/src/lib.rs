@@ -131,7 +131,10 @@ impl SandboxConfig {
     }
 
     /// Check if a file path is allowed under the sandbox.
-    #[deprecated(since = "0.1.0", note = "Use get_allowed_path() to avoid TOCTOU vulnerabilities")]
+    #[deprecated(
+        since = "0.1.0",
+        note = "Use get_allowed_path() to avoid TOCTOU vulnerabilities"
+    )]
     pub fn is_path_allowed(&self, path: &str) -> bool {
         self.get_allowed_path(path).is_some()
     }

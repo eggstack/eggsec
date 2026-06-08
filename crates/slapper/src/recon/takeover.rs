@@ -415,10 +415,7 @@ impl TakeoverDetector {
                 {
                     for cname_pattern in fingerprint.nxdomain_cnames {
                         if err_str.contains(*cname_pattern) {
-                            let cname_display = fingerprint
-                                .cnames
-                                .first()
-                                .unwrap_or(&"unknown");
+                            let cname_display = fingerprint.cnames.first().unwrap_or(&"unknown");
                             return HttpCheckResult::Vulnerable(format!(
                                 "DNS resolution failed for {} pointing to {}",
                                 subdomain, cname_display
@@ -428,9 +425,7 @@ impl TakeoverDetector {
                 }
                 HttpCheckResult::Unknown(err_str)
             }
-            Err(_) => {
-                HttpCheckResult::Unknown(format!("Request timed out for {}", subdomain))
-            }
+            Err(_) => HttpCheckResult::Unknown(format!("Request timed out for {}", subdomain)),
         }
     }
 

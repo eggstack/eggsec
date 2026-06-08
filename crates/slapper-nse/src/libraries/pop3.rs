@@ -205,7 +205,8 @@ pub fn register_pop3_library(lua: &Lua) -> LuaResult<()> {
 
             if response.starts_with("+OK") {
                 let parts: Vec<&str> = response.split("\r\n\r\n").collect();
-                let header = parts.first()
+                let header = parts
+                    .first()
                     .unwrap_or(&"")
                     .lines()
                     .skip(1)

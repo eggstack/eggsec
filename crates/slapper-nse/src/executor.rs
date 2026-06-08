@@ -174,9 +174,7 @@ impl NseExecutor {
                         if let Ok(action) = globals.get::<mlua::Function>("action") {
                             let host = globals.get::<Table>("nmap")?;
                             match action.call::<Value>((host.clone(), port_info.clone())) {
-                                Ok(v) if !v.is_nil() => {
-                                    outputs.push(format!("action: {:?}", v))
-                                }
+                                Ok(v) if !v.is_nil() => outputs.push(format!("action: {:?}", v)),
                                 Err(e) => outputs.push(format!("action error: {}", e)),
                                 _ => {}
                             }

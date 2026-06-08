@@ -133,6 +133,7 @@ pub struct SlapperConfig {
     #[serde(default)]
     pub execution_policy: ExecutionPolicy,
 
+    #[cfg(feature = "external-integrations")]
     #[serde(default)]
     pub integrations: crate::integrations::IntegrationConfig,
 

@@ -247,9 +247,7 @@ impl UserData for SocketHandle {
 
         methods.add_method_mut("receive", |lua, this, size: Option<usize>| {
             let size = size.unwrap_or(1024);
-            let data = this
-                .receive(size)
-                .map_err(mlua::Error::RuntimeError)?;
+            let data = this.receive(size).map_err(mlua::Error::RuntimeError)?;
 
             let result = lua.create_table()?;
             result.set("data", data)?;
@@ -550,9 +548,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                     .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
 
                 let size = size.unwrap_or(1024);
-                let data = sock
-                    .receive(size)
-                    .map_err(mlua::Error::RuntimeError)?;
+                let data = sock.receive(size).map_err(mlua::Error::RuntimeError)?;
 
                 let result = lua.create_table()?;
                 result.set("data", data)?;

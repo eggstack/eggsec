@@ -65,7 +65,12 @@ impl ContentScanner {
                     }
                 };
 
-                match tokio::time::timeout(std::time::Duration::from_secs(30), client.get(&url).send()).await {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.get(&url).send(),
+                )
+                .await
+                {
                     Ok(Ok(response)) => {
                         let status = response.status().as_u16();
                         let content_type = response
@@ -74,7 +79,10 @@ impl ContentScanner {
                             .and_then(|v| v.to_str().ok())
                             .map(|s| s.to_string());
 
-                        if status == 200 || status == 401 || status == crate::constants::STATUS_FORBIDDEN {
+                        if status == 200
+                            || status == 401
+                            || status == crate::constants::STATUS_FORBIDDEN
+                        {
                             let (category, severity) = Self::categorize_path(path);
                             let is_sensitive = !category.is_empty();
 

@@ -309,7 +309,10 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
 
                         let mut encrypted = [0u8; 8];
                         let input_arr1: [u8; 8] = challenge[..8].try_into().map_err(|_| {
-                            std::io::Error::new(std::io::ErrorKind::InvalidData, "VNC challenge too short")
+                            std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "VNC challenge too short",
+                            )
                         })?;
                         let mut input1 = GenericArray::from(input_arr1);
                         cipher.encrypt_block(&mut input1);
@@ -317,7 +320,10 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
 
                         let mut encrypted2 = [0u8; 8];
                         let input_arr2: [u8; 8] = challenge[8..].try_into().map_err(|_| {
-                            std::io::Error::new(std::io::ErrorKind::InvalidData, "VNC challenge too short")
+                            std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "VNC challenge too short",
+                            )
                         })?;
                         let mut input2 = GenericArray::from(input_arr2);
                         cipher.encrypt_block(&mut input2);

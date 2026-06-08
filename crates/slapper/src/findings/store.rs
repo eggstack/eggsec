@@ -40,7 +40,10 @@ impl FindingStore {
         let fingerprint = finding.fingerprint.clone();
         let mut findings = self.load_findings_inner()?;
 
-        if let Some(idx) = findings.iter().position(|f| f.finding.fingerprint == fingerprint) {
+        if let Some(idx) = findings
+            .iter()
+            .position(|f| f.finding.fingerprint == fingerprint)
+        {
             findings[idx].finding = finding;
             self.write_findings_inner(&findings)?;
             return Ok(findings[idx].clone());

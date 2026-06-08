@@ -343,7 +343,10 @@ async fn test_stale_task_reassignment() {
     let queue = TaskQueue::new(100);
 
     // Enqueue and dequeue a task (simulating assignment)
-    queue.enqueue(make_task("task-stale", "job-1")).await.unwrap();
+    queue
+        .enqueue(make_task("task-stale", "job-1"))
+        .await
+        .unwrap();
     let task = queue.dequeue("worker-dead").await.unwrap().unwrap();
     assert_eq!(task.id, "task-stale");
     assert_eq!(queue.get_in_progress_count().await, 1);
@@ -396,10 +399,7 @@ async fn test_enqueue_task_command() {
 
     // Enqueue a task
     let task = make_task("task-enq", "job-enq");
-    client
-        .enqueue_task("127.0.0.1", port, task)
-        .await
-        .unwrap();
+    client.enqueue_task("127.0.0.1", port, task).await.unwrap();
 
     // Request tasks — should get the enqueued task back
     let tasks = client

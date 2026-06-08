@@ -3,6 +3,8 @@ members = [
     "crates/slapper-core",
     "crates/slapper",
     "crates/slapper-nse",
+    "crates/slapper-tui",
+    "crates/slapper-cli",
 ]
 resolver = "2"
 

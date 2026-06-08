@@ -83,12 +83,8 @@ pub fn list_context_names(ctx: &AuthContext) -> Vec<String> {
 pub fn load_auth_context_file(path: &Path) -> Result<AuthContext> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read auth context file: {}", path.display()))?;
-    parse_auth_context(&content).with_context(|| {
-        format!(
-            "Failed to parse auth context file: {}",
-            path.display()
-        )
-    })
+    parse_auth_context(&content)
+        .with_context(|| format!("Failed to parse auth context file: {}", path.display()))
 }
 
 /// Get an auth context entry by role name, returning an error if the role doesn't exist
@@ -244,7 +240,9 @@ contexts:
       Authorization: "Bearer tok"
 "#;
         let err = parse_auth_context(yaml).unwrap_err();
-        assert!(err.to_string().contains("Unsupported auth-context version 2"));
+        assert!(err
+            .to_string()
+            .contains("Unsupported auth-context version 2"));
     }
 
     #[test]

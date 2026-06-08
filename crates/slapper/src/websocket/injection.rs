@@ -16,7 +16,11 @@ pub async fn test_injection(
     payloads: &[String],
     timeout_secs: u64,
 ) -> Vec<InjectionTestResult> {
-    tracing::info!("Testing WebSocket injection with {} payloads on {}", payloads.len(), url);
+    tracing::info!(
+        "Testing WebSocket injection with {} payloads on {}",
+        payloads.len(),
+        url
+    );
     let mut results = Vec::new();
 
     for payload in payloads {
@@ -28,11 +32,7 @@ pub async fn test_injection(
 }
 
 #[cfg(feature = "websocket")]
-async fn test_single_injection(
-    url: &str,
-    payload: &str,
-    timeout_secs: u64,
-) -> InjectionTestResult {
+async fn test_single_injection(url: &str, payload: &str, timeout_secs: u64) -> InjectionTestResult {
     use futures::{SinkExt, StreamExt};
 
     let connect_result = tokio::time::timeout(
@@ -97,11 +97,8 @@ async fn test_single_injection(
         }
     };
 
-    let recv_result = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        ws.next(),
-    )
-    .await;
+    let recv_result =
+        tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), ws.next()).await;
 
     match recv_result {
         Ok(Some(Ok(msg))) => {
@@ -113,7 +110,8 @@ async fn test_single_injection(
                 _ => None,
             };
 
-            let vulnerability_detected = detect_injection_vulnerability(payload, response_content.as_deref());
+            let vulnerability_detected =
+                detect_injection_vulnerability(payload, response_content.as_deref());
 
             if vulnerability_detected {
                 tracing::warn!(
@@ -215,8 +213,13 @@ fn detect_injection_vulnerability(payload: &str, response: Option<&str>) -> bool
 
     if payload.contains("../") {
         let path_traversal_indicators = [
-            "root:", "bin/bash", "bin/sh", "/etc/passwd", "/etc/shadow",
-            "boot.ini", "win.ini",
+            "root:",
+            "bin/bash",
+            "bin/sh",
+            "/etc/passwd",
+            "/etc/shadow",
+            "boot.ini",
+            "win.ini",
         ];
         if path_traversal_indicators
             .iter()

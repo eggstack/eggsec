@@ -173,8 +173,14 @@ pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::
 
     if !report.wireless_networks.is_empty() {
         writeln!(md, "## Wireless Networks\n")?;
-        writeln!(md, "| SSID | BSSID | Channel | Security | Signal | Last Seen |")?;
-        writeln!(md, "|------|-------|---------|----------|--------|-----------|")?;
+        writeln!(
+            md,
+            "| SSID | BSSID | Channel | Security | Signal | Last Seen |"
+        )?;
+        writeln!(
+            md,
+            "|------|-------|---------|----------|--------|-----------|"
+        )?;
         for network in &report.wireless_networks {
             let escape_pipe = |s: &str| s.replace('|', "\\|");
             writeln!(

@@ -304,7 +304,10 @@ pub struct ProxyConfig {
     #[serde(default)]
     pub health_check_url: Option<String>,
 
-    #[serde(default = "default_health_interval", alias = "health_check_check_interval_secs")]
+    #[serde(
+        default = "default_health_interval",
+        alias = "health_check_check_interval_secs"
+    )]
     pub health_check_frequency_secs: u64,
 
     #[serde(default = "default_max_failures")]

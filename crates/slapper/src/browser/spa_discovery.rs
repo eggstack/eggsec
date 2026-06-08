@@ -29,10 +29,7 @@ impl std::fmt::Display for DiscoveryMethod {
     }
 }
 
-pub async fn discover_routes(
-    tab: &headless_chrome::Tab,
-) -> Result<Vec<SpaRoute>> {
-
+pub async fn discover_routes(tab: &headless_chrome::Tab) -> Result<Vec<SpaRoute>> {
     let js_script = r#"
         (function() {
             const routes = new Set();
@@ -232,8 +229,14 @@ mod tests {
     #[test]
     fn test_discovery_method_display() {
         assert_eq!(DiscoveryMethod::Crawl.to_string(), "Crawl");
-        assert_eq!(DiscoveryMethod::XhrInterception.to_string(), "XHR Interception");
-        assert_eq!(DiscoveryMethod::FetchInterception.to_string(), "Fetch Interception");
+        assert_eq!(
+            DiscoveryMethod::XhrInterception.to_string(),
+            "XHR Interception"
+        );
+        assert_eq!(
+            DiscoveryMethod::FetchInterception.to_string(),
+            "Fetch Interception"
+        );
         assert_eq!(DiscoveryMethod::RouteParsing.to_string(), "Route Parsing");
     }
 

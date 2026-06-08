@@ -81,7 +81,9 @@ pub struct BypassEngine {
 impl BypassEngine {
     pub fn new(args: &WafArgs, profile: Option<WafProfile>, test_type: TestType) -> Result<Self> {
         let client = crate::utils::create_insecure_client_with_options(args.timeout, |builder| {
-            builder.redirect(reqwest::redirect::Policy::limited(crate::constants::waf::MAX_REDIRECTS))
+            builder.redirect(reqwest::redirect::Policy::limited(
+                crate::constants::waf::MAX_REDIRECTS,
+            ))
         })?;
 
         Ok(Self {

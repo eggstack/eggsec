@@ -94,18 +94,16 @@ fn is_private_ip(ip: &IpAddr) -> bool {
 pub fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     let haystack_bytes = haystack.as_bytes();
     let needle_bytes = needle.as_bytes();
-    
+
     if needle_bytes.len() > haystack_bytes.len() {
         return false;
     }
-    
-    haystack_bytes
-        .windows(needle_bytes.len())
-        .any(|window| {
-            // SAFETY: We're comparing bytes from valid UTF-8 strings
-            let candidate = std::str::from_utf8(window).unwrap_or("");
-            candidate.eq_ignore_ascii_case(needle)
-        })
+
+    haystack_bytes.windows(needle_bytes.len()).any(|window| {
+        // SAFETY: We're comparing bytes from valid UTF-8 strings
+        let candidate = std::str::from_utf8(window).unwrap_or("");
+        candidate.eq_ignore_ascii_case(needle)
+    })
 }
 
 #[cfg(test)]

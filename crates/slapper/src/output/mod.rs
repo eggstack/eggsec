@@ -82,7 +82,8 @@ pub use attack_graph::{
 };
 pub use convert::{
     convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
-    load_scan_report, FindingData, PortData, ScanReportData, ServiceData, WirelessNetworkReportData,
+    load_scan_report, FindingData, PortData, ScanReportData, ServiceData,
+    WirelessNetworkReportData,
 };
 pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
 pub use diff::DiffSummary;
@@ -97,4 +98,3 @@ pub use trend::{
     ComparisonResult, Finding as TrendFinding, ResultComparator, ResultSummary, ScanResult,
     Severity as TrendSeverity, TrendAnalysis, TrendAnalyzer, TrendDirection,
 };
-

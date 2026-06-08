@@ -316,15 +316,15 @@ impl PacketBuilder {
                     packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload));
                     payload_appended = true;
                 }
-            TransportBuilder::Udp(udp) => {
-                let payload = self.payload.as_deref().unwrap_or(&[]);
-                packet.extend_from_slice(&udp.to_bytes(payload));
-            }
-            TransportBuilder::Icmp(icmp) => {
-                let payload = self.payload.as_deref().unwrap_or(&[]);
-                packet.extend_from_slice(&icmp.to_bytes(payload));
-                payload_appended = true;
-            }
+                TransportBuilder::Udp(udp) => {
+                    let payload = self.payload.as_deref().unwrap_or(&[]);
+                    packet.extend_from_slice(&udp.to_bytes(payload));
+                }
+                TransportBuilder::Icmp(icmp) => {
+                    let payload = self.payload.as_deref().unwrap_or(&[]);
+                    packet.extend_from_slice(&icmp.to_bytes(payload));
+                    payload_appended = true;
+                }
             }
         }
 

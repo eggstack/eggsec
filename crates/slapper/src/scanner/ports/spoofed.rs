@@ -383,7 +383,8 @@ pub(crate) async fn scan_ports_spoofed(
                                 scan_type,
                                 ttl,
                             ) {
-                                let send_result = tx_guard.send_to(&packet, Some(interface.clone()));
+                                let send_result =
+                                    tx_guard.send_to(&packet, Some(interface.clone()));
                                 if send_result.is_none() {
                                     tracing::warn!("Failed to send simultaneous decoy packet");
                                 } else {

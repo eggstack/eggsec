@@ -15,7 +15,9 @@ pub struct HttpConnectProxy {
     proxy_addr: SocketAddr,
     username: Option<SensitiveString>,
     password: Option<SensitiveString>,
-    #[deprecated(note = "use_ssl is not implemented - HTTPS proxy type determines TLS in the caller")]
+    #[deprecated(
+        note = "use_ssl is not implemented - HTTPS proxy type determines TLS in the caller"
+    )]
     use_ssl: bool,
     timeout: Duration,
 }
@@ -165,12 +167,15 @@ impl HttpConnectProxy {
                 }
             }
             Ok(response)
-        }).await;
+        })
+        .await;
 
         match result {
             Ok(Ok(response)) => Ok(response),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(SlapperError::Proxy("Timeout reading proxy response".to_string())),
+            Err(_) => Err(SlapperError::Proxy(
+                "Timeout reading proxy response".to_string(),
+            )),
         }
     }
 

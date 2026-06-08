@@ -323,7 +323,11 @@ impl FuzzerResultConverter<IdorTestResult> for IdorTestResult {
                 severity: self.severity,
                 tags: vec![format!("{:?}", self.vulnerability)],
             },
-            status_code: if self.success { 200 } else { crate::constants::STATUS_FORBIDDEN },
+            status_code: if self.success {
+                200
+            } else {
+                crate::constants::STATUS_FORBIDDEN
+            },
             response_time_ms: 0,
             response_length: None,
             response_body: None,
@@ -423,7 +427,9 @@ impl AdvancedFuzzer for WebSocketFuzzer {
         {
             let tests = self.generate_all_tests();
             for r in tests {
-                if r.vulnerability != crate::fuzzer::payloads::websocket::WebSocketVulnerability::Injection {
+                if r.vulnerability
+                    != crate::fuzzer::payloads::websocket::WebSocketVulnerability::Injection
+                {
                     results.push(r.into_fuzz_result());
                 }
             }
@@ -530,10 +536,7 @@ impl AdvancedFuzzer for WebSocketFuzzer {
                         } else {
                             Severity::Info
                         },
-                        tags: vec![
-                            "websocket".to_string(),
-                            "injection".to_string(),
-                        ],
+                        tags: vec!["websocket".to_string(), "injection".to_string()],
                     },
                     status_code: if test.sent { 200 } else { 0 },
                     response_time_ms: 0,
@@ -570,10 +573,7 @@ impl AdvancedFuzzer for WebSocketFuzzer {
                         } else {
                             Severity::Info
                         },
-                        tags: vec![
-                            "websocket".to_string(),
-                            "fuzzing".to_string(),
-                        ],
+                        tags: vec!["websocket".to_string(), "fuzzing".to_string()],
                     },
                     status_code: if test.sent { 200 } else { 0 },
                     response_time_ms: 0,
@@ -618,9 +618,9 @@ impl FuzzerResultConverter<WebSocketTestResult> for WebSocketTestResult {
             WebSocketVulnerability::Injection => {
                 Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string())
             }
-            WebSocketVulnerability::DoS => {
-                Some(crate::waf::types::OwaspCategory::A05_2021_SecurityMisconfiguration.to_string())
-            }
+            WebSocketVulnerability::DoS => Some(
+                crate::waf::types::OwaspCategory::A05_2021_SecurityMisconfiguration.to_string(),
+            ),
             WebSocketVulnerability::CrossSiteWebSocketHijacking => {
                 Some(crate::waf::types::OwaspCategory::A01_2021_BrokenAccessControl.to_string())
             }

@@ -17,24 +17,23 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
                 _ => crate::supply_chain::sbom::SbomFormat::CycloneDx,
             };
 
-            let path_str = project_path.to_str().ok_or_else(|| {
-                anyhow::anyhow!("Invalid path: {}", project_path.display())
-            })?;
+            let path_str = project_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid path: {}", project_path.display()))?;
 
-            let report =
-                if project_path.join("Cargo.toml").exists() {
-                    gen.generate_from_cargo(path_str, format.clone())?
-                } else if project_path.join("package.json").exists() {
-                    gen.generate_from_npm(path_str, format.clone())?
-                } else if project_path.join("requirements.txt").exists() {
-                    gen.generate_from_requirements(path_str, format.clone())?
-                } else {
-                    return Err(crate::error::SlapperError::Validation(
+            let report = if project_path.join("Cargo.toml").exists() {
+                gen.generate_from_cargo(path_str, format.clone())?
+            } else if project_path.join("package.json").exists() {
+                gen.generate_from_npm(path_str, format.clone())?
+            } else if project_path.join("requirements.txt").exists() {
+                gen.generate_from_requirements(path_str, format.clone())?
+            } else {
+                return Err(crate::error::SlapperError::Validation(
                     "No supported manifest file found (Cargo.toml, package.json, requirements.txt)"
                         .to_string(),
                 )
                 .into());
-                };
+            };
 
             let output = match gen_args.format.as_str() {
                 "cyclonedx" => gen.export_cyclonedx(&report)?,

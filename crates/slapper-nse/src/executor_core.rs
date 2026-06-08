@@ -12,15 +12,13 @@ use std::sync::Arc;
 
 use crate::libraries::shared;
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SandboxMetrics {
     pub io_handles: usize,
     pub io_violations: usize,
     pub lfs_violations: usize,
     pub os_violations: usize,
 }
-
 
 /// Core Lua VM state shared between sync and async executors.
 ///

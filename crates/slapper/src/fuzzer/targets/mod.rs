@@ -1,5 +1,5 @@
-pub mod api;
 pub mod apache;
+pub mod api;
 pub mod generic;
 pub mod nginx;
 pub mod php;
@@ -81,7 +81,10 @@ mod tests {
 
     #[test]
     fn test_target_type_from_str_default() {
-        assert_eq!("default".parse::<TargetType>().unwrap(), TargetType::Generic);
+        assert_eq!(
+            "default".parse::<TargetType>().unwrap(),
+            TargetType::Generic
+        );
     }
 
     #[test]
@@ -100,7 +103,11 @@ mod tests {
         ];
         for t in &types {
             let payloads = get_target_payloads(*t);
-            assert!(!payloads.is_empty(), "payloads for {:?} should not be empty", t);
+            assert!(
+                !payloads.is_empty(),
+                "payloads for {:?} should not be empty",
+                t
+            );
         }
     }
 

@@ -45,13 +45,17 @@ impl KubernetesScanner {
     }
 
     pub fn from_in_cluster_config(timeout_secs: u64) -> Result<Self> {
-        let token = match std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token") {
-            Ok(t) => Some(t),
-            Err(e) => {
-                tracing::warn!("Failed to read service account token: {} - in-cluster auth unavailable", e);
-                None
-            }
-        };
+        let token =
+            match std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token") {
+                Ok(t) => Some(t),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to read service account token: {} - in-cluster auth unavailable",
+                        e
+                    );
+                    None
+                }
+            };
         let api_server = std::env::var("KUBERNETES_SERVICE_HOST")
             .map(|h| format!("https://{}", h))
             .unwrap_or_else(|_| "https://kubernetes.default.svc".to_string());
@@ -263,10 +267,13 @@ impl KubernetesScanner {
                                             .and_then(|c: &serde_json::Value| c.as_array())
                                         {
                                             for container in containers {
-                                                if let Some(sec) = container.get("securityContext") {
+                                                if let Some(sec) = container.get("securityContext")
+                                                {
                                                     if sec
                                                         .get("privileged")
-                                                        .and_then(|v: &serde_json::Value| v.as_bool())
+                                                        .and_then(|v: &serde_json::Value| {
+                                                            v.as_bool()
+                                                        })
                                                         .unwrap_or(false)
                                                     {
                                                         findings.push(K8sFinding {

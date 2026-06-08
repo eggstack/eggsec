@@ -1,10 +1,6 @@
 #[cfg(all(feature = "stress-testing", unix))]
 use crate::error::{Result, SlapperError};
 #[cfg(all(feature = "stress-testing", unix))]
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-#[cfg(all(feature = "stress-testing", unix))]
-use std::time::{Duration, Instant};
-#[cfg(all(feature = "stress-testing", unix))]
 use pnet::packet::ip::IpNextHeaderProtocols;
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet_packet::icmp::echo_request::MutableEchoRequestPacket;
@@ -14,6 +10,10 @@ use pnet_packet::icmp::{IcmpCode, IcmpTypes};
 use pnet_packet::ipv4::MutableIpv4Packet;
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet_packet::ipv6::MutableIpv6Packet;
+#[cfg(all(feature = "stress-testing", unix))]
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+#[cfg(all(feature = "stress-testing", unix))]
+use std::time::{Duration, Instant};
 
 #[cfg(all(feature = "stress-testing", unix))]
 use super::metrics::StressMetrics;

@@ -49,10 +49,10 @@ pub use auth_test::*;
 pub use browser::*;
 pub use notify::*;
 pub use report::*;
-#[cfg(feature = "rest-api")]
-pub use serve::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
+#[cfg(feature = "rest-api")]
+pub use serve::*;
 pub use storage::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
@@ -221,7 +221,12 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
 
 async fn handle_no_command(cli: &Cli) -> Result<()> {
     if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-        crate::tui::run(cli.config.clone())?;
+        // TUI launch is handled by the binary via slapper-tui.
+        // This path should not be reached when using the binary.
+        anyhow::bail!(
+            "TUI launch requested but slapper-tui is not available. \
+             Run from the slapper binary or install slapper-tui."
+        );
     } else {
         println!("No command specified and not running in interactive terminal.");
         println!("Run 'slapper --help' for available commands.");

@@ -78,7 +78,10 @@ fn extract_api_key<T>(request: &Request<T>) -> Option<String> {
         .metadata()
         .get("authorization")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer ")))
+        .and_then(|v| {
+            v.strip_prefix("Bearer ")
+                .or_else(|| v.strip_prefix("bearer "))
+        })
         .map(|v| v.to_string())
 }
 
@@ -176,7 +179,11 @@ fn convert_internal_tool_info(info: &crate::tool::registry::ToolInfo) -> ToolInf
         category: tool_category_to_string(info.category).to_string(),
         description: info.description.clone(),
         protocols: info.protocols.clone(),
-        capabilities: info.capabilities.iter().map(convert_internal_capability).collect(),
+        capabilities: info
+            .capabilities
+            .iter()
+            .map(convert_internal_capability)
+            .collect(),
     }
 }
 
@@ -237,15 +244,13 @@ fn proto_to_serde_json_value(value: &prost_types::Value) -> serde_json::Value {
     match &value.kind {
         Some(Kind::NullValue(_)) => serde_json::Value::Null,
         Some(Kind::BoolValue(b)) => serde_json::Value::Bool(*b),
-        Some(Kind::NumberValue(n)) => {
-            serde_json::Number::from_f64(*n)
-                .map(serde_json::Value::Number)
-                .unwrap_or(serde_json::Value::Null)
-        }
+        Some(Kind::NumberValue(n)) => serde_json::Number::from_f64(*n)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
         Some(Kind::StringValue(s)) => serde_json::Value::String(s.clone()),
-        Some(Kind::ListValue(list)) => serde_json::Value::Array(
-            list.values.iter().map(proto_to_serde_json_value).collect(),
-        ),
+        Some(Kind::ListValue(list)) => {
+            serde_json::Value::Array(list.values.iter().map(proto_to_serde_json_value).collect())
+        }
         Some(Kind::StructValue(st)) => {
             let map: serde_json::Map<String, serde_json::Value> = st
                 .fields
@@ -681,7 +686,9 @@ mod tests {
     use crate::tool::finding::{Finding as InternalFinding, FindingType, ResponseSeverity};
     use crate::tool::response::ToolResponse;
     use crate::tool::tool_error::ToolError as InternalToolError;
-    use crate::tool::traits::{ParameterDef as InternalParameterDef, ParameterType, ToolCapability};
+    use crate::tool::traits::{
+        ParameterDef as InternalParameterDef, ParameterType, ToolCapability,
+    };
 
     #[test]
     fn test_serde_json_to_proto_value_null() {
@@ -774,7 +781,10 @@ mod tests {
 
     #[test]
     fn test_tool_category_to_string() {
-        assert_eq!(tool_category_to_string(ToolCategory::Recon), "Reconnaissance");
+        assert_eq!(
+            tool_category_to_string(ToolCategory::Recon),
+            "Reconnaissance"
+        );
         assert_eq!(tool_category_to_string(ToolCategory::Scanning), "Scanning");
         assert_eq!(tool_category_to_string(ToolCategory::Waf), "WAF");
     }
@@ -816,7 +826,10 @@ mod tests {
         };
 
         let internal = convert_proto_target(&target);
-        assert_eq!(internal.target_type, crate::tool::request::TargetType::Domain);
+        assert_eq!(
+            internal.target_type,
+            crate::tool::request::TargetType::Domain
+        );
         assert_eq!(internal.value, "example.com");
         assert!(internal.scope.is_some());
         let scope = internal.scope.unwrap();

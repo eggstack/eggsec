@@ -116,9 +116,7 @@ fn pg_login(
         let auth_type = i32::from_be_bytes([response[5], response[6], response[7], response[8]]);
 
         match auth_type {
-            PG_AUTHENTICATION_OK => {
-                Ok(true)
-            }
+            PG_AUTHENTICATION_OK => Ok(true),
             PG_AUTHENTICATION_MD5_PASSWORD => {
                 let _salt = &response[9..13];
                 let md5_hash = format!(
@@ -189,9 +187,10 @@ fn pg_query(conn: &mut PgConnection, query: &str) -> std::io::Result<String> {
         }
 
         if !response.is_empty()
-            && (response[0] == b'Z' || response[0] == b'C' || response[0] == b'E') {
-                break;
-            }
+            && (response[0] == b'Z' || response[0] == b'C' || response[0] == b'E')
+        {
+            break;
+        }
     }
 
     if response.is_empty() {

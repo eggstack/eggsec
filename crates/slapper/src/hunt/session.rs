@@ -54,10 +54,7 @@ pub async fn check_session_security(
     Ok(issues)
 }
 
-fn check_cookie_flags(
-    headers: &reqwest::header::HeaderMap,
-    target: &str,
-) -> Vec<SessionIssue> {
+fn check_cookie_flags(headers: &reqwest::header::HeaderMap, target: &str) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
     let cookie_headers: Vec<_> = headers
         .get_all(reqwest::header::SET_COOKIE)
@@ -91,8 +88,9 @@ fn check_cookie_flags(
                 severity: Severity::Medium,
                 description: format!("Cookie '{}' missing Secure flag on HTTPS site", cookie_name),
                 evidence: format!("Set-Cookie header: {}", cookie_str),
-                remediation: "Set Secure flag on cookies for HTTPS sites to prevent HTTP transmission"
-                    .to_string(),
+                remediation:
+                    "Set Secure flag on cookies for HTTPS sites to prevent HTTP transmission"
+                        .to_string(),
                 cvss_score: Some(5.0),
             });
         }
@@ -161,8 +159,7 @@ fn check_session_token_entropy(
             let parts: Vec<&str> = cookie_str.split(';').collect();
             if let Some(name_value) = parts.first() {
                 let mut name_value_iter = name_value.splitn(2, '=');
-                if let (Some(name), Some(value)) =
-                    (name_value_iter.next(), name_value_iter.next())
+                if let (Some(name), Some(value)) = (name_value_iter.next(), name_value_iter.next())
                 {
                     let name = name.trim().to_lowercase();
                     let value = value.trim();
@@ -194,10 +191,7 @@ fn check_session_token_entropy(
     issues
 }
 
-async fn check_session_fixation(
-    client: &HuntClient,
-    config: &HuntConfig,
-) -> Vec<SessionIssue> {
+async fn check_session_fixation(client: &HuntClient, config: &HuntConfig) -> Vec<SessionIssue> {
     let mut issues = Vec::new();
 
     let request_count = 5;
@@ -276,8 +270,7 @@ async fn check_session_fixation(
                 "Received identical session cookie across {} consecutive requests",
                 request_count
             ),
-            remediation: "Regenerate session ID after authentication and periodically"
-                .to_string(),
+            remediation: "Regenerate session ID after authentication and periodically".to_string(),
             cvss_score: Some(6.5),
         });
     }

@@ -87,7 +87,11 @@ impl HuntClient {
             .map_err(|e| crate::error::SlapperError::Http(e.to_string()))
     }
 
-    pub async fn post_json(&self, path: &str, body: &serde_json::Value) -> Result<reqwest::Response> {
+    pub async fn post_json(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::Response> {
         let url = self.build_url(path);
 
         self.client
@@ -111,11 +115,7 @@ impl HuntClient {
             .map_err(|e| crate::error::SlapperError::Http(e.to_string()))
     }
 
-    pub async fn request(
-        &self,
-        method: reqwest::Method,
-        path: &str,
-    ) -> Result<reqwest::Response> {
+    pub async fn request(&self, method: reqwest::Method, path: &str) -> Result<reqwest::Response> {
         let url = self.build_url(path);
 
         self.client

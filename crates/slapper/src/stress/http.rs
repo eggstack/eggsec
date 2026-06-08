@@ -120,9 +120,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     Ok(metrics.to_stats())
 }
 
-async fn build_clients(
-    proxy_manager: Option<&ProxyManager>,
-) -> Result<Vec<reqwest::Client>> {
+async fn build_clients(proxy_manager: Option<&ProxyManager>) -> Result<Vec<reqwest::Client>> {
     if let Some(manager) = proxy_manager {
         let healthy_proxies = manager.get_all_healthy_proxies().await;
         if healthy_proxies.is_empty() {
@@ -139,7 +137,9 @@ async fn build_clients(
             let mut builder = reqwest::Client::builder()
                 .timeout(Duration::from_secs(30))
                 .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-                .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+                .pool_idle_timeout(Duration::from_secs(
+                    crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+                ))
                 .connect_timeout(Duration::from_secs(5))
                 .tcp_keepalive(Duration::from_secs(60))
                 .tcp_nodelay(true)

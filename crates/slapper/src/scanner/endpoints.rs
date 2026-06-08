@@ -345,7 +345,8 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
 
     let path_lower = path.to_lowercase();
 
-    if status_code == 200 || status_code == crate::constants::STATUS_FORBIDDEN || status_code == 401 {
+    if status_code == 200 || status_code == crate::constants::STATUS_FORBIDDEN || status_code == 401
+    {
         for pattern in &sensitive_patterns {
             if path_lower.contains(pattern) {
                 return true;

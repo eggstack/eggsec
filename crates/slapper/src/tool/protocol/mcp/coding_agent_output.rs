@@ -200,9 +200,9 @@ mod tests {
             profile: "coding-agent".to_string(),
             run_id: "req-123".to_string(),
             status: "completed".to_string(),
-            findings: vec![CodingAgentFindingReport::from_finding(
-                &make_test_finding(ResponseSeverity::Critical),
-            )],
+            findings: vec![CodingAgentFindingReport::from_finding(&make_test_finding(
+                ResponseSeverity::Critical,
+            ))],
             summary: CodingAgentSummary {
                 total_findings: 1,
                 by_severity: {

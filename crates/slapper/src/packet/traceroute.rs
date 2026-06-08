@@ -481,7 +481,10 @@ impl Traceroute {
             .map_err(|e| ProbeError::SocketError(e.to_string()))?;
 
         let packet = vec![0u8; self.config.packet_size];
-        let dst = SocketAddr::new(target, self.config.port.wrapping_add(ttl as u16).wrapping_sub(1));
+        let dst = SocketAddr::new(
+            target,
+            self.config.port.wrapping_add(ttl as u16).wrapping_sub(1),
+        );
 
         socket
             .send_to(&packet, dst)

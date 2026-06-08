@@ -155,10 +155,7 @@ async fn check_api_discovery(client: &HuntClient, _config: &HuntConfig) -> Vec<B
     flaws
 }
 
-async fn check_sensitive_files(
-    client: &HuntClient,
-    config: &HuntConfig,
-) -> Vec<BusinessLogicFlaw> {
+async fn check_sensitive_files(client: &HuntClient, config: &HuntConfig) -> Vec<BusinessLogicFlaw> {
     let mut flaws = Vec::new();
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
@@ -184,7 +181,9 @@ async fn check_sensitive_files(
             let result = tokio::time::timeout(timeout, client.get(&path)).await;
             let resp = match result {
                 Ok(r) => r,
-                Err(_) => Err(crate::error::SlapperError::Http("Request timed out".to_string())),
+                Err(_) => Err(crate::error::SlapperError::Http(
+                    "Request timed out".to_string(),
+                )),
             };
             (path, resp)
         }));
@@ -295,8 +294,9 @@ async fn check_error_handling(client: &HuntClient, _config: &HuntConfig) -> Vec<
                             path,
                             &body[..200.min(body.len())]
                         ),
-                        remediation: "Implement custom error pages; disable debug mode in production"
-                            .to_string(),
+                        remediation:
+                            "Implement custom error pages; disable debug mode in production"
+                                .to_string(),
                         cvss_score: Some(5.0),
                     });
                 }

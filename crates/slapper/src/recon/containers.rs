@@ -226,7 +226,10 @@ impl ContainerScanner {
         ))
     }
 
-    pub fn check_container_config(&self, config: &FxHashMap<String, String>) -> Vec<ContainerFinding> {
+    pub fn check_container_config(
+        &self,
+        config: &FxHashMap<String, String>,
+    ) -> Vec<ContainerFinding> {
         let mut issues = Vec::new();
 
         if let Some(user) = config.get("USER") {

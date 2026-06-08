@@ -27,8 +27,10 @@ Slapper is organized as a Cargo workspace. The first-level crate boundary is:
 - **`slapper-core`**: dependency-light domain types (`Severity`, `SensitiveString`), constants, and shared primitives. Designed for fast independent compilation with a small dependency set.
 - **`slapper`**: main engine, CLI dispatch, assessment modules, TUI/API adapters, feature-gated integrations, and the canonical `SlapperError` type.
 - **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
+- **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.
+- **`slapper-cli`**: CLI binary entry point. Depends on both `slapper` and `slapper-tui`.
 
-New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate.
+New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate or in `slapper-tui` as appropriate.
 
 ---
 
@@ -142,7 +144,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`cli/`](../crates/slapper/src/cli/) | Command-line argument parsing (clap-based), 37+ commands | [cli_commands.md](cli_commands.md) |
-| [`tui/`](../crates/slapper/src/tui/) | Real-time terminal UI (ratatui-based), 28+ tabs, event loop | [tui.md](tui.md) |
+| [`tui/`](../crates/slapper-tui/src/) | Real-time terminal UI (ratatui-based), 28+ tabs, event loop | [tui.md](tui.md) |
 
 ### Supporting Modules
 
@@ -183,7 +185,7 @@ slapper pipeline  # Pipeline profile execution
 
 ### TUI (`tui/`)
 
-The terminal user interface uses `ratatui` with 28+ tabs organized by function:
+The terminal user interface uses `ratatui` with 28+ tabs organized by function. The TUI is now a separate crate (`slapper-tui`), extracted from the main `slapper` crate.
 
 | Tab Group | Tabs |
 |-----------|------|
@@ -554,7 +556,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | `agent` | `tool`, `config`, `output`, `ai` (optional) |
 | `distributed` | `tool`, `config` |
 | `output` | `types`, `findings` |
-| `tui` | `config`, `commands`, `output` |
+| `tui` | `config`, `commands`, `output` (in `slapper-tui`) |
 | `ai` | `config`, `error`, `types` |
 | `nse` | `scanner`, `recon` (via Lua bindings) |
 
@@ -590,6 +592,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Test Suite | Command |
 |------------|---------|
 | Unit tests | `cargo test --lib -p slapper` |
+| TUI tests | `cargo test --lib -p slapper-tui` |
 | Integration tests | `cargo test --test scanner_tests -p slapper` |
 | Negative tests | `cargo test --test negative_tests -p slapper` |
 | Clippy | `cargo clippy --lib -p slapper` |
@@ -629,7 +632,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 | **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md) |
 | **Compliance** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
 | **Utilities** | [utils.md](utils.md), [logging.md](logging.md), [probe.md](probe.md) |
-| **Reference** | [feature_matrix.md](feature_matrix.md), [defense_lab.md](defense_lab.md), [review_plan.md](review_plan.md) |
+| **Reference** | [feature_matrix.md](feature_matrix.md), [defense_lab.md](defense_lab.md), [review_plan.md](review_plan.md), [compile_time_baseline.md](compile_time_baseline.md) |
 
 ### Implementation Plan
 

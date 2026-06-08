@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[allow(unused_imports)]
-pub use crate::findings::lifecycle::{FindingStatus, StoredFinding, StatusChange};
+pub use crate::findings::lifecycle::{FindingStatus, StatusChange, StoredFinding};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredScan {

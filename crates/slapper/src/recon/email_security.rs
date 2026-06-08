@@ -642,9 +642,9 @@ impl EmailSecurityAnalyzer {
     }
 
     async fn test_starttls(&self, hostname: &str, port: u16) -> StartTlsServerResult {
+        use std::time::Duration;
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufStream};
         use tokio::net::TcpStream;
-        use std::time::Duration;
 
         let timeout = Duration::from_secs(5);
         let connect_result =
@@ -666,8 +666,7 @@ impl EmailSecurityAnalyzer {
         let mut buf_stream = BufStream::new(stream);
 
         let mut greeting = String::new();
-        let read_result =
-            tokio::time::timeout(timeout, buf_stream.read_line(&mut greeting)).await;
+        let read_result = tokio::time::timeout(timeout, buf_stream.read_line(&mut greeting)).await;
 
         if read_result.is_err() || greeting.is_empty() {
             return StartTlsServerResult {
@@ -680,11 +679,7 @@ impl EmailSecurityAnalyzer {
         }
 
         let ehlo_cmd = format!("EHLO slapper-test\r\n");
-        let _ = tokio::time::timeout(
-            timeout,
-            buf_stream.write_all(ehlo_cmd.as_bytes()),
-        )
-        .await;
+        let _ = tokio::time::timeout(timeout, buf_stream.write_all(ehlo_cmd.as_bytes())).await;
 
         let mut supports_starttls = false;
         let mut ehlo_response = String::new();

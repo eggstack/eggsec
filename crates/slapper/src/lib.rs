@@ -5,6 +5,15 @@
 //! fingerprinting, WAF detection/bypass, security fuzzing, load testing,
 //! and distributed scanning capabilities.
 //!
+//! ## Workspace Crates
+//!
+//! - `slapper-core`: dependency-light shared types and constants.
+//! - `slapper-nse`: optional Nmap NSE compatibility support.
+//! - `slapper-tui`: terminal UI adapter crate.
+//!
+//! The main `slapper` crate owns the assessment engine, command dispatch,
+//! and feature-gated integrations.
+//!
 //! ## Architecture
 //!
 //! The crate is organized into these main module groups:
@@ -19,7 +28,6 @@
 //! - **`loadtest`** - HTTP load testing with metrics
 //! - **`pipeline`** - Chained security assessment profiles
 //! - **`tool`** - REST API/MCP/gRPC integration for AI agents (feature-gated)
-//! - **`tui`** - Real-time terminal UI (ratatui-based)
 //! - **`output`** - Multiple report formats (JSON, HTML, CSV, SARIF, JUnit)
 //! - **`distributed`** - Worker/coordinator cluster architecture
 //! - **`proxy`** - SOCKS/HTTP/Tor proxy pool management
@@ -121,7 +129,6 @@ pub mod supply_chain;
 #[cfg(not(feature = "sbom"))]
 #[allow(dead_code)]
 mod supply_chain;
-pub mod tui;
 pub mod types;
 pub mod utils;
 #[cfg(feature = "vuln-management")]

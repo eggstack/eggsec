@@ -154,14 +154,8 @@ mod sandbox_enforcement_tests {
     fn test_command_sandbox_allows_specific_commands() {
         let sandbox = create_sandbox_with_commands(vec!["ls", "cat"]);
 
-        assert!(
-            sandbox.is_command_allowed("ls"),
-            "ls should be allowed"
-        );
-        assert!(
-            sandbox.is_command_allowed("cat"),
-            "cat should be allowed"
-        );
+        assert!(sandbox.is_command_allowed("ls"), "ls should be allowed");
+        assert!(sandbox.is_command_allowed("cat"), "cat should be allowed");
         assert!(
             sandbox.is_command_allowed("cat /etc/passwd"),
             "cat with args should be allowed if cat is in list"
@@ -274,7 +268,9 @@ mod sandbox_enforcement_tests {
             "localhost should resolve to at least one IP"
         );
         assert!(
-            localhost_ips.iter().all(|ip| sandbox.is_network_allowed(*ip)),
+            localhost_ips
+                .iter()
+                .all(|ip| sandbox.is_network_allowed(*ip)),
             "All resolved IPs should be in allowed networks"
         );
     }

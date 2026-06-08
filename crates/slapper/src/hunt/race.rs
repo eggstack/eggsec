@@ -62,10 +62,7 @@ pub async fn check_race_conditions(
     Ok(conditions)
 }
 
-async fn check_concurrent_requests(
-    client: &HuntClient,
-    config: &HuntConfig,
-) -> Vec<RaceCondition> {
+async fn check_concurrent_requests(client: &HuntClient, config: &HuntConfig) -> Vec<RaceCondition> {
     let mut conditions = Vec::new();
     let concurrency = config.concurrency;
     let timeout = Duration::from_millis(config.timeout_ms);
@@ -107,7 +104,10 @@ async fn check_concurrent_requests(
         }
 
         let unique_statuses: FxHashSet<u16> = status_codes.iter().copied().collect();
-        let success_count = status_codes.iter().filter(|&&s| s == 200 || s == 201).count();
+        let success_count = status_codes
+            .iter()
+            .filter(|&&s| s == 200 || s == 201)
+            .count();
         let error_count = status_codes.iter().filter(|&&s| s >= 400).count();
 
         if unique_statuses.len() > 1 && success_count > 0 && error_count > 0 {
@@ -147,8 +147,9 @@ async fn check_concurrent_requests(
                     "{} out of {} concurrent requests returned success",
                     success_count, concurrency
                 ),
-                remediation: "Use database-level locking or idempotency keys for state-changing operations"
-                    .to_string(),
+                remediation:
+                    "Use database-level locking or idempotency keys for state-changing operations"
+                        .to_string(),
                 cvss_score: Some(6.0),
             });
         }

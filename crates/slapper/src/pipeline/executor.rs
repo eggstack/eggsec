@@ -78,9 +78,7 @@ impl Pipeline {
             Stage::from_profile(args.profile)
         };
 
-        let default_concurrency = config
-            .map(|c| c.scan.default_concurrency)
-            .unwrap_or(10);
+        let default_concurrency = config.map(|c| c.scan.default_concurrency).unwrap_or(10);
         let concurrency = args.concurrency.unwrap_or(default_concurrency);
 
         let spoof_config = SpoofConfig::from_args(
@@ -834,9 +832,9 @@ impl Pipeline {
 
     async fn run_vuln(&self) -> Result<()> {
         use crate::types::Severity;
-        use crate::vuln::VulnAssessment;
         use crate::vuln::asset::assess_asset;
         use crate::vuln::prioritizer::prioritize_findings;
+        use crate::vuln::VulnAssessment;
 
         let mut findings: Vec<(String, String, Severity, Option<f32>)> = Vec::new();
         let target_str = self.target.clone();
@@ -880,18 +878,26 @@ impl Pipeline {
             assessment.summary.push("No findings to assess".to_string());
         } else {
             let prioritized = prioritize_findings(&findings);
-            assessment.summary.push(format!("Assessed {} finding(s):", prioritized.len()));
+            assessment
+                .summary
+                .push(format!("Assessed {} finding(s):", prioritized.len()));
             for f in &prioritized {
                 assessment.summary.push(format!(
                     "  #{} [{}] {} - Risk: {:.1} ({:?})",
-                    f.priority_rank, f.severity, f.title, f.risk_score.combined_score, f.risk_score.priority_level
+                    f.priority_rank,
+                    f.severity,
+                    f.title,
+                    f.risk_score.combined_score,
+                    f.risk_score.priority_level
                 ));
             }
             assessment.prioritized_findings = prioritized;
         }
 
         let asset = assess_asset(&target_str, "web_server");
-        assessment.summary.push(format!("Asset criticality: {:.1}", asset.overall_score));
+        assessment
+            .summary
+            .push(format!("Asset criticality: {:.1}", asset.overall_score));
         assessment.asset_criticality = Some(asset);
 
         let mut context = self.context.lock().await;

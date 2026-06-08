@@ -56,7 +56,10 @@ async fn resolve_target(
 
     let parsed = Url::parse(&url).ok();
     if parsed.is_none() {
-        tracing::warn!("failed to parse target as URL: {}", sanitize_for_logging(target));
+        tracing::warn!(
+            "failed to parse target as URL: {}",
+            sanitize_for_logging(target)
+        );
     }
     let host = parsed.as_ref().and_then(|u| {
         u.host().map(|h| match h {
@@ -481,10 +484,17 @@ async fn run_secrets_check(
                 }
             }
             Ok(Err(e)) => {
-                tracing::debug!("failed to fetch {} for secrets scanning: {}", sensitive_file.url, e);
+                tracing::debug!(
+                    "failed to fetch {} for secrets scanning: {}",
+                    sensitive_file.url,
+                    e
+                );
             }
             Err(_) => {
-                tracing::debug!("timeout fetching {} for secrets scanning", sensitive_file.url);
+                tracing::debug!(
+                    "timeout fetching {} for secrets scanning",
+                    sensitive_file.url
+                );
             }
         }
     }
@@ -791,8 +801,12 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
         }
     }
     if let Some(ref dns) = recon.dns_records {
-        if !dns.a.is_empty() || !dns.aaaa.is_empty() || !dns.mx.is_empty()
-            || !dns.txt.is_empty() || !dns.ns.is_empty() || dns.soa.is_some()
+        if !dns.a.is_empty()
+            || !dns.aaaa.is_empty()
+            || !dns.mx.is_empty()
+            || !dns.txt.is_empty()
+            || !dns.ns.is_empty()
+            || dns.soa.is_some()
         {
             s.push_str("dns\n");
             if !dns.a.is_empty() {
@@ -818,7 +832,10 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
                 }
             }
             if let Some(ref soa) = dns.soa {
-                s.push_str(&format!("\tsoa: {} {} {}\n", soa.mname, soa.rname, soa.serial));
+                s.push_str(&format!(
+                    "\tsoa: {} {} {}\n",
+                    soa.mname, soa.rname, soa.serial
+                ));
             }
         }
     }

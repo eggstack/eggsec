@@ -2,20 +2,37 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use std::time::Duration;
 
-use crate::constants;
 use super::client_pool::ClientPool;
+use crate::constants;
 
-static HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> =
-    std::sync::LazyLock::new(|| ClientPool::new(10, Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS), false, None, None));
+static HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> = std::sync::LazyLock::new(|| {
+    ClientPool::new(
+        10,
+        Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS),
+        false,
+        None,
+        None,
+    )
+});
 
 static INSECURE_HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> =
-    std::sync::LazyLock::new(|| ClientPool::new(10, Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS), true, None, None));
+    std::sync::LazyLock::new(|| {
+        ClientPool::new(
+            10,
+            Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS),
+            true,
+            None,
+            None,
+        )
+    });
 
 pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-        .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+        .pool_idle_timeout(Duration::from_secs(
+            constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+        ))
         .tcp_nodelay(true)
         .build()
         .context("Failed to create HTTP client")
@@ -26,13 +43,15 @@ pub fn get_shared_http_client() -> Client {
         // First try with full options
         if let Ok(client) = Client::builder()
             .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+            .pool_idle_timeout(Duration::from_secs(
+                constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .tcp_nodelay(true)
             .build()
         {
             return client;
         }
-        
+
         // Fallback to minimal client
         tracing::warn!("Failed to create HTTP client with full options, using minimal client");
         Client::new()
@@ -44,16 +63,20 @@ pub fn get_shared_insecure_http_client() -> Client {
         // First try with full options
         if let Ok(client) = Client::builder()
             .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+            .pool_idle_timeout(Duration::from_secs(
+                constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .tcp_nodelay(true)
             .danger_accept_invalid_certs(true)
             .build()
         {
             return client;
         }
-        
+
         // Fallback to minimal insecure client
-        tracing::warn!("Failed to create insecure HTTP client with full options, using minimal client");
+        tracing::warn!(
+            "Failed to create insecure HTTP client with full options, using minimal client"
+        );
         Client::builder()
             .danger_accept_invalid_certs(true)
             .build()
@@ -95,7 +118,9 @@ pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
         .cookie_store(true)
         .timeout(Duration::from_secs(timeout_secs))
         .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-        .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+        .pool_idle_timeout(Duration::from_secs(
+            constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+        ))
         .tcp_nodelay(true)
         .danger_accept_invalid_certs(true)
         .build()
@@ -108,7 +133,9 @@ pub fn create_http_client_with_proxy(timeout_secs: u64, proxy: &str) -> Result<C
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-        .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+        .pool_idle_timeout(Duration::from_secs(
+            constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+        ))
         .tcp_nodelay(true)
         .proxy(proxy)
         .build()
@@ -123,7 +150,9 @@ where
         Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
             .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+            .pool_idle_timeout(Duration::from_secs(
+                constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .tcp_nodelay(true),
     );
     builder.build().context("Failed to create HTTP client")
@@ -169,7 +198,9 @@ where
         Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
             .pool_max_idle_per_host(constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+            .pool_idle_timeout(Duration::from_secs(
+                constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .tcp_nodelay(true)
             .danger_accept_invalid_certs(true),
     );

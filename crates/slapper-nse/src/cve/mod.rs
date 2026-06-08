@@ -86,8 +86,7 @@ pub struct VendorAdvisory {
     pub title: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SeverityType {
     CvssV2,
     CvssV3,
@@ -95,7 +94,6 @@ pub enum SeverityType {
     #[default]
     None,
 }
-
 
 /// Source configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,8 +115,7 @@ impl Default for CveSourceConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum CveSource {
     #[default]
     Nvd,
@@ -126,7 +123,6 @@ pub enum CveSource {
     CisaKev,
     All,
 }
-
 
 impl std::fmt::Display for CveSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

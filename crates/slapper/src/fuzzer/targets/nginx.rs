@@ -133,7 +133,11 @@ mod tests {
     #[test]
     fn test_nginx_payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 15, "nginx should have at least 15 payloads, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 15,
+            "nginx should have at least 15 payloads, got {}",
+            payloads.len()
+        );
     }
 
     #[test]

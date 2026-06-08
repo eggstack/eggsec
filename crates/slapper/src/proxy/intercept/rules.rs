@@ -88,7 +88,10 @@ impl InterceptRule {
             return true;
         }
 
-        if let Some(prefix) = pattern.strip_suffix("/*").or_else(|| pattern.strip_suffix("**")) {
+        if let Some(prefix) = pattern
+            .strip_suffix("/*")
+            .or_else(|| pattern.strip_suffix("**"))
+        {
             path.starts_with(prefix)
         } else {
             path == pattern
@@ -139,8 +142,7 @@ impl RuleSet {
 
     pub fn remove(&mut self, host_pattern: &str, path_pattern: Option<&str>) {
         self.rules.retain(|r| {
-            r.host_pattern != host_pattern
-                || r.path_pattern.as_deref() != path_pattern
+            r.host_pattern != host_pattern || r.path_pattern.as_deref() != path_pattern
         });
     }
 
@@ -200,10 +202,12 @@ pub fn parse_rule_from_yaml(yaml: &str) -> Result<InterceptRule> {
         "intercept" => RuleAction::Intercept,
         "monitor" => RuleAction::Monitor,
         "modify" => RuleAction::Modify,
-        _ => return Err(crate::error::SlapperError::Config(format!(
-            "Unknown action: {}",
-            parsed.action
-        ))),
+        _ => {
+            return Err(crate::error::SlapperError::Config(format!(
+                "Unknown action: {}",
+                parsed.action
+            )))
+        }
     };
 
     let mut rule = InterceptRule::new(parsed.host, parsed.path, action);
@@ -234,11 +238,7 @@ mod tests {
 
     #[test]
     fn test_wildcard_host_matching() {
-        let rule = InterceptRule::new(
-            "*.example.com".to_string(),
-            None,
-            RuleAction::Monitor,
-        );
+        let rule = InterceptRule::new("*.example.com".to_string(), None, RuleAction::Monitor);
 
         assert!(rule.matches("api.example.com", "/any/path"));
         assert!(rule.matches("example.com", "/any/path"));
@@ -261,9 +261,18 @@ mod tests {
             RuleAction::Intercept,
         ));
 
-        assert!(matches!(rules.evaluate("evil.com", "/any"), RuleAction::Block));
-        assert!(matches!(rules.evaluate("example.com", "/admin/panel"), RuleAction::Intercept));
-        assert!(matches!(rules.evaluate("example.com", "/public"), RuleAction::Allow));
+        assert!(matches!(
+            rules.evaluate("evil.com", "/any"),
+            RuleAction::Block
+        ));
+        assert!(matches!(
+            rules.evaluate("example.com", "/admin/panel"),
+            RuleAction::Intercept
+        ));
+        assert!(matches!(
+            rules.evaluate("example.com", "/public"),
+            RuleAction::Allow
+        ));
     }
 
     #[test]

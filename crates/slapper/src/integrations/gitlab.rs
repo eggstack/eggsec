@@ -122,9 +122,7 @@ impl IssueTracker for GitLabClient {
         let iid = match json["iid"].as_i64() {
             Some(n) => n,
             None => {
-                tracing::warn!(
-                    "GitLab: create_issue response missing 'iid' field"
-                );
+                tracing::warn!("GitLab: create_issue response missing 'iid' field");
                 return Err(SlapperError::Network(
                     "GitLab: create_issue response missing 'iid' field".to_string(),
                 ));
@@ -159,10 +157,7 @@ impl IssueTracker for GitLabClient {
                     )));
                 }
             };
-            body.insert(
-                "state_event".to_string(),
-                serde_json::json!(state_value),
-            );
+            body.insert("state_event".to_string(), serde_json::json!(state_value));
         }
 
         let req = self

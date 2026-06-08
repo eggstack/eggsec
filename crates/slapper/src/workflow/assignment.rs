@@ -75,7 +75,10 @@ mod tests {
             notes: Some("Requires network access".to_string()),
         };
         let assignment = assign_finding(&request, "manager");
-        assert_eq!(assignment.notes, Some("Requires network access".to_string()));
+        assert_eq!(
+            assignment.notes,
+            Some("Requires network access".to_string())
+        );
     }
 
     #[test]

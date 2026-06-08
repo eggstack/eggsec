@@ -243,8 +243,14 @@ impl AiPlanner {
         findings: &[crate::ai::types::ScanFinding],
         target: &str,
     ) -> Result<AdaptivePlanSuggestion> {
-        let critical_count = findings.iter().filter(|f| f.severity == Severity::Critical).count();
-        let high_count = findings.iter().filter(|f| f.severity == Severity::High).count();
+        let critical_count = findings
+            .iter()
+            .filter(|f| f.severity == Severity::Critical)
+            .count();
+        let high_count = findings
+            .iter()
+            .filter(|f| f.severity == Severity::High)
+            .count();
 
         let prompt = format!(
             "Analyze this execution plan and suggest improvements.\n\

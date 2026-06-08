@@ -32,11 +32,7 @@ async fn test_single_credential(
 ) -> AuthTestResult {
     let addr = format!("{}:{}", target, port);
 
-    let result = tokio::time::timeout(
-        timeout,
-        ftp_auth_attempt(&addr, username, password),
-    )
-    .await;
+    let result = tokio::time::timeout(timeout, ftp_auth_attempt(&addr, username, password)).await;
 
     match result {
         Ok(Ok(success)) => AuthTestResult {
@@ -49,7 +45,11 @@ async fn test_single_credential(
             } else {
                 None
             },
-            severity: if success { Severity::Critical } else { Severity::Info },
+            severity: if success {
+                Severity::Critical
+            } else {
+                Severity::Info
+            },
             message: if success {
                 "Authentication successful".to_string()
             } else {
@@ -78,17 +78,19 @@ async fn test_single_credential(
 }
 
 async fn ftp_auth_attempt(addr: &str, username: &str, password: &str) -> Result<bool> {
-    use std::net::TcpStream;
     use std::io::{Read, Write};
+    use std::net::TcpStream;
 
     let mut stream = TcpStream::connect(addr)
         .map_err(|e| SlapperError::Network(format!("TCP connection failed: {}", e)))?;
 
-    stream.set_read_timeout(Some(Duration::from_secs(10)))
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
         .map_err(|e| SlapperError::Network(format!("Timeout set failed: {}", e)))?;
 
     let mut response = [0u8; 1024];
-    stream.read(&mut response)
+    stream
+        .read(&mut response)
         .map_err(|e| SlapperError::Network(format!("Read failed: {}", e)))?;
 
     let response_str = String::from_utf8_lossy(&response);
@@ -98,19 +100,23 @@ async fn ftp_auth_attempt(addr: &str, username: &str, password: &str) -> Result<
     }
 
     let user_cmd = format!("USER {}\r\n", username);
-    stream.write_all(user_cmd.as_bytes())
+    stream
+        .write_all(user_cmd.as_bytes())
         .map_err(|e| SlapperError::Network(format!("Write failed: {}", e)))?;
 
     let mut response = [0u8; 1024];
-    stream.read(&mut response)
+    stream
+        .read(&mut response)
         .map_err(|e| SlapperError::Network(format!("Read failed: {}", e)))?;
 
     let pass_cmd = format!("PASS {}\r\n", password);
-    stream.write_all(pass_cmd.as_bytes())
+    stream
+        .write_all(pass_cmd.as_bytes())
         .map_err(|e| SlapperError::Network(format!("Write failed: {}", e)))?;
 
     let mut response = [0u8; 1024];
-    let n = stream.read(&mut response)
+    let n = stream
+        .read(&mut response)
         .map_err(|e| SlapperError::Network(format!("Read failed: {}", e)))?;
 
     let response_str = String::from_utf8_lossy(&response[..n]);
@@ -118,14 +124,15 @@ async fn ftp_auth_attempt(addr: &str, username: &str, password: &str) -> Result<
 }
 
 pub fn check_ftp_banner(address: &str, port: u16) -> Result<Option<String>> {
-    use std::net::TcpStream;
     use std::io::{BufRead, BufReader};
+    use std::net::TcpStream;
 
     let addr = format!("{}:{}", address, port);
     let mut stream = TcpStream::connect(&addr)
         .map_err(|e| SlapperError::Network(format!("TCP connection failed: {}", e)))?;
 
-    stream.set_read_timeout(Some(Duration::from_secs(5)))
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
         .map_err(|e| SlapperError::Network(format!("Timeout set failed: {}", e)))?;
 
     let reader = BufReader::new(stream);

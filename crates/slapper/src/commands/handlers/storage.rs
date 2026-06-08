@@ -81,10 +81,7 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
         let config = StorageConfig::default();
         let db = init_storage(&config).await?;
 
-        let output_path = args
-            .output
-            .as_deref()
-            .unwrap_or("storage_export.json");
+        let output_path = args.output.as_deref().unwrap_or("storage_export.json");
 
         if let Some(ref scan_id) = args.scan_id {
             let findings = db.list_findings(scan_id, 0, 10000).await?;
@@ -156,10 +153,22 @@ async fn handle_storage_stats(args: crate::cli::storage::StorageStatsArgs) -> Re
             let scans = db.list_scans(100).await?;
             println!("Database Statistics:");
             println!("  Total scans: {}", scans.len());
-            let running = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Running).count();
-            let completed = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Completed).count();
-            let failed = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Failed).count();
-            let cancelled = scans.iter().filter(|s| s.status == crate::storage::models::ScanStatus::Cancelled).count();
+            let running = scans
+                .iter()
+                .filter(|s| s.status == crate::storage::models::ScanStatus::Running)
+                .count();
+            let completed = scans
+                .iter()
+                .filter(|s| s.status == crate::storage::models::ScanStatus::Completed)
+                .count();
+            let failed = scans
+                .iter()
+                .filter(|s| s.status == crate::storage::models::ScanStatus::Failed)
+                .count();
+            let cancelled = scans
+                .iter()
+                .filter(|s| s.status == crate::storage::models::ScanStatus::Cancelled)
+                .count();
             println!("  Running: {}", running);
             println!("  Completed: {}", completed);
             println!("  Failed: {}", failed);

@@ -303,7 +303,8 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
                     title: "Using latest or untagged base image".to_string(),
                     description: "Pin base images to specific versions for reproducibility"
                         .to_string(),
-                    recommendation: "Pin base image to a specific version tag or digest".to_string(),
+                    recommendation: "Pin base image to a specific version tag or digest"
+                        .to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
@@ -371,7 +372,8 @@ fn check_github_actions(path: &Path) -> Vec<SupplyChainFinding> {
                     category: "github_actions".to_string(),
                     title: "Unpinned GitHub Action".to_string(),
                     description: "Pin actions to specific versions or SHA hashes".to_string(),
-                    recommendation: "Pin action to a version tag (e.g., @v4) or SHA hash".to_string(),
+                    recommendation: "Pin action to a version tag (e.g., @v4) or SHA hash"
+                        .to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
@@ -723,9 +725,6 @@ mod tests {
 
         let result = scan_repo(dir.path()).unwrap();
         assert!(result.dockerfile_found);
-        assert!(!result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("ADD")));
+        assert!(!result.findings.iter().any(|f| f.title.contains("ADD")));
     }
 }

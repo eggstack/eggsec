@@ -245,12 +245,13 @@ async fn test_rapid_close(url: &str, timeout_secs: u64) -> FuzzTestResult {
     for _ in 0..10 {
         let result = tokio::time::timeout(
             std::time::Duration::from_millis(100),
-            ws.send(tokio_tungstenite::tungstenite::Message::Close(
-                Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
-                    code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+            ws.send(tokio_tungstenite::tungstenite::Message::Close(Some(
+                tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                    code:
+                        tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                     reason: "test".into(),
-                }),
-            )),
+                },
+            ))),
         )
         .await;
 
@@ -269,7 +270,8 @@ async fn test_rapid_close(url: &str, timeout_secs: u64) -> FuzzTestResult {
 
     if !connection_dropped {
         use futures::StreamExt;
-        let recv_result = tokio::time::timeout(std::time::Duration::from_millis(500), ws.next()).await;
+        let recv_result =
+            tokio::time::timeout(std::time::Duration::from_millis(500), ws.next()).await;
         match recv_result {
             Ok(Some(Err(_))) | Ok(None) => connection_dropped = true,
             _ => {}
@@ -286,7 +288,11 @@ async fn test_rapid_close(url: &str, timeout_secs: u64) -> FuzzTestResult {
         details: format!(
             "Sent {} close frames, connection {}",
             sent_count,
-            if connection_dropped { "closed" } else { "alive" }
+            if connection_dropped {
+                "closed"
+            } else {
+                "alive"
+            }
         ),
     }
 }

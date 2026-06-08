@@ -436,9 +436,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         output.set(key.clone(), value.clone())?;
 
         let script_output: Table = globals.get("_SCRIPT_OUTPUT").unwrap_or_else(|_| {
-            
-            lua
-                .create_table()
+            lua.create_table()
                 .unwrap_or_else(|_| lua.create_table().unwrap())
         });
         let len = script_output.len().unwrap_or(0) + 1;
@@ -766,10 +764,9 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     let base_fn = lua.create_function(|lua, _: ()| {
         let globals = lua.globals();
         let stdnse_tbl: Table = globals.get("stdnse")?;
-        let base: Table = stdnse_tbl.get("base_coroutine").unwrap_or_else(|_| {
-            
-            lua.create_table().unwrap()
-        });
+        let base: Table = stdnse_tbl
+            .get("base_coroutine")
+            .unwrap_or_else(|_| lua.create_table().unwrap());
         Ok(base)
     })?;
     stdnse.set("base", base_fn)?;

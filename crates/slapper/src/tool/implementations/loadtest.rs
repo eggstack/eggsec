@@ -79,16 +79,13 @@ impl SecurityTool for LoadTestTool {
             .unwrap_or_default();
 
         let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, &config)?;
-        let results = tokio::time::timeout(
-            std::time::Duration::from_secs(60),
-            runner.run(),
-        )
-        .await
-        .map_err(|e| crate::error::SlapperError::Timeout {
-            timeout_ms: 60_000,
-            operation: format!("Load test timed out after 60s: {}", e),
-        })?
-        .map_err(|e| crate::error::SlapperError::Runtime(format!("Load test failed: {}", e)))?;
+        let results = tokio::time::timeout(std::time::Duration::from_secs(60), runner.run())
+            .await
+            .map_err(|e| crate::error::SlapperError::Timeout {
+                timeout_ms: 60_000,
+                operation: format!("Load test timed out after 60s: {}", e),
+            })?
+            .map_err(|e| crate::error::SlapperError::Runtime(format!("Load test failed: {}", e)))?;
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;

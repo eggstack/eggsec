@@ -38,11 +38,7 @@ impl PasswordPolicyTester {
             weak_passwords_tested: Vec::new(),
         };
 
-        let response = self
-            .client
-            .get(target)
-            .send()
-            .await;
+        let response = self.client.get(target).send().await;
 
         if let Ok(resp) = response {
             let body = resp.text().await.unwrap_or_default();
@@ -61,12 +57,16 @@ impl PasswordPolicyTester {
             if lower.contains("digit") || lower.contains("number") || lower.contains("0-9") {
                 result.requires_digit = true;
             }
-            if lower.contains("special") || lower.contains("symbol") || lower.contains("[@!#$%^&*()]") {
+            if lower.contains("special")
+                || lower.contains("symbol")
+                || lower.contains("[@!#$%^&*()]")
+            {
                 result.requires_special = true;
             }
 
-            let re = regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
-                .expect("valid regex pattern");
+            let re =
+                regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
+                    .expect("valid regex pattern");
             if let Some(caps) = re.captures(&lower) {
                 if let Some(m) = caps.get(1) {
                     if let Ok(len) = m.as_str().parse::<usize>() {
@@ -76,13 +76,7 @@ impl PasswordPolicyTester {
             }
         }
 
-        let weak_passwords = vec![
-            "password",
-            "123456",
-            "password123",
-            "admin",
-            "letmein",
-        ];
+        let weak_passwords = vec!["password", "123456", "password123", "admin", "letmein"];
 
         for pwd in &weak_passwords {
             let test_response = self
@@ -100,7 +94,10 @@ impl PasswordPolicyTester {
                 let status = resp.status().as_u16();
                 if status == 302 || status == 200 {
                     let body = resp.text().await.unwrap_or_default();
-                    if !body.contains("invalid") && !body.contains("error") && !body.contains("weak") {
+                    if !body.contains("invalid")
+                        && !body.contains("error")
+                        && !body.contains("weak")
+                    {
                         result.accepts_weak_passwords = true;
                         result.weak_passwords_tested.push(pwd.to_string());
                     }
@@ -176,7 +173,9 @@ mod tests {
         };
         assert!(result.accepts_weak_passwords);
         assert_eq!(result.weak_passwords_tested.len(), 3);
-        assert!(result.weak_passwords_tested.contains(&"password".to_string()));
+        assert!(result
+            .weak_passwords_tested
+            .contains(&"password".to_string()));
         assert!(result.weak_passwords_tested.contains(&"123456".to_string()));
         assert!(result.weak_passwords_tested.contains(&"admin".to_string()));
     }
@@ -205,8 +204,14 @@ mod tests {
         assert_eq!(deserialized.requires_lowercase, result.requires_lowercase);
         assert_eq!(deserialized.requires_digit, result.requires_digit);
         assert_eq!(deserialized.requires_special, result.requires_special);
-        assert_eq!(deserialized.accepts_weak_passwords, result.accepts_weak_passwords);
-        assert_eq!(deserialized.weak_passwords_tested, result.weak_passwords_tested);
+        assert_eq!(
+            deserialized.accepts_weak_passwords,
+            result.accepts_weak_passwords
+        );
+        assert_eq!(
+            deserialized.weak_passwords_tested,
+            result.weak_passwords_tested
+        );
     }
 
     #[test]

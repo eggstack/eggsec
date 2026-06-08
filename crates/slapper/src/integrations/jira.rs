@@ -33,18 +33,12 @@ impl JiraClient {
     }
 
     async fn transition_issue(&self, id: &str, target_status: &str) -> Result<()> {
-        let transitions_url = format!(
-            "{}/rest/api/3/issue/{}/transitions",
-            self.config.url, id
-        );
+        let transitions_url = format!("{}/rest/api/3/issue/{}/transitions", self.config.url, id);
 
-        let req = self
-            .client
-            .get(&transitions_url)
-            .basic_auth(
-                &self.config.username,
-                Some(self.config.api_token.expose_secret()),
-            );
+        let req = self.client.get(&transitions_url).basic_auth(
+            &self.config.username,
+            Some(self.config.api_token.expose_secret()),
+        );
 
         let response = send_with_retry(req, "Jira").await?;
         let json: serde_json::Value = response
@@ -52,11 +46,11 @@ impl JiraClient {
             .await
             .map_err(|e| SlapperError::Network(e.to_string()))?;
 
-        let transitions = json["transitions"]
-            .as_array()
-            .ok_or_else(|| {
-                SlapperError::Network("Jira: transitions response missing 'transitions' array".to_string())
-            })?;
+        let transitions = json["transitions"].as_array().ok_or_else(|| {
+            SlapperError::Network(
+                "Jira: transitions response missing 'transitions' array".to_string(),
+            )
+        })?;
 
         let target_lower = target_status.to_lowercase();
         let transition_id = transitions.iter().find_map(|t| {
@@ -123,18 +117,19 @@ impl JiraClient {
             })
             .unwrap_or_default();
 
-        let severity = fields["priority"]["name"]
-            .as_str()
-            .and_then(|s| match s.to_lowercase().as_str() {
-                "highest" | "blocker" | "critical" => Some(crate::types::Severity::Critical),
-                "high" => Some(crate::types::Severity::High),
-                "medium" | "major" | "normal" => Some(crate::types::Severity::Medium),
-                "low" | "minor" | "trivial" => Some(crate::types::Severity::Low),
-                other => {
-                    tracing::warn!("Jira: unknown severity level '{}'", other);
-                    None
-                }
-            });
+        let severity =
+            fields["priority"]["name"]
+                .as_str()
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "highest" | "blocker" | "critical" => Some(crate::types::Severity::Critical),
+                    "high" => Some(crate::types::Severity::High),
+                    "medium" | "major" | "normal" => Some(crate::types::Severity::Medium),
+                    "low" | "minor" | "trivial" => Some(crate::types::Severity::Low),
+                    other => {
+                        tracing::warn!("Jira: unknown severity level '{}'", other);
+                        None
+                    }
+                });
 
         let assignees: Vec<String> = fields["assignee"]
             .as_object()
@@ -315,13 +310,10 @@ impl IssueTracker for JiraClient {
     async fn get_issue(&self, id: &str) -> Result<Issue> {
         let url = format!("{}/rest/api/3/issue/{}", self.config.url, id);
 
-        let req = self
-            .client
-            .get(&url)
-            .basic_auth(
-                &self.config.username,
-                Some(self.config.api_token.expose_secret()),
-            );
+        let req = self.client.get(&url).basic_auth(
+            &self.config.username,
+            Some(self.config.api_token.expose_secret()),
+        );
 
         let response = send_with_retry(req, "Jira").await?;
         let json: serde_json::Value = response
@@ -347,13 +339,10 @@ impl IssueTracker for JiraClient {
                 start_at
             );
 
-            let req = self
-                .client
-                .get(&url)
-                .basic_auth(
-                    &self.config.username,
-                    Some(self.config.api_token.expose_secret()),
-                );
+            let req = self.client.get(&url).basic_auth(
+                &self.config.username,
+                Some(self.config.api_token.expose_secret()),
+            );
 
             let response = send_with_retry(req, "Jira").await?;
             let json: serde_json::Value = response
@@ -405,18 +394,14 @@ mod tests {
 
         let find_transition = |target: &str| -> Option<String> {
             let target_lower = target.to_lowercase();
-            transitions
-                .as_array()
-                .unwrap()
-                .iter()
-                .find_map(|t| {
-                    let to_lower = t["to"]["name"].as_str().unwrap_or("").to_lowercase();
-                    if to_lower == target_lower {
-                        t["id"].as_str().map(String::from)
-                    } else {
-                        None
-                    }
-                })
+            transitions.as_array().unwrap().iter().find_map(|t| {
+                let to_lower = t["to"]["name"].as_str().unwrap_or("").to_lowercase();
+                if to_lower == target_lower {
+                    t["id"].as_str().map(String::from)
+                } else {
+                    None
+                }
+            })
         };
 
         assert_eq!(find_transition("done"), Some("31".to_string()));

@@ -43,7 +43,9 @@ impl OastTool {
     pub fn new() -> Self {
         let client = Client::builder()
             .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+            .pool_idle_timeout(Duration::from_secs(
+                crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .tcp_nodelay(true)
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
             .build()

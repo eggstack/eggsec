@@ -289,7 +289,7 @@ pub fn register_versant_library(lua: &Lua) -> LuaResult<()> {
 
 fn rand_simple() -> u32 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    
+
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

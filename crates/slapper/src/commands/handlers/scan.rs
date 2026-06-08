@@ -9,7 +9,9 @@ pub async fn handle_scan_ports(
     args.json |= ctx.json;
     let target = args.host.clone();
     let scan_id = format!("port-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     match crate::scanner::ports::run_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
@@ -37,7 +39,9 @@ pub async fn handle_scan_endpoints(
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("endpoint-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     match crate::scanner::endpoints::run_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
@@ -65,7 +69,9 @@ pub async fn handle_fingerprint(
     args.json |= ctx.json;
     let target = args.host.clone();
     let scan_id = format!("fingerprint-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     match crate::scanner::fingerprint::run_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
@@ -91,7 +97,9 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("nse-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     let config = slapper_nse::NseConfig::new(
         &args.target,
         &args.script,
@@ -121,7 +129,9 @@ pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("scan-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     match crate::pipeline::run_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))
@@ -142,12 +152,15 @@ pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -
 }
 
 pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -> Result<()> {
-    let session =
-        crate::pipeline::session::load(&args.session).await.map_err(|e| anyhow::anyhow!("{}", e))?;
+    let session = crate::pipeline::session::load(&args.session)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
     ctx.ensure_scope(&session.target)?;
     let target = session.target.clone();
     let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     match crate::pipeline::resume_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))

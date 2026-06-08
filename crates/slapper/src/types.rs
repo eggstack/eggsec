@@ -335,8 +335,14 @@ mod tests {
     fn output_format_from_str() {
         assert_eq!("json".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
         assert_eq!("HTML".parse::<OutputFormat>().unwrap(), OutputFormat::Html);
-        assert_eq!("SARIF".parse::<OutputFormat>().unwrap(), OutputFormat::Sarif);
-        assert_eq!("markdown".parse::<OutputFormat>().unwrap(), OutputFormat::Markdown);
+        assert_eq!(
+            "SARIF".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Sarif
+        );
+        assert_eq!(
+            "markdown".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Markdown
+        );
         assert!("unknown".parse::<OutputFormat>().is_err());
     }
 
@@ -396,7 +402,10 @@ mod tests {
     fn output_format_parse_or_default() {
         assert_eq!(OutputFormat::parse_or_default("json"), OutputFormat::Json);
         assert_eq!(OutputFormat::parse_or_default("HTML"), OutputFormat::Html);
-        assert_eq!(OutputFormat::parse_or_default("unknown"), OutputFormat::Pretty);
+        assert_eq!(
+            OutputFormat::parse_or_default("unknown"),
+            OutputFormat::Pretty
+        );
         assert_eq!(OutputFormat::parse_or_default(""), OutputFormat::Pretty);
     }
 

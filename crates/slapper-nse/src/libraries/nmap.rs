@@ -764,9 +764,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, _: ()| {
             let globals = lua.globals();
             let output: Table = globals.get("_SCRIPT_OUTPUT").unwrap_or_else(|_| {
-                
-                lua
-                    .create_table()
+                lua.create_table()
                     .unwrap_or_else(|_| lua.create_table().unwrap())
             });
             let result = lua.create_table()?;

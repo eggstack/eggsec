@@ -58,7 +58,10 @@ async fn test_session_tester_good_cookies() {
         .and(path("/"))
         .respond_with(
             ResponseTemplate::new(200)
-                .insert_header("Set-Cookie", "session=abc123; HttpOnly; Secure; SameSite=Strict")
+                .insert_header(
+                    "Set-Cookie",
+                    "session=abc123; HttpOnly; Secure; SameSite=Strict",
+                )
                 .set_body_string("OK"),
         )
         .mount(&server)
@@ -95,8 +98,7 @@ async fn test_mfa_tester_mfa_detected() {
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string("Please enter your TOTP verification code"),
+            ResponseTemplate::new(200).set_body_string("Please enter your TOTP verification code"),
         )
         .mount(&server)
         .await;
@@ -115,8 +117,7 @@ async fn test_mfa_tester_bypass_weak_code() {
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string("Please enter your verification code"),
+            ResponseTemplate::new(200).set_body_string("Please enter your verification code"),
         )
         .mount(&server)
         .await;
@@ -253,14 +254,19 @@ async fn test_brute_force_tester_weak_credential() {
     Mock::given(method("POST"))
         .and(path("/login"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_string("Welcome to the dashboard! Your session token: abc123"),
+            ResponseTemplate::new(200)
+                .set_body_string("Welcome to the dashboard! Your session token: abc123"),
         )
         .mount(&server)
         .await;
 
     let tester = slapper::auth::BruteForceTester::new(10, 1, 5).unwrap();
     let result = tester
-        .test(&format!("{}/login", server.uri()), "admin", &["password123".to_string()])
+        .test(
+            &format!("{}/login", server.uri()),
+            "admin",
+            &["password123".to_string()],
+        )
         .await
         .unwrap();
 
@@ -287,7 +293,11 @@ async fn test_brute_force_tester_lockout() {
 
     let tester = slapper::auth::BruteForceTester::new(10, 1, 5).unwrap();
     let result = tester
-        .test(&format!("{}/login", server.uri()), "admin", &["pass1".to_string(), "pass2".to_string()])
+        .test(
+            &format!("{}/login", server.uri()),
+            "admin",
+            &["pass1".to_string(), "pass2".to_string()],
+        )
         .await
         .unwrap();
 
@@ -307,9 +317,7 @@ async fn test_lockout_detector_hard_lockout() {
 
     Mock::given(method("POST"))
         .and(path("/login"))
-        .respond_with(
-            ResponseTemplate::new(423).set_body_string("Account has been locked"),
-        )
+        .respond_with(ResponseTemplate::new(423).set_body_string("Account has been locked"))
         .mount(&server)
         .await;
 

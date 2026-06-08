@@ -83,21 +83,33 @@ impl InterceptProxy {
 
     pub fn should_monitor(&self, host: &str, path: &str) -> bool {
         let rules = self.rules.read();
-        matches!(rules.evaluate(host, path), RuleAction::Monitor | RuleAction::Intercept)
+        matches!(
+            rules.evaluate(host, path),
+            RuleAction::Monitor | RuleAction::Intercept
+        )
     }
 
-    pub async fn wait_for_decision(&mut self, _event: &InterceptEvent) -> Result<InterceptDecision> {
+    pub async fn wait_for_decision(
+        &mut self,
+        _event: &InterceptEvent,
+    ) -> Result<InterceptDecision> {
         if let Some(ref mut rx) = self.decision_rx {
             let decision = tokio::time::timeout(self.config.timeout, rx.recv())
                 .await
                 .map_err(|_| crate::error::SlapperError::Proxy("Intercept timeout".to_string()))?
-                .ok_or_else(|| crate::error::SlapperError::Proxy("Decision channel closed".to_string()))?;
+                .ok_or_else(|| {
+                    crate::error::SlapperError::Proxy("Decision channel closed".to_string())
+                })?;
             return Ok(decision);
         }
         Ok(InterceptDecision::Allow)
     }
 
-    pub fn modify_request(&self, request: &mut InterceptRequest, modification: &RequestModification) {
+    pub fn modify_request(
+        &self,
+        request: &mut InterceptRequest,
+        modification: &RequestModification,
+    ) {
         if let Some(ref headers) = modification.headers {
             for (k, v) in headers {
                 if !validate_header_value(k) || !validate_header_value(v) {
@@ -117,11 +129,19 @@ impl InterceptProxy {
         }
     }
 
-    pub fn modify_response(&self, response: &mut InterceptResponse, modification: &ResponseModification) {
+    pub fn modify_response(
+        &self,
+        response: &mut InterceptResponse,
+        modification: &ResponseModification,
+    ) {
         if let Some(ref headers) = modification.headers {
             for (k, v) in headers {
                 if !validate_header_value(k) || !validate_header_value(v) {
-                    tracing::warn!("Blocked CRLF injection attempt in response header: {}={}", k, v);
+                    tracing::warn!(
+                        "Blocked CRLF injection attempt in response header: {}={}",
+                        k,
+                        v
+                    );
                     continue;
                 }
                 response.headers.insert(k.clone(), v.clone());

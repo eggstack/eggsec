@@ -88,14 +88,11 @@ impl WebhookNotifier {
                 type HmacSha256 = Hmac<Sha256>;
                 match HmacSha256::new_from_slice(secret.expose_secret().as_bytes()) {
                     Ok(mut mac) => {
-                        let canonical_json =
-                            serde_json::to_string(&payload_value).unwrap();
+                        let canonical_json = serde_json::to_string(&payload_value).unwrap();
                         mac.update(canonical_json.as_bytes());
                         let result = mac.finalize();
-                        let signature =
-                            format!("sha256={}", hex::encode(result.into_bytes()));
-                        extra_headers
-                            .insert("X-Signature-256".to_string(), signature);
+                        let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+                        extra_headers.insert("X-Signature-256".to_string(), signature);
                     }
                     Err(e) => {
                         results.push(Err(format!("HMAC key error: {}", e)));
@@ -109,12 +106,7 @@ impl WebhookNotifier {
             }
 
             match self
-                .send_with_retry(
-                    &webhook.url,
-                    &payload_value,
-                    "Webhook",
-                    &extra_headers,
-                )
+                .send_with_retry(&webhook.url, &payload_value, "Webhook", &extra_headers)
                 .await
             {
                 Ok(_) => results.push(Ok(())),
@@ -153,8 +145,13 @@ impl WebhookNotifier {
             }
         }
         let discord_payload = self.build_discord_payload(payload);
-        self.send_with_retry(webhook_url, &discord_payload, "Discord", &FxHashMap::default())
-            .await
+        self.send_with_retry(
+            webhook_url,
+            &discord_payload,
+            "Discord",
+            &FxHashMap::default(),
+        )
+        .await
     }
 
     pub async fn notify_teams(
@@ -633,8 +630,7 @@ mod tests {
         };
 
         type HmacSha256 = Hmac<Sha256>;
-        let mut mac =
-            HmacSha256::new_from_slice(secret.expose_secret().as_bytes()).unwrap();
+        let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes()).unwrap();
         let canonical_json = serde_json::to_string(&payload).unwrap();
         mac.update(canonical_json.as_bytes());
         let result = mac.finalize();
@@ -762,7 +758,11 @@ mod tests {
         };
         let filter = vec![WebhookEvent::ScanComplete];
         let blocked = notifier
-            .notify_teams("https://outlook.office.com/webhook/test", &payload, Some(&filter))
+            .notify_teams(
+                "https://outlook.office.com/webhook/test",
+                &payload,
+                Some(&filter),
+            )
             .await;
         assert!(blocked.is_ok(), "filter blocked = Ok without request");
         let no_filter = notifier

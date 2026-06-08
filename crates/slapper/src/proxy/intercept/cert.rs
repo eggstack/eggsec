@@ -3,8 +3,10 @@
 //! Generates on-the-fly SSL certificates for intercepting HTTPS traffic.
 
 use crate::error::{Result, SlapperError};
-use rcgen::{CertificateParams, KeyPair, IsCa, BasicConstraints, KeyUsagePurpose, ExtendedKeyUsagePurpose};
 use parking_lot::RwLock;
+use rcgen::{
+    BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

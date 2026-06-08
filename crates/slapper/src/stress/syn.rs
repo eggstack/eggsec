@@ -54,7 +54,15 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
                 } else {
                     utils::get_local_ip(&interface)?
                 };
-                build_syn_packet_v4(src_ip, src_port, dst_ip, target_addr.port(), seq_num, src_mac, dst_mac)?
+                build_syn_packet_v4(
+                    src_ip,
+                    src_port,
+                    dst_ip,
+                    target_addr.port(),
+                    seq_num,
+                    src_mac,
+                    dst_mac,
+                )?
             }
             IpAddr::V6(dst_ip) => {
                 let src_ip = if config.spoof_source {
@@ -62,7 +70,15 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
                 } else {
                     utils::get_local_ip_v6(&interface)?
                 };
-                build_syn_packet_v6(src_ip, src_port, dst_ip, target_addr.port(), seq_num, src_mac, dst_mac)?
+                build_syn_packet_v6(
+                    src_ip,
+                    src_port,
+                    dst_ip,
+                    target_addr.port(),
+                    seq_num,
+                    src_mac,
+                    dst_mac,
+                )?
             }
         };
 

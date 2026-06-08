@@ -180,11 +180,21 @@ mod tests {
 
     #[test]
     fn test_priority_level_sort() {
-        let mut levels = vec![PriorityLevel::P3, PriorityLevel::P0, PriorityLevel::P2, PriorityLevel::P1];
+        let mut levels = vec![
+            PriorityLevel::P3,
+            PriorityLevel::P0,
+            PriorityLevel::P2,
+            PriorityLevel::P1,
+        ];
         levels.sort();
         assert_eq!(
             levels,
-            vec![PriorityLevel::P3, PriorityLevel::P2, PriorityLevel::P1, PriorityLevel::P0]
+            vec![
+                PriorityLevel::P3,
+                PriorityLevel::P2,
+                PriorityLevel::P1,
+                PriorityLevel::P0
+            ]
         );
     }
 }

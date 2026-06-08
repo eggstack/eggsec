@@ -1,11 +1,11 @@
-//! Slapper Core - Dependency-light domain types and primitives
+//! Slapper Core - dependency-light domain types and shared primitives.
 //!
-//! This crate contains the shared domain types and constants used across
-//! the Slapper workspace. It is designed to have a small dependency set
-//! and no heavy optional dependencies (no tokio, reqwest, ratatui, etc.).
+//! This crate contains stable shared types and constants used across the
+//! Slapper workspace. It intentionally avoids runtime, UI, network, API,
+//! database, packet, browser, and agent dependencies.
 //!
-//! The canonical error type (`SlapperError`) and CLI-specific types
-//! (`OutputFormat`) remain in the main `slapper` crate.
+//! Keep this crate small. Subsystem-specific behavior belongs in subsystem
+//! crates or the main `slapper` engine crate.
 
 pub mod constants;
 pub mod types;

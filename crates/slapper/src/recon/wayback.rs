@@ -93,7 +93,10 @@ impl WaybackClient {
                 continue;
             }
             let inner = trimmed.trim_start_matches('[').trim_end_matches(']');
-            let parts: Vec<&str> = inner.split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = inner
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             if parts.len() >= 2 {
                 let timestamp = parts[0].to_string();
                 let original = parts[1].to_string();

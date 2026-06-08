@@ -32,11 +32,7 @@ async fn test_single_credential(
 ) -> AuthTestResult {
     let addr = format!("{}:{}", target, port);
 
-    let result = tokio::time::timeout(
-        timeout,
-        ssh_auth_attempt(&addr, username, password),
-    )
-    .await;
+    let result = tokio::time::timeout(timeout, ssh_auth_attempt(&addr, username, password)).await;
 
     match result {
         Ok(Ok(success)) => AuthTestResult {
@@ -49,7 +45,11 @@ async fn test_single_credential(
             } else {
                 None
             },
-            severity: if success { Severity::Critical } else { Severity::Info },
+            severity: if success {
+                Severity::Critical
+            } else {
+                Severity::Info
+            },
             message: if success {
                 "Authentication successful".to_string()
             } else {
@@ -78,8 +78,8 @@ async fn test_single_credential(
 }
 
 async fn ssh_auth_attempt(addr: &str, username: &str, password: &str) -> Result<bool> {
-    use std::net::TcpStream;
     use ssh2::Session;
+    use std::net::TcpStream;
 
     let tcp = TcpStream::connect(addr)
         .map_err(|e| SlapperError::Network(format!("TCP connection failed: {}", e)))?;
@@ -88,7 +88,8 @@ async fn ssh_auth_attempt(addr: &str, username: &str, password: &str) -> Result<
         .map_err(|e| SlapperError::Network(format!("SSH session creation failed: {}", e)))?;
 
     session.set_tcp_stream(tcp);
-    session.handshake()
+    session
+        .handshake()
         .map_err(|e| SlapperError::Network(format!("SSH handshake failed: {}", e)))?;
 
     match session.userauth_password(username, password) {
@@ -98,14 +99,15 @@ async fn ssh_auth_attempt(addr: &str, username: &str, password: &str) -> Result<
 }
 
 pub fn check_ssh_banner(address: &str, port: u16) -> Result<Option<String>> {
-    use std::net::TcpStream;
     use std::io::{BufRead, BufReader};
+    use std::net::TcpStream;
 
     let addr = format!("{}:{}", address, port);
     let mut stream = TcpStream::connect(&addr)
         .map_err(|e| SlapperError::Network(format!("TCP connection failed: {}", e)))?;
 
-    stream.set_read_timeout(Some(Duration::from_secs(5)))
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
         .map_err(|e| SlapperError::Network(format!("Timeout set failed: {}", e)))?;
 
     let reader = BufReader::new(stream);

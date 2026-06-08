@@ -163,7 +163,10 @@ impl WafEngine {
                         }
                     }
                 }
-                tracing::warn!("Auto-detected WAF '{}' but no matching profile found, using generic profile", waf_name);
+                tracing::warn!(
+                    "Auto-detected WAF '{}' but no matching profile found, using generic profile",
+                    waf_name
+                );
             }
             let profile = get_auto_profile();
             self.selected_profile = Some(profile.name.clone());
@@ -224,7 +227,9 @@ impl WafEngine {
         let bypass_results = self
             .bypass_engine
             .as_ref()
-            .ok_or_else(|| crate::error::SlapperError::Internal("bypass engine not initialized".to_string()))?
+            .ok_or_else(|| {
+                crate::error::SlapperError::Internal("bypass engine not initialized".to_string())
+            })?
             .run_bypasses(&detection)
             .await?;
 
@@ -268,7 +273,8 @@ impl WafEngine {
             let total = bypass_results.len();
             tracing::info!(
                 "WAF bypass complete: {} successful out of {} attempts",
-                successful, total
+                successful,
+                total
             );
         }
 
@@ -334,7 +340,8 @@ impl WafEngine {
                         if let Some(suggestion) = suggestion {
                             tracing::info!(
                                 "[AI] Suggested bypass for {:?}: {}",
-                                br.technique, suggestion
+                                br.technique,
+                                suggestion
                             );
                         }
                     }

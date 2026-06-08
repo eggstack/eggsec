@@ -8,26 +8,26 @@ pub mod browser;
 pub mod ci;
 pub mod cluster;
 pub mod fuzz;
+pub mod http;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
-pub mod http;
 pub mod misc;
 pub mod packet;
 pub mod plan;
 pub mod scan;
 pub mod storage;
 pub mod stress;
-#[cfg(feature = "wireless")]
-pub mod wireless;
 pub(crate) mod timeout;
 pub mod vuln;
+#[cfg(feature = "wireless")]
+pub mod wireless;
 
 pub use ci::*;
 pub use cluster::*;
 pub use fuzz::*;
+pub use http::*;
 #[cfg(feature = "advanced-hunting")]
 pub use hunt::*;
-pub use http::*;
 pub use misc::*;
 pub use packet::*;
 pub use plan::*;
@@ -251,7 +251,10 @@ pub struct CommonHttpArgs {
     pub api_key: Option<String>,
     #[arg(long, help = "Custom User-Agent header")]
     pub user_agent: Option<String>,
-    #[arg(long, help = "Simulate realistic user behavior with randomized timing/headers for regression testing")]
+    #[arg(
+        long,
+        help = "Simulate realistic user behavior with randomized timing/headers for regression testing"
+    )]
     pub stealth: bool,
     #[arg(long, help = "Rate limit (requests per second)")]
     pub rate_limit: Option<u32>,
@@ -399,18 +402,12 @@ mod tests {
 
     #[test]
     fn quick_profile_allows_safe_active() {
-        assert_eq!(
-            ScanProfile::Quick.max_risk_budget(),
-            ProbeRisk::SafeActive
-        );
+        assert_eq!(ScanProfile::Quick.max_risk_budget(), ProbeRisk::SafeActive);
     }
 
     #[test]
     fn stealth_profile_allows_passive_only() {
-        assert_eq!(
-            ScanProfile::Stealth.max_risk_budget(),
-            ProbeRisk::Passive
-        );
+        assert_eq!(ScanProfile::Stealth.max_risk_budget(), ProbeRisk::Passive);
     }
 
     #[test]
@@ -429,8 +426,7 @@ mod tests {
     #[test]
     fn risk_budget_ordering() {
         assert!(
-            ProbeRisk::Passive.risk_level()
-                < ScanProfile::Quick.max_risk_budget().risk_level()
+            ProbeRisk::Passive.risk_level() < ScanProfile::Quick.max_risk_budget().risk_level()
         );
         assert!(
             ScanProfile::Stealth.max_risk_budget().risk_level()

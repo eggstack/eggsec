@@ -81,10 +81,8 @@ mod tests {
 
     #[test]
     fn test_validate_transition_error() {
-        let result = StatusWorkflow::validate_transition(
-            &FindingStatus::Open,
-            &FindingStatus::Verified,
-        );
+        let result =
+            StatusWorkflow::validate_transition(&FindingStatus::Open, &FindingStatus::Verified);
         assert!(result.is_err());
     }
 

@@ -9,7 +9,9 @@ fn test_sandbox_disabled_allows_all_paths() {
         ..Default::default()
     };
     assert!(config.get_allowed_path("/etc/passwd").is_some());
-    assert!(config.get_allowed_path("/tmp/slapper-nse/test.txt").is_some());
+    assert!(config
+        .get_allowed_path("/tmp/slapper-nse/test.txt")
+        .is_some());
 }
 
 #[test]
@@ -19,7 +21,9 @@ fn test_sandbox_enabled_restricts_paths() {
         allowed_dir: Some(PathBuf::from("/tmp/slapper-nse")),
         ..Default::default()
     };
-    assert!(config.get_allowed_path("/tmp/slapper-nse/test.txt").is_some());
+    assert!(config
+        .get_allowed_path("/tmp/slapper-nse/test.txt")
+        .is_some());
     assert!(config.is_path_allowed("/tmp/slapper-nse/test.txt"));
 }
 

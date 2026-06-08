@@ -306,10 +306,14 @@ impl WirelessScanner {
                         recommendations.push("Upgrade from WEP to WPA2 or WPA3 immediately — WEP is trivially cracked".to_string());
                     }
                     SecurityType::Open => {
-                        recommendations.push("Enable WPA2 or WPA3 encryption on open networks".to_string());
+                        recommendations
+                            .push("Enable WPA2 or WPA3 encryption on open networks".to_string());
                     }
                     SecurityType::WPA => {
-                        recommendations.push("Upgrade from WPA to WPA2 or WPA3 — WPA has known TKIP vulnerabilities".to_string());
+                        recommendations.push(
+                            "Upgrade from WPA to WPA2 or WPA3 — WPA has known TKIP vulnerabilities"
+                                .to_string(),
+                        );
                     }
                     SecurityType::Unknown => {
                         recommendations.push("Verify wireless security configuration — security type could not be determined".to_string());
@@ -320,7 +324,9 @@ impl WirelessScanner {
         }
 
         if recommendations.is_empty() && !networks.is_empty() {
-            recommendations.push("All detected networks use strong encryption (WPA2/WPA3/Enterprise)".to_string());
+            recommendations.push(
+                "All detected networks use strong encryption (WPA2/WPA3/Enterprise)".to_string(),
+            );
         }
         if networks.is_empty() {
             recommendations.push("No wireless networks were detected during the scan".to_string());
@@ -378,7 +384,10 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
     }
 }
 
-pub async fn run_cli(args: crate::cli::WirelessArgs, _config: &crate::config::SlapperConfig) -> Result<()> {
+pub async fn run_cli(
+    args: crate::cli::WirelessArgs,
+    _config: &crate::config::SlapperConfig,
+) -> Result<()> {
     let scanner = WirelessScanner::new().with_interface(args.interface.clone());
 
     if !args.quiet {
@@ -391,14 +400,20 @@ pub async fn run_cli(args: crate::cli::WirelessArgs, _config: &crate::config::Sl
         serde_json::to_string_pretty(&result)?
     } else {
         let mut buf = String::new();
-        buf.push_str(&format!("Wireless Scan Results - Interface: {}\n", result.interface));
+        buf.push_str(&format!(
+            "Wireless Scan Results - Interface: {}\n",
+            result.interface
+        ));
         buf.push_str(&format!("Networks found: {}\n\n", result.networks.len()));
 
         for (i, network) in result.networks.iter().enumerate() {
             buf.push_str(&format!("  {}. {}\n", i + 1, network.ssid));
             buf.push_str(&format!("     BSSID:    {}\n", network.bssid));
             buf.push_str(&format!("     Channel:  {}\n", network.channel));
-            buf.push_str(&format!("     Security: {}\n", network.security_type.as_str()));
+            buf.push_str(&format!(
+                "     Security: {}\n",
+                network.security_type.as_str()
+            ));
             buf.push_str(&format!("     Signal:   {} dBm\n", network.signal_strength));
             buf.push_str(&format!("     Last seen: {}\n", network.last_seen));
             buf.push('\n');

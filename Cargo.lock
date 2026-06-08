@@ -5696,24 +5696,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "slapper-core"
+name = "slapper-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
- "hex",
- "ipnetwork 0.20.0",
- "regex",
- "rustc-hash",
+ "clap",
+ "clap_complete",
+ "shellexpand",
+ "slapper",
+ "slapper-tui",
+ "tokio",
+]
+
+[[package]]
+name = "slapper-core"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
- "serde_yaml_neo",
- "sha2",
  "subtle",
- "thiserror 2.0.18",
- "toml",
- "tracing",
- "url",
  "zeroize",
 ]
 
@@ -5751,6 +5752,35 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+]
+
+[[package]]
+name = "slapper-tui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "chrono",
+ "chrono-tz",
+ "crossterm",
+ "directories",
+ "futures",
+ "parking_lot",
+ "pnet",
+ "pnet_packet 0.35.0",
+ "ratatui",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "slapper",
+ "slapper-core",
+ "slapper-nse",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
+ "url",
+ "uuid",
 ]
 
 [[package]]

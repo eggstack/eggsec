@@ -72,19 +72,9 @@ pub fn generate_xml(results: &[NseOutput]) -> String {
         let _ = writeln!(xml, "    </hostnames>");
 
         let _ = writeln!(xml, "    <ports>");
-        let port_line = result
-            .ports
-            .as_deref()
-            .unwrap_or("80/tcp   open  http");
-        let port_id = port_line
-            .split('/')
-            .next()
-            .unwrap_or("80");
-        let _ = writeln!(
-            xml,
-            "      <port protocol=\"tcp\" portid=\"{}\">",
-            port_id
-        );
+        let port_line = result.ports.as_deref().unwrap_or("80/tcp   open  http");
+        let port_id = port_line.split('/').next().unwrap_or("80");
+        let _ = writeln!(xml, "      <port protocol=\"tcp\" portid=\"{}\">", port_id);
         let _ = writeln!(xml, "        <state state=\"open\" reason=\"syn-ack\"/>");
         let _ = writeln!(
             xml,

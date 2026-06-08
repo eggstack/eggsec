@@ -25,7 +25,9 @@ pub struct SearchTool {
 static SEARCH_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
     reqwest::Client::builder()
         .pool_max_idle_per_host(crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-        .pool_idle_timeout(std::time::Duration::from_secs(crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS))
+        .pool_idle_timeout(std::time::Duration::from_secs(
+            crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+        ))
         .tcp_nodelay(true)
         .build()
         .expect("Failed to create search HTTP client")

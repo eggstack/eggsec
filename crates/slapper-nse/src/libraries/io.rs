@@ -95,17 +95,17 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             match file {
                 Ok(f) => {
                     let fd = {
-                        let mut next = NEXT_FD.lock().map_err(|_| {
-                            std::io::Error::other("lock error")
-                        })?;
+                        let mut next = NEXT_FD
+                            .lock()
+                            .map_err(|_| std::io::Error::other("lock error"))?;
                         let fd = *next;
                         *next += 1;
                         fd
                     };
 
-                    let mut handles = FILE_HANDLES.lock().map_err(|_| {
-                        std::io::Error::other("lock error")
-                    })?;
+                    let mut handles = FILE_HANDLES
+                        .lock()
+                        .map_err(|_| std::io::Error::other("lock error"))?;
                     handles.insert(fd, FileHandle { file: f, fd });
 
                     let result = lua.create_table()?;
@@ -261,18 +261,17 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "popen",
         lua.create_function(move |lua, (cmd, mode): (String, Option<String>)| {
-            if sandbox_for_popen.enabled
-                && !sandbox_for_popen.is_command_allowed(&cmd) {
-                    if sandbox_for_popen.log_violations {
-                        tracing::warn!(
-                            command = %cmd,
-                            "Sandbox: blocked io.popen call"
-                        );
-                    }
-                    let result = lua.create_table()?;
-                    result.set("error", "io.popen blocked by sandbox")?;
-                    return Ok(result);
+            if sandbox_for_popen.enabled && !sandbox_for_popen.is_command_allowed(&cmd) {
+                if sandbox_for_popen.log_violations {
+                    tracing::warn!(
+                        command = %cmd,
+                        "Sandbox: blocked io.popen call"
+                    );
                 }
+                let result = lua.create_table()?;
+                result.set("error", "io.popen blocked by sandbox")?;
+                return Ok(result);
+            }
 
             let mode_str = mode.unwrap_or_else(|| "r".to_string());
 

@@ -6,7 +6,9 @@ pub async fn handle_recon(ctx: &CommandContext, mut args: crate::cli::ReconArgs)
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("recon-{}", chrono::Utc::now().timestamp());
-    ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+    ctx.notify_manager
+        .notify_scan_started(&scan_id, &target)
+        .await;
     match crate::recon::run_cli(args, &ctx.config)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))

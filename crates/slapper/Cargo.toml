@@ -302,10 +302,6 @@ wireless = []
 # OpenAPI schema ingestion and fuzz target generation
 api-schema = []
 
-[[bin]]
-name = "slapper"
-path = "src/main.rs"
-
 [dev-dependencies]
 wiremock = "0.6"
 tempfile = "3"

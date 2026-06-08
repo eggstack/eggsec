@@ -1,7 +1,7 @@
 use crate::findings::Finding;
 use crate::types::Severity;
-use serde::{Deserialize, Serialize};
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde::{Deserialize, Serialize};
 
 /// Structured report summary with aggregated statistics and risk narrative.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -49,7 +49,9 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: None,
-            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            task_queue: Arc::new(TaskQueue::new(
+                crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
+            )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
@@ -65,7 +67,9 @@ impl RemoteListener {
             rate_limit,
             ip_allowlist: None,
             tls_server: None,
-            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            task_queue: Arc::new(TaskQueue::new(
+                crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
+            )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
@@ -81,7 +85,9 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: Some(allowlist),
             tls_server: None,
-            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            task_queue: Arc::new(TaskQueue::new(
+                crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
+            )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
@@ -100,7 +106,9 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: Some(Arc::new(tls_server)),
-            task_queue: Arc::new(TaskQueue::new(crate::constants::DEFAULT_TASK_QUEUE_CAPACITY)),
+            task_queue: Arc::new(TaskQueue::new(
+                crate::constants::DEFAULT_TASK_QUEUE_CAPACITY,
+            )),
             workers: Arc::new(RwLock::new(FxHashMap::default())),
         })
     }
@@ -431,8 +439,12 @@ impl RemoteListener {
                         .iter()
                         .filter_map(|cap| match cap.as_str() {
                             "PortScan" => Some(crate::distributed::TaskType::PortScan),
-                            "ServiceFingerprint" => Some(crate::distributed::TaskType::ServiceFingerprint),
-                            "EndpointDiscovery" => Some(crate::distributed::TaskType::EndpointDiscovery),
+                            "ServiceFingerprint" => {
+                                Some(crate::distributed::TaskType::ServiceFingerprint)
+                            }
+                            "EndpointDiscovery" => {
+                                Some(crate::distributed::TaskType::EndpointDiscovery)
+                            }
                             "Fuzz" => Some(crate::distributed::TaskType::Fuzz),
                             "WafTest" => Some(crate::distributed::TaskType::WafTest),
                             "LoadTest" => Some(crate::distributed::TaskType::LoadTest),
@@ -465,8 +477,12 @@ impl RemoteListener {
                         if let Some(reg) = workers_guard.get_mut(worker_id) {
                             reg.last_heartbeat_secs = Some(chrono::Utc::now().timestamp());
                             // Parse status JSON to update worker state
-                            if let Ok(status_val) = serde_json::from_str::<serde_json::Value>(&status) {
-                                if let Some(status_str) = status_val.get("status").and_then(|v| v.as_str()) {
+                            if let Ok(status_val) =
+                                serde_json::from_str::<serde_json::Value>(&status)
+                            {
+                                if let Some(status_str) =
+                                    status_val.get("status").and_then(|v| v.as_str())
+                                {
                                     reg.status = match status_str {
                                         "busy" => crate::distributed::WorkerStatus::Busy,
                                         "idle" => crate::distributed::WorkerStatus::Idle,
@@ -539,31 +555,29 @@ impl RemoteListener {
                 CommandMessage::AssignTasks { .. } => {
                     // Workers don't receive AssignTasks; this is coordinator-only
                 }
-                CommandMessage::EnqueueTask { id, task } => {
-                    match task_queue.enqueue(task).await {
-                        Ok(()) => {
-                            let response = ResponseMessage {
-                                id,
-                                msg_type: "enqueue_ack".to_string(),
-                                success: true,
-                                output: Some("Task enqueued".to_string()),
-                                error: None,
-                                duration_ms: None,
-                                hostname: None,
-                                capabilities: None,
-                            };
-                            line_writer
-                                .write_line(&serde_json::to_string(&response)?)
-                                .await?;
-                        }
-                        Err(e) => {
-                            let response = ResponseMessage::error(id, e.to_string(), None);
-                            line_writer
-                                .write_line(&serde_json::to_string(&response)?)
-                                .await?;
-                        }
+                CommandMessage::EnqueueTask { id, task } => match task_queue.enqueue(task).await {
+                    Ok(()) => {
+                        let response = ResponseMessage {
+                            id,
+                            msg_type: "enqueue_ack".to_string(),
+                            success: true,
+                            output: Some("Task enqueued".to_string()),
+                            error: None,
+                            duration_ms: None,
+                            hostname: None,
+                            capabilities: None,
+                        };
+                        line_writer
+                            .write_line(&serde_json::to_string(&response)?)
+                            .await?;
                     }
-                }
+                    Err(e) => {
+                        let response = ResponseMessage::error(id, e.to_string(), None);
+                        line_writer
+                            .write_line(&serde_json::to_string(&response)?)
+                            .await?;
+                    }
+                },
                 CommandMessage::StatusRequest { id } => {
                     let workers_snapshot: Vec<crate::distributed::WorkerRegistration> =
                         workers.read().await.values().cloned().collect();
@@ -1090,11 +1104,7 @@ impl RemoteClient {
         ))
     }
 
-    pub async fn request_status(
-        &mut self,
-        host: &str,
-        port: u16,
-    ) -> Result<serde_json::Value> {
+    pub async fn request_status(&mut self, host: &str, port: u16) -> Result<serde_json::Value> {
         let mut line_writer = self.connect_to_coordinator(host, port).await?;
 
         let cmd = CommandMessage::StatusRequest {
@@ -1118,7 +1128,9 @@ impl RemoteClient {
 
         if !response.success {
             return Err(SlapperError::Network(
-                response.error.unwrap_or_else(|| "Status request failed".to_string()),
+                response
+                    .error
+                    .unwrap_or_else(|| "Status request failed".to_string()),
             ));
         }
 
@@ -1160,7 +1172,9 @@ impl RemoteClient {
 
         if !response.success {
             return Err(SlapperError::Network(
-                response.error.unwrap_or_else(|| "Failed to enqueue task".to_string()),
+                response
+                    .error
+                    .unwrap_or_else(|| "Failed to enqueue task".to_string()),
             ));
         }
 

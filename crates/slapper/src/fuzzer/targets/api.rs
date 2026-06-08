@@ -1,7 +1,7 @@
 use super::TargetPayload;
 use crate::utils::validation::validate_path;
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -381,8 +381,8 @@ pub fn get_payloads() -> Vec<TargetPayload> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustc_hash::FxHashMap;
     use crate::fuzzer::TargetType;
+    use rustc_hash::FxHashMap;
 
     fn make_test_spec() -> OpenAPISpec {
         let mut paths = FxHashMap::default();
@@ -536,7 +536,11 @@ mod tests {
         let fuzzer = OpenAPIFuzzer::new(spec);
         let targets = fuzzer.generate_targets();
         // Should find GET on /api/resource and POST on /api/resource/create
-        assert!(targets.len() >= 2, "should find at least 2 targets, got {}", targets.len());
+        assert!(
+            targets.len() >= 2,
+            "should find at least 2 targets, got {}",
+            targets.len()
+        );
 
         let methods: Vec<&str> = targets.iter().map(|t| t.method.as_str()).collect();
         assert!(methods.contains(&"GET"));
@@ -548,7 +552,10 @@ mod tests {
         let spec = make_test_spec();
         let fuzzer = OpenAPIFuzzer::new(spec);
         let targets = fuzzer.generate_targets();
-        let get_target = targets.iter().find(|t| t.method == "GET").expect("GET target should exist");
+        let get_target = targets
+            .iter()
+            .find(|t| t.method == "GET")
+            .expect("GET target should exist");
         assert_eq!(get_target.fuzz_points.len(), 2);
         assert_eq!(get_target.fuzz_points[0].name, "id");
         assert_eq!(get_target.fuzz_points[1].name, "email");
@@ -559,12 +566,21 @@ mod tests {
         let spec = make_test_spec();
         let fuzzer = OpenAPIFuzzer::new(spec);
         let targets = fuzzer.generate_targets();
-        let get_target = targets.iter().find(|t| t.method == "GET").expect("GET target should exist");
+        let get_target = targets
+            .iter()
+            .find(|t| t.method == "GET")
+            .expect("GET target should exist");
 
         // id is integer
-        assert!(matches!(get_target.fuzz_points[0].fuzz_type, FuzzType::Integer));
+        assert!(matches!(
+            get_target.fuzz_points[0].fuzz_type,
+            FuzzType::Integer
+        ));
         // email is Email
-        assert!(matches!(get_target.fuzz_points[1].fuzz_type, FuzzType::Email));
+        assert!(matches!(
+            get_target.fuzz_points[1].fuzz_type,
+            FuzzType::Email
+        ));
     }
 
     #[test]
@@ -587,7 +603,11 @@ mod tests {
 
         for fuzz_type in &types {
             let payloads = fuzzer.generate_fuzz_payloads(fuzz_type);
-            assert!(!payloads.is_empty(), "payloads for {:?} should not be empty", fuzz_type);
+            assert!(
+                !payloads.is_empty(),
+                "payloads for {:?} should not be empty",
+                fuzz_type
+            );
         }
     }
 

@@ -143,8 +143,7 @@ impl GeoLocator {
         if !ip66_path.exists() && !maxmind_path.exists() {
             if let Some(ref s) = settings {
                 if s.account_id.is_some() && s.license_key.is_some() {
-                    self.download_maxmind_db(settings.as_ref().unwrap())
-                        .await?;
+                    self.download_maxmind_db(settings.as_ref().unwrap()).await?;
                 } else {
                     tracing::info!("Downloading free IP66 database...");
                     self.download_ip66_db(&ip66_path).await?;
@@ -436,7 +435,9 @@ impl GeoLocator {
 
         let response = self.client.get(&url).send().await?;
 
-        if response.status() == crate::constants::STATUS_RATE_LIMITED || response.status() == crate::constants::STATUS_FORBIDDEN {
+        if response.status() == crate::constants::STATUS_RATE_LIMITED
+            || response.status() == crate::constants::STATUS_FORBIDDEN
+        {
             return Err(SlapperError::RateLimited(
                 "Rate limited or forbidden".to_string(),
             ));

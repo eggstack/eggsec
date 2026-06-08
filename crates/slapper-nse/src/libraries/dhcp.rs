@@ -134,30 +134,25 @@ fn parse_dhcp_response(packet: &[u8]) -> Result<(String, String, String, String,
         }
 
         match opt_code {
-            OPT_SUBNET_MASK
-                if opt_len >= 4 => {
-                    subnet_mask =
-                        Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
-                            .to_string();
-                }
-            OPT_ROUTER
-                if opt_len >= 4 => {
-                    router =
-                        Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
-                            .to_string();
-                }
-            OPT_DNS
-                if opt_len >= 4 => {
-                    dns = Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
+            OPT_SUBNET_MASK if opt_len >= 4 => {
+                subnet_mask =
+                    Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
                         .to_string();
-                }
-            OPT_LEASE_TIME
-                if opt_len >= 4 => {
-                    lease_time = ((packet[i + 2] as u32) << 24)
-                        | ((packet[i + 3] as u32) << 16)
-                        | ((packet[i + 4] as u32) << 8)
-                        | (packet[i + 5] as u32);
-                }
+            }
+            OPT_ROUTER if opt_len >= 4 => {
+                router = Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
+                    .to_string();
+            }
+            OPT_DNS if opt_len >= 4 => {
+                dns = Ipv4Addr::new(packet[i + 2], packet[i + 3], packet[i + 4], packet[i + 5])
+                    .to_string();
+            }
+            OPT_LEASE_TIME if opt_len >= 4 => {
+                lease_time = ((packet[i + 2] as u32) << 24)
+                    | ((packet[i + 3] as u32) << 16)
+                    | ((packet[i + 4] as u32) << 8)
+                    | (packet[i + 5] as u32);
+            }
             OPT_END => break,
             _ => {}
         }

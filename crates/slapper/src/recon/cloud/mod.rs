@@ -37,10 +37,7 @@ pub struct CloudScanner {
 }
 
 fn response_indicates_resource_exists(status: u16) -> bool {
-    matches!(
-        status,
-        200 | 201 | 204 | 301 | 302 | 307 | 308 | 403 | 405
-    )
+    matches!(status, 200 | 201 | 204 | 301 | 302 | 307 | 308 | 403 | 405)
 }
 
 impl CloudScanner {

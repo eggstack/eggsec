@@ -84,7 +84,8 @@ impl NotifyManager {
     ) {
         // Skip if scan-complete notifications are disabled and no findings to report,
         // or if both scan-complete and findings notifications are disabled.
-        if !self.config.notify_on_complete && (findings.is_none() || !self.config.notify_on_findings)
+        if !self.config.notify_on_complete
+            && (findings.is_none() || !self.config.notify_on_findings)
         {
             return;
         }
@@ -151,11 +152,7 @@ impl NotifyManager {
 
         if let Some(ref slack_url) = self.slack_webhook {
             let filter = self.config.platform_event_filter.as_deref();
-            if let Err(e) = self
-                .notifier
-                .notify_slack(slack_url, payload, filter)
-                .await
-            {
+            if let Err(e) = self.notifier.notify_slack(slack_url, payload, filter).await {
                 tracing::warn!("Slack notification failed: {}", e);
             }
         }
@@ -173,11 +170,7 @@ impl NotifyManager {
 
         if let Some(ref teams_url) = self.teams_webhook {
             let filter = self.config.platform_event_filter.as_deref();
-            if let Err(e) = self
-                .notifier
-                .notify_teams(teams_url, payload, filter)
-                .await
-            {
+            if let Err(e) = self.notifier.notify_teams(teams_url, payload, filter).await {
                 tracing::warn!("Teams notification failed: {}", e);
             }
         }
