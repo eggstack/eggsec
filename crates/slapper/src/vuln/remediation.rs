@@ -47,7 +47,7 @@ impl Remediation {
     pub fn for_finding(finding_id: &str, title: &str, severity: Severity) -> Self {
         let (effort_hours, steps, references, priority) = match severity {
             Severity::Critical => (
-                4.0,
+                24.0,
                 vec![
                     "Immediately isolate affected system".to_string(),
                     "Apply emergency patch or mitigation".to_string(),
@@ -61,7 +61,7 @@ impl Remediation {
                 RemediationPriority::Critical,
             ),
             Severity::High => (
-                8.0,
+                16.0,
                 vec![
                     "Plan remediation window".to_string(),
                     "Test patch in staging environment".to_string(),
@@ -72,7 +72,7 @@ impl Remediation {
                 RemediationPriority::High,
             ),
             Severity::Medium => (
-                16.0,
+                8.0,
                 vec![
                     "Schedule remediation in next sprint".to_string(),
                     "Develop and test fix".to_string(),
@@ -83,7 +83,7 @@ impl Remediation {
                 RemediationPriority::Medium,
             ),
             Severity::Low => (
-                24.0,
+                4.0,
                 vec![
                     "Review and understand the finding".to_string(),
                     "Plan fix for future release".to_string(),
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_remediation_for_critical() {
         let rem = Remediation::for_finding("f1", "RCE Vulnerability", Severity::Critical);
-        assert_eq!(rem.effort_hours, 4.0);
+        assert_eq!(rem.effort_hours, 24.0);
         assert_eq!(rem.priority, RemediationPriority::Critical);
     }
 

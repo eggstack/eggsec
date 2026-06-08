@@ -37,11 +37,11 @@ pub fn triage_finding(
     finding_id: &str,
     title: &str,
     description: &str,
-    severity: Severity,
+    _severity: Severity,
     cvss_score: Option<f32>,
 ) -> TriageResult {
     let duplicate_keywords = ["example", "demo", "sample", "localhost"];
-    let false_positive_keywords = ["informational", "no risk"];
+    let false_positive_keywords = ["informational", "no risk", "not vulnerable", "safe", "no impact"];
 
     let title_lower = title.to_lowercase();
     let description_lower = description.to_lowercase();
@@ -50,8 +50,8 @@ pub fn triage_finding(
         .iter()
         .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
-    let is_false_positive = severity == Severity::Info
-        && false_positive_keywords
+    let is_false_positive =
+        false_positive_keywords
             .iter()
             .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
@@ -123,5 +123,17 @@ mod tests {
             Some(9.8),
         );
         assert_eq!(result.triage_status, TriageStatus::TruePositive);
+    }
+
+    #[test]
+    fn test_triage_false_positive_without_info_severity() {
+        let result = triage_finding(
+            "f3",
+            "Information disclosure",
+            "This is not vulnerable to SQL injection",
+            Severity::Medium,
+            Some(5.0),
+        );
+        assert_eq!(result.triage_status, TriageStatus::FalsePositive);
     }
 }

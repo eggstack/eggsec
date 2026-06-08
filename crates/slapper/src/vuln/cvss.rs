@@ -76,20 +76,20 @@ impl CvssScore {
         if scope == "U" {
             let impact = 6.42 * iss;
             let exploitability = 8.22 * av * ac * pr_u * ui;
-            if impact == 0.0 {
+            if impact <= 0.0 {
                 0.0
             } else {
                 let score = (impact + exploitability).min(10.0);
-                f32::floor(score * 10.0) / 10.0
+                f32::ceil(score * 10.0) / 10.0
             }
         } else {
             let impact = 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02).powf(15.0);
             let exploitability = 8.22 * av * ac * pr_c * ui;
-            if impact == 0.0 {
+            if impact <= 0.0 {
                 0.0
             } else {
                 let score = (1.08 * (impact + exploitability)).min(10.0);
-                f32::floor(score * 10.0) / 10.0
+                f32::ceil(score * 10.0) / 10.0
             }
         }
     }
@@ -274,20 +274,20 @@ fn compute_base_score(v: &ParsedVector) -> f32 {
     if v.scope == "U" {
         let impact = 6.42 * iss;
         let exploitability = 8.22 * av * ac * pr_u * ui;
-        if impact == 0.0 {
+        if impact <= 0.0 {
             0.0
         } else {
             let score = (impact + exploitability).min(10.0);
-            f32::floor(score * 10.0) / 10.0
+            f32::ceil(score * 10.0) / 10.0
         }
     } else {
         let impact = 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02).powf(15.0);
         let exploitability = 8.22 * av * ac * pr_c * ui;
-        if impact == 0.0 {
+        if impact <= 0.0 {
             0.0
         } else {
             let score = (1.08 * (impact + exploitability)).min(10.0);
-            f32::floor(score * 10.0) / 10.0
+            f32::ceil(score * 10.0) / 10.0
         }
     }
 }
@@ -299,7 +299,7 @@ fn compute_temporal_score(base_score: f32, v: &ParsedVector) -> f32 {
 
     let score = base_score * e * rl * rc;
     let score = score.min(10.0);
-    f32::floor(score * 10.0) / 10.0
+    f32::ceil(score * 10.0) / 10.0
 }
 
 fn compute_environmental_score(v: &ParsedVector) -> f32 {
@@ -329,7 +329,7 @@ fn compute_environmental_score(v: &ParsedVector) -> f32 {
         (impact, 8.22 * av * ac * pr_c * ui)
     };
 
-    if impact == 0.0 {
+    if impact <= 0.0 {
         return 0.0;
     }
 
@@ -344,7 +344,7 @@ fn compute_environmental_score(v: &ParsedVector) -> f32 {
     let rc = temporal_metric_weight(&v.rc);
 
     let score = (score * e * rl * rc).min(10.0);
-    f32::floor(score * 10.0) / 10.0
+    f32::ceil(score * 10.0) / 10.0
 }
 
 fn modified_cia(base: &str, modified: &str, requirement_weight: f32) -> f32 {
@@ -361,13 +361,15 @@ mod tests {
     fn test_cvss_score_from_vector() {
         let score =
             CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").unwrap();
-        assert!(score.base_score >= 9.0);
+        // NVD CVSS 3.1 calculator: 9.8
+        assert_eq!(score.base_score, 9.8);
     }
 
     #[test]
     fn test_base_score_calculation() {
         let score = CvssScore::calculate_base("N", "L", "N", "N", "U", "H", "H", "H");
-        assert!(score >= 9.0);
+        // NVD CVSS 3.1 calculator: 9.8
+        assert_eq!(score, 9.8);
     }
 
     #[test]
@@ -378,6 +380,8 @@ mod tests {
         let without_exploit =
             CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").unwrap();
         assert!(with_exploit.temporal_score <= without_exploit.temporal_score);
+        // Temporal score with E:H/RL:U/RC:C should be <= base score
+        assert!(with_exploit.temporal_score <= with_exploit.base_score);
     }
 
     #[test]
@@ -420,5 +424,22 @@ mod tests {
         let low =
             CvssScore::from_vector("CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:L/A:N").unwrap();
         assert_eq!(low.severity(), "LOW");
+    }
+
+    #[test]
+    fn test_zero_impact_scope_changed() {
+        // All CIA = None, impact should be 0
+        let score =
+            CvssScore::from_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:N").unwrap();
+        assert_eq!(score.base_score, 0.0);
+    }
+
+    #[test]
+    fn test_roundup_vs_floor() {
+        // Verify Roundup function: 4.02 -> 4.1 (not 4.0)
+        // AV:L/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N = 3.3 per NVD
+        let score =
+            CvssScore::from_vector("CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N").unwrap();
+        assert_eq!(score.base_score, 3.3);
     }
 }
