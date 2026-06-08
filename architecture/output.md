@@ -2,9 +2,9 @@
 
 The Output module handles the formatting, deduplication, and export of security findings and scan data into various standardized formats.
 
-## Supported Formats (`src/output/`)
+## Supported Formats (`crates/slapper-output/src/`)
 
-Slapper supports a wide range of output formats to integrate with different tools and workflows:
+Most output code now lives in the `slapper-output` crate (`crates/slapper-output/src/`). Modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `crates/slapper/src/output/`. Slapper supports a wide range of output formats to integrate with different tools and workflows:
 
 | Format | File | Purpose |
 |--------|------|---------|

@@ -49,6 +49,7 @@ pub mod session;
 pub mod stage;
 
 use crate::error::{Result, SlapperError};
+use crate::output::extensions::{JUnitBuilderExt, SarifBuilderExt};
 
 use crate::cli::ResumeArgs;
 use crate::cli::ScanArgs;

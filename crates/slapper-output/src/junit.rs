@@ -97,62 +97,6 @@ impl JUnitBuilder {
         }
     }
 
-    pub fn with_report(mut self, report: &crate::pipeline::PipelineReport) -> Self {
-        let suite_name = format!("slapper-scan-{}", report.target);
-
-        for port in &report.open_ports {
-            if port.status == "open" {
-                self = self.add_test_case(
-                    &suite_name,
-                    &format!("port_{}_open", port.port),
-                    "port_scan",
-                    0.0,
-                    JUnitTestResult::Passed,
-                );
-            }
-        }
-
-        for service in &report.services {
-            let service_name = format!(
-                "{}_v{}",
-                service.service,
-                service.version.as_deref().unwrap_or("unknown")
-            );
-            self = self.add_test_case(
-                &suite_name,
-                &service_name,
-                "fingerprint",
-                0.0,
-                JUnitTestResult::Passed,
-            );
-        }
-
-        for endpoint in &report.endpoints {
-            let test_name = format!(
-                "{} {} - {}",
-                endpoint.path, endpoint.status_code, endpoint.status_text
-            );
-            let result = if endpoint.status_code >= 400 {
-                JUnitTestResult::Failed {
-                    message: format!("Endpoint returned error status: {}", endpoint.status_code),
-                    failure_type: "HttpError".to_string(),
-                    text: Some(format!("Path: {}", endpoint.path)),
-                }
-            } else {
-                JUnitTestResult::Passed
-            };
-            self = self.add_test_case(
-                &suite_name,
-                &test_name,
-                "endpoints",
-                endpoint.response_time_ms as f64 / 1000.0,
-                result,
-            );
-        }
-
-        self
-    }
-
     pub fn add_test_case(
         mut self,
         suite_name: &str,

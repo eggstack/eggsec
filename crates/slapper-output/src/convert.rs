@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-fn parse_severity(value: &str) -> crate::types::Severity {
-    crate::types::Severity::parse_or_default(value)
+fn parse_severity(value: &str) -> slapper_core::types::Severity {
+    slapper_core::types::Severity::parse_or_default(value)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,7 +73,7 @@ pub fn convert_to_junit(report: &ScanReportData) -> Result<String, String> {
     for finding in &report.findings {
         let result = if matches!(
             parse_severity(&finding.severity),
-            crate::types::Severity::Critical | crate::types::Severity::High
+            slapper_core::types::Severity::Critical | slapper_core::types::Severity::High
         ) {
             JUnitTestResult::Failed {
                 message: finding.description.clone(),
@@ -106,8 +106,8 @@ pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
 
     for finding in &report.findings {
         let level = match parse_severity(&finding.severity) {
-            crate::types::Severity::Critical | crate::types::Severity::High => "error",
-            crate::types::Severity::Medium => "warning",
+            slapper_core::types::Severity::Critical | slapper_core::types::Severity::High => "error",
+            slapper_core::types::Severity::Medium => "warning",
             _ => "note",
         };
 
@@ -130,10 +130,10 @@ pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
 
 pub fn convert_to_html(report: &ScanReportData) -> String {
     use super::html::generate_html_report;
-    use super::markdown::ScanSummary;
+    use crate::markdown::ScanSummary;
 
     let summary = ScanSummary::from(report);
-    let findings: Vec<super::markdown::Finding> =
+    let findings: Vec<crate::markdown::Finding> =
         report.findings.iter().map(|f| f.into()).collect();
 
     let mut html = generate_html_report(summary, findings);
@@ -162,11 +162,11 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
 }
 
 pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::Error> {
-    use super::markdown::{generate_markdown_report, ScanSummary};
+    use crate::markdown::{generate_markdown_report, ScanSummary};
     use std::fmt::Write;
 
     let summary = ScanSummary::from(report);
-    let findings: Vec<super::markdown::Finding> =
+    let findings: Vec<crate::markdown::Finding> =
         report.findings.iter().map(|f| f.into()).collect();
 
     let mut md = generate_markdown_report(summary, findings)?;
@@ -223,9 +223,9 @@ pub fn convert_to_json(report: &ScanReportData) -> Result<String, String> {
     serde_json::to_string_pretty(report).map_err(|e| format!("Failed to serialize to JSON: {}", e))
 }
 
-impl From<&ScanReportData> for super::markdown::ScanSummary {
+impl From<&ScanReportData> for crate::markdown::ScanSummary {
     fn from(report: &ScanReportData) -> Self {
-        let findings_by_severity = |sev: crate::types::Severity| {
+        let findings_by_severity = |sev: slapper_core::types::Severity| {
             report
                 .findings
                 .iter()
@@ -233,25 +233,25 @@ impl From<&ScanReportData> for super::markdown::ScanSummary {
                 .count() as u32
         };
 
-        super::markdown::ScanSummary {
+        crate::markdown::ScanSummary {
             target: report.target.clone(),
             scan_type: report.scan_type.clone(),
             timestamp: report.timestamp.clone(),
             duration_seconds: report.duration_ms / 1000,
             total_requests: 0,
             findings_count: report.findings.len() as u32,
-            critical_count: findings_by_severity(crate::types::Severity::Critical),
-            high_count: findings_by_severity(crate::types::Severity::High),
-            medium_count: findings_by_severity(crate::types::Severity::Medium),
-            low_count: findings_by_severity(crate::types::Severity::Low),
-            info_count: findings_by_severity(crate::types::Severity::Info),
+            critical_count: findings_by_severity(slapper_core::types::Severity::Critical),
+            high_count: findings_by_severity(slapper_core::types::Severity::High),
+            medium_count: findings_by_severity(slapper_core::types::Severity::Medium),
+            low_count: findings_by_severity(slapper_core::types::Severity::Low),
+            info_count: findings_by_severity(slapper_core::types::Severity::Info),
         }
     }
 }
 
-impl From<&FindingData> for super::markdown::Finding {
+impl From<&FindingData> for crate::markdown::Finding {
     fn from(f: &FindingData) -> Self {
-        super::markdown::Finding {
+        crate::markdown::Finding {
             title: f.title.clone(),
             severity: f.severity.clone(),
             category: f.category.clone(),
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn summary_counts_mixed_case_critical() {
         let report = sample_report_with_severity("CRITICAL");
-        let summary = crate::output::markdown::ScanSummary::from(&report);
+        let summary = crate::markdown::ScanSummary::from(&report);
         assert_eq!(summary.critical_count, 1);
     }
 }

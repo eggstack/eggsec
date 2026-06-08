@@ -7,6 +7,10 @@ repository.workspace = true
 rust-version.workspace = true
 description = "CLI binary for Slapper security testing toolkit"
 
+[[bin]]
+name = "slapper"
+path = "src/main.rs"
+
 [dependencies]
 slapper = { path = "../slapper" }
 slapper-tui = { path = "../slapper-tui" }

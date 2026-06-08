@@ -1,4 +1,4 @@
-use crate::output::agent::AgentFinding;
+use crate::agent::AgentFinding;
 use rustc_hash::FxHashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -68,8 +68,8 @@ impl DedupEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::output::agent::{AgentFinding, Confidence, Evidence, FindingStatus, Remediation};
-    use crate::types::Severity;
+    use crate::agent::{AgentFinding, Confidence, Evidence, FindingStatus, Remediation};
+    use slapper_core::types::Severity;
     use chrono::Utc;
 
     fn make_finding(id: &str, severity: Severity, title: &str, target: &str) -> AgentFinding {
@@ -89,7 +89,7 @@ mod tests {
             endpoint: String::new(),
             parameter: None,
             timestamp: Utc::now(),
-            attack_surface: crate::output::agent::AttackSurface::Web,
+            attack_surface: crate::agent::AttackSurface::Web,
             status: FindingStatus::New,
         }
     }

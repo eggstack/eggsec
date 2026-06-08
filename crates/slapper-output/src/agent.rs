@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub use crate::types::Severity;
+pub use slapper_core::types::Severity;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -178,6 +178,123 @@ impl AgentFinding {
             "[{}] {} - {} ({})",
             self.severity, self.title, self.target, self.endpoint
         )
+    }
+
+    pub fn from_scan_result(
+        scan_type: &str,
+        target: &str,
+        endpoint: &str,
+        results: &serde_json::Value,
+    ) -> Vec<AgentFinding> {
+        let mut findings = Vec::new();
+
+        if let Some(items) = results.as_array() {
+            for item in items {
+                let vuln_type = item
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(scan_type);
+
+                let severity = item
+                    .get("severity")
+                    .and_then(|v| v.as_str())
+                    .map(Self::parse_severity)
+                    .unwrap_or(Severity::Medium);
+
+                let title = item
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Finding");
+
+                let mut finding = AgentFinding::new(vuln_type, severity, title, target, endpoint);
+
+                if let Some(desc) = item.get("description").and_then(|v| v.as_str()) {
+                    finding = finding.with_description(desc);
+                }
+
+                if let Some(cwe) = item.get("cwe").and_then(|v| v.as_str()) {
+                    finding = finding.with_cwe(cwe);
+                }
+
+                if let Some(cvss) = item.get("cvss").and_then(|v| v.as_f64()) {
+                    finding = finding.with_cvss(cvss as f32);
+                }
+
+                if let Some(param) = item.get("parameter").and_then(|v| v.as_str()) {
+                    finding = finding.with_parameter(param);
+                }
+
+                if let Some(surface) = item.get("attack_surface").and_then(|v| v.as_str()) {
+                    if let Some(as_) = Self::parse_attack_surface(surface) {
+                        finding = finding.with_attack_surface(as_);
+                    }
+                }
+
+                finding = finding.with_confidence(Confidence::Possible);
+
+                findings.push(finding);
+            }
+        }
+
+        findings
+    }
+
+    fn parse_severity(s: &str) -> Severity {
+        match s.to_lowercase().as_str() {
+            "critical" | "crit" => Severity::Critical,
+            "high" => Severity::High,
+            "medium" | "moderate" => Severity::Medium,
+            "low" => Severity::Low,
+            _ => Severity::Info,
+        }
+    }
+
+    fn parse_attack_surface(s: &str) -> Option<AttackSurface> {
+        match s.to_lowercase().as_str() {
+            "web" | "http" | "https" => Some(AttackSurface::Web),
+            "api" | "graphql" | "rest" => Some(AttackSurface::Api),
+            "network" | "tcp" | "udp" => Some(AttackSurface::Network),
+            "auth" | "authentication" | "login" => Some(AttackSurface::Authentication),
+            "session" | "cookie" | "jwt" => Some(AttackSurface::Session),
+            "file" | "filesystem" | "path" => Some(AttackSurface::FileSystem),
+            "internal" | "ssrf" => Some(AttackSurface::Internal),
+            "cloud" | "aws" | "azure" | "gcp" => Some(AttackSurface::Cloud),
+            "cdn" | "proxy" | "waf" => Some(AttackSurface::Cdn),
+            _ => None,
+        }
+    }
+
+    pub fn summarize(&self) -> String {
+        format!(
+            "[{:?}/{:?}] {} on {} at {}",
+            self.severity, self.confidence, self.vulnerability_type, self.target, self.endpoint
+        )
+    }
+
+    pub fn to_sarif_finding(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "name": self.vulnerability_type,
+            "shortDescription": {
+                "text": self.title
+            },
+            "fullDescription": {
+                "text": self.description
+            },
+            "severity": match self.severity {
+                Severity::Critical => "error",
+                Severity::High => "error",
+                Severity::Medium => "warning",
+                Severity::Low => "note",
+                Severity::Info => "note",
+            },
+            "properties": {
+                "confidence": format!("{:?}", self.confidence).to_lowercase(),
+                "cvss": self.cvss,
+                "cwe": self.cwe_ids,
+                "attackSurface": format!("{:?}", self.attack_surface).to_lowercase(),
+            }
+        })
     }
 }
 

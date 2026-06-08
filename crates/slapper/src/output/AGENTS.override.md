@@ -2,6 +2,8 @@
 
 Specialized guidance for the report generation module.
 
+> **Note**: Most output code has moved to the `slapper-output` crate (`crates/slapper-output/src/`). This module retains only the core engine-coupled components: `pdf`, `template`, `run_manifest`, `attack_graph`, `report`, and `report_summary`. For format conversion, deduplication, trend analysis, and session persistence, see `crates/slapper-output/src/`.
+
 ## Key Types
 
 | Type | Location | Purpose |

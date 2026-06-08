@@ -29,6 +29,7 @@ Slapper is organized as a Cargo workspace. The first-level crate boundary is:
 - **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
 - **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.
 - **`slapper-cli`**: CLI binary entry point. Depends on both `slapper` and `slapper-tui`.
+- **`slapper-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `slapper` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `slapper`.
 
 New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate or in `slapper-tui` as appropriate.
 

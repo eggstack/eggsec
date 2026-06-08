@@ -1,4 +1,4 @@
-use crate::types::Severity;
+use slapper_core::types::Severity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

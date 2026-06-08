@@ -2,99 +2,168 @@
 //!
 //! Provides report generation, format conversion, trend analysis, and scan session management.
 //!
-//! ## Key Components
-//!
-//! - [`convert`] - Format conversion (CSV, HTML, JUnit, Markdown, SARIF)
-//! - [`report`] - Report generation with metadata and templates
-//! - [`dedup`] - Finding deduplication engine
-//! - [`trend`] - Trend analysis across multiple scans
-//! - [`baseline`] - Baseline comparison for regression detection
-//! - [`session`] - Scan session persistence
-//! - [`schedule`] - Scheduled scan management
-//! - [`ai_schema`] - AI-compatible output schema
-//! - [`pdf`] - PDF report generation (feature-gated)
-//!
-//! ## Supported Output Formats
-//!
-//! | Format | Module | Description |
-//! |--------|--------|-------------|
-//! | JSON | [`convert`] | Pretty-printed and compact JSON |
-//! | CSV | [`csv`] | Tabular data export |
-//! | HTML | [`html`] | Styled HTML reports |
-//! | Markdown | [`markdown`] | Markdown-formatted reports |
-//! | SARIF | [`sarif`] | Static Analysis Results Format |
-//! | JUnit | [`junit`] | JUnit XML for CI/CD integration |
-//! | PDF | [`pdf`] | PDF reports (requires `pdf` feature) |
-//!
-//! ## Usage
-//!
-//! ```rust,no_run
-//! use slapper::output::{convert_to_csv, load_scan_report};
-//!
-//! # fn example() -> slapper::error::Result<()> {
-//! let report = load_scan_report("scan.json")?;
-//! let csv = convert_to_csv(&report);
-//! println!("{}", csv);
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Errors
-//!
-//! Output operations may fail with [`SlapperError`](crate::error::SlapperError) for:
-//! - File I/O errors (reading reports, writing output)
-//! - Serialization errors (invalid JSON, CSV escaping)
-//! - Template errors (invalid report templates)
+//! Most output types and renderers live in the `slapper-output` crate and are
+//! re-exported here for backward compatibility. Modules that depend on
+//! engine-internal types (`pdf`, `report`, `report_summary`, `run_manifest`,
+//! `attack_graph`) remain in this crate.
 
-pub mod agent;
-pub mod ai_schema;
+// Re-export everything from slapper-output (agent, ai_schema, baseline, convert,
+// csv, dedup, diff, escape, html, junit, markdown, sarif, schedule, session,
+// trend and all their public types).
+pub use slapper_output::*;
+
+// Local modules that depend on engine-internal types and could not be moved.
 #[cfg(feature = "advanced-hunting")]
 pub mod attack_graph;
-pub mod baseline;
-pub mod convert;
-pub mod csv;
-pub mod dedup;
-pub mod diff;
-pub mod escape;
-pub mod html;
-pub mod junit;
-pub mod markdown;
 pub mod pdf;
 pub mod report;
 pub mod report_summary;
 pub mod run_manifest;
-pub mod sarif;
-pub mod schedule;
-pub mod session;
-pub mod trend;
 
-pub use agent::AttackSurface;
-pub use agent::Severity;
-#[deprecated(since = "0.1.0", note = "Use Severity directly from this module")]
-pub use agent::Severity as AgentSeverity;
-pub use agent::{
-    AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,
-    RemediationEffort,
-};
+// Re-export local module types for backward compatibility.
 #[cfg(feature = "advanced-hunting")]
 pub use attack_graph::{
     AttackGraph, AttackGraphBuilder, EdgeType, GraphCluster, GraphEdge, GraphNode, NodeType,
 };
-pub use convert::{
-    convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
-    load_scan_report, FindingData, PortData, ScanReportData, ServiceData,
-    WirelessNetworkReportData,
-};
-pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
-pub use diff::DiffSummary;
-pub use junit::{JUnitBuilder, JUnitReport, JUnitTestResult};
 pub use pdf::{PdfConfig, PdfGenerator};
 pub use report::{Report, ReportMetadata, ReportTemplate, SeverityCounts};
+pub use report_summary::ReportSummary;
 pub use run_manifest::RunManifest;
-pub use sarif::{SarifBuilder, SarifReport};
-pub use schedule::{CronExpression, CronScheduler, Priority, ScanOptions, ScanQueue, ScanType};
-pub use session::{ScanSession, SessionInfo};
-pub use trend::{
-    ComparisonResult, Finding as TrendFinding, ResultComparator, ResultSummary, ScanResult,
-    Severity as TrendSeverity, TrendAnalysis, TrendAnalyzer, TrendDirection,
-};
+
+/// Extension traits that add `with_report` convenience methods to builder types
+/// from slapper-output. These methods consume engine-internal `PipelineReport`.
+pub mod extensions {
+    use crate::pipeline::PipelineReport;
+
+    /// Extension trait for [`SarifBuilder`] to populate from a [`PipelineReport`].
+    pub trait SarifBuilderExt {
+        fn with_report(self, report: &PipelineReport) -> Self;
+    }
+
+    impl SarifBuilderExt for super::SarifBuilder {
+        fn with_report(mut self, report: &PipelineReport) -> Self {
+            for port in &report.open_ports {
+                if port.status == "open" {
+                    let rule_id = format!("PORT-{}", port.port);
+                    self = self.add_rule(
+                        &rule_id,
+                        &format!("Open Port {}", port.port),
+                        "note",
+                        &format!(
+                            "Open port {} detected on {}",
+                            port.port, report.target
+                        ),
+                    );
+                    self = self.add_result(
+                        &rule_id,
+                        "note",
+                        &format!("Port {} is open", port.port),
+                        &format!("{}:{}", report.target, port.port),
+                    );
+                }
+            }
+
+            for service in &report.services {
+                let rule_id = format!("SERVICE-{}", service.service);
+                self = self.add_rule(
+                    &rule_id,
+                    &service.service.clone(),
+                    "note",
+                    &format!(
+                        "Detected {} service version {}",
+                        service.service,
+                        service.version.as_deref().unwrap_or("unknown")
+                    ),
+                );
+                self = self.add_result(
+                    &rule_id,
+                    "note",
+                    &format!(
+                        "Service: {} {}",
+                        service.service,
+                        service.version.as_deref().unwrap_or("")
+                    ),
+                    &format!("{}:{}", report.target, service.port),
+                );
+            }
+
+            if !report.endpoints.is_empty() {
+                self = self.add_rule(
+                    "ENDPOINT",
+                    "Discovered Endpoint",
+                    "note",
+                    "Found endpoint during scan",
+                );
+            }
+
+            self
+        }
+    }
+
+    /// Extension trait for [`JUnitBuilder`] to populate from a [`PipelineReport`].
+    pub trait JUnitBuilderExt {
+        fn with_report(self, report: &PipelineReport) -> Self;
+    }
+
+    impl JUnitBuilderExt for super::JUnitBuilder {
+        fn with_report(self, report: &PipelineReport) -> Self {
+            let suite_name = format!("slapper-scan-{}", report.target);
+            let mut builder = self;
+
+            for port in &report.open_ports {
+                if port.status == "open" {
+                    builder = builder.add_test_case(
+                        &suite_name,
+                        &format!("port_{}_open", port.port),
+                        "port_scan",
+                        0.0,
+                        super::JUnitTestResult::Passed,
+                    );
+                }
+            }
+
+            for service in &report.services {
+                let service_name = format!(
+                    "{}_v{}",
+                    service.service,
+                    service.version.as_deref().unwrap_or("unknown")
+                );
+                builder = builder.add_test_case(
+                    &suite_name,
+                    &service_name,
+                    "fingerprint",
+                    0.0,
+                    super::JUnitTestResult::Passed,
+                );
+            }
+
+            for endpoint in &report.endpoints {
+                let test_name = format!(
+                    "{} {} - {}",
+                    endpoint.path, endpoint.status_code, endpoint.status_text
+                );
+                let result = if endpoint.status_code >= 400 {
+                    super::JUnitTestResult::Failed {
+                        message: format!(
+                            "Endpoint returned error status: {}",
+                            endpoint.status_code
+                        ),
+                        failure_type: "HttpError".to_string(),
+                        text: Some(format!("Path: {}", endpoint.path)),
+                    }
+                } else {
+                    super::JUnitTestResult::Passed
+                };
+                builder = builder.add_test_case(
+                    &suite_name,
+                    &test_name,
+                    "endpoints",
+                    endpoint.response_time_ms as f64 / 1000.0,
+                    result,
+                );
+            }
+
+            builder
+        }
+    }
+}

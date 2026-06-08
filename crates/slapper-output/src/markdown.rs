@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 
-use crate::output::agent::AgentFinding;
+use crate::agent::AgentFinding;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Finding {

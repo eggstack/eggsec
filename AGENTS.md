@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Slapper is a Rust-based security testing toolkit organized as a workspace with 5 crates: `slapper-core`, `slapper`, `slapper-nse`, `slapper-tui`, and `slapper-cli`. See `README.md` for features and `ARCHITECTURE.md` for design details.
+Slapper is a Rust-based security testing toolkit organized as a workspace with 6 crates: `slapper-core`, `slapper`, `slapper-nse`, `slapper-tui`, `slapper-cli`, and `slapper-output`. See `README.md` for features and `ARCHITECTURE.md` for design details.
 
 ## Implementation Plan
 
@@ -25,7 +25,9 @@ cargo check --lib -p slapper
 cargo check -p slapper-tui
 cargo check -p slapper-cli
 cargo check -p slapper-nse
+cargo check -p slapper-output
 cargo test -p slapper-core
+cargo test -p slapper-output
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
@@ -48,7 +50,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `recon/` | `crates/slapper/src/recon/AGENTS.override.md` |
 | `tool/` | `crates/slapper/src/tool/AGENTS.override.md` |
 | `config/` | `crates/slapper/src/config/AGENTS.override.md` |
-| `output/` | `crates/slapper/src/output/AGENTS.override.md` |
+| `output/` | `crates/slapper/src/output/AGENTS.override.md` (core modules remain; report formatting moved to `slapper-output`) |
 | `proxy/` | `crates/slapper/src/proxy/AGENTS.override.md` |
 | `stress/` | `crates/slapper/src/stress/AGENTS.override.md` |
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
@@ -113,6 +115,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile
+- **slapper-output Re-exports**: The `slapper-output` crate re-exports key types (`Severity`, `AgentFinding`, `ScanReportData`, `DiffSummary`, `TrendAnalyzer`, etc.) at its crate root. Use `slapper_output::Severity` rather than reaching into `slapper_output::agent::Severity` directly.
 
 ### Codebase Health
 
@@ -251,6 +254,7 @@ cargo check --lib -p slapper
 cargo check -p slapper-tui
 cargo check -p slapper-cli
 cargo check -p slapper-nse
+cargo check -p slapper-output
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper

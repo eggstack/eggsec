@@ -36,8 +36,8 @@ pub struct Finding {
     pub cve: Option<String>,
 }
 
-impl From<&crate::output::AgentFinding> for Finding {
-    fn from(f: &crate::output::AgentFinding) -> Self {
+impl From<&crate::agent::AgentFinding> for Finding {
+    fn from(f: &crate::agent::AgentFinding) -> Self {
         Self {
             severity: f.severity,
             category: f.vulnerability_type.clone(),
@@ -50,7 +50,7 @@ impl From<&crate::output::AgentFinding> for Finding {
     }
 }
 
-pub use crate::types::Severity;
+pub use slapper_core::types::Severity;
 
 pub struct ResultComparator;
 

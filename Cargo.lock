@@ -5593,7 +5593,6 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
- "arboard",
  "async-channel",
  "async-stream",
  "async-trait",
@@ -5606,7 +5605,6 @@ dependencies = [
  "clap_complete",
  "criterion",
  "crossbeam",
- "crossterm",
  "cyclonedx-bom",
  "dashmap",
  "directories",
@@ -5644,7 +5642,6 @@ dependencies = [
  "prost-types",
  "quick-xml",
  "rand 0.8.5",
- "ratatui",
  "rcgen",
  "regex",
  "reqwest",
@@ -5660,6 +5657,7 @@ dependencies = [
  "shellexpand",
  "slapper-core",
  "slapper-nse",
+ "slapper-output",
  "smallvec",
  "socket2 0.5.10",
  "spdx 0.10.9",
@@ -5752,6 +5750,24 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+]
+
+[[package]]
+name = "slapper-output"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hostname",
+ "lru 0.18.0",
+ "quick-xml",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "slapper-core",
+ "tokio",
+ "tracing",
+ "unicode-normalization",
+ "uuid",
 ]
 
 [[package]]

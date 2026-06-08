@@ -5,6 +5,7 @@ members = [
     "crates/slapper-nse",
     "crates/slapper-tui",
     "crates/slapper-cli",
+    "crates/slapper-output",
 ]
 resolver = "2"
 
@@ -40,6 +41,9 @@ rustc-hash = "2"
 scraper = "0.21"
 hickory-resolver = "0.26"
 chrono-tz = "0.10"
+unicode-normalization = "0.1"
+lru = "0.18"
+uuid = { version = "1", features = ["v4", "serde"] }
 
 [profile.release]
 lto = true

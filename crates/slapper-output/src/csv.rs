@@ -2,7 +2,20 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 
-pub use crate::types::OutputFormat;
+/// Output format for CSV export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputFormat {
+    #[default]
+    Pretty,
+    Json,
+    Compact,
+    Html,
+    Csv,
+    Sarif,
+    Junit,
+    Markdown,
+}
 
 pub struct CsvExporter;
 

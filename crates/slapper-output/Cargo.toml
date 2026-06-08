@@ -1,0 +1,23 @@
+[package]
+name = "slapper-output"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Report formatting and output adapters for Slapper"
+
+[dependencies]
+slapper-core = { path = "../slapper-core" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+rustc-hash = { workspace = true }
+tracing = { workspace = true }
+quick-xml = { version = "0.31", features = ["serialize"] }
+unicode-normalization = { workspace = true }
+lru = { workspace = true }
+uuid = { workspace = true }
+hostname = { workspace = true }
+tokio = { workspace = true }

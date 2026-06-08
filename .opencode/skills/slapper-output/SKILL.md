@@ -2,6 +2,13 @@
 
 Report generation module workflows and patterns for exporting scan results.
 
+## Crate Location
+
+Most output types and renderers live in `crates/slapper-output/`. The `slapper` crate
+re-exports them via `pub use slapper_output::*` in `crates/slapper/src/output/mod.rs`.
+Engine-coupled modules (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`)
+remain in `crates/slapper/src/output/`.
+
 ## Key Types and Patterns
 
 ### Report Formats
@@ -22,7 +29,6 @@ Report generation module workflows and patterns for exporting scan results.
 - `trend.rs` - `ResultComparator::compare()`, `TrendAnalyzer::get_findings_by_category()`, `TrendAnalyzer::get_most_common_findings()`
 - `agent.rs` - `FindingSummary::from_findings()`
 - `session.rs` - `ScanSession::tab_states`, `ScanSession::results`
-- `template.rs` - `ReportTemplateEngine::custom_templates`, `TemplateRenderContext::custom_data`
 - `attack_graph.rs` - `GraphNode::properties`
 - `sarif.rs` - `SarifResult::properties`
 - `junit.rs` - `JUnitBuilder::test_suites`
@@ -68,6 +74,7 @@ Both SARIF and JUnit modules are immune to XXE attacks:
 
 ### Running Output Tests
 ```bash
+cargo test -p slapper-output
 cargo test --lib -p slapper output::
 ```
 
@@ -77,8 +84,8 @@ Follow existing test patterns in `output/` modules, testing report generation fo
 ## Common Tasks
 
 ### Adding a New Report Format
-1. Implement format generation in `output/`
-2. Re-export `Severity` from `crate::types::Severity` if needed
+1. Implement format generation in `crates/slapper-output/src/`
+2. Re-export `Severity` from `slapper_core::types::Severity` if needed
 3. Use `FxHashMap`/`FxHashSet` for hash collections
 4. Add tests for new report format
 
@@ -118,6 +125,7 @@ if DiffEngine::has_regressions(&diff) {
 ```
 
 ## Resources
+- `crates/slapper-output/src/` - Output crate source code
 - `crates/slapper/src/output/AGENTS.override.md` - Detailed output patterns
 - `AGENTS.md` - General project guidelines
 - `architecture/output.md` - Module architecture documentation

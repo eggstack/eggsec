@@ -1,4 +1,4 @@
-use crate::output::agent::AgentFinding;
+use crate::agent::AgentFinding;
 use rustc_hash::FxHashSet;
 
 #[derive(Debug, Clone)]
@@ -50,9 +50,9 @@ impl BaselineComparison {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::output::agent::AttackSurface;
-    use crate::output::agent::{AgentFinding, Confidence, Evidence, FindingStatus, Remediation};
-    use crate::types::Severity;
+    use crate::agent::AttackSurface;
+    use crate::agent::{AgentFinding, Confidence, Evidence, FindingStatus, Remediation};
+    use slapper_core::types::Severity;
     use chrono::Utc;
 
     fn make_finding(id: &str, title: &str) -> AgentFinding {
