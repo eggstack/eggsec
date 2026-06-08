@@ -57,7 +57,7 @@ pub fn get_shared_insecure_http_client() -> Client {
         Client::builder()
             .danger_accept_invalid_certs(true)
             .build()
-            .expect("Failed to create minimal insecure HTTP client")
+            .unwrap()
     })
 }
 
