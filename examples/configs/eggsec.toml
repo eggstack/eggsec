@@ -90,9 +90,6 @@ notify_on_complete = true
 # Send notification when findings are discovered
 notify_on_findings = true
 
-# Minimum severity to trigger notification: info, low, medium, high, critical
-min_severity_for_notify = "high"
-
 # Slack webhook URL
 # slack_webhook = "https://hooks.slack.com/services/TXXXXX/BXXXXX/XXXXX"
 
@@ -104,7 +101,7 @@ min_severity_for_notify = "high"
 name = "security-monitoring"
 url = "https://webhook.site/your-webhook-id"
 secret = "your-signing-secret"  # Optional: adds X-Eggsec-Signature header
-events = ["scan_complete", "finding"]
+events = ["scan_complete", "finding_detected"]
 
 # Headers to include in webhook requests
 [notifications.webhooks.headers]
@@ -141,5 +138,4 @@ payload_types = ["sqli", "ssrf", "redos"]
 
 # Custom directories
 # custom_payloads_dir = "~/.config/eggsec/payloads"
-# plugins_dir = "~/.config/eggsec/plugins"
 # wordlists_dir = "~/.config/eggsec/wordlists"

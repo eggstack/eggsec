@@ -18,6 +18,8 @@ license = "MIT"
 authors = ["David Bowman"]
 organization = "eggstack"
 repository = "https://github.com/eggstack/eggsec"
+homepage = "https://github.com/eggstack/eggsec"
+documentation = "https://github.com/eggstack/eggsec#readme"
 rust-version = "1.80"
 
 [workspace.dependencies]

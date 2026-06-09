@@ -6,6 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Terminal UI adapter for Eggsec"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["tui", "terminal", "security", "scanner"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 eggsec-core = { path = "../eggsec-core" }

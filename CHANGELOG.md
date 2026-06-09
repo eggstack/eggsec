@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added missing feature flag guards for NSE integration tests
 - Removed unused imports in stress module exports
 - Fixed invalid `SynFlooder` import reference in TUI workers
-- Added LICENSE files (MIT and Apache-2.0)
+- Added MIT license file
 - Added `#![allow(dead_code)]` to stress metrics module
 
 ### Removed
@@ -63,11 +63,6 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 - Port exclusion rules
 - Secret handling with `secrecy` crate
 - Rate limiting with configurable limits
-
-#### Plugin System
-- Python plugin support (optional feature)
-- Custom payload directories
-- Plugin configuration schema
 
 #### Infrastructure
 - Dockerfile for containerized deployment

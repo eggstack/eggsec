@@ -6,6 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Core data types for the Eggsec tool abstraction layer"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "tool-abstraction", "findings"]
+categories = ["development-tools"]
 
 [dependencies]
 eggsec-core = { path = "../eggsec-core" }

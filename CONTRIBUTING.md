@@ -311,12 +311,12 @@ Update documentation in:
 
 ### Overview
 
-The TUI is built with [ratatui](https://github.com/ratatui-org/ratatui) and uses crossterm for terminal handling. All TUI code is in `src/tui/`.
+The TUI is built with [ratatui](https://github.com/ratatui-org/ratatui) and uses crossterm for terminal handling. All TUI code is in `crates/eggsec-tui/src/`.
 
 ### Directory Structure
 
 ```
-src/tui/
+crates/eggsec-tui/src/
 ├── mod.rs           # Entry point, App struct, event loop
 ├── ui.rs            # Layout rendering, tabs, status bar
 ├── components/      # Reusable UI widgets
@@ -353,7 +353,7 @@ When adding new features, ensure they respect the current input mode:
 
 ### Adding a New Tab
 
-1. **Create the tab struct** in `src/tui/tabs/new_feature.rs`:
+1. **Create the tab struct** in `crates/eggsec-tui/src/tabs/new_feature.rs`:
 
 ```rust
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText};
@@ -460,7 +460,7 @@ impl TabInput for NewFeatureTab {
 }
 ```
 
-2. **Register the tab** in `src/tui/tabs/mod.rs`:
+2. **Register the tab** in `crates/eggsec-tui/src/tabs/mod.rs`:
 
 ```rust
 mod new_feature;
@@ -482,7 +482,7 @@ impl Tab {
 }
 ```
 
-3. **Add to App struct** in `src/tui/mod.rs`:
+3. **Add to App struct** in `crates/eggsec-tui/src/mod.rs`:
 
 ```rust
 pub struct App {
@@ -491,7 +491,7 @@ pub struct App {
 }
 ```
 
-4. **Add TaskConfig variant** in `src/tui/workers/runner.rs`:
+4. **Add TaskConfig variant** in `crates/eggsec-tui/src/workers/runner.rs`:
 
 ```rust
 pub enum TaskConfig {
@@ -660,7 +660,7 @@ Releases are handled by maintainers:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project (MIT OR Apache-2.0).
+By contributing, you agree that your contributions will be licensed under the MIT License.
 
 ---
 

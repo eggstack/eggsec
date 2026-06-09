@@ -6,6 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Agent coordination primitives for Eggsec"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["agent", "coordination", "security", "distributed"]
+categories = ["development-tools"]
 
 [dependencies]
 eggsec-core = { path = "../eggsec-core" }

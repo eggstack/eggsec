@@ -371,7 +371,7 @@ Eggsec is designed for authorized security testing only. Use it against systems 
 
 ## License
 
-Licensed under either Apache License 2.0 or MIT license at your option.
+Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 

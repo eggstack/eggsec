@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "CLI binary for Eggsec security testing toolkit"
+publish = false
 
 [[bin]]
 name = "eggsec"

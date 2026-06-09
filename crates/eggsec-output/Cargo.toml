@@ -6,6 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Report formatting and output adapters for Eggsec"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["reporting", "output", "sarif", "json", "security"]
+categories = ["development-tools"]
 
 [dependencies]
 eggsec-core = { path = "../eggsec-core" }
