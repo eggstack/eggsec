@@ -4,22 +4,16 @@
 [mcp]
 profile = "coding-agent"
 
-[[scope.rules]]
-type = "allow"
+require_explicit_scope = true
+
+[[allowed_targets]]
 pattern = "localhost"
-comment = "Local development server"
+description = "Local development server"
 
-[[scope.rules]]
-type = "allow"
+[[allowed_targets]]
 pattern = "127.0.0.1"
-comment = "Local development server"
+description = "Local development server"
 
-[[scope.rules]]
-type = "allow"
-pattern = "10.0.0.0/8"
-comment = "Internal lab network"
-
-[[scope.rules]]
-type = "deny"
-pattern = "*"
-comment = "Deny everything else by default"
+[[allowed_targets]]
+cidr = "10.0.0.0/8"
+description = "Internal lab network"

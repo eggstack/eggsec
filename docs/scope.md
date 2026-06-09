@@ -68,12 +68,12 @@ Evaluation order: excluded_ports wins, then allowed_ports is checked.
 
 Every target-bearing operation (scan, fuzz, stress test, agent run) goes through scope validation:
 
-1. **Private IP check** - The target string is parsed. If it resolves to a private/loopback IP (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, IPv6 ULA/link-local), it is **rejected immediately** before scope rules are evaluated.
+1. **Private IP check** - If no CIDR rules exist in `allowed_targets` or `excluded_targets`, the target string is parsed. If it resolves to a private/loopback IP (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, IPv6 ULA/link-local), it is rejected. Hostnames that resolve to private IPs are also blocked.
 2. **Exclusion check** - If the target matches any `excluded_targets` rule, it is rejected.
 3. **Allowed check** - If `allowed_targets` is non-empty, the target must match at least one rule.
 4. **Port check** - If `allowed_ports` or `excluded_ports` are configured, ports are filtered accordingly.
 
-The private IP check is hard-coded and cannot be overridden by scope rules. This is a safety mechanism: even if you add `10.0.0.0/8` to `allowed_targets`, direct IP address `10.255.255.255` is still blocked at the `TargetScope::parse()` level. Hostnames that resolve to private IPs are also blocked during DNS resolution.
+**When CIDR rules are present** (any rule with a `cidr` field), the private IP check is skipped. This allows CIDR ranges like `10.0.0.0/8` to match private IPs. Use this for lab/internal testing environments where you need to scan private network ranges.
 
 ## Example: Localhost Scope (Safe Testing)
 
@@ -131,16 +131,19 @@ excluded_ports = [22, 3389, 8443]
 
 ## Private IP Blocking (Known Limitation)
 
-The private IP block in `TargetScope::parse()` fires **before** scope rule evaluation. This means:
+When no CIDR rules are configured, private IPs are blocked before scope rule evaluation. This prevents accidental scanning of internal networks. However, when CIDR rules are present, the private IP check is skipped, allowing the CIDR rules to match private IPs:
 
 | Target | Scope Rule | Result |
 |--------|-----------|--------|
-| `10.0.0.5` (direct IP) | `allowed: 10.0.0.0/8` | **Blocked** - private IP |
-| `10.0.0.5` (hostname resolving to 10.0.0.5) | `allowed: 10.0.0.0/8` | **Blocked** - DNS resolves to private IP |
-| `webserver.lab.local` (resolves to 10.0.0.5) | `allowed: *.lab.local` | **Blocked** - DNS resolves to private IP |
-| `webserver.lab.local` (resolves to 203.0.113.50) | `allowed: *.lab.local` | Allowed |
+| `10.0.0.5` (direct IP) | No CIDR rules | **Blocked** - private IP |
+| `10.0.0.5` (direct IP) | `cidr: 10.0.0.0/8` | Allowed - CIDR rule matches |
+| `10.0.0.5` (hostname resolving to 10.0.0.5) | No CIDR rules | **Blocked** - DNS resolves to private IP |
+| `10.0.0.5` (hostname resolving to 10.0.0.5) | `cidr: 10.0.0.0/8` | Allowed - CIDR rule matches |
+| `webserver.lab.local` (resolves to 10.0.0.5) | No CIDR rules | **Blocked** - DNS resolves to private IP |
+| `webserver.lab.local` (resolves to 10.0.0.5) | `pattern: *.lab.local` (no CIDR) | **Blocked** - private IP with no CIDR rules |
+| `webserver.lab.local` (resolves to 203.0.113.50) | `pattern: *.lab.local` | Allowed |
 
-To test internal systems, use a VPN or tunnel that presents a public-facing address, or test from within the isolated network where the hostname resolves to a non-private address through a local DNS server.
+To test internal systems, use CIDR rules in your scope file (e.g., `cidr = "10.0.0.0/8"`), or use a VPN/tunnel that presents a public-facing address.
 
 ## See Also
 

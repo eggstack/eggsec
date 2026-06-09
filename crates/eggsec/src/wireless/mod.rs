@@ -381,6 +381,7 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
         services: Vec::new(),
         duration_ms: result.scan_duration_secs * 1000,
         wireless_networks,
+        policy_summary: None,
     }
 }
 

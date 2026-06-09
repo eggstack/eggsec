@@ -33,6 +33,7 @@ pub fn evaluate_policy_decision(
     target: Option<&str>,
     profile_name: Option<&str>,
     scope: Option<&crate::config::Scope>,
+    policy: &crate::config::ExecutionPolicy,
 ) -> PolicyDecision {
     use crate::cli::ScanProfile;
 
@@ -69,6 +70,5 @@ pub fn evaluate_policy_decision(
         requires_explicit_scope: profile.requires_private_scope(),
     };
 
-    let policy = crate::config::ExecutionPolicy::default();
-    evaluate_operation_policy(&descriptor, &policy, scope)
+    evaluate_operation_policy(&descriptor, policy, scope)
 }

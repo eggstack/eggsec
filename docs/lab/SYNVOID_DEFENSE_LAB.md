@@ -46,7 +46,7 @@ pattern = "::1"
 description = "IPv6 localhost"
 
 [[allowed_targets]]
-pattern = "10.0.0.0/8"
+cidr = "10.0.0.0/8"
 description = "Private lab range"
 
 require_explicit_scope = true
@@ -56,11 +56,11 @@ require_explicit_scope = true
 
 ```toml
 [[allowed_targets]]
-pattern = "10.0.0.0/8"
+cidr = "10.0.0.0/8"
 description = "Synvoid lab network"
 
 [[allowed_targets]]
-pattern = "172.16.0.0/12"
+cidr = "172.16.0.0/12"
 description = "Container lab network"
 
 [[allowed_targets]]
@@ -68,7 +68,7 @@ pattern = "localhost"
 description = "Local development"
 
 [[excluded_targets]]
-pattern = "10.0.1.0/24"
+cidr = "10.0.1.0/24"
 description = "Management network - do not test"
 
 require_explicit_scope = true

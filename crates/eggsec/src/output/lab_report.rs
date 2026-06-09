@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::{ExecutionBudget, PolicyDecision};
+use crate::output::PolicySummary;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabDefenseReportSection {
@@ -113,6 +114,20 @@ impl LabDefenseReportSection {
         }
 
         lines.join("\n")
+    }
+}
+
+impl From<&PolicyDecision> for PolicySummary {
+    fn from(decision: &PolicyDecision) -> Self {
+        Self {
+            operation_mode: decision.operation_mode.to_string(),
+            max_risk: decision.operation_risk.to_string(),
+            total_decisions: 1,
+            denied_count: if decision.allowed { 0 } else { 1 },
+            warning_count: decision.warnings.len(),
+            denied_reasons: decision.denied_reasons.clone(),
+            warnings: decision.warnings.clone(),
+        }
     }
 }
 

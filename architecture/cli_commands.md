@@ -52,16 +52,16 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
     Ok(())
 }
 
-// Operation policy enforcement (checks scope, risk level, and non-interactive mode)
-ctx.enforce_operation_policy(OperationRisk::High, Some(&args.target))?;
+// Operation policy enforcement (wraps shared policy evaluator with scope enforcement)
+ctx.evaluate_and_enforce_operation(descriptor)?;
 ```
 
-### `enforce_operation_policy()` Method
+### `evaluate_and_enforce_operation()` Method
 
-`CommandContext::enforce_operation_policy()` at `commands/handlers/mod.rs:101-127` validates that an operation is allowed by the current execution policy:
-1. Checks scope if a target is provided
-2. Validates risk level against `execution_policy` settings
-3. Blocks high-risk operations in non-interactive mode (`--json` flag)
+`CommandContext::evaluate_and_enforce_operation()` wraps the shared `evaluate_operation_policy()` evaluator (`config/policy_decision.rs`) with scope enforcement and structured denial output:
+1. Calls `evaluate_operation_policy(&descriptor, &self.config.execution_policy, Some(&self.scope))`
+2. If denied, returns an error containing the `PolicyDecision` details
+3. If allowed, returns the `PolicyDecision` so callers can attach it to reports/logs
 
 ## Workflow
 

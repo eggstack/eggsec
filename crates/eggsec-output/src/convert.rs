@@ -16,6 +16,8 @@ pub struct ScanReportData {
     pub duration_ms: u64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wireless_networks: Vec<WirelessNetworkReportData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_summary: Option<super::PolicySummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -323,6 +325,7 @@ mod tests {
             services: vec![],
             duration_ms: 1000,
             wireless_networks: vec![],
+            policy_summary: None,
         }
     }
 

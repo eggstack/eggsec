@@ -207,10 +207,11 @@ impl McpProfilePolicy {
         arguments: &serde_json::Value,
     ) -> Result<(), PolicyViolation> {
         // Build a synthetic ToolInfo to check selectors
+        let category = infer_tool_category(tool_id);
         let synthetic = ToolInfo {
             id: tool_id.to_string(),
             name: tool_id.to_string(),
-            category: ToolCategory::Scanning,
+            category,
             description: String::new(),
             capabilities: Vec::new(),
             protocols: Vec::new(),
@@ -225,6 +226,32 @@ impl McpProfilePolicy {
             return Err(PolicyViolation::ToolDenied {
                 tool_id: tool_id.to_string(),
             });
+        }
+
+        // Check tool risk against profile budget
+        let risk = classify_tool_risk(tool_id);
+        match risk {
+            crate::config::OperationRisk::StressTest if !self.allow_stress_testing => {
+                return Err(PolicyViolation::ToolDenied {
+                    tool_id: tool_id.to_string(),
+                });
+            }
+            crate::config::OperationRisk::RawPacket if !self.allow_packet_features => {
+                return Err(PolicyViolation::ToolDenied {
+                    tool_id: tool_id.to_string(),
+                });
+            }
+            crate::config::OperationRisk::ExploitAdjacent => {
+                return Err(PolicyViolation::ToolDenied {
+                    tool_id: tool_id.to_string(),
+                });
+            }
+            crate::config::OperationRisk::RemoteExecution => {
+                return Err(PolicyViolation::ToolDenied {
+                    tool_id: tool_id.to_string(),
+                });
+            }
+            _ => {}
         }
 
         // Check denied argument keys
@@ -386,17 +413,212 @@ impl PolicyViolation {
             PolicyViolation::TargetDenied { .. } => -32024,
         }
     }
+
+    /// Convert to an MCP error response with an embedded [`PolicyDecision`].
+    pub fn to_mcp_error_with_decision(
+        &self,
+        profile_policy: &McpProfilePolicy,
+        tool_id: &str,
+        arguments: &serde_json::Value,
+        execution_policy: &crate::config::ExecutionPolicy,
+        scope: Option<&crate::config::Scope>,
+    ) -> super::types::McpError {
+        let denial = denial_from_violation(
+            self,
+            profile_policy,
+            tool_id,
+            arguments,
+            execution_policy,
+            scope,
+        );
+        super::types::McpError {
+            code: denial.code,
+            message: denial.violation,
+            data: Some(serde_json::to_value(&denial.policy_decision).unwrap_or_default()),
+        }
+    }
 }
 
-/// Extract the hostname from a target string (strips scheme, port, path).
+/// A policy denial that embeds both the MCP-specific violation and a shared
+/// [`PolicyDecision`] for structured downstream consumption.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpPolicyDenial {
+    /// Human-readable description of the violation.
+    pub violation: String,
+    /// MCP JSON-RPC error code.
+    pub code: i32,
+    /// Shared policy decision providing full evaluation context.
+    pub policy_decision: crate::config::PolicyDecision,
+}
+
+/// Infer a [`ToolCategory`] from a tool ID string for selector matching.
+fn infer_tool_category(tool_id: &str) -> ToolCategory {
+    match tool_id {
+        "stress" | "waf-stress" | "syn-flood" | "udp-flood" | "icmp-flood" => ToolCategory::Stress,
+        "proxy" | "tor" => ToolCategory::Recon,
+        "load" | "loadtest" | "http-bench" => ToolCategory::LoadTest,
+        "fuzz" | "fuzzer" | "api-fuzz" => ToolCategory::Fuzzing,
+        "recon" | "recon-all" | "subdomain" => ToolCategory::Recon,
+        "waf-detect" | "waf-bypass" => ToolCategory::Waf,
+        "scan" | "scan-ports" | "fingerprint" | "scan-endpoints" => ToolCategory::Scanning,
+        "pipeline" | "search" => ToolCategory::Pipeline,
+        "oast" => ToolCategory::Scanning,
+        _ => ToolCategory::Scanning,
+    }
+}
+
+/// Infer the [`OperationRisk`] for a tool based on its ID.
+///
+/// This is used when building [`PolicyDecision`] for MCP calls where
+/// real tool metadata may not be available.
+pub fn classify_tool_risk(tool_id: &str) -> crate::config::OperationRisk {
+    use crate::config::OperationRisk;
+    match tool_id {
+        "stress" | "waf-stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
+            OperationRisk::StressTest
+        }
+        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => OperationRisk::RawPacket,
+        "proxy" | "tor" => OperationRisk::ExploitAdjacent,
+        "remote" | "exec" | "ssh" => OperationRisk::RemoteExecution,
+        "load" | "loadtest" | "http-bench" => OperationRisk::LoadTest,
+        "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
+        "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
+        _ => OperationRisk::SafeActive,
+    }
+}
+
+/// Build a [`PolicyDecision`] for an MCP tool call by evaluating the tool
+/// against both the MCP profile policy and the shared execution policy.
+pub fn policy_decision_for_mcp_call(
+    profile_policy: &McpProfilePolicy,
+    tool_id: &str,
+    arguments: &serde_json::Value,
+    execution_policy: &crate::config::ExecutionPolicy,
+    scope: Option<&crate::config::Scope>,
+) -> crate::config::PolicyDecision {
+    use crate::config::{IntendedUse, OperationDescriptor, OperationMode};
+
+    let risk = classify_tool_risk(tool_id);
+    let target = arguments
+        .get("target")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let intended_uses = if profile_policy.profile.is_coding_agent() {
+        vec![IntendedUse::CodingAgentVerification]
+    } else {
+        vec![IntendedUse::WebAssessment]
+    };
+
+    let descriptor = OperationDescriptor {
+        operation: tool_id.to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk,
+        intended_uses,
+        target: target.clone(),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: profile_policy.require_explicit_scope,
+    };
+
+    let mut decision =
+        crate::config::evaluate_operation_policy(&descriptor, execution_policy, scope);
+
+    if let Err(violation) = profile_policy.validate_tool_call(tool_id, None, arguments) {
+        decision.allowed = false;
+        decision
+            .denied_reasons
+            .push(violation.to_string());
+    }
+
+    if let Some(ref tgt) = target {
+        if let Err(violation) = profile_policy.validate_target(tgt) {
+            decision.allowed = false;
+            decision
+                .denied_reasons
+                .push(violation.to_string());
+        }
+    }
+
+    decision
+}
+
+/// Convert a [`PolicyViolation`] into an [`McpPolicyDenial`] that includes
+/// a shared [`PolicyDecision`].
+pub fn denial_from_violation(
+    violation: &PolicyViolation,
+    profile_policy: &McpProfilePolicy,
+    tool_id: &str,
+    arguments: &serde_json::Value,
+    execution_policy: &crate::config::ExecutionPolicy,
+    scope: Option<&crate::config::Scope>,
+) -> McpPolicyDenial {
+    let policy_decision =
+        policy_decision_for_mcp_call(profile_policy, tool_id, arguments, execution_policy, scope);
+    McpPolicyDenial {
+        violation: violation.to_string(),
+        code: violation.to_mcp_error_code(),
+        policy_decision,
+    }
+}
+
+/// Extract the hostname from a target string (strips scheme, port, path, userinfo).
+///
+/// Handles:
+/// - `http://user:pass@host.com:8080/path` → `host.com`
+/// - `https://example.com` → `example.com`
+/// - `http://127.0.0.1:3000` → `127.0.0.1`
+/// - `http://[::1]:8080` → `::1`
+/// - `[::1]:8080` → `::1`
+/// - `::1` → `::1`
+/// - `localhost:8080` → `localhost`
+/// - `example.com` → `example.com`
 fn extract_hostname(target: &str) -> &str {
     let s = target.trim();
-    let s = s
-        .strip_prefix("http://")
-        .or_else(|| s.strip_prefix("https://"))
-        .unwrap_or(s);
+
+    // Strip scheme if present
+    let s = if let Some(rest) = s.strip_prefix("http://") {
+        rest
+    } else if let Some(rest) = s.strip_prefix("https://") {
+        rest
+    } else {
+        s
+    };
+
+    // Strip userinfo (user:pass@) if present
+    let s = if let Some(pos) = s.find('@') {
+        &s[pos + 1..]
+    } else {
+        s
+    };
+
+    // Strip path
     let s = s.split('/').next().unwrap_or(s);
-    let s = s.split(':').next().unwrap_or(s);
+
+    // Handle bracketed IPv6: [::1]:8080 or [::1]
+    if let Some(inner) = s.strip_prefix('[') {
+        if let Some(bracket_end) = inner.find(']') {
+            return &inner[..bracket_end];
+        }
+        // Malformed bracket — return as-is after stripping the bracket
+        return s;
+    }
+
+    // For non-bracketed hosts, split on ':' to remove port
+    // But distinguish bare IPv6 (multiple colons) from host:port (one colon + digits)
+    if s.contains(':') {
+        // If there's exactly one ':' and the part after it parses as u16, it's host:port
+        if let Some(pos) = s.rfind(':') {
+            let port_part = &s[pos + 1..];
+            if port_part.is_empty() || port_part.parse::<u16>().is_ok() {
+                return &s[..pos];
+            }
+        }
+        // Multiple colons or non-numeric port part — treat as bare IPv6
+        return s;
+    }
+
     s
 }
 
@@ -674,7 +896,7 @@ mod tests {
         assert_eq!(extract_hostname("http://localhost:8080/path"), "localhost");
         assert_eq!(extract_hostname("https://example.com"), "example.com");
         assert_eq!(extract_hostname("http://127.0.0.1:3000"), "127.0.0.1");
-        assert_eq!(extract_hostname("[::1]:8080"), "[::1]");
+        assert_eq!(extract_hostname("[::1]:8080"), "::1");
         assert_eq!(extract_hostname("example.com"), "example.com");
     }
 
@@ -876,7 +1098,112 @@ mod tests {
             "host.com"
         );
         assert_eq!(extract_hostname("https://192.168.1.1/api"), "192.168.1.1");
-        assert_eq!(extract_hostname("http://[::1]:8080"), "[::1]");
+        assert_eq!(extract_hostname("http://[::1]:8080"), "::1");
         assert_eq!(extract_hostname("just-hostname"), "just-hostname");
+        assert_eq!(extract_hostname("::1"), "::1");
+        assert_eq!(extract_hostname("localhost:8080"), "localhost");
+    }
+
+    #[test]
+    fn test_infer_tool_category_stress() {
+        assert_eq!(infer_tool_category("stress"), ToolCategory::Stress);
+        assert_eq!(infer_tool_category("waf-stress"), ToolCategory::Stress);
+        assert_eq!(infer_tool_category("syn-flood"), ToolCategory::Stress);
+    }
+
+    #[test]
+    fn test_infer_tool_category_scanning() {
+        assert_eq!(infer_tool_category("scan"), ToolCategory::Scanning);
+        assert_eq!(infer_tool_category("scan-ports"), ToolCategory::Scanning);
+        assert_eq!(infer_tool_category("fingerprint"), ToolCategory::Scanning);
+        assert_eq!(infer_tool_category("scan-endpoints"), ToolCategory::Scanning);
+    }
+
+    #[test]
+    fn test_infer_tool_category_other_variants() {
+        assert_eq!(infer_tool_category("fuzz"), ToolCategory::Fuzzing);
+        assert_eq!(infer_tool_category("recon"), ToolCategory::Recon);
+        assert_eq!(infer_tool_category("load"), ToolCategory::LoadTest);
+        assert_eq!(infer_tool_category("waf-detect"), ToolCategory::Waf);
+        assert_eq!(infer_tool_category("search"), ToolCategory::Pipeline);
+        assert_eq!(infer_tool_category("proxy"), ToolCategory::Recon);
+        assert_eq!(infer_tool_category("oast"), ToolCategory::Scanning);
+    }
+
+    #[test]
+    fn test_infer_tool_category_unknown_defaults_to_scanning() {
+        assert_eq!(infer_tool_category("unknown-tool"), ToolCategory::Scanning);
+    }
+
+    #[test]
+    fn test_coding_agent_risk_denies_stress() {
+        let policy = McpProfilePolicy::coding_agent();
+        let result = policy.validate_tool_call("stress", None, &serde_json::json!({}));
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PolicyViolation::ToolDenied { tool_id } => assert_eq!(tool_id, "stress"),
+            _ => panic!("Expected ToolDenied for stress tool"),
+        }
+    }
+
+    #[test]
+    fn test_coding_agent_risk_denies_waf_stress() {
+        let policy = McpProfilePolicy::coding_agent();
+        let result = policy.validate_tool_call("waf-stress", None, &serde_json::json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_risk_denies_syn_flood() {
+        let policy = McpProfilePolicy::coding_agent();
+        let result = policy.validate_tool_call("syn-flood", None, &serde_json::json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_risk_allows_scan() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("scan", None, &serde_json::json!({}))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_coding_agent_risk_allows_waf_detect() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("waf-detect", None, &serde_json::json!({}))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_ops_agent_risk_allows_stress() {
+        let policy = McpProfilePolicy::ops_agent();
+        assert!(policy
+            .validate_tool_call("stress", None, &serde_json::json!({}))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_ops_agent_risk_allows_load() {
+        let policy = McpProfilePolicy::ops_agent();
+        assert!(policy
+            .validate_tool_call("load", None, &serde_json::json!({}))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_ops_agent_risk_allows_fuzz() {
+        let policy = McpProfilePolicy::ops_agent();
+        assert!(policy
+            .validate_tool_call("fuzz", None, &serde_json::json!({}))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_coding_agent_risk_denies_remote_exec() {
+        let policy = McpProfilePolicy::coding_agent();
+        let result = policy.validate_tool_call("ssh", None, &serde_json::json!({}));
+        assert!(result.is_err());
     }
 }

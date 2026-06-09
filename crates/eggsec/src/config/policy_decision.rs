@@ -167,6 +167,39 @@ impl PolicyDecision {
     }
 }
 
+/// Check whether a named compile-time Cargo feature is enabled.
+///
+/// Returns `true` for features that are always available or not relevant
+/// as compile-time gates, and `false` for features that are behind a
+/// `cfg(feature = "...")` gate that is not currently active.
+pub fn is_feature_enabled(feature: &str) -> bool {
+    match feature {
+        "packet-inspection" => cfg!(feature = "packet-inspection"),
+        "stress-testing" => cfg!(feature = "stress-testing"),
+        "nse" => cfg!(feature = "nse"),
+        "nse-sandbox" => cfg!(feature = "nse-sandbox"),
+        "headless-browser" => cfg!(feature = "headless-browser"),
+        "rest-api" => cfg!(feature = "rest-api"),
+        "grpc-api" => cfg!(feature = "grpc-api"),
+        "ws-api" => cfg!(feature = "ws-api"),
+        "ai-integration" => cfg!(feature = "ai-integration"),
+        "database" => cfg!(feature = "database"),
+        "container" => cfg!(feature = "container"),
+        "sbom" => cfg!(feature = "sbom"),
+        "websocket" => cfg!(feature = "websocket"),
+        "compliance" => cfg!(feature = "compliance"),
+        "external-integrations" => cfg!(feature = "external-integrations"),
+        "finding-workflow" => cfg!(feature = "finding-workflow"),
+        "vuln-management" => cfg!(feature = "vuln-management"),
+        "cloud" => cfg!(feature = "cloud"),
+        "git-secrets" => cfg!(feature = "git-secrets"),
+        "wireless" => cfg!(feature = "wireless"),
+        "pdf" => cfg!(feature = "pdf"),
+        "advanced-hunting" => cfg!(feature = "advanced-hunting"),
+        _ => true, // Unknown features are assumed available
+    }
+}
+
 /// Shared policy evaluation entry point.
 ///
 /// Takes an [`OperationDescriptor`], the current [`ExecutionPolicy`], and an
@@ -195,6 +228,18 @@ pub fn evaluate_operation_policy(
     // Propagate required features from descriptor
     for feature in &descriptor.required_features {
         decision = decision.with_required_feature(feature);
+    }
+
+    // Check required feature availability
+    for feature in &descriptor.required_features {
+        if !is_feature_enabled(feature) {
+            decision = decision.with_missing_feature(feature);
+            decision.denied_reasons.push(format!(
+                "required feature '{}' is not enabled",
+                feature
+            ));
+            decision.allowed = false;
+        }
     }
 
     // Check scope if a target and scope are provided
@@ -451,11 +496,19 @@ mod tests {
         let mut policy = ExecutionPolicy::default();
         policy.allow_exploit_adjacent = true;
         let decision = evaluate_operation_policy(&descriptor, &policy, None);
-        assert!(decision.allowed);
         assert!(decision
             .required_features
             .iter()
             .any(|f| f == "packet-inspection"));
+        if cfg!(feature = "packet-inspection") {
+            assert!(decision.allowed);
+        } else {
+            assert!(!decision.allowed);
+            assert!(decision
+                .missing_features
+                .iter()
+                .any(|f| f == "packet-inspection"));
+        }
     }
 
     #[test]
@@ -481,6 +534,31 @@ mod tests {
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
         assert!(!decision.allowed);
+    }
+
+    #[test]
+    fn evaluate_operation_policy_missing_feature_denies() {
+        let descriptor = OperationDescriptor {
+            operation: "nse-scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec!["nonexistent-test-feature".to_string()],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let policy = ExecutionPolicy::default();
+        let decision = evaluate_operation_policy(&descriptor, &policy, None);
+        // "nonexistent-test-feature" maps to _ => true, so it's not missing
+        assert!(decision.missing_features.is_empty());
+        assert!(decision.allowed);
+    }
+
+    #[test]
+    fn is_feature_enabled_unknown_defaults_true() {
+        assert!(is_feature_enabled("totally-fake-feature"));
     }
 
     #[test]

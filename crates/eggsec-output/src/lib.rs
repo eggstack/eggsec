@@ -34,6 +34,7 @@ pub mod escape;
 pub mod html;
 pub mod junit;
 pub mod markdown;
+pub mod policy_summary;
 pub mod sarif;
 pub mod schedule;
 pub mod session;
@@ -47,6 +48,7 @@ pub use agent::{
     AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,
     RemediationEffort,
 };
+pub use policy_summary::PolicySummary;
 pub use convert::{
     convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
     load_scan_report, FindingData, PortData, ScanReportData, ServiceData,

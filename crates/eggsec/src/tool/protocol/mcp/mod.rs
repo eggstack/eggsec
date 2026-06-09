@@ -13,7 +13,10 @@ mod types;
 
 pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
-pub use policy::{McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector};
+pub use policy::{
+    classify_tool_risk, denial_from_violation, McpPolicyDenial, McpProfilePolicy,
+    PolicyViolation, policy_decision_for_mcp_call, TargetPolicy, ToolSelector,
+};
 pub use profile::McpProfile;
 pub use routes::{create_mcp_router, run_stdio};
 pub use streaming::StreamEvent;

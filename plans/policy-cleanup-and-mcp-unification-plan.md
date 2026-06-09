@@ -1,5 +1,7 @@
 # Policy Cleanup and MCP Unification Plan
 
+> **Status: COMPLETE** — All 9 phases implemented. `extract_hostname` now handles userinfo URLs and bracketed IPv6; `evaluate_policy_decision` accepts `&ExecutionPolicy`; `is_feature_enabled` provides compile-time feature checks; `evaluate_operation_policy` populates `missing_features` and denies when features are unavailable; `CommandContext::evaluate_and_enforce_operation` wraps the shared evaluator; `McpPolicyDenial` embeds `PolicyViolation` + `PolicyDecision`; `classify_tool_risk` and `infer_tool_category` replace hardcoded metadata; `PolicySummary` struct added to `eggsec-output`; scope syntax docs corrected to use `cidr = "..."`.
+
 ## Purpose
 
 This plan is a narrow cleanup pass after the policy-integration hardening work. The repo now has a much better policy taxonomy, `OperationDescriptor`, `PolicyDecision`, a shared `evaluate_operation_policy` function, profile-aware `plan` output, and stronger MCP profile boundaries. The remaining issues are mostly integration seams and likely test failures.

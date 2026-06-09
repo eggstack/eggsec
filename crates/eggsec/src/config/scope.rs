@@ -542,4 +542,64 @@ mod tests {
         assert!(is_private_ip(&link_local));
         assert!(!is_private_ip(&global));
     }
+
+    #[test]
+    fn test_scope_toml_parse_sample() {
+        let toml_str = r#"
+require_explicit_scope = true
+max_requests_per_second = 100
+excluded_ports = [22, 3389]
+
+[[allowed_targets]]
+pattern = "*.example.com"
+description = "Production web applications"
+
+[[allowed_targets]]
+cidr = "10.0.0.0/8"
+description = "Internal network"
+
+[[allowed_targets]]
+pattern = "localhost"
+description = "Local development"
+
+[[excluded_targets]]
+pattern = "admin.example.com"
+description = "Admin panel - excluded by policy"
+
+[[excluded_targets]]
+cidr = "10.0.0.1/32"
+description = "Critical database server"
+"#;
+
+        let scope: Scope = toml::from_str(toml_str).unwrap();
+
+        assert!(scope.require_explicit_scope);
+        assert_eq!(scope.max_requests_per_second, Some(100));
+        assert_eq!(scope.allowed_targets.len(), 3);
+        assert_eq!(scope.excluded_targets.len(), 2);
+        assert_eq!(scope.excluded_ports, vec![22, 3389]);
+
+        // Verify allowed target fields
+        assert_eq!(scope.allowed_targets[0].pattern, "*.example.com");
+        assert!(scope.allowed_targets[0].cidr.is_none());
+        assert_eq!(scope.allowed_targets[1].cidr.as_deref(), Some("10.0.0.0/8"));
+        assert!(scope.allowed_targets[1].pattern.is_empty());
+        assert_eq!(scope.allowed_targets[2].pattern, "localhost");
+
+        // Verify excluded target fields
+        assert_eq!(scope.excluded_targets[0].pattern, "admin.example.com");
+        assert_eq!(scope.excluded_targets[1].cidr.as_deref(), Some("10.0.0.1/32"));
+    }
+
+    #[test]
+    fn test_scope_toml_parse_empty() {
+        let toml_str = r#"
+require_explicit_scope = false
+"#;
+
+        let scope: Scope = toml::from_str(toml_str).unwrap();
+        assert!(!scope.require_explicit_scope);
+        assert!(scope.allowed_targets.is_empty());
+        assert!(scope.excluded_targets.is_empty());
+    }
 }

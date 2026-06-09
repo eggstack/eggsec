@@ -73,7 +73,8 @@ pub use ai_analyze::*;
 
 use crate::cli::Cli;
 use crate::cli::Commands;
-use crate::config::OperationRisk;
+use crate::config::OperationDescriptor;
+use crate::config::evaluate_operation_policy;
 use crate::config::{Scope, EggsecConfig};
 use crate::error::Result as ErrorResult;
 use anyhow::Result;
@@ -115,36 +116,31 @@ impl CommandContext {
         crate::utils::check_scope(&self.scope, target)
     }
 
-    /// Validate that an operation is allowed by the current execution policy.
+    /// Evaluate an operation against the current execution policy and scope.
     ///
-    /// Checks scope (if a target is provided), the risk level against the
-    /// policy, and blocks high-risk operations in non-interactive mode.
-    pub fn enforce_operation_policy(
+    /// Wraps the shared [`evaluate_operation_policy`] evaluator. Returns the
+    /// [`PolicyDecision`] on allow, or an error with denial details on deny.
+    pub fn evaluate_and_enforce_operation(
         &self,
-        risk: OperationRisk,
-        target: Option<&str>,
-    ) -> Result<()> {
-        if let Some(target_str) = target {
-            self.ensure_scope(target_str)?;
+        descriptor: OperationDescriptor,
+    ) -> Result<crate::config::PolicyDecision> {
+        let decision = evaluate_operation_policy(
+            &descriptor,
+            &self.config.execution_policy,
+            Some(&self.scope),
+        );
+
+        if !decision.allowed {
+            if self.json {
+                let json = serde_json::to_string(&decision)
+                    .unwrap_or_else(|_| "unable to serialize decision".to_string());
+                anyhow::bail!("{}", json);
+            } else {
+                anyhow::bail!("{}", decision.to_human_readable());
+            }
         }
 
-        if !risk.is_allowed_by(&self.config.execution_policy) {
-            anyhow::bail!(
-                "Operation risk level '{}' is not allowed by current policy. \
-                 Enable it in your config file under [execution_policy].",
-                risk
-            );
-        }
-
-        if risk > self.config.execution_policy.max_risk_without_confirm && self.json {
-            anyhow::bail!(
-                "Operation risk level '{}' exceeds maximum allowed without confirmation \
-                 in non-interactive mode.",
-                risk
-            );
-        }
-
-        Ok(())
+        Ok(decision)
     }
 }
 

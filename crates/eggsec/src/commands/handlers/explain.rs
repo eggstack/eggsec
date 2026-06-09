@@ -4,7 +4,7 @@ use crate::cli::{PolicyExplainArgs, ScopeExplainArgs};
 use crate::commands::handlers::CommandContext;
 use crate::config::{
     evaluate_operation_policy, load_scope, IntendedUse, OperationDescriptor, OperationMode,
-    OperationRisk, PolicyDecision,
+    OperationRisk,
 };
 
 pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs) -> Result<()> {
@@ -16,6 +16,7 @@ pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs
         args.target.as_deref(),
         args.profile.as_deref(),
         scope.as_ref(),
+        &ctx.config.execution_policy,
     );
 
     if args.json || ctx.json {
@@ -45,8 +46,7 @@ pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) 
         requires_explicit_scope: false,
     };
 
-    let policy = crate::config::ExecutionPolicy::default();
-    let decision = evaluate_operation_policy(&descriptor, &policy, scope.as_ref());
+    let decision = evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());
 
     if args.json || ctx.json {
         println!("{}", serde_json::to_string_pretty(&decision)?);
