@@ -3,8 +3,19 @@ use crate::output::agent::{
 };
 use crate::tool::response::{ResponseSeverity, ToolResponse};
 
-impl ToolResponse {
-    pub fn to_findings(&self) -> Vec<AgentFinding> {
+/// Extension trait for [`ToolResponse`] to convert findings to agent findings.
+pub trait ToolResponseExt {
+    fn to_findings(&self) -> Vec<AgentFinding>;
+    fn to_single_finding(
+        &self,
+        vuln_type: &str,
+        title: &str,
+        description: &str,
+    ) -> AgentFinding;
+}
+
+impl ToolResponseExt for ToolResponse {
+    fn to_findings(&self) -> Vec<AgentFinding> {
         self.findings
             .iter()
             .map(|f| {
@@ -28,7 +39,7 @@ impl ToolResponse {
             .collect()
     }
 
-    pub fn to_single_finding(
+    fn to_single_finding(
         &self,
         vuln_type: &str,
         title: &str,

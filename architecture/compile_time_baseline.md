@@ -10,12 +10,13 @@ The third pass removed unused TUI dependencies from `slapper` and extracted `sla
 
 ```text
 crates/
-  slapper-core/    # Dependency-light types and constants
-  slapper/         # Assessment engine library (no binary)
-  slapper-nse/     # Optional NSE compatibility
-  slapper-tui/     # Terminal UI adapter (ratatui/crossterm)
-  slapper-cli/     # CLI binary entry point (binary named "slapper")
-  slapper-output/  # Report formatting and output adapters
+  slapper-core/      # Dependency-light types and constants
+  slapper-tool-core/ # Core data types for tool abstraction layer
+  slapper/           # Assessment engine library (no binary)
+  slapper-nse/       # Optional NSE compatibility
+  slapper-tui/       # Terminal UI adapter (ratatui/crossterm)
+  slapper-cli/       # CLI binary entry point (binary named "slapper")
+  slapper-output/    # Report formatting and output adapters
 ```
 
 ## Third pass changes

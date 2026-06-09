@@ -1,5 +1,6 @@
 use crate::error::SlapperError;
-use crate::tool::{request::ToolRequest, response::ToolResponse, ToolRegistry};
+use crate::tool::{ToolRequest, ToolResponse, ToolRegistry};
+use crate::tool::response::{ResponseMetadata, ResponseStatus};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -50,9 +51,9 @@ impl ToolDispatcher {
             Err(_) => ToolResponse {
                 request_id: request.id.clone(),
                 tool_id: request.tool.clone(),
-                status: crate::tool::ResponseStatus::Failed,
+                status: ResponseStatus::Failed,
                 results: serde_json::json!({}),
-                metadata: crate::tool::ResponseMetadata {
+                metadata: ResponseMetadata {
                     started_at,
                     completed_at,
                     duration_ms: (completed_at - started_at).num_milliseconds() as u64,

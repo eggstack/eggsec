@@ -76,11 +76,12 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ### Workspace Layout
 
-Slapper is organized as a Cargo workspace with six crates:
+Slapper is organized as a Cargo workspace with seven crates:
 
 | Crate | Purpose |
 |-------|---------|
 | `slapper-core` | Dependency-light types, constants, shared primitives |
+| `slapper-tool-core` | Core data types for the tool abstraction layer (requests, responses, findings, errors) |
 | `slapper` | Assessment engine library (no binary) |
 | `slapper-nse` | Optional Nmap NSE compatibility runtime |
 | `slapper-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |

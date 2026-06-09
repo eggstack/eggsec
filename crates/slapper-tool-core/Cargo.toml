@@ -1,0 +1,18 @@
+[package]
+name = "slapper-tool-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Core data types for the Slapper tool abstraction layer"
+
+[dependencies]
+slapper-core = { path = "../slapper-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+rustc-hash = { workspace = true }
+parking_lot = { workspace = true }
+uuid = { workspace = true }
+toml = "0.8"

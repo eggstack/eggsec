@@ -6,54 +6,28 @@
 //! and can be executed via the [`ToolRegistry`] or through protocol adapters
 //! (MCP, OpenAI, REST API).
 //!
-//! # Key Types
-//!
-//! - [`ToolRegistry`] — Central registry for all security tools
-//! - [`SecurityTool`] — Trait that all tools must implement
-//! - [`ToolRequest`] — Request structure for tool execution
-//! - [`ToolResponse`] — Response structure with findings and metadata
-//! - [`ToolDispatcher`] — Dispatches requests to registered tools
-//! - [`Target`] — Target specification (URL, IP, domain, CIDR)
-//! - [`SessionState`] — Session state with authentication and CSRF tokens
-//! - [`LoginSequence`] — Recorded login sequence for authenticated scanning
-//! - [`CsrfToken`] — CSRF token with extraction metadata
-//!
-//! # Protocol Adapters
-//!
-//! Tools can be exposed through multiple protocols:
-//! - **MCP** (`tool::protocol::mcp`) — Model Context Protocol for AI agents
-//! - **OpenAI** (`tool::protocol::openai`) — OpenAI-compatible chat completions
-//! - **REST** (`tool::protocol::rest`) — HTTP REST API
-//! - **OpenResponses** (`tool::protocol::openresponses`) — OpenClaw responses API
-//!
-//! # Example
-//!
-//! ```no_run
-//! use slapper::tool::{create_default_registry, ToolRequest, Target};
-//!
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let registry = create_default_registry();
-//! let tools = registry.list();
-//! println!("Available tools: {:?}", tools.iter().map(|t| &t.name).collect::<Vec<_>>());
-//! # Ok(())
-//! # }
-//! ```
+//! Core data types (request, response, error, etc.) live in the `slapper-tool-core`
+//! crate and are re-exported here for backward compatibility.
 
+// Re-export core data types from slapper-tool-core as modules
+// so that `crate::tool::tool_error::ToolError` etc. still work.
+pub use slapper_tool_core::tool_error;
+pub use slapper_tool_core::request;
+pub use slapper_tool_core::response;
+pub use slapper_tool_core::history;
+pub use slapper_tool_core::ratelimit;
+
+// Local modules that depend on slapper-internal types
+pub mod finding;
 pub mod convert;
 pub mod dispatcher;
-pub mod finding;
-pub mod history;
 pub mod metadata;
 pub mod openapi;
 pub mod planner;
-pub mod ratelimit;
 pub mod registry;
-pub mod request;
-pub mod response;
 pub mod scripting;
 pub mod session;
 pub mod state;
-pub mod tool_error;
 pub mod traits;
 
 pub mod implementations;
@@ -63,6 +37,13 @@ pub mod agents;
 pub mod orchestrator;
 pub mod protocol;
 
+// Re-export core types at tool module level for convenience
+pub use slapper_tool_core::{
+    AuthConfig, AuthType, CancellationToken, CancellationTokenHandle, EndpointData, EndpointLimit,
+    GlobalRateLimitStatus, PortData, PortState, RequestOptions, Scope, Target, TargetType,
+    ToolError, ToolErrorType, ToolRequest, ToolResponse,
+};
+
 pub use dispatcher::ToolDispatcher;
 pub use history::{ExecutionEntry, ExecutionHistory};
 pub use openapi::OpenApiGenerator;
@@ -70,14 +51,10 @@ pub use orchestrator::{
     ExecutionResult, Orchestrator, StageProgress, StageResult, StageToolResult,
 };
 pub use planner::{ChainPlanner, ExecutionPlan, PlanRequest, PlanValidation};
-pub use ratelimit::{RateLimitConfig, RateLimitStatus, RateLimiter};
 pub use registry::{ToolInfo, ToolRegistry};
-pub use request::{
-    CancellationToken, CancellationTokenHandle, RequestOptions, Target, TargetType, ToolRequest,
-};
 pub use response::{
     Finding, FindingType, ProgressUpdate, ResponseMetadata, ResponseSeverity, ResponseStatus,
-    StreamEvent, StreamEventType, ToolError, ToolErrorType, ToolResponse,
+    StreamEvent, StreamEventType,
 };
 pub use session::{
     AuthMethod, AuthenticatedSessionManager, CsrfExtractor, CsrfToken, CsrfTokenLocation,

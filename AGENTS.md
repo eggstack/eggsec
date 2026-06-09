@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Slapper is a Rust-based security testing toolkit organized as a workspace with 6 crates: `slapper-core`, `slapper`, `slapper-nse`, `slapper-tui`, `slapper-cli`, and `slapper-output`. See `README.md` for features and `ARCHITECTURE.md` for design details.
+Slapper is a Rust-based security testing toolkit organized as a workspace with 7 crates: `slapper-core`, `slapper-tool-core`, `slapper`, `slapper-nse`, `slapper-tui`, `slapper-cli`, and `slapper-output`. See `README.md` for features and `ARCHITECTURE.md` for design details.
 
 ## Implementation Plan
 
@@ -21,12 +21,14 @@ Slapper is a Rust-based security testing toolkit organized as a workspace with 6
 
 ```bash
 cargo check -p slapper-core
+cargo check -p slapper-tool-core
 cargo check --lib -p slapper
 cargo check -p slapper-tui
 cargo check -p slapper-cli
 cargo check -p slapper-nse
 cargo check -p slapper-output
 cargo test -p slapper-core
+cargo test -p slapper-tool-core
 cargo test -p slapper-output
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
@@ -254,6 +256,7 @@ cargo check --lib -p slapper
 cargo check -p slapper-tui
 cargo check -p slapper-cli
 cargo check -p slapper-nse
+cargo check -p slapper-tool-core
 cargo check -p slapper-output
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper

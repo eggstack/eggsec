@@ -97,6 +97,7 @@ handlebars = "6"
 # Workspace crates
 slapper-core = { path = "../slapper-core" }
 slapper-output = { path = "../slapper-output" }
+slapper-tool-core = { path = "../slapper-tool-core" }
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
 slapper-nse = { path = "../slapper-nse", optional = true }

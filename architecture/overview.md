@@ -25,6 +25,7 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 Slapper is organized as a Cargo workspace. The first-level crate boundary is:
 
 - **`slapper-core`**: dependency-light domain types (`Severity`, `SensitiveString`), constants, and shared primitives. Designed for fast independent compilation with a small dependency set.
+- **`slapper-tool-core`**: core data types for the tool abstraction layer (requests, responses, findings, errors). Dependency-light types shared between `slapper` and tool protocol integrations.
 - **`slapper`**: main engine, CLI dispatch, assessment modules, TUI/API adapters, feature-gated integrations, and the canonical `SlapperError` type.
 - **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
 - **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.

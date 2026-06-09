@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub use crate::tool::finding::{Finding, FindingType, ResponseSeverity};
-pub use crate::tool::tool_error::{ToolError, ToolErrorType};
+pub use crate::finding::{Finding, FindingType, ResponseSeverity};
+pub use crate::tool_error::{ToolError, ToolErrorType};
 
 /// Response returned by a tool after execution.
 ///
@@ -279,168 +279,35 @@ impl std::fmt::Display for StreamEventType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fuzzer::engine::FuzzResult;
-    use crate::fuzzer::payloads::{Payload, PayloadType};
-    use crate::types::Severity;
 
-    fn make_fuzz_result(
-        leaks: Vec<String>,
-        anomaly: bool,
-        waf: bool,
-        severity: Severity,
-    ) -> FuzzResult {
-        FuzzResult {
-            payload: Payload {
-                payload_type: PayloadType::Sqli,
-                payload: "test payload".to_string(),
-                description: "SQL injection test".to_string(),
-                severity: Severity::Medium,
-                tags: vec!["test".to_string()],
-            },
-            status_code: 200,
-            response_time_ms: 150,
-            response_length: Some(500),
-            response_body: None,
-            is_waf_blocked: waf,
-            is_anomaly: anomaly,
-            is_redos_suspected: false,
-            leaks_found: leaks,
-            error: None,
-            owasp_category: None,
-            detected_severity: severity,
-        }
+    #[test]
+    fn test_tool_response_success() {
+        let response = ToolResponse::success("req-123", "scanner", serde_json::json!({"ports": [80, 443]}));
+        assert!(response.is_success());
+        assert_eq!(response.request_id, "req-123");
+        assert_eq!(response.tool_id, "scanner");
     }
 
     #[test]
-    fn test_fuzz_result_to_finding_with_leaks() {
-        let result = make_fuzz_result(
-            vec!["SQL injection detected".to_string()],
-            false,
-            false,
-            Severity::High,
-        );
-        let finding = Finding::from(result);
-
-        assert_eq!(finding.title, "SQL injection test");
-        assert_eq!(finding.description, "SQL injection detected");
-        assert_eq!(finding.severity, ResponseSeverity::High);
-        assert!(finding.location.contains("SQL Injection"));
-        assert!(finding.location.contains("test payload"));
-        assert_eq!(
-            finding.metadata.get("status_code").and_then(|v| v.as_u64()),
-            Some(200)
-        );
-        assert_eq!(
-            finding
-                .metadata
-                .get("response_time_ms")
-                .and_then(|v| v.as_u64()),
-            Some(150)
-        );
-        assert!(!finding
-            .metadata
-            .get("is_waf_blocked")
-            .unwrap()
-            .as_bool()
-            .unwrap());
-        assert!(!finding
-            .metadata
-            .get("is_anomaly")
-            .unwrap()
-            .as_bool()
-            .unwrap());
+    fn test_tool_response_with_findings() {
+        let finding = Finding::new(FindingType::OpenPort, ResponseSeverity::Info, "Open port 80");
+        let response = ToolResponse::success("req-1", "scanner", serde_json::json!({}))
+            .with_findings(vec![finding]);
+        assert_eq!(response.metadata.findings_count, 1);
     }
 
     #[test]
-    fn test_fuzz_result_to_finding_with_anomaly() {
-        let result = make_fuzz_result(vec![], true, false, Severity::Medium);
-        let finding = Finding::from(result);
-
-        assert_eq!(finding.title, "SQL injection test");
-        assert!(finding.description.is_empty());
-        assert_eq!(finding.severity, ResponseSeverity::Medium);
-        assert!(finding
-            .metadata
-            .get("is_anomaly")
-            .unwrap()
-            .as_bool()
-            .unwrap());
+    fn test_tool_response_with_errors() {
+        let error = ToolError::new("E001", "test error");
+        let response = ToolResponse::success("req-1", "scanner", serde_json::json!({}))
+            .with_errors(vec![error]);
+        assert_eq!(response.status, ResponseStatus::PartialSuccess);
     }
 
     #[test]
-    fn test_fuzz_result_to_finding_waf_blocked() {
-        let result = make_fuzz_result(vec![], false, true, Severity::Critical);
-        let finding = Finding::from(result);
-
-        assert_eq!(finding.severity, ResponseSeverity::Critical);
-        assert!(finding
-            .metadata
-            .get("is_waf_blocked")
-            .unwrap()
-            .as_bool()
-            .unwrap());
-    }
-
-    #[test]
-    fn test_fuzz_result_to_finding_multiple_leaks() {
-        let result = make_fuzz_result(
-            vec![
-                "leak 1: admin credentials".to_string(),
-                "leak 2: session token".to_string(),
-            ],
-            false,
-            false,
-            Severity::Critical,
-        );
-        let finding = Finding::from(result);
-
-        assert!(finding.description.contains("leak 1"));
-        assert!(finding.description.contains("leak 2"));
-    }
-
-    #[test]
-    fn test_fuzz_result_to_finding_severity_mapping() {
-        for severity_input in [
-            Severity::Critical,
-            Severity::High,
-            Severity::Medium,
-            Severity::Low,
-            Severity::Info,
-        ] {
-            let result = make_fuzz_result(vec![], false, false, severity_input);
-            let finding = Finding::from(result);
-            let expected = ResponseSeverity::from(severity_input);
-            assert_eq!(finding.severity, expected);
-        }
-    }
-
-    #[test]
-    fn test_fuzz_result_to_finding_payload_metadata() {
-        let result = make_fuzz_result(vec![], false, false, Severity::Medium);
-        let finding = Finding::from(result);
-
-        let payload_meta = finding.metadata.get("payload").unwrap();
-        assert!(payload_meta.is_object());
-    }
-
-    #[test]
-    fn test_severity_to_response_severity() {
-        assert_eq!(
-            ResponseSeverity::from(Severity::Critical),
-            ResponseSeverity::Critical
-        );
-        assert_eq!(
-            ResponseSeverity::from(Severity::High),
-            ResponseSeverity::High
-        );
-        assert_eq!(
-            ResponseSeverity::from(Severity::Medium),
-            ResponseSeverity::Medium
-        );
-        assert_eq!(ResponseSeverity::from(Severity::Low), ResponseSeverity::Low);
-        assert_eq!(
-            ResponseSeverity::from(Severity::Info),
-            ResponseSeverity::Info
-        );
+    fn test_response_status_display() {
+        assert_eq!(ResponseStatus::Success.to_string(), "success");
+        assert_eq!(ResponseStatus::Failed.to_string(), "failed");
+        assert_eq!(ResponseStatus::Timeout.to_string(), "timeout");
     }
 }
