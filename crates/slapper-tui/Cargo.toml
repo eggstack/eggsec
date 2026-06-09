@@ -36,6 +36,24 @@ pnet = { version = "0.35", optional = true }
 pnet_packet = { version = "0.35", optional = true }
 slapper-nse = { path = "../slapper-nse", optional = true }
 
+# Feature forwarding model:
+#
+# TUI feature flags mirror engine (slapper) capabilities only where the TUI
+# exposes corresponding tabs or controls. Features are divided into three
+# categories:
+#
+# 1. Engine-only forwarding: These features only forward to the `slapper`
+#    crate (no local dependencies) and enable conditional tab variants in
+#    the TUI (e.g. `headless-browser`, `compliance`, `database`, etc.).
+#    The TUI gains new tabs/controls when these are enabled.
+#
+# 2. Local dependency forwarding: `stress-testing` and `packet-inspection`
+#    add local `pnet`/`pnet_packet` dependencies for raw packet crafting
+#    and inspection, in addition to forwarding to `slapper`.
+#    `nse` adds the `slapper-nse` dependency for NSE script support.
+#
+# 3. Combined feature: `full` enables all of the above for maximum
+#    capability — every tab and control is available.
 [features]
 default = []
 nse = ["dep:slapper-nse", "slapper/nse"]

@@ -10,8 +10,10 @@ pub(crate) mod key_handler;
 pub(crate) mod navigation;
 mod options;
 pub(crate) mod runner;
+pub(crate) mod state;
 pub(crate) mod state_update;
 pub(crate) mod tab_error;
+pub(crate) mod tab_store;
 pub(crate) mod task_management;
 pub(crate) mod task_runtime;
 
@@ -23,6 +25,8 @@ pub use key_handler::KeyHandler;
 pub use notifications::{Notification, NotificationSeverity};
 pub use options::GlobalHttpOptions;
 pub use runner::run;
+pub use state::{OverlayState, QuickSwitchState, SearchState, TaskState};
+pub use tab_store::TabStore;
 
 pub(crate) mod notifications;
 
@@ -47,73 +51,22 @@ pub struct App {
     pub session_manager: crate::session::SessionManager,
     pub last_auto_save: std::time::Instant,
     pub theme_manager: crate::theme::ThemeManager,
-    pub recon: tabs::ReconTab,
-    pub load: tabs::LoadTab,
-    pub scan_ports: tabs::ScanPortsTab,
-    pub scan_endpoints: tabs::ScanEndpointsTab,
-    pub fingerprint: tabs::FingerprintTab,
-    pub fuzz: tabs::FuzzTab,
-    pub waf: tabs::WafTab,
-    pub waf_stress: tabs::WafStressTab,
-    pub scan: tabs::ScanTab,
-    pub resume: tabs::ResumeTab,
-    pub proxy: tabs::ProxyTab,
-    pub packet: tabs::PacketTab,
-    pub graphql: tabs::GraphQlTab,
-    pub oauth: tabs::OAuthTab,
-    pub cluster: tabs::ClusterTab,
-    pub stress: tabs::StressTab,
-    pub report: tabs::ReportTab,
-    #[cfg(feature = "nse")]
-    pub nse: tabs::NseTab,
-    pub settings: tabs::SettingsTab,
+    pub tabs: TabStore,
     pub http_options: GlobalHttpOptions,
     pub history: SharedHistory,
-    pub show_help: bool,
-    pub help_tab: Option<Tab>,
-    pub show_http_options: bool,
-    pub show_search: bool,
-    pub search_query: String,
-    pub search_is_global: bool,
-    pub global_search: Option<crate::search::GlobalSearch>,
-    pub search_backup: Option<std::collections::VecDeque<crate::tabs::history::HistoryEntry>>,
+    pub overlay: OverlayState,
+    pub search: SearchState,
+    pub quick_switch: QuickSwitchState,
+    pub task_state: TaskState,
     pub pending_key: Option<KeyCode>,
-    pub dashboard: tabs::DashboardTab,
-    #[cfg(feature = "advanced-hunting")]
-    pub hunt: tabs::HuntTab,
-    #[cfg(feature = "headless-browser")]
-    pub browser: tabs::BrowserTab,
-    #[cfg(feature = "compliance")]
-    pub compliance: tabs::ComplianceTab,
-    #[cfg(feature = "database")]
-    pub storage: tabs::StorageTab,
-    #[cfg(feature = "external-integrations")]
-    pub integrations: tabs::IntegrationsTab,
-    #[cfg(feature = "finding-workflow")]
-    pub workflow: tabs::WorkflowTab,
-    #[cfg(feature = "vuln-management")]
-    pub vuln: tabs::VulnTab,
-    #[cfg(feature = "wireless")]
-    pub wireless: tabs::WirelessTab,
     pub export_format: OutputFormat,
-    pub task_handle: Option<tokio::task::JoinHandle<()>>,
-    pub task_inner_abort: Option<tokio::task::AbortHandle>,
-    pub task_tab: Option<crate::tabs::Tab>,
-    pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
-    pub result_rx: Option<tokio::sync::mpsc::Receiver<workers::TaskResult>>,
     pub help_manager: HelpManager,
     pub command_palette: Option<CommandPalette>,
     pub help_context: HelpContext,
-    pub pending_action: Option<PendingAction>,
     pub needs_redraw: bool,
     pub tab_scroll_offset: u16,
     pub last_tab_area_width: u16,
     pub bookmarks: FxHashSet<String>,
-    pub paused: bool,
-    pub notification: Option<Notification>,
-    pub show_quick_switch: bool,
-    pub quick_switch_query: String,
-    pub quick_switch_selected: usize,
 }
 
 impl App {
@@ -180,73 +133,22 @@ impl App {
             session_manager,
             last_auto_save: std::time::Instant::now(),
             theme_manager: ThemeManager::new(),
-            recon: tabs::ReconTab::new(),
-            load: tabs::LoadTab::new(),
-            scan_ports: tabs::ScanPortsTab::new(),
-            scan_endpoints: tabs::ScanEndpointsTab::new(),
-            fingerprint: tabs::FingerprintTab::new(),
-            fuzz: tabs::FuzzTab::new(),
-            waf: tabs::WafTab::new(),
-            waf_stress: tabs::WafStressTab::new(),
-            scan: tabs::ScanTab::new(),
-            resume: tabs::ResumeTab::new(),
-            proxy: tabs::ProxyTab::new(),
-            packet: tabs::PacketTab::new(),
-            graphql: tabs::GraphQlTab::new(),
-            oauth: tabs::OAuthTab::new(),
-            cluster: tabs::ClusterTab::new(),
-            stress: tabs::StressTab::new(),
-            report: tabs::ReportTab::new(),
-            #[cfg(feature = "nse")]
-            nse: tabs::NseTab::new(),
-            settings: tabs::SettingsTab::new(),
-            dashboard: tabs::DashboardTab::new(),
-            #[cfg(feature = "advanced-hunting")]
-            hunt: tabs::HuntTab::new(),
-            #[cfg(feature = "headless-browser")]
-            browser: tabs::BrowserTab::new(),
-            #[cfg(feature = "compliance")]
-            compliance: tabs::ComplianceTab::new(),
-            #[cfg(feature = "database")]
-            storage: tabs::StorageTab::new(),
-            #[cfg(feature = "external-integrations")]
-            integrations: tabs::IntegrationsTab::new(),
-            #[cfg(feature = "finding-workflow")]
-            workflow: tabs::WorkflowTab::new(),
-            #[cfg(feature = "vuln-management")]
-            vuln: tabs::VulnTab::new(),
-            #[cfg(feature = "wireless")]
-            wireless: tabs::WirelessTab::new(),
+            tabs: TabStore::new(),
             http_options: GlobalHttpOptions::default(),
             history,
-            show_help: false,
-            help_tab: None,
-            show_http_options: false,
-            show_search: false,
-            search_query: String::new(),
-            search_is_global: false,
-            global_search: Some(crate::search::GlobalSearch::new()),
-            search_backup: None,
+            overlay: OverlayState::default(),
+            search: SearchState::default(),
+            quick_switch: QuickSwitchState::default(),
+            task_state: TaskState::default(),
             pending_key: None,
             tab_scroll_offset: 0,
             last_tab_area_width: 80,
             export_format: OutputFormat::Json,
-            task_handle: None,
-            task_inner_abort: None,
-            task_tab: None,
-            progress_rx: None,
-            result_rx: None,
             help_manager: HelpManager::new(),
             command_palette: None,
             help_context: HelpContext::Normal,
-            pending_action: None,
             needs_redraw: true,
-            notification: None,
             bookmarks: restored_bookmarks,
-            paused: false,
-            show_quick_switch: false,
-            quick_switch_query: String::new(),
-            quick_switch_selected: 0,
         };
 
         if let Some(state) = &restored_state {
@@ -258,7 +160,7 @@ impl App {
 
         // Sync settings with current theme
         let theme = app.theme_manager.current().clone();
-        app.settings.sync_with_theme(&theme);
+        app.tabs.settings.sync_with_theme(&theme);
 
         app
     }
@@ -304,8 +206,8 @@ impl App {
     }
 
     pub fn handle_enter(&mut self) {
-        if self.show_help {
-            self.show_help = false;
+        if self.overlay.show_help {
+            self.overlay.show_help = false;
             return;
         }
 
@@ -338,39 +240,39 @@ impl App {
 
     fn build_current_task(&self) -> Option<workers::TaskConfig> {
         match self.current_tab {
-            Tab::Recon => self.recon.build_task_config(),
-            Tab::Load => self.load.build_task_config(),
-            Tab::ScanPorts => self.scan_ports.build_task_config(),
-            Tab::ScanEndpoints => self.scan_endpoints.build_task_config(),
-            Tab::Fingerprint => self.fingerprint.build_task_config(),
-            Tab::Fuzz => self.fuzz.build_task_config(),
-            Tab::Waf => self.waf.build_task_config(),
-            Tab::WafStress => self.waf_stress.build_task_config(),
-            Tab::Scan => self.scan.build_task_config(),
-            Tab::Packet => self.packet.build_task_config(),
+            Tab::Recon => self.tabs.recon.build_task_config(),
+            Tab::Load => self.tabs.load.build_task_config(),
+            Tab::ScanPorts => self.tabs.scan_ports.build_task_config(),
+            Tab::ScanEndpoints => self.tabs.scan_endpoints.build_task_config(),
+            Tab::Fingerprint => self.tabs.fingerprint.build_task_config(),
+            Tab::Fuzz => self.tabs.fuzz.build_task_config(),
+            Tab::Waf => self.tabs.waf.build_task_config(),
+            Tab::WafStress => self.tabs.waf_stress.build_task_config(),
+            Tab::Scan => self.tabs.scan.build_task_config(),
+            Tab::Packet => self.tabs.packet.build_task_config(),
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.build_task_config(),
+            Tab::Hunt => self.tabs.hunt.build_task_config(),
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.build_task_config(),
+            Tab::Browser => self.tabs.browser.build_task_config(),
             #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.build_task_config(),
+            Tab::Compliance => self.tabs.compliance.build_task_config(),
             #[cfg(feature = "database")]
-            Tab::Storage => self.storage.build_task_config(),
+            Tab::Storage => self.tabs.storage.build_task_config(),
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.build_task_config(),
+            Tab::Integrations => self.tabs.integrations.build_task_config(),
             #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.build_task_config(),
+            Tab::Workflow => self.tabs.workflow.build_task_config(),
             #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.build_task_config(),
+            Tab::Vuln => self.tabs.vuln.build_task_config(),
             #[cfg(feature = "wireless")]
-            Tab::Wireless => self.wireless.build_task_config(),
+            Tab::Wireless => self.tabs.wireless.build_task_config(),
             _ => None,
         }
     }
 
     pub fn handle_escape(&mut self) {
-        if self.show_help {
-            self.show_help = false;
+        if self.overlay.show_help {
+            self.overlay.show_help = false;
             return;
         }
         if self.mode == InputMode::Insert {
@@ -380,49 +282,49 @@ impl App {
     }
 
     pub fn handle_char(&mut self, c: char) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_char(c);
     }
 
     pub fn handle_backspace(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_backspace();
     }
 
     pub fn handle_delete(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_delete();
     }
 
     pub fn handle_autocomplete(&mut self) -> bool {
-        if self.show_help || self.mode != InputMode::Insert {
+        if self.overlay.show_help || self.mode != InputMode::Insert {
             return false;
         }
         self.dispatcher_mut().handle_autocomplete()
     }
 
     pub fn handle_up(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_up();
     }
 
     pub fn handle_down(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_down();
     }
 
     pub fn handle_left(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         if !self.dispatcher_mut().handle_left() {
@@ -431,7 +333,7 @@ impl App {
     }
 
     pub fn handle_right(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         if !self.dispatcher_mut().handle_right() {
@@ -440,7 +342,7 @@ impl App {
     }
 
     pub fn handle_focus_next(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_focus_next();
@@ -453,7 +355,7 @@ impl App {
     }
 
     pub fn handle_focus_prev(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_focus_prev();
@@ -466,7 +368,7 @@ impl App {
     }
 
     pub fn handle_left_or_prev_tab(&mut self) -> bool {
-        if self.show_help {
+        if self.overlay.show_help {
             return false;
         }
         if self.dispatcher_mut().is_at_left_edge() {
@@ -478,7 +380,7 @@ impl App {
     }
 
     pub fn handle_right_or_next_tab(&mut self) -> bool {
-        if self.show_help {
+        if self.overlay.show_help {
             return false;
         }
         if self.dispatcher_mut().is_at_right_edge() {
@@ -495,7 +397,7 @@ impl App {
 
     pub fn save_settings(&mut self) {
         if self.current_tab == Tab::Settings {
-            self.settings.save_config();
+            self.tabs.settings.save_config();
         }
     }
 
@@ -510,17 +412,17 @@ impl App {
     }
 
     pub fn request_confirmation(&mut self, action: PendingAction) {
-        self.pending_action = Some(action);
+        self.overlay.pending_action = Some(action);
     }
 
     pub fn confirm_action(&mut self) {
-        if let Some(action) = self.pending_action.take() {
+        if let Some(action) = self.overlay.pending_action.take() {
             action.execute(self);
         }
     }
 
     pub fn cancel_action(&mut self) {
-        self.pending_action = None;
+        self.overlay.pending_action = None;
     }
 
     /// Set current tab only if it's available for the current feature set.
@@ -535,7 +437,7 @@ impl App {
     }
 
     pub fn is_confirm_popup_visible(&self) -> bool {
-        self.pending_action.is_some()
+        self.overlay.pending_action.is_some()
     }
 
     pub fn page_up(&mut self) {
@@ -549,42 +451,42 @@ impl App {
     }
 
     pub fn handle_word_forward(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_word_forward();
     }
 
     pub fn handle_word_backward(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_word_backward();
     }
 
     pub fn handle_home(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_home();
     }
 
     pub fn handle_end(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_end();
     }
 
     pub fn handle_top(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_top();
     }
 
     pub fn handle_bottom(&mut self) {
-        if self.show_help {
+        if self.overlay.show_help {
             return;
         }
         self.dispatcher_mut().handle_bottom();
@@ -603,15 +505,15 @@ impl App {
     }
 
     pub fn toggle_pause(&mut self) {
-        self.paused = !self.paused;
+        self.task_state.paused = !self.task_state.paused;
     }
 
     pub fn is_paused(&self) -> bool {
-        self.paused
+        self.task_state.paused
     }
 
     pub fn resume(&mut self) {
-        self.paused = false;
+        self.task_state.paused = false;
     }
 
     pub fn auto_save_if_due(&mut self) {
@@ -633,24 +535,24 @@ impl App {
         if self.is_any_overlay_active() {
             return;
         }
-        self.show_quick_switch = true;
-        self.quick_switch_query.clear();
-        self.quick_switch_selected = 0;
+        self.quick_switch.visible = true;
+        self.quick_switch.query.clear();
+        self.quick_switch.selected = 0;
         self.needs_redraw = true;
     }
 
     pub fn close_quick_switch(&mut self) {
-        self.show_quick_switch = false;
-        self.quick_switch_query.clear();
+        self.quick_switch.visible = false;
+        self.quick_switch.query.clear();
         self.needs_redraw = true;
     }
 
     pub fn is_quick_switch_visible(&self) -> bool {
-        self.show_quick_switch
+        self.quick_switch.visible
     }
 
     pub fn get_quick_switch_results(&self) -> Vec<&'static Tab> {
-        let query = self.quick_switch_query.to_lowercase();
+        let query = self.quick_switch.query.to_lowercase();
         if query.is_empty() {
             return Tab::all().iter().collect();
         }
@@ -688,17 +590,17 @@ impl App {
 
     /// Check if search popup is visible
     pub fn is_search_visible(&self) -> bool {
-        self.show_search
+        self.overlay.show_search
     }
 
     /// Check if HTTP options popup is visible
     pub fn is_http_options_visible(&self) -> bool {
-        self.show_http_options
+        self.overlay.show_http_options
     }
 
     /// Check if help popup is visible
     pub fn is_help_visible(&self) -> bool {
-        self.show_help
+        self.overlay.show_help
     }
 
     /// Get the topmost overlay based on precedence:
@@ -760,10 +662,10 @@ mod tests {
         assert_eq!(app.current_tab, Tab::Recon);
         assert!(!app.should_quit);
         assert_eq!(app.mode, InputMode::Normal);
-        assert!(!app.show_help);
-        assert!(!app.show_search);
-        assert!(app.search_query.is_empty());
-        assert!(app.pending_action.is_none());
+        assert!(!app.overlay.show_help);
+        assert!(!app.overlay.show_search);
+        assert!(app.search.query.is_empty());
+        assert!(app.overlay.pending_action.is_none());
     }
 
     #[test]
@@ -792,31 +694,31 @@ mod tests {
     #[test]
     fn test_request_confirmation_sets_pending_action() {
         let mut app = create_test_app();
-        assert!(app.pending_action.is_none());
+        assert!(app.overlay.pending_action.is_none());
 
         app.request_confirmation(PendingAction::ResetTab);
-        assert!(app.pending_action.is_some());
-        assert_eq!(app.pending_action, Some(PendingAction::ResetTab));
+        assert!(app.overlay.pending_action.is_some());
+        assert_eq!(app.overlay.pending_action, Some(PendingAction::ResetTab));
     }
 
     #[test]
     fn test_confirm_action_clears_pending_action() {
         let mut app = create_test_app();
         app.request_confirmation(PendingAction::ResetTab);
-        assert!(app.pending_action.is_some());
+        assert!(app.overlay.pending_action.is_some());
 
         app.confirm_action();
-        assert!(app.pending_action.is_none());
+        assert!(app.overlay.pending_action.is_none());
     }
 
     #[test]
     fn test_cancel_action_clears_pending_action() {
         let mut app = create_test_app();
         app.request_confirmation(PendingAction::ResetTab);
-        assert!(app.pending_action.is_some());
+        assert!(app.overlay.pending_action.is_some());
 
         app.cancel_action();
-        assert!(app.pending_action.is_none());
+        assert!(app.overlay.pending_action.is_none());
     }
 
     #[test]
@@ -846,25 +748,25 @@ mod tests {
     #[test]
     fn test_search_query_set_and_cleared() {
         let mut app = create_test_app();
-        assert!(app.search_query.is_empty());
+        assert!(app.search.query.is_empty());
 
-        app.search_query = "test query".to_string();
-        assert_eq!(app.search_query, "test query");
+        app.search.query = "test query".to_string();
+        assert_eq!(app.search.query, "test query");
 
-        app.search_query.clear();
-        assert!(app.search_query.is_empty());
+        app.search.query.clear();
+        assert!(app.search.query.is_empty());
     }
 
     #[test]
     fn test_show_http_options_toggle() {
         let mut app = create_test_app();
-        assert!(!app.show_http_options);
+        assert!(!app.overlay.show_http_options);
 
-        app.show_http_options = true;
-        assert!(app.show_http_options);
+        app.overlay.show_http_options = true;
+        assert!(app.overlay.show_http_options);
 
-        app.show_http_options = false;
-        assert!(!app.show_http_options);
+        app.overlay.show_http_options = false;
+        assert!(!app.overlay.show_http_options);
     }
 
     #[test]
@@ -913,10 +815,10 @@ mod tests {
         let mut app = create_test_app();
         assert!(!app.is_search_visible());
 
-        app.show_search = true;
+        app.overlay.show_search = true;
         assert!(app.is_search_visible());
 
-        app.show_search = false;
+        app.overlay.show_search = false;
         assert!(!app.is_search_visible());
     }
 
@@ -925,10 +827,10 @@ mod tests {
         let mut app = create_test_app();
         assert!(!app.is_http_options_visible());
 
-        app.show_http_options = true;
+        app.overlay.show_http_options = true;
         assert!(app.is_http_options_visible());
 
-        app.show_http_options = false;
+        app.overlay.show_http_options = false;
         assert!(!app.is_http_options_visible());
     }
 
@@ -937,10 +839,10 @@ mod tests {
         let mut app = create_test_app();
         assert!(!app.is_help_visible());
 
-        app.show_help = true;
+        app.overlay.show_help = true;
         assert!(app.is_help_visible());
 
-        app.show_help = false;
+        app.overlay.show_help = false;
         assert!(!app.is_help_visible());
     }
 
@@ -954,9 +856,9 @@ mod tests {
     fn test_topmost_overlay_confirm_popup_precedence() {
         let mut app = create_test_app();
         // Set up multiple overlays
-        app.show_help = true;
-        app.show_search = true;
-        app.show_http_options = true;
+        app.overlay.show_help = true;
+        app.overlay.show_search = true;
+        app.overlay.show_http_options = true;
 
         // Confirm popup should take precedence
         app.request_confirmation(PendingAction::ResetTab);
@@ -967,12 +869,12 @@ mod tests {
     fn test_h_key_closes_http_options_overlay() {
         let mut app = create_test_app();
         // Show HTTP options
-        app.show_http_options = true;
+        app.overlay.show_http_options = true;
         assert!(app.is_http_options_visible());
 
         // Simulate 'h' key press behavior (from runner.rs lines 385-387)
         if app.is_http_options_visible() {
-            app.show_http_options = false;
+            app.overlay.show_http_options = false;
             app.needs_redraw = true;
         }
 
@@ -986,13 +888,13 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Settings;
         app.mode = InputMode::Normal;
-        let initial_focus = app.settings.focus_area;
+        let initial_focus = app.tabs.settings.focus_area;
         let initial_tab = app.current_tab;
 
         app.handle_right();
 
         assert_eq!(app.current_tab, initial_tab);
-        assert_ne!(app.settings.focus_area, initial_focus);
+        assert_ne!(app.tabs.settings.focus_area, initial_focus);
     }
 
     #[test]
@@ -1000,11 +902,11 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Recon;
         app.mode = InputMode::Insert;
-        app.recon.inputs.focus(0);
+        app.tabs.recon.inputs.focus(0);
 
         app.handle_enter();
 
         assert_eq!(app.mode, InputMode::Normal);
-        assert!(!app.recon.inputs.is_focused());
+        assert!(!app.tabs.recon.inputs.is_focused());
     }
 }

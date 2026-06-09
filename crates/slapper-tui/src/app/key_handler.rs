@@ -197,7 +197,7 @@ impl KeyHandler {
     }
 
     fn handle_ctrl_f(&self, app: &mut App) {
-        if app.show_search {
+        if app.overlay.show_search {
             app.perform_search();
         } else {
             app.toggle_search(true);
@@ -215,10 +215,10 @@ impl KeyHandler {
                 app.toggle_command_palette();
             }
             Some(OverlayType::Search) => {
-                app.toggle_search(app.search_is_global);
+                app.toggle_search(app.search.is_global);
             }
             Some(OverlayType::HttpOptions) => {
-                app.show_http_options = false;
+                app.overlay.show_http_options = false;
                 app.needs_redraw = true;
             }
             Some(OverlayType::Help) => {
@@ -380,16 +380,16 @@ impl KeyHandler {
                 app.perform_search();
             }
             (KeyModifiers::NONE, KeyCode::Backspace) if app.is_search_visible() => {
-                app.search_query.pop();
+                app.search.query.pop();
             }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) if app.is_search_visible() => {
-                app.search_query.clear();
+                app.search.query.clear();
             }
             (KeyModifiers::NONE, KeyCode::Char(c)) if app.is_search_visible() => {
-                app.search_query.push(c);
+                app.search.query.push(c);
             }
             (KeyModifiers::NONE, KeyCode::Char('h')) if app.is_http_options_visible() => {
-                app.show_http_options = false;
+                app.overlay.show_http_options = false;
                 app.needs_redraw = true;
             }
             _ => {}
@@ -406,55 +406,55 @@ impl KeyHandler {
             }
             (KeyModifiers::NONE, KeyCode::Enter) => {
                 let results = app.get_quick_switch_results();
-                if !results.is_empty() && app.quick_switch_selected < results.len() {
-                    if let Some(tab) = results.get(app.quick_switch_selected) {
+                if !results.is_empty() && app.quick_switch.selected < results.len() {
+                    if let Some(tab) = results.get(app.quick_switch.selected) {
                         app.current_tab = **tab;
                         app.adjust_tab_scroll();
                     }
                 }
                 app.close_quick_switch();
             }
-            (KeyModifiers::NONE, KeyCode::Up) if app.quick_switch_selected > 0 => {
-                app.quick_switch_selected -= 1;
+            (KeyModifiers::NONE, KeyCode::Up) if app.quick_switch.selected > 0 => {
+                app.quick_switch.selected -= 1;
             }
             (KeyModifiers::NONE, KeyCode::Down) => {
                 let results = app.get_quick_switch_results();
-                if app.quick_switch_selected < results.len().saturating_sub(1) {
-                    app.quick_switch_selected += 1;
+                if app.quick_switch.selected < results.len().saturating_sub(1) {
+                    app.quick_switch.selected += 1;
                 }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) | (KeyModifiers::NONE, KeyCode::PageUp) => {
                 let results = app.get_quick_switch_results();
-                if app.quick_switch_selected >= 10 {
-                    app.quick_switch_selected -= 10;
+                if app.quick_switch.selected >= 10 {
+                    app.quick_switch.selected -= 10;
                 } else {
-                    app.quick_switch_selected = 0;
+                    app.quick_switch.selected = 0;
                 }
                 if !results.is_empty() {
-                    app.quick_switch_selected = app.quick_switch_selected.min(results.len() - 1);
+                    app.quick_switch.selected = app.quick_switch.selected.min(results.len() - 1);
                 }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('d'))
             | (KeyModifiers::NONE, KeyCode::PageDown) => {
                 let results = app.get_quick_switch_results();
                 if !results.is_empty() {
-                    app.quick_switch_selected =
-                        (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
+                    app.quick_switch.selected =
+                        (app.quick_switch.selected + 10).min(results.len().saturating_sub(1));
                 }
             }
             (KeyModifiers::NONE, KeyCode::Home) => {
-                app.quick_switch_selected = 0;
+                app.quick_switch.selected = 0;
             }
             (KeyModifiers::NONE, KeyCode::End) => {
                 let results = app.get_quick_switch_results();
-                app.quick_switch_selected = results.len().saturating_sub(1);
+                app.quick_switch.selected = results.len().saturating_sub(1);
             }
             (KeyModifiers::NONE, KeyCode::Backspace) => {
-                app.quick_switch_query.pop();
+                app.quick_switch.query.pop();
                 self.clamp_quick_switch_selection(app);
             }
             (KeyModifiers::NONE, KeyCode::Char(c)) => {
-                app.quick_switch_query.push(c);
+                app.quick_switch.query.push(c);
                 self.clamp_quick_switch_selection(app);
             }
             _ => {}
@@ -464,10 +464,10 @@ impl KeyHandler {
     fn clamp_quick_switch_selection(&self, app: &mut App) {
         let results = app.get_quick_switch_results();
         let len = results.len();
-        app.quick_switch_selected = if len == 0 {
+        app.quick_switch.selected = if len == 0 {
             0
         } else {
-            app.quick_switch_selected.min(len - 1)
+            app.quick_switch.selected.min(len - 1)
         };
     }
 }
@@ -506,7 +506,7 @@ mod tests {
 
         press(&mut handler, &mut app, KeyCode::Down);
 
-        assert_eq!(app.quick_switch_selected, 1);
+        assert_eq!(app.quick_switch.selected, 1);
     }
 
     #[test]
@@ -517,15 +517,15 @@ mod tests {
         press_ctrl(&mut handler, &mut app, 'x');
         press(&mut handler, &mut app, KeyCode::End);
         assert_eq!(
-            app.quick_switch_selected,
+            app.quick_switch.selected,
             app.get_quick_switch_results().len().saturating_sub(1)
         );
 
         press_ctrl(&mut handler, &mut app, 'u');
-        assert!(app.quick_switch_selected < app.get_quick_switch_results().len());
+        assert!(app.quick_switch.selected < app.get_quick_switch_results().len());
 
         press(&mut handler, &mut app, KeyCode::Home);
-        assert_eq!(app.quick_switch_selected, 0);
+        assert_eq!(app.quick_switch.selected, 0);
     }
 
     #[test]
@@ -548,13 +548,13 @@ mod tests {
         let mut app = create_test_app();
         let mut handler = KeyHandler::new();
 
-        app.show_search = true;
-        app.search_query = "needle".to_string();
+        app.overlay.show_search = true;
+        app.search.query = "needle".to_string();
 
         press_ctrl(&mut handler, &mut app, 'u');
 
-        assert!(app.search_query.is_empty());
-        assert!(app.show_search);
+        assert!(app.search.query.is_empty());
+        assert!(app.overlay.show_search);
     }
 
     #[test]
@@ -576,13 +576,13 @@ mod tests {
         let mut handler = KeyHandler::new();
         app.current_tab = Tab::Recon;
         app.mode = InputMode::Normal;
-        app.recon.inputs.focus(0);
-        app.recon.inputs.fields[0].value = "abc".to_string();
-        app.recon.inputs.fields[0].cursor_pos = app.recon.inputs.fields[0].value.len();
+        app.tabs.recon.inputs.focus(0);
+        app.tabs.recon.inputs.fields[0].value = "abc".to_string();
+        app.tabs.recon.inputs.fields[0].cursor_pos = app.tabs.recon.inputs.fields[0].value.len();
 
         press(&mut handler, &mut app, KeyCode::Backspace);
 
-        assert_eq!(app.recon.inputs.fields[0].value, "abc");
+        assert_eq!(app.tabs.recon.inputs.fields[0].value, "abc");
     }
 
     #[test]
@@ -590,17 +590,17 @@ mod tests {
         let mut app = create_test_app();
         let mut handler = KeyHandler::new();
         app.current_tab = Tab::Recon;
-        app.recon.inputs.focus(0);
-        app.recon.inputs.fields[0].value = "abc".to_string();
-        app.recon.inputs.fields[0].cursor_pos = 1;
+        app.tabs.recon.inputs.focus(0);
+        app.tabs.recon.inputs.fields[0].value = "abc".to_string();
+        app.tabs.recon.inputs.fields[0].cursor_pos = 1;
 
         app.mode = InputMode::Normal;
         press(&mut handler, &mut app, KeyCode::Delete);
-        assert_eq!(app.recon.inputs.fields[0].value, "abc");
+        assert_eq!(app.tabs.recon.inputs.fields[0].value, "abc");
 
         app.mode = InputMode::Insert;
         press(&mut handler, &mut app, KeyCode::Delete);
-        assert_eq!(app.recon.inputs.fields[0].value, "ac");
+        assert_eq!(app.tabs.recon.inputs.fields[0].value, "ac");
     }
 
     #[test]
@@ -609,18 +609,18 @@ mod tests {
         let mut handler = KeyHandler::new();
 
         press_ctrl(&mut handler, &mut app, 'x');
-        app.quick_switch_selected = app.get_quick_switch_results().len().saturating_sub(1);
-        app.quick_switch_query = "recon".to_string();
-        app.quick_switch_selected = app.get_quick_switch_results().len().saturating_sub(1);
+        app.quick_switch.selected = app.get_quick_switch_results().len().saturating_sub(1);
+        app.quick_switch.query = "recon".to_string();
+        app.quick_switch.selected = app.get_quick_switch_results().len().saturating_sub(1);
 
         // Shrink results to a smaller set and ensure selection is clamped
         press(&mut handler, &mut app, KeyCode::Char('x'));
 
         let len = app.get_quick_switch_results().len();
         if len == 0 {
-            assert_eq!(app.quick_switch_selected, 0);
+            assert_eq!(app.quick_switch.selected, 0);
         } else {
-            assert!(app.quick_switch_selected < len);
+            assert!(app.quick_switch.selected < len);
         }
     }
 
@@ -629,19 +629,19 @@ mod tests {
         let mut app = create_test_app();
         let mut handler = KeyHandler::new();
         app.current_tab = Tab::Dashboard;
-        app.task_tab = Some(Tab::Recon);
+        app.task_state.tab = Some(Tab::Recon);
 
         press_ctrl(&mut handler, &mut app, 'c');
 
         assert!(!app.should_quit);
-        assert!(app.task_tab.is_none());
+        assert!(app.task_state.tab.is_none());
     }
 
     #[test]
     fn test_quit_is_blocked_when_active_task_exists() {
         let mut app = create_test_app();
         let mut handler = KeyHandler::new();
-        app.task_tab = Some(Tab::Recon);
+        app.task_state.tab = Some(Tab::Recon);
 
         press(&mut handler, &mut app, KeyCode::Char('q'));
 

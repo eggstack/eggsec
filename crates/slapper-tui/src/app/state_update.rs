@@ -15,13 +15,13 @@ impl super::App {
     pub(super) fn update(&mut self) {
         let mut dirty = false;
 
-        if let Some(ref mut rx) = self.progress_rx {
+        if let Some(ref mut rx) = self.task_state.progress_rx {
             let mut pending_updates = Vec::new();
             while let Ok((completed, total)) = rx.try_recv() {
                 pending_updates.push((completed, total));
             }
             if rx.is_closed() {
-                self.progress_rx = None;
+                self.task_state.progress_rx = None;
             }
             for (completed, total) in pending_updates {
                 self.update_progress(completed, total);
@@ -29,7 +29,7 @@ impl super::App {
             }
         }
 
-        if let Some(ref mut rx) = self.result_rx {
+        if let Some(ref mut rx) = self.task_state.result_rx {
             let mut pending_results = Vec::new();
             while let Ok(result) = rx.try_recv() {
                 pending_results.push(result);
@@ -40,9 +40,9 @@ impl super::App {
                 dirty = true;
             }
             if is_closed {
-                self.result_rx = None;
-                self.task_tab = None;
-                self.task_handle = None;
+                self.task_state.result_rx = None;
+                self.task_state.tab = None;
+                self.task_state.handle = None;
             }
         }
 
@@ -53,7 +53,7 @@ impl super::App {
 
     fn update_progress(&mut self, completed: u64, total: u64) {
         // Use task_tab if set, otherwise fall back to current_tab (for backwards compatibility)
-        let tab = self.task_tab.unwrap_or(self.current_tab);
+        let tab = self.task_state.tab.unwrap_or(self.current_tab);
         tab.update_progress_in_app(self, completed, total);
     }
 
@@ -86,7 +86,7 @@ impl super::App {
                         r.latency_mean_ms,
                     );
                 });
-                self.load.set_results(r);
+                self.tabs.load.set_results(r);
                 None
             }
             #[cfg(feature = "stress-testing")]
@@ -106,7 +106,7 @@ impl super::App {
                         0.0,
                     );
                 });
-                self.load.set_stress_results(target.clone(), stats);
+                self.tabs.load.set_stress_results(target.clone(), stats);
                 None
             }
             TaskResult::PortScan(r) => {
@@ -117,7 +117,7 @@ impl super::App {
                         r.open_ports.iter().map(|p| p.port).collect(),
                     );
                 });
-                self.scan_ports.set_results(r);
+                self.tabs.scan_ports.set_results(r);
                 None
             }
             TaskResult::EndpointScan(r) => {
@@ -128,7 +128,7 @@ impl super::App {
                         r.interesting_findings,
                     );
                 });
-                self.scan_endpoints.set_results(r);
+                self.tabs.scan_endpoints.set_results(r);
                 None
             }
             TaskResult::Fingerprint(r) => {
@@ -142,7 +142,7 @@ impl super::App {
                             .collect(),
                     );
                 });
-                self.fingerprint.set_results(r);
+                self.tabs.fingerprint.set_results(r);
                 None
             }
             TaskResult::WafDetection(r) => {
@@ -150,7 +150,7 @@ impl super::App {
                 self.with_history(|h| {
                     h.add_waf_result("<target>", r.waf_name.is_some(), &waf_name, 0);
                 });
-                self.waf.set_results(r);
+                self.tabs.waf.set_results(r);
                 None
             }
             TaskResult::WafBypass {
@@ -167,8 +167,8 @@ impl super::App {
                         success_count,
                     );
                 });
-                self.waf.set_results(detection);
-                self.waf.set_bypass_results(bypasses);
+                self.tabs.waf.set_results(detection);
+                self.tabs.waf.set_bypass_results(bypasses);
                 None
             }
             TaskResult::WafStress(bypasses) => {
@@ -176,7 +176,7 @@ impl super::App {
                 self.with_history(|h| {
                     h.add_waf_result("<target>", true, "WAF Stress", success_count);
                 });
-                self.waf.set_bypass_results(bypasses);
+                self.tabs.waf.set_bypass_results(bypasses);
                 None
             }
             TaskResult::Pipeline(r) => {
@@ -189,11 +189,11 @@ impl super::App {
                         r.total_duration_ms,
                     );
                 });
-                self.scan.set_report(r);
+                self.tabs.scan.set_report(r);
                 None
             }
             TaskResult::Fuzz(session) => {
-                self.fuzz.set_results(session);
+                self.tabs.fuzz.set_results(session);
                 None
             }
             TaskResult::Recon(r) => {
@@ -204,7 +204,7 @@ impl super::App {
                         r.ip_address.as_deref().unwrap_or("").to_string(),
                     );
                 });
-                self.recon.set_results(r);
+                self.tabs.recon.set_results(r);
                 None
             }
             _ => Some(result),
@@ -217,47 +217,48 @@ impl super::App {
                 packets_captured,
                 output_file,
             } => {
-                self.packet
+                self.tabs
+                    .packet
                     .set_capture_results(packets_captured, output_file);
                 None
             }
             TaskResult::PacketTraceroute { hops } => {
-                self.packet.set_traceroute_results(hops);
+                self.tabs.packet.set_traceroute_results(hops);
                 None
             }
             TaskResult::PacketSend {
                 packets_sent,
                 bytes_sent,
             } => {
-                self.packet.set_send_results(packets_sent, bytes_sent);
+                self.tabs.packet.set_send_results(packets_sent, bytes_sent);
                 None
             }
             TaskResult::GraphQl(r) => {
-                self.graphql.set_results(r);
+                self.tabs.graphql.set_results(r);
                 None
             }
             TaskResult::OAuth(r) => {
-                self.oauth.set_results(r);
+                self.tabs.oauth.set_results(r);
                 None
             }
             #[cfg(feature = "nse")]
             TaskResult::Nse(r) => {
-                self.nse.set_results(r);
+                self.tabs.nse.set_results(r);
                 None
             }
             #[cfg(feature = "advanced-hunting")]
             TaskResult::Hunt(r) => {
-                self.hunt.set_report(r);
+                self.tabs.hunt.set_report(r);
                 None
             }
             #[cfg(feature = "headless-browser")]
             TaskResult::Browser(r) => {
-                self.browser.set_report(r);
+                self.tabs.browser.set_report(r);
                 None
             }
             #[cfg(feature = "compliance")]
             TaskResult::Compliance(r) => {
-                self.compliance.set_report(r);
+                self.tabs.compliance.set_report(r);
                 None
             }
             _ => Some(result),
@@ -268,37 +269,40 @@ impl super::App {
         match result {
             #[cfg(feature = "database")]
             TaskResult::Storage => {
-                self.storage.state = AppState::Completed;
-                self.storage
+                self.tabs.storage.state = AppState::Completed;
+                self.tabs
+                    .storage
                     .results_view
                     .add_line(ratatui::text::Line::from("Storage task completed"));
                 None
             }
             #[cfg(feature = "database")]
             TaskResult::StorageListScans { scans } => {
-                self.storage.set_scans(scans.clone());
-                self.storage.state = AppState::Completed;
+                self.tabs.storage.set_scans(scans.clone());
+                self.tabs.storage.state = AppState::Completed;
                 None
             }
             #[cfg(feature = "database")]
             TaskResult::StorageListFindings { findings } => {
-                self.storage.set_findings(findings.clone());
-                self.storage.state = AppState::Completed;
+                self.tabs.storage.set_findings(findings.clone());
+                self.tabs.storage.state = AppState::Completed;
                 None
             }
             #[cfg(feature = "external-integrations")]
             TaskResult::Integrations => {
-                self.integrations.state = AppState::Completed;
-                self.integrations
+                self.tabs.integrations.state = AppState::Completed;
+                self.tabs
+                    .integrations
                     .results_view
                     .add_line(ratatui::text::Line::from("Integrations task completed"));
                 None
             }
             #[cfg(feature = "external-integrations")]
             TaskResult::IntegrationsCreateIssue { ref issue } => {
-                self.integrations.state = AppState::Completed;
-                self.integrations.results_view.clear();
-                self.integrations
+                self.tabs.integrations.state = AppState::Completed;
+                self.tabs.integrations.results_view.clear();
+                self.tabs
+                    .integrations
                     .results_view
                     .add_line(ratatui::text::Line::from(format!(
                         "Created issue: {} ({})",
@@ -309,9 +313,10 @@ impl super::App {
             }
             #[cfg(feature = "external-integrations")]
             TaskResult::IntegrationsSearchIssues { issues } => {
-                self.integrations.state = AppState::Completed;
-                self.integrations.results_view.clear();
-                self.integrations
+                self.tabs.integrations.state = AppState::Completed;
+                self.tabs.integrations.results_view.clear();
+                self.tabs
+                    .integrations
                     .results_view
                     .add_line(ratatui::text::Line::from(format!(
                         "Found {} issues",
@@ -321,18 +326,19 @@ impl super::App {
             }
             #[cfg(feature = "finding-workflow")]
             TaskResult::Workflow(ref report) => {
-                self.workflow.report = Some(report.clone());
-                self.workflow.state = AppState::Completed;
+                self.tabs.workflow.report = Some(report.clone());
+                self.tabs.workflow.state = AppState::Completed;
                 None
             }
             #[cfg(feature = "vuln-management")]
             TaskResult::Vuln(ref assessment) => {
-                self.vuln.state = AppState::Completed;
-                self.vuln.results_view.clear();
+                self.tabs.vuln.state = AppState::Completed;
+                self.tabs.vuln.results_view.clear();
 
                 // Display summary lines (backward compat)
                 for line in &assessment.summary {
-                    self.vuln
+                    self.tabs
+                        .vuln
                         .results_view
                         .add_line(ratatui::text::Line::from(line.clone()));
                 }
@@ -340,30 +346,33 @@ impl super::App {
                 // If no summary but structured data exists, display it
                 if assessment.summary.is_empty() {
                     if let Some(ref cvss) = assessment.cvss_score {
-                        self.vuln.display_cvss(&cvss.vector);
+                        self.tabs.vuln.display_cvss(&cvss.vector);
                     }
                     if let Some(ref info) = assessment.exploit_info {
-                        self.vuln.display_exploit_info(&info.cve_id, info.clone());
+                        self.tabs
+                            .vuln
+                            .display_exploit_info(&info.cve_id, info.clone());
                     }
                     if let Some(ref asset) = assessment.asset_criticality {
-                        self.vuln.display_asset(asset.clone());
+                        self.tabs.vuln.display_asset(asset.clone());
                     }
                     if !assessment.prioritized_findings.is_empty() {
-                        self.vuln
+                        self.tabs
+                            .vuln
                             .display_prioritized(assessment.prioritized_findings.clone());
                     }
                     if let Some(ref result) = assessment.triage_results.first() {
-                        self.vuln.display_triage(result.clone());
+                        self.tabs.vuln.display_triage(result.clone());
                     }
                     if let Some(ref rem) = assessment.remediation_plans.first() {
-                        self.vuln.display_remediation(rem.clone());
+                        self.tabs.vuln.display_remediation(rem.clone());
                     }
                 }
                 None
             }
             #[cfg(feature = "wireless")]
             TaskResult::Wireless(r) => {
-                self.wireless.set_results(r);
+                self.tabs.wireless.set_results(r);
                 None
             }
             _ => Some(result),
@@ -371,7 +380,7 @@ impl super::App {
     }
 
     pub(super) fn set_error_for_current_tab(&mut self, error: TabError) {
-        let mut tab = self.task_tab.unwrap_or(self.current_tab);
+        let mut tab = self.task_state.tab.unwrap_or(self.current_tab);
         if Self::is_error_unsupported_tab(tab) {
             self.log_unsupported_tab_error(tab, &error);
             return;
@@ -405,30 +414,33 @@ trait TabProgressUpdate {
 impl TabProgressUpdate for super::tabs::Tab {
     fn update_progress_in_app(&self, app: &mut super::App, completed: u64, total: u64) {
         match self {
-            super::tabs::Tab::Recon => app.recon.update_progress(completed, total),
-            super::tabs::Tab::Load => app.load.update_progress(completed, total),
-            super::tabs::Tab::ScanPorts => app.scan_ports.update_progress(completed, total),
-            super::tabs::Tab::ScanEndpoints => app.scan_endpoints.update_progress(completed, total),
-            super::tabs::Tab::Fingerprint => app.fingerprint.update_progress(completed, total),
-            super::tabs::Tab::Fuzz => app.fuzz.update_progress(completed, total),
-            super::tabs::Tab::Waf => app.waf.update_progress(completed, total),
-            super::tabs::Tab::WafStress => app.waf_stress.update_progress(completed, total),
+            super::tabs::Tab::Recon => app.tabs.recon.update_progress(completed, total),
+            super::tabs::Tab::Load => app.tabs.load.update_progress(completed, total),
+            super::tabs::Tab::ScanPorts => app.tabs.scan_ports.update_progress(completed, total),
+            super::tabs::Tab::ScanEndpoints => {
+                app.tabs.scan_endpoints.update_progress(completed, total)
+            }
+            super::tabs::Tab::Fingerprint => app.tabs.fingerprint.update_progress(completed, total),
+            super::tabs::Tab::Fuzz => app.tabs.fuzz.update_progress(completed, total),
+            super::tabs::Tab::Waf => app.tabs.waf.update_progress(completed, total),
+            super::tabs::Tab::WafStress => app.tabs.waf_stress.update_progress(completed, total),
             super::tabs::Tab::Scan => {
-                let total = app.scan.stages.len() as u64;
+                let total = app.tabs.scan.stages.len() as u64;
                 if total == 0 {
                     return;
                 }
                 let completed = app
+                    .tabs
                     .scan
                     .stages
                     .iter()
                     .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
                     .count() as u64;
-                app.scan.update_progress(completed, total);
+                app.tabs.scan.update_progress(completed, total);
             }
             #[cfg(feature = "wireless")]
             super::tabs::Tab::Wireless => {
-                app.wireless.update_progress(completed, total);
+                app.tabs.wireless.update_progress(completed, total);
             }
             _ => {}
         }
@@ -446,8 +458,8 @@ mod tests {
     #[test]
     fn test_update_does_not_panic_when_no_channels() {
         let mut app = create_test_app();
-        app.progress_rx = None;
-        app.result_rx = None;
+        app.task_state.progress_rx = None;
+        app.task_state.result_rx = None;
         app.update();
     }
 
@@ -456,10 +468,10 @@ mod tests {
         let mut app = create_test_app();
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         drop(tx);
-        app.progress_rx = Some(rx);
-        app.result_rx = None;
+        app.task_state.progress_rx = Some(rx);
+        app.task_state.result_rx = None;
         app.update();
-        assert!(app.progress_rx.is_none());
+        assert!(app.task_state.progress_rx.is_none());
     }
 
     #[test]
@@ -467,9 +479,9 @@ mod tests {
         let mut app = create_test_app();
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         drop(tx);
-        app.progress_rx = None;
-        app.result_rx = Some(rx);
+        app.task_state.progress_rx = None;
+        app.task_state.result_rx = Some(rx);
         app.update();
-        assert!(app.result_rx.is_none());
+        assert!(app.task_state.result_rx.is_none());
     }
 }

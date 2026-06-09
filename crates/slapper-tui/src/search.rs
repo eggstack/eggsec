@@ -77,7 +77,7 @@ impl Default for GlobalSearch {
 }
 
 pub fn draw_search_results(f: &mut Frame, app: &App) {
-    let search = match &app.global_search {
+    let search = match &app.search.global_search {
         Some(s) => s,
         None => return,
     };
@@ -108,7 +108,7 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
     };
 
     if search.is_empty() {
-        let msg = if app.search_query.is_empty() {
+        let msg = if app.search.query.is_empty() {
             "Press Enter to search..."
         } else {
             "No results found"

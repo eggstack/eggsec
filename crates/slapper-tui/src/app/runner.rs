@@ -44,14 +44,14 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     let history = state::create_shared_history();
     let mut app = App::new(history);
     if let Ok(config) = slapper::config::load_config(config_path.as_deref()) {
-        app.settings.load_config(&config);
+        app.tabs.settings.load_config(&config);
         app.session_manager.config = crate::session::SessionConfig::default()
             .with_auto_save_interval(config.auto_save_interval_secs);
     } else {
         tracing::debug!("No config file found for TUI settings; using defaults");
     }
     if let Some(path) = config_path {
-        app.settings.set_config_path(path);
+        app.tabs.settings.set_config_path(path);
     }
     let res = run_app(&mut terminal, &mut app);
 

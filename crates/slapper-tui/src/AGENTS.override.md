@@ -35,6 +35,8 @@ Specialized guidance for the terminal UI module.
 crates/slapper/src/tui/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
+│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState
+│   ├── tab_store.rs     # TabStore - owns all 29 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
 │   ├── state_update.rs  # Background task handling, result dispatch
@@ -55,12 +57,21 @@ crates/slapper/src/tui/
 │   ├── input.rs         # InputField with focus colors
 │   ├── selector.rs      # Selector dropdown
 │   ├── popup.rs         # Popup overlays
-│   ├── palette.rs       # Command palette
-│   ├── help_bar.rs      # Help bar component
 │   └── ...
-├── theme.rs      # Theme system (tc! macro)
+├── theme/        # Theme system
+│   ├── mod.rs          # Module re-exports
+│   ├── palette.rs      # ThemeMode, Theme, ThemeColors
+│   ├── builtin.rs      # dark_theme(), light_theme()
+│   ├── manager.rs      # ThemeManager
+│   ├── style.rs        # Theme style methods
+│   └── legacy.rs       # Thread-local macros (tc!, theme!)
+├── ui/           # Rendering layer
+│   ├── mod.rs          # draw(), LAYOUT_MARGIN, TAB_BAR_HEIGHT
+│   ├── shell.rs        # draw_tabs, draw_breadcrumb, draw_content, draw_status_bar
+│   ├── popups.rs       # draw_http_options_popup, draw_command_palette, draw_search_popup, draw_quick_switch
+│   └── tests.rs        # UI rendering tests
 ├── search.rs     # Global search
-└── ui.rs         # Main rendering, status bar with mode indicator
+└── help.rs       # HelpManager
 ```
 
 ## Event Loop Order
@@ -225,7 +236,7 @@ This ensures small terminals (< 24 rows) still show usable UI.
 
 ## Theme
 
-`tc!` macro in `tui/theme.rs`:
+`tc!` macro in `tui/theme/legacy.rs`:
 
 ```rust
 tc!(field_name)  // primary, secondary, accent, background, text, etc.

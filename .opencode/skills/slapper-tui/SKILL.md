@@ -8,6 +8,8 @@ TUI module workflows and patterns for the terminal UI.
 crates/slapper-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
+│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState
+│   ├── tab_store.rs     # TabStore - owns all 29 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
 │   ├── state_update.rs  # Background task handling, result dispatch
@@ -28,12 +30,21 @@ crates/slapper-tui/src/
 │   ├── input.rs         # InputField with focus colors
 │   ├── selector.rs      # Selector dropdown
 │   ├── popup.rs         # Popup overlays
-│   ├── palette.rs       # Command palette
-│   ├── help_bar.rs      # Help bar component
 │   └── ...
-├── theme.rs      # Theme system (tc! macro)
+├── theme/        # Theme system
+│   ├── mod.rs          # Module re-exports
+│   ├── palette.rs      # ThemeMode, Theme, ThemeColors
+│   ├── builtin.rs      # dark_theme(), light_theme()
+│   ├── manager.rs      # ThemeManager
+│   ├── style.rs        # Theme style methods
+│   └── legacy.rs       # Thread-local macros (tc!, theme!)
+├── ui/           # Rendering layer
+│   ├── mod.rs          # draw(), LAYOUT_MARGIN, TAB_BAR_HEIGHT
+│   ├── shell.rs        # draw_tabs, draw_breadcrumb, draw_content, draw_status_bar
+│   ├── popups.rs       # draw_http_options_popup, draw_command_palette, draw_search_popup, draw_quick_switch
+│   └── tests.rs        # UI rendering tests
 ├── search.rs     # Global search
-└── ui.rs         # Main rendering, status bar with mode indicator
+└── help.rs       # HelpManager
 ```
 
 ## is_at_left_edge Checkbox Guard (Critical - 2026-05-26 Session)
@@ -238,8 +249,9 @@ mod tests {
 1. Create tab module in `crates/slapper-tui/src/tabs/`
 2. Implement `TabState`, `TabInput`, `TabRender` traits
 3. Add tab to `Tab` enum in `tabs/mod.rs`
-4. Add rendering in `ui.rs` `draw_content()`
-5. Add to `App::dispatcher_mut()` for event routing
+4. Add tab instance to `TabStore` in `app/tab_store.rs`
+5. Add rendering in `ui/shell.rs` `draw_content()`
+6. Add to `App::dispatcher_mut()` for event routing
 
 ### Fixing Layout Issues
 1. Check for fixed `Constraint::Length` values

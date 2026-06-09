@@ -19,6 +19,18 @@ cargo test --lib -p slapper tui::app::
 
 # Run render tests at various terminal sizes
 cargo test --lib -p slapper tui::app::navigation::render_tests
+
+# Run state struct tests
+cargo test --lib -p slapper tui::app::state
+
+# Run ThemeManager tests
+cargo test --lib -p slapper tui::theme::manager
+
+# Run TabStore tests
+cargo test --lib -p slapper tui::app::tab_store
+
+# Run UI rendering tests
+cargo test --lib -p slapper tui::ui::tests
 ```
 
 ## Key Test Patterns
@@ -113,3 +125,14 @@ fn test_render_at_80x24_no_panic() {
     terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
 }
 ```
+
+## Test Coverage Areas
+
+- Tab focus navigation
+- Layout rendering at various terminal sizes
+- Event handling
+- State updates
+- State struct defaults (`app/state.rs`)
+- ThemeManager initialization and switching (`theme/manager.rs`)
+- TabStore initialization (`app/tab_store.rs`)
+- UI rendering via `TestBackend` (`ui/tests.rs`)

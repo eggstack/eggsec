@@ -4,10 +4,10 @@ use crate::workers;
 
 impl super::App {
     pub fn has_active_task(&self) -> bool {
-        self.task_handle.is_some()
-            || self.task_tab.is_some()
-            || self.progress_rx.is_some()
-            || self.result_rx.is_some()
+        self.task_state.handle.is_some()
+            || self.task_state.tab.is_some()
+            || self.task_state.progress_rx.is_some()
+            || self.task_state.result_rx.is_some()
     }
 
     fn stop_tab_state(&mut self, tab: super::tabs::Tab) {
@@ -16,38 +16,38 @@ impl super::App {
     }
 
     fn clear_task_runtime(&mut self) {
-        if let Some(handle) = self.task_handle.take() {
+        if let Some(handle) = self.task_state.handle.take() {
             handle.abort();
         }
-        if let Some(abort) = self.task_inner_abort.take() {
+        if let Some(abort) = self.task_state.inner_abort.take() {
             abort.abort();
         }
-        self.task_tab = None;
-        if let Some(rx) = self.progress_rx.take() {
+        self.task_state.tab = None;
+        if let Some(rx) = self.task_state.progress_rx.take() {
             drop(rx);
         }
-        if let Some(rx) = self.result_rx.take() {
+        if let Some(rx) = self.task_state.result_rx.take() {
             drop(rx);
         }
     }
 
     pub fn stop(&mut self) {
-        let tab = self.task_tab.unwrap_or(self.current_tab);
+        let tab = self.task_state.tab.unwrap_or(self.current_tab);
         self.stop_tab_state(tab);
         self.clear_task_runtime();
     }
 
     pub fn stop_with_message(&mut self, message: &str) {
-        let tab = self.task_tab.unwrap_or(self.current_tab);
+        let tab = self.task_state.tab.unwrap_or(self.current_tab);
         self.stop_tab_state(tab);
         self.clear_task_runtime();
 
         // Reuse current tab-targeted error plumbing by temporarily scoping task_tab.
-        self.task_tab = Some(tab);
+        self.task_state.tab = Some(tab);
         self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
             message.to_string(),
         ));
-        self.task_tab = None;
+        self.task_state.tab = None;
     }
 
     pub(crate) fn spawn_task(&mut self, config: Option<workers::TaskConfig>) {
@@ -65,16 +65,16 @@ impl super::App {
             let runner = workers::TaskRunner::new(config, progress_tx, result_tx.clone());
             let error_tx = result_tx.clone();
 
-            self.progress_rx = Some(progress_rx);
-            self.result_rx = Some(result_rx);
+            self.task_state.progress_rx = Some(progress_rx);
+            self.task_state.result_rx = Some(result_rx);
 
-            self.task_tab = Some(self.current_tab);
+            self.task_state.tab = Some(self.current_tab);
 
             let inner_handle = tokio::spawn(async move { runner.run().await });
 
             let inner_abort = inner_handle.abort_handle();
             let handle_to_abort = inner_abort.clone();
-            self.task_inner_abort = Some(inner_abort);
+            self.task_state.inner_abort = Some(inner_abort);
 
             let handle = tokio::spawn(async move {
                 match tokio::time::timeout(Duration::from_secs(300), inner_handle).await {
@@ -130,7 +130,7 @@ impl super::App {
                     }
                 }
             });
-            self.task_handle = Some(handle);
+            self.task_state.handle = Some(handle);
         }
     }
 }
@@ -148,13 +148,15 @@ mod tests {
     fn stop_with_message_targets_task_tab_when_current_tab_differs() {
         let mut app = create_test_app();
         app.current_tab = Tab::Dashboard;
-        app.task_tab = Some(Tab::Recon);
-        app.recon.state = AppState::Running;
+        app.task_state.tab = Some(Tab::Recon);
+        app.tabs.recon.state = AppState::Running;
 
         app.stop_with_message("Interrupted by user");
 
-        assert!(matches!(app.recon.state, AppState::Error(ref m) if m == "Interrupted by user"));
-        assert!(app.task_tab.is_none());
+        assert!(
+            matches!(app.tabs.recon.state, AppState::Error(ref m) if m == "Interrupted by user")
+        );
+        assert!(app.task_state.tab.is_none());
         assert!(!app.has_active_task());
     }
 
@@ -162,13 +164,13 @@ mod tests {
     fn stop_targets_task_tab_state_when_current_tab_differs() {
         let mut app = create_test_app();
         app.current_tab = Tab::Dashboard;
-        app.task_tab = Some(Tab::Recon);
-        app.recon.state = AppState::Running;
+        app.task_state.tab = Some(Tab::Recon);
+        app.tabs.recon.state = AppState::Running;
 
         app.stop();
 
-        assert!(matches!(app.recon.state, AppState::Idle));
-        assert!(app.task_tab.is_none());
+        assert!(matches!(app.tabs.recon.state, AppState::Idle));
+        assert!(app.task_state.tab.is_none());
         assert!(!app.has_active_task());
     }
 }

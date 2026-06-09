@@ -152,7 +152,7 @@ impl super::App {
                 self.page_down();
             }
             "http-options" | "http" => {
-                self.show_http_options = !self.show_http_options;
+                self.overlay.show_http_options = !self.overlay.show_http_options;
             }
             _ => {}
         }
@@ -327,28 +327,28 @@ mod tests {
     #[test]
     fn test_execute_command_toggle_help() {
         let mut app = create_test_app();
-        assert!(!app.show_help);
+        assert!(!app.overlay.show_help);
         app.execute_command("help");
-        assert!(app.show_help);
+        assert!(app.overlay.show_help);
     }
 
     #[test]
     fn test_execute_command_toggle_search() {
         let mut app = create_test_app();
-        assert!(!app.show_search);
+        assert!(!app.overlay.show_search);
         app.execute_command("search");
-        assert!(app.show_search);
-        assert!(app.search_is_global); // Command palette does global search
+        assert!(app.overlay.show_search);
+        assert!(app.search.is_global); // Command palette does global search
     }
 
     #[test]
     fn test_execute_command_toggle_http_options() {
         let mut app = create_test_app();
-        assert!(!app.show_http_options);
+        assert!(!app.overlay.show_http_options);
         app.execute_command("http");
-        assert!(app.show_http_options);
+        assert!(app.overlay.show_http_options);
         app.execute_command("http");
-        assert!(!app.show_http_options);
+        assert!(!app.overlay.show_http_options);
     }
 
     #[test]

@@ -27,59 +27,62 @@ impl super::App {
     }
 
     fn clear_search_on_tab_switch(&mut self) {
-        if self.show_search {
+        if self.overlay.show_search {
             self.restore_search();
-            self.show_search = false;
-            self.search_query.clear();
+            self.overlay.show_search = false;
+            self.search.query.clear();
         }
     }
 
     pub(super) fn toggle_help(&mut self) {
-        self.show_help = !self.show_help;
-        if self.show_help {
-            self.help_tab = Some(self.current_tab);
+        self.overlay.show_help = !self.overlay.show_help;
+        if self.overlay.show_help {
+            self.overlay.help_tab = Some(self.current_tab);
         } else {
-            self.help_tab = None;
+            self.overlay.help_tab = None;
         }
     }
 
     pub(super) fn toggle_search(&mut self, is_global: bool) {
-        if self.show_search {
+        if self.overlay.show_search {
             self.restore_search();
         }
-        self.show_search = !self.show_search;
-        if self.show_search {
-            self.search_query.clear();
-            self.search_is_global = is_global;
+        self.overlay.show_search = !self.overlay.show_search;
+        if self.overlay.show_search {
+            self.search.query.clear();
+            self.search.is_global = is_global;
         }
     }
 
     pub(super) fn perform_search(&mut self) {
-        if self.search_query.is_empty() {
+        if self.search.query.is_empty() {
             return;
         }
 
-        if self.search_is_global {
+        if self.search.is_global {
             // Perform global search using GlobalSearch
-            if let Some(ref mut search) = self.global_search {
+            if let Some(ref mut search) = self.search.global_search {
                 let data = vec![
-                    ("Recon", self.recon.target().to_string()),
-                    ("Fingerprint", self.fingerprint.target().to_string()),
-                    ("Fuzz", self.fuzz.target().to_string()),
-                    ("WAF", self.waf.target().to_string()),
-                    ("Scan", self.scan.target().to_string()),
-                    ("Scan Endpoints", self.scan_endpoints.target().to_string()),
-                    ("Scan Ports", self.scan_ports.target().to_string()),
-                    ("Stress", self.stress.target().to_string()),
+                    ("Recon", self.tabs.recon.target().to_string()),
+                    ("Fingerprint", self.tabs.fingerprint.target().to_string()),
+                    ("Fuzz", self.tabs.fuzz.target().to_string()),
+                    ("WAF", self.tabs.waf.target().to_string()),
+                    ("Scan", self.tabs.scan.target().to_string()),
+                    (
+                        "Scan Endpoints",
+                        self.tabs.scan_endpoints.target().to_string(),
+                    ),
+                    ("Scan Ports", self.tabs.scan_ports.target().to_string()),
+                    ("Stress", self.tabs.stress.target().to_string()),
                 ];
-                search.search_from_strings(&self.search_query, &data);
+                search.search_from_strings(&self.search.query, &data);
             }
             // Keep search open to show results
         } else if self.current_tab == super::tabs::Tab::History {
-            let query = self.search_query.clone();
+            let query = self.search.query.clone();
             let mut h = self.history.lock();
             {
-                self.search_backup = Some(h.entries.clone());
+                self.search.backup = Some(h.entries.clone());
 
                 let results: Vec<_> = h.search(&query).into_iter().cloned().collect();
                 h.entries.clear();
@@ -91,13 +94,13 @@ impl super::App {
                     h.update_details_view();
                 }
             }
-            self.show_search = false;
+            self.overlay.show_search = false;
         }
     }
 
     pub(super) fn restore_search(&mut self) {
         if self.current_tab == super::tabs::Tab::History {
-            if let Some(backup) = self.search_backup.take() {
+            if let Some(backup) = self.search.backup.take() {
                 let mut h = self.history.lock();
                 {
                     h.entries = backup;
@@ -213,18 +216,18 @@ mod tests {
     #[test]
     fn test_toggle_help() {
         let mut app = create_test_app();
-        assert!(!app.show_help);
+        assert!(!app.overlay.show_help);
         assert!(!app.is_help_visible());
 
         app.toggle_help();
-        assert!(app.show_help);
+        assert!(app.overlay.show_help);
         assert!(app.is_help_visible());
-        assert_eq!(app.help_tab, Some(Tab::Recon));
+        assert_eq!(app.overlay.help_tab, Some(Tab::Recon));
 
         app.toggle_help();
-        assert!(!app.show_help);
+        assert!(!app.overlay.show_help);
         assert!(!app.is_help_visible());
-        assert_eq!(app.help_tab, None);
+        assert_eq!(app.overlay.help_tab, None);
     }
 
     #[test]
@@ -233,47 +236,47 @@ mod tests {
         app.current_tab = Tab::ScanPorts;
         app.toggle_help();
         assert!(app.is_help_visible());
-        assert_eq!(app.help_tab, Some(Tab::ScanPorts));
+        assert_eq!(app.overlay.help_tab, Some(Tab::ScanPorts));
 
         app.current_tab = Tab::Fuzz;
         app.toggle_help();
         assert!(!app.is_help_visible());
-        assert_eq!(app.help_tab, None);
+        assert_eq!(app.overlay.help_tab, None);
     }
 
     #[test]
     fn test_toggle_search() {
         let mut app = create_test_app();
-        assert!(!app.show_search);
+        assert!(!app.overlay.show_search);
 
         app.toggle_search(true);
-        assert!(app.show_search);
-        assert!(app.search_is_global);
+        assert!(app.overlay.show_search);
+        assert!(app.search.is_global);
 
         app.toggle_search(false);
-        assert!(!app.show_search);
+        assert!(!app.overlay.show_search);
     }
 
     #[test]
     fn test_toggle_search_clears_query_on_open() {
         let mut app = create_test_app();
-        app.search_query = "test query".to_string();
+        app.search.query = "test query".to_string();
         app.toggle_search(false);
-        assert!(app.show_search);
-        assert!(app.search_query.is_empty());
+        assert!(app.overlay.show_search);
+        assert!(app.search.query.is_empty());
     }
 
     #[test]
     fn test_toggle_search_global_sets_search_is_global() {
         let mut app = create_test_app();
-        assert!(!app.show_search);
+        assert!(!app.overlay.show_search);
 
         app.toggle_search(true);
-        assert!(app.show_search);
-        assert!(app.search_is_global);
+        assert!(app.overlay.show_search);
+        assert!(app.search.is_global);
 
         app.toggle_search(false);
-        assert!(!app.show_search);
+        assert!(!app.overlay.show_search);
         // After closing, search_is_global should retain its value until next open
     }
 
@@ -282,40 +285,40 @@ mod tests {
         let mut app = create_test_app();
 
         app.toggle_search(false);
-        assert!(app.show_search);
-        assert!(!app.search_is_global);
+        assert!(app.overlay.show_search);
+        assert!(!app.search.is_global);
     }
 
     #[test]
     fn test_search_query_backspace_removes_char() {
         let mut app = create_test_app();
-        app.show_search = true;
-        app.search_query = "test".to_string();
+        app.overlay.show_search = true;
+        app.search.query = "test".to_string();
 
-        app.search_query.pop();
-        assert_eq!(app.search_query, "tes");
+        app.search.query.pop();
+        assert_eq!(app.search.query, "tes");
     }
 
     #[test]
     fn test_search_query_clear() {
         let mut app = create_test_app();
-        app.show_search = true;
-        app.search_query = "test query".to_string();
+        app.overlay.show_search = true;
+        app.search.query = "test query".to_string();
 
-        app.search_query.clear();
-        assert!(app.search_query.is_empty());
+        app.search.query.clear();
+        assert!(app.search.query.is_empty());
     }
 
     #[test]
     fn test_perform_search_empty_query_returns_early() {
         let mut app = create_test_app();
-        app.show_search = true;
-        app.search_query = "".to_string();
+        app.overlay.show_search = true;
+        app.search.query = "".to_string();
 
         // Should return early without panic
         app.perform_search();
         // Query should still be empty
-        assert!(app.search_query.is_empty());
+        assert!(app.search.query.is_empty());
     }
 
     #[test]
@@ -323,10 +326,10 @@ mod tests {
         let mut app = create_test_app();
         assert!(!app.is_help_visible());
 
-        app.show_help = true;
+        app.overlay.show_help = true;
         assert!(app.is_help_visible());
 
-        app.show_help = false;
+        app.overlay.show_help = false;
         assert!(!app.is_help_visible());
     }
 
@@ -357,25 +360,25 @@ mod tests {
     #[test]
     fn test_navigation_clears_search_on_tab_switch() {
         let mut app = create_test_app();
-        app.show_search = true;
-        app.search_query = "test query".to_string();
+        app.overlay.show_search = true;
+        app.search.query = "test query".to_string();
 
         app.next_tab();
 
-        assert!(!app.show_search);
-        assert!(app.search_query.is_empty());
+        assert!(!app.overlay.show_search);
+        assert!(app.search.query.is_empty());
     }
 
     #[test]
     fn test_prev_navigation_clears_search_on_tab_switch() {
         let mut app = create_test_app();
-        app.show_search = true;
-        app.search_query = "test query".to_string();
+        app.overlay.show_search = true;
+        app.search.query = "test query".to_string();
 
         app.prev_tab();
 
-        assert!(!app.show_search);
-        assert!(app.search_query.is_empty());
+        assert!(!app.overlay.show_search);
+        assert!(app.search.query.is_empty());
     }
 
     #[test]

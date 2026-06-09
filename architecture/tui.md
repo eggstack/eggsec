@@ -11,6 +11,8 @@ Manages the overall application state, event loop, and rendering.
 | File | Purpose |
 |------|---------|
 | `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
+| `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState` |
+| `tab_store.rs` | `TabStore` - owns all 29 tab instances (20 always-present + 9 feature-gated) |
 | `runner.rs` | Main event loop using crossterm/ratatui |
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
 | `state_update.rs` | Async task result handling and routing |
@@ -164,23 +166,16 @@ pub enum NotificationSeverity {
 }
 ```
 
-### ui.rs Draw Functions (`ui.rs`)
+### ui/ Module (`ui/`)
 
-| Function | Line | Purpose |
-|----------|------|---------|
-| `draw()` | 17 | Top-level render: layout, tabs, breadcrumb, content, status bar, overlays |
-| `draw_tabs()` | 359 | Tab bar with scrolling window (`TabWindow`) |
-| `draw_breadcrumb()` | 386 | Navigation breadcrumb path |
-| `draw_content()` | 428 | Delegates to current tab's `render()` and `render_overlays()` |
-| `draw_status_bar()` | 573 | Mode indicator (NORMAL/INSERT), status text, contextual help |
-| `draw_http_options_popup()` | 88 | HTTP options overlay (inline in ui.rs) |
-| `draw_command_palette()` | 154 | Command palette overlay (inline in ui.rs) |
-| `draw_search_popup()` | 245 | Search input overlay (inline in ui.rs) |
-| `draw_quick_switch()` | 275 | Quick switch tab search overlay (inline in ui.rs) |
-| `get_tab_status()` | 480 | Maps `AppState` to status text + color |
-| `get_normal_status()` | 490 | Returns status text for non-running tabs |
-| `get_help_text()` | 513 | Context-sensitive help text for status bar |
-| `layout::draw_notifications()` | (components) | Toast notifications (up to 3 stacked) |
+The UI rendering layer is split into a module with focused submodules:
+
+| File | Purpose |
+|------|---------|
+| `mod.rs` | `draw()` top-level render, `LAYOUT_MARGIN`, `TAB_BAR_HEIGHT` constants |
+| `shell.rs` | Shell rendering helpers: `draw_tabs()`, `draw_breadcrumb()`, `draw_content()`, `draw_status_bar()`, `get_tab_status()`, `get_normal_status()`, `get_help_text()` |
+| `popups.rs` | Popup overlays: `draw_http_options_popup()`, `draw_command_palette()`, `draw_search_popup()`, `draw_quick_switch()` |
+| `tests.rs` | UI rendering tests |
 
 ### Components (`components/`)
 
@@ -201,7 +196,7 @@ Reusable UI primitives (7 files):
 | `Popup` | `popup.rs` | Modal dialogs (confirm, help, info) |
 | `centered_rect` | `popup.rs` | Centered rectangle helper for popups |
 | `empty_state_paragraph` | `empty_state.rs` | Empty state placeholder widget |
-**Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are inlined in `tui/ui.rs` (lines ~88, ~154, ~245, ~275), not in separate `components/` files. The previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`) were removed as dead code.
+**Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are in `ui/popups.rs`, not in separate `components/` files. Previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`) were removed as dead code.
 
 ### Workers (`workers/`)
 
@@ -235,7 +230,17 @@ pub type SharedHistory = Arc<Mutex<HistoryTab>>;
 
 History is shared via `Arc<Mutex<HistoryTab>>` for thread-safe access.
 
-### Theme (`theme.rs`)
+### Theme (`theme/`)
+
+The theme system is split into a module with focused submodules:
+
+| File | Purpose |
+|------|---------|
+| `palette.rs` | `ThemeMode`, `Theme`, `ThemeColors` structs |
+| `builtin.rs` | `dark_theme()`, `light_theme()` factory functions |
+| `manager.rs` | `ThemeManager` - holds dark/light themes, theme switching, persistence |
+| `style.rs` | Theme style methods for rendering |
+| `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
 
 `ThemeManager` holds dark/light themes with 28 color fields.
 
@@ -251,10 +256,10 @@ let style = Style::default().fg(tc!(text));
 
 ### Adding a New Tab
 
-Adding a new tab requires changes in **7-9 locations** (the `App` struct is a god-object with 60+ fields). Each new tab must be added to:
+Adding a new tab requires changes in **7-9 locations**. Each new tab must be added to:
 
 1. `Tab` enum (`tabs/mod.rs`) — variant + `title()`, `description()`, `cli_command()`, `stable_id()`, `from_stable_id()`, `all()` (feature-gated)
-2. `App` struct (`app/mod.rs`) — new field for the tab instance
+2. `TabStore` (`app/tab_store.rs`) — new field for the tab instance (TabStore owns all tab instances)
 3. `Tab::as_tab_state()`, `as_tab_state_mut()`, `as_tab_render()`, `as_tab_input()` — 28-variant exhaustive match each
 4. `App::get_current_help()` (`app/navigation.rs`) — 28-variant match
 5. `command_to_tab()` + `execute_command()` (`app/command.rs`) — 28-variant match each
@@ -445,7 +450,7 @@ Files using FxHashMap/FxHashSet in TUI module:
 - `app/bookmarks.rs` - Bookmark functions
 - `app/help_config.rs` - StaticHelpData.sections
 - `help.rs` - HelpManager.sections
-- `theme.rs` - ThemeManager.themes
+- `theme/manager.rs` - ThemeManager.themes
 - `tabs/dashboard.rs` - PortfolioSnapshot.findings_by_severity
 
 ### Key Binding Conflict Prevention
