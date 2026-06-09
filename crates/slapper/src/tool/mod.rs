@@ -19,7 +19,10 @@
 //! - `finding`, `convert`, `dispatcher`, `metadata`, `openapi`, `planner`,
 //!   `registry`, `scripting`, `session`, `state`, `traits`, `implementations`,
 //!   `orchestrator`, `protocol`
-//! - `agents` (behind `rest-api` feature)
+//!
+//! **Compatibility facade** — `agents` (behind `rest-api`) re-exports the
+//! `slapper-agent` crate so existing `slapper::tool::agents::*` paths continue
+//! to work.
 
 // Re-export core data types from slapper-tool-core as modules
 // so that `crate::tool::tool_error::ToolError` etc. still work.
@@ -46,7 +49,9 @@ pub mod implementations;
 
 #[cfg(feature = "rest-api")]
 pub mod agents {
-    //! Re-export of agent coordination types from `slapper-agent`.
+    //! Compatibility facade for agent coordination primitives.
+    //!
+    //! The implementation lives in the `slapper-agent` crate.
     pub use slapper_agent::*;
 }
 pub mod orchestrator;

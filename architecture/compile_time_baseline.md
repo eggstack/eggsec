@@ -124,3 +124,6 @@ cargo test -p slapper --lib
 ### Final interpretation
 
 This completes the initial crate modularization phase. The `slapper-agent` crate was extracted from `tool/agents/` with zero blockers — all constants already lived in `slapper-core` and the module had no coupling to engine types. Further splits should be driven by measured compile-time hot paths or clearly isolated adapter boundaries.
+
+- `slapper-agent` owns the agent coordination implementation; `slapper::tool::agents` is only a compatibility facade.
+- `reqwest` remains in `slapper-agent` because lifecycle callback health checks use it.

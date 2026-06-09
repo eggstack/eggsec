@@ -31,6 +31,7 @@ Slapper is organized as a Cargo workspace. The first-level crate boundary is:
 - **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.
 - **`slapper-cli`**: CLI binary entry point. Depends on both `slapper` and `slapper-tui`.
 - **`slapper-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `slapper` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `slapper`.
+- **`slapper-agent`**: agent coordination primitives extracted from `slapper::tool::agents` (registry, scheduler, lifecycle, communication, delegation, aggregation). Depends on `slapper-core` but not the main engine crate.
 
 New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate or in `slapper-tui` as appropriate.
 

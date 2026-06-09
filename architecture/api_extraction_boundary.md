@@ -5,7 +5,8 @@
 API/agent modules are split across crates:
 
 - `crates/slapper/src/tool/protocol/` - REST, MCP, gRPC, OpenAI, OpenResponses adapters (in `slapper`)
-- `crates/slapper-agent/` - Agent registry, task scheduler, lifecycle management (**extracted**)
+- `crates/slapper-agent/` - Agent coordination primitives (registry, scheduler, lifecycle, communication, delegation, aggregation) (**extracted**)
+- `crates/slapper/src/tool/mod.rs` - Compatibility facade that re-exports `slapper-agent` as `slapper::tool::agents`
 - `crates/slapper/src/agent/` - Autonomous agent (portfolio, memory, alerts, skills) (in `slapper`)
 - `crates/slapper/src/nse_tool.rs` - NSE tool implementation (in `slapper`)
 
@@ -186,24 +187,24 @@ To enable extraction of the server adapters into `slapper-api`:
 Already complete. `slapper-tool-core` contains all protocol-neutral request/response/finding/error types.
 
 ### Phase 2: Extract tool agent coordination to slapper-agent (DONE)
-Extracted `tool/agents/` (registry, scheduler, lifecycle, communication, delegation, aggregator) into the `slapper-agent` crate. All constants already lived in `slapper-core`. Zero coupling to engine types — extraction was clean with no blockers.
+Implementation lives in `crates/slapper-agent/src/`. The `slapper` crate preserves `slapper::tool::agents::*` as a compatibility facade in `crates/slapper/src/tool/mod.rs`.
 
-**Files moved:**
-- `tool/agents/registry.rs` → `slapper-agent/src/registry.rs`
-- `tool/agents/scheduler.rs` → `slapper-agent/src/scheduler.rs`
-- `tool/agents/lifecycle.rs` → `slapper-agent/src/lifecycle.rs`
-- `tool/agents/communication.rs` → `slapper-agent/src/communication.rs`
-- `tool/agents/delegation.rs` → `slapper-agent/src/delegation.rs`
-- `tool/agents/aggregator.rs` → `slapper-agent/src/aggregator.rs`
-- `tool/agents/mod.rs` → `slapper-agent/src/lib.rs`
+**Implementation owned by `slapper-agent`:**
+- `src/registry.rs`
+- `src/scheduler.rs`
+- `src/lifecycle.rs`
+- `src/communication.rs`
+- `src/delegation.rs`
+- `src/aggregator.rs`
 
 **Dependencies resolved:**
 - `crate::constants::DEFAULT_MAX_RETRIES` → `slapper_core::constants::DEFAULT_MAX_RETRIES` (already in slapper-core)
 - `crate::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` → `slapper_core::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` (already in slapper-core)
 - `crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` → `slapper_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` (already in slapper-core)
 - `crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` → `slapper_core::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` (already in slapper-core)
+- `reqwest` remains in `slapper-agent` because lifecycle callback health checks use it.
 
-**Compatibility shim:** `slapper` re-exports `slapper_agent` as `tool::agents` behind the `rest-api` feature gate.
+**Compatibility shim:** `slapper::tool::agents` is re-exported from `slapper-agent` behind the `rest-api` feature gate.
 
 ### Phase 3: Extract gRPC adapter to slapper-api
 The gRPC adapter is the cleanest candidate - it has a clear proto boundary and minimal coupling beyond ToolRegistry/ToolDispatcher.
