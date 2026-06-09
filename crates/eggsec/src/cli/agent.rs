@@ -1,5 +1,20 @@
 use clap::Parser;
 
+pub(crate) const AGENT_ABOUT: &str = "MODE: Standard Assessment / Defense Lab | REQUIRED: --scope, respects policy decisions and budget constraints
+
+Run security agent for scheduled assessments
+
+Runs an autonomous security agent that manages a portfolio of targets.
+Respects all policy decisions, budget constraints, and scope rules.
+Supports optional AI integration for intelligent assessment planning.
+Targets are validated against configured scope before any execution.
+
+Examples:
+  eggsec agent run --once
+  eggsec agent run --with-ai --poll-interval 120
+  eggsec agent targets list
+  eggsec agent targets add mysite https://example.com --schedule '0 */6 * * *'";
+
 #[derive(Debug, Clone, Parser)]
 pub struct AgentArgs {
     #[command(subcommand)]

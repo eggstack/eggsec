@@ -24,17 +24,19 @@ Examples:
   eggsec scan-endpoints https://example.com -c 50 --json";
 
 #[cfg(feature = "nse")]
-pub(crate) const NSE_ABOUT: &str = "NSE support provides selective compatibility with Nmap Scripting Engine semantics for scriptable discovery and service checks. It is an optional compatibility layer, separate from the removed Python/Ruby plugin runtimes, and should be used for approved scripts within Eggsec's scope and execution policy.
+pub(crate) const NSE_ABOUT: &str = "MODE: Defense Lab | REQUIRED: --scope (private/localhost), nse feature
 
-Executes Lua-based NSE scripts for security scanning.
+NSE support provides selective compatibility with Nmap Scripting Engine semantics for scriptable discovery and service checks. It is an optional compatibility layer, separate from the removed Python/Ruby plugin runtimes, and should be used for approved scripts within Eggsec's scope and execution policy.
+
+Executes Lua-based NSE scripts for security scanning within a sandboxed environment.
 Built-in scripts: default, discovery, banner, http-headers
 
 Examples:
-  eggsec nse example.com -s default
-  eggsec nse example.com -s banner
-  eggsec nse https://example.com -s http-headers
-  eggsec nse example.com -s custom -f script.nse
-  eggsec nse example.com -s default --script-args userdb=users.txt";
+  eggsec nse 127.0.0.1 -s default
+  eggsec nse 127.0.0.1 -s banner
+  eggsec nse http://127.0.0.1:8080 -s http-headers
+  eggsec nse 127.0.0.1 -s custom -f script.nse
+  eggsec nse 127.0.0.1 -s default --script-args userdb=users.txt";
 
 pub(crate) const FINGERPRINT_ABOUT: &str = "Fingerprint services (AMAP-style)
 

@@ -76,6 +76,7 @@ pub mod data;
 pub mod detector;
 pub mod output;
 pub mod payloads;
+pub mod regression_report;
 pub mod types;
 pub mod waf_patterns;
 
@@ -90,6 +91,7 @@ pub use bypass::{
     BypassResult, TestType, WafProfile,
 };
 pub use detector::{WafDetectionResult, WafDetector};
+pub use regression_report::{WafBehavior, WafBehaviorSummary, WafRegressionCase, WafRegressionReport};
 pub use types::{Finding, OwaspCategory, ScanResults, Severity};
 pub use waf_patterns::get_waf_signatures;
 

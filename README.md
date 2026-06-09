@@ -43,6 +43,18 @@ Eggsec is a command-line security assessment tool designed for security professi
 
 Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
 
+## Why Low-Level Features Exist
+
+Eggsec includes stress testing, raw packet inspection, proxy management, and distributed scanning capabilities. These tools exist to validate the resilience of systems you own or are explicitly authorized to test — such as Synvoid, a distributed WAF platform.
+
+These capabilities are framed as **defense-lab** and **hazardous-lab** workflows with:
+- Mandatory scope files restricting targets to localhost or private lab networks
+- Finite execution budgets (duration, request count, packet count)
+- Policy decision records for auditability
+- Clear CLI help text indicating the operating mode and required features
+
+They are **not** generic offensive automation.
+
 ## Safety Model
 
 Eggsec enforces a defense-in-depth safety model built around scope control, configuration defaults, and feature gating.
@@ -156,6 +168,8 @@ Eggsec includes 16 built-in profiles that chain multiple security tests together
 | **protocol-edge** | Protocol edge case testing (requires `packet-inspection`) |
 | **nse-safe** | Safe NSE script execution (requires `nse`) |
 
+Defense-lab profiles require private/localhost targets and enforce conservative budgets. Use `eggsec policy-explain` to inspect what a profile would do before running it.
+
 ```bash
 # Quick scan - port scan + fingerprinting
 ./eggsec scan example.com --profile quick
@@ -207,6 +221,17 @@ Eggsec includes 16 built-in profiles that chain multiple security tests together
 ```
 
 Run `eggsec --help` or `eggsec <command> --help` for the full command reference with all options.
+
+### Lab Defense Commands
+
+| Command | Mode | Description |
+|---------|------|-------------|
+| `eggsec policy-explain` | - | Explain policy decisions for a target/profile |
+| `eggsec scope-explain` | - | Explain scope matching for a target |
+| `eggsec scan --profile defense-lab` | defense-lab | Comprehensive local defense validation |
+| `eggsec scan --profile waf-regression` | defense-lab | WAF payload regression |
+| `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
+| `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
 
 ## Build Features
 

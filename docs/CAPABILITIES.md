@@ -136,6 +136,11 @@ Chained security assessment pipelines:
 | **deep** | Web scan with mutation fuzzing enabled |
 | **vuln** | CVE-prioritized fuzzing based on detected technologies |
 | **auth** | JWT/OAuth/IDOR security testing |
+| **defense-lab** | comprehensive local defense validation (defense-lab mode) |
+| **synvoid-local** | Synvoid-specific WAF validation (defense-lab mode) |
+| **waf-regression** | WAF payload and evasion regression (defense-lab mode) |
+| **protocol-edge** | malformed protocol edge behavior (defense-lab mode) |
+| **nse-safe** | sandboxed NSE scripts (defense-lab mode) |
 
 ---
 
@@ -228,10 +233,12 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 
 ### Stress Testing (requires stress-testing feature)
 
-| Command | Description |
-|---------|-------------|
-| `eggsec stress <target> --type <type>` | SYN/UDP/HTTP/TCP/ICMP flood |
-| `eggsec proxy <action>` | Proxy pool management |
+| Command | Mode | Description |
+|---------|------|-------------|
+| `eggsec stress <target> --type <type>` | Defense Lab / Hazardous Lab | SYN/UDP/HTTP/TCP/ICMP flood |
+| `eggsec proxy <action>` | Hazardous Lab | Proxy pool management |
+| `eggsec icmp <target>` | Hazardous Lab | ICMP echo probes |
+| `eggsec traceroute <target>` | Hazardous Lab | Network path tracing |
 
 ### Management & Integration
 
@@ -259,6 +266,13 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | Command | Description |
 |---------|-------------|
 | `eggsec nse <target>` | Run NSE scripts |
+
+### Lab Defense Commands
+
+| Command | Mode | Description |
+|---------|------|-------------|
+| `policy-explain` | - | Explain policy decisions |
+| `scope-explain` | - | Explain scope matching |
 
 ---
 

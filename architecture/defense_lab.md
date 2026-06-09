@@ -123,3 +123,17 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:262-26
 - **Agent loop integration**: Automated defense-lab runs triggered on schedule or CI events
 - **Golden baseline fixtures**: Versioned baseline captures for regression testing
 - **CI-compatible regression profiles**: Lightweight profiles that run in CI pipelines to detect defense regressions early
+
+## Integration with Policy System
+
+Defense-lab profiles integrate with the unified operation taxonomy:
+
+- Each profile declares an `OperationMode` (DefenseLab or HazardousLab)
+- Each profile declares `IntendedUse` values (WafRegression, SynvoidRegression, etc.)
+- Policy decisions are emitted for every operation with structured metadata
+- Budgets enforce finite limits on all defense-lab runs
+
+See `config/policy.rs` for `OperationMode`, `OperationRisk`, and `IntendedUse`.
+See `config/policy_decision.rs` for `PolicyDecision`.
+See `config/budget.rs` for `ExecutionBudget`.
+See `config/presets.rs` for built-in defense-lab presets.

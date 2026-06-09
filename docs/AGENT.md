@@ -524,6 +524,14 @@ cat ~/.config/eggsec/ai.toml
 curl https://api.openai.com/v1/models
 ```
 
+## Defense-Lab Agent Runs
+
+When the agent runs defense-lab profiles, it:
+- Uses the profile's operation mode and risk budget
+- Records policy decisions with unique IDs
+- Enforces per-target cooldowns and execution budgets
+- Produces structured reports with budget consumption data
+
 ## Best Practices
 
 1. **Start with `--once`** to verify configuration before running continuously

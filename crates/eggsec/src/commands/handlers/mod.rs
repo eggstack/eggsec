@@ -5,6 +5,7 @@ pub mod ci;
 pub mod cluster;
 pub mod config;
 pub mod doctor;
+pub mod explain;
 pub mod fuzz;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
@@ -24,6 +25,7 @@ pub mod vuln;
 pub mod wireless;
 pub use config::*;
 pub use doctor::*;
+pub use explain::*;
 #[cfg(feature = "rest-api")]
 pub mod agent;
 #[cfg(feature = "grpc-api")]
@@ -169,6 +171,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
         Some(Commands::Config(args)) => handle_config(ctx, args).await,
         Some(Commands::Doctor) => handle_doctor(ctx).await,
+        Some(Commands::PolicyExplain(args)) => handle_policy_explain(ctx, args).await,
+        Some(Commands::ScopeExplain(args)) => handle_scope_explain(ctx, args).await,
         Some(Commands::Graphql(args)) => handle_graphql(ctx, args).await,
         Some(Commands::OAuth(args)) => handle_oauth(ctx, args).await,
         Some(Commands::AuthTest(args)) => handle_auth_test(ctx, args).await,

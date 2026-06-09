@@ -18,15 +18,18 @@ Examples:
   eggsec fuzz https://api.example.com -t jwt  # JWT testing
   eggsec fuzz https://oauth.example.com -t oauth  # OAuth/OIDC testing";
 
-pub(crate) const WAF_STRESS_ABOUT: &str = "WAF resilience validation
+pub(crate) const WAF_STRESS_ABOUT: &str = "MODE: Defense Lab | REQUIRED: --scope (private/localhost), explicit scope
+
+WAF resilience validation
 
 Applies all payload types to evaluate WAF detection and resilience.
+For WAF regression and resilience validation on authorized targets.
 Useful for WAF evaluation and tuning.
 
 Examples:
-  eggsec waf-stress https://example.com
-  eggsec waf-stress https://example.com -c 50
-  eggsec waf-stress https://example.com --json";
+  eggsec waf-stress http://127.0.0.1:8080
+  eggsec waf-stress http://127.0.0.1:8080 -c 50
+  eggsec waf-stress http://127.0.0.1:8080 --json";
 
 pub(crate) const WAF_ABOUT: &str = "Evaluate WAF detection and evasion resistance
 

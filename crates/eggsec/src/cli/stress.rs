@@ -2,45 +2,57 @@
 use clap::ValueEnum;
 
 #[cfg(feature = "stress-testing")]
-pub(crate) const ICMP_ABOUT: &str = "Send ICMP echo probes to target host
+pub(crate) const ICMP_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope (private/localhost), stress-testing feature, allow_stress_testing policy, root
+
+Send ICMP echo probes to target host
 
 Performs ICMP ping to measure reachability and round-trip time.
+For authorized network reachability testing on owned infrastructure only.
 Requires root privileges for raw ICMP sockets.
 NOTE: Requires building with --features stress-testing
 
 Examples:
-  eggsec icmp 8.8.8.8
-  eggsec icmp example.com -c 10
-  eggsec icmp 192.168.1.1 --timeout 5 --json";
+  eggsec icmp 127.0.0.1
+  eggsec icmp 192.168.1.1 -c 10
+  eggsec icmp 10.0.0.1 --timeout 5 --json";
 
 #[cfg(feature = "stress-testing")]
-pub(crate) const TRACEROUTE_ABOUT: &str = "Trace network path to target host
+pub(crate) const TRACEROUTE_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope (private/localhost), stress-testing feature, allow_stress_testing policy
+
+Trace network path to target host
 
 Performs traceroute to discover the path packets take to reach a destination.
+For authorized network path analysis on owned infrastructure only.
 Supports both UDP and ICMP modes.
 NOTE: Requires building with --features stress-testing
 
 Examples:
-  eggsec traceroute 8.8.8.8
-  eggsec traceroute example.com --icmp
-  eggsec traceroute 192.168.1.1 --max-hops 30";
+  eggsec traceroute 127.0.0.1
+  eggsec traceroute 192.168.1.1 --icmp
+  eggsec traceroute 10.0.0.1 --max-hops 30";
 
 #[cfg(feature = "stress-testing")]
-pub(crate) const STRESS_ABOUT: &str = "Run stress/load testing against target
+pub(crate) const STRESS_ABOUT: &str = "MODE: Defense Lab / Hazardous Lab | REQUIRED: --scope (private/localhost), stress-testing feature, allow_stress_testing policy
+
+Run stress/load testing against target
 
 Applies controlled stress testing techniques including SYN, UDP, HTTP, TCP, and ICMP traffic to measure resilience.
+For authorized stress testing of owned systems only. Targets must be within configured scope.
 WARNING: Only use on systems you own or have explicit permission to test.
 NOTE: Requires building with --features stress-testing
 
 Examples:
-  eggsec stress example.com --type http -r 1000 -d 60
-  eggsec stress example.com --type syn -r 5000 -d 30
-  eggsec stress 192.168.1.1:80 --type udp -r 10000 -d 120";
+  eggsec stress 127.0.0.1 --type http -r 1000 -d 60
+  eggsec stress 192.168.1.1 --type syn -r 5000 -d 30
+  eggsec stress 10.0.0.1:80 --type udp -r 10000 -d 120";
 
 #[cfg(feature = "stress-testing")]
-pub(crate) const PROXY_ABOUT: &str = "Manage proxy pool and rotation
+pub(crate) const PROXY_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope, stress-testing feature, allow_stress_testing policy
+
+Manage proxy pool and rotation
 
 Manages proxy lists for scan distribution and traffic normalization.
+For distributed-system resilience testing on authorized targets only.
 Supports SOCKS4, SOCKS5, HTTP, HTTPS, and Tor proxies.
 NOTE: Requires building with --features stress-testing
 

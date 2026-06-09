@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum OperationRisk {
     Passive,
-    ActiveScan,
-    IntrusiveFuzz,
+    SafeActive,
+    Intrusive,
     LoadTest,
     StressTest,
     RawPacket,
@@ -58,7 +58,7 @@ fn default_true() -> bool {
 }
 
 fn default_max_risk() -> OperationRisk {
-    OperationRisk::ActiveScan
+    OperationRisk::SafeActive
 }
 
 impl Default for ExecutionPolicy {
@@ -72,7 +72,7 @@ impl Default for ExecutionPolicy {
             allow_credential_testing: false,
             allow_remote_execution: false,
             allow_agent_autonomous: false,
-            max_risk_without_confirm: OperationRisk::ActiveScan,
+            max_risk_without_confirm: OperationRisk::SafeActive,
         }
     }
 }
@@ -81,8 +81,8 @@ impl OperationRisk {
     /// Check if this risk level is allowed by the given policy.
     pub fn is_allowed_by(&self, policy: &ExecutionPolicy) -> bool {
         match self {
-            Self::Passive | Self::ActiveScan => true,
-            Self::IntrusiveFuzz => policy.allow_intrusive_fuzzing,
+            Self::Passive | Self::SafeActive => true,
+            Self::Intrusive => policy.allow_intrusive_fuzzing,
             Self::LoadTest => policy.allow_load_testing,
             Self::StressTest => policy.allow_stress_testing,
             Self::RawPacket => policy.allow_raw_packets,
@@ -97,14 +97,108 @@ impl std::fmt::Display for OperationRisk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Passive => write!(f, "passive"),
-            Self::ActiveScan => write!(f, "active scan"),
-            Self::IntrusiveFuzz => write!(f, "intrusive fuzzing"),
+            Self::SafeActive => write!(f, "safe active"),
+            Self::Intrusive => write!(f, "intrusive"),
             Self::LoadTest => write!(f, "load testing"),
             Self::StressTest => write!(f, "stress testing"),
             Self::RawPacket => write!(f, "raw packet"),
             Self::CredentialTesting => write!(f, "credential testing"),
             Self::RemoteExecution => write!(f, "remote execution"),
             Self::AgentAutonomous => write!(f, "agent autonomous"),
+        }
+    }
+}
+
+/// Operating mode for an eggsec session.
+///
+/// Determines the safety boundary and allowed operation surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OperationMode {
+    /// Standard scoped recon, scanning, fuzzing, API testing, WAF detection, and reporting.
+    StandardAssessment,
+    /// Local/private/scope-constrained WAF and distributed-system validation,
+    /// including load and selected stress tests.
+    DefenseLab,
+    /// Raw packet operations, flood-style stress tests, proxy rotation,
+    /// low-level protocol edge cases, and other aggressive tests requiring
+    /// explicit build features plus explicit runtime policy approval.
+    HazardousLab,
+}
+
+impl OperationMode {
+    /// Returns a human-readable label for the mode.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::StandardAssessment => "standard assessment",
+            Self::DefenseLab => "defense lab",
+            Self::HazardousLab => "hazardous lab",
+        }
+    }
+
+    /// Returns the maximum `OperationRisk` allowed by default for this mode.
+    pub fn default_max_risk(self) -> OperationRisk {
+        match self {
+            Self::StandardAssessment => OperationRisk::SafeActive,
+            Self::DefenseLab => OperationRisk::Intrusive,
+            Self::HazardousLab => OperationRisk::AgentAutonomous,
+        }
+    }
+}
+
+impl std::fmt::Display for OperationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StandardAssessment => write!(f, "standard-assessment"),
+            Self::DefenseLab => write!(f, "defense-lab"),
+            Self::HazardousLab => write!(f, "hazardous-lab"),
+        }
+    }
+}
+
+/// Intended use case for an operation or profile.
+///
+/// Used in policy decisions, reports, and documentation to clarify
+/// why a particular operation is being performed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IntendedUse {
+    WebAssessment,
+    ApiAssessment,
+    WafRegression,
+    SynvoidRegression,
+    DistributedSystemStress,
+    ProtocolEdgeValidation,
+    CiRegression,
+    CodingAgentVerification,
+}
+
+impl IntendedUse {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::WebAssessment => "web assessment",
+            Self::ApiAssessment => "API assessment",
+            Self::WafRegression => "WAF regression",
+            Self::SynvoidRegression => "Synvoid regression",
+            Self::DistributedSystemStress => "distributed system stress",
+            Self::ProtocolEdgeValidation => "protocol edge validation",
+            Self::CiRegression => "CI regression",
+            Self::CodingAgentVerification => "coding agent verification",
+        }
+    }
+}
+
+impl std::fmt::Display for IntendedUse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WebAssessment => write!(f, "web-assessment"),
+            Self::ApiAssessment => write!(f, "api-assessment"),
+            Self::WafRegression => write!(f, "waf-regression"),
+            Self::SynvoidRegression => write!(f, "synvoid-regression"),
+            Self::DistributedSystemStress => write!(f, "distributed-system-stress"),
+            Self::ProtocolEdgeValidation => write!(f, "protocol-edge-validation"),
+            Self::CiRegression => write!(f, "ci-regression"),
+            Self::CodingAgentVerification => write!(f, "coding-agent-verification"),
         }
     }
 }
@@ -117,13 +211,13 @@ mod tests {
     fn default_policy_allows_passive() {
         let policy = ExecutionPolicy::default();
         assert!(OperationRisk::Passive.is_allowed_by(&policy));
-        assert!(OperationRisk::ActiveScan.is_allowed_by(&policy));
+        assert!(OperationRisk::SafeActive.is_allowed_by(&policy));
     }
 
     #[test]
     fn default_policy_blocks_intrusive() {
         let policy = ExecutionPolicy::default();
-        assert!(!OperationRisk::IntrusiveFuzz.is_allowed_by(&policy));
+        assert!(!OperationRisk::Intrusive.is_allowed_by(&policy));
         assert!(!OperationRisk::StressTest.is_allowed_by(&policy));
         assert!(!OperationRisk::RawPacket.is_allowed_by(&policy));
     }
@@ -137,8 +231,8 @@ mod tests {
 
     #[test]
     fn risk_ordering() {
-        assert!(OperationRisk::Passive < OperationRisk::ActiveScan);
-        assert!(OperationRisk::ActiveScan < OperationRisk::StressTest);
+        assert!(OperationRisk::Passive < OperationRisk::SafeActive);
+        assert!(OperationRisk::SafeActive < OperationRisk::StressTest);
         assert!(OperationRisk::StressTest < OperationRisk::AgentAutonomous);
     }
 
@@ -158,7 +252,7 @@ mod tests {
         policy.allow_credential_testing = true;
         policy.allow_remote_execution = true;
         policy.allow_agent_autonomous = true;
-        assert!(OperationRisk::IntrusiveFuzz.is_allowed_by(&policy));
+        assert!(OperationRisk::Intrusive.is_allowed_by(&policy));
         assert!(OperationRisk::LoadTest.is_allowed_by(&policy));
         assert!(OperationRisk::StressTest.is_allowed_by(&policy));
         assert!(OperationRisk::RawPacket.is_allowed_by(&policy));
@@ -188,6 +282,44 @@ mod tests {
         assert_eq!(
             format!("{}", OperationRisk::AgentAutonomous),
             "agent autonomous"
+        );
+    }
+
+    #[test]
+    fn operation_mode_display() {
+        assert_eq!(
+            format!("{}", OperationMode::StandardAssessment),
+            "standard-assessment"
+        );
+        assert_eq!(format!("{}", OperationMode::DefenseLab), "defense-lab");
+        assert_eq!(
+            format!("{}", OperationMode::HazardousLab),
+            "hazardous-lab"
+        );
+    }
+
+    #[test]
+    fn operation_mode_default_max_risk() {
+        assert_eq!(
+            OperationMode::StandardAssessment.default_max_risk(),
+            OperationRisk::SafeActive
+        );
+        assert_eq!(
+            OperationMode::DefenseLab.default_max_risk(),
+            OperationRisk::Intrusive
+        );
+        assert_eq!(
+            OperationMode::HazardousLab.default_max_risk(),
+            OperationRisk::AgentAutonomous
+        );
+    }
+
+    #[test]
+    fn intended_use_display() {
+        assert_eq!(format!("{}", IntendedUse::WafRegression), "waf-regression");
+        assert_eq!(
+            format!("{}", IntendedUse::SynvoidRegression),
+            "synvoid-regression"
         );
     }
 }

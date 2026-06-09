@@ -1,6 +1,9 @@
-pub(crate) const CLUSTER_ABOUT: &str = "Manage distributed scanning cluster
+pub(crate) const CLUSTER_ABOUT: &str = "MODE: Defense Lab / Hazardous Lab | REQUIRED: --scope (private/localhost), stress-testing feature, allow_stress_testing policy
+
+Manage distributed scanning cluster
 
 Starts worker or coordinator nodes for distributed scanning.
+For distributed system stress validation on authorized infrastructure.
 Workers execute tasks, coordinators manage job distribution.
 
 Examples:

@@ -1,3 +1,28 @@
+pub(crate) const REMOTE_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope, explicit authorization
+
+Start remote listener for distributed commands
+
+Listens for remote commands from coordinated scanner nodes.
+For authorized distributed scanning infrastructure only.
+Requires explicit scope and authorization before execution.
+
+Examples:
+  eggsec remote start --port 7890 --auth <psk>
+  eggsec remote start --port 7890 --tls-cert cert.pem --tls-key key.pem
+  eggsec remote generate-key";
+
+pub(crate) const EXEC_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope, explicit authorization
+
+Execute commands on remote systems
+
+Sends commands to a remote listener for execution.
+For authorized distributed scanning infrastructure only.
+Requires explicit scope and authorization before execution.
+
+Examples:
+  eggsec exec --target 192.168.1.100:7890 --auth <psk> -- ls -la
+  eggsec exec --target 10.0.0.5:7890 --auth <psk> -- cat /etc/hosts";
+
 pub(crate) const NOTIFY_ABOUT: &str = "Test and manage notifications
 
 Tests webhook integrations and sends test notifications.

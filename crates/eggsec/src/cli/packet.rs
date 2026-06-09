@@ -1,17 +1,20 @@
 #[cfg(feature = "packet-inspection")]
-pub(crate) const PACKET_ABOUT: &str = "Packet inspection and analysis tools
+pub(crate) const PACKET_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope (private/localhost), packet-inspection feature, allow_raw_packets policy
+
+Packet inspection and analysis tools
 
 Provides tools for live packet capture, packet crafting, hexdump view,
 header inspection, and traceroute functionality.
+For protocol edge validation on owned systems only.
 NOTE: Live packet capture requires building with --features packet-inspection
 Requires root/sudo for live packet capture.
 
 Examples:
-  eggsec packet capture -i eth0
-  eggsec packet capture -i eth0 --filter tcp --max 100
-  eggsec packet send --tcp --dst example.com:80 --flags SYN
+  eggsec packet capture -i lo
+  eggsec packet capture -i lo --filter tcp --max 100
+  eggsec packet send --tcp --dst 127.0.0.1:80 --flags SYN
   eggsec packet dump capture.pcap
-  eggsec packet traceroute example.com
+  eggsec packet traceroute 127.0.0.1
   eggsec packet interfaces";
 
 #[derive(clap::Args)]

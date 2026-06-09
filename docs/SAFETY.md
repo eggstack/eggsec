@@ -47,3 +47,24 @@ allow_stress_testing = false
 ```
 
 See `architecture/feature_matrix.md` for feature flags.
+
+## Operating Modes
+
+Eggsec operates in three modes:
+
+- **standard-assessment**: Ordinary scoped scanning, fuzzing, API testing, WAF detection
+- **defense-lab**: Local/private WAF regression, Synvoid validation, protocol edge testing
+- **hazardous-lab**: Raw packets, flood stress, proxy rotation, distributed stress
+
+Each CLI command's help text indicates its mode. Use `eggsec policy-explain` to inspect decisions before running traffic-generating operations.
+
+## Policy Decision Records
+
+Every target-bearing operation produces a structured policy decision with:
+- Unique decision ID
+- Operation mode and risk level
+- Target normalization and scope matching
+- Required features and policy flags
+- Denial reasons (when blocked)
+
+Use `eggsec policy-explain --json` to view a policy decision without executing.

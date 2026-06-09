@@ -33,22 +33,28 @@
 //! - Windows: `%APPDATA%\eggsec\eggsec.toml`
 
 mod api;
+mod budget;
 mod http;
 mod loader;
 mod policy;
+mod policy_decision;
+mod presets;
 mod scan;
 mod scope;
 mod settings;
 
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
+pub use budget::{BudgetError, ExecutionBudget};
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
-pub use policy::{ExecutionPolicy, OperationRisk};
+pub use policy::{ExecutionPolicy, OperationMode, OperationRisk, IntendedUse};
+pub use policy_decision::PolicyDecision;
+pub use presets::DefenseLabPreset;
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
     WebhookEvent,
 };
-pub use scope::{Scope, ScopeError, ScopeRule, TargetScope};
+pub use scope::{is_private_ip, Scope, ScopeError, ScopeRule, TargetScope};
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
     ConfigError, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig, ProxyConfigEntry,

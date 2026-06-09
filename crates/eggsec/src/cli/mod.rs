@@ -7,6 +7,7 @@ pub mod auth;
 pub mod browser;
 pub mod ci;
 pub mod cluster;
+pub mod explain;
 pub mod fuzz;
 pub mod http;
 #[cfg(feature = "advanced-hunting")]
@@ -24,6 +25,7 @@ pub mod wireless;
 
 pub use ci::*;
 pub use cluster::*;
+pub use explain::*;
 pub use fuzz::*;
 pub use http::*;
 #[cfg(feature = "advanced-hunting")]
@@ -55,22 +57,51 @@ pub mod agent;
 #[cfg(feature = "rest-api")]
 pub use agent::*;
 
+const POLICY_EXPLAIN_ABOUT: &str = r#"Explain policy decisions for a target and profile
+
+Evaluates what would happen if you ran a given profile against a target,
+without sending any network traffic. Shows operation mode, risk level,
+intended use, scope matching, required features, and any policy blocks.
+
+Examples:
+  eggsec policy-explain --target http://127.0.0.1:8080 --profile waf-regression
+  eggsec policy-explain --target http://127.0.0.1:8080 --profile defense-lab --json
+"#;
+
+const SCOPE_EXPLAIN_ABOUT: &str = r#"Explain scope matching for a target
+
+Evaluates whether a target falls within the configured scope, without
+sending any network traffic. Shows rule matches, exclusions, and
+private-IP detection.
+
+Examples:
+  eggsec scope-explain --target 10.0.0.5
+  eggsec scope-explain --target example.com --json
+"#;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const HELP_AFTER: &str = r#"
-EXAMPLES:
+OPERATING MODES:
+  Standard Assessment  - Scoped recon, scanning, fuzzing, API testing, WAF detection
+  Defense Lab          - Local/private-scope WAF and distributed-system validation
+  Hazardous Lab        - Raw packets, flood stress, proxy rotation, protocol edge cases
+
+COMMANDS:
   Scan ports:        eggsec scan-ports 192.168.1.1 -p 1-1000
   Fuzz endpoints:    eggsec fuzz https://example.com/api -t sqli
   Detect WAF:        eggsec waf https://example.com
   Auth testing:      eggsec auth-test https://example.com/login --all
   MCP for coding:    eggsec codegg-mcp
+  Policy explain:    eggsec policy-explain --target http://127.0.0.1:8080 --profile defense-lab
+  Scope explain:     eggsec scope-explain --target 192.168.1.1
 
 See https://github.com/eggstack/eggsec#readme for full documentation.
 "#;
 
 #[derive(Parser)]
 #[command(name = "eggsec")]
-#[command(about = "High-performance security testing toolkit")]
+#[command(about = "Security testing and defense-validation toolkit")]
 #[command(version = VERSION, long_about = None)]
 #[command(after_help = HELP_AFTER)]
 pub struct Cli {
@@ -140,6 +171,16 @@ pub enum Commands {
     Config(ConfigArgs),
     #[command(about = "Check system and runtime dependencies", long_about = DOCTOR_ABOUT)]
     Doctor,
+    #[command(
+        about = "Explain policy decisions for a target and profile",
+        long_about = POLICY_EXPLAIN_ABOUT
+    )]
+    PolicyExplain(PolicyExplainArgs),
+    #[command(
+        about = "Explain scope matching for a target",
+        long_about = SCOPE_EXPLAIN_ABOUT
+    )]
+    ScopeExplain(ScopeExplainArgs),
     #[cfg(feature = "sbom")]
     #[command(about = "Generate SBOM and check supply chain security")]
     Sbom(SbomArgs),
@@ -181,9 +222,9 @@ pub enum Commands {
     Cluster(ClusterArgs),
     #[command(about = "Test and manage notifications", long_about = NOTIFY_ABOUT)]
     Notify(NotifyArgs),
-    #[command(about = "Start remote listener for distributed commands")]
+    #[command(about = "Start remote listener for distributed commands", long_about = REMOTE_ABOUT)]
     Remote(RemoteArgs),
-    #[command(about = "Execute commands on remote systems")]
+    #[command(about = "Execute commands on remote systems", long_about = EXEC_ABOUT)]
     Exec(ExecArgs),
     #[cfg(feature = "rest-api")]
     #[command(about = "Start REST API server for external tool integration")]
@@ -205,6 +246,7 @@ pub enum Commands {
     #[cfg(feature = "rest-api")]
     #[command(
         about = "Run security agent for scheduled assessments",
+        long_about = AGENT_ABOUT,
         alias = "agent"
     )]
     Agent(AgentArgs),
@@ -333,6 +375,28 @@ impl std::fmt::Display for ScanProfile {
 }
 
 impl ScanProfile {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "quick" => Some(ScanProfile::Quick),
+            "endpoint" => Some(ScanProfile::Endpoint),
+            "web" => Some(ScanProfile::Web),
+            "waf" => Some(ScanProfile::Waf),
+            "full" => Some(ScanProfile::Full),
+            "api" => Some(ScanProfile::Api),
+            "recon" => Some(ScanProfile::Recon),
+            "stealth" => Some(ScanProfile::Stealth),
+            "deep" => Some(ScanProfile::Deep),
+            "vuln" => Some(ScanProfile::Vuln),
+            "auth" => Some(ScanProfile::Auth),
+            "defense-lab" => Some(ScanProfile::DefenseLab),
+            "synvoid-local" => Some(ScanProfile::SynvoidLocal),
+            "waf-regression" => Some(ScanProfile::WafRegression),
+            "protocol-edge" => Some(ScanProfile::ProtocolEdge),
+            "nse-safe" => Some(ScanProfile::NseSafe),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if this profile is a defense-lab variant that requires
     /// local/private-scope targets only.
     pub fn requires_private_scope(&self) -> bool {
@@ -379,6 +443,72 @@ impl ScanProfile {
                 crate::probe::ProbeRisk::Stress
             }
         }
+    }
+
+    /// Returns the operating mode for this profile.
+    pub fn operation_mode(&self) -> crate::config::OperationMode {
+        match self {
+            ScanProfile::Quick
+            | ScanProfile::Endpoint
+            | ScanProfile::Web
+            | ScanProfile::Waf
+            | ScanProfile::Full
+            | ScanProfile::Api
+            | ScanProfile::Recon
+            | ScanProfile::Stealth
+            | ScanProfile::Deep
+            | ScanProfile::Vuln
+            | ScanProfile::Auth => crate::config::OperationMode::StandardAssessment,
+            ScanProfile::DefenseLab
+            | ScanProfile::SynvoidLocal
+            | ScanProfile::WafRegression
+            | ScanProfile::ProtocolEdge
+            | ScanProfile::NseSafe => crate::config::OperationMode::DefenseLab,
+        }
+    }
+
+    /// Returns the intended use cases for this profile.
+    pub fn intended_uses(&self) -> Vec<crate::config::IntendedUse> {
+        match self {
+            ScanProfile::Quick | ScanProfile::Endpoint | ScanProfile::Web => {
+                vec![crate::config::IntendedUse::WebAssessment]
+            }
+            ScanProfile::Api => vec![crate::config::IntendedUse::ApiAssessment],
+            ScanProfile::Waf | ScanProfile::WafRegression => {
+                vec![crate::config::IntendedUse::WafRegression]
+            }
+            ScanProfile::Full | ScanProfile::Deep => vec![
+                crate::config::IntendedUse::WebAssessment,
+                crate::config::IntendedUse::ApiAssessment,
+            ],
+            ScanProfile::Recon => vec![crate::config::IntendedUse::WebAssessment],
+            ScanProfile::Stealth => vec![crate::config::IntendedUse::WebAssessment],
+            ScanProfile::Vuln | ScanProfile::Auth => {
+                vec![crate::config::IntendedUse::WebAssessment]
+            }
+            ScanProfile::DefenseLab => vec![
+                crate::config::IntendedUse::WafRegression,
+                crate::config::IntendedUse::SynvoidRegression,
+            ],
+            ScanProfile::SynvoidLocal => {
+                vec![crate::config::IntendedUse::SynvoidRegression]
+            }
+            ScanProfile::ProtocolEdge => {
+                vec![crate::config::IntendedUse::ProtocolEdgeValidation]
+            }
+            ScanProfile::NseSafe => vec![crate::config::IntendedUse::CodingAgentVerification],
+        }
+    }
+
+    /// Returns a human-readable description of this profile's mode and risk.
+    pub fn mode_description(&self) -> String {
+        let mode = self.operation_mode();
+        let risk = self.max_risk_budget();
+        format!(
+            "{} mode (max risk: {})",
+            mode.label(),
+            format!("{:?}", risk).to_lowercase()
+        )
     }
 }
 
@@ -432,5 +562,28 @@ mod tests {
             ScanProfile::Stealth.max_risk_budget().risk_level()
                 < ScanProfile::Quick.max_risk_budget().risk_level()
         );
+    }
+
+    #[test]
+    fn defense_lab_profile_operation_mode() {
+        assert_eq!(
+            ScanProfile::DefenseLab.operation_mode(),
+            crate::config::OperationMode::DefenseLab
+        );
+    }
+
+    #[test]
+    fn standard_profile_operation_mode() {
+        assert_eq!(
+            ScanProfile::Quick.operation_mode(),
+            crate::config::OperationMode::StandardAssessment
+        );
+    }
+
+    #[test]
+    fn defense_lab_intended_uses() {
+        let uses = ScanProfile::DefenseLab.intended_uses();
+        assert!(uses.contains(&crate::config::IntendedUse::WafRegression));
+        assert!(uses.contains(&crate::config::IntendedUse::SynvoidRegression));
     }
 }

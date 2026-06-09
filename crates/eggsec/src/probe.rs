@@ -65,6 +65,17 @@ impl ProbeRisk {
                 | ProbeRisk::ExploitAdjacent
         )
     }
+
+    pub fn to_operation_risk(self) -> crate::config::OperationRisk {
+        match self {
+            ProbeRisk::Passive => crate::config::OperationRisk::Passive,
+            ProbeRisk::SafeActive => crate::config::OperationRisk::SafeActive,
+            ProbeRisk::Intrusive => crate::config::OperationRisk::Intrusive,
+            ProbeRisk::Credentialed => crate::config::OperationRisk::CredentialTesting,
+            ProbeRisk::Stress => crate::config::OperationRisk::StressTest,
+            ProbeRisk::ExploitAdjacent => crate::config::OperationRisk::AgentAutonomous,
+        }
+    }
 }
 
 #[cfg(test)]

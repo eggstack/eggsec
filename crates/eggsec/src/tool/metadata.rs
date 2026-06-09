@@ -1,4 +1,4 @@
-use crate::config::OperationRisk;
+use crate::config::{IntendedUse, OperationMode, OperationRisk};
 use serde::{Deserialize, Serialize};
 
 /// Metadata for a tool that describes its capabilities and risk profile
@@ -15,6 +15,8 @@ pub struct ToolMetadata {
     pub can_run_raw_packet_ops: bool,
     pub input_schema: Option<serde_json::Value>,
     pub output_schema: Option<serde_json::Value>,
+    pub operation_mode: OperationMode,
+    pub intended_uses: Vec<IntendedUse>,
 }
 
 impl ToolMetadata {
@@ -45,6 +47,31 @@ impl ToolMetadata {
             restrictions.push("Can mutate state".to_string());
         }
         restrictions
+    }
+
+    pub fn lab_classification(&self) -> String {
+        let mode = match self.operation_mode {
+            crate::config::OperationMode::StandardAssessment => "standard",
+            crate::config::OperationMode::DefenseLab => "defense-lab",
+            crate::config::OperationMode::HazardousLab => "hazardous-lab",
+        };
+        let uses: Vec<_> = self.intended_uses.iter().map(|u| u.label()).collect();
+        format!("{}: {}", mode, uses.join(", "))
+    }
+
+    #[cfg(feature = "rest-api")]
+    pub fn is_available_for_profile(&self, profile: &crate::tool::protocol::mcp::profile::McpProfile) -> bool {
+        use crate::tool::protocol::mcp::profile::McpProfile;
+        match profile {
+            McpProfile::OpsAgent => true,
+            McpProfile::CodingAgent => {
+                matches!(
+                    self.operation_mode,
+                    crate::config::OperationMode::StandardAssessment
+                ) && !self.can_stress_load_test
+                    && !self.can_run_raw_packet_ops
+            }
+        }
     }
 }
 
@@ -112,12 +139,14 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: false,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::StandardAssessment,
+        intended_uses: vec![IntendedUse::CodingAgentVerification],
     });
 
     registry.register(ToolMetadata {
         name: "scan_ports".to_string(),
         description: "Scan target ports for open services".to_string(),
-        risk_tier: OperationRisk::ActiveScan,
+        risk_tier: OperationRisk::SafeActive,
         requires_target_scope: true,
         requires_explicit_enablement: false,
         can_mutate_state: false,
@@ -126,12 +155,14 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: false,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::StandardAssessment,
+        intended_uses: vec![IntendedUse::WebAssessment],
     });
 
     registry.register(ToolMetadata {
         name: "fuzz".to_string(),
         description: "Fuzz target endpoints with payloads".to_string(),
-        risk_tier: OperationRisk::IntrusiveFuzz,
+        risk_tier: OperationRisk::Intrusive,
         requires_target_scope: true,
         requires_explicit_enablement: true,
         can_mutate_state: false,
@@ -140,6 +171,8 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: false,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::StandardAssessment,
+        intended_uses: vec![IntendedUse::WebAssessment],
     });
 
     registry.register(ToolMetadata {
@@ -154,6 +187,8 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: false,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::HazardousLab,
+        intended_uses: vec![IntendedUse::DistributedSystemStress],
     });
 
     registry.register(ToolMetadata {
@@ -168,6 +203,8 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: true,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::HazardousLab,
+        intended_uses: vec![IntendedUse::ProtocolEdgeValidation],
     });
 
     registry.register(ToolMetadata {
@@ -182,6 +219,8 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: false,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::StandardAssessment,
+        intended_uses: vec![IntendedUse::WebAssessment],
     });
 
     registry.register(ToolMetadata {
@@ -196,6 +235,8 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
         can_run_raw_packet_ops: false,
         input_schema: None,
         output_schema: None,
+        operation_mode: OperationMode::HazardousLab,
+        intended_uses: vec![IntendedUse::DistributedSystemStress],
     });
 
     registry
@@ -260,9 +301,75 @@ mod tests {
             can_run_raw_packet_ops: false,
             input_schema: None,
             output_schema: None,
+            operation_mode: OperationMode::HazardousLab,
+            intended_uses: vec![IntendedUse::DistributedSystemStress],
         };
         let restrictions = meta.restrictions();
         assert!(restrictions.iter().any(|r| r.contains("scope")));
         assert!(restrictions.iter().any(|r| r.contains("stress")));
+    }
+
+    #[test]
+    fn lab_classification_standard() {
+        let meta = ToolMetadata {
+            name: "plan".to_string(),
+            description: "Create plan".to_string(),
+            risk_tier: OperationRisk::Passive,
+            requires_target_scope: false,
+            requires_explicit_enablement: false,
+            can_mutate_state: false,
+            can_send_network_traffic: false,
+            can_stress_load_test: false,
+            can_run_raw_packet_ops: false,
+            operation_mode: crate::config::OperationMode::StandardAssessment,
+            intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+            input_schema: None,
+            output_schema: None,
+        };
+        let cls = meta.lab_classification();
+        assert!(cls.contains("standard"));
+    }
+
+    #[test]
+    #[cfg(feature = "rest-api")]
+    fn coding_agent_blocks_hazardous() {
+        let meta = ToolMetadata {
+            name: "stress".to_string(),
+            description: "Stress test".to_string(),
+            risk_tier: OperationRisk::StressTest,
+            requires_target_scope: true,
+            requires_explicit_enablement: true,
+            can_mutate_state: false,
+            can_send_network_traffic: true,
+            can_stress_load_test: true,
+            can_run_raw_packet_ops: false,
+            operation_mode: crate::config::OperationMode::HazardousLab,
+            intended_uses: vec![crate::config::IntendedUse::DistributedSystemStress],
+            input_schema: None,
+            output_schema: None,
+        };
+        assert!(!meta.is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::CodingAgent));
+        assert!(meta.is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::OpsAgent));
+    }
+
+    #[test]
+    #[cfg(feature = "rest-api")]
+    fn coding_agent_allows_standard() {
+        let meta = ToolMetadata {
+            name: "scan_ports".to_string(),
+            description: "Scan ports".to_string(),
+            risk_tier: OperationRisk::SafeActive,
+            requires_target_scope: true,
+            requires_explicit_enablement: false,
+            can_mutate_state: false,
+            can_send_network_traffic: true,
+            can_stress_load_test: false,
+            can_run_raw_packet_ops: false,
+            operation_mode: crate::config::OperationMode::StandardAssessment,
+            intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+            input_schema: None,
+            output_schema: None,
+        };
+        assert!(meta.is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::CodingAgent));
     }
 }

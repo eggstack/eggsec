@@ -23,6 +23,7 @@ pub use eggsec_output::*;
 // Local modules that depend on engine-internal types and could not be moved.
 #[cfg(feature = "advanced-hunting")]
 pub mod attack_graph;
+pub mod lab_report;
 pub mod pdf;
 pub mod report;
 pub mod report_summary;
@@ -32,6 +33,9 @@ pub mod run_manifest;
 #[cfg(feature = "advanced-hunting")]
 pub use attack_graph::{
     AttackGraph, AttackGraphBuilder, EdgeType, GraphCluster, GraphEdge, GraphNode, NodeType,
+};
+pub use lab_report::{
+    BudgetSummary, LabDefenseReportSection, ScopeSummary, SkippedOperation, TargetResolutionSummary,
 };
 pub use pdf::{PdfConfig, PdfGenerator};
 pub use report::{Report, ReportMetadata, ReportTemplate, SeverityCounts};
