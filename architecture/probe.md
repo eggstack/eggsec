@@ -33,6 +33,19 @@ Risk classification for guardrails and opt-in:
 | `Stress` | Stress/load testing |
 | `ExploitAdjacent` | Near-exploitation testing |
 
+### ProbeRisk → OperationRisk Mapping
+
+`ProbeRisk::to_operation_risk()` converts probe-level risk to the shared `OperationRisk` enum used by the policy evaluator:
+
+| ProbeRisk | OperationRisk | Policy Gate |
+|-----------|---------------|-------------|
+| `Passive` | `Passive` | Always allowed |
+| `SafeActive` | `SafeActive` | Always allowed |
+| `Intrusive` | `Intrusive` | `allow_intrusive_fuzzing` |
+| `Credentialed` | `CredentialTesting` | `allow_credential_testing` |
+| `Stress` | `StressTest` | `allow_stress_testing` |
+| `ExploitAdjacent` | `ExploitAdjacent` | `allow_exploit_adjacent` |
+
 ## Serialization
 
 All enums serialize to kebab-case JSON (e.g., `"discovery"`, `"safe-active"`).

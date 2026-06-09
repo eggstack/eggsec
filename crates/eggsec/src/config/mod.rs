@@ -47,8 +47,8 @@ pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, Wa
 pub use budget::{BudgetError, ExecutionBudget};
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
-pub use policy::{ExecutionPolicy, OperationMode, OperationRisk, IntendedUse};
-pub use policy_decision::PolicyDecision;
+pub use policy::{ExecutionPolicy, OperationMode, OperationRisk, IntendedUse, OperationDescriptor};
+pub use policy_decision::{evaluate_operation_policy, PolicyDecision};
 pub use presets::DefenseLabPreset;
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,

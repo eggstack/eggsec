@@ -73,7 +73,7 @@ impl ProbeRisk {
             ProbeRisk::Intrusive => crate::config::OperationRisk::Intrusive,
             ProbeRisk::Credentialed => crate::config::OperationRisk::CredentialTesting,
             ProbeRisk::Stress => crate::config::OperationRisk::StressTest,
-            ProbeRisk::ExploitAdjacent => crate::config::OperationRisk::AgentAutonomous,
+            ProbeRisk::ExploitAdjacent => crate::config::OperationRisk::ExploitAdjacent,
         }
     }
 }

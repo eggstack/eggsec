@@ -250,6 +250,7 @@ dns_concurrency = 10
 # allow_stress_testing = false
 # allow_raw_packets = false
 # allow_credential_testing = true
+# allow_exploit_adjacent = false
 # allow_remote_execution = false
 # allow_agent_autonomous = false
 # max_risk_without_confirm = "medium"

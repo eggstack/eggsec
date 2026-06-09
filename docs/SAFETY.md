@@ -16,8 +16,8 @@ Eggsec classifies operations by risk level:
 | Risk Level | Description | Default |
 |------------|-------------|---------|
 | Passive | Read-only operations | Allowed |
-| ActiveScan | Port scanning, fingerprinting | Allowed |
-| IntrusiveFuzz | Fuzzing, injection testing | Blocked |
+| SafeActive | Port scanning, fingerprinting | Allowed |
+| Intrusive | Fuzzing, injection testing | Blocked |
 | LoadTest | Load testing | Blocked |
 | StressTest | Stress testing | Blocked |
 | RawPacket | Raw packet operations | Blocked |

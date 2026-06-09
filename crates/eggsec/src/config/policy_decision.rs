@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{IntendedUse, OperationMode, OperationRisk};
+use super::{ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk, Scope};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyDecision {
@@ -167,6 +167,110 @@ impl PolicyDecision {
     }
 }
 
+/// Shared policy evaluation entry point.
+///
+/// Takes an [`OperationDescriptor`], the current [`ExecutionPolicy`], and an
+/// optional [`Scope`], and returns a fully-populated [`PolicyDecision`].
+///
+/// This is the canonical function that command handlers, MCP dispatchers,
+/// agent workflows, and API endpoints should call instead of building
+/// policy checks inline.
+pub fn evaluate_operation_policy(
+    descriptor: &OperationDescriptor,
+    policy: &ExecutionPolicy,
+    scope: Option<&Scope>,
+) -> PolicyDecision {
+    let mut decision = PolicyDecision::allowed(
+        &descriptor.operation,
+        descriptor.mode,
+        descriptor.risk,
+        descriptor.intended_uses.clone(),
+    );
+
+    // Attach target if provided
+    if let Some(ref target) = descriptor.target {
+        decision = decision.with_target(target, target);
+    }
+
+    // Propagate required features from descriptor
+    for feature in &descriptor.required_features {
+        decision = decision.with_required_feature(feature);
+    }
+
+    // Check scope if a target and scope are provided
+    if let Some(ref target) = descriptor.target {
+        if let Some(scope) = scope {
+            match scope.is_target_allowed(target) {
+                Ok(true) => {
+                    decision
+                        .matched_scope_rules
+                        .push("target in scope".to_string());
+                }
+                Ok(false) => {
+                    decision
+                        .denied_reasons
+                        .push("target not in scope".to_string());
+                    decision.allowed = false;
+                }
+                Err(e) => {
+                    decision
+                        .warnings
+                        .push(format!("scope check error: {}", e));
+                }
+            }
+        } else if descriptor.requires_explicit_scope || descriptor.requires_private_or_local_target {
+            decision
+                .denied_reasons
+                .push("scope file required but not provided".to_string());
+            decision.allowed = false;
+        } else if super::is_private_ip(
+            &target
+                .parse()
+                .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)),
+        ) {
+            decision.warnings.push(
+                "target is a private IP; scope file recommended for defense-lab profiles"
+                    .to_string(),
+            );
+        }
+    }
+
+    // Check risk against execution policy
+    if !descriptor.risk.is_allowed_by(policy) {
+        decision
+            .denied_reasons
+            .push(format!(
+                "operation risk '{}' is not allowed by current execution policy",
+                descriptor.risk
+            ));
+        decision.allowed = false;
+    }
+
+    // Check required policy flags
+    for flag in &descriptor.required_policy_flags {
+        match flag.as_str() {
+            "require_explicit_scope" => {
+                if !policy.require_explicit_scope {
+                    decision
+                        .denied_reasons
+                        .push("require_explicit_scope is disabled in policy".to_string());
+                    decision.allowed = false;
+                }
+                decision
+                    .required_policy_flags
+                    .push(flag.clone());
+            }
+            _ => {
+                decision
+                    .required_policy_flags
+                    .push(flag.clone());
+            }
+        }
+    }
+
+    decision
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,5 +340,169 @@ mod tests {
         )
         .with_warning("private IP");
         assert_eq!(decision.warnings.len(), 1);
+    }
+
+    #[test]
+    fn evaluate_operation_policy_allowed_localhost() {
+        let scope = super::super::Scope {
+            allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+            ..Default::default()
+        };
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let policy = ExecutionPolicy::default();
+        let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
+        assert!(decision.allowed);
+        assert!(!decision.matched_scope_rules.is_empty());
+    }
+
+    #[test]
+    fn evaluate_operation_policy_denied_public_target() {
+        let scope = super::super::Scope {
+            allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+            ..Default::default()
+        };
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let policy = ExecutionPolicy::default();
+        let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
+        assert!(!decision.allowed);
+        assert!(decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("not in scope")));
+    }
+
+    #[test]
+    fn evaluate_operation_policy_denied_by_risk() {
+        let descriptor = OperationDescriptor {
+            operation: "stress".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::StressTest,
+            intended_uses: vec![IntendedUse::DistributedSystemStress],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let policy = ExecutionPolicy::default();
+        let decision = evaluate_operation_policy(&descriptor, &policy, None);
+        assert!(!decision.allowed);
+        assert!(decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("not allowed by current execution policy")));
+    }
+
+    #[test]
+    fn evaluate_operation_policy_denied_missing_scope() {
+        let descriptor = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::DefenseLab,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WafRegression],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+        };
+        let policy = ExecutionPolicy::default();
+        let decision = evaluate_operation_policy(&descriptor, &policy, None);
+        assert!(!decision.allowed);
+        assert!(decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("scope file required")));
+    }
+
+    #[test]
+    fn evaluate_operation_policy_hazardous_lab_allowed() {
+        let descriptor = OperationDescriptor {
+            operation: "raw-packet".to_string(),
+            mode: OperationMode::HazardousLab,
+            risk: OperationRisk::ExploitAdjacent,
+            intended_uses: vec![IntendedUse::ProtocolEdgeValidation],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec!["packet-inspection".to_string()],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let mut policy = ExecutionPolicy::default();
+        policy.allow_exploit_adjacent = true;
+        let decision = evaluate_operation_policy(&descriptor, &policy, None);
+        assert!(decision.allowed);
+        assert!(decision
+            .required_features
+            .iter()
+            .any(|f| f == "packet-inspection"));
+    }
+
+    #[test]
+    fn evaluate_operation_policy_excluded_target() {
+        let scope = super::super::Scope {
+            allowed_targets: vec![super::super::ScopeRule::new("*".to_string())],
+            excluded_targets: vec![super::super::ScopeRule::new(
+                "admin.example.com".to_string(),
+            )],
+            ..Default::default()
+        };
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("admin.example.com".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let policy = ExecutionPolicy::default();
+        let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
+        assert!(!decision.allowed);
+    }
+
+    #[test]
+    fn evaluate_operation_policy_golden_json() {
+        let descriptor = OperationDescriptor {
+            operation: "waf-detect".to_string(),
+            mode: OperationMode::DefenseLab,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WafRegression],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let mut policy = ExecutionPolicy::default();
+        policy.allow_intrusive_fuzzing = true;
+        let decision = evaluate_operation_policy(&descriptor, &policy, None);
+        let json = serde_json::to_string_pretty(&decision).unwrap();
+        assert!(decision.allowed);
+        assert!(json.contains("\"defense-lab\""));
+        assert!(json.contains("\"intrusive\""));
+        assert!(json.contains("\"waf-regression\""));
     }
 }

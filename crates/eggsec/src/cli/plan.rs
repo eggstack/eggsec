@@ -10,13 +10,19 @@ pub struct PlanArgs {
     #[arg(short = 'o', long)]
     pub output: Option<String>,
 
-    /// Output format
+    /// Output format (table, json)
     #[arg(short, long, default_value = "table")]
     pub format: String,
 
-    /// Profile to use (quick, default, thorough)
-    #[arg(short, long, default_value = "default")]
+    /// Scan profile (quick, endpoint, web, waf, full, api, recon, stealth,
+    /// deep, vuln, auth, defense-lab, synvoid-local, waf-regression,
+    /// protocol-edge, nse-safe)
+    #[arg(short, long, default_value = "quick")]
     pub profile: String,
+
+    /// Scope file path
+    #[arg(long)]
+    pub scope: Option<String>,
 
     /// Enable verbose output
     #[arg(short, long)]

@@ -14,6 +14,7 @@ pub enum OperationRisk {
     StressTest,
     RawPacket,
     CredentialTesting,
+    ExploitAdjacent,
     RemoteExecution,
     AgentAutonomous,
 }
@@ -47,6 +48,9 @@ pub struct ExecutionPolicy {
     pub allow_remote_execution: bool,
 
     #[serde(default)]
+    pub allow_exploit_adjacent: bool,
+
+    #[serde(default)]
     pub allow_agent_autonomous: bool,
 
     #[serde(default = "default_max_risk")]
@@ -70,6 +74,7 @@ impl Default for ExecutionPolicy {
             allow_stress_testing: false,
             allow_raw_packets: false,
             allow_credential_testing: false,
+            allow_exploit_adjacent: false,
             allow_remote_execution: false,
             allow_agent_autonomous: false,
             max_risk_without_confirm: OperationRisk::SafeActive,
@@ -87,6 +92,7 @@ impl OperationRisk {
             Self::StressTest => policy.allow_stress_testing,
             Self::RawPacket => policy.allow_raw_packets,
             Self::CredentialTesting => policy.allow_credential_testing,
+            Self::ExploitAdjacent => policy.allow_exploit_adjacent,
             Self::RemoteExecution => policy.allow_remote_execution,
             Self::AgentAutonomous => policy.allow_agent_autonomous,
         }
@@ -103,6 +109,7 @@ impl std::fmt::Display for OperationRisk {
             Self::StressTest => write!(f, "stress testing"),
             Self::RawPacket => write!(f, "raw packet"),
             Self::CredentialTesting => write!(f, "credential testing"),
+            Self::ExploitAdjacent => write!(f, "exploit adjacent"),
             Self::RemoteExecution => write!(f, "remote execution"),
             Self::AgentAutonomous => write!(f, "agent autonomous"),
         }
@@ -203,6 +210,38 @@ impl std::fmt::Display for IntendedUse {
     }
 }
 
+/// Descriptor for an operation that can be evaluated against policy and scope.
+///
+/// Bundles the metadata needed by [`super::policy_decision::evaluate_operation_policy`]
+/// to produce a [`PolicyDecision`]. Command handlers, MCP dispatchers, agent
+/// workflows, and API endpoints all construct an `OperationDescriptor` instead of
+/// reinventing policy checks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperationDescriptor {
+    /// Human-readable operation name (e.g. "scan-ports", "fuzz", "stress").
+    pub operation: String,
+    /// Operating mode (standard-assessment, defense-lab, hazardous-lab).
+    pub mode: OperationMode,
+    /// Risk tier of the operation.
+    pub risk: OperationRisk,
+    /// Intended use cases for this operation.
+    pub intended_uses: Vec<IntendedUse>,
+    /// Original target string (hostname, URL, or IP).
+    pub target: Option<String>,
+    /// Feature flags required to execute this operation (e.g. "packet-inspection", "nse").
+    #[serde(default)]
+    pub required_features: Vec<String>,
+    /// Policy flags that must be set (e.g. "require_explicit_scope").
+    #[serde(default)]
+    pub required_policy_flags: Vec<String>,
+    /// If `true`, the target must be a private/local address or within scope.
+    #[serde(default)]
+    pub requires_private_or_local_target: bool,
+    /// If `true`, an explicit scope file must be configured.
+    #[serde(default)]
+    pub requires_explicit_scope: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,6 +259,7 @@ mod tests {
         assert!(!OperationRisk::Intrusive.is_allowed_by(&policy));
         assert!(!OperationRisk::StressTest.is_allowed_by(&policy));
         assert!(!OperationRisk::RawPacket.is_allowed_by(&policy));
+        assert!(!OperationRisk::ExploitAdjacent.is_allowed_by(&policy));
     }
 
     #[test]
@@ -227,6 +267,14 @@ mod tests {
         let mut policy = ExecutionPolicy::default();
         policy.allow_stress_testing = true;
         assert!(OperationRisk::StressTest.is_allowed_by(&policy));
+    }
+
+    #[test]
+    fn custom_policy_can_enable_exploit_adjacent() {
+        let mut policy = ExecutionPolicy::default();
+        policy.allow_exploit_adjacent = true;
+        assert!(OperationRisk::ExploitAdjacent.is_allowed_by(&policy));
+        assert!(!OperationRisk::AgentAutonomous.is_allowed_by(&policy));
     }
 
     #[test]
@@ -250,6 +298,7 @@ mod tests {
         policy.allow_stress_testing = true;
         policy.allow_raw_packets = true;
         policy.allow_credential_testing = true;
+        policy.allow_exploit_adjacent = true;
         policy.allow_remote_execution = true;
         policy.allow_agent_autonomous = true;
         assert!(OperationRisk::Intrusive.is_allowed_by(&policy));
@@ -257,6 +306,7 @@ mod tests {
         assert!(OperationRisk::StressTest.is_allowed_by(&policy));
         assert!(OperationRisk::RawPacket.is_allowed_by(&policy));
         assert!(OperationRisk::CredentialTesting.is_allowed_by(&policy));
+        assert!(OperationRisk::ExploitAdjacent.is_allowed_by(&policy));
         assert!(OperationRisk::RemoteExecution.is_allowed_by(&policy));
         assert!(OperationRisk::AgentAutonomous.is_allowed_by(&policy));
     }
@@ -279,6 +329,10 @@ mod tests {
     #[test]
     fn risk_display() {
         assert_eq!(format!("{}", OperationRisk::Passive), "passive");
+        assert_eq!(
+            format!("{}", OperationRisk::ExploitAdjacent),
+            "exploit adjacent"
+        );
         assert_eq!(
             format!("{}", OperationRisk::AgentAutonomous),
             "agent autonomous"

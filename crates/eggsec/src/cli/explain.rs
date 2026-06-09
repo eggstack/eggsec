@@ -1,6 +1,6 @@
 use clap::Args;
 
-use crate::config::PolicyDecision;
+use crate::config::{evaluate_operation_policy, OperationDescriptor, PolicyDecision};
 
 #[derive(Args, Clone)]
 pub struct PolicyExplainArgs {
@@ -44,57 +44,31 @@ pub fn evaluate_policy_decision(
     let risk = profile.max_risk_budget().to_operation_risk();
     let intended_uses = profile.intended_uses();
 
-    let mut decision = PolicyDecision::allowed("policy-explain", mode, risk, intended_uses);
-
-    if let Some(target_str) = target {
-        decision = decision.with_target(target_str, target_str);
-
-        if let Some(scope) = scope {
-            match scope.is_target_allowed(target_str) {
-                Ok(true) => {
-                    decision
-                        .matched_scope_rules
-                        .push("target in scope".to_string());
-                }
-                Ok(false) => {
-                    decision
-                        .denied_reasons
-                        .push("target not in scope".to_string());
-                    decision.allowed = false;
-                }
-                Err(e) => {
-                    decision
-                        .warnings
-                        .push(format!("scope check error: {}", e));
-                }
-            }
-        } else if crate::config::is_private_ip(
-            &target_str
-                .parse()
-                .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)),
-        ) {
-            decision.warnings.push(
-                "target is a private IP; scope file recommended for defense-lab profiles"
-                    .to_string(),
-            );
-        }
-    }
-
-    if profile.requires_private_scope() && target.is_some() {
-        decision
-            .required_policy_flags
-            .push("require_explicit_scope".to_string());
-    }
-
+    let mut required_features = Vec::new();
     if profile.requires_packet_inspection() {
-        decision
-            .required_features
-            .push("packet-inspection".to_string());
+        required_features.push("packet-inspection".to_string());
     }
-
     if profile.requires_nse() {
-        decision.required_features.push("nse".to_string());
+        required_features.push("nse".to_string());
     }
 
-    decision
+    let mut required_policy_flags = Vec::new();
+    if profile.requires_private_scope() && target.is_some() {
+        required_policy_flags.push("require_explicit_scope".to_string());
+    }
+
+    let descriptor = OperationDescriptor {
+        operation: "policy-explain".to_string(),
+        mode,
+        risk,
+        intended_uses,
+        target: target.map(|s| s.to_string()),
+        required_features,
+        required_policy_flags,
+        requires_private_or_local_target: profile.requires_private_scope(),
+        requires_explicit_scope: profile.requires_private_scope(),
+    };
+
+    let policy = crate::config::ExecutionPolicy::default();
+    evaluate_operation_policy(&descriptor, &policy, scope)
 }

@@ -152,8 +152,8 @@ Eggsec enforces human-in-the-loop at critical decision points:
 
 | Operation | Risk Tier | Approval Required |
 |-----------|-----------|-------------------|
-| Port scanning | ActiveScan | Allowed by default |
-| Fuzzing | IntrusiveFuzz | Must be enabled in config |
+| Port scanning | SafeActive | Allowed by default |
+| Fuzzing | Intrusive | Must be enabled in config |
 | Stress testing | StressTest | Must be enabled in config |
 | Raw packet ops | RawPacket | Must be enabled in config |
 | Auth testing | CredentialTesting | Must be enabled in config |

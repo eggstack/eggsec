@@ -20,7 +20,7 @@ The main configuration struct that holds all tool settings. It is typically load
 - `AlertChannelsConfig` - Alert routing
 - `ReconConfig` - Reconnaissance settings (`dns_concurrency`, `apis` for API configuration)
 - `RemoteConfig` - Remote worker settings (`psk`, `default_port`, `allowed_workers`)
-- `ExecutionPolicy` - Operation policy controls (scope requirements, risk levels, allowed operations)
+- `ExecutionPolicy` - Operation policy controls (scope requirements, risk levels, allowed operations); includes `allow_exploit_adjacent` field for near-exploitation testing
 
 ### `Scope` (`scope.rs`)
 

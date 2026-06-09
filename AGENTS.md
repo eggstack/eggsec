@@ -125,7 +125,8 @@ Use these sections as the canonical reference points when updating guidance or s
 - `McpProfilePolicy` - 18-field policy struct enforcing tool visibility and call restrictions per profile in `tool/protocol/mcp/policy.rs`
 - `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
 - `CodingAgentFindingReport` - Typed output schema for coding-agent findings in `tool/protocol/mcp/coding_agent_output.rs`
-- `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs`
+- `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs` (`ProbeRisk::ExploitAdjacent` maps to `OperationRisk::ExploitAdjacent`)
+- `OperationDescriptor` - Bundles operation metadata for the shared policy evaluator in `config/policy.rs`
 - `StoredFinding` - Unified finding type in `findings::lifecycle`, re-exported by `storage::models` for database persistence
 - `Wordlist` - Validated endpoint wordlist parsing with normalization (`scanner/wordlist.rs`)
 
@@ -141,6 +142,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **AI Cache Keys**: Always use `CacheKeyBuilder` for cache keys in AI module to avoid collisions
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
+- **Shared Policy Evaluator**: Use `evaluate_operation_policy()` in `config/policy_decision.rs` instead of building policy checks inline
 - **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile
 - **eggsec-output Re-exports**: The `eggsec-output` crate re-exports key types (`Severity`, `AgentFinding`, `ScanReportData`, `DiffSummary`, `TrendAnalyzer`, etc.) at its crate root. Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity` directly.
 
