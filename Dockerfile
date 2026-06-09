@@ -2,7 +2,7 @@
 # Multi-stage Docker build
 
 # Build stage
-FROM rust:1.75-bookworm AS builder
+FROM rust:1.80-bookworm AS builder
 
 WORKDIR /app
 
@@ -15,26 +15,33 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace manifests
+# Copy workspace manifests for dependency caching
 COPY Cargo.toml Cargo.lock ./
+COPY crates/eggsec-core/Cargo.toml crates/eggsec-core/
 COPY crates/eggsec/Cargo.toml crates/eggsec/
 COPY crates/eggsec-nse/Cargo.toml crates/eggsec-nse/
+COPY crates/eggsec-tui/Cargo.toml crates/eggsec-tui/
+COPY crates/eggsec-cli/Cargo.toml crates/eggsec-cli/
+COPY crates/eggsec-output/Cargo.toml crates/eggsec-output/
+COPY crates/eggsec-tool-core/Cargo.toml crates/eggsec-tool-core/
+COPY crates/eggsec-agent/Cargo.toml crates/eggsec-agent/
 
 # Create dummy sources to cache dependencies
-RUN mkdir -p crates/eggsec/src crates/eggsec-nse/src && \
-    echo "fn main() {}" > crates/eggsec/src/main.rs && \
-    echo "" > crates/eggsec/src/lib.rs && \
-    echo "" > crates/eggsec-nse/src/lib.rs && \
-    cargo build -p eggsec --release --features full && \
+RUN mkdir -p crates/eggsec-core/src crates/eggsec/src crates/eggsec-nse/src \
+    crates/eggsec-tui/src crates/eggsec-cli/src crates/eggsec-output/src \
+    crates/eggsec-tool-core/src crates/eggsec-agent/src && \
+    touch crates/eggsec-core/src/lib.rs crates/eggsec/src/lib.rs \
+    crates/eggsec-nse/src/lib.rs crates/eggsec-tui/src/lib.rs \
+    crates/eggsec-cli/src/main.rs crates/eggsec-output/src/lib.rs \
+    crates/eggsec-tool-core/src/lib.rs crates/eggsec-agent/src/lib.rs && \
+    cargo build -p eggsec-cli --release --features full && \
     rm -rf crates/*/src
 
 # Copy source code
-COPY crates/eggsec/src crates/eggsec/src
-COPY crates/eggsec-nse/src crates/eggsec-nse/src
-COPY crates/eggsec/build.rs crates/eggsec/
+COPY crates/ crates/
 
 # Build the application with all features
-RUN cargo build -p eggsec --release --features full
+RUN cargo build -p eggsec-cli --release --features full
 
 # Runtime stage
 FROM debian:bookworm-slim

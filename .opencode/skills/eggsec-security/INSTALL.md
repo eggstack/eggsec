@@ -10,11 +10,11 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/anomalyco/eggsec.git
+git clone https://github.com/eggstack/eggsec.git
 cd eggsec
 
 # Build with default features
-cargo build --release -p eggsec
+cargo build --release -p eggsec-cli
 
 # The binary will be at:
 # target/release/eggsec
@@ -25,55 +25,55 @@ cargo build --release -p eggsec
 ### Default Build (Recommended)
 
 ```bash
-cargo build --release -p eggsec
+cargo build --release -p eggsec-cli
 ```
 
 ### Full Feature Set
 
 ```bash
-cargo build --release -p eggsec --features full
+cargo build --release -p eggsec-cli --features full
 ```
 
 ### REST API Server
 
 ```bash
-cargo build --release -p eggsec --features rest-api
+cargo build --release -p eggsec-cli --features rest-api
 ```
 
 ### AI Integration
 
 ```bash
-cargo build --release -p eggsec --features ai-integration
+cargo build --release -p eggsec-cli --features ai-integration
 ```
 
 ### Nmap NSE Support
 
 ```bash
-cargo build --release -p eggsec --features nse
+cargo build --release -p eggsec-cli --features nse
 ```
 
 ### Stress Testing (Raw Sockets)
 
 ```bash
-cargo build --release -p eggsec --features stress-testing
+cargo build --release -p eggsec-cli --features stress-testing
 ```
 
 ### All Features Combined
 
 ```bash
-cargo build --release -p eggsec --features full
+cargo build --release -p eggsec-cli --features full
 ```
 
-Note: `grpc-api` and `nse-sandbox` are intentionally excluded from `full` and must be enabled separately.
+Note: `grpc-api`, `ws-api`, `pdf`, and `nse-sandbox` are intentionally excluded from `full` and must be enabled separately.
 
 ## Installing from Source
 
 ```bash
 # Install to ~/.cargo/bin
-cargo install --path crates/eggsec --features full
+cargo install --path crates/eggsec-cli --features full
 
 # Or with specific features
-cargo install --path crates/eggsec --features rest-api,ai-integration
+cargo install --path crates/eggsec-cli --features rest-api,ai-integration
 ```
 
 ## Configuration
@@ -129,20 +129,20 @@ eggsec recon --target example.com --dns
 
 ```bash
 # Library tests
-cargo test --lib -p eggsec
+cargo test --lib -p eggsec-cli
 
 # Integration tests
-cargo test --test scanner_tests -p eggsec
-cargo test --test negative_tests -p eggsec
+cargo test --test scanner_tests -p eggsec-cli
+cargo test --test negative_tests -p eggsec-cli
 
 # All tests
-cargo test -p eggsec
+cargo test -p eggsec-cli
 ```
 
 ## Linting
 
 ```bash
-cargo clippy --lib -p eggsec
+cargo clippy --lib -p eggsec-cli
 ```
 
 ## Troubleshooting

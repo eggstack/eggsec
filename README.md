@@ -120,6 +120,19 @@ cargo build --release -p eggsec-cli
 ./target/release/eggsec scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml --json
 ```
 
+### Installing to PATH
+
+```bash
+# Install to ~/.cargo/bin/eggsec
+cargo install --path crates/eggsec-cli
+
+# With all features
+cargo install --path crates/eggsec-cli --features full
+
+# Verify
+eggsec --version
+```
+
 ## Pipeline Profiles
 
 Eggsec includes 16 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
@@ -348,6 +361,9 @@ Install the required system dependencies for your platform. See the System Depen
 
 **High memory usage during large scans**
 Reduce concurrency with `--concurrency 10` or use a more targeted port range with `-p`.
+
+**`cargo install` fails with "found a virtual manifest"**
+Run `cargo install --path crates/eggsec-cli` instead of bare `cargo install`. The workspace root is a virtual manifest; the binary crate is in `crates/eggsec-cli`.
 
 ## Responsible Use
 
