@@ -241,6 +241,26 @@ let args = EndpointScanArgs {
 let results = scanner::endpoints::run_cli(args, &config).await?;
 ```
 
+### Parsing a Custom Wordlist
+
+```rust
+use eggsec::scanner::wordlist::Wordlist;
+
+// Parse from a file (async)
+let wordlist = Wordlist::from_file("/path/to/endpoints.txt").await?;
+let endpoints: Vec<String> = wordlist.into_endpoints();
+
+// Parse from a string
+let wordlist = Wordlist::parse("/admin\n/api/v1\n/login\n")?;
+assert_eq!(wordlist.len(), 3);
+```
+
+The `Wordlist` parser:
+- Skips empty lines and `#` comments
+- Normalizes paths to start with `/`
+- Rejects paths with whitespace, control chars, or length > 2048
+- Returns an error if the wordlist contains no valid endpoints
+
 ## Service Fingerprinting
 
 ### Fingerprinting Services

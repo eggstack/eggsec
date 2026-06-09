@@ -72,10 +72,8 @@ Default wordlists include common prefixes:
 ## Configuration
 
 ```toml
-[recon.subdomains]
-wordlist = "~/.config/eggsec/wordlists/subdomains.txt"
-concurrent = 100
-timeout = 5
+[recon]
+dns_concurrency = 100
 ```
 
 ## Triggers

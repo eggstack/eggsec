@@ -183,9 +183,14 @@ impl SecurityTool for ScannerTool {
                 Ok(())
             }
             ScanMode::Endpoints => {
+                let wordlist = request
+                    .params
+                    .get("wordlist")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 let args = crate::cli::EndpointScanArgs {
                     url: target.clone(),
-                    wordlist: None,
+                    wordlist,
                     concurrency,
                     timeout: timeout / 1000,
                     json: true,

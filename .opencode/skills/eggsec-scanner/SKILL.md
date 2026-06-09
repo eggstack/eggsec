@@ -8,9 +8,10 @@ Port scanning and endpoint discovery module workflows and patterns.
 - `mod.rs` - `scan_ports()` entry point, `PortScanConfig`, `PortResult`, `PortScanResults`
 - `spoofed.rs` - Raw socket scanning, `init_packet_trace(path, include_header)` for CSV tracing
 
-### Endpoint Discovery (`scanner/endpoints.rs`)
+### Endpoint Discovery (`scanner/endpoints.rs`, `scanner/wordlist.rs`)
 - `EndpointScanConfig`, `EndpointResult`, `EndpointScanResults`
-- 261 built-in endpoint paths
+- `Wordlist` - validated wordlist parsing with normalization and error checking
+- 223 built-in endpoint paths
 
 ### Fingerprinting (`scanner/fingerprint.rs`, `scanner/udp_fingerprint.rs`)
 - `ServiceFingerprint`, `fingerprint_services()`, `fingerprint_udp_services()`
@@ -78,9 +79,10 @@ cargo test --test scanner_tests -p eggsec
 4. Return proper `Result<PortScanResults>` with error handling
 
 ### New Endpoint Discovery Pattern
-1. Add to `DEFAULT_ENDPOINTS` in `endpoints.rs`
-2. Update `is_interesting()` for new sensitivity patterns
-3. Add tests
+1. Add to `DEFAULT_ENDPOINTS` in `endpoints.rs` (for built-in paths)
+2. Or users can supply custom endpoints via `--wordlist` / `Wordlist::from_file()`
+3. Update `is_interesting()` for new sensitivity patterns
+4. Add tests
 
 ## Bug Fixes (2026-05-22)
 

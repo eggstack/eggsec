@@ -127,6 +127,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `CodingAgentFindingReport` - Typed output schema for coding-agent findings in `tool/protocol/mcp/coding_agent_output.rs`
 - `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs`
 - `StoredFinding` - Unified finding type in `findings::lifecycle`, re-exported by `storage::models` for database persistence
+- `Wordlist` - Validated endpoint wordlist parsing with normalization (`scanner/wordlist.rs`)
 
 ### Important Patterns
 

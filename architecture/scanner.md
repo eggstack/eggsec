@@ -14,12 +14,13 @@ High-performance TCP and UDP port scanning.
 - **Spoofed Scanning**: IP spoofing with decoy support (Simultaneous or Staggered modes)
 - **Timing Templates**: Nmap-style T0-T5 presets controlling parallelism, timeouts, and rate limits
 
-### Endpoint Discovery (`endpoints.rs`)
+### Endpoint Discovery (`endpoints.rs`, `wordlist.rs`)
 
 Finding hidden files and directories on web servers.
 
-- **Wordlist-based Brute Forcing**: Uses extensive wordlists (261 built-in paths) to find common endpoints
-- **Custom Wordlist Loading**: Load endpoints from file
+- **Wordlist-based Brute Forcing**: Uses extensive wordlists (223 built-in paths) to find common endpoints
+- **Custom Wordlist Loading**: Load endpoints from file via `--wordlist` / `-w` CLI flag
+- **Wordlist Parsing** (`wordlist.rs`): Validated parsing with line-based splitting, `#` comment support, path normalization (ensures leading `/`), and validation (max 2048 chars, no whitespace, no control chars)
 - **Custom Payload Support**: Allows for targeted discovery based on specific technologies
 - **Note**: Does NOT implement recursive crawling - flat wordlist scan only
 

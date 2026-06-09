@@ -7,6 +7,7 @@
 | `scanner/ports/mod.rs` | Main TCP port scanning with semaphore concurrency |
 | `scanner/ports/spoofed.rs` | Raw socket scanning (requires `stress-testing` + Unix) |
 | `scanner/endpoints.rs` | HTTP endpoint discovery with wordlist brute forcing |
+| `scanner/wordlist.rs` | Validated endpoint wordlist parsing, normalization, and validation (used by `endpoints.rs` for custom `--wordlist` loading) |
 | `scanner/fingerprint.rs` | TCP service fingerprinting via banner grabbing |
 | `scanner/udp_fingerprint.rs` | UDP service fingerprinting |
 | `scanner/spoof.rs` | IP spoofing config, decoy modes, packet crafting |

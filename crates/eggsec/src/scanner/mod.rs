@@ -87,6 +87,7 @@ pub mod spoof;
 pub mod templates;
 pub mod timing;
 pub mod udp_fingerprint;
+pub mod wordlist;
 
 #[cfg(feature = "stress-testing")]
 pub mod icmp_probe;
@@ -103,6 +104,7 @@ pub use timing::{PortPriority, TimingConfig, TimingPreset};
 pub use udp_fingerprint::{
     fingerprint_udp_services, get_default_udp_ports, UdpFingerprintResults, UdpServiceFingerprint,
 };
+pub use wordlist::Wordlist;
 
 #[cfg(feature = "stress-testing")]
 pub use icmp_probe::{ping_host, PingResult, PingStats};

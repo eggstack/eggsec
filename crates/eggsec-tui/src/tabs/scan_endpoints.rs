@@ -125,6 +125,7 @@ impl ScanEndpointsTab {
         self.results_view.clear();
 
         let base_url = results.base_url.clone();
+        let endpoints_scanned = results.endpoints_scanned;
         let endpoints_found = results.endpoints_found;
         let interesting_findings = results.interesting_findings;
 
@@ -147,6 +148,9 @@ impl ScanEndpointsTab {
         ]));
 
         self.results_view.add_line(Line::from(vec![
+            Span::styled("Scanned: ", Style::default().fg(tc!(secondary))),
+            Span::raw(endpoints_scanned.to_string()),
+            Span::raw(" | "),
             Span::styled("Found: ", Style::default().fg(tc!(info))),
             Span::raw(endpoints_found.to_string()),
             Span::raw(" | "),
@@ -199,13 +203,44 @@ impl ScanEndpointsTab {
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
-            self.results = None;
-            self.results_view.clear();
-            self.error = None;
+        if self.target().is_empty() {
+            self.state = AppState::Error("Target cannot be empty".to_string());
+            self.error = Some(TabError::Target("Target cannot be empty".to_string()));
+            return;
         }
+
+        let wordlist_path = self.wordlist().map(|s| s.to_string());
+        if let Some(path_str) = wordlist_path {
+            let path = std::path::Path::new(&path_str);
+            if !path.exists() {
+                self.state = AppState::Error(format!(
+                    "Wordlist file not found: {}",
+                    path_str
+                ));
+                self.error = Some(TabError::Config(format!(
+                    "Wordlist file not found: {}",
+                    path_str
+                )));
+                return;
+            }
+            if !path.is_file() {
+                self.state = AppState::Error(format!(
+                    "Wordlist path is not a file: {}",
+                    path_str
+                ));
+                self.error = Some(TabError::Config(format!(
+                    "Wordlist path is not a file: {}",
+                    path_str
+                )));
+                return;
+            }
+        }
+
+        self.state = AppState::Running;
+        self.progress.current = 0;
+        self.results = None;
+        self.results_view.clear();
+        self.error = None;
     }
 
     pub fn stop(&mut self) {

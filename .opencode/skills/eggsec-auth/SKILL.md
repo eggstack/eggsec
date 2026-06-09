@@ -26,7 +26,9 @@ Auth tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 ### Brute Force Testing
 ```rust
 let mut engine = AuthEngine::new();
-engine.add_wordlist("rockyou.txt");
+let usernames = vec!["admin".to_string(), "root".to_string()];
+let passwords = vec!["password".to_string(), "123456".to_string()];
+engine.load_wordlists(usernames, passwords);
 engine.set_target("https://example.com/login");
 engine.run_brute_force().await?;
 ```

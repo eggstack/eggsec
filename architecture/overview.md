@@ -233,7 +233,7 @@ High-performance port scanning with configurable timing:
 | **TCP Scanning** | SYN, CONNECT, FIN, NULL, XMAS, ACK scans |
 | **UDP Scanning** | UDP probe-based scanning |
 | **Service Detection** | 42+ protocol fingerprints |
-| **Endpoint Discovery** | 261 built-in path signatures |
+| **Endpoint Discovery** | 223 built-in path signatures, custom wordlist support |
 | **IP Spoofing** | Raw socket spoofing (feature-gated) |
 | **Timing Presets** | Paranoid, Sneaky, Polite, Normal, Aggressive, Insane |
 

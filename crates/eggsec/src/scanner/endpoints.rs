@@ -374,12 +374,9 @@ where
     }
 
     let endpoints = if let Some(wordlist_path) = args.wordlist {
-        let content = tokio::fs::read_to_string(&wordlist_path).await?;
-        content
-            .lines()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
+        crate::scanner::wordlist::Wordlist::from_file(&wordlist_path)
+            .await?
+            .into_endpoints()
     } else {
         DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
     };
@@ -466,12 +463,9 @@ pub async fn run_cli(args: EndpointScanArgs, config: &EggsecConfig) -> Result<()
     }
 
     let endpoints = if let Some(wordlist_path) = args.wordlist {
-        let content = tokio::fs::read_to_string(&wordlist_path).await?;
-        content
-            .lines()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
+        crate::scanner::wordlist::Wordlist::from_file(&wordlist_path)
+            .await?
+            .into_endpoints()
     } else {
         DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
     };

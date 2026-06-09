@@ -28,7 +28,6 @@ Endpoint discovery finds hidden paths, directories, and files on web servers. Th
 ## Capabilities
 
 - Path bruteforcing with wordlists
-- Recursive directory crawling
 - File extension enumeration
 - HTTP method discovery (GET, POST, PUT, DELETE)
 - Response analysis (status codes, content-length)
@@ -51,11 +50,7 @@ eggsec scan endpoints --target https://example.com
 eggsec scan endpoints --target https://example.com --wordlist /path/to/paths.txt
 ```
 
-### Recursive Discovery
-
-```bash
-eggsec scan endpoints --target https://example.com --recursive
-```
+The wordlist is a plain text file with one endpoint per line. Lines starting with `#` are treated as comments. Paths are automatically normalized to start with `/`.
 
 ### PHP Extension Scan
 
@@ -87,10 +82,9 @@ eggsec scan endpoints --target https://api.example.com --api
 ## Configuration
 
 ```toml
-[scan.endpoints]
-wordlist = "~/.config/eggsec/wordlists/paths.txt"
-concurrent = 50
-rate_limit = 100
+[scan]
+default_concurrency = 50
+rate_limit_per_second = 100
 follow_redirects = true
 ```
 

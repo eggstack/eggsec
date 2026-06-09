@@ -71,18 +71,11 @@ pub fn get_static_help_data() -> StaticHelpData {
             title: "Endpoint Discovery".to_string(),
             content: "Directory and file discovery using wordlists. Supports recursive scanning."
                 .to_string(),
-            commands: vec![
-                HelpCommand {
-                    key: "Enter".to_string(),
-                    description: "Start scan".to_string(),
-                    category: "Action".to_string(),
-                },
-                HelpCommand {
-                    key: "w".to_string(),
-                    description: "Load wordlist".to_string(),
-                    category: "Config".to_string(),
-                },
-            ],
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Start scan".to_string(),
+                category: "Action".to_string(),
+            }],
         },
     );
 

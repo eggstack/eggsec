@@ -457,10 +457,9 @@ async fn process_fingerprint(task: Task) -> Result<serde_json::Value> {
 async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
     let target = &task.target;
     let wordlist = if let Some(w) = task.payload.get("wordlist").and_then(|v| v.as_str()) {
-        tokio::fs::read_to_string(w)
-            .await
-            .map(|content| content.lines().map(|s| s.to_string()).collect::<Vec<_>>())
-            .unwrap_or_default()
+        crate::scanner::wordlist::Wordlist::from_file(w)
+            .await?
+            .into_endpoints()
     } else {
         vec![
             "/admin".to_string(),

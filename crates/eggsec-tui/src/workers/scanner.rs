@@ -69,12 +69,9 @@ pub async fn run_endpoint_scan(
     }
 
     let endpoints: Vec<String> = if let Some(ref wl) = wordlist {
-        tokio::fs::read_to_string(wl)
+        eggsec::scanner::wordlist::Wordlist::from_file(wl)
             .await?
-            .lines()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
+            .into_endpoints()
     } else {
         DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
     };
