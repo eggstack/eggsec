@@ -9,7 +9,7 @@ thread_local! {
 
 pub fn sync_theme_to_thread_local(theme: &Theme) {
     THEME_MANAGER.with(|tm| {
-        tm.borrow_mut().current = theme.clone();
+        tm.borrow_mut().set_current_for_legacy_sync(theme);
     });
 }
 

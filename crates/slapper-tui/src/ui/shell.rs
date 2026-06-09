@@ -6,7 +6,6 @@ use ratatui::{
 };
 
 use crate::app::NotificationSeverity;
-use crate::tc;
 use crate::theme::Theme;
 use crate::App;
 use crate::InputMode;
@@ -111,10 +110,10 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
             };
             (notif.message.clone(), color)
         } else {
-            get_normal_status(app)
+            get_normal_status(app, theme)
         }
     } else {
-        get_normal_status(app)
+        get_normal_status(app, theme)
     };
 
     let help_text = get_help_text(app, area);
@@ -165,33 +164,42 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
     f.render_widget(help, chunks.get(2).copied().unwrap_or(area));
 }
 
-pub fn get_tab_status(state: &crate::tabs::AppState) -> (String, ratatui::style::Color) {
+pub fn get_tab_status(
+    state: &crate::tabs::AppState,
+    theme: &Theme,
+) -> (String, ratatui::style::Color) {
     use crate::tabs::AppState;
     match state {
-        AppState::Idle => ("Ready - Press Enter to start".to_string(), tc!(status_idle)),
-        AppState::Running => ("Running - Ctrl+C to stop".to_string(), tc!(status_running)),
-        AppState::Completed => ("Completed".to_string(), tc!(success)),
-        AppState::Error(e) => (e.to_string(), tc!(error)),
+        AppState::Idle => (
+            "Ready - Press Enter to start".to_string(),
+            theme.colors.status_idle,
+        ),
+        AppState::Running => (
+            "Running - Ctrl+C to stop".to_string(),
+            theme.colors.status_running,
+        ),
+        AppState::Completed => ("Completed".to_string(), theme.colors.success),
+        AppState::Error(e) => (e.to_string(), theme.colors.error),
     }
 }
 
-pub fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
+pub fn get_normal_status(app: &App, theme: &Theme) -> (String, ratatui::style::Color) {
     match app.current_tab {
         crate::tabs::Tab::Settings => (
             "Press 's' to save settings, 'r' to reset".to_string(),
-            tc!(status_idle),
+            theme.colors.status_idle,
         ),
         crate::tabs::Tab::History => (
             "↑↓ Navigate | 'd' Delete | 'r' Clear all".to_string(),
-            tc!(status_idle),
+            theme.colors.status_idle,
         ),
         crate::tabs::Tab::Dashboard => (
             "Dashboard - View scan results overview".to_string(),
-            tc!(status_idle),
+            theme.colors.status_idle,
         ),
         _ => {
             let state = app.current_tab.as_tab_state(app).state();
-            get_tab_status(&state)
+            get_tab_status(&state, theme)
         }
     }
 }

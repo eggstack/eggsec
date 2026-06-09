@@ -174,7 +174,14 @@ All 29 tabs now properly guard input handlers with `!self.is_running()`. This pr
 
 ### Theming
 
-Use `tc!` macro for all colors:
+New code should prefer explicit `&Theme` parameters:
+```rust
+pub fn draw_widget(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
+    let style = Style::default().fg(theme.colors.text);
+}
+```
+
+For tab renderers and components, `tc!` macro is still valid:
 ```rust
 use crate::tc;
 let style = Style::default().fg(tc!(text));

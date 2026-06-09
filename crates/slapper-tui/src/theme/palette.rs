@@ -9,7 +9,7 @@ pub enum ThemeMode {
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub mode: ThemeMode,
-    pub name: &'static str,
+    pub name: String,
     pub colors: ThemeColors,
 }
 

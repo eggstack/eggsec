@@ -69,12 +69,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     if let Some(ref mut palette) = app.command_palette {
         if palette.visible {
-            draw_command_palette(f, app);
+            draw_command_palette(f, app, &theme);
         }
     }
 
     if app.overlay.show_search {
-        draw_search_popup(f, app);
+        draw_search_popup(f, app, &theme);
     }
 
     if app.overlay.show_search && !app.search.query.is_empty() {
@@ -86,11 +86,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     if app.overlay.show_http_options {
-        draw_http_options_popup(f, app);
+        draw_http_options_popup(f, app, &theme);
     }
 
     if app.quick_switch.visible {
-        draw_quick_switch(f, app);
+        draw_quick_switch(f, app, &theme);
     }
 
     if let Some(action) = app.overlay.pending_action {

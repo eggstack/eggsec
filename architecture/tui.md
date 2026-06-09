@@ -236,19 +236,22 @@ The theme system is split into a module with focused submodules:
 
 | File | Purpose |
 |------|---------|
-| `palette.rs` | `ThemeMode`, `Theme`, `ThemeColors` structs |
+| `palette.rs` | `ThemeMode`, `Theme` (with `name: String`), `ThemeColors` structs |
 | `builtin.rs` | `dark_theme()`, `light_theme()` factory functions |
-| `manager.rs` | `ThemeManager` - holds dark/light themes, theme switching, persistence |
-| `style.rs` | Theme style methods for rendering |
+| `manager.rs` | `ThemeManager` - holds dark/light themes, private `current`, theme switching |
+| `style.rs` | Theme style methods for rendering (currently unused helper methods) |
 | `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
 
-`ThemeManager` holds dark/light themes with 28 color fields.
+`ThemeManager` holds dark/light themes with 28 color fields. `Theme.name` is `String` to support future file-loaded themes.
 
-Use `tc!` macro for theme colors:
+The main shell and popup layers use explicit `&Theme` parameters. Tab renderers and components still use the `tc!` macro for theme colors:
+
 ```rust
 use crate::tc;
 let style = Style::default().fg(tc!(text));
 ```
+
+New rendering code should prefer explicit `&Theme` parameters (via `App::current_theme()` or direct `theme` param) over the `tc!` macro.
 
 ### Session Management (`session.rs`)
 

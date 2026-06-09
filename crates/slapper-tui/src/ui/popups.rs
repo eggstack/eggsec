@@ -6,10 +6,10 @@ use ratatui::{
 };
 
 use crate::components::centered_rect;
-use crate::tc;
+use crate::theme::Theme;
 use crate::App;
 
-pub fn draw_http_options_popup(f: &mut Frame, app: &App) {
+pub fn draw_http_options_popup(f: &mut Frame, app: &App, theme: &Theme) {
     use ratatui::widgets::{Clear, Paragraph};
 
     let popup_width = 50;
@@ -24,7 +24,7 @@ pub fn draw_http_options_popup(f: &mut Frame, app: &App) {
         .title("Global HTTP Options (press h to close)")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(tc!(primary)));
+        .border_style(Style::default().fg(theme.colors.primary));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -71,11 +71,12 @@ pub fn draw_http_options_popup(f: &mut Frame, app: &App) {
         ),
     ];
 
-    let paragraph = Paragraph::new(content.join("\n")).style(Style::default().fg(tc!(text)));
+    let paragraph =
+        Paragraph::new(content.join("\n")).style(Style::default().fg(theme.colors.text));
     f.render_widget(paragraph, inner);
 }
 
-pub fn draw_command_palette(f: &mut Frame, app: &mut App) {
+pub fn draw_command_palette(f: &mut Frame, app: &mut App, theme: &Theme) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
     let palette = match app.command_palette.as_mut() {
@@ -92,7 +93,7 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App) {
         .title("Command Palette (Ctrl+P to close, Up/Down to navigate, Enter to select)")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(tc!(highlight)));
+        .border_style(Style::default().fg(theme.colors.highlight));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -110,8 +111,11 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App) {
     let content_height = chunks.get(2).copied().unwrap_or(inner).height;
     palette.update_content_height(content_height);
 
-    let query_paragraph = Paragraph::new(format!("Query: {}", palette.query))
-        .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
+    let query_paragraph = Paragraph::new(format!("Query: {}", palette.query)).style(
+        Style::default()
+            .fg(theme.colors.text)
+            .bg(theme.colors.surface),
+    );
     f.render_widget(query_paragraph, chunks.first().copied().unwrap_or(inner));
 
     let visible_height = palette.visible_results_height();
@@ -124,7 +128,7 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App) {
         "0/0".to_string()
     };
     let status_paragraph =
-        Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(theme.colors.text_dim));
     f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
 
     let mut items: Vec<ListItem> = Vec::new();
@@ -132,11 +136,11 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App) {
         let result = &palette.results[global_idx];
         let style = if global_idx == palette.selected_index {
             Style::default()
-                .fg(tc!(background))
-                .bg(tc!(highlight))
+                .fg(theme.colors.background)
+                .bg(theme.colors.highlight)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(tc!(text))
+            Style::default().fg(theme.colors.text)
         };
 
         let shortcut_text = result
@@ -157,13 +161,13 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(tc!(border))),
+                .border_style(Style::default().fg(theme.colors.border)),
         )
-        .style(Style::default().fg(tc!(text)));
+        .style(Style::default().fg(theme.colors.text));
     f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
 }
 
-pub fn draw_search_popup(f: &mut Frame, app: &App) {
+pub fn draw_search_popup(f: &mut Frame, app: &App, theme: &Theme) {
     use ratatui::widgets::{Clear, Paragraph};
 
     let popup_width = 60;
@@ -178,7 +182,7 @@ pub fn draw_search_popup(f: &mut Frame, app: &App) {
         .title("Search (press Esc to close, Enter to search)")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(tc!(accent)));
+        .border_style(Style::default().fg(theme.colors.accent));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -189,11 +193,11 @@ pub fn draw_search_popup(f: &mut Frame, app: &App) {
         format!("Searching: {}", app.search.query)
     };
 
-    let paragraph = Paragraph::new(search_content).style(Style::default().fg(tc!(text)));
+    let paragraph = Paragraph::new(search_content).style(Style::default().fg(theme.colors.text));
     f.render_widget(paragraph, inner);
 }
 
-pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
+pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
     let popup_width = 60;
@@ -208,7 +212,7 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
         .title("Tab Search (Ctrl+X to close, Enter to select, Up/Down to navigate)")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(tc!(primary)));
+        .border_style(Style::default().fg(theme.colors.primary));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -223,8 +227,11 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
         ])
         .split(inner);
 
-    let query_paragraph = Paragraph::new(format!("Filter: {}", app.quick_switch.query))
-        .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
+    let query_paragraph = Paragraph::new(format!("Filter: {}", app.quick_switch.query)).style(
+        Style::default()
+            .fg(theme.colors.text)
+            .bg(theme.colors.surface),
+    );
     f.render_widget(query_paragraph, chunks.first().copied().unwrap_or(inner));
 
     let results = app.get_quick_switch_results();
@@ -235,7 +242,7 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     };
     let status_text = format!("{}/{}", selected_display, results.len());
     let status_paragraph =
-        Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(theme.colors.text_dim));
     f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
 
     let visible_rows = chunks
@@ -257,11 +264,11 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
         let i = start + offset;
         let style = if i == selected {
             Style::default()
-                .fg(tc!(background))
-                .bg(tc!(highlight))
+                .fg(theme.colors.background)
+                .bg(theme.colors.highlight)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(tc!(text))
+            Style::default().fg(theme.colors.text)
         };
         let item_text = format!("{} - {}", tab.title(), tab.description());
         items.push(ListItem::new(item_text).style(style));
@@ -269,7 +276,8 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
 
     if items.is_empty() {
         items.push(
-            ListItem::new("(No matching tabs found)").style(Style::default().fg(tc!(text_dim))),
+            ListItem::new("(No matching tabs found)")
+                .style(Style::default().fg(theme.colors.text_dim)),
         );
     }
 
@@ -278,8 +286,8 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(tc!(border))),
+                .border_style(Style::default().fg(theme.colors.border)),
         )
-        .style(Style::default().fg(tc!(text)));
+        .style(Style::default().fg(theme.colors.text));
     f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
 }

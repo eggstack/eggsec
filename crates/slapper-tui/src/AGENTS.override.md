@@ -236,21 +236,30 @@ This ensures small terminals (< 24 rows) still show usable UI.
 
 ## Theme
 
-`tc!` macro in `tui/theme/legacy.rs`:
+`Theme` has `name: String` (supports future file-loaded themes) and `ThemeManager.current` is private.
 
+New rendering code should prefer explicit `&Theme` parameters:
 ```rust
-tc!(field_name)  // primary, secondary, accent, background, text, etc.
+pub fn draw_widget(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
+    let style = Style::default().fg(theme.colors.text);
+}
+```
+
+For tab renderers and components that still use `tc!` macro:
+```rust
+use crate::tc;
+let style = Style::default().fg(tc!(text));
 ```
 
 **Semantic mapping:**
 | Old | Theme |
 |-----|-------|
-| `Color::White` | `tc!(text)` |
-| `Color::Gray` | `tc!(text_dim)` |
-| `Color::Green` | `tc!(success)` |
-| `Color::Red` | `tc!(error)` |
+| `Color::White` | `tc!(text)` or `theme.colors.text` |
+| `Color::Gray` | `tc!(text_dim)` or `theme.colors.text_dim` |
+| `Color::Green` | `tc!(success)` or `theme.colors.success` |
+| `Color::Red` | `tc!(error)` or `theme.colors.error` |
 
-**HTTP status:** 200-299 → `tc!(success)`, 400-499 → `tc!(warning)`, 500-599 → `tc!(error)`
+**HTTP status:** 200-299 → `success`, 400-499 → `warning`, 500-599 → `error`
 
 ## FocusArea Enum Pattern
 

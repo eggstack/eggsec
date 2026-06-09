@@ -5,7 +5,7 @@ use super::palette::{Theme, ThemeMode};
 
 pub struct ThemeManager {
     themes: FxHashMap<String, Theme>,
-    pub(crate) current: Theme,
+    current: Theme,
 }
 
 impl Default for ThemeManager {
@@ -58,6 +58,10 @@ impl ThemeManager {
         }
     }
 
+    pub(crate) fn set_current_for_legacy_sync(&mut self, theme: &Theme) {
+        self.current = theme.clone();
+    }
+
     pub fn list_themes(&self) -> Vec<&str> {
         let mut themes: Vec<&str> = self.themes.keys().map(|s| s.as_str()).collect();
         themes.sort();
@@ -100,5 +104,37 @@ mod tests {
         assert_eq!(manager.current().mode, ThemeMode::Light);
         manager.toggle();
         assert_eq!(manager.current().mode, ThemeMode::Dark);
+    }
+
+    #[test]
+    fn builtin_theme_names_are_owned_strings() {
+        let dark = crate::theme::builtin::dark_theme();
+        let light = crate::theme::builtin::light_theme();
+        assert_eq!(dark.name, "dark");
+        assert_eq!(light.name, "light");
+    }
+
+    #[test]
+    fn set_theme_preserves_name_on_success() {
+        let mut manager = ThemeManager::new();
+        manager.set_theme("light");
+        assert_eq!(manager.current().name, "light");
+    }
+
+    #[test]
+    fn set_theme_preserves_name_on_failure() {
+        let mut manager = ThemeManager::new();
+        let initial_name = manager.current().name.clone();
+        manager.set_theme("nonexistent");
+        assert_eq!(manager.current().name, initial_name);
+    }
+
+    #[test]
+    fn legacy_sync_updates_through_setter() {
+        let mut manager = ThemeManager::new();
+        let light = crate::theme::builtin::light_theme();
+        manager.set_current_for_legacy_sync(&light);
+        assert_eq!(manager.current().mode, ThemeMode::Light);
+        assert_eq!(manager.current().name, "light");
     }
 }

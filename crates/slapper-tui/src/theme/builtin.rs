@@ -3,7 +3,7 @@ use super::palette::{Theme, ThemeColors, ThemeMode};
 pub fn dark_theme() -> Theme {
     Theme {
         mode: ThemeMode::Dark,
-        name: "dark",
+        name: "dark".to_string(),
         colors: ThemeColors {
             primary: ratatui::style::Color::Cyan,
             secondary: ratatui::style::Color::Blue,
@@ -40,7 +40,7 @@ pub fn dark_theme() -> Theme {
 pub fn light_theme() -> Theme {
     Theme {
         mode: ThemeMode::Light,
-        name: "light",
+        name: "light".to_string(),
         colors: ThemeColors {
             primary: ratatui::style::Color::Blue,
             secondary: ratatui::style::Color::Cyan,

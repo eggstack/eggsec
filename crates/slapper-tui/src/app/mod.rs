@@ -531,6 +531,10 @@ impl App {
         crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
     }
 
+    pub fn current_theme(&self) -> &crate::theme::Theme {
+        self.theme_manager.current()
+    }
+
     pub fn toggle_quick_switch(&mut self) {
         if self.is_any_overlay_active() {
             return;
