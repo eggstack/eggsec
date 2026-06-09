@@ -16,7 +16,7 @@ Comprehensive reference of all security testing capabilities available in Eggsec
 
 ## Reconnaissance Modules
 
-Eggsec includes 18 reconnaissance modules for comprehensive target intelligence gathering:
+Eggsec includes 21+ reconnaissance modules for comprehensive target intelligence gathering:
 
 | Module | File | Description |
 |--------|------|-------------|
@@ -43,7 +43,7 @@ Eggsec includes 18 reconnaissance modules for comprehensive target intelligence 
 
 ## Fuzzing Payload Types
 
-Eggsec supports 24 security fuzzing payload types:
+Eggsec supports 30 security fuzzing payload types:
 
 | Type | Alias | File | Tests For |
 |------|-------|------|-----------|
@@ -70,6 +70,13 @@ Eggsec supports 24 security fuzzing payload types:
 | **CSV Injection** | csv | `src/fuzzer/payloads/csv.rs` | Formula injection payloads |
 | **SOAP Injection** | soap | `src/fuzzer/payloads/soap.rs` | SOAP/XML Injection |
 | **WebSocket** | websocket | `src/fuzzer/payloads/websocket.rs` | WebSocket Fuzzing |
+| **NoSQL Injection** | nosql | `src/fuzzer/payloads/nosql.rs` | NoSQL injection payloads |
+| **XPath Injection** | xpath | `src/fuzzer/payloads/xpath.rs` | XPath injection payloads |
+| **Expression Language Injection** | expression | `src/fuzzer/payloads/expression.rs` | Expression language injection |
+| **Prototype Pollution** | prototype | `src/fuzzer/payloads/prototype.rs` | Prototype pollution payloads |
+| **Race Condition** | race | `src/fuzzer/payloads/race.rs` | Race condition testing |
+| **Mass Assignment** | massassign | `src/fuzzer/payloads/massassign.rs` | Mass assignment testing |
+| **Out-of-Band Testing** | oast | `src/fuzzer/payloads/oast.rs` | Out-of-band application security testing |
 | **CVE Lookup** | cve | `src/recon/cve_lookup.rs` | CVE vulnerability testing based on detected technologies |
 
 ---
@@ -108,7 +115,7 @@ Advanced vulnerability detection capabilities:
 |----------|------|-------------|
 | **REST API** | `src/tool/protocol/rest.rs` | REST API server - exposes eggsec tools via HTTP (requires rest-api feature) |
 | **gRPC API** | `src/tool/protocol/grpc.rs` | gRPC API server - exposes eggsec tools via protocol buffers (requires grpc-api feature) |
-| **MCP Server** | `src/tool/protocol/mcp.rs` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (requires mcp-server feature) |
+| **MCP Server** | `src/tool/protocol/mcp/` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (requires mcp-server feature) |
 
 ---
 
@@ -142,10 +149,10 @@ Full security testing toolkit for AI agents. All tools are available.
 
 | Capability | Available | Notes |
 |------------|-----------|-------|
-| Recon | Yes | All 18 modules |
+| Recon | Yes | All 21+ modules |
 | Port scanning | Yes | |
 | Fingerprinting | Yes | |
-| Fuzzing (all types) | Yes | 24 payload types |
+| Fuzzing (all types) | Yes | 30 payload types |
 | WAF detection/bypass | Yes | |
 | WAF stress testing | Yes | |
 | Load testing | Yes | |
@@ -265,5 +272,12 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `nse` | Nmap Scripting Engine support |
 | `rest-api` | REST API server |
 | `grpc-api` | gRPC API server |
-| `mcp-server` | MCP server for AI integration |
+| `ai-integration` | AI planner, script generation |
+| `headless-browser` | DOM XSS and SPA crawling |
+| `database` | SQLx-based persistence |
+| `container` | Kubernetes/Docker scanning |
+| `sbom` | SBOM generation |
+| `advanced-hunting` | Advanced threat hunting |
+| `compliance` | Compliance scanning |
+| `wireless` | WiFi scanning |
 | `full` | All features combined |

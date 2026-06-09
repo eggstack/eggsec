@@ -66,23 +66,47 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 Use these sections as the canonical reference points when updating guidance or skills:
 
-- `architecture/tui.md` - TUI event loop, key handling, overlays, tab routing, session persistence, and quick switch behavior
-- `architecture/config.md` - config loading, scope enforcement, and TUI settings save semantics
-- `architecture/output.md` - report formatting, exports, and rendering integration
-- `architecture/compile_time_baseline.md` - workspace crate layout and compile-time baseline
+- `architecture/overview.md` - System-wide architecture, module index, data flow
+- `architecture/tui.md` - TUI event loop, key handling, overlays, tab routing, session persistence
+- `architecture/config.md` - Config loading, scope enforcement, TUI settings save semantics
+- `architecture/cli_commands.md` - CLI parsing, command dispatch, handler patterns
+- `architecture/output.md` - Report formatting, exports, and rendering integration
+- `architecture/pipeline.md` - Security assessment pipeline, 16 profiles
+- `architecture/scanner.md` - Port scanning and endpoint discovery
+- `architecture/fuzzer.md` - Fuzzing engine and payload generation
+- `architecture/waf.md` - WAF detection and bypass
+- `architecture/recon.md` - Reconnaissance module
+- `architecture/distributed.md` - Distributed coordinator/worker architecture
+- `architecture/compile_time_baseline.md` - Workspace crate layout and compile-time baseline
 
 ### Feature Flags
 
-- `stress-testing` - Raw sockets, IP spoofing
-- `packet-inspection` - Packet capture
+- `tool-api` - Tool abstraction layer (always enabled internally)
+- `insecure-tls` - TLS bypass for testing only
 - `rest-api` / `grpc-api` - API server integration
+- `ws-api` - WebSocket pub/sub
 - `nse` - Nmap NSE script support
 - `nse-ssh2` - NSE with SSH2/libssh2 support
 - `nse-sandbox` - Restrict dangerous Lua operations
 - `ai-integration` - AI planner, script generation, autonomous agent skills
-- `ws-api` - WebSocket pub/sub
-- `api-schema` - API schema support (marker-only, no additional deps)
-- `full` - All features combined (16 sub-features, does not include `grpc-api` or `ws-api`)
+- `websocket` - WebSocket security testing
+- `headless-browser` - DOM XSS and SPA crawling
+- `database` - SQLx-based persistence
+- `container` - Kubernetes/Docker scanning
+- `sbom` - SBOM generation (CycloneDX, SPDX)
+- `stress-testing` - Raw sockets, IP spoofing
+- `packet-inspection` - Packet capture
+- `advanced-hunting` - Advanced threat hunting
+- `compliance` - Compliance scanning (OWASP, PCI, HIPAA, SOC2)
+- `external-integrations` - Jira, GitHub, GitLab connectors
+- `finding-workflow` - Finding lifecycle management
+- `vuln-management` - Vulnerability triage and CVSS scoring
+- `cloud` - AWS/GCP/Azure asset discovery
+- `git-secrets` - Git secrets scanning
+- `wireless` - WiFi scanning and authentication testing
+- `pdf` - PDF report generation
+- `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
+- `full` - All features combined (16 sub-features, does not include `grpc-api`, `ws-api`, or `pdf`)
 
 ### Key Types
 
@@ -91,7 +115,6 @@ Use these sections as the canonical reference points when updating guidance or s
 - `SensitiveString` - Zeroized credential wrapper (defined in `eggsec-core::types`, re-exported by `types.rs`)
 - `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `eggsec-tui` (`tui/app/tab_error.rs`)
 - `ThemeLoadState` - Grouped theme-load runtime state (`rx`, `handle`, deferred restore, user-change flag) in `eggsec-tui` (`tui/app/state.rs`)
-- `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
 - `PayloadType` - Enum of 30 payload categories
 - `AiClient` / `Provider` - AI LLM client and provider enum
@@ -110,8 +133,8 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Severity Enum**: Single canonical definition in `types.rs`. Re-export, don't recreate.
 - **TabError Enum**: Structured error handling for tabs with `is_recoverable()` method for auto-recovery logic
 - **Tool Abstraction**: `tool/traits.rs` has `SecurityTool` trait, `tool/registry.rs` has `ToolRegistry`
-- **Regex Caching**: Use `lru = "0.18"` with cache size 100 (NonZeroUsizer)
-- **Circuit Breaker**: `utils/circuit_breaker.rs` - `CircuitBreaker` + `CircuitBreakerRegistry`
+- **Regex Caching**: Use `lru = "0.18"` with cache size 100 (NonZeroUsize)
+- **Circuit Breaker**: `utils/circuit_breaker.rs` - `CircuitBreaker` with configurable thresholds
 - **Truncation**: `utils/formatting.rs` - `strip_controls` (recommended) and `preserve_all`
 - **Visual Regression Testing**: Use `TestBackend` + `Terminal::new()` with `terminal.backend().buffer()` to verify rendered content
 - **AI Cache Keys**: Always use `CacheKeyBuilder` for cache keys in AI module to avoid collisions
@@ -124,17 +147,17 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1324 base, 1469+ with full features |
-| Clippy | ~33 warnings (pre-existing, none in ai module) |
-| Source files | 742 (.rs files in crates/) |
+| Tests | 3032+ (2718 #[test] + 314 #[tokio::test]) |
+| Clippy | ~54 warnings (pre-existing, none in ai module) |
+| Source files | 763 (.rs files in crates/) |
 | Payload types | 30 |
-| Tabs | 27 (28 with conditional feature tabs) |
+| Tabs | 29 (Tab enum variants 0-28) |
 | WAF products | 34 |
-| NSE libraries | 169 |
-| Modules | 39 |
+| NSE libraries | 164 public modules |
+| Modules | 38 |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
-| CLI commands | 24 base, 37 with all features |
+| CLI commands | 24 base, 39 with all features |
 
 ### Codebase Issues (Known Stub Implementations)
 
@@ -148,10 +171,10 @@ No remaining stub implementations.
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
 - **Docker Shell Injection**: FIXED - `container/docker.rs:inspect_image()` now validates image names before passing to shell (2026-06-02)
 - **Silent Error Suppression**: FIXED - All listed issues now properly log errors instead of silent suppression (2026-06-02):
-  - `notify/mod.rs:114` - now logs with `tracing::warn!`
-  - `loadtest/runner.rs:315` - now handles semaphore acquire errors gracefully
-  - `packet/capture.rs:209` - now logs pcap write failures
-  - `kubernetes.rs:65` - now logs network errors
+  - `notify/mod.rs` - now logs with `tracing::warn!`
+  - `loadtest/runner.rs` - now handles semaphore acquire errors gracefully
+  - `packet/capture.rs` - now logs pcap write failures
+  - `kubernetes.rs` - now logs network errors
 - **NSE TOCTOU Vulnerability**: FIXED - lfs and os libraries now use `get_allowed_path()` to avoid race conditions (2026-06-02)
 - **NSE DNS Rebinding Attack**: MITIGATED - `is_host_allowed()` limitation documented; `resolve_host()` returns bound IPs (2026-06-02)
 - **NSE Sandbox Enforcement**: FIXED - 17 integration tests added for path/command/network restrictions (2026-06-02)
@@ -222,6 +245,7 @@ Skills are located in `.opencode/skills/`:
 | `eggsec-tui/` | TUI module workflows |
 | `eggsec-waf/` | WAF module workflows |
 | `tui-testing/` | TUI testing guidance and visual regression patterns |
+| `eggsec-wave-implementation/` | Historical wave implementation reference |
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
@@ -231,6 +255,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 | File | Module |
 |------|--------|
+| `architecture/overview.md` | System-wide architecture, module index, data flow |
 | `architecture/cli_commands.md` | CLI parsing, command dispatch, handler patterns |
 | `architecture/ai_agents.md` | AI/LLM integration and autonomous agents |
 | `architecture/config.md` | Configuration system, scope enforcement |
@@ -244,7 +269,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/networking.md` | Networking & packets module |
 | `architecture/output.md` | Output & reporting module |
 | `architecture/nse_integration.md` | NSE integration |
-| `architecture/tui.md` | Terminal User Interface (TUI) module, 28 tabs (+ conditional feature tabs), event loop, components |
+| `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 | `architecture/compile_time_baseline.md` | Workspace crate layout and compile-time baseline |
 | `architecture/defense_lab.md` | Defense-lab mode and regression validation |
 | `architecture/stress.md` | Stress testing module (raw sockets, IP spoofing) |
@@ -254,8 +279,26 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/probe.md` | Probe classification (ProbeIntent, ProbeRisk) |
 | `architecture/auth_context.md` | Auth context YAML parsing |
 | `architecture/logging.md` | Logging configuration |
-| `architecture/api_extraction_boundary.md` | API/agent extraction boundary analysis and proposed next-pass order |
+| `architecture/api_extraction_boundary.md` | API/agent extraction boundary analysis |
 | `architecture/generated.md` | Auto-generated protobuf code |
+| `architecture/auth.md` | Authentication testing module |
+| `architecture/browser.md` | Headless browser security testing |
+| `architecture/compliance.md` | Compliance scanning |
+| `architecture/container.md` | Kubernetes/Docker scanning |
+| `architecture/diff.md` | Scan result diffing |
+| `architecture/error.md` | Error type catalog |
+| `architecture/feature_matrix.md` | Feature flags reference |
+| `architecture/findings.md` | Finding store and lifecycle |
+| `architecture/hunt.md` | Advanced threat hunting |
+| `architecture/integrations.md` | External service integrations |
+| `architecture/notify.md` | Notification system |
+| `architecture/proxy.md` | Proxy pool management |
+| `architecture/storage.md` | Database persistence |
+| `architecture/supply_chain.md` | SBOM generation |
+| `architecture/vuln.md` | Vulnerability triage |
+| `architecture/websocket.md` | WebSocket security testing |
+| `architecture/wireless.md` | WiFi scanning |
+| `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands
 

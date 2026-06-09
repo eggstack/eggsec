@@ -55,14 +55,11 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 ## Notes
 
-### `full` feature (Deprecated)
+### `full` feature
 
-The `full` feature is **Deprecated** and currently fails to compile due to a
-pre-existing `k8s-openapi` issue: the `container` feature pulls in `k8s-openapi` which
-requires a Kubernetes version feature (e.g., `v1_30`) to be enabled. This is not set
-in `Cargo.toml` and must be provided by the final binary crate.
+The `full` feature enables 16 sub-features. It does not include `grpc-api`, `ws-api`, or `pdf`.
 
-It enables 16 sub-features.
+Note: The `container` feature pulls in `k8s-openapi` which requires a Kubernetes version feature (e.g., `v1_30`) to be enabled. This must be provided by the final binary crate.
 
 ### `api-schema`
 

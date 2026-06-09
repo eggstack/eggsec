@@ -14,7 +14,7 @@ We needed a type to handle sensitive data (API keys, passwords, PSKs, webhook se
 
 ## Decision
 
-We use `SensitiveString` (defined in `types.rs`) instead of `SecretString` from third-party crates because:
+We use `SensitiveString` (defined in `crates/eggsec-core/src/types.rs`) instead of `SecretString` from third-party crates because:
 
 1. **Zeroization on Drop**: `SensitiveString` uses `zeroize::Zeroize` to explicitly zeroize memory when dropped, preventing secrets from remaining in memory after use.
 
@@ -40,5 +40,5 @@ We use `SensitiveString` (defined in `types.rs`) instead of `SecretString` from 
 
 ## References
 
-- `crates/eggsec/src/types.rs` - `SensitiveString` implementation
+- `crates/eggsec-core/src/types.rs` - `SensitiveString` implementation
 - [zeroize crate documentation](https://docs.rs/zeroize)

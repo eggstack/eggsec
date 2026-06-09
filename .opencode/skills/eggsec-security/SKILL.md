@@ -18,7 +18,7 @@ eggsec
 ```
 
 Key TUI features:
-- 28 tabs covering all security testing functions
+- 29 tabs covering all security testing functions
 - Real-time progress monitoring with spinners
 - Session persistence (resume previous scans)
 - Bookmark favorite tabs with Ctrl+B
@@ -126,10 +126,10 @@ eggsec waf bypass --target https://example.com --waf cloudflare
 
 ```bash
 # HTTP load test
-eggsec loadtest --target https://example.com --requests 10000 --concurrency 100
+eggsec load --target https://example.com --requests 10000 --concurrency 100
 
 # Rate limit testing
-eggsec loadtest --target https://example.com/api --rate-limit-test
+eggsec load --target https://example.com/api --rate-limit-test
 ```
 
 ### 7. Pipeline Mode
@@ -146,7 +146,7 @@ eggsec pipeline --target https://example.com --scope "*.example.com" --output re
 
 ## Configuration
 
-Configuration uses TOML format. Default location: `~/.config/eggsec/config.toml`
+Configuration uses TOML format. Default location: `~/.config/eggsec/eggsec.toml`
 
 ```toml
 [target]
@@ -178,8 +178,14 @@ temperature = 0.7
 Eggsec supports multiple report formats:
 
 ```bash
+# Pretty (default, human-readable)
+eggsec pipeline --target https://example.com --format pretty
+
 # JSON report
 eggsec pipeline --target https://example.com --format json --output report.json
+
+# Compact
+eggsec pipeline --target https://example.com --format compact --output report.txt
 
 # HTML report
 eggsec pipeline --target https://example.com --format html --output report.html

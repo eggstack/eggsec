@@ -20,7 +20,7 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **Scoped Repeatable Testing** | Run the same assessment profiles repeatedly for regression validation |
 | **Rust-Native Primitives** | High-performance async I/O, no external runtime dependencies |
 | **Structured Outputs** | JSON, SARIF, JUnit, HTML, CSV for humans, CI, and agents |
-| **WAF and Defense Validation** | Detection of 26+ WAF products with evasion-resistance testing |
+| **WAF and Defense Validation** | Detection of 34 WAF products with evasion-resistance testing |
 | **Local Lab/Regression Workflows** | Repeatable profiles against local test environments |
 | **Optional NSE Compatibility** | Curated Nmap NSE script support as an optional layer |
 
@@ -31,13 +31,13 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **Reconnaissance** | DNS enumeration, subdomain discovery, WHOIS, tech stack detection, CVE mapping, cloud asset discovery, CORS analysis |
 | **Web Security** | SQLi, XSS, SSRF, Path Traversal, ReDoS, Header Injection, SSTI, IDOR testing |
 | **API Security** | GraphQL introspection/injection, JWT analysis, OAuth/OIDC testing, gRPC fuzzing |
-| **Scanning** | Port scanning, service fingerprinting (20+ protocols), endpoint discovery |
-| **WAF** | Detection of 26 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
+| **Scanning** | Port scanning, service fingerprinting (42+ protocols), endpoint discovery |
+| **WAF** | Detection of 34 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
 | **Load Testing** | High-concurrency HTTP testing with detailed metrics |
 | **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
-| **Repeatable Profiles** | 11 pipeline profiles, session resumption, multiple output formats |
+| **Repeatable Profiles** | 16 pipeline profiles, session resumption, multiple output formats |
 
 ## What Eggsec is not
 
@@ -68,7 +68,7 @@ description = "Admin panel - excluded"
 
 **Configuration defaults** keep aggressive capabilities disabled until you opt in. Rate limits, concurrency caps, and timeouts are configurable per profile. Dry-run planning (`eggsec plan`) previews what a scan will do without sending traffic.
 
-**Feature gating** ensures intrusive modules (stress testing, raw packet crafting, IP spoofing) require explicit build flags like `--features stress-testing` and cannot be invoked accidentally.
+**Feature gating** ensures intrusive modules (stress testing, raw packet crafting, headless browser, NSE, database storage, container scanning, and more) require explicit build flags and cannot be invoked accidentally.
 
 See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation.
 
@@ -122,7 +122,7 @@ cargo build --release -p eggsec-cli
 
 ## Pipeline Profiles
 
-Eggsec includes 11 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
+Eggsec includes 16 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
 
 | Profile | Use Case |
 |---------|----------|
@@ -137,6 +137,11 @@ Eggsec includes 11 built-in profiles that chain multiple security tests together
 | **deep** | Mutation fuzzing enabled for thorough testing |
 | **vuln** | CVE-prioritized based on detected technologies |
 | **auth** | JWT, OAuth, IDOR focused |
+| **defense-lab** | Local lab regression testing |
+| **synvoid-local** | Local SYN scan testing |
+| **waf-regression** | WAF regression testing |
+| **protocol-edge** | Protocol edge case testing (requires `packet-inspection`) |
+| **nse-safe** | Safe NSE script execution (requires `nse`) |
 
 ```bash
 # Quick scan - port scan + fingerprinting
@@ -155,7 +160,7 @@ Eggsec includes 11 built-in profiles that chain multiple security tests together
 ## Core Workflows
 
 - **Scoped web assessment** - Port scanning, service fingerprinting, endpoint discovery, and vulnerability fuzzing against authorized targets
-- **WAF/defense validation in lab** - Detect 26+ WAF products, test evasion resistance, run regression suites against local WAF instances
+- **WAF/defense validation in lab** - Detect 34 WAF products, test evasion resistance, run regression suites against local WAF instances
 - **CI regression checks** - Structured output (SARIF, JUnit, JSON) for integration into GitHub Actions, GitLab CI, and other pipelines
 - **Agent/MCP integration** - Autonomous security agent with skills, portfolio management, and structured findings for AI-driven workflows
 - **Optional NSE compatibility** - Curated Nmap NSE script support as an optional build layer
@@ -188,7 +193,7 @@ Eggsec includes 11 built-in profiles that chain multiple security tests together
 ./eggsec resume session.json
 ```
 
-For the full command reference with all options, see [docs/cli.md](docs/cli.md).
+Run `eggsec --help` or `eggsec <command> --help` for the full command reference with all options.
 
 ## Build Features
 
@@ -197,12 +202,28 @@ For the full command reference with all options, see [docs/cli.md](docs/cli.md).
 | `stress-testing` | SYN/UDP/ICMP floods, proxy management, IP spoofing | Lab-only |
 | `packet-inspection` | Live packet capture, traceroute | Experimental |
 | `nse` | Nmap NSE script compatibility | Experimental |
+| `nse-ssh2` | NSE with SSH2/libssh2 support | Experimental |
+| `nse-sandbox` | Restrict dangerous Lua operations | Experimental |
 | `api-schema` | OpenAPI v3 schema-based fuzzing | Stable |
 | `sbom` | SBOM generation (CycloneDX, SPDX) | Stable |
 | `rest-api` | REST API server for agent integration | Experimental |
-| `ai-integration` | AI planner, script generation, autonomous agent | Experimental |
+| `grpc-api` | gRPC API server | Experimental |
 | `ws-api` | WebSocket pub/sub | Experimental |
-| `full` | All features combined | - |
+| `ai-integration` | AI planner, script generation, autonomous agent | Experimental |
+| `websocket` | WebSocket security testing | Stable |
+| `headless-browser` | DOM XSS and SPA crawling | Stable |
+| `database` | SQLx-based PostgreSQL persistence | Stable |
+| `container` | Kubernetes/Docker security scanning | Stable |
+| `cloud` | AWS/GCP/Azure asset discovery | Stable |
+| `git-secrets` | Git secrets scanning | Stable |
+| `wireless` | WiFi scanning and authentication testing | Stable |
+| `pdf` | PDF report generation | Stable |
+| `advanced-hunting` | Advanced threat hunting | Stable |
+| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |
+| `external-integrations` | Jira, GitHub, GitLab connectors | Stable |
+| `finding-workflow` | Finding lifecycle management | Stable |
+| `vuln-management` | Vulnerability triage and CVSS scoring | Stable |
+| `full` | All features combined (excludes `grpc-api`, `ws-api`, `pdf`) | - |
 
 ### Build Examples
 
@@ -235,11 +256,14 @@ cargo build --release -p eggsec-cli --features full
 
 | Format | Use Case |
 |--------|----------|
+| Pretty | Human-readable terminal output (default) |
 | JSON | Machine parsing, automation |
+| Compact | Condensed terminal output |
 | HTML | Human-readable reports |
 | CSV | Spreadsheet analysis |
 | SARIF | CI/CD security scanning (GitHub, GitLab) |
 | JUnit XML | Test integration (CI pipelines) |
+| Markdown | Documentation, GitHub issues |
 
 ## Defense-Lab Mode
 
@@ -250,11 +274,11 @@ Eggsec can run local, repeatable profiles against defensive systems for regressi
 - **WAF regression testing** - Validate that WAF rules continue to catch known evasion patterns after updates
 
 ```bash
-# Run a profile against a local instance
-./eggsec scan localhost:8080 --profile waf --json -o baseline.json
+# Run a defense-lab profile against a local instance
+./eggsec scan localhost:8080 --profile defense-lab --json -o baseline.json
 
-# Later, compare against baseline
-./eggsec diff baseline.json current.json
+# Run WAF regression testing
+./eggsec scan localhost:8080 --profile waf-regression --json
 ```
 
 ## Relationship to Nmap/NSE

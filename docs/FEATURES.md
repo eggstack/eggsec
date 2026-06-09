@@ -16,7 +16,7 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows use
 | `packet-inspection` | Live packet capture, advanced packet tools | pnet, pnet_packet, libc |
 | `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, eggsec-nse |
 | `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, eggsec-nse/sandbox |
-| `full` | All features combined | stress-testing, packet-inspection, rest-api, nse |
+| `full` | All features combined (excludes `grpc-api`, `ws-api`, `pdf`) | stress-testing, packet-inspection, rest-api, nse, ai-integration, websocket, headless-browser, database, container, sbom, advanced-hunting, compliance, external-integrations, finding-workflow, vuln-management, wireless |
 
 ## Available Builds
 
@@ -94,15 +94,31 @@ full
 │   ├── tool-api
 │   ├── axum, tower
 │   └── async-stream
-└── nse
-    ├── tool-api
-    └── eggsec-nse
-        └── sandbox (optional)
+├── nse
+│   ├── tool-api
+│   └── eggsec-nse
+│       └── sandbox (optional)
+├── ai-integration
+├── websocket
+├── headless-browser
+├── database
+├── container
+├── sbom
+├── advanced-hunting
+├── compliance
+├── external-integrations
+├── finding-workflow
+├── vuln-management
+└── wireless
 
-grpc-api (standalone)
+grpc-api (standalone, NOT in full)
 └── tool-api
     ├── tonic
     └── prost, prost-build
+
+ws-api (standalone, NOT in full)
+
+pdf (standalone, NOT in full)
 ```
 
 ## API Server Features
@@ -217,3 +233,19 @@ The following commands require specific build features:
 | `packet capture` | `packet-inspection` |
 | `packet send` | `packet-inspection` |
 | `nse` | `nse` |
+| `serve` | `rest-api` |
+| `mcp-serve` | `rest-api` |
+| `codegg-mcp` | `rest-api` |
+| `agent` | `rest-api` |
+| `ai-analyze` | `ai-integration` |
+| `browser` | `headless-browser` |
+| `hunt` | `advanced-hunting` |
+| `compliance` | `compliance` |
+| `sbom` | `sbom` |
+| `grpc` | `grpc-api` |
+| `wireless` | `wireless` |
+| `vuln` | `vuln-management` |
+| `storage` | `database` |
+| `config` | Default |
+| `doctor` | Default |
+| `report` | Default |

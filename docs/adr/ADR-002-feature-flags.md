@@ -17,11 +17,16 @@ We use Cargo feature flags with the following design principles:
 2. **Composite Features**: The `full` feature enables all features except those with known issues:
    ```toml
    full = ["stress-testing", "packet-inspection",
-           "rest-api", "grpc-api", "nse", "ai-integration"]
+           "rest-api", "nse", "ai-integration", "websocket",
+           "headless-browser", "database", "container", "sbom",
+           "advanced-hunting", "compliance", "external-integrations",
+           "finding-workflow", "vuln-management", "wireless"]
    ```
 
-3. **Explicit Exclusions**: Two features are intentionally excluded from `full`:
+3. **Explicit Exclusions**: Three features are intentionally excluded from `full`:
    - `grpc-api`: Requires additional system dependencies
+   - `ws-api`: Standalone WebSocket API server
+   - `pdf`: PDF report generation
    - `nse-sandbox`: Security feature that may break some NSE scripts
 
 4. **Feature Gating**: Code uses `#[cfg(feature = "...")]` to conditionally compile:
@@ -50,7 +55,20 @@ We use Cargo feature flags with the following design principles:
 | `nse` | Nmap NSE script support | off |
 | `nse-sandbox` | NSE sandbox mode (NOT in `full`) | off |
 | `ai-integration` | AI/LLM features | off |
-| `full` | All features except grpc-api, nse-sandbox | off |
+| `websocket` | WebSocket security testing | off |
+| `headless-browser` | DOM XSS and SPA crawling | off |
+| `database` | SQLx-based persistence | off |
+| `container` | Kubernetes/Docker scanning | off |
+| `sbom` | SBOM generation | off |
+| `advanced-hunting` | Advanced threat hunting | off |
+| `compliance` | Compliance scanning | off |
+| `external-integrations` | Jira, GitHub, GitLab connectors | off |
+| `finding-workflow` | Finding lifecycle management | off |
+| `vuln-management` | Vulnerability triage and CVSS scoring | off |
+| `wireless` | WiFi scanning | off |
+| `ws-api` | WebSocket API server (NOT in `full`) | off |
+| `pdf` | PDF report generation (NOT in `full`) | off |
+| `full` | All features except grpc-api, ws-api, pdf, nse-sandbox | off |
 
 ## References
 

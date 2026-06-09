@@ -6,16 +6,20 @@ Authentication security testing module.
 `crates/eggsec/src/auth/`
 
 ## Tab
-Auth tab is one of the 28 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
+Auth tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 
 ## Key Types
 
 - `AuthEngine` - Main authentication testing engine
 - `BruteForceTester` - Credential brute force testing
-- `CredentialStuffingTester` - Breach credential testing
+- `CredentialStuffer` - Breach credential testing
 - `LockoutDetector` - Account lockout detection
 - `MfaTester` - MFA bypass testing
 - `RateLimitTester` - Rate limit testing
+- `PasswordPolicyTester` - Password policy testing
+- `SessionTester` - Session management testing
+- `TimingTester` - Timing attack testing
+- `ProtocolAuthTester` - Multi-protocol authentication testing
 
 ## Patterns
 

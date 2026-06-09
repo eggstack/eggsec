@@ -22,7 +22,7 @@ We use three error handling patterns, each serving different purposes:
 
 ```rust
 pub enum EggsecError {
-    Timeout { message: String },
+    Timeout { timeout_ms: u64, operation: String },
     Network { message: String },
     Config(String),
     // ... 23 variants total

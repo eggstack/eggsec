@@ -1,6 +1,6 @@
 # TUI (Terminal User Interface)
 
-Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 28 different tabs.
+Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 29 different tabs.
 
 ## Core Components (`src/tui/`)
 
@@ -12,7 +12,7 @@ Manages the overall application state, event loop, and rendering.
 |------|---------|
 | `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
 | `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState`, `ThemeLoadState` |
-| `tab_store.rs` | `TabStore` - owns all 29 tab instances (20 always-present + 9 feature-gated) |
+| `tab_store.rs` | `TabStore` - owns all 28 tab instances (19 always-present + 9 feature-gated; History tab shares Dashboard instance) |
 | `runner.rs` | Main event loop using crossterm/ratatui |
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
 | `state_update.rs` | Async task result handling and routing |
@@ -32,7 +32,7 @@ Manages the overall application state, event loop, and rendering.
 
 ### Tabs (`tabs/`)
 
-28 specialized tabs for different security testing functions:
+29 specialized tabs for different security testing functions:
 
 | Tab | File | Purpose |
 |-----|------|---------|

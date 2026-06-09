@@ -26,6 +26,15 @@ src/commands/      # Handler dispatch and implementations
 - `storage.rs` - `StorageArgs`, `StorageCommand`
 - `vuln.rs` - `VulnArgs`, `VulnCommand`
 - `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `ReportArgs`, `SbomArgs`
+- `agent.rs` - `AgentArgs`, agent management commands
+- `ai_analyze.rs` - `AiAnalyzeArgs`, AI analysis commands
+- `browser.rs` - `BrowserArgs`, headless browser commands
+- `ci.rs` - `CiArgs`, CI/CD integration commands
+- `hunt.rs` - `HuntArgs`, vulnerability hunting commands
+- `packet.rs` - `PacketArgs`, packet inspection commands
+- `plan.rs` - `PlanArgs`, execution planning commands
+- `timeout.rs` - `TimeoutArgs`, timeout configuration commands
+- `wireless.rs` - `WirelessArgs`, wireless scanning commands
 
 ### Key Types
 

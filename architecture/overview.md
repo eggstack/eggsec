@@ -109,7 +109,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`pipeline/`](../crates/eggsec/src/pipeline/) | Chained security assessment profiles (11 built-in profiles) | [pipeline.md](pipeline.md) |
+| [`pipeline/`](../crates/eggsec/src/pipeline/) | Chained security assessment profiles (16 built-in profiles) | [pipeline.md](pipeline.md) |
 | [`tool/`](../crates/eggsec/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration; core DTOs in `eggsec-tool-core` | [ai_agents.md](ai_agents.md) |
 | [`agent/`](../crates/eggsec/src/agent/) | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
 | [`distributed/`](../crates/eggsec/src/distributed/) | Worker/coordinator cluster architecture for parallel scanning | [distributed.md](distributed.md) |
@@ -138,7 +138,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`ai/`](../crates/eggsec/src/ai/) | AI/LLM client (OpenAI, Anthropic, Azure), cache, planner, script generation, WAF bypass suggestions | [ai_agents.md](ai_agents.md) |
-| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 169 NSE libraries | [nse_integration.md](nse_integration.md) |
+| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 164 NSE libraries | [nse_integration.md](nse_integration.md) |
 | [`integrations/`](../crates/eggsec/src/integrations/) | Jira, GitHub, GitLab external connectors | [integrations.md](integrations.md) |
 | [`notify/`](../crates/eggsec/src/notify/) | Webhook, Slack, Discord, Teams notifications | [notify.md](notify.md) |
 
@@ -146,8 +146,8 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 37+ commands | [cli_commands.md](cli_commands.md) |
-| [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 28+ tabs, event loop | [tui.md](tui.md) |
+| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 39+ commands | [cli_commands.md](cli_commands.md) |
+| [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 29 tabs, event loop | [tui.md](tui.md) |
 
 ### Supporting Modules
 
@@ -173,7 +173,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 ### CLI (`cli/`)
 
-The command-line interface is built with `clap` and provides 37+ commands organized into functional groups:
+The command-line interface is built with `clap` and provides 39+ commands organized into functional groups:
 
 ```
 eggsec scan      # Port scanning, service fingerprinting
@@ -191,7 +191,7 @@ eggsec pipeline  # Pipeline profile execution
 
 ### TUI (`tui/`)
 
-The terminal user interface uses `ratatui` with 28+ tabs organized by function. The TUI is now a separate crate (`eggsec-tui`), extracted from the main `eggsec` crate.
+The terminal user interface uses `ratatui` with 29 tabs organized by function. The TUI is now a separate crate (`eggsec-tui`), extracted from the main `eggsec` crate.
 
 | Tab Group | Tabs |
 |-----------|------|
@@ -232,7 +232,7 @@ High-performance port scanning with configurable timing:
 |------------|-------------|
 | **TCP Scanning** | SYN, CONNECT, FIN, NULL, XMAS, ACK scans |
 | **UDP Scanning** | UDP probe-based scanning |
-| **Service Detection** | 20+ protocol fingerprints |
+| **Service Detection** | 42+ protocol fingerprints |
 | **Endpoint Discovery** | 261 built-in path signatures |
 | **IP Spoofing** | Raw socket spoofing (feature-gated) |
 | **Timing Presets** | Paranoid, Sneaky, Polite, Normal, Aggressive, Insane |
@@ -296,7 +296,7 @@ Configuration management with scope enforcement:
 | **TOML/YAML Loading** | Hierarchical config from files and env vars |
 | **Scope Enforcement** | Target restrictions via pattern/CIDR rules |
 | **TUI Settings** | Partial save with field exposure control |
-| **Profile Management** | 11 built-in scan profiles |
+| **Profile Management** | 16 built-in scan profiles |
 
 - **Documentation**: [config.md](config.md)
 
@@ -374,7 +374,7 @@ Nmap Scripting Engine compatibility:
 | Component | Description |
 |-----------|-------------|
 | **Lua VM** | Lua 5.4 via mlua crate |
-| **Libraries** | 169 NSE-compatible library wrappers |
+| **Libraries** | 164 NSE-compatible library modules |
 | **CVE Integration** | NVD, OSV, CISA KEV feeds |
 | **Sandbox** | Restricted Lua operation execution |
 
@@ -603,7 +603,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: 1324 base, 1469+ with full features
+- **Test count**: 3032+ (2718 #[test] + 314 #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---
@@ -638,7 +638,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 | **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md) |
 | **Compliance** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
 | **Utilities** | [utils.md](utils.md), [logging.md](logging.md), [probe.md](probe.md) |
-| **Reference** | [feature_matrix.md](feature_matrix.md), [defense_lab.md](defense_lab.md), [review_plan.md](review_plan.md), [compile_time_baseline.md](compile_time_baseline.md) |
+| **Reference** | [feature_matrix.md](feature_matrix.md), [defense_lab.md](defense_lab.md), [compile_time_baseline.md](compile_time_baseline.md), [auth_context.md](auth_context.md) |
 
 ### Implementation Plan
 

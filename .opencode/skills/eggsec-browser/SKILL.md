@@ -10,26 +10,28 @@ Browser tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patter
 
 ## Key Types
 
-- `BrowserEngine` - Headless browser automation
 - `BrowserConfig` - Browser configuration
-- `SecurityTest` - Security test definitions
+- `BrowserReport` - Scan results and findings
+- `run_browser_scan()` - Entry point for browser security scanning
+- `DomXssFinding` - DOM XSS vulnerability findings
+- `ClientIssue` - Client-side security issues (with `ClientIssueType` enum)
+- `SpaRoute` - SPA route discovery results
+- `RequestCorpus` - Request corpus for testing
 
 ## Patterns
 
 ### Browser Scan
 ```rust
-let engine = BrowserEngine::new(config);
-engine.navigate("https://example.com");
-engine.inject_payloads(vec!["xss", "dom_xss"]);
-let findings = engine.analyze().await?;
+let config = BrowserConfig::new(target);
+let report = run_browser_scan(target, config).await?;
 ```
 
-### Focus Areas
-- `BrowserFocusArea::Inputs` - Form input fields
-- `BrowserFocusArea::Options` - Scan configuration
-
 ## Key Files
-- `mod.rs` - Main browser engine
+- `mod.rs` - Main browser engine, `BrowserConfig`, `BrowserReport`, `run_browser_scan()`
+- `xss_dom.rs` - DOM XSS detection (`DomXssFinding`, `XssSource`, `XssSink`)
+- `spa_discovery.rs` - SPA route discovery (`SpaRoute`, `DiscoveryMethod`)
+- `client_checks.rs` - Client-side checks (`ClientIssue`, `ClientIssueType`)
+- `corpus.rs` - Request corpus building (`RequestCorpus`, `CorpusEntry`)
 
 ## Module Notes
 See `architecture/browser.md` for architecture documentation.

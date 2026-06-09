@@ -10,27 +10,26 @@ Hunt tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 
 ## Key Types
 
-- `HuntEngine` - Main vulnerability hunting engine
-- `VulnPattern` - Vulnerability pattern definitions
-- `Severity` - Impact severity levels
+- `HuntClient` - Main vulnerability hunting client
+- `HuntReport` - Hunt results and findings
+- `HuntConfig` - Hunt configuration (target, options)
 
 ## Patterns
 
 ### Running a Hunt
 ```rust
-let engine = HuntEngine::new();
-engine.set_target_url("https://example.com");
-engine.add_patterns(vec!["sql_injection", "xss", "csrf"]);
-let results = engine.run().await?;
+let config = HuntConfig::new("https://example.com");
+let mut client = HuntClient::new("https://example.com", &config)?;
+let report = client.run_all_checks().await?;
 ```
 
-### Focus Areas
-- `HuntFocusArea::Inputs` - Target input fields
-- `HuntFocusArea::Options` - Hunt configuration options
-
 ## Key Files
-- `mod.rs` - Main engine implementation
-- `patterns.rs` - Vulnerability patterns
+- `mod.rs` - Main client (`HuntClient`, `HuntReport`, `HuntConfig`)
+- `business.rs` - Business logic flaw detection (`BusinessLogicFlaw`, `FlawType`)
+- `authz.rs` - Authorization bypass detection (`AuthzBypass`, `BypassType`)
+- `chain.rs` - Attack chain detection (`AttackChain`, `ChainType`, `ChainStep`)
+- `race.rs` - Race condition detection (`RaceCondition`, `RaceType`)
+- `session.rs` - Session issue detection (`SessionIssue`, `SessionIssueType`)
 
 ## Module Notes
 See `architecture/hunt.md` for architecture documentation.
