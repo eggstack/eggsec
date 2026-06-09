@@ -3,7 +3,10 @@ use crate::app::notifications::Notification;
 use crate::search::GlobalSearch;
 use crate::tabs::history::HistoryEntry;
 use crate::tabs::Tab;
+use crate::theme::install::ThemeInstallReport;
 use std::collections::VecDeque;
+use std::sync::mpsc::Receiver;
+use std::thread::JoinHandle;
 
 /// Overlay UI state (help, HTTP options, search, confirm popup, notifications)
 pub struct OverlayState {
@@ -87,6 +90,37 @@ impl Default for TaskState {
     }
 }
 
+/// Runtime state for best-effort packaged/user theme loading.
+/// The TUI must remain usable with built-in themes even if this loader fails.
+pub struct ThemeLoadState {
+    pub rx: Option<Receiver<ThemeInstallReport>>,
+    pub handle: Option<JoinHandle<()>>,
+    pub deferred_theme_name: Option<String>,
+    pub changed_by_user: bool,
+}
+
+impl Default for ThemeLoadState {
+    fn default() -> Self {
+        Self {
+            rx: None,
+            handle: None,
+            deferred_theme_name: None,
+            changed_by_user: false,
+        }
+    }
+}
+
+impl ThemeLoadState {
+    pub fn is_running(&self) -> bool {
+        self.rx.is_some() || self.handle.is_some()
+    }
+
+    pub fn mark_user_changed(&mut self) {
+        self.changed_by_user = true;
+        self.deferred_theme_name = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +162,50 @@ mod tests {
         assert!(state.progress_rx.is_none());
         assert!(state.result_rx.is_none());
         assert!(!state.paused);
+    }
+
+    #[test]
+    fn theme_load_state_defaults() {
+        let state = ThemeLoadState::default();
+        assert!(state.rx.is_none());
+        assert!(state.handle.is_none());
+        assert!(state.deferred_theme_name.is_none());
+        assert!(!state.changed_by_user);
+    }
+
+    #[test]
+    fn theme_load_state_is_running_checks_receiver_and_handle() {
+        let state = ThemeLoadState::default();
+        assert!(!state.is_running());
+
+        let (_tx, rx) = std::sync::mpsc::channel::<ThemeInstallReport>();
+        let state = ThemeLoadState {
+            rx: Some(rx),
+            handle: None,
+            deferred_theme_name: None,
+            changed_by_user: false,
+        };
+        assert!(state.is_running());
+
+        let handle = std::thread::spawn(|| {});
+        let mut state = ThemeLoadState {
+            rx: None,
+            handle: Some(handle),
+            deferred_theme_name: None,
+            changed_by_user: false,
+        };
+        assert!(state.is_running());
+        state.handle.take().unwrap().join().unwrap();
+    }
+
+    #[test]
+    fn theme_load_state_mark_user_changed_clears_deferred_theme() {
+        let mut state = ThemeLoadState::default();
+        state.deferred_theme_name = Some("catppuccin-mocha".to_string());
+
+        state.mark_user_changed();
+
+        assert!(state.deferred_theme_name.is_none());
+        assert!(state.changed_by_user);
     }
 }

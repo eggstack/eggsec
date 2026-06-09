@@ -5,7 +5,7 @@ Specialized guidance for the terminal UI module.
 ## Recent Fixes (2026-05-29)
 
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
-- **Theme restoration**: SessionManager restores theme when loading sessions; packaged themes can be retried after the background loader finishes without blocking startup
+- **Theme restoration**: SessionManager restores theme when loading sessions; packaged themes can be retried after the background loader finishes, with the deferred restore kept in `ThemeLoadState`, without blocking startup
 - **Settings save merge**: TUI settings now merge into the loaded config and preserve non-exposed sections
 - **waf.rs checkbox bounds check**: Fixed `waf.rs:519` to guard against out-of-bounds index when toggling technique checkboxes (matching `recon.rs:588-590` pattern)
 - **workers/security.rs error logging**: Fixed `security.rs:227,235` to use `tracing::warn!` instead of `tracing::debug!` for expected failure cases (finding list operations)
@@ -35,7 +35,7 @@ Specialized guidance for the terminal UI module.
 crates/slapper/src/tui/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
-│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState
+│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
 │   ├── tab_store.rs     # TabStore - owns all 29 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
@@ -47,6 +47,7 @@ crates/slapper/src/tui/
 │   ├── navigation.rs   # Tab navigation, scrolling
 │   ├── command.rs      # Command palette commands
 │   ├── export.rs       # Export functionality
+│   ├── theme_runtime.rs # Theme loader lifecycle helpers
 │   └── ...
 ├── tabs/         # Individual tab implementations
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
@@ -237,6 +238,8 @@ This ensures small terminals (< 24 rows) still show usable UI.
 ## Theme
 
 `Theme.name` is the canonical stable ID for the theme, selector labels are derived separately for display, `Ctrl+T` cycles the built-in theme trio only, and `ThemeManager.current` is private.
+
+Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, and deferred restore request together so startup stays non-blocking.
 
 New rendering code should prefer explicit `&Theme` parameters:
 ```rust

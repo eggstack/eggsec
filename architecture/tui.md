@@ -11,12 +11,13 @@ Manages the overall application state, event loop, and rendering.
 | File | Purpose |
 |------|---------|
 | `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
-| `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState` |
+| `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState`, `ThemeLoadState` |
 | `tab_store.rs` | `TabStore` - owns all 29 tab instances (20 always-present + 9 feature-gated) |
 | `runner.rs` | Main event loop using crossterm/ratatui |
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
 | `state_update.rs` | Async task result handling and routing |
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
+| `theme_runtime.rs` | Theme loader lifecycle helpers and deferred restore handling |
 | `input.rs` | `InputMode` enum: `Normal`, `Insert` |
 | `navigation.rs` | Tab navigation helpers (next/prev tab, edge detection) |
 | `bookmarks.rs` | Tab bookmark toggle, query, and persistence |
@@ -248,7 +249,7 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Built-in themes**: `cyber-red` (default fallback, always available), `dark`, `light`.
 
-**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`), `App::update()` polls the channel, and the join handle is cleaned up once the final report arrives or the loader disconnects. Failures are logged as warnings and do not block the UI.
+**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`); the receiver, join handle, and deferred restore request live in `ThemeLoadState`, `App::update()` polls the channel, and the lifecycle helpers in `app/theme_runtime.rs` clean up the thread once the final report arrives or the loader disconnects. Failures are logged as warnings and do not block the UI.
 
 **Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles the built-in trio only (`cyber-red -> dark -> light -> cyber-red`). Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
 
@@ -265,7 +266,7 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 ### Session Management (`session.rs`)
 
-`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/slapper/sessions/` on Linux via `directories::ProjectDirs`, with `~/.slapper/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request until the background loader registers it.
+`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/slapper/sessions/` on Linux via `directories::ProjectDirs`, with `~/.slapper/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request in `ThemeLoadState` until the background loader registers it.
 
 ### Adding a New Tab
 

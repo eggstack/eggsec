@@ -8,7 +8,7 @@ TUI module workflows and patterns for the terminal UI.
 crates/slapper-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
-│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState
+│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
 │   ├── tab_store.rs     # TabStore - owns all 29 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
@@ -20,6 +20,7 @@ crates/slapper-tui/src/
 │   ├── navigation.rs    # Tab navigation, scrolling
 │   ├── command.rs       # Command palette commands
 │   ├── export.rs        # Export functionality
+│   ├── theme_runtime.rs # Theme loader lifecycle helpers
 │   └── ...
 ├── tabs/         # Individual tab implementations
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
@@ -191,7 +192,7 @@ let style = Style::default().fg(tc!(text));
 
 Semantic colors: `primary`, `secondary`, `accent`, `background`, `text`, `text_dim`, `success`, `warning`, `error`, `info`.
 
-The Settings tab has a theme selector dropdown. `Ctrl+T` cycles the built-in theme trio only, while the selector exposes canonical values with readable labels. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
+The Settings tab has a theme selector dropdown. `Ctrl+T` cycles the built-in theme trio only, while the selector exposes canonical values with readable labels. Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, and deferred restore request together so startup stays non-blocking. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
 
 ### Notifications
 

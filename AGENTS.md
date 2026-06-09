@@ -90,6 +90,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `Severity` - Unified severity (defined in `slapper-core::types`, re-exported by `types.rs`)
 - `SensitiveString` - Zeroized credential wrapper (defined in `slapper-core::types`, re-exported by `types.rs`)
 - `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `slapper-tui` (`tui/app/tab_error.rs`)
+- `ThemeLoadState` - Grouped theme-load runtime state (`rx`, `handle`, deferred restore, user-change flag) in `slapper-tui` (`tui/app/state.rs`)
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
 - `PayloadType` - Enum of 30 payload categories
@@ -189,7 +190,7 @@ No remaining stub implementations.
 - **Theme system**: 50 Halloy-format themes are packaged into the binary via LZMA compression. Packaged theme names are canonicalized to stable IDs, selector labels are display-friendly, and the `cyber-red` fallback theme is always available in-code, independent of file system access.
 - **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes into Slapper `Theme` structs. Missing fields use defaults from built-in themes.
 - **Theme install**: Packaged themes are installed idempotently to the user's config dir (`~/.config/slapper/themes` on Linux). Existing files are never overwritten.
-- **Theme background loading**: Theme loading runs in a background thread (`std::thread::spawn`) with results sent via `std::sync::mpsc`. `App::update()` polls the channel and joins the loader handle once the final report arrives. `App::spawn_theme_loader()` starts the thread. `new_for_testing()` skips the loader.
+- **Theme background loading**: Theme loading runs in a background thread (`std::thread::spawn`) with results sent via `std::sync::mpsc`. The receiver, join handle, and deferred restore live in `ThemeLoadState`. `App::update()` polls the channel and joins the loader handle once the final report arrives. `App::spawn_theme_loader()` starts the thread. `new_for_testing()` skips the loader.
 
 ## Skills Directory
 

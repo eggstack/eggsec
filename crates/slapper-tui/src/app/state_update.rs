@@ -15,8 +15,8 @@ impl super::App {
     pub(super) fn update(&mut self) {
         let mut dirty = false;
 
-        // Poll background theme loading
-        if let Some(rx) = self.theme_load_rx.take() {
+        // Poll background theme loading.
+        if let Some(rx) = self.theme_load.rx.take() {
             match rx.try_recv() {
                 Ok(report) => {
                     self.handle_theme_install_report(report);
@@ -24,7 +24,7 @@ impl super::App {
                     dirty = true;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    self.theme_load_rx = Some(rx);
+                    self.theme_load.rx = Some(rx);
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     tracing::warn!("Theme loading thread disconnected without sending report");

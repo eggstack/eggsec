@@ -84,7 +84,7 @@ Slapper is organized as a Cargo workspace with eight crates:
 | `slapper-tool-core` | Core data types for the tool abstraction layer (requests, responses, findings, errors) |
 | `slapper` | Assessment engine library (no binary) |
 | `slapper-nse` | Optional Nmap NSE compatibility runtime |
-| `slapper-tui` | Terminal UI adapter (`ratatui`/`crossterm`, packaged themes) |
+| `slapper-tui` | Terminal UI adapter (`ratatui`/`crossterm`, packaged themes, non-blocking background loading) |
 | `slapper-cli` | CLI binary entry point |
 | `slapper-output` | Report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) |
 | `slapper-agent` | Agent coordination primitives (registry, scheduler, lifecycle, communication) |
