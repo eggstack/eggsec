@@ -65,7 +65,7 @@ EXAMPLES:
   Auth testing:      eggsec auth-test https://example.com/login --all
   MCP for coding:    eggsec codegg-mcp
 
-See https://dbowm91.dev/docs for full documentation.
+See https://github.com/eggstack/eggsec#readme for full documentation.
 "#;
 
 #[derive(Parser)]
