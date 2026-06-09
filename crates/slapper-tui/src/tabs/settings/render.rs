@@ -142,13 +142,11 @@ impl TabRender for super::SettingsTab {
             }
             SettingsSection::Theme => {
                 let mut builder = FormBuilder::new("Theme Settings").row_height(3);
-                builder = builder.add_checkbox(self.dark_mode.clone());
-                builder = builder.add_selector(self.accent_color.clone());
+                builder = builder.add_selector(self.theme_selector.clone());
                 builder.render(f, inner, insert_mode);
 
-                // Form height: 2 fields (checkbox=2, selector=3) + block borders (2) = 7
-                let form_height: u16 = 7;
-                let theme_hint = Paragraph::new("Use Ctrl+T to toggle theme instantly");
+                let form_height: u16 = 5;
+                let theme_hint = Paragraph::new("Use Ctrl+T to toggle between dark/light themes");
                 let hint_y = inner.y + form_height;
                 if hint_y < inner.y + inner.height {
                     let hint_area = Rect {

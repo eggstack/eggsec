@@ -174,6 +174,8 @@ All 29 tabs now properly guard input handlers with `!self.is_running()`. This pr
 
 ### Theming
 
+50+ Halloy-format themes are packaged into the binary via LZMA compression. The `cyber-red` fallback theme is always available in-code, independent of file system access.
+
 New code should prefer explicit `&Theme` parameters:
 ```rust
 pub fn draw_widget(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
@@ -188,6 +190,8 @@ let style = Style::default().fg(tc!(text));
 ```
 
 Semantic colors: `primary`, `secondary`, `accent`, `background`, `text`, `text_dim`, `success`, `warning`, `error`, `info`.
+
+The Settings tab has a theme selector dropdown. `Ctrl+T` toggles between dark/light themes. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
 
 ### Notifications
 

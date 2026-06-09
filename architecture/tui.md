@@ -232,17 +232,27 @@ History is shared via `Arc<Mutex<HistoryTab>>` for thread-safe access.
 
 ### Theme (`theme/`)
 
-The theme system is split into a module with focused submodules:
+The theme system supports 50+ packaged Halloy-format themes plus 3 built-in themes:
 
 | File | Purpose |
 |------|---------|
 | `palette.rs` | `ThemeMode`, `Theme` (with `name: String`), `ThemeColors` structs |
-| `builtin.rs` | `dark_theme()`, `light_theme()` factory functions |
-| `manager.rs` | `ThemeManager` - holds dark/light themes, private `current`, theme switching |
+| `builtin.rs` | `dark_theme()`, `light_theme()`, `cyber_red_theme()` factory functions |
+| `manager.rs` | `ThemeManager` - holds registered themes, private `current`, theme switching |
 | `style.rs` | Theme style methods for rendering (currently unused helper methods) |
 | `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
+| `loader.rs` | Parses Halloy `.toml` themes into Slapper `Theme` structs; missing fields use defaults from built-in themes |
+| `install.rs` | Idempotent installer: writes packaged themes to `~/.config/slapper/themes`, never overwrites existing files |
+| `archive.rs` | LZMA decode for packaged theme data |
+| `packaged.rs` | Auto-generated LZMA-compressed blob of 50 Halloy themes (regenerated via `scripts/package_themes.py`) |
 
-`ThemeManager` holds dark/light themes with 28 color fields. `Theme.name` is `String` to support future file-loaded themes.
+**Built-in themes**: `cyber-red` (default fallback, always available), `dark`, `light`.
+
+**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Themes are loaded in a background task to avoid blocking the UI.
+
+**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. `Ctrl+T` still toggles between the current dark and light theme. Session persistence saves and restores the selected theme name.
+
+`ThemeManager` holds registered themes with 28 color fields. `Theme.name` is `String` to support file-loaded themes.
 
 The main shell and popup layers use explicit `&Theme` parameters. Tab renderers and components still use the `tc!` macro for theme colors:
 

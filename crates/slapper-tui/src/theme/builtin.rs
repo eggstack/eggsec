@@ -73,3 +73,40 @@ pub fn light_theme() -> Theme {
         },
     }
 }
+
+pub fn cyber_red_theme() -> Theme {
+    Theme {
+        mode: ThemeMode::Dark,
+        name: "cyber-red".to_string(),
+        colors: ThemeColors {
+            primary: ratatui::style::Color::Red,
+            secondary: ratatui::style::Color::Magenta,
+            accent: ratatui::style::Color::Cyan,
+            background: ratatui::style::Color::Black,
+            foreground: ratatui::style::Color::White,
+            surface: ratatui::style::Color::DarkGray,
+            border: ratatui::style::Color::DarkGray,
+            border_focused: ratatui::style::Color::Red,
+            text: ratatui::style::Color::White,
+            text_dim: ratatui::style::Color::DarkGray,
+            text_bright: ratatui::style::Color::White,
+            success: ratatui::style::Color::Green,
+            warning: ratatui::style::Color::Yellow,
+            error: ratatui::style::Color::Red,
+            info: ratatui::style::Color::Cyan,
+            selected: ratatui::style::Color::Red,
+            selected_text: ratatui::style::Color::Black,
+            highlight: ratatui::style::Color::Magenta,
+            mode_normal: ratatui::style::Color::Green,
+            mode_insert: ratatui::style::Color::Yellow,
+            tab_active: ratatui::style::Color::Red,
+            tab_inactive: ratatui::style::Color::DarkGray,
+            status_running: ratatui::style::Color::Green,
+            status_idle: ratatui::style::Color::DarkGray,
+            status_error: ratatui::style::Color::Red,
+            focus_normal: ratatui::style::Color::Indexed(196),
+            focus_input: ratatui::style::Color::Indexed(51),
+            focus_results: ratatui::style::Color::Indexed(82),
+        },
+    }
+}

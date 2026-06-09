@@ -1,6 +1,10 @@
+pub mod archive;
 pub mod builtin;
+pub mod install;
 pub mod legacy;
+pub mod loader;
 pub mod manager;
+pub mod packaged;
 pub mod palette;
 pub mod style;
 

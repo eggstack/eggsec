@@ -33,8 +33,8 @@ pub struct SettingsTab {
     pub config: Option<SlapperConfig>,
     pub config_path: Option<String>,
     pub status_message: String,
-    pub dark_mode: Checkbox,
-    pub accent_color: Selector,
+    pub theme_selector: Selector,
+    pub pending_theme_name: Option<String>,
     pub error: Option<TabError>,
 }
 
@@ -108,15 +108,10 @@ impl SettingsTab {
             SelectorItem::new("Critical", "critical"),
         ]);
 
-        let accent_color = Selector::new("Accent Color").items(vec![
-            SelectorItem::new("Cyan", "cyan"),
-            SelectorItem::new("Blue", "blue"),
-            SelectorItem::new("Green", "green"),
-            SelectorItem::new("Yellow", "yellow"),
-            SelectorItem::new("Red", "red"),
-            SelectorItem::new("Magenta", "magenta"),
-            SelectorItem::new("White", "white"),
-            SelectorItem::new("Black", "black"),
+        let theme_selector = Selector::new("Theme").items(vec![
+            SelectorItem::new("cyber-red", "cyber-red"),
+            SelectorItem::new("dark", "dark"),
+            SelectorItem::new("light", "light"),
         ]);
 
         Self {
@@ -141,14 +136,18 @@ impl SettingsTab {
             config: None,
             config_path: Some("slapper.toml".to_string()),
             status_message: String::new(),
-            dark_mode: Checkbox::new("Dark Mode").checked(true),
-            accent_color,
+            theme_selector,
+            pending_theme_name: None,
             error: None,
         }
     }
 
     pub fn set_config_path(&mut self, path: String) {
         self.config_path = Some(path);
+    }
+
+    pub fn take_pending_theme(&mut self) -> Option<String> {
+        self.pending_theme_name.take()
     }
 
     pub fn max_focus_index(&self) -> usize {
@@ -161,7 +160,7 @@ impl SettingsTab {
             SettingsSection::Report => 3,
             SettingsSection::Schedule => 3,
             SettingsSection::Notifications => 6,
-            SettingsSection::Theme => 1,
+            SettingsSection::Theme => 0,
         }
     }
 
@@ -172,9 +171,6 @@ impl SettingsTab {
             is_detail && self.current_section == SettingsSection::Proxy && idx == 2;
         let keep_severity_open =
             is_detail && self.current_section == SettingsSection::Notifications && idx == 6;
-        let keep_accent_open =
-            is_detail && self.current_section == SettingsSection::Theme && idx == 1;
-
         // Reset all
         self.http_inputs.blur();
         self.scan_inputs.blur();
@@ -191,16 +187,15 @@ impl SettingsTab {
         self.notify_on_findings.focused = false;
         self.proxy_rotation_selector.focused = false;
         self.severity_selector.focused = false;
-        self.dark_mode.focused = false;
-        self.accent_color.focused = false;
+        self.theme_selector.focused = false;
         if !keep_proxy_rotation_open {
             self.proxy_rotation_selector.close();
         }
         if !keep_severity_open {
             self.severity_selector.close();
         }
-        if !keep_accent_open {
-            self.accent_color.close();
+        if !self.theme_selector.focused {
+            self.theme_selector.close();
         }
 
         if !is_detail {
@@ -255,11 +250,7 @@ impl SettingsTab {
                 }
             }
             SettingsSection::Theme => {
-                if idx == 0 {
-                    self.dark_mode.focused = true;
-                } else {
-                    self.accent_color.focused = true;
-                }
+                self.theme_selector.focused = true;
             }
         }
     }
@@ -494,26 +485,7 @@ impl SettingsTab {
     }
 
     pub fn sync_with_theme(&mut self, theme: &crate::theme::Theme) {
-        self.dark_mode.checked = theme.mode == crate::theme::ThemeMode::Dark;
-        let color_name = match theme.colors.accent {
-            ratatui::style::Color::Cyan => "Cyan",
-            ratatui::style::Color::Blue => "Blue",
-            ratatui::style::Color::Green => "Green",
-            ratatui::style::Color::Yellow => "Yellow",
-            ratatui::style::Color::Red => "Red",
-            ratatui::style::Color::Magenta => "Magenta",
-            ratatui::style::Color::White => "White",
-            ratatui::style::Color::Black => "Black",
-            _ => "Cyan",
-        };
-        if let Some(idx) = self
-            .accent_color
-            .items
-            .iter()
-            .position(|it| it.label == color_name)
-        {
-            self.accent_color.select(idx);
-        }
+        self.theme_selector.select_by_value(&theme.name);
     }
 
     pub fn reset(&mut self) {
@@ -577,8 +549,7 @@ impl SettingsTab {
         self.notify_on_findings.checked = true;
         self.proxy_rotation_selector.select(0);
         self.severity_selector.select(0);
-        self.dark_mode.checked = true;
-        self.accent_color.select(0);
+        self.theme_selector.select(0);
         self.focus_area = SettingsFocusArea::SectionList;
         self.current_section = SettingsSection::Http;
         self.detail_focus_index = 0;
@@ -749,6 +720,15 @@ impl SettingsTab {
                 .join("\n"),
             _ => "No schedules configured".to_string(),
         }
+    }
+
+    pub fn set_available_themes(&mut self, themes: &[(String, String)], current_id: &str) {
+        let items: Vec<crate::components::SelectorItem> = themes
+            .iter()
+            .map(|(id, label)| crate::components::SelectorItem::new(label, id))
+            .collect();
+        self.theme_selector.set_items(items);
+        self.theme_selector.select_by_value(current_id);
     }
 
     pub fn is_input_focused(&self) -> bool {

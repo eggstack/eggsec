@@ -162,6 +162,27 @@ impl App {
         let theme = app.theme_manager.current().clone();
         app.tabs.settings.sync_with_theme(&theme);
 
+        // Schedule background theme loading
+        let theme_report = crate::theme::install::load_and_install_themes();
+        tracing::info!(
+            "Theme loading: {} installed, {} loaded, {} skipped, {} errors",
+            theme_report.installed,
+            theme_report.loaded,
+            theme_report.skipped_existing,
+            theme_report.errors.len()
+        );
+
+        // Register loaded themes
+        for theme_result in theme_report.loaded_themes {
+            match theme_result {
+                Ok(theme) => app.theme_manager.register_theme(theme),
+                Err(e) => tracing::warn!("Failed to load theme: {}", e),
+            }
+        }
+
+        // Update settings selector with all available themes
+        app.update_settings_theme_selector();
+
         app
     }
 
@@ -230,6 +251,19 @@ impl App {
             };
             running
         };
+
+        // Apply theme change from settings selector if pending
+        if self.current_tab == super::tabs::Tab::Settings {
+            if let Some(theme_name) = self.tabs.settings.take_pending_theme() {
+                if self.theme_manager.set_theme(&theme_name) {
+                    crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
+                    self.update_settings_theme_selector();
+                    self.needs_redraw = true;
+                } else {
+                    tracing::warn!("Unknown theme selected: {}", theme_name);
+                }
+            }
+        }
 
         if is_running {
             if let Some(task_config) = self.build_current_task() {
@@ -529,6 +563,18 @@ impl App {
     pub fn toggle_theme(&mut self) {
         self.theme_manager.toggle();
         crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
+        self.update_settings_theme_selector();
+    }
+
+    pub fn update_settings_theme_selector(&mut self) {
+        let themes: Vec<(String, String)> = self
+            .theme_manager
+            .list_themes()
+            .iter()
+            .map(|id| (id.to_string(), id.to_string()))
+            .collect();
+        let current = self.theme_manager.current_name().to_string();
+        self.tabs.settings.set_available_themes(&themes, &current);
     }
 
     pub fn current_theme(&self) -> &crate::theme::Theme {

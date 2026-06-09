@@ -132,6 +132,7 @@ Use these sections as the canonical reference points when updating guidance or s
 | NSE libraries | 169 |
 | Modules | 39 |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
+| Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
 | CLI commands | 24 base, 37 with all features |
 
 ### Codebase Issues (Known Stub Implementations)
@@ -184,6 +185,10 @@ No remaining stub implementations.
 - **JSONL format verification**: Code may correctly use JSONL format (line-delimited JSON) even when documentation claims otherwise. The findings store uses JSONL correctly.
 - **AiClient Clone**: Uses `#[derive(Clone)]` at `client.rs:54`, not manual implementation. Don't claim manual implementation without verifying.
 - **Method call patterns**: A method being "called unconditionally" isn't a bug if the method internally handles `None` values appropriately.
+- **Packaged themes**: Run `python3 scripts/package_themes.py` after modifying `themes/*.toml` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
+- **Theme system**: 50 Halloy-format themes are packaged into the binary via LZMA compression. The `cyber-red` fallback theme is always available in-code, independent of file system access.
+- **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes into Slapper `Theme` structs. Missing fields use defaults from built-in themes.
+- **Theme install**: Packaged themes are installed idempotently to the user's config dir (`~/.config/slapper/themes` on Linux). Existing files are never overwritten.
 
 ## Skills Directory
 

@@ -264,16 +264,14 @@ impl TabInput for SettingsTab {
                 }
             }
             SettingsSection::Theme => {
-                if idx == 0 {
-                    self.dark_mode.toggle();
-                } else {
-                    if self.accent_color.is_open() {
-                        if self.accent_color.confirm().is_none() {
-                            tracing::warn!("Failed to confirm accent color selector");
-                        }
+                if self.theme_selector.is_open() {
+                    if let Some(item) = self.theme_selector.confirm() {
+                        self.pending_theme_name = Some(item.value.clone());
                     } else {
-                        self.accent_color.open();
+                        tracing::warn!("Failed to confirm theme selector");
                     }
+                } else {
+                    self.theme_selector.open();
                 }
             }
         }
@@ -292,8 +290,8 @@ impl TabInput for SettingsTab {
             self.severity_selector.cancel();
             return;
         }
-        if self.accent_color.is_open() {
-            self.accent_color.cancel();
+        if self.theme_selector.is_open() {
+            self.theme_selector.cancel();
             return;
         }
         self.focus_area = SettingsFocusArea::SectionList;
@@ -334,8 +332,8 @@ impl TabInput for SettingsTab {
                 self.severity_selector.move_prev();
                 return;
             }
-            if self.accent_color.is_open() {
-                self.accent_color.move_prev();
+            if self.theme_selector.is_open() {
+                self.theme_selector.move_prev();
                 return;
             }
             // In detail view, up moves between fields
@@ -382,8 +380,8 @@ impl TabInput for SettingsTab {
                 self.severity_selector.move_next();
                 return;
             }
-            if self.accent_color.is_open() {
-                self.accent_color.move_next();
+            if self.theme_selector.is_open() {
+                self.theme_selector.move_next();
                 return;
             }
             // In detail view, down moves between fields
