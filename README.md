@@ -103,7 +103,7 @@ sudo dnf install libpcap-devel openssl-devel libusb1-devel
 
 ```bash
 # Clone and build
-git clone https://github.com/dbowm91/eggsec.git
+git clone https://github.com/eggstack/eggsec.git
 cd eggsec
 cargo build --release -p eggsec-cli
 

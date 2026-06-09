@@ -75,5 +75,5 @@ CMD ["--help"]
 # Labels
 LABEL org.opencontainers.image.title="Eggsec"
 LABEL org.opencontainers.image.description="Security Testing Toolkit"
-LABEL org.opencontainers.image.source="https://github.com/dbowm91/eggsec"
+LABEL org.opencontainers.image.source="https://github.com/eggstack/eggsec"
 LABEL org.opencontainers.image.authors="Eggsec Team"

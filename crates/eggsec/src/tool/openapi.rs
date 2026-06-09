@@ -522,7 +522,7 @@ impl OpenApiGenerator {
                 version: self.version.clone(),
                 contact: Some(Contact {
                     name: "Eggsec Team".to_string(),
-                    url: "https://github.com/dbowm91/eggsec".to_string(),
+                    url: "https://github.com/eggstack/eggsec".to_string(),
                 }),
             },
             servers: vec![Server {

@@ -120,5 +120,5 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 - Initial security controls for responsible testing
 - TLS certificate verification (configurable)
 
-[Unreleased]: https://github.com/dbowm91/eggsec/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/dbowm91/eggsec/releases/tag/v0.1.0
+[Unreleased]: https://github.com/eggstack/eggsec/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/eggstack/eggsec/releases/tag/v0.1.0

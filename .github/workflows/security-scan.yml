@@ -40,7 +40,7 @@ jobs:
 
       - name: Download Eggsec
         run: |
-          curl -sL "https://github.com/dbowm91/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
+          curl -sL "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
           chmod +x eggsec
 
       - name: Run Quick Scan
@@ -116,7 +116,7 @@ jobs:
 
       - name: Download Eggsec
         run: |
-          curl -sL "https://github.com/dbowm91/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
+          curl -sL "https://github.com/eggstack/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
           chmod +x eggsec
 
       - name: Load targets from file

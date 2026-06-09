@@ -2,7 +2,7 @@
   image: alpine:latest
   before_script:
     - apk add --no-cache curl
-    - curl -sL "https://github.com/dbowm91/eggsec/releases/latest/download/eggsec-linux-amd64" -o /usr/local/bin/eggsec
+    - curl -sL "https://github.com/eggstack/eggsec/releases/latest/download/eggsec-linux-amd64" -o /usr/local/bin/eggsec
     - chmod +x /usr/local/bin/eggsec
 
 eggsec-quick-scan:

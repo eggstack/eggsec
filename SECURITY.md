@@ -14,7 +14,7 @@ We take security vulnerabilities seriously. If you discover a security vulnerabi
 
 Instead, please report vulnerabilities by:
 
-1. **GitHub Security Advisory**: Use GitHub's private vulnerability reporting at https://github.com/dbowm91/eggsec/security/advisories/new
+1. **GitHub Security Advisory**: Use GitHub's private vulnerability reporting at https://github.com/eggstack/eggsec/security/advisories/new
 
 ### What to Include
 

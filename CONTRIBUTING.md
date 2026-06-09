@@ -35,7 +35,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/dbowm91/eggsec.git
+   git remote add upstream https://github.com/eggstack/eggsec.git
    ```
 
 ## Development Setup

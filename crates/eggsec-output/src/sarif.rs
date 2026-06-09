@@ -220,7 +220,7 @@ impl SarifBuilder {
                     driver: SarifDriver {
                         name: self.tool_name,
                         version: self.tool_version,
-                        information_uri: "https://github.com/dbowm91/eggsec".to_string(),
+                        information_uri: "https://github.com/eggstack/eggsec".to_string(),
                         rules: self.rules,
                     },
                 },
