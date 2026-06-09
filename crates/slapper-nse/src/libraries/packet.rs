@@ -287,7 +287,6 @@ pub fn register_packet_library(lua: &Lua) -> LuaResult<()> {
                 let result = lua.create_table()?;
                 #[cfg(feature = "stress-testing")]
                 {
-                    use std::io::{Read, Write};
                     use std::net::UdpSocket;
 
                     match UdpSocket::bind("0.0.0.0:0") {

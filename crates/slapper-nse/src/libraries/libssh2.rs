@@ -9,8 +9,7 @@ use mlua::{Lua, Result as LuaResult, Table, UserData, UserDataMethods, Value};
 use ssh2::Session;
 #[cfg(feature = "nse-ssh2")]
 use std::net::TcpStream;
-#[cfg(feature = "nse-ssh2")]
-use std::path::Path;
+
 #[cfg(feature = "nse-ssh2")]
 use std::time::Duration;
 
@@ -110,7 +109,7 @@ impl UserData for LibSsh2Session {
                             this.authenticated = true;
                             Ok(true)
                         }
-                        Err(e) => Ok(false),
+                        Err(_e) => Ok(false),
                     }
                 } else {
                     Ok(false)
@@ -142,7 +141,7 @@ impl UserData for LibSsh2Session {
                             this.authenticated = true;
                             Ok(true)
                         }
-                        Err(e) => Ok(false),
+                        Err(_e) => Ok(false),
                     }
                 } else {
                     Ok(false)
@@ -153,8 +152,8 @@ impl UserData for LibSsh2Session {
         // userauth_keyboard_interactive
         methods.add_method_mut(
             "userauth_keyboard_interactive",
-            |_lua, this, (username, _submethods): (String, Option<String>)| {
-                if let Some(ref mut session) = this.session {
+            |_lua, this, (_username, _submethods): (String, Option<String>)| {
+                if let Some(ref mut _session) = this.session {
                     Ok(false)
                 } else {
                     Ok(false)
@@ -178,8 +177,8 @@ impl UserData for LibSsh2Session {
         });
 
         // userauth_list
-        methods.add_method("userauth_list", |_lua, this, username: String| {
-            if let Some(ref session) = this.session {
+        methods.add_method("userauth_list", |_lua, this, _username: String| {
+            if let Some(ref _session) = this.session {
                 Ok("publickey,password,keyboard-interactive".to_string())
             } else {
                 Ok("".to_string())
@@ -220,7 +219,7 @@ impl UserData for LibSsh2Session {
         // channel_read
         methods.add_method(
             "channel_read",
-            |_lua, this, (channel, size): (Table, Option<u32>)| {
+            |_lua, this, (_channel, size): (Table, Option<u32>)| {
                 let _size = size.unwrap_or(4096);
                 if let Some(ref _session) = this.session {
                     Ok(format!("Read {} bytes from channel", _size))
@@ -233,7 +232,7 @@ impl UserData for LibSsh2Session {
         // channel_write
         methods.add_method_mut(
             "channel_write",
-            |_lua, this, (channel, data): (Table, String)| {
+            |_lua, this, (_channel, data): (Table, String)| {
                 if let Some(ref _session) = this.session {
                     Ok(data.len() as u32)
                 } else {
@@ -245,7 +244,7 @@ impl UserData for LibSsh2Session {
         // channel_request_pty
         methods.add_method_mut(
             "channel_request_pty",
-            |_lua, this, (channel, term): (Table, String)| {
+            |_lua, this, (_channel, _term): (Table, String)| {
                 if let Some(ref _session) = this.session {
                     Ok(true)
                 } else {
@@ -255,7 +254,7 @@ impl UserData for LibSsh2Session {
         );
 
         // channel_request_shell
-        methods.add_method_mut("channel_request_shell", |_lua, this, channel: Table| {
+        methods.add_method_mut("channel_request_shell", |_lua, this, _channel: Table| {
             if let Some(ref _session) = this.session {
                 Ok(true)
             } else {
@@ -264,8 +263,7 @@ impl UserData for LibSsh2Session {
         });
 
         // channel_window_size
-        methods.add_method("channel_window_size", |_lua, this, channel: Table| {
-            let _ = channel;
+        methods.add_method("channel_window_size", |_lua, _this, _channel: Table| {
             Ok(2097152u32)
         });
 

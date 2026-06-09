@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::request::ToolRequest;
-use crate::response::{ResponseMetadata, ResponseStatus, ToolResponse};
+use crate::response::{ResponseStatus, ToolResponse};
 
 const DEFAULT_MAX_ENTRIES: usize = 1000;
 
