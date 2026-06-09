@@ -2,13 +2,13 @@
 # Copy to ~/.config/eggsec/eggsec.toml or ./eggsec.toml
 
 [http]
-# Request timeout in seconds
+# Request timeout in seconds (1-300, default: 30)
 timeout_secs = 30
 
-# Maximum retry attempts for failed requests
+# Maximum retry attempts for failed requests (0-10, default: 0)
 max_retries = 3
 
-# Delay between retries in milliseconds
+# Delay between retries in milliseconds (default: 1000)
 retry_delay_ms = 1000
 
 # Verify TLS certificates (set to false for self-signed certs)
@@ -17,7 +17,7 @@ verify_tls = true
 # Follow HTTP redirects
 follow_redirects = true
 
-# Maximum redirects to follow
+# Maximum redirects to follow (default: 10)
 max_redirects = 10
 
 # Default headers for all requests
@@ -29,12 +29,12 @@ max_redirects = 10
 # Custom User-Agent (leave empty for browser-like rotation)
 # default_user_agent = "Eggsec/0.1.0"
 
-# Proxy settings
+# Proxy settings (for simple single-proxy setup)
 # proxy = "http://127.0.0.1:8080"
 # proxy_auth = "user:password"
 
 [scan]
-# Default concurrency for all scan types
+# Default concurrency for all scan types (default: 20)
 default_concurrency = 20
 
 # Rate limit: requests per second (null for unlimited)
@@ -52,7 +52,7 @@ exclude_ports = []
 # Hosts to never scan
 exclude_hosts = []
 
-# Port scan timeout in seconds
+# Port scan timeout in seconds (default: 2)
 port_timeout_secs = 2
 
 # Save scan sessions for resumption
@@ -62,7 +62,7 @@ save_session = true
 # session_dir = "/path/to/sessions"
 
 [output]
-# Output format: pretty, json, compact, sarif, junit, html, csv
+# Output format: pretty, json, compact, sarif, junit, html, csv, markdown
 format = "pretty"
 
 # Verbosity: quiet, normal, verbose, debug
@@ -90,51 +90,169 @@ notify_on_complete = true
 # Send notification when findings are discovered
 notify_on_findings = true
 
+# Send notification on errors
+notify_on_error = true
+
 # Slack webhook URL
 # slack_webhook = "https://hooks.slack.com/services/TXXXXX/BXXXXX/XXXXX"
 
 # Discord webhook URL
 # discord_webhook = "https://discord.com/api/webhooks/XXXXX/XXXXX"
 
+# Microsoft Teams webhook URL
+# teams_webhook = "https://outlook.office.com/webhook/XXXXX"
+
 # Custom webhooks
 [[notifications.webhooks]]
 name = "security-monitoring"
 url = "https://webhook.site/your-webhook-id"
 secret = "your-signing-secret"  # Optional: adds X-Eggsec-Signature header
-events = ["scan_complete", "finding_detected"]
+events = ["scan_complete", "finding"]
 
 # Headers to include in webhook requests
 [notifications.webhooks.headers]
 "X-Custom-Header" = "value"
 
 # Scan Profiles
+# Custom profiles override default scan behavior. Each profile can set
+# its own HTTP, scan, and fuzzing configuration.
+
 [profiles.quick]
 name = "Quick Scan"
-stages = ["port", "fingerprint"]
-concurrency = 50
+
+[profiles.quick.scan]
+default_concurrency = 50
+port_timeout_secs = 1
 
 [profiles.deep]
 name = "Deep Scan"
-stages = ["port", "fingerprint", "endpoint", "fuzz"]
-concurrency = 30
+
+[profiles.deep.scan]
+default_concurrency = 30
+
+[profiles.deep.fuzz]
 payload_types = ["sqli", "xss", "traversal", "ssrf"]
+concurrency = 20
 
 [profiles.waf-focus]
 name = "WAF Assessment"
-stages = ["endpoint", "fuzz"]
-concurrency = 20
+
+[profiles.waf-focus.scan]
+default_concurrency = 20
+
+[profiles.waf-focus.fuzz]
 payload_types = ["sqli", "xss", "headers"]
 
 [profiles.full]
 name = "Full Assessment"
-stages = ["port", "fingerprint", "endpoint", "fuzz", "load"]
-concurrency = 20
+
+[profiles.full.scan]
+default_concurrency = 20
+
+[profiles.full.fuzz]
+payload_types = ["sqli", "xss", "traversal", "ssrf", "redos", "ssrf", "path-traversal", "command-injection"]
 
 [profiles.api]
 name = "API Security"
-stages = ["endpoint", "fuzz"]
-concurrency = 30
+
+[profiles.api.scan]
+default_concurrency = 30
+
+[profiles.api.fuzz]
 payload_types = ["sqli", "ssrf", "redos"]
+
+# Reconnaissance settings
+[recon]
+dns_concurrency = 10
+
+# API keys for external recon services
+[recon.apis]
+# virustotal_api_key = "your-virustotal-api-key"
+# shodan_api_key = "your-shodan-api-key"
+# alienvault_api_key = "your-alienvault-api-key"
+# ip-api_key = "your-ip-api-key"
+# maxmind_license_key = "your-maxmind-license-key"
+# wayback_machine_api_key = "your-wayback-machine-api-key"
+# nvd_api_key = "your-nvd-api-key"
+
+# Scheduled scans (cron-based)
+# [[schedule]]
+# schedule = "0 2 * * 0"   # Weekly on Sunday at 2 AM
+# target = "example.com"
+# scan_type = "deep"
+# output = "./reports/weekly-{{target}}-{{date}}.json"
+# enabled = true
+
+# Distributed/remote worker configuration
+# [remote]
+# psk = "your-pre-shared-key"
+# default_port = 9443
+# [[remote.allowed_workers]]
+# host = "worker1.lab.local"
+# port = 9443
+
+# Proxy pool (for rotating through multiple proxies)
+# [[proxies]]
+# proxy_type = "socks5"
+# address = "127.0.0.1"
+# port = 1080
+# weight = 1
+# priority = 1
+# enabled = true
+
+# [[proxies]]
+# proxy_type = "http"
+# address = "proxy.example.com"
+# port = 8080
+# username = "user"
+# password = "pass"
+# enabled = true
+
+# AI/LLM integration for smart fuzzing and analysis
+# [ai]
+# provider = "openai"
+# model = "gpt-4"
+# api_key = "your-api-key"
+# base_url = "https://api.openai.com/v1"
+# max_tokens = 4096
+# temperature = 0.7
+# max_payloads = 50
+# max_bypasses = 10
+
+# Search integration (SearXNG)
+# [search]
+# enabled = true
+# searxng_url = "http://localhost:8888"
+# engines = ["google", "bing", "duckduckgo"]
+# cache_ttl_seconds = 3600
+
+# Alert channels (named notification targets)
+# [alert_channels.slack]
+# webhook_url = "https://hooks.slack.com/services/TXXXXX/BXXXXX/XXXXX"
+# channel = "#security-alerts"
+
+# [alert_channels.email]
+# smtp_host = "smtp.example.com"
+# smtp_port = 587
+# username = "alerts@example.com"
+# password = "your-smtp-password"
+# from = "eggsec@example.com"
+# to = ["security-team@example.com"]
+
+# [alert_channels.pagerduty]
+# routing_key = "your-pagerduty-routing-key"
+# severity = "critical"
+
+# Execution policy (safety guardrails)
+# [execution_policy]
+# allow_intrusive_fuzzing = true
+# allow_load_testing = true
+# allow_stress_testing = false
+# allow_raw_packets = false
+# allow_credential_testing = true
+# allow_remote_execution = false
+# allow_agent_autonomous = false
+# max_risk_without_confirm = "medium"
 
 # Custom directories
 # custom_payloads_dir = "~/.config/eggsec/payloads"

@@ -179,7 +179,7 @@ Use descriptive branch names:
 
 - `feature/add-graphql-support` - New features
 - `fix/rate-limiter-race-condition` - Bug fixes
-- `docs/improve-plugin-guide` - Documentation
+- `docs/improve-nse-guide` - Documentation
 - `refactor/simplify-error-handling` - Code refactoring
 
 ### Code Style

@@ -8,3 +8,10 @@ contexts:
     description: "Admin user - set ADMIN_TOKEN env var"
     headers:
       Authorization: "Bearer ${ADMIN_TOKEN}"
+  cookie-session:
+    description: "Session-based auth using cookies"
+    cookies:
+      session_id: "${SESSION_ID}"
+      csrf_token: "${CSRF_TOKEN:-default-csrf}"
+    headers:
+      X-Requested-With: "XMLHttpRequest"
