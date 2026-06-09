@@ -1,15 +1,15 @@
-# Docker Setup for Slapper
+# Docker Setup for Eggsec
 
-This directory contains Docker configuration for setting up Slapper and its test targets in a controlled environment.
+This directory contains Docker configuration for setting up Eggsec and its test targets in a controlled environment.
 
 ## Quick Start
 
 ```bash
 # Build the image
-docker build -t slapper:latest .
+docker build -t eggsec:latest .
 
 # Run basic scanner (no test targets)
-docker compose --profile scanner up -d slapper
+docker compose --profile scanner up -d eggsec
 
 # Run with test targets (DVWA, Juice Shop, etc.)
 docker compose --profile testing up -d
@@ -22,7 +22,7 @@ docker compose --profile full up -d
 
 | Service | Port | Description | Profile |
 |---------|------|-------------|---------|
-| slapper | - | Main security testing toolkit | scanner, testing, full, distributed |
+| eggsec | - | Main security testing toolkit | scanner, testing, full, distributed |
 | dvwa | 8080 | Damn Vulnerable Web App | testing, full |
 | juice-shop | 3000 | OWASP Juice Shop | testing, full |
 | metasploitable | 2222, 3306, etc. | Metasploitable2 | testing, full |
@@ -34,7 +34,7 @@ docker compose --profile full up -d
 
 ## Profiles
 
-- **scanner**: Core slapper tool only
+- **scanner**: Core eggsec tool only
 - **testing**: Test targets (DVWA, Juice Shop, Metasploitable, webhook receiver)
 - **storage**: Elasticsearch + Kibana
 - **distributed**: Redis for distributed scanning
@@ -49,7 +49,7 @@ The Dockerfile builds with `--features full`, enabling:
 
 ## Security Capabilities
 
-The slapper container is granted:
+The eggsec container is granted:
 - `NET_RAW` - Raw socket access for ping/scanning
 - `NET_ADMIN` - Network administration for stress testing
 
@@ -59,15 +59,15 @@ These are required for packet-level operations. For full packet capture capabili
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| SLAPPER_LOG_LEVEL | info | Logging level |
-| SLAPPER_CONFIG | - | Path to config file |
-| SLAPPER_RATE_LIMIT | 50 | Requests per second |
+| EGGSEC_LOG_LEVEL | info | Logging level |
+| EGGSEC_CONFIG | - | Path to config file |
+| EGGSEC_RATE_LIMIT | 50 | Requests per second |
 | REDIS_URL | - | Redis connection for distributed mode |
 
 ## Volume Mounts
 
 - `./scan-results:/app/results` - Scan output directory
-- `slapper-sessions:/home/slapper/.local/share/slapper` - Session data
+- `eggsec-sessions:/home/eggsec/.local/share/eggsec` - Session data
 - `elastic-data:/usr/share/elasticsearch/data` - Elasticsearch data
 - `redis-data:/data` - Redis persistence
 
@@ -76,30 +76,30 @@ These are required for packet-level operations. For full packet capture capabili
 ### Web Application Testing
 ```bash
 docker compose --profile testing up -d dvwa juice-shop
-docker compose run slapper scan http://dvwa-target
+docker compose run eggsec scan http://dvwa-target
 ```
 
 ### Anonymized Scanning
 ```bash
 docker compose --profile full up -d tor-proxy
-docker compose run slapper scan http://target --proxy socks5://tor-proxy:9050
+docker compose run eggsec scan http://target --proxy socks5://tor-proxy:9050
 ```
 
 ### Distributed Scanning
 ```bash
 # Start coordinator
 docker compose --profile distributed up -d redis
-docker compose run slapper coordinator --redis redis:6379
+docker compose run eggsec coordinator --redis redis:6379
 
 # In another terminal, start workers
-docker compose run slapper worker --coordinator http://slapper:8080
+docker compose run eggsec worker --coordinator http://eggsec:8080
 ```
 
 ### WAF Detection & Bypass Testing
 ```bash
 docker compose --profile testing up -d dvwa
-docker compose run slapper waf-detect http://dvwa-target
-docker compose run slapper waf-bypass http://dvwa-target
+docker compose run eggsec waf-detect http://dvwa-target
+docker compose run eggsec waf-bypass http://dvwa-target
 ```
 
 ## Building for Specific Features
@@ -126,4 +126,4 @@ Tor may need time to bootstrap. Check logs: `docker compose logs tor-proxy`
 
 - All test targets are intentionally vulnerable - do not expose to untrusted networks
 - Default credentials where applicable are documented in target service configs
-- The slapper container runs as non-root user for safety, with elevated capabilities only when needed
+- The eggsec container runs as non-root user for safety, with elevated capabilities only when needed

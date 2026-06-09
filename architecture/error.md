@@ -2,16 +2,16 @@
 
 ## Purpose
 
-Unified error types for the entire Slapper codebase. `SlapperError` is the primary error enum with 23 variants covering configuration, network, HTTP, IO, proxy, and domain-specific failure modes.
+Unified error types for the entire Eggsec codebase. `EggsecError` is the primary error enum with 23 variants covering configuration, network, HTTP, IO, proxy, and domain-specific failure modes.
 
 ## Key Types
 
 | Type | Location | Description |
 |------|----------|-------------|
-| `SlapperError` | `error/mod.rs` | Primary error enum with 23 variants |
-| `Result<T>` | `error/mod.rs` | Type alias for `Result<T, SlapperError>` |
+| `EggsecError` | `error/mod.rs` | Primary error enum with 23 variants |
+| `Result<T>` | `error/mod.rs` | Type alias for `Result<T, EggsecError>` |
 
-### SlapperError Variants
+### EggsecError Variants
 
 | Variant | Description |
 |---------|-------------|
@@ -43,12 +43,12 @@ Unified error types for the entire Slapper codebase. `SlapperError` is the prima
 
 | File | Description |
 |------|-------------|
-| `error/mod.rs` | `SlapperError` enum, `From` impls for 21 error types, helper methods (`is_timeout()`, `is_network()`, `http_status()`, `with_timeout()`) |
+| `error/mod.rs` | `EggsecError` enum, `From` impls for 21 error types, helper methods (`is_timeout()`, `is_network()`, `http_status()`, `with_timeout()`) |
 | `utils/error.rs` | Error message sanitization utilities (`sanitize_error_message()`, `sanitize_rate_limit_error()`, `sanitize_internal_error()`) |
 
 ## From Implementations
 
-`SlapperError` implements `From` for 21 error types. One is via `#[from]` attribute on the enum variant; 20 are manual impls.
+`EggsecError` implements `From` for 21 error types. One is via `#[from]` attribute on the enum variant; 20 are manual impls.
 
 ### Non-Feature-Gated (18)
 
@@ -83,9 +83,9 @@ Unified error types for the entire Slapper codebase. `SlapperError` is the prima
 
 ## Related Error Types
 
-These domain-specific error types serve specialized purposes and intentionally do **not** convert to `SlapperError`. They are used within their respective modules and converted at module boundaries via `.map_err()`.
+These domain-specific error types serve specialized purposes and intentionally do **not** convert to `EggsecError`. They are used within their respective modules and converted at module boundaries via `.map_err()`.
 
-| Type | Location | Purpose | Converts to `SlapperError`? |
+| Type | Location | Purpose | Converts to `EggsecError`? |
 |------|----------|---------|-----------------------------|
 | `ConfigError` | `config/settings.rs:707` | Config file IO/parse/serialize errors | No (config boundary) |
 | `ScopeError` | `config/scope.rs:420` | Target scope validation errors | Yes (via `From` impl) |
@@ -102,9 +102,9 @@ These domain-specific error types serve specialized purposes and intentionally d
 
 ### Design Rationale
 
-- **`SlapperError`** is the canonical error for library code. All modules that are part of the core library return `Result<T, SlapperError>` (aliased as `crate::error::Result<T>`).
+- **`EggsecError`** is the canonical error for library code. All modules that are part of the core library return `Result<T, EggsecError>` (aliased as `crate::error::Result<T>`).
 - **Domain-specific errors** (`ConfigError`, `ToolError`, `QueueError`, etc.) exist where callers need structured error data (e.g., `ToolError` is serialized to JSON for MCP responses; `CiError` maps to process exit codes).
-- **`anyhow::Result`** is used in binary entry points (command handlers, TUI workers, agent code) for convenience, with `.map_err()` bridges to `SlapperError` at boundaries.
+- **`anyhow::Result`** is used in binary entry points (command handlers, TUI workers, agent code) for convenience, with `.map_err()` bridges to `EggsecError` at boundaries.
 
 ## Utilities
 

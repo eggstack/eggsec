@@ -2,7 +2,7 @@
 
 The Networking module provides low-level access to the network stack for tasks like packet capture, custom packet crafting, and stress testing.
 
-## Core Capabilities (`crates/slapper/src/packet/` & `crates/slapper/src/stress/`)
+## Core Capabilities (`crates/eggsec/src/packet/` & `crates/eggsec/src/stress/`)
 
 ### Packet Parsing (`parse_impl.rs`)
 
@@ -84,7 +84,7 @@ Creating custom network packets from scratch.
 - **TLS Parsing**: Implemented in `parse_impl.rs` via `TlsHandshake::parse()` - extracting information from TLS handshakes (SNI, certificates).
 - **HTTP Parsing**: Implemented in `parse_impl.rs` via `HttpRequest::parse()` and `HttpResponse::parse()`.
 
-### Stress Testing (`crates/slapper/src/stress/`)
+### Stress Testing (`crates/eggsec/src/stress/`)
 
 Generating massive amounts of network traffic to test the resilience of infrastructure and security appliances.
 

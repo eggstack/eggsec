@@ -6,7 +6,7 @@
 
 ## Reporting Security Vulnerabilities
 
-We take security vulnerabilities seriously. If you discover a security vulnerability in Slapper, please report it responsibly.
+We take security vulnerabilities seriously. If you discover a security vulnerability in Eggsec, please report it responsibly.
 
 ### How to Report
 
@@ -14,7 +14,7 @@ We take security vulnerabilities seriously. If you discover a security vulnerabi
 
 Instead, please report vulnerabilities by:
 
-1. **GitHub Security Advisory**: Use GitHub's private vulnerability reporting at https://github.com/dbowm91/slapper/security/advisories/new
+1. **GitHub Security Advisory**: Use GitHub's private vulnerability reporting at https://github.com/dbowm91/eggsec/security/advisories/new
 
 ### What to Include
 
@@ -44,7 +44,7 @@ Please include the following information:
 
 ## Scope Controls
 
-Slapper includes scope controls to prevent unauthorized testing:
+Eggsec includes scope controls to prevent unauthorized testing:
 
 - **Explicit scope requirement**: Can enforce that all targets must be explicitly authorized
 - **CIDR-based rules**: Define allowed/excluded IP ranges
@@ -55,14 +55,14 @@ Slapper includes scope controls to prevent unauthorized testing:
 
 - **Secrets handling**: API keys, tokens, and passwords are marked as sensitive
 - **Output sanitization**: Logs and reports can redact sensitive values
-- **No telemetry**: Slapper does not send any data to external services
+- **No telemetry**: Eggsec does not send any data to external services
 
 ## Credential Management
 
 ```bash
 # Use environment variables for sensitive data
-export SLAPPER_PROXY_AUTH="user:pass"
-export SLAPPER_BEARER_TOKEN="secret-token"
+export EGGSEC_PROXY_AUTH="user:pass"
+export EGGSEC_BEARER_TOKEN="secret-token"
 
 # Never commit credentials to version control
 # Add to .gitignore:
@@ -80,7 +80,7 @@ export SLAPPER_BEARER_TOKEN="secret-token"
 chmod 600 scan-results.json
 
 # Avoid logging sensitive data
-./slapper scan target.com --log-level warn
+./eggsec scan target.com --log-level warn
 ```
 
 ## Network Safety
@@ -112,7 +112,7 @@ rate_limit_per_second = 50
 
 ### Inherent Risks
 
-As a security testing tool, Slapper inherently:
+As a security testing tool, Eggsec inherently:
 
 - Sends potentially malicious payloads to targets
 - May trigger security alerts on target systems

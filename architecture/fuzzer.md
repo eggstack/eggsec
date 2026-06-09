@@ -1,6 +1,6 @@
 # Fuzzer Module
 
-The Fuzzer is the most advanced part of Slapper, designed to find vulnerabilities by sending semi-random or specifically crafted data to a target and analyzing the response.
+The Fuzzer is the most advanced part of Eggsec, designed to find vulnerabilities by sending semi-random or specifically crafted data to a target and analyzing the response.
 
 ## Core Architecture (`src/fuzzer/`)
 
@@ -17,7 +17,7 @@ The core loop that manages targets, payloads, and detections.
 
 ### Payloads (`payloads/`)
 
-Slapper comes with a vast library of payloads for different vulnerability types. The `PayloadType` enum defines 30 categories:
+Eggsec comes with a vast library of payloads for different vulnerability types. The `PayloadType` enum defines 30 categories:
 
 - **Injection**: SQLi, XSS, Command Injection, Template Injection, LDAP, XXE, NoSQL, XPath, Expression.
 - **File System**: Path Traversal.

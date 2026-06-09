@@ -1,15 +1,15 @@
 """
-Example Slapper Plugin
+Example Eggsec Plugin
 
 This plugin demonstrates how to create custom security checks
-that extend Slapper's capabilities.
+that extend Eggsec's capabilities.
 
-To use: Place in ~/.slapper/plugins/ or ./plugins/
+To use: Place in ~/.eggsec/plugins/ or ./plugins/
 """
 
 def register_checks():
     """
-    Register custom checks with Slapper.
+    Register custom checks with Eggsec.
     Returns a list of check definitions.
     """
     return [
@@ -105,7 +105,7 @@ def run_check(check_name: str, target: str) -> list:
 
 def on_result(result_type: str, result_data: dict):
     """
-    Callback when Slapper produces a result.
+    Callback when Eggsec produces a result.
     Can be used for custom processing or logging.
     
     Args:

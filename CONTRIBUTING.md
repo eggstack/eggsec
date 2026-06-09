@@ -1,6 +1,6 @@
-# Contributing to Slapper
+# Contributing to Eggsec
 
-Thank you for your interest in contributing to Slapper! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Eggsec! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -30,12 +30,12 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/slapper.git
-   cd slapper
+   git clone https://github.com/YOUR_USERNAME/eggsec.git
+   cd eggsec
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/dbowm91/slapper.git
+   git remote add upstream https://github.com/dbowm91/eggsec.git
    ```
 
 ## Development Setup
@@ -94,7 +94,7 @@ cargo audit
 
 ### Feature Flags
 
-Slapper uses Cargo feature flags to enable optional capabilities. This allows building with only the features you need.
+Eggsec uses Cargo feature flags to enable optional capabilities. This allows building with only the features you need.
 
 #### Available Features
 
@@ -113,9 +113,9 @@ Slapper uses Cargo feature flags to enable optional capabilities. This allows bu
 Features are propagated between workspace crates:
 
 ```
-slapper (parent)
-├── nse → slapper-nse/nse
-└── stress-testing → slapper-nse?/stress-testing (if nse enabled)
+eggsec (parent)
+├── nse → eggsec-nse/nse
+└── stress-testing → eggsec-nse?/stress-testing (if nse enabled)
 ```
 
 The `?` syntax means "if the dependency is enabled, also enable this feature on it".
@@ -124,13 +124,13 @@ The `?` syntax means "if the dependency is enabled, also enable this feature on 
 
 ```bash
 # Test default build
-cargo build -p slapper
+cargo build -p eggsec
 
 # Test specific feature
-cargo build -p slapper --features stress-testing
+cargo build -p eggsec --features stress-testing
 
 # Test all features
-cargo build -p slapper --features full
+cargo build -p eggsec --features full
 
 # CI tests all feature combinations via matrix strategy
 ```
@@ -155,7 +155,7 @@ This catches undeclared or miswired features early.
 
 #### Adding a New Feature
 
-1. Add the feature to `crates/slapper/Cargo.toml`:
+1. Add the feature to `crates/eggsec/Cargo.toml`:
    ```toml
    [features]
    my-feature = ["dep:my-dependency"]
@@ -226,7 +226,7 @@ Use descriptive branch names:
 /// # Example
 ///
 /// ```
-/// use slapper::module::function;
+/// use eggsec::module::function;
 /// let result = function("example");
 /// ```
 pub fn new_function(param: &str) -> Result<Output, Error> {
@@ -268,7 +268,7 @@ Place integration tests in the `tests/` directory:
 
 ```rust
 // tests/integration_test.rs
-use slapper::*;
+use eggsec::*;
 
 #[tokio::test]
 async fn test_full_workflow() {
@@ -664,4 +664,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-Thank you for contributing to Slapper!
+Thank you for contributing to Eggsec!

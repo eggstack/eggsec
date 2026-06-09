@@ -1,0 +1,276 @@
+---
+name: tui_tab_indexing
+description: "TUI tab indexing model with stable IDs and TabWindow"
+triggers:
+  - tab
+  - navigation
+  - tabwindow
+  - visible_index
+  - stable_id
+  - mouse hit-testing
+metadata:
+  category: TUI
+  tools: [tui]
+  scope: local
+---
+
+## Overview
+
+Eggsec's TUI uses a unified tab indexing system to handle tab navigation, rendering, mouse selection, bookmarks, and session persistence correctly across base and feature-gated builds.
+
+**Key Concepts:**
+- `Tab` enum variant - In-memory active tab identity
+- `Tab::all()` position - Visible/runtime tab index in current feature set
+- `Tab::stable_id()` - Persistent identity string for sessions/bookmarks
+- `tab as usize` - Enum discriminant only (AVOID for navigation)
+
+## Core Types
+
+```rust
+// In crates/eggsec/src/tui/tabs/mod.rs
+
+// Tab enum with stable_id() and from_stable_id()
+pub enum Tab {
+    Recon = 0,
+    Load = 1,
+    // ... up to Vuln = 28
+}
+
+// Get all tabs available in current feature set
+Tab::all() -> &'static [Tab]
+
+// Get position in Tab::all() (not enum discriminant!)
+tab.visible_index() -> Option<usize>
+
+// Get stable string ID for persistence
+tab.stable_id() -> &'static str  // e.g., "dashboard", "settings"
+
+// Restore tab from stable ID (checks availability!)
+Tab::from_stable_id("dashboard") -> Option<Tab>
+
+// Restore tab from enum discriminant (legacy migration only!)
+Tab::from_discriminant(0) -> Option<Tab>  // Legacy migration path only!
+```
+
+## TabWindow Helper
+
+`TabWindow` computes the visible window of tabs for the current terminal width:
+
+```rust
+pub struct TabWindow {
+    pub start: usize,           // Start index in Tab::all()
+    pub end: usize,             // End index in Tab::all()
+    pub selected_visible: usize, // Selected index within visible window
+    pub max_visible: usize,     // Max tabs that fit in current width
+    pub total_tabs: usize,      // Total tabs in Tab::all()
+    pub has_prev: bool,         // True if there are hidden tabs before
+    pub has_next: bool,         // True if there are hidden tabs after
+}
+
+impl TabWindow {
+    // Create window for given terminal width
+    pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self;
+}
+```
+
+## TabWindow Usage
+
+```rust
+use crate::tui::tabs::{Tab, TabWindow};
+
+// Create window based on terminal width
+let window = TabWindow::for_width(80, app.current_tab, app.tab_scroll_offset);
+
+// Render visible tabs
+for (i, tab) in Tab::all()[window.start..window.end].iter().enumerate() {
+    let is_selected = i == window.selected_visible;
+    // render tab with appropriate style
+}
+
+// Mouse click handling
+let local_index = (click_x.saturating_sub(tab_area.x)) / tab_width;
+let clicked_tab_index = window.start + local_index;
+if let Some(tab) = Tab::from_visible_index(clicked_tab_index) {
+    app.current_tab = tab;
+}
+```
+
+## Anti-Patterns to Avoid
+
+```rust
+// WRONG: Using enum discriminant as visible index
+app.current_tab = 5 as Tab;  // This is NOT the 5th visible tab!
+
+// WRONG: Using Tab::all().len() as visible count
+let count = Tab::all().len();  // Not all tabs may be available!
+
+// WRONG: Dividing tab area by total tab count
+let tab_width = area.width / Tab::all().len() as u16;  // Unequal!
+```
+
+## Correct Patterns
+
+```rust
+// CORRECT: Use visible_index() and from_visible_index()
+let idx = app.current_tab.visible_index().unwrap_or(0);
+if let Some(tab) = Tab::from_visible_index(idx) {
+    app.current_tab = tab;
+}
+
+// CORRECT: Use TabWindow for rendering and mouse handling
+let window = TabWindow::for_width(area.width, app.current_tab, app.tab_scroll_offset);
+
+// CORRECT: Use stable_id for persistence
+let id = app.current_tab.stable_id();  // "dashboard"
+// Store this string, not the index!
+```
+
+## Terminal Width Tracking
+
+`App` tracks the tab-area width to ensure keyboard navigation uses the same width as rendering:
+
+```rust
+pub struct App {
+    pub last_tab_area_width: u16,  // Tab bar width = area.width - (LAYOUT_MARGIN * 2)
+    pub tab_scroll_offset: u16,
+    // ...
+}
+
+// Updated in ui::draw() - tracks actual tab bar width
+app.last_tab_area_width = area.width.saturating_sub(LAYOUT_MARGIN * 2);
+
+// Navigation uses stored width
+fn adjust_tab_scroll(&mut self) {
+    let window = TabWindow::for_width(
+        self.last_tab_area_width,
+        self.current_tab,
+        self.tab_scroll_offset
+    );
+}
+```
+
+**Important:** Rendering, keyboard scroll adjustment, and mouse hit-testing all use the same `last_tab_area_width` to ensure consistent tab window calculation.
+
+## Bookmarks with Stable IDs
+
+Bookmarks are stored as `HashSet<String>` of stable IDs:
+
+```rust
+pub struct App {
+    pub bookmarks: std::collections::HashSet<String>,
+}
+
+// Toggle bookmark using Tab
+app.toggle_bookmark(Tab::Dashboard);
+
+// Check if bookmarked
+app.is_bookmarked(Tab::Settings);
+
+// Get bookmark IDs for persistence
+let ids = app.get_bookmarked_tab_ids();  // Vec<String>
+```
+
+## Session Persistence
+
+Session state uses stable IDs for forward compatibility:
+
+```rust
+pub struct SessionState {
+    pub current_tab_id: Option<String>,  // Stable ID, not index!
+    pub bookmarks: Vec<String>,            // Stable IDs!
+    // Legacy numeric fields for backward compatibility
+    pub legacy_current_tab: Option<usize>,
+    pub legacy_bookmarks: Vec<usize>,
+}
+```
+
+## Feature-Gated Tabs
+
+Tabs like NSE, Hunt, etc. are only available when their feature flag is enabled. `Tab::from_stable_id()` returns `None` if the tab isn't available in the current build:
+
+```rust
+// This returns None in a build without the nse feature
+let tab = Tab::from_stable_id("nse");  // None if no nse feature
+
+// So session restore falls back gracefully
+let tab = Tab::from_stable_id(id).unwrap_or(Tab::Recon);
+```
+
+## Testing with TUI
+
+Use `App::new_for_testing()` in unit tests to avoid ambient session file dependencies:
+
+```rust
+#[test]
+fn test_tab_navigation() {
+    let app = App::new_for_testing(create_shared_history());
+    assert_eq!(app.current_tab, Tab::Recon);  // Always starts on Recon in tests
+}
+```
+
+## Legacy Migration Helper
+
+`Tab::from_discriminant(discriminant: usize) -> Option<Tab>` maps enum discriminant values directly to Tab variants:
+
+```rust
+// Maps discriminant values (0-28) to Tab variants
+Tab::from_discriminant(0)  // Some(Tab::Recon)
+Tab::from_discriminant(17)  // Some(Tab::Nse)
+Tab::from_discriminant(999) // None
+
+// Use only for explicit legacy numeric session migration
+// Normal code should use Tab::from_stable_id() or Tab::from_index()
+```
+
+## Implementation Files
+
+- `crates/eggsec/src/tui/tabs/mod.rs` - Tab enum, TabWindow, stable IDs, visible_tab_spans
+- `crates/eggsec/src/tui/app/navigation.rs` - Keyboard navigation, adjust_tab_scroll, render tests
+- `crates/eggsec/src/tui/app/runner.rs` - Mouse hit-testing using visible_tab_spans
+- `crates/eggsec/src/tui/app/mod.rs` - App struct with bookmarks, handle_left/handle_right
+- `crates/eggsec/src/tui/session.rs` - Session capture/restore
+
+## Phase 13 Updates (2026-04-30)
+
+### Render-Aware Tab Window
+
+`TabWindow::for_width` now uses actual tab label widths via greedy algorithm:
+- Previous: Used fixed `min_tab_width = 8` for all tabs
+- Now: Sums actual `tab.title().len()` values until width limit reached
+
+### TabSpan for Mouse Hit-Testing
+
+```rust
+pub struct TabSpan {
+    pub tab: Tab,
+    pub global_index: usize,
+    pub x_start: u16,
+    pub x_end: u16,
+}
+
+pub fn visible_tab_spans(&self, term_width: u16) -> Vec<TabSpan>;
+```
+
+Use `visible_tab_spans()` instead of dividing tab area evenly.
+
+### Tab Label Shortcuts
+
+Only tabs 1-10 show numeric shortcut labels:
+- `[1] Recon` through `[9] Scan` have shortcuts
+- `[0] Resume` is tab 10
+- Tabs 11+ (Proxy, Packet, etc.) show names without shortcuts
+
+### Keyboard Navigation Changes
+
+`handle_left()` and `handle_right()` now use edge detection instead of fallback tab switching:
+- Use `is_at_left_edge()` and `is_at_right_edge()` on dispatcher
+- No fallback to `prev_tab()` / `next_tab()` when returning `false`
+- Use explicit keys: `n/p`, `Shift+H/L` for tab switching
+
+## Verification
+
+```bash
+cargo test --lib -p eggsec -- test_tab_window
+cargo test --lib -p eggsec -- test_bookmark_api_uses_stable_ids
+cargo test --lib -p eggsec -- render_tests
+```

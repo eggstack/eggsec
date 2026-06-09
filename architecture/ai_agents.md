@@ -1,6 +1,6 @@
 # AI & Agents Module
 
-Slapper features deep integration with AI models for analysis, payload generation, and agent-readable security orchestration via the Model Context Protocol (MCP).
+Eggsec features deep integration with AI models for analysis, payload generation, and agent-readable security orchestration via the Model Context Protocol (MCP).
 
 ## AI Integration (`src/ai/`)
 
@@ -85,7 +85,7 @@ pub enum AiError {
 
 ## Agent Orchestration (`src/agent/`)
 
-Slapper can run as an agent-readable scanning orchestrator that executes configured schedules, enforces operational constraints, and handles alert routing.
+Eggsec can run as an agent-readable scanning orchestrator that executes configured schedules, enforces operational constraints, and handles alert routing.
 
 - **Agent Runner (`mod.rs`)**: Core polling loop, scheduled scan dispatch, and event handling.
 - **Memory (`memory.rs`)**: Maintains longitudinal context and baseline-aware finding comparisons.
@@ -99,7 +99,7 @@ Slapper can run as an agent-readable scanning orchestrator that executes configu
 
 ## MCP Integration
 
-Slapper implements the **Model Context Protocol (MCP)**, allowing it to be used as a "tool" by other AI agents or integrated into larger AI-driven security platforms.
+Eggsec implements the **Model Context Protocol (MCP)**, allowing it to be used as a "tool" by other AI agents or integrated into larger AI-driven security platforms.
 
 ### Profile-Based Policy Enforcement
 
@@ -243,4 +243,4 @@ Typed output schema for the coding-agent profile:
 ### WAF Bypass
 1. **waf_bypass.rs** - Fixed eviction order to evict failed/stale entries first instead of useful entries
 
-See `crates/slapper/src/ai/AGENTS.override.md` for detailed AI patterns and `crates/slapper/src/agent/AGENTS.override.md` for agent patterns.
+See `crates/eggsec/src/ai/AGENTS.override.md` for detailed AI patterns and `crates/eggsec/src/agent/AGENTS.override.md` for agent patterns.

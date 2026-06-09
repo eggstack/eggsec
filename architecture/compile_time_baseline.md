@@ -2,65 +2,65 @@
 
 ## Context
 
-The first crate-splitting pass created `slapper-core` for shared types/constants.
-The second pass extracted the TUI into `slapper-tui` and the binary into `slapper-cli`.
-The third pass removed unused TUI dependencies from `slapper` and extracted `slapper-output`.
+The first crate-splitting pass created `eggsec-core` for shared types/constants.
+The second pass extracted the TUI into `eggsec-tui` and the binary into `eggsec-cli`.
+The third pass removed unused TUI dependencies from `eggsec` and extracted `eggsec-output`.
 
 ## Workspace layout (post third pass)
 
 ```text
 crates/
-  slapper-core/      # Dependency-light types and constants
-  slapper-tool-core/ # Core data types for tool abstraction layer
-  slapper/           # Assessment engine library (no binary)
-  slapper-nse/       # Optional NSE compatibility
-  slapper-tui/       # Terminal UI adapter (ratatui/crossterm)
-  slapper-cli/       # CLI binary entry point (binary named "slapper")
-  slapper-output/    # Report formatting and output adapters
+  eggsec-core/      # Dependency-light types and constants
+  eggsec-tool-core/ # Core data types for tool abstraction layer
+  eggsec/           # Assessment engine library (no binary)
+  eggsec-nse/       # Optional NSE compatibility
+  eggsec-tui/       # Terminal UI adapter (ratatui/crossterm)
+  eggsec-cli/       # CLI binary entry point (binary named "eggsec")
+  eggsec-output/    # Report formatting and output adapters
 ```
 
 ## Third pass changes
 
-- Removed `ratatui`, `crossterm`, `arboard` from `slapper` crate (unused dependencies)
-- Added explicit `[[bin]] name = "slapper"` to `slapper-cli` (was relying on auto-discovery)
-- Created `slapper-output` crate for report formatting (JSON, CSV, HTML, SARIF, JUnit, Markdown)
-- Output modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `slapper`
+- Removed `ratatui`, `crossterm`, `arboard` from `eggsec` crate (unused dependencies)
+- Added explicit `[[bin]] name = "eggsec"` to `eggsec-cli` (was relying on auto-discovery)
+- Created `eggsec-output` crate for report formatting (JSON, CSV, HTML, SARIF, JUnit, Markdown)
+- Output modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `eggsec`
 
 ## Third pass commands
 
 ```bash
 rustc --version
 cargo --version
-cargo check -p slapper-core
-cargo check -p slapper --no-default-features
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo check -p slapper-output
+cargo check -p eggsec-core
+cargo check -p eggsec --no-default-features
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo check -p eggsec-output
 cargo check --workspace --all-targets --no-default-features
-cargo check -p slapper-cli --features nse
-cargo check -p slapper-cli --features rest-api
-cargo check -p slapper-cli --features stress-testing
+cargo check -p eggsec-cli --features nse
+cargo check -p eggsec-cli --features rest-api
+cargo check -p eggsec-cli --features stress-testing
 ```
 
 ## Results after third pass
 
-- `slapper-core`: pass
-- `slapper --no-default-features`: pass
-- `slapper-tui`: pass
-- `slapper-cli`: pass
-- `slapper-output`: pass
+- `eggsec-core`: pass
+- `eggsec --no-default-features`: pass
+- `eggsec-tui`: pass
+- `eggsec-cli`: pass
+- `eggsec-output`: pass
 - `--workspace --all-targets --no-default-features`: pass
-- `slapper-cli --features nse`: pass
-- `slapper-cli --features rest-api`: pass (pre-existing: server startup warnings)
-- `slapper-cli --features stress-testing`: pass
+- `eggsec-cli --features nse`: pass
+- `eggsec-cli --features rest-api`: pass (pre-existing: server startup warnings)
+- `eggsec-cli --features stress-testing`: pass
 
 ## Post-third-pass notes
 
-- `slapper-core` has 4 dependencies (serde, serde_json, subtle, zeroize)
-- `slapper` no longer depends on `ratatui`, `crossterm`, or `arboard`
-- `slapper-output` depends on `slapper-core` (not on `slapper`)
-- Output modules with engine coupling remain in `slapper` to avoid cycles
-- The `slapper` crate re-exports `slapper_output` as `output` for backward compatibility
+- `eggsec-core` has 4 dependencies (serde, serde_json, subtle, zeroize)
+- `eggsec` no longer depends on `ratatui`, `crossterm`, or `arboard`
+- `eggsec-output` depends on `eggsec-core` (not on `eggsec`)
+- Output modules with engine coupling remain in `eggsec` to avoid cycles
+- The `eggsec` crate re-exports `eggsec_output` as `output` for backward compatibility
 
 ## Notes
 
@@ -68,7 +68,7 @@ Pre-first-pass and pre-second-pass timing data are not available.
 
 ## Interpretation
 
-The current crate split isolates terminal UI dependencies from the engine crate and moves portable output/tool DTO code into separate crates. The main `slapper` crate remains the largest compile unit because it still owns scanning, web/security modules, API adapters, command dispatch, config, and feature-gated integrations.
+The current crate split isolates terminal UI dependencies from the engine crate and moves portable output/tool DTO code into separate crates. The main `eggsec` crate remains the largest compile unit because it still owns scanning, web/security modules, API adapters, command dispatch, config, and feature-gated integrations.
 
 ## Final modularization stabilization pass
 
@@ -76,54 +76,54 @@ The current crate split isolates terminal UI dependencies from the engine crate 
 
 ```text
 crates/
-  slapper-core/      # Dependency-light types and constants
-  slapper-tool-core/ # Core data types for tool abstraction layer
-  slapper/           # Assessment engine library (no binary)
-  slapper-nse/       # Optional NSE compatibility
-  slapper-tui/       # Terminal UI adapter (ratatui/crossterm)
-  slapper-cli/       # CLI binary entry point (binary named "slapper")
-  slapper-output/    # Report formatting and output adapters
-  slapper-agent/     # Agent coordination primitives (extracted from tool/agents/)
+  eggsec-core/      # Dependency-light types and constants
+  eggsec-tool-core/ # Core data types for tool abstraction layer
+  eggsec/           # Assessment engine library (no binary)
+  eggsec-nse/       # Optional NSE compatibility
+  eggsec-tui/       # Terminal UI adapter (ratatui/crossterm)
+  eggsec-cli/       # CLI binary entry point (binary named "eggsec")
+  eggsec-output/    # Report formatting and output adapters
+  eggsec-agent/     # Agent coordination primitives (extracted from tool/agents/)
 ```
 
 ### Commands run
 
 ```bash
-cargo check -p slapper-core
-cargo check -p slapper-tool-core
-cargo check -p slapper-output
-cargo check -p slapper-agent
-cargo check -p slapper --no-default-features
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo check -p slapper-cli --features nse
-cargo check -p slapper-cli --features rest-api
-cargo check -p slapper-cli --features stress-testing
-cargo check -p slapper-cli --features pdf
-cargo test -p slapper-core
-cargo test -p slapper-tool-core
-cargo test -p slapper-output
-cargo test -p slapper-agent
-cargo test -p slapper --lib
+cargo check -p eggsec-core
+cargo check -p eggsec-tool-core
+cargo check -p eggsec-output
+cargo check -p eggsec-agent
+cargo check -p eggsec --no-default-features
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo check -p eggsec-cli --features nse
+cargo check -p eggsec-cli --features rest-api
+cargo check -p eggsec-cli --features stress-testing
+cargo check -p eggsec-cli --features pdf
+cargo test -p eggsec-core
+cargo test -p eggsec-tool-core
+cargo test -p eggsec-output
+cargo test -p eggsec-agent
+cargo test -p eggsec --lib
 ```
 
 ### Results
 
-- `slapper-core`: pass
-- `slapper-tool-core`: pass
-- `slapper-output`: pass
-- `slapper-agent`: pass (new crate)
-- `slapper --no-default-features`: pass
-- `slapper-tui`: pass
-- `slapper-cli`: pass
-- `slapper-cli --features nse`: pass
-- `slapper-cli --features rest-api`: pass
-- `slapper-cli --features stress-testing`: pass
-- `slapper-cli --features pdf`: pass
+- `eggsec-core`: pass
+- `eggsec-tool-core`: pass
+- `eggsec-output`: pass
+- `eggsec-agent`: pass (new crate)
+- `eggsec --no-default-features`: pass
+- `eggsec-tui`: pass
+- `eggsec-cli`: pass
+- `eggsec-cli --features nse`: pass
+- `eggsec-cli --features rest-api`: pass
+- `eggsec-cli --features stress-testing`: pass
+- `eggsec-cli --features pdf`: pass
 
 ### Final interpretation
 
-This completes the initial crate modularization phase. The `slapper-agent` crate was extracted from `tool/agents/` with zero blockers — all constants already lived in `slapper-core` and the module had no coupling to engine types. Further splits should be driven by measured compile-time hot paths or clearly isolated adapter boundaries.
+This completes the initial crate modularization phase. The `eggsec-agent` crate was extracted from `tool/agents/` with zero blockers — all constants already lived in `eggsec-core` and the module had no coupling to engine types. Further splits should be driven by measured compile-time hot paths or clearly isolated adapter boundaries.
 
-- `slapper-agent` owns the agent coordination implementation; `slapper::tool::agents` is only a compatibility facade.
-- `reqwest` remains in `slapper-agent` because lifecycle callback health checks use it.
+- `eggsec-agent` owns the agent coordination implementation; `eggsec::tool::agents` is only a compatibility facade.
+- `reqwest` remains in `eggsec-agent` because lifecycle callback health checks use it.

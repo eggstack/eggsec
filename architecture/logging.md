@@ -2,7 +2,7 @@
 
 ## Overview
 
-Logging configuration and initialization for Slapper. Defined in `crates/slapper/src/logging/`.
+Logging configuration and initialization for Eggsec. Defined in `crates/eggsec/src/logging/`.
 
 ## Files
 

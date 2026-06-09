@@ -7,7 +7,7 @@ Import OpenAPI schemas for type-aware API testing.
 Parse OpenAPI 3.x JSON/YAML:
 
 ```rust
-use slapper::api_schema::parse_openapi;
+use eggsec::api_schema::parse_openapi;
 
 let schema = parse_openapi(openapi_content, false)?;
 println!("Found {} endpoints", schema.endpoints.len());
@@ -18,7 +18,7 @@ println!("Found {} endpoints", schema.endpoints.len());
 Generate fuzz targets from schema:
 
 ```rust
-use slapper::api_schema::generate_fuzz_targets;
+use eggsec::api_schema::generate_fuzz_targets;
 
 let targets = generate_fuzz_targets(&schema);
 for target in &targets {

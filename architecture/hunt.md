@@ -23,13 +23,13 @@ Advanced threat hunting module for detecting attack chains, business logic flaws
 
 ### CLI Support
 
-The `slapper hunt` subcommand is available when the `advanced-hunting` feature is enabled:
+The `eggsec hunt` subcommand is available when the `advanced-hunting` feature is enabled:
 
 ```bash
-slapper hunt https://example.com
-slapper hunt https://example.com --skip-chains --skip-business
-slapper hunt https://example.com --concurrency 20 --timeout 60
-slapper hunt https://example.com --format json --output results.json
+eggsec hunt https://example.com
+eggsec hunt https://example.com --skip-chains --skip-business
+eggsec hunt https://example.com --concurrency 20 --timeout 60
+eggsec hunt https://example.com --format json --output results.json
 ```
 
 ### TUI Integration

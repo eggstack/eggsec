@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "crates/slapper-core",
-    "crates/slapper",
-    "crates/slapper-nse",
-    "crates/slapper-tui",
-    "crates/slapper-cli",
-    "crates/slapper-output",
-    "crates/slapper-tool-core",
-    "crates/slapper-agent",
+    "crates/eggsec-core",
+    "crates/eggsec",
+    "crates/eggsec-nse",
+    "crates/eggsec-tui",
+    "crates/eggsec-cli",
+    "crates/eggsec-output",
+    "crates/eggsec-tool-core",
+    "crates/eggsec-agent",
 ]
 resolver = "2"
 
@@ -15,7 +15,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/dbowm91/slapper"
+repository = "https://github.com/dbowm91/eggsec"
 rust-version = "1.80"
 
 [workspace.dependencies]

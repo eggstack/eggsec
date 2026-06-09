@@ -1,4 +1,4 @@
-# Slapper - Security Testing Toolkit
+# Eggsec - Security Testing Toolkit
 # Multi-stage Docker build
 
 # Build stage
@@ -17,24 +17,24 @@ RUN apt-get update && apt-get install -y \
 
 # Copy workspace manifests
 COPY Cargo.toml Cargo.lock ./
-COPY crates/slapper/Cargo.toml crates/slapper/
-COPY crates/slapper-nse/Cargo.toml crates/slapper-nse/
+COPY crates/eggsec/Cargo.toml crates/eggsec/
+COPY crates/eggsec-nse/Cargo.toml crates/eggsec-nse/
 
 # Create dummy sources to cache dependencies
-RUN mkdir -p crates/slapper/src crates/slapper-nse/src && \
-    echo "fn main() {}" > crates/slapper/src/main.rs && \
-    echo "" > crates/slapper/src/lib.rs && \
-    echo "" > crates/slapper-nse/src/lib.rs && \
-    cargo build -p slapper --release --features full && \
+RUN mkdir -p crates/eggsec/src crates/eggsec-nse/src && \
+    echo "fn main() {}" > crates/eggsec/src/main.rs && \
+    echo "" > crates/eggsec/src/lib.rs && \
+    echo "" > crates/eggsec-nse/src/lib.rs && \
+    cargo build -p eggsec --release --features full && \
     rm -rf crates/*/src
 
 # Copy source code
-COPY crates/slapper/src crates/slapper/src
-COPY crates/slapper-nse/src crates/slapper-nse/src
-COPY crates/slapper/build.rs crates/slapper/
+COPY crates/eggsec/src crates/eggsec/src
+COPY crates/eggsec-nse/src crates/eggsec-nse/src
+COPY crates/eggsec/build.rs crates/eggsec/
 
 # Build the application with all features
-RUN cargo build -p slapper --release --features full
+RUN cargo build -p eggsec --release --features full
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -48,32 +48,32 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN useradd -m -s /bin/bash slapper
+RUN useradd -m -s /bin/bash eggsec
 
 # Copy binary from builder
-COPY --from=builder /app/target/release/slapper /usr/local/bin/slapper
+COPY --from=builder /app/target/release/eggsec /usr/local/bin/eggsec
 
 # Create directories for config and data
-RUN mkdir -p /home/slapper/.config/slapper \
-    /home/slapper/.local/share/slapper \
-    /home/slapper/.cache/slapper \
-    && chown -R slapper:slapper /home/slapper
+RUN mkdir -p /home/eggsec/.config/eggsec \
+    /home/eggsec/.local/share/eggsec \
+    /home/eggsec/.cache/eggsec \
+    && chown -R eggsec:eggsec /home/eggsec
 
 # Copy example configurations
-COPY examples/configs/*.toml /home/slapper/.config/slapper/
+COPY examples/configs/*.toml /home/eggsec/.config/eggsec/
 
 # Set environment
-ENV SLAPPER_CONFIG_DIR=/home/slapper/.config/slapper
-ENV SLAPPER_DATA_DIR=/home/slapper/.local/share/slapper
+ENV EGGSEC_CONFIG_DIR=/home/eggsec/.config/eggsec
+ENV EGGSEC_DATA_DIR=/home/eggsec/.local/share/eggsec
 
-USER slapper
+USER eggsec
 
 # Default command
-ENTRYPOINT ["slapper"]
+ENTRYPOINT ["eggsec"]
 CMD ["--help"]
 
 # Labels
-LABEL org.opencontainers.image.title="Slapper"
+LABEL org.opencontainers.image.title="Eggsec"
 LABEL org.opencontainers.image.description="Security Testing Toolkit"
-LABEL org.opencontainers.image.source="https://github.com/dbowm91/slapper"
-LABEL org.opencontainers.image.authors="Slapper Team"
+LABEL org.opencontainers.image.source="https://github.com/dbowm91/eggsec"
+LABEL org.opencontainers.image.authors="Eggsec Team"

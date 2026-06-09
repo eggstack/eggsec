@@ -1,4 +1,4 @@
-# Slapper TUI Theme Plumbing Cleanup Plan
+# Eggsec TUI Theme Plumbing Cleanup Plan
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Do not add runtime theme directory scanning.
 
 Do not add a new user-facing theme config format.
 
-Do not redesign the Slapper TUI visually.
+Do not redesign the Eggsec TUI visually.
 
 Do not rewrite all tab rendering.
 
@@ -24,15 +24,15 @@ Do not change CLI behavior or feature flags except for comments or strictly mech
 
 ## Current state to assume
 
-`crates/slapper-tui/src/app/mod.rs` now has a thinner `App` with `tabs: TabStore`, `overlay: OverlayState`, `search: SearchState`, `quick_switch: QuickSwitchState`, and `task_state: TaskState`.
+`crates/eggsec-tui/src/app/mod.rs` now has a thinner `App` with `tabs: TabStore`, `overlay: OverlayState`, `search: SearchState`, `quick_switch: QuickSwitchState`, and `task_state: TaskState`.
 
-`crates/slapper-tui/src/app/state.rs` contains focused state structs with default tests.
+`crates/eggsec-tui/src/app/state.rs` contains focused state structs with default tests.
 
-`crates/slapper-tui/src/app/tab_store.rs` owns the concrete tab instances and preserves feature-gated tabs.
+`crates/eggsec-tui/src/app/tab_store.rs` owns the concrete tab instances and preserves feature-gated tabs.
 
-`crates/slapper-tui/src/theme/` now contains `builtin.rs`, `legacy.rs`, `manager.rs`, `palette.rs`, and `style.rs`.
+`crates/eggsec-tui/src/theme/` now contains `builtin.rs`, `legacy.rs`, `manager.rs`, `palette.rs`, and `style.rs`.
 
-`crates/slapper-tui/src/ui/` now contains `mod.rs`, `shell.rs`, `popups.rs`, and tests.
+`crates/eggsec-tui/src/ui/` now contains `mod.rs`, `shell.rs`, `popups.rs`, and tests.
 
 The main shell already passes `&Theme` explicitly into `draw_tabs`, `draw_breadcrumb`, and `draw_status_bar`, but `draw_content` still delegates to tab renderers without explicit theme plumbing.
 
@@ -50,17 +50,17 @@ Run and record baseline results before editing:
 
 ```bash
 cargo fmt --all -- --check
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
 ```
 
 If `--features full` is practical in the current environment, also run:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 If any check fails before changes, document the failure and continue only if it is clearly unrelated to this pass.
@@ -103,7 +103,7 @@ Acceptance criteria:
 - Existing dark/light themes still work.
 - `ThemeManager::list_themes()` still returns stable names.
 - Session theme restore still uses the theme name string as before.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 3: Tighten `ThemeManager` mutation boundaries
 
@@ -196,7 +196,7 @@ Acceptance criteria:
 
 - `ui/shell.rs` no longer imports `crate::tc`.
 - Shell rendering and status helpers are fully explicit-theme.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 6: Remove `tc!` from popup rendering
 
@@ -224,14 +224,14 @@ Acceptance criteria:
 - `ui/popups.rs` no longer imports `crate::tc`.
 - All popup rendering uses explicit theme access.
 - Visual semantics are unchanged.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 7: Audit remaining `tc!` usage and categorize it
 
 Search for remaining macro uses:
 
 ```bash
-rg "tc!|theme!" crates/slapper-tui/src
+rg "tc!|theme!" crates/eggsec-tui/src
 ```
 
 Categorize each remaining use into one of three groups:
@@ -302,7 +302,7 @@ For popup rendering, avoid brittle full snapshot tests. If a simple `TestBackend
 
 Acceptance criteria:
 
-- `cargo test -p slapper-tui` passes.
+- `cargo test -p eggsec-tui` passes.
 - Tests cover the new dynamic-name and mutation-boundary behavior.
 
 ## Phase 10: Final validation
@@ -311,17 +311,17 @@ Run:
 
 ```bash
 cargo fmt --all
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
 ```
 
 If practical:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 Document any unrelated failures clearly.
@@ -343,6 +343,6 @@ Keep this pass small and mechanical. The first simplification pass already did t
 
 Prefer explicit `&Theme` parameters in rendering functions.
 
-Do not introduce a large abstraction layer just because Halloy theming is planned. Slapper needs a clear semantic palette and explicit plumbing first.
+Do not introduce a large abstraction layer just because Halloy theming is planned. Eggsec needs a clear semantic palette and explicit plumbing first.
 
-Run `cargo check -p slapper-tui` after each phase.
+Run `cargo check -p eggsec-tui` after each phase.

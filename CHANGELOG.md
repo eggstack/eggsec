@@ -20,10 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Python plugin runtime and all Python plugin support (`python-plugins` feature)
 - Ruby plugin runtime and all Ruby plugin support (`ruby-plugins` feature)
-- Metasploit RPC integration (`slapper-ruby` crate)
-- `slapper-plugin` crate (Python plugin manager, AST scanner, security validation)
-- `slapper-ruby` crate (Ruby plugin bridge, loader, MSF client)
-- `slapper plugin list` and `slapper plugin run` CLI commands
+- Metasploit RPC integration (`eggsec-ruby` crate)
+- `eggsec-plugin` crate (Python plugin manager, AST scanner, security validation)
+- `eggsec-ruby` crate (Ruby plugin bridge, loader, MSF client)
+- `eggsec plugin list` and `eggsec plugin run` CLI commands
 - TUI plugin tab for Python/Ruby plugin discovery
 - Plugin-related configuration fields (`plugins_dir`)
 - Plugin development documentation (`PLUGIN_DEVELOPMENT.md`, `PLUGINS.md`)
@@ -33,8 +33,8 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 ### Added
 
 #### Configuration System
-- Configuration file support (TOML/YAML) at `~/.config/slapper/slapper.toml`
-- Environment variable support with `SLAPPER_` prefix
+- Configuration file support (TOML/YAML) at `~/.config/eggsec/eggsec.toml`
+- Environment variable support with `EGGSEC_` prefix
 - Scope file support for target authorization (`scope.toml`)
 - Multiple scan profiles (quick, deep, waf-test, full)
 - Custom scan profile definitions
@@ -120,5 +120,5 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 - Initial security controls for responsible testing
 - TLS certificate verification (configurable)
 
-[Unreleased]: https://github.com/dbowm91/slapper/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/dbowm91/slapper/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dbowm91/eggsec/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dbowm91/eggsec/releases/tag/v0.1.0

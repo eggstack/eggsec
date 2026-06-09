@@ -2,17 +2,17 @@
 
 ## Overview
 
-Centralized constants for the Slapper workspace. Defined in `crates/slapper-core/src/constants.rs` and re-exported by `crates/slapper/src/constants.rs`.
+Centralized constants for the Eggsec workspace. Defined in `crates/eggsec-core/src/constants.rs` and re-exported by `crates/eggsec/src/constants.rs`.
 
 ## Top-Level Constants
 
 | Constant | Type | Value | Description |
 |----------|------|-------|-------------|
 | `PROJECT_QUALIFIER` | `&str` | `"tools"` | Project qualifier |
-| `PROJECT_NAME` | `&str` | `"slapper"` | Project name |
+| `PROJECT_NAME` | `&str` | `"eggsec"` | Project name |
 | `DEFAULT_EXPORT_DIR` | `&str` | `"./exports"` | Default export directory |
 | `DEFAULT_REMOTE_PORT` | `u16` | `7890` | Default remote port |
-| `DEFAULT_CONFIG_FILE` | `&str` | `"slapper.toml"` | Default config filename |
+| `DEFAULT_CONFIG_FILE` | `&str` | `"eggsec.toml"` | Default config filename |
 | `DEFAULT_MAX_RETRIES` | `u32` | `3` | Default max retries |
 | `DEFAULT_RETRY_DELAY_MS` | `u64` | `1000` | Default retry delay (ms) |
 | `DEFAULT_POOL_IDLE_TIMEOUT_SECS` | `u64` | `30` | Connection pool idle timeout |

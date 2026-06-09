@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Slapper is a Rust-based security testing toolkit organized as a workspace with 8 crates: `slapper-core`, `slapper-tool-core`, `slapper`, `slapper-nse`, `slapper-tui`, `slapper-cli`, `slapper-output`, and `slapper-agent`. See `README.md` for features and `ARCHITECTURE.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 8 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, and `eggsec-agent`. See `README.md` for features and `ARCHITECTURE.md` for design details.
 
 ## Implementation Plan
 
@@ -20,21 +20,21 @@ Slapper is a Rust-based security testing toolkit organized as a workspace with 8
 ### Build & Test Commands
 
 ```bash
-cargo check -p slapper-core
-cargo check -p slapper-tool-core
-cargo check --lib -p slapper
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo check -p slapper-nse
-cargo check -p slapper-output
-cargo test -p slapper-core
-cargo test -p slapper-tool-core
-cargo test -p slapper-output
-cargo test --lib -p slapper
-cargo test --test negative_tests -p slapper
-cargo test --test scanner_tests -p slapper
-cargo clippy --lib -p slapper
-cargo build --release -p slapper-cli
+cargo check -p eggsec-core
+cargo check -p eggsec-tool-core
+cargo check --lib -p eggsec
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo check -p eggsec-nse
+cargo check -p eggsec-output
+cargo test -p eggsec-core
+cargo test -p eggsec-tool-core
+cargo test -p eggsec-output
+cargo test --lib -p eggsec
+cargo test --test negative_tests -p eggsec
+cargo test --test scanner_tests -p eggsec
+cargo clippy --lib -p eggsec
+cargo build --release -p eggsec-cli
 ```
 
 ### Module Override Files
@@ -43,24 +43,24 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 | Module | Override File |
 |--------|---------------|
-| `agent/` | `crates/slapper/src/agent/AGENTS.override.md` |
-| `ai/` | `crates/slapper/src/ai/AGENTS.override.md` |
-| `fuzzer/` | `crates/slapper/src/fuzzer/AGENTS.override.md` |
-| `scanner/` | `crates/slapper/src/scanner/AGENTS.override.md` |
-| `tui/` | `crates/slapper-tui/src/AGENTS.override.md` |
-| `waf/` | `crates/slapper/src/waf/AGENTS.override.md` |
-| `recon/` | `crates/slapper/src/recon/AGENTS.override.md` |
-| `tool/` | `crates/slapper/src/tool/AGENTS.override.md` |
-| `config/` | `crates/slapper/src/config/AGENTS.override.md` |
-| `output/` | `crates/slapper/src/output/AGENTS.override.md` (core modules remain; report formatting moved to `slapper-output`) |
-| `proxy/` | `crates/slapper/src/proxy/AGENTS.override.md` |
-| `stress/` | `crates/slapper/src/stress/AGENTS.override.md` |
-| `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
-| `packet/` | `crates/slapper/src/packet/AGENTS.override.md` (uses pnet, pnet_packet for raw sockets) |
-| `loadtest/` | `crates/slapper/src/loadtest/AGENTS.override.md` |
-| `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
-| `nse/` | `crates/slapper-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
-| `container/` | `crates/slapper/src/container/AGENTS.override.md` |
+| `agent/` | `crates/eggsec/src/agent/AGENTS.override.md` |
+| `ai/` | `crates/eggsec/src/ai/AGENTS.override.md` |
+| `fuzzer/` | `crates/eggsec/src/fuzzer/AGENTS.override.md` |
+| `scanner/` | `crates/eggsec/src/scanner/AGENTS.override.md` |
+| `tui/` | `crates/eggsec-tui/src/AGENTS.override.md` |
+| `waf/` | `crates/eggsec/src/waf/AGENTS.override.md` |
+| `recon/` | `crates/eggsec/src/recon/AGENTS.override.md` |
+| `tool/` | `crates/eggsec/src/tool/AGENTS.override.md` |
+| `config/` | `crates/eggsec/src/config/AGENTS.override.md` |
+| `output/` | `crates/eggsec/src/output/AGENTS.override.md` (core modules remain; report formatting moved to `eggsec-output`) |
+| `proxy/` | `crates/eggsec/src/proxy/AGENTS.override.md` |
+| `stress/` | `crates/eggsec/src/stress/AGENTS.override.md` |
+| `distributed/` | `crates/eggsec/src/distributed/AGENTS.override.md` |
+| `packet/` | `crates/eggsec/src/packet/AGENTS.override.md` (uses pnet, pnet_packet for raw sockets) |
+| `loadtest/` | `crates/eggsec/src/loadtest/AGENTS.override.md` |
+| `pipeline/` | `crates/eggsec/src/pipeline/AGENTS.override.md` |
+| `nse/` | `crates/eggsec-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
+| `container/` | `crates/eggsec/src/container/AGENTS.override.md` |
 
 ### Architecture Index
 
@@ -86,11 +86,11 @@ Use these sections as the canonical reference points when updating guidance or s
 
 ### Key Types
 
-- `SlapperConfig` - Main configuration (`config::load_config()`)
-- `Severity` - Unified severity (defined in `slapper-core::types`, re-exported by `types.rs`)
-- `SensitiveString` - Zeroized credential wrapper (defined in `slapper-core::types`, re-exported by `types.rs`)
-- `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `slapper-tui` (`tui/app/tab_error.rs`)
-- `ThemeLoadState` - Grouped theme-load runtime state (`rx`, `handle`, deferred restore, user-change flag) in `slapper-tui` (`tui/app/state.rs`)
+- `EggsecConfig` - Main configuration (`config::load_config()`)
+- `Severity` - Unified severity (defined in `eggsec-core::types`, re-exported by `types.rs`)
+- `SensitiveString` - Zeroized credential wrapper (defined in `eggsec-core::types`, re-exported by `types.rs`)
+- `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `eggsec-tui` (`tui/app/tab_error.rs`)
+- `ThemeLoadState` - Grouped theme-load runtime state (`rx`, `handle`, deferred restore, user-change flag) in `eggsec-tui` (`tui/app/state.rs`)
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
 - `PayloadType` - Enum of 30 payload categories
@@ -118,7 +118,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile
-- **slapper-output Re-exports**: The `slapper-output` crate re-exports key types (`Severity`, `AgentFinding`, `ScanReportData`, `DiffSummary`, `TrendAnalyzer`, etc.) at its crate root. Use `slapper_output::Severity` rather than reaching into `slapper_output::agent::Severity` directly.
+- **eggsec-output Re-exports**: The `eggsec-output` crate re-exports key types (`Severity`, `AgentFinding`, `ScanReportData`, `DiffSummary`, `TrendAnalyzer`, etc.) at its crate root. Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity` directly.
 
 ### Codebase Health
 
@@ -186,10 +186,10 @@ No remaining stub implementations.
 - **JSONL format verification**: Code may correctly use JSONL format (line-delimited JSON) even when documentation claims otherwise. The findings store uses JSONL correctly.
 - **AiClient Clone**: Uses `#[derive(Clone)]` at `client.rs:54`, not manual implementation. Don't claim manual implementation without verifying.
 - **Method call patterns**: A method being "called unconditionally" isn't a bug if the method internally handles `None` values appropriately.
-- **Packaged themes**: Run `python3 scripts/package_themes.py` after modifying `themes/*.toml` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
+- **Packaged themes**: Run `python3 scripts/package_themes.py` after modifying `themes/*.toml` to regenerate `crates/eggsec-tui/src/theme/packaged.rs`. The script is deterministic.
 - **Theme system**: 50 Halloy-format themes are packaged into the binary via LZMA compression. Packaged theme names are canonicalized to stable IDs, selector labels are display-friendly, and the `cyber-red` fallback theme is always available in-code, independent of file system access.
-- **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes into Slapper `Theme` structs. Missing fields use defaults from built-in themes.
-- **Theme install**: Packaged themes are installed idempotently to the user's config dir (`~/.config/slapper/themes` on Linux). Existing files are never overwritten.
+- **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes into Eggsec `Theme` structs. Missing fields use defaults from built-in themes.
+- **Theme install**: Packaged themes are installed idempotently to the user's config dir (`~/.config/eggsec/themes` on Linux). Existing files are never overwritten.
 - **Theme background loading**: Theme loading runs in a background thread (`std::thread::spawn`) with results sent via `std::sync::mpsc`. The receiver, join handle, and deferred restore live in `ThemeLoadState`. `App::update()` polls the channel and joins the loader handle once the final report arrives. `App::spawn_theme_loader()` starts the thread. `new_for_testing()` skips the loader.
 
 ## Skills Directory
@@ -198,29 +198,29 @@ Skills are located in `.opencode/skills/`:
 
 | Skill | Purpose |
 |-------|---------|
-| `slapper-agent/` | Agent-specific workflows |
-| `slapper-ai/` | AI module workflows |
-| `slapper-architecture-review/` | Architecture document review methodology |
-| `slapper-auth/` | Authentication security testing workflows |
-| `slapper-browser/` | Headless browser security testing |
-| `slapper-cli/` | CLI parsing, command dispatch, handler patterns |
-| `slapper-config/` | Config module workflows |
-| `slapper-distributed/` | Distributed module workflows |
-| `slapper-fuzzer/` | Fuzzer module workflows |
-| `slapper-hunt/` | Vulnerability hunting workflows |
-| `slapper-loadtest/` | Loadtest module workflows |
-| `slapper-nse/` | NSE/Lua module workflows |
-| `slapper-output/` | Output module workflows |
-| `slapper-packet/` | Packet capture/crafting/parsing workflows |
-| `slapper-pipeline/` | Pipeline module workflows |
-| `slapper-proxy/` | Proxy module workflows |
-| `slapper-recon/` | Reconnaissance module workflows |
-| `slapper-scanner/` | Scanner module workflows |
-| `slapper-security/` | Security testing skill workflows |
-| `slapper-stress/` | Stress module workflows |
-| `slapper-tool/` | Tool module workflows |
-| `slapper-tui/` | TUI module workflows |
-| `slapper-waf/` | WAF module workflows |
+| `eggsec-agent/` | Agent-specific workflows |
+| `eggsec-ai/` | AI module workflows |
+| `eggsec-architecture-review/` | Architecture document review methodology |
+| `eggsec-auth/` | Authentication security testing workflows |
+| `eggsec-browser/` | Headless browser security testing |
+| `eggsec-cli/` | CLI parsing, command dispatch, handler patterns |
+| `eggsec-config/` | Config module workflows |
+| `eggsec-distributed/` | Distributed module workflows |
+| `eggsec-fuzzer/` | Fuzzer module workflows |
+| `eggsec-hunt/` | Vulnerability hunting workflows |
+| `eggsec-loadtest/` | Loadtest module workflows |
+| `eggsec-nse/` | NSE/Lua module workflows |
+| `eggsec-output/` | Output module workflows |
+| `eggsec-packet/` | Packet capture/crafting/parsing workflows |
+| `eggsec-pipeline/` | Pipeline module workflows |
+| `eggsec-proxy/` | Proxy module workflows |
+| `eggsec-recon/` | Reconnaissance module workflows |
+| `eggsec-scanner/` | Scanner module workflows |
+| `eggsec-security/` | Security testing skill workflows |
+| `eggsec-stress/` | Stress module workflows |
+| `eggsec-tool/` | Tool module workflows |
+| `eggsec-tui/` | TUI module workflows |
+| `eggsec-waf/` | WAF module workflows |
 | `tui-testing/` | TUI testing guidance and visual regression patterns |
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
@@ -260,16 +260,16 @@ Detailed architecture documentation is in the `architecture/` directory:
 ## Verification Commands
 
 ```bash
-cargo check --lib -p slapper
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo check -p slapper-nse
-cargo check -p slapper-tool-core
-cargo check -p slapper-output
-cargo test --lib -p slapper
-cargo test --test negative_tests -p slapper
-cargo test --test scanner_tests -p slapper
-cargo clippy --lib -p slapper
+cargo check --lib -p eggsec
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo check -p eggsec-nse
+cargo check -p eggsec-tool-core
+cargo check -p eggsec-output
+cargo test --lib -p eggsec
+cargo test --test negative_tests -p eggsec
+cargo test --test scanner_tests -p eggsec
+cargo clippy --lib -p eggsec
 ```
 
 ## Planning Notes for Future Agents

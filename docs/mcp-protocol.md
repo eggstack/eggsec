@@ -1,34 +1,34 @@
 # MCP Protocol Reference
 
-Slapper's MCP (Model Context Protocol) server provides AI agents with secure, structured access to security testing tools.
+Eggsec's MCP (Model Context Protocol) server provides AI agents with secure, structured access to security testing tools.
 
 ## Quick Start
 
 ```bash
 # Start MCP server (ops-agent profile, default)
-slapper mcp-serve --port 8081
+eggsec mcp-serve --port 8081
 
 # Or with authentication
-slapper mcp-serve --port 8081 --api-key your-secret-key
+eggsec mcp-serve --port 8081 --api-key your-secret-key
 
 # STDIO mode for direct AI integration
-slapper mcp-serve --stdio
+eggsec mcp-serve --stdio
 
 # Coding agent profile (stdio + restricted tools)
-slapper mcp-serve --stdio --profile coding-agent
+eggsec mcp-serve --stdio --profile coding-agent
 
 # Shorthand for coding agent via codegg-mcp alias
-slapper codegg-mcp
+eggsec codegg-mcp
 ```
 
 ## MCP Profiles
 
-Slapper has **one** MCP implementation with multiple profiles that control available tools, safety policies, and output schemas.
+Eggsec has **one** MCP implementation with multiple profiles that control available tools, safety policies, and output schemas.
 
 | Profile | Server Name | Description |
 |---------|-------------|-------------|
-| `ops-agent` | `slapper-tool-api` | Full security testing toolkit for AI agents. All tools, unconstrained. |
-| `coding-agent` | `slapper-coding-agent-mcp` | Bounded live security validation tools for coding agents. Restricted tools, enforced safety. |
+| `ops-agent` | `eggsec-tool-api` | Full security testing toolkit for AI agents. All tools, unconstrained. |
+| `coding-agent` | `eggsec-coding-agent-mcp` | Bounded live security validation tools for coding agents. Restricted tools, enforced safety. |
 
 ### Ops-Agent Profile
 
@@ -55,33 +55,33 @@ Optimized for AI coding assistants that need to validate security while writing 
 
 | URI | Description |
 |-----|-------------|
-| `slapper://coding-agent/manifest` | Available tools and recommended workflow |
-| `slapper://coding-agent/safety-policy` | Safety defaults, hard caps, allowed targets |
-| `slapper://coding-agent/finding-schema` | Schema for structured findings output |
-| `slapper://coding-agent/workflow` | Recommended validation workflow |
-| `slapper://coding-agent/tool-contracts` | Per-tool input/output contracts |
+| `eggsec://coding-agent/manifest` | Available tools and recommended workflow |
+| `eggsec://coding-agent/safety-policy` | Safety defaults, hard caps, allowed targets |
+| `eggsec://coding-agent/finding-schema` | Schema for structured findings output |
+| `eggsec://coding-agent/workflow` | Recommended validation workflow |
+| `eggsec://coding-agent/tool-contracts` | Per-tool input/output contracts |
 
 ### Startup Examples
 
 ```bash
 # Ops-agent (HTTP mode)
-slapper mcp-serve --port 8081
+eggsec mcp-serve --port 8081
 
 # Ops-agent (STDIO mode)
-slapper mcp-serve --stdio
+eggsec mcp-serve --stdio
 
 # Coding-agent (STDIO mode)
-slapper mcp-serve --stdio --profile coding-agent
+eggsec mcp-serve --stdio --profile coding-agent
 
 # Coding-agent shorthand
-slapper codegg-mcp
+eggsec codegg-mcp
 
 # Coding-agent with scope file
-slapper mcp-serve --stdio --profile coding-agent --scope-file scope.toml
+eggsec mcp-serve --stdio --profile coding-agent --scope-file scope.toml
 
 # Coding-agent with example config
 # See examples/codegg-mcp.local.toml
-slapper mcp-serve --stdio --profile coding-agent
+eggsec mcp-serve --stdio --profile coding-agent
 ```
 
 ## Endpoints
@@ -125,7 +125,7 @@ Get server capabilities.
   "id": 1,
   "result": {
     "serverInfo": {
-      "name": "slapper-mcp",
+      "name": "eggsec-mcp",
       "version": "0.1.0"
     },
     "capabilities": {
@@ -313,7 +313,7 @@ Read a specific resource.
   "id": 13,
   "method": "resources/read",
   "params": {
-    "uri": "slapper://manifest"
+    "uri": "eggsec://manifest"
   }
 }
 ```
@@ -463,7 +463,7 @@ Presets: `standard` (60/5/10), `relaxed` (120/10/20), `strict` (30/2/5)
 
 ## Session Persistence
 
-Sessions are stored on disk at `~/.slapper/sessions/` with:
+Sessions are stored on disk at `~/.eggsec/sessions/` with:
 - 1-hour TTL (configurable)
 - Automatic cleanup
 - Max 100 sessions (configurable)

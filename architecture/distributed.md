@@ -1,6 +1,6 @@
 # Distributed Module
 
-Slapper can be deployed in a distributed architecture to perform large-scale security assessments by distributing tasks across multiple worker nodes.
+Eggsec can be deployed in a distributed architecture to perform large-scale security assessments by distributing tasks across multiple worker nodes.
 
 ## Cluster Architecture (`src/distributed/`)
 
@@ -18,7 +18,7 @@ Independent nodes that perform the actual scanning and fuzzing tasks.
 
 - **Self-Registration**: Workers automatically register with the coordinator on startup.
 - **Resource Monitoring**: Workers report their current load and availability to the coordinator.
-- **Task Execution**: Workers receive tasks, execute them locally using the core Slapper engine, and report results back.
+- **Task Execution**: Workers receive tasks, execute them locally using the core Eggsec engine, and report results back.
 
 #### Worker Helpers
 
@@ -201,7 +201,7 @@ When workers register with the coordinator via `CommandMessage::Register`, they 
 
 | Variant | Fields | Direction | Purpose |
 |---------|--------|-----------|---------|
-| `Execute` | `id`, `command`, `timeout`, `env` | Coordinator → Worker | Execute a slapper command on the worker |
+| `Execute` | `id`, `command`, `timeout`, `env` | Coordinator → Worker | Execute a eggsec command on the worker |
 | `Register` | `id`, `hostname`, `capabilities` | Worker → Coordinator | Worker self-registration on startup |
 | `Heartbeat` | `id`, `status` | Worker → Coordinator | Periodic liveness and status report |
 | `Result` | `id`, `result` | Worker → Coordinator | Task execution result with output/error |
@@ -255,7 +255,7 @@ The worker dispatches tasks to type-specific processors via `process_task()`:
 | LoadTest | `process_load_test()` | HTTP load testing via `loadtest::run_cli()` |
 | Recon | `process_recon()` | Reconnaissance via `recon::run_cli()` |
 
-Each processor extracts parameters from `Task.payload` (an `FxHashMap<String, serde_json::Value>`) and invokes the corresponding Slapper engine module.
+Each processor extracts parameters from `Task.payload` (an `FxHashMap<String, serde_json::Value>`) and invokes the corresponding Eggsec engine module.
 
 ## Task Lifecycle
 

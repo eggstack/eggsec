@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Slapper CLI is built using `clap` for argument parsing and a handler-based dispatch system for command execution. This document describes the architecture patterns used.
+The Eggsec CLI is built using `clap` for argument parsing and a handler-based dispatch system for command execution. This document describes the architecture patterns used.
 
 ## Command Structure
 
@@ -86,7 +86,7 @@ Provides shared state and utilities:
 
 ```rust
 pub struct CommandContext {
-    pub config: SlapperConfig,
+    pub config: EggsecConfig,
     pub scope: Scope,
     pub json: bool,
     config_path: Option<String>,

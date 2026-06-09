@@ -14,7 +14,7 @@ Defense-lab mode is distinct from general assessment mode. It assumes a local or
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│ Build/Run    │────▶│ Run Slapper  │────▶│ Collect      │
+│ Build/Run    │────▶│ Run Eggsec  │────▶│ Collect      │
 │ Synvoid      │     │ Profile      │     │ Observations │
 └──────────────┘     └──────────────┘     └──────────────┘
                                                   │
@@ -35,8 +35,8 @@ Defense-lab mode is distinct from general assessment mode. It assumes a local or
 ```
 
 1. **Build and run Synvoid** (or similar) locally or in a controlled lab
-2. **Run a Slapper defense-lab profile** against the target
-3. **Collect Slapper observations** (responses, latencies, error classes)
+2. **Run a Eggsec defense-lab profile** against the target
+3. **Collect Eggsec observations** (responses, latencies, error classes)
 4. **Optionally collect Synvoid logs/metrics** (WAF decisions, rule matches, resource usage)
 5. **Compare against baseline** to identify changes or regressions
 6. **Convert regressions into test cases** for CI or future runs
@@ -72,14 +72,14 @@ Defense-lab profiles should not be run against targets you do not own or control
 
 ## Output Model
 
-A defense-lab run produces structured output suitable for regression analysis. The canonical envelope for this is `RunManifest` defined in `crates/slapper/src/output/run_manifest.rs` and documented in `architecture/output.md`.
+A defense-lab run produces structured output suitable for regression analysis. The canonical envelope for this is `RunManifest` defined in `crates/eggsec/src/output/run_manifest.rs` and documented in `architecture/output.md`.
 
 | Field | Description |
 |-------|-------------|
 | `schema_version` | Manifest schema version for forward compatibility |
 | `run_id` | Unique identifier for this run |
 | `started_at` / `ended_at` | Timestamps |
-| `slapper_version` | Version used |
+| `eggsec_version` | Version used |
 | `target_scope` | Target specification |
 | `profile` | Defense-lab profile name |
 | `probe_intents` | Categorized probe metadata (uses `ProbeIntent` enum from `probe.rs`) |
@@ -95,7 +95,7 @@ The manifest wraps run-level provenance so that two manifests can be meaningfull
 
 ## Shared Probe Vocabulary
 
-Defense-lab profiles use the shared `ProbeIntent` and `ProbeRisk` enums defined in `crates/slapper/src/probe.rs`. These enums are also used by scanner, NSE, WAF, and loadtest modules to tag probes with consistent intent and risk metadata. This enables guardrails and budget enforcement across all assessment modes.
+Defense-lab profiles use the shared `ProbeIntent` and `ProbeRisk` enums defined in `crates/eggsec/src/probe.rs`. These enums are also used by scanner, NSE, WAF, and loadtest modules to tag probes with consistent intent and risk metadata. This enables guardrails and budget enforcement across all assessment modes.
 
 ## Defense-Lab Profiles
 

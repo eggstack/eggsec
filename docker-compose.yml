@@ -2,14 +2,14 @@ version: '3.8'
 
 services:
   # ============================================
-  # Core: Slapper security testing toolkit
+  # Core: Eggsec security testing toolkit
   # ============================================
-  slapper:
+  eggsec:
     build:
       context: .
       dockerfile: Dockerfile
-    image: slapper:latest
-    container_name: slapper
+    image: eggsec:latest
+    container_name: eggsec
     
     security_opt:
       - no-new-privileges:true
@@ -29,17 +29,17 @@ services:
     
     volumes:
       - ./scan-results:/app/results
-      - slapper-sessions:/home/slapper/.local/share/slapper
+      - eggsec-sessions:/home/eggsec/.local/share/eggsec
     
     environment:
-      - SLAPPER_LOG_LEVEL=info
-      - SLAPPER_CONFIG=/home/slapper/.config/slapper/slapper.toml
+      - EGGSEC_LOG_LEVEL=info
+      - EGGSEC_CONFIG=/home/eggsec/.config/eggsec/eggsec.toml
       - RUST_BACKTRACE=1
-      - SLAPPER_RATE_LIMIT=50
-      - REDIS_URL=redis://:slapper123@redis:6379
+      - EGGSEC_RATE_LIMIT=50
+      - REDIS_URL=redis://:eggsec123@redis:6379
     
     healthcheck:
-      test: ["CMD", "slapper", "--version"]
+      test: ["CMD", "eggsec", "--version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -106,12 +106,12 @@ services:
   # ============================================
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: slapper-elastic
+    container_name: eggsec-elastic
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "ELASTIC_PASSWORD=slapper123"
+      - "ELASTIC_PASSWORD=eggsec123"
     ports:
       - "9200:9200"
     volumes:
@@ -132,7 +132,7 @@ services:
   # ============================================
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
-    container_name: slapper-kibana
+    container_name: eggsec-kibana
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
@@ -185,7 +185,7 @@ services:
       - "9051:9051"
     environment:
       - TOR_CONTROL_PORT=9051
-      - TOR_PASSWORD=slapper123
+      - TOR_PASSWORD=eggsec123
     healthcheck:
       test: ["CMD", "torify", "curl", "-f", "http://localhost:9050"]
       interval: 30s
@@ -204,14 +204,14 @@ services:
   # ============================================
   redis:
     image: redis:7-alpine
-    container_name: slapper-redis
-    command: redis-server --requirepass slapper123
+    container_name: eggsec-redis
+    command: redis-server --requirepass eggsec123
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "slapper123", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "eggsec123", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -258,6 +258,6 @@ networks:
         - subnet: 172.28.0.0/16
 
 volumes:
-  slapper-sessions:
+  eggsec-sessions:
   elastic-data:
   redis-data:

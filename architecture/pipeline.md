@@ -1,6 +1,6 @@
 # Pipeline Module
 
-The Pipeline module allows for the orchestration of complex security assessment workflows by chaining multiple Slapper tasks together.
+The Pipeline module allows for the orchestration of complex security assessment workflows by chaining multiple Eggsec tasks together.
 
 ## Core Concepts (`src/pipeline/`)
 
@@ -67,12 +67,12 @@ pub struct Pipeline {
     context: Arc<Mutex<PipelineContext>>,
     session_path: Option<String>,     // Path for session checkpoint persistence (*.session/*.session.json)
     tui_mode: bool,
-    config: Option<SlapperConfig>,    // Optional config for TLS, concurrency, default settings
+    config: Option<EggsecConfig>,    // Optional config for TLS, concurrency, default settings
 }
 ```
 
 - `spoof_config` (`SpoofConfig`): Configures source IP spoofing, decoy addresses, fragmentation, scan type, packet trace, max rate, and TTL. Built from CLI args via `SpoofConfig::from_args()`.
-- `config` (`Option<SlapperConfig>`): Optional loaded config file. Used to read `http.verify_tls`, `http.timeout_secs`, `scan.default_concurrency`, and other settings. When `None`, defaults are used.
+- `config` (`Option<EggsecConfig>`): Optional loaded config file. Used to read `http.verify_tls`, `http.timeout_secs`, `scan.default_concurrency`, and other settings. When `None`, defaults are used.
 - `session_path` (`Option<String>`): Extracted from `--output` arg when the path ends with `.session` or `.session.json`. When set, a `PipelineSession` checkpoint is written after each stage completes.
 
 ### Pipeline Context (`context.rs`)

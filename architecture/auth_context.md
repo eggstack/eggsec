@@ -2,7 +2,7 @@
 
 ## Overview
 
-YAML-based authentication context parsing for multi-user/multi-role testing. Defined in `crates/slapper/src/auth_context/mod.rs`.
+YAML-based authentication context parsing for multi-user/multi-role testing. Defined in `crates/eggsec/src/auth_context/mod.rs`.
 
 ## Key Types
 

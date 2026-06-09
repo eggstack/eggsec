@@ -4,7 +4,7 @@ The CLI and Commands layer is responsible for parsing user input, managing globa
 
 ## CLI Parsing (`src/cli/`)
 
-Slapper uses `clap` for command-line argument parsing. The CLI is organized into several modules, each defining the arguments for a specific category of commands:
+Eggsec uses `clap` for command-line argument parsing. The CLI is organized into several modules, each defining the arguments for a specific category of commands:
 
 - **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (37 variants), and `CommonHttpArgs`.
 - **`scan.rs`**: Arguments for the `scan` command (port scanning, endpoint discovery).
@@ -24,7 +24,7 @@ Slapper uses `clap` for command-line argument parsing. The CLI is organized into
 
 Once arguments are parsed, the `main` function initializes a `CommandContext` and calls `handle_command` via `src/commands/mod.rs` re-exports. The implementation lives in `src/commands/handlers/mod.rs`.
 
-- **`CommandContext`**: Carries global state including the loaded `SlapperConfig`, `Scope`, and output preferences.
+- **`CommandContext`**: Carries global state including the loaded `EggsecConfig`, `Scope`, and output preferences.
 - **`handle_command`**: A large exhaustive match statement that dispatches to the correct handler based on the subcommand.
   Because it is exhaustive (no wildcard arm), adding/removing `Commands` variants requires updating dispatch at compile time.
 
@@ -98,4 +98,4 @@ ctx.enforce_operation_policy(OperationRisk::High, Some(&args.target))?;
 
 ## Skills Reference
 
-- `.opencode/skills/slapper-cli/` - Full CLI patterns and handler guide
+- `.opencode/skills/eggsec-cli/` - Full CLI patterns and handler guide

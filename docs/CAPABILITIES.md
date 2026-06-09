@@ -1,6 +1,6 @@
-# Slapper Capabilities Reference
+# Eggsec Capabilities Reference
 
-Comprehensive reference of all security testing capabilities available in Slapper.
+Comprehensive reference of all security testing capabilities available in Eggsec.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ Comprehensive reference of all security testing capabilities available in Slappe
 
 ## Reconnaissance Modules
 
-Slapper includes 18 reconnaissance modules for comprehensive target intelligence gathering:
+Eggsec includes 18 reconnaissance modules for comprehensive target intelligence gathering:
 
 | Module | File | Description |
 |--------|------|-------------|
@@ -43,7 +43,7 @@ Slapper includes 18 reconnaissance modules for comprehensive target intelligence
 
 ## Fuzzing Payload Types
 
-Slapper supports 24 security fuzzing payload types:
+Eggsec supports 24 security fuzzing payload types:
 
 | Type | Alias | File | Tests For |
 |------|-------|------|-----------|
@@ -106,8 +106,8 @@ Advanced vulnerability detection capabilities:
 
 | Protocol | File | Description |
 |----------|------|-------------|
-| **REST API** | `src/tool/protocol/rest.rs` | REST API server - exposes slapper tools via HTTP (requires rest-api feature) |
-| **gRPC API** | `src/tool/protocol/grpc.rs` | gRPC API server - exposes slapper tools via protocol buffers (requires grpc-api feature) |
+| **REST API** | `src/tool/protocol/rest.rs` | REST API server - exposes eggsec tools via HTTP (requires rest-api feature) |
+| **gRPC API** | `src/tool/protocol/grpc.rs` | gRPC API server - exposes eggsec tools via protocol buffers (requires grpc-api feature) |
 | **MCP Server** | `src/tool/protocol/mcp.rs` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (requires mcp-server feature) |
 
 ---
@@ -134,7 +134,7 @@ Chained security assessment pipelines:
 
 ## MCP Profiles
 
-Slapper's MCP server has two profiles that control available tools and safety policies.
+Eggsec's MCP server has two profiles that control available tools and safety policies.
 
 ### Ops-Agent Profile
 
@@ -191,67 +191,67 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 
 | Command | Description |
 |---------|-------------|
-| `slapper load <url>` | HTTP load testing |
-| `slapper scan-ports <target>` | Port scanning |
-| `slapper scan-endpoints <url>` | Endpoint discovery |
-| `slapper fingerprint <target>` | Service fingerprinting |
-| `slapper fuzz <url> -t <type>` | Security fuzzing |
-| `slapper waf <url>` | WAF detection |
-| `slapper waf-stress <url>` | WAF stress testing |
-| `slapper scan <target> --profile <profile>` | Pipeline scan |
-| `slapper recon <target>` | Reconnaissance |
+| `eggsec load <url>` | HTTP load testing |
+| `eggsec scan-ports <target>` | Port scanning |
+| `eggsec scan-endpoints <url>` | Endpoint discovery |
+| `eggsec fingerprint <target>` | Service fingerprinting |
+| `eggsec fuzz <url> -t <type>` | Security fuzzing |
+| `eggsec waf <url>` | WAF detection |
+| `eggsec waf-stress <url>` | WAF stress testing |
+| `eggsec scan <target> --profile <profile>` | Pipeline scan |
+| `eggsec recon <target>` | Reconnaissance |
 
 ### API Security Commands
 
 | Command | Description |
 |---------|-------------|
-| `slapper graphql <url>` | GraphQL security testing |
-| `slapper oauth <url>` | OAuth/OIDC testing |
+| `eggsec graphql <url>` | GraphQL security testing |
+| `eggsec oauth <url>` | OAuth/OIDC testing |
 
 ### Network Tools
 
 | Command | Description |
 |---------|-------------|
-| `slapper packet capture` | Live packet capture |
-| `slapper packet send` | Craft and send packets |
-| `slapper packet dump` | Analyze pcap files |
-| `slapper packet traceroute` | Network path tracing |
-| `slapper icmp <target>` | ICMP ping probes |
-| `slapper traceroute <target>` | Network path tracing |
+| `eggsec packet capture` | Live packet capture |
+| `eggsec packet send` | Craft and send packets |
+| `eggsec packet dump` | Analyze pcap files |
+| `eggsec packet traceroute` | Network path tracing |
+| `eggsec icmp <target>` | ICMP ping probes |
+| `eggsec traceroute <target>` | Network path tracing |
 
 ### Stress Testing (requires stress-testing feature)
 
 | Command | Description |
 |---------|-------------|
-| `slapper stress <target> --type <type>` | SYN/UDP/HTTP/TCP/ICMP flood |
-| `slapper proxy <action>` | Proxy pool management |
+| `eggsec stress <target> --type <type>` | SYN/UDP/HTTP/TCP/ICMP flood |
+| `eggsec proxy <action>` | Proxy pool management |
 
 ### Management & Integration
 
 | Command | Description |
 |---------|-------------|
-| `slapper cluster coordinator` | Start cluster coordinator |
-| `slapper cluster worker` | Start cluster worker |
-| `slapper remote --port` | Start remote listener |
-| `slapper exec --target` | Execute remote commands |
-| `slapper notify` | Webhook notifications |
-| `slapper report` | Generate reports |
-| `slapper resume <file>` | Resume previous scan |
+| `eggsec cluster coordinator` | Start cluster coordinator |
+| `eggsec cluster worker` | Start cluster worker |
+| `eggsec remote --port` | Start remote listener |
+| `eggsec exec --target` | Execute remote commands |
+| `eggsec notify` | Webhook notifications |
+| `eggsec report` | Generate reports |
+| `eggsec resume <file>` | Resume previous scan |
 
 ### API Servers
 
 | Command | Description |
 |---------|-------------|
-| `slapper serve --port` | REST API server |
-| `slapper grpc-serve --port` | gRPC API server |
-| `slapper mcp-serve --port` | MCP server for AI agents |
-| `slapper codegg-mcp` | MCP server for coding agents (stdio, coding-agent profile) |
+| `eggsec serve --port` | REST API server |
+| `eggsec grpc-serve --port` | gRPC API server |
+| `eggsec mcp-serve --port` | MCP server for AI agents |
+| `eggsec codegg-mcp` | MCP server for coding agents (stdio, coding-agent profile) |
 
 ### NSE Scripting
 
 | Command | Description |
 |---------|-------------|
-| `slapper nse <target>` | Run NSE scripts |
+| `eggsec nse <target>` | Run NSE scripts |
 
 ---
 

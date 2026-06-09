@@ -37,8 +37,8 @@ Implemented behind `headless-browser` feature flag. Core scanning logic is in pl
 ## CLI Usage
 
 ```
-slapper browser https://example.com
-slapper browser https://example.com --no-dom-xss
-slapper browser https://example.com --no-spa --no-client-checks
-slapper browser https://example.com --json -o results.json
+eggsec browser https://example.com
+eggsec browser https://example.com --no-dom-xss
+eggsec browser https://example.com --no-spa --no-client-checks
+eggsec browser https://example.com --json -o results.json
 ```

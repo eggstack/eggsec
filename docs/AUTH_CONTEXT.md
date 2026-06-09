@@ -30,7 +30,7 @@ export USER_TOKEN="user-jwt-token"
 export ADMIN_TOKEN="admin-jwt-token"
 
 # Use auth context
-slapper fuzz https://api.example.com/users/123 \
+eggsec fuzz https://api.example.com/users/123 \
   --auth-context auth-context.yaml \
   --auth-role user
 ```

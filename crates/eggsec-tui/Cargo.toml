@@ -1,0 +1,88 @@
+[package]
+name = "eggsec-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Terminal UI adapter for Eggsec"
+
+[dependencies]
+eggsec-core = { path = "../eggsec-core" }
+eggsec = { path = "../eggsec" }
+
+ratatui = "0.30"
+crossterm = { version = "0.29", features = ["event-stream"] }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+parking_lot = { workspace = true }
+futures = "0.3"
+rustc-hash = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+toml = "0.8"
+arboard = "3.4"
+directories = "5"
+url = "2"
+base64 = "0.22"
+lzma-rs = "0.3"
+
+# Feature-gated dependencies forwarded from eggsec
+pnet = { version = "0.35", optional = true }
+pnet_packet = { version = "0.35", optional = true }
+eggsec-nse = { path = "../eggsec-nse", optional = true }
+
+# Feature forwarding model:
+#
+# TUI feature flags mirror engine (eggsec) capabilities only where the TUI
+# exposes corresponding tabs or controls. Features are divided into three
+# categories:
+#
+# 1. Engine-only forwarding: These features only forward to the `eggsec`
+#    crate (no local dependencies) and enable conditional tab variants in
+#    the TUI (e.g. `headless-browser`, `compliance`, `database`, etc.).
+#    The TUI gains new tabs/controls when these are enabled.
+#
+# 2. Local dependency forwarding: `stress-testing` and `packet-inspection`
+#    add local `pnet`/`pnet_packet` dependencies for raw packet crafting
+#    and inspection, in addition to forwarding to `eggsec`.
+#    `nse` adds the `eggsec-nse` dependency for NSE script support.
+#
+# 3. Combined feature: `full` enables all of the above for maximum
+#    capability — every tab and control is available.
+[features]
+default = []
+nse = ["dep:eggsec-nse", "eggsec/nse"]
+headless-browser = ["eggsec/headless-browser"]
+compliance = ["eggsec/compliance"]
+database = ["eggsec/database"]
+external-integrations = ["eggsec/external-integrations"]
+finding-workflow = ["eggsec/finding-workflow"]
+vuln-management = ["eggsec/vuln-management"]
+wireless = ["eggsec/wireless"]
+stress-testing = ["dep:pnet", "dep:pnet_packet", "eggsec/stress-testing"]
+packet-inspection = ["dep:pnet", "dep:pnet_packet", "eggsec/packet-inspection"]
+advanced-hunting = ["eggsec/advanced-hunting"]
+tool-api = ["eggsec/tool-api"]
+rest-api = ["eggsec/rest-api"]
+full = [
+    "nse",
+    "headless-browser",
+    "compliance",
+    "database",
+    "external-integrations",
+    "finding-workflow",
+    "vuln-management",
+    "wireless",
+    "stress-testing",
+    "packet-inspection",
+    "advanced-hunting",
+    "tool-api",
+    "rest-api",
+]

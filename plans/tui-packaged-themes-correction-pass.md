@@ -1,4 +1,4 @@
-# Slapper TUI Packaged Themes Correction Pass
+# Eggsec TUI Packaged Themes Correction Pass
 
 ## Purpose
 
@@ -6,7 +6,7 @@ This plan corrects the issues found after the first packaged Halloy theme implem
 
 The previous pass successfully added the major primitives:
 
-- `base64` and `lzma-rs` dependencies in `slapper-tui`.
+- `base64` and `lzma-rs` dependencies in `eggsec-tui`.
 - `theme/archive.rs`, `theme/install.rs`, `theme/loader.rs`, and generated `theme/packaged.rs`.
 - `scripts/package_themes.py` for deterministic theme packaging.
 - Native in-binary `cyber-red` fallback theme.
@@ -42,18 +42,18 @@ Before changes, run:
 
 ```bash
 cargo fmt --all -- --check
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
 ```
 
-If `cargo check -p slapper-tui` currently fails because `update_settings_theme_selector()` or related theme-selector wiring is missing, treat that as an expected target of this pass. Record the exact errors before fixing.
+If `cargo check -p eggsec-tui` currently fails because `update_settings_theme_selector()` or related theme-selector wiring is missing, treat that as an expected target of this pass. Record the exact errors before fixing.
 
 Also run:
 
 ```bash
-rg "update_settings_theme_selector|pending_theme_name|take_pending_theme|theme_selector" crates/slapper-tui/src
-rg "load_and_install_themes" crates/slapper-tui/src
+rg "update_settings_theme_selector|pending_theme_name|take_pending_theme|theme_selector" crates/eggsec-tui/src
+rg "load_and_install_themes" crates/eggsec-tui/src
 ```
 
 Use this to identify all current call sites.
@@ -157,7 +157,7 @@ Acceptance criteria:
 
 ## Phase 3: Implement or repair `update_settings_theme_selector()`
 
-Current issue: `App::new_inner()` and `handle_enter()` call `update_settings_theme_selector()`, but repository search did not find the method. If absent, `slapper-tui` will not compile. If present elsewhere, verify it works correctly.
+Current issue: `App::new_inner()` and `handle_enter()` call `update_settings_theme_selector()`, but repository search did not find the method. If absent, `eggsec-tui` will not compile. If present elsewhere, verify it works correctly.
 
 Add a method on `App`:
 
@@ -201,7 +201,7 @@ Ensure `cyber-red` is always present even if no file themes load.
 
 Acceptance criteria:
 
-- `cargo check -p slapper-tui` does not fail on missing `update_settings_theme_selector()`.
+- `cargo check -p eggsec-tui` does not fail on missing `update_settings_theme_selector()`.
 - Settings selector contains at least `cyber-red`, `dark`, and `light` immediately.
 - After background load, selector contains packaged/user themes.
 - Current theme remains selected.
@@ -411,26 +411,26 @@ Run:
 
 ```bash
 cargo fmt --all
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
 ```
 
 If practical:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 Run packaging determinism check:
 
 ```bash
 python3 scripts/package_themes.py
-git diff -- crates/slapper-tui/src/theme/packaged.rs
+git diff -- crates/eggsec-tui/src/theme/packaged.rs
 python3 scripts/package_themes.py
-git diff -- crates/slapper-tui/src/theme/packaged.rs
+git diff -- crates/eggsec-tui/src/theme/packaged.rs
 ```
 
 The second run should produce no diff.
@@ -439,7 +439,7 @@ The second run should produce no diff.
 
 This pass is complete when:
 
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 - TUI startup does not synchronously install/load packaged themes from `App::new_inner()`.
 - App starts immediately with native Cyber Red fallback.
 - Theme install/load is best-effort, non-fatal, and handled after app construction.

@@ -34,7 +34,7 @@ All `.md` files in `architecture/` **except** `review_plan.md`. This excludes th
 | 13 | `fuzzer.md` | `src/fuzzer/` | ~121 | `plans/review_fuzzer.md` |
 | 14 | `waf.md` | `src/waf/` | ~95 | `plans/review_waf.md` |
 | 15 | `scanner.md` | `src/scanner/` | ~78 | `plans/review_scanner.md` |
-| 16 | `nse_integration.md` | `slapper-nse/` | ~109 | `plans/review_nse_integration.md` |
+| 16 | `nse_integration.md` | `eggsec-nse/` | ~109 | `plans/review_nse_integration.md` |
 | 17 | `hunt.md` | `src/hunt/` | ~32 | `plans/review_hunt.md` |
 | 18 | `distributed.md` | `src/distributed/` | ~93 | `plans/review_distributed.md` |
 | 19 | `loadtest.md` | `src/loadtest/` | ~140 | `plans/review_loadtest.md` |
@@ -74,7 +74,7 @@ All `.md` files in `architecture/` **except** `review_plan.md`. This excludes th
 ### Agent 1 — Core Architecture (4 docs)
 **Documents:** `overview.md`, `config.md`, `cli_commands.md`, `error.md`
 **Write to:** `plans/review_overview.md`, `plans/review_config.md`, `plans/review_cli_commands.md`, `plans/review_error.md`
-**Focus:** Config loading, CLI dispatch, error taxonomy, cross-cutting claims. Verify `SlapperConfig` fields, command match arms, error enum variants.
+**Focus:** Config loading, CLI dispatch, error taxonomy, cross-cutting claims. Verify `EggsecConfig` fields, command match arms, error enum variants.
 
 ### Agent 2 — TUI (1 doc, largest)
 **Documents:** `tui.md`
@@ -118,7 +118,7 @@ All `.md` files in `architecture/` **except** `review_plan.md`. This excludes th
 Each subagent MUST:
 
 1. **Read the architecture document(s)** assigned to it
-2. **Read the corresponding source module(s)** in `crates/slapper/src/` (or `slapper-nse/` for NSE)
+2. **Read the corresponding source module(s)** in `crates/eggsec/src/` (or `eggsec-nse/` for NSE)
 3. **Run the Review Checklist** (below) against every claim in the document
 4. **Write findings** to the designated `plans/review_<module>.md` file(s)
 
@@ -213,7 +213,7 @@ After all reviews complete, a consolidation agent will:
 - **No assumptions**: If a claim cannot be verified, mark it as "UNVERIFIED" with reason.
 - **Line references**: All claims must cite `<file:line>` for traceability.
 - **Scope**: Only review what the document claims. Don't expand scope beyond the doc's topic.
-- **Working directory**: All work stays in `/home/sugarwookie/projects/slapper/`.
+- **Working directory**: All work stays in `/home/sugarwookie/projects/eggsec/`.
 - **Subagent writes**: Each subagent writes its own `plans/review_*.md` files. Do not overwrite another agent's output.
 - **Improvement plans only**: `plans/review_*.md` files contain findings and recommendations, not direct code changes.
 
@@ -223,8 +223,8 @@ After all reviews complete, a consolidation agent will:
 
 - Cross-cutting docs (`overview.md`, `feature_matrix.md`, `defense_lab.md`) require checking against ALL modules, not just one.
 - `tui.md` is the largest doc (~1715 lines); its agent should focus on structural claims (tab count, event loop, state management) rather than pixel-level details.
-- `nse_integration.md` spans a separate crate (`slapper-nse/`); agent must check both crates.
-- Feature flags in `Cargo.toml` at root and `crates/slapper/Cargo.toml` must be cross-referenced for `feature_matrix.md`.
+- `nse_integration.md` spans a separate crate (`eggsec-nse/`); agent must check both crates.
+- Feature flags in `Cargo.toml` at root and `crates/eggsec/Cargo.toml` must be cross-referenced for `feature_matrix.md`.
 - Several new architecture docs were added in Wave 7: `auth_context.md`, `constants.md`, `types.md`, `utils.md`, `probe.md`, `stress.md`, `logging.md`, `generated.md` - ensure these are reviewed for accuracy.
 
 ---
@@ -270,8 +270,8 @@ Before committing, verify and clean up:
 
 ### Statistical Findings
 - **43 architecture docs** reviewed (46 planned, but 3 were duplicates in mapping table)
-- **41 modules** in `crates/slapper/src/`
-- **169 NSE libraries** in `slapper-nse/src/libraries/`
+- **41 modules** in `crates/eggsec/src/`
+- **169 NSE libraries** in `eggsec-nse/src/libraries/`
 - **34 WAF products** verified
 - **30 fuzzing payload types** verified
 - **261 scanner endpoints** verified

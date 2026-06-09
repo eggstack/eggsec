@@ -4,11 +4,11 @@
 
 API/agent modules are split across crates:
 
-- `crates/slapper/src/tool/protocol/` - REST, MCP, gRPC, OpenAI, OpenResponses adapters (in `slapper`)
-- `crates/slapper-agent/` - Agent coordination primitives (registry, scheduler, lifecycle, communication, delegation, aggregation) (**extracted**)
-- `crates/slapper/src/tool/mod.rs` - Compatibility facade that re-exports `slapper-agent` as `slapper::tool::agents`
-- `crates/slapper/src/agent/` - Autonomous agent (portfolio, memory, alerts, skills) (in `slapper`)
-- `crates/slapper/src/nse_tool.rs` - NSE tool implementation (in `slapper`)
+- `crates/eggsec/src/tool/protocol/` - REST, MCP, gRPC, OpenAI, OpenResponses adapters (in `eggsec`)
+- `crates/eggsec-agent/` - Agent coordination primitives (registry, scheduler, lifecycle, communication, delegation, aggregation) (**extracted**)
+- `crates/eggsec/src/tool/mod.rs` - Compatibility facade that re-exports `eggsec-agent` as `eggsec::tool::agents`
+- `crates/eggsec/src/agent/` - Autonomous agent (portfolio, memory, alerts, skills) (in `eggsec`)
+- `crates/eggsec/src/nse_tool.rs` - NSE tool implementation (in `eggsec`)
 
 Feature gates:
 - `rest-api` = `["tool-api", "axum", "tower", "tower-http", "async-stream"]`
@@ -18,84 +18,84 @@ Feature gates:
 
 ---
 
-## Candidate slapper-api modules
+## Candidate eggsec-api modules
 
 These modules are server adapters that translate between wire protocols and the tool abstraction layer. They have no engine-internal logic.
 
 ### REST adapter
-- **File:** `crates/slapper/src/tool/protocol/rest.rs`
+- **File:** `crates/eggsec/src/tool/protocol/rest.rs`
 - **Dependencies:** `axum`, `tower-http`, `subtle`, `crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse}`, `crate::config::Scope`, `crate::distributed::TlsConfig`, `crate::tool::ratelimit::*`
 - **Notes:** Depends on `crate::distributed::TlsConfig` - would need to be passed as a trait object or moved to a shared types crate.
 
 ### MCP adapter
 - **Files:**
-  - `crates/slapper/src/tool/protocol/mcp/mod.rs`
-  - `crates/slapper/src/tool/protocol/mcp/routes.rs` - axum HTTP + stdio transport
-  - `crates/slapper/src/tool/protocol/mcp/handlers/server.rs` - McpServer (1686 lines, deeply coupled)
-  - `crates/slapper/src/tool/protocol/mcp/handlers/helpers.rs`
-  - `crates/slapper/src/tool/protocol/mcp/auth.rs`
-  - `crates/slapper/src/tool/protocol/mcp/types.rs` - McpRequest, McpResponse, McpError, McpTool, McpResource, McpRoot
-  - `crates/slapper/src/tool/protocol/mcp/streaming.rs` - StreamEvent
-  - `crates/slapper/src/tool/protocol/mcp/policy.rs` - McpProfilePolicy, TargetPolicy, ToolSelector
-  - `crates/slapper/src/tool/protocol/mcp/profile.rs` - McpProfile enum
-  - `crates/slapper/src/tool/protocol/mcp/constraints.rs`
-  - `crates/slapper/src/tool/protocol/mcp/coding_agent_output.rs`
-  - `crates/slapper/src/tool/protocol/mcp/prompts.rs` (feature-gated `rest-api`)
+  - `crates/eggsec/src/tool/protocol/mcp/mod.rs`
+  - `crates/eggsec/src/tool/protocol/mcp/routes.rs` - axum HTTP + stdio transport
+  - `crates/eggsec/src/tool/protocol/mcp/handlers/server.rs` - McpServer (1686 lines, deeply coupled)
+  - `crates/eggsec/src/tool/protocol/mcp/handlers/helpers.rs`
+  - `crates/eggsec/src/tool/protocol/mcp/auth.rs`
+  - `crates/eggsec/src/tool/protocol/mcp/types.rs` - McpRequest, McpResponse, McpError, McpTool, McpResource, McpRoot
+  - `crates/eggsec/src/tool/protocol/mcp/streaming.rs` - StreamEvent
+  - `crates/eggsec/src/tool/protocol/mcp/policy.rs` - McpProfilePolicy, TargetPolicy, ToolSelector
+  - `crates/eggsec/src/tool/protocol/mcp/profile.rs` - McpProfile enum
+  - `crates/eggsec/src/tool/protocol/mcp/constraints.rs`
+  - `crates/eggsec/src/tool/protocol/mcp/coding_agent_output.rs`
+  - `crates/eggsec/src/tool/protocol/mcp/prompts.rs` (feature-gated `rest-api`)
 - **Dependencies:** `axum`, `async-stream`, `tokio`, `crate::tool::{ToolDispatcher, ToolRegistry, ...}`, `crate::ai::AiClient` (optional), `crate::config::Scope`
 - **Blocker:** `McpServer` directly holds `ToolRegistry`, `ToolDispatcher`, `SessionManager`, `AiClient`. It's the most deeply coupled adapter. Would need a trait-based decoupling to move.
 
 ### gRPC adapter
 - **Files:**
-  - `crates/slapper/src/tool/protocol/grpc.rs`
-  - `crates/slapper/src/tool/protocol/grpc.proto` (proto definition)
+  - `crates/eggsec/src/tool/protocol/grpc.rs`
+  - `crates/eggsec/src/tool/protocol/grpc.proto` (proto definition)
 - **Dependencies:** `tonic`, `prost`, `prost-types`, `tonic-reflection`, `async-stream`, `tokio-stream`, `crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest}`
 - **Notes:** Self-contained service implementation. Cleanest candidate for extraction.
 
 ### OpenAI-compatible adapter
 - **Files:**
-  - `crates/slapper/src/tool/protocol/openai/mod.rs`
-  - `crates/slapper/src/tool/protocol/openai/handlers.rs`
-  - `crates/slapper/src/tool/protocol/openai/models.rs`
-  - `crates/slapper/src/tool/protocol/openai/types.rs`
+  - `crates/eggsec/src/tool/protocol/openai/mod.rs`
+  - `crates/eggsec/src/tool/protocol/openai/handlers.rs`
+  - `crates/eggsec/src/tool/protocol/openai/models.rs`
+  - `crates/eggsec/src/tool/protocol/openai/types.rs`
 - **Dependencies:** `axum`, `crate::tool::registry::ToolRegistry`, `crate::config::Scope`
 
 ### OpenResponses adapter
 - **Files:**
-  - `crates/slapper/src/tool/protocol/openresponses/mod.rs`
-  - `crates/slapper/src/tool/protocol/openresponses/handlers.rs`
-  - `crates/slapper/src/tool/protocol/openresponses/types.rs`
+  - `crates/eggsec/src/tool/protocol/openresponses/mod.rs`
+  - `crates/eggsec/src/tool/protocol/openresponses/handlers.rs`
+  - `crates/eggsec/src/tool/protocol/openresponses/types.rs`
 - **Dependencies:** `axum`, `crate::tool::registry::ToolRegistry`
 
 ### AI REST routes
-- **File:** `crates/slapper/src/tool/protocol/ai_routes.rs`
+- **File:** `crates/eggsec/src/tool/protocol/ai_routes.rs`
 - **Dependencies:** `axum`, `subtle`, `crate::ai::AiClient` (optional), `crate::utils::circuit_breaker::*`
 
 ### Agent REST routes
-- **File:** `crates/slapper/src/tool/protocol/agent_routes.rs`
+- **File:** `crates/eggsec/src/tool/protocol/agent_routes.rs`
 - **Dependencies:** `axum`, `uuid`, `subtle`, `crate::tool::agents::{AgentRegistry, TaskScheduler, ...}`, `crate::constants::*`
 
 ---
 
-## Candidate slapper-agent modules
+## Candidate eggsec-agent modules
 
 These modules implement autonomous agent scheduling, memory, and orchestration. They are tightly coupled to the tool engine but conceptually separate from the protocol adapters.
 
 ### Agent core
 - **Files:**
-  - `crates/slapper/src/agent/mod.rs` - Agent struct, run loop, scan execution
-  - `crates/slapper/src/agent/portfolio.rs` - TargetPortfolio, TargetConfig, ScanRecord
-  - `crates/slapper/src/agent/memory.rs` - LongitudinalMemory
-  - `crates/slapper/src/agent/alerts/` - AlertRouter, AlertChannel, EmailChannel, SlackChannel, PagerDutyChannel, WebhookConfig
-  - `crates/slapper/src/agent/channels.rs`
-  - `crates/slapper/src/agent/events.rs` - SecurityEvent, EventHandler
-  - `crates/slapper/src/agent/constraints/` - ConstraintChecker, OperationalConstraints, DoNotDoList
-  - `crates/slapper/src/agent/config_watcher.rs` - ConfigWatcher, ConfigReloader
-  - `crates/slapper/src/agent/skills.rs` (feature-gated `ai-integration`) - SkillLoader, SkillRegistry
-- **Dependencies:** `crate::tool::{create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse}`, `crate::config::SlapperConfig`, `crate::output::schedule::CronScheduler`, `crate::ai::AiClient` (optional)
+  - `crates/eggsec/src/agent/mod.rs` - Agent struct, run loop, scan execution
+  - `crates/eggsec/src/agent/portfolio.rs` - TargetPortfolio, TargetConfig, ScanRecord
+  - `crates/eggsec/src/agent/memory.rs` - LongitudinalMemory
+  - `crates/eggsec/src/agent/alerts/` - AlertRouter, AlertChannel, EmailChannel, SlackChannel, PagerDutyChannel, WebhookConfig
+  - `crates/eggsec/src/agent/channels.rs`
+  - `crates/eggsec/src/agent/events.rs` - SecurityEvent, EventHandler
+  - `crates/eggsec/src/agent/constraints/` - ConstraintChecker, OperationalConstraints, DoNotDoList
+  - `crates/eggsec/src/agent/config_watcher.rs` - ConfigWatcher, ConfigReloader
+  - `crates/eggsec/src/agent/skills.rs` (feature-gated `ai-integration`) - SkillLoader, SkillRegistry
+- **Dependencies:** `crate::tool::{create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse}`, `crate::config::EggsecConfig`, `crate::output::schedule::CronScheduler`, `crate::ai::AiClient` (optional)
 - **Blocker:** `Agent::new()` calls `create_default_registry()` directly and holds a `ToolDispatcher`. Would need the tool registry injected as a dependency.
 
-### Tool agent coordination (EXTRACTED to `slapper-agent`)
-- **Crate:** `crates/slapper-agent/`
+### Tool agent coordination (EXTRACTED to `eggsec-agent`)
+- **Crate:** `crates/eggsec-agent/`
 - **Files:**
   - `src/registry.rs` - AgentRegistry, AgentInfo, AgentStatus
   - `src/scheduler.rs` - TaskScheduler, ScheduledTask, TaskStatus, TaskPriority
@@ -103,16 +103,16 @@ These modules implement autonomous agent scheduling, memory, and orchestration. 
   - `src/communication.rs` - MultiAgentCoordinator, InterAgentChannel
   - `src/delegation.rs` - DelegationRequest, DelegationResponse
   - `src/aggregator.rs` - ResultAggregator
-- **Dependencies:** `slapper-core` (constants), `uuid`, `tokio`, `serde_json`, `chrono`, `rustc-hash`, `reqwest`
-- **Notes:** Successfully extracted with zero engine coupling. Re-exported from `slapper` via `tool::agents` behind `rest-api` feature.
+- **Dependencies:** `eggsec-core` (constants), `uuid`, `tokio`, `serde_json`, `chrono`, `rustc-hash`, `reqwest`
+- **Notes:** Successfully extracted with zero engine coupling. Re-exported from `eggsec` via `tool::agents` behind `rest-api` feature.
 
 ### Agent CLI handler
-- **File:** `crates/slapper/src/commands/handlers/agent.rs`
+- **File:** `crates/eggsec/src/commands/handlers/agent.rs`
 - **Dependencies:** `crate::agent::*`, `crate::cli::agent::*`
 
 ---
 
-## Must remain in slapper for now
+## Must remain in eggsec for now
 
 These modules depend on engine-internal types and cannot be extracted without significant refactoring:
 
@@ -128,13 +128,13 @@ These modules depend on engine-internal types and cannot be extracted without si
 - `tool/openapi.rs` - OpenApiGenerator
 - `tool/convert.rs` - conversion utilities
 - `tool/scripting.rs` - scripting utilities
-- `nse_tool.rs` - NseTool (depends on `slapper_nse::NseExecutor`)
+- `nse_tool.rs` - NseTool (depends on `eggsec_nse::NseExecutor`)
 
 ---
 
-## DTOs already in slapper-tool-core
+## DTOs already in eggsec-tool-core
 
-The `slapper-tool-core` crate already contains protocol-neutral DTOs:
+The `eggsec-tool-core` crate already contains protocol-neutral DTOs:
 
 | Module | Types |
 |--------|-------|
@@ -145,51 +145,51 @@ The `slapper-tool-core` crate already contains protocol-neutral DTOs:
 | `history.rs` | `ExecutionEntry`, `ExecutionHistory` |
 | `ratelimit.rs` | `RateLimitConfig`, `RateLimiter`, `RateLimitStatus`, `EndpointLimit`, `GlobalRateLimitStatus` |
 
-These types have no dependencies on the main slapper engine (only `slapper-core` for `Severity`, `SensitiveString`).
+These types have no dependencies on the main eggsec engine (only `eggsec-core` for `Severity`, `SensitiveString`).
 
 ---
 
 ## Dependency targets to isolate
 
-To enable extraction of the server adapters into `slapper-api`:
+To enable extraction of the server adapters into `eggsec-api`:
 
-1. **ToolRegistry trait interface** - Currently `ToolRegistry` holds `Arc<dyn SecurityTool>`. A `slapper-api` crate would need to depend on `slapper-tool-core` for DTOs and accept a `ToolRegistry` via dependency injection (trait object or `Arc<dyn ToolRegistryInterface>`).
+1. **ToolRegistry trait interface** - Currently `ToolRegistry` holds `Arc<dyn SecurityTool>`. A `eggsec-api` crate would need to depend on `eggsec-tool-core` for DTOs and accept a `ToolRegistry` via dependency injection (trait object or `Arc<dyn ToolRegistryInterface>`).
 
 2. **TlsConfig** - `rest.rs` imports `crate::distributed::TlsConfig`. Either move to a shared crate or pass as a trait.
 
-3. **AiClient** - `ai_routes.rs` and `McpServer` optionally hold `AiClient`. Pass as `Option<Arc<dyn AiClientTrait>>` or keep ai-integration feature-gated in slapper-api.
+3. **AiClient** - `ai_routes.rs` and `McpServer` optionally hold `AiClient`. Pass as `Option<Arc<dyn AiClientTrait>>` or keep ai-integration feature-gated in eggsec-api.
 
 4. **SessionManager** - `McpServer` holds `SessionManager`. Could be made optional or trait-based.
 
-5. **Scope** - `config::Scope` is used by REST and MCP adapters. Move to slapper-core or accept as `Arc<dyn ScopeEnforcer>`.
+5. **Scope** - `config::Scope` is used by REST and MCP adapters. Move to eggsec-core or accept as `Arc<dyn ScopeEnforcer>`.
 
-6. **Constants** - `crate::constants::*` is used by agent_routes and agents. Move shared constants to slapper-core.
+6. **Constants** - `crate::constants::*` is used by agent_routes and agents. Move shared constants to eggsec-core.
 
 ---
 
 ## Known blockers
 
-1. **McpServer deep coupling** - `handlers/server.rs` is 1686 lines and directly uses `ToolRegistry`, `ToolDispatcher`, `SessionManager`, `AiClient`, `Scope`, `CancellationToken`, and many other slapper-internal types. Extracting this requires either: (a) trait-based decoupling of all dependencies, or (b) keeping McpServer in slapper and only extracting the HTTP transport layer.
+1. **McpServer deep coupling** - `handlers/server.rs` is 1686 lines and directly uses `ToolRegistry`, `ToolDispatcher`, `SessionManager`, `AiClient`, `Scope`, `CancellationToken`, and many other eggsec-internal types. Extracting this requires either: (a) trait-based decoupling of all dependencies, or (b) keeping McpServer in eggsec and only extracting the HTTP transport layer.
 
 2. **`create_default_registry()` coupling** - Both `Agent::new()` and test code call `create_default_registry()` which hardcodes all tool implementations. The agent module would need the registry injected.
 
-3. **Feature gate alignment** - `rest-api` enables axum/tower/async-stream, while `grpc-api` enables tonic/prost. A `slapper-api` crate would need to re-export these as optional features.
+3. **Feature gate alignment** - `rest-api` enables axum/tower/async-stream, while `grpc-api` enables tonic/prost. A `eggsec-api` crate would need to re-export these as optional features.
 
-4. **`From` impls in finding.rs** - The `From<FuzzResult> for Finding` etc. impls depend on engine types. These must stay in slapper, but the `Finding` type itself is already in `slapper-tool-core`.
+4. **`From` impls in finding.rs** - The `From<FuzzResult> for Finding` etc. impls depend on engine types. These must stay in eggsec, but the `Finding` type itself is already in `eggsec-tool-core`.
 
-5. **WebSocket support** - `ws-api` feature adds WebSocket handler inside `rest.rs`. Would need conditional compilation in slapper-api.
+5. **WebSocket support** - `ws-api` feature adds WebSocket handler inside `rest.rs`. Would need conditional compilation in eggsec-api.
 
 ---
 
 ## Proposed next-pass order
 
-### Phase 1: Extract slapper-tool-core DTOs (DONE)
-Already complete. `slapper-tool-core` contains all protocol-neutral request/response/finding/error types.
+### Phase 1: Extract eggsec-tool-core DTOs (DONE)
+Already complete. `eggsec-tool-core` contains all protocol-neutral request/response/finding/error types.
 
-### Phase 2: Extract tool agent coordination to slapper-agent (DONE)
-Implementation lives in `crates/slapper-agent/src/`. The `slapper` crate preserves `slapper::tool::agents::*` as a compatibility facade in `crates/slapper/src/tool/mod.rs`.
+### Phase 2: Extract tool agent coordination to eggsec-agent (DONE)
+Implementation lives in `crates/eggsec-agent/src/`. The `eggsec` crate preserves `eggsec::tool::agents::*` as a compatibility facade in `crates/eggsec/src/tool/mod.rs`.
 
-**Implementation owned by `slapper-agent`:**
+**Implementation owned by `eggsec-agent`:**
 - `src/registry.rs`
 - `src/scheduler.rs`
 - `src/lifecycle.rs`
@@ -198,15 +198,15 @@ Implementation lives in `crates/slapper-agent/src/`. The `slapper` crate preserv
 - `src/aggregator.rs`
 
 **Dependencies resolved:**
-- `crate::constants::DEFAULT_MAX_RETRIES` → `slapper_core::constants::DEFAULT_MAX_RETRIES` (already in slapper-core)
-- `crate::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` → `slapper_core::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` (already in slapper-core)
-- `crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` → `slapper_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` (already in slapper-core)
-- `crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` → `slapper_core::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` (already in slapper-core)
-- `reqwest` remains in `slapper-agent` because lifecycle callback health checks use it.
+- `crate::constants::DEFAULT_MAX_RETRIES` → `eggsec_core::constants::DEFAULT_MAX_RETRIES` (already in eggsec-core)
+- `crate::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` → `eggsec_core::constants::DEFAULT_SCHEDULER_RETRY_DELAY_MS` (already in eggsec-core)
+- `crate::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` → `eggsec_core::constants::DEFAULT_POOL_MAX_IDLE_PER_HOST` (already in eggsec-core)
+- `crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` → `eggsec_core::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS` (already in eggsec-core)
+- `reqwest` remains in `eggsec-agent` because lifecycle callback health checks use it.
 
-**Compatibility shim:** `slapper::tool::agents` is re-exported from `slapper-agent` behind the `rest-api` feature gate.
+**Compatibility shim:** `eggsec::tool::agents` is re-exported from `eggsec-agent` behind the `rest-api` feature gate.
 
-### Phase 3: Extract gRPC adapter to slapper-api
+### Phase 3: Extract gRPC adapter to eggsec-api
 The gRPC adapter is the cleanest candidate - it has a clear proto boundary and minimal coupling beyond ToolRegistry/ToolDispatcher.
 
 **Files to move:**
@@ -216,7 +216,7 @@ The gRPC adapter is the cleanest candidate - it has a clear proto boundary and m
 **Dependencies to resolve:**
 - Accept `ToolRegistry` and `ToolDispatcher` via constructor injection.
 
-### Phase 4: Extract REST + OpenAI + OpenResponses adapters to slapper-api
+### Phase 4: Extract REST + OpenAI + OpenResponses adapters to eggsec-api
 These all use axum and share similar patterns.
 
 **Files to move:**
@@ -227,10 +227,10 @@ These all use axum and share similar patterns.
 
 **Dependencies to resolve:**
 - `TlsConfig` - pass as parameter or trait
-- `Scope` - pass as `Option<Scope>` from slapper-tool-core (Scope already exists there)
-- `RateLimiter` - already in slapper-tool-core
+- `Scope` - pass as `Option<Scope>` from eggsec-tool-core (Scope already exists there)
+- `RateLimiter` - already in eggsec-tool-core
 
-### Phase 5: Extract MCP adapter to slapper-api
+### Phase 5: Extract MCP adapter to eggsec-api
 Most complex extraction due to McpServer coupling.
 
 **Files to move:**
@@ -247,9 +247,9 @@ Most complex extraction due to McpServer coupling.
 
 **Dependencies to resolve:**
 - McpServer needs trait-based access to ToolRegistry, ToolDispatcher, SessionManager, AiClient
-- Consider splitting McpServer into transport (move to slapper-api) and handler logic (stay in slapper)
+- Consider splitting McpServer into transport (move to eggsec-api) and handler logic (stay in eggsec)
 
-### Phase 6: Extract agent core to slapper-agent
+### Phase 6: Extract agent core to eggsec-agent
 Move the autonomous agent runtime (portfolio, memory, alerts, constraints, skills).
 
 **Files to move:**
@@ -266,4 +266,4 @@ Move the autonomous agent runtime (portfolio, memory, alerts, constraints, skill
 **Dependencies to resolve:**
 - Agent must accept ToolRegistry via injection (not call `create_default_registry()`)
 - AiClient must be optional and injected
-- CronScheduler already in slapper-output, accessible via workspace dependency
+- CronScheduler already in eggsec-output, accessible via workspace dependency

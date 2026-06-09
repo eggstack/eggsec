@@ -1,20 +1,20 @@
-# Slapper Modularization: Final Stabilization Handoff Plan
+# Eggsec Modularization: Final Stabilization Handoff Plan
 
 ## Purpose
 
-Slapper has completed several useful modularization passes:
+Eggsec has completed several useful modularization passes:
 
-- `slapper-core` now owns dependency-light shared primitives.
-- `slapper-tui` owns the terminal UI.
-- `slapper-cli` owns the user-facing binary named `slapper`.
-- `slapper-output` owns portable report/output adapters.
-- `slapper-tool-core` owns protocol-neutral tool DTOs.
-- `slapper` remains the main assessment engine crate.
-- `slapper-nse` remains optional Nmap NSE compatibility support.
+- `eggsec-core` now owns dependency-light shared primitives.
+- `eggsec-tui` owns the terminal UI.
+- `eggsec-cli` owns the user-facing binary named `eggsec`.
+- `eggsec-output` owns portable report/output adapters.
+- `eggsec-tool-core` owns protocol-neutral tool DTOs.
+- `eggsec` remains the main assessment engine crate.
+- `eggsec-nse` remains optional Nmap NSE compatibility support.
 
 This final handoff plan should close the modularization phase cleanly. It should not start a large scanner/API/MCP rewrite. The goal is to leave the repo coherent, documented, and ready for future incremental extraction when needed.
 
-The only optional extraction in this pass is the low-risk agent coordination boundary identified in `architecture/api_extraction_boundary.md`: `crates/slapper/src/tool/agents/`. If that extraction becomes messy, stop and document the blockers. Do not force it.
+The only optional extraction in this pass is the low-risk agent coordination boundary identified in `architecture/api_extraction_boundary.md`: `crates/eggsec/src/tool/agents/`. If that extraction becomes messy, stop and document the blockers. Do not force it.
 
 ## Current target architecture
 
@@ -22,22 +22,22 @@ Expected workspace shape at the end of this phase:
 
 ```text
 crates/
-  slapper-core/        # Dependency-light shared domain primitives
-  slapper-tool-core/   # Protocol-neutral tool DTOs/data structures
-  slapper-output/      # Portable output/report adapters
-  slapper/             # Main engine: scanners, command dispatch, config/scope, runtime integrations
-  slapper-nse/         # Optional Nmap NSE compatibility support
-  slapper-tui/         # Terminal UI adapter
-  slapper-cli/         # User-facing binary package; binary name `slapper`
+  eggsec-core/        # Dependency-light shared domain primitives
+  eggsec-tool-core/   # Protocol-neutral tool DTOs/data structures
+  eggsec-output/      # Portable output/report adapters
+  eggsec/             # Main engine: scanners, command dispatch, config/scope, runtime integrations
+  eggsec-nse/         # Optional Nmap NSE compatibility support
+  eggsec-tui/         # Terminal UI adapter
+  eggsec-cli/         # User-facing binary package; binary name `eggsec`
 ```
 
 Optional if clean:
 
 ```text
-  slapper-agent/       # Tool-agent coordination primitives from tool/agents/
+  eggsec-agent/       # Tool-agent coordination primitives from tool/agents/
 ```
 
-Do not add `slapper-api` in this pass unless it is already trivial and explicitly approved in local review. The existing boundary note shows API/MCP extraction still has meaningful coupling.
+Do not add `eggsec-api` in this pass unless it is already trivial and explicitly approved in local review. The existing boundary note shows API/MCP extraction still has meaningful coupling.
 
 ## Non-goals
 
@@ -47,9 +47,9 @@ Do not extract MCP server internals.
 
 Do not extract REST/OpenAI/OpenResponses/gRPC adapters in this pass.
 
-Do not move `SlapperError` wholesale into `slapper-core`.
+Do not move `EggsecError` wholesale into `eggsec-core`.
 
-Do not move config/scope wholesale into `slapper-core`.
+Do not move config/scope wholesale into `eggsec-core`.
 
 Do not redesign TUI, CLI, output schemas, report formats, command names, feature names, or config formats.
 
@@ -65,21 +65,21 @@ At completion:
 
 1. Workspace crate docs accurately describe all existing crates.
 2. `architecture/overview.md` has no stale crate ownership claims.
-3. `crates/slapper/src/lib.rs` has no stale crate ownership claims.
+3. `crates/eggsec/src/lib.rs` has no stale crate ownership claims.
 4. `architecture/compile_time_baseline.md` reflects the final modularization state.
 5. `architecture/api_extraction_boundary.md` remains accurate after any final changes.
-6. `slapper-output` dependency notes explain why `tokio` remains, or `tokio` is removed if unused.
-7. `slapper-tool-core` dependencies are confirmed as used.
-8. Feature forwarding in `slapper-cli` and `slapper-tui` is coherent.
-9. If `slapper-agent` is extracted, it compiles and does not depend on the main `slapper` crate.
-10. If `slapper-agent` is not extracted, blockers are documented precisely.
+6. `eggsec-output` dependency notes explain why `tokio` remains, or `tokio` is removed if unused.
+7. `eggsec-tool-core` dependencies are confirmed as used.
+8. Feature forwarding in `eggsec-cli` and `eggsec-tui` is coherent.
+9. If `eggsec-agent` is extracted, it compiles and does not depend on the main `eggsec` crate.
+10. If `eggsec-agent` is not extracted, blockers are documented precisely.
 11. Core checks pass:
-    - `cargo check -p slapper-core`
-    - `cargo check -p slapper-tool-core`
-    - `cargo check -p slapper-output`
-    - `cargo check -p slapper --no-default-features`
-    - `cargo check -p slapper-tui`
-    - `cargo check -p slapper-cli`
+    - `cargo check -p eggsec-core`
+    - `cargo check -p eggsec-tool-core`
+    - `cargo check -p eggsec-output`
+    - `cargo check -p eggsec --no-default-features`
+    - `cargo check -p eggsec-tui`
+    - `cargo check -p eggsec-cli`
 12. Workspace no-default check passes or any failure is documented as pre-existing.
 
 ## Part 1: Correct remaining documentation drift
@@ -88,10 +88,10 @@ At completion:
 
 Known stale line to fix:
 
-The `slapper` crate description may still say it owns “TUI/API adapters.” Since TUI is extracted, change this to:
+The `eggsec` crate description may still say it owns “TUI/API adapters.” Since TUI is extracted, change this to:
 
 ```markdown
-- **`slapper`**: main engine, CLI command model/dispatch, assessment modules, remaining API/agent adapters, feature-gated integrations, and the canonical `SlapperError` type.
+- **`eggsec`**: main engine, CLI command model/dispatch, assessment modules, remaining API/agent adapters, feature-gated integrations, and the canonical `EggsecError` type.
 ```
 
 Do not imply the main crate owns the binary or TUI.
@@ -103,27 +103,27 @@ In `architecture/overview.md`, the supporting module index may still say `types.
 Update to reflect reality:
 
 ```markdown
-| [`slapper-core`](../crates/slapper-core/) | Dependency-light shared types (`Severity`, `SensitiveString`) and constants | [types.md](types.md) |
-| [`types.rs`](../crates/slapper/src/types.rs) | Main-crate compatibility facade plus CLI-facing types such as `OutputFormat` | [types.md](types.md) |
-| [`constants.rs`](../crates/slapper/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
+| [`eggsec-core`](../crates/eggsec-core/) | Dependency-light shared types (`Severity`, `SensitiveString`) and constants | [types.md](types.md) |
+| [`types.rs`](../crates/eggsec/src/types.rs) | Main-crate compatibility facade plus CLI-facing types such as `OutputFormat` | [types.md](types.md) |
+| [`constants.rs`](../crates/eggsec/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
 ```
 
 Adjust wording based on the actual files.
 
-### 3. Update `crates/slapper/src/lib.rs` only if needed
+### 3. Update `crates/eggsec/src/lib.rs` only if needed
 
 Confirm its workspace crate list is current:
 
 ```rust
-//! - `slapper-core`
-//! - `slapper-tool-core`
-//! - `slapper-output`
-//! - `slapper-nse`
-//! - `slapper-tui`
-//! - `slapper-cli`
+//! - `eggsec-core`
+//! - `eggsec-tool-core`
+//! - `eggsec-output`
+//! - `eggsec-nse`
+//! - `eggsec-tui`
+//! - `eggsec-cli`
 ```
 
-If `slapper-agent` is added in this pass, add it to this list.
+If `eggsec-agent` is added in this pass, add it to this list.
 
 ### 4. Update compile tracking
 
@@ -153,18 +153,18 @@ Do not invent timing numbers. If wall-clock numbers are unavailable, record pass
 
 ## Part 2: Dependency audit closeout
 
-### 1. `slapper-output`
+### 1. `eggsec-output`
 
 Inspect imports in:
 
 ```text
-crates/slapper-output/src/
+crates/eggsec-output/src/
 ```
 
 Confirm whether each manifest dependency is used:
 
 ```toml
-slapper-core
+eggsec-core
 serde
 serde_json
 chrono
@@ -177,7 +177,7 @@ hostname
 tokio
 ```
 
-If `tokio` is used only in `session` or `schedule`, add a comment to `crates/slapper-output/Cargo.toml`:
+If `tokio` is used only in `session` or `schedule`, add a comment to `crates/eggsec-output/Cargo.toml`:
 
 ```toml
 # Used by async session/schedule helpers in the output crate.
@@ -186,20 +186,20 @@ tokio = { workspace = true }
 
 If `tokio` is unused, remove it and run checks.
 
-Do not add heavy dependencies to `slapper-output`.
+Do not add heavy dependencies to `eggsec-output`.
 
-### 2. `slapper-tool-core`
+### 2. `eggsec-tool-core`
 
 Inspect imports in:
 
 ```text
-crates/slapper-tool-core/src/
+crates/eggsec-tool-core/src/
 ```
 
 Confirm these dependencies are used:
 
 ```toml
-slapper-core
+eggsec-core
 serde
 serde_json
 chrono
@@ -211,11 +211,11 @@ toml
 
 Remove any unused dependency.
 
-Do not let `slapper-tool-core` depend on `slapper`, API server crates, scanner implementation modules, or TUI/output crates.
+Do not let `eggsec-tool-core` depend on `eggsec`, API server crates, scanner implementation modules, or TUI/output crates.
 
-### 3. Main `slapper`
+### 3. Main `eggsec`
 
-Inspect `crates/slapper/Cargo.toml` for stale dependencies after prior extractions.
+Inspect `crates/eggsec/Cargo.toml` for stale dependencies after prior extractions.
 
 Candidate dependencies to verify:
 
@@ -228,37 +228,37 @@ handlebars
 uuid
 ```
 
-Remove only if unused in `crates/slapper/src`.
+Remove only if unused in `crates/eggsec/src`.
 
 Do not remove dependencies merely because they are also present in another crate.
 
 ## Part 3: Feature forwarding closeout
 
-### 1. Validate `slapper-cli` features
+### 1. Validate `eggsec-cli` features
 
-Inspect `crates/slapper-cli/Cargo.toml`.
+Inspect `crates/eggsec-cli/Cargo.toml`.
 
 Ensure forwarded features exist in target crates.
 
 Expected examples:
 
 ```toml
-nse = ["slapper/nse", "slapper-tui/nse"]
-rest-api = ["slapper/rest-api", "slapper-tui/rest-api"]
-stress-testing = ["slapper/stress-testing", "slapper-tui/stress-testing"]
-pdf = ["slapper/pdf"]
-full = ["slapper/full", "slapper-tui/full"]
+nse = ["eggsec/nse", "eggsec-tui/nse"]
+rest-api = ["eggsec/rest-api", "eggsec-tui/rest-api"]
+stress-testing = ["eggsec/stress-testing", "eggsec-tui/stress-testing"]
+pdf = ["eggsec/pdf"]
+full = ["eggsec/full", "eggsec-tui/full"]
 ```
 
-If a feature is engine-only, do not forward it to `slapper-tui`.
+If a feature is engine-only, do not forward it to `eggsec-tui`.
 
 If a feature enables optional TUI tabs, forwarding to both may be correct.
 
-### 2. Validate `slapper-tui` features
+### 2. Validate `eggsec-tui` features
 
-Inspect `crates/slapper-tui/Cargo.toml`.
+Inspect `crates/eggsec-tui/Cargo.toml`.
 
-Confirm it does not own engine semantics. It may forward features to `slapper` only to compile optional views/tabs.
+Confirm it does not own engine semantics. It may forward features to `eggsec` only to compile optional views/tabs.
 
 Do not redesign TUI tabs in this pass.
 
@@ -267,47 +267,47 @@ Do not redesign TUI tabs in this pass.
 Run:
 
 ```bash
-cargo check -p slapper-cli
-cargo check -p slapper-cli --features nse
-cargo check -p slapper-cli --features rest-api
-cargo check -p slapper-cli --features stress-testing
-cargo check -p slapper-cli --features pdf
+cargo check -p eggsec-cli
+cargo check -p eggsec-cli --features nse
+cargo check -p eggsec-cli --features rest-api
+cargo check -p eggsec-cli --features stress-testing
+cargo check -p eggsec-cli --features pdf
 ```
 
 Run `full` if practical:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 If `full` is too slow or fails for unrelated reasons, document that.
 
-## Part 4: Optional low-risk extraction: `slapper-agent`
+## Part 4: Optional low-risk extraction: `eggsec-agent`
 
-The API boundary note identifies `crates/slapper/src/tool/agents/` as lower-coupling than MCP or REST/gRPC adapters. This optional extraction should be attempted only if it stays small and acyclic.
+The API boundary note identifies `crates/eggsec/src/tool/agents/` as lower-coupling than MCP or REST/gRPC adapters. This optional extraction should be attempted only if it stays small and acyclic.
 
 ### 1. Candidate files
 
 Consider moving:
 
 ```text
-crates/slapper/src/tool/agents/mod.rs
-crates/slapper/src/tool/agents/registry.rs
-crates/slapper/src/tool/agents/scheduler.rs
-crates/slapper/src/tool/agents/lifecycle.rs
-crates/slapper/src/tool/agents/communication.rs
-crates/slapper/src/tool/agents/delegation.rs
-crates/slapper/src/tool/agents/aggregator.rs
+crates/eggsec/src/tool/agents/mod.rs
+crates/eggsec/src/tool/agents/registry.rs
+crates/eggsec/src/tool/agents/scheduler.rs
+crates/eggsec/src/tool/agents/lifecycle.rs
+crates/eggsec/src/tool/agents/communication.rs
+crates/eggsec/src/tool/agents/delegation.rs
+crates/eggsec/src/tool/agents/aggregator.rs
 ```
 
 Do not move:
 
 ```text
-crates/slapper/src/agent/
-crates/slapper/src/tool/dispatcher.rs
-crates/slapper/src/tool/registry.rs
-crates/slapper/src/tool/implementations/
-crates/slapper/src/tool/protocol/
+crates/eggsec/src/agent/
+crates/eggsec/src/tool/dispatcher.rs
+crates/eggsec/src/tool/registry.rs
+crates/eggsec/src/tool/implementations/
+crates/eggsec/src/tool/protocol/
 ```
 
 ### 2. Create crate only if clean
@@ -315,7 +315,7 @@ crates/slapper/src/tool/protocol/
 If imports are limited to shared DTOs/constants and common dependencies, create:
 
 ```text
-crates/slapper-agent/
+crates/eggsec-agent/
   Cargo.toml
   src/lib.rs
 ```
@@ -324,17 +324,17 @@ Suggested manifest:
 
 ```toml
 [package]
-name = "slapper-agent"
+name = "eggsec-agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Agent coordination primitives for Slapper"
+description = "Agent coordination primitives for Eggsec"
 
 [dependencies]
-slapper-core = { path = "../slapper-core" }
-slapper-tool-core = { path = "../slapper-tool-core" }
+eggsec-core = { path = "../eggsec-core" }
+eggsec-tool-core = { path = "../eggsec-tool-core" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -353,9 +353,9 @@ Update root workspace members if created.
 
 If `tool/agents/` depends on constants from `crate::constants`, prefer one of these:
 
-Option A: Use constants already in `slapper-core::constants` if available.
+Option A: Use constants already in `eggsec-core::constants` if available.
 
-Option B: Move only pure numeric defaults into `slapper-core::constants`, such as:
+Option B: Move only pure numeric defaults into `eggsec-core::constants`, such as:
 
 ```rust
 DEFAULT_MAX_RETRIES
@@ -363,16 +363,16 @@ DEFAULT_SCHEDULER_RETRY_DELAY_MS
 DEFAULT_LEASE_DURATION_MS
 ```
 
-Option C: Define agent-local constants in `slapper-agent` if they are only used by agent coordination.
+Option C: Define agent-local constants in `eggsec-agent` if they are only used by agent coordination.
 
-Do not make `slapper-agent` depend on the main `slapper` crate just for constants.
+Do not make `eggsec-agent` depend on the main `eggsec` crate just for constants.
 
 ### 4. Compatibility shim
 
-If extraction succeeds, update `crates/slapper/src/tool/mod.rs` or `crates/slapper/src/tool/agents/mod.rs` with a compatibility facade:
+If extraction succeeds, update `crates/eggsec/src/tool/mod.rs` or `crates/eggsec/src/tool/agents/mod.rs` with a compatibility facade:
 
 ```rust
-pub use slapper_agent::*;
+pub use eggsec_agent::*;
 ```
 
 or module-level re-exports that preserve existing paths.
@@ -381,10 +381,10 @@ Do not break `crate::tool::agents::AgentRegistry`-style imports.
 
 ### 5. Stop conditions for extraction
 
-Stop and do not extract `slapper-agent` if:
+Stop and do not extract `eggsec-agent` if:
 
 1. The candidate files depend on `ToolRegistry`, `ToolDispatcher`, concrete tool implementations, scanner/fuzzer/WAF modules, or command handlers.
-2. The extraction would require `slapper-agent -> slapper`.
+2. The extraction would require `eggsec-agent -> eggsec`.
 3. The extraction changes agent behavior.
 4. The compatibility shim becomes complex.
 5. The diff becomes too large to review.
@@ -399,7 +399,7 @@ Update:
 architecture/api_extraction_boundary.md
 ```
 
-If `slapper-agent` extraction succeeds:
+If `eggsec-agent` extraction succeeds:
 
 - Mark `tool/agents/` extraction as done.
 - Update dependency graph.
@@ -408,7 +408,7 @@ If `slapper-agent` extraction succeeds:
 If it does not succeed:
 
 - Add exact blockers.
-- Keep proposed next pass as either `slapper-agent` prep or gRPC adapter prep.
+- Keep proposed next pass as either `eggsec-agent` prep or gRPC adapter prep.
 
 Do not remove the MCP coupling warnings. They are important.
 
@@ -418,40 +418,40 @@ Run:
 
 ```bash
 cargo fmt
-cargo check -p slapper-core
-cargo check -p slapper-tool-core
-cargo check -p slapper-output
-cargo check -p slapper --no-default-features
-cargo check -p slapper-tui
-cargo check -p slapper-cli
+cargo check -p eggsec-core
+cargo check -p eggsec-tool-core
+cargo check -p eggsec-output
+cargo check -p eggsec --no-default-features
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
 ```
 
-If `slapper-agent` is created:
+If `eggsec-agent` is created:
 
 ```bash
-cargo check -p slapper-agent
-cargo test -p slapper-agent
+cargo check -p eggsec-agent
+cargo test -p eggsec-agent
 ```
 
 Run broader checks:
 
 ```bash
 cargo check --workspace --all-targets --no-default-features
-cargo test -p slapper-core
-cargo test -p slapper-tool-core
-cargo test -p slapper-output
-cargo test -p slapper --lib --no-default-features
+cargo test -p eggsec-core
+cargo test -p eggsec-tool-core
+cargo test -p eggsec-output
+cargo test -p eggsec --lib --no-default-features
 cargo test --workspace --no-default-features
 ```
 
 Run feature checks:
 
 ```bash
-cargo check -p slapper-cli --features nse
-cargo check -p slapper-cli --features rest-api
-cargo check -p slapper-cli --features stress-testing
-cargo check -p slapper-cli --features pdf
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features nse
+cargo check -p eggsec-cli --features rest-api
+cargo check -p eggsec-cli --features stress-testing
+cargo check -p eggsec-cli --features pdf
+cargo check -p eggsec-cli --features full
 ```
 
 If `full` fails for unrelated or pre-existing reasons, document it precisely.
@@ -461,11 +461,11 @@ If `full` fails for unrelated or pre-existing reasons, document it precisely.
 Report:
 
 1. Documentation corrections made.
-2. Dependency audit results for `slapper-output`.
-3. Dependency audit results for `slapper-tool-core`.
-4. Main `slapper` stale dependency audit result.
+2. Dependency audit results for `eggsec-output`.
+3. Dependency audit results for `eggsec-tool-core`.
+4. Main `eggsec` stale dependency audit result.
 5. Feature forwarding review result.
-6. Whether `slapper-agent` was extracted.
+6. Whether `eggsec-agent` was extracted.
 7. If extracted, final dependency graph.
 8. If not extracted, exact blockers.
 9. Updates made to `architecture/api_extraction_boundary.md`.
@@ -487,10 +487,10 @@ After this pass, do not continue splitting crates unless one of the following is
 Likely future candidates, in order:
 
 ```text
-1. slapper-agent      # if not completed in this pass
-2. slapper-api grpc   # gRPC adapter first; cleanest API adapter
-3. slapper-api rest   # REST/OpenAI/OpenResponses after gRPC
+1. eggsec-agent      # if not completed in this pass
+2. eggsec-api grpc   # gRPC adapter first; cleanest API adapter
+3. eggsec-api rest   # REST/OpenAI/OpenResponses after gRPC
 4. MCP adapter        # last; deeply coupled
-5. slapper-scan       # only after measured compile-time need
+5. eggsec-scan       # only after measured compile-time need
 ```
 

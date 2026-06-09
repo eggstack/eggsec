@@ -1,4 +1,4 @@
-# Slapper TUI Packaged Themes Final Polish Plan
+# Eggsec TUI Packaged Themes Final Polish Plan
 
 ## Purpose
 
@@ -35,20 +35,20 @@ Run before editing:
 
 ```bash
 cargo fmt --all -- --check
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
 ```
 
 Also inspect the relevant current code:
 
 ```bash
-rg "theme_load_rx|theme_load_handle|spawn_theme_loader|handle_theme_install_report|update_settings_theme_selector" crates/slapper-tui/src/app
-rg "theme_selector|pending_theme_name|set_available_themes|sync_theme_selector" crates/slapper-tui/src/tabs/settings
-rg "ThemeManager::new|cyber-red|register_theme" crates/slapper-tui/src/theme
+rg "theme_load_rx|theme_load_handle|spawn_theme_loader|handle_theme_install_report|update_settings_theme_selector" crates/eggsec-tui/src/app
+rg "theme_selector|pending_theme_name|set_available_themes|sync_theme_selector" crates/eggsec-tui/src/tabs/settings
+rg "ThemeManager::new|cyber-red|register_theme" crates/eggsec-tui/src/theme
 ```
 
-If `cargo check -p slapper-tui` fails, fix compile errors first before making behavioral changes.
+If `cargo check -p eggsec-tui` fails, fix compile errors first before making behavioral changes.
 
 ## Phase 1: Add deferred restored-theme retry
 
@@ -298,7 +298,7 @@ Suggested tests:
 
 Acceptance criteria:
 
-- `cargo test -p slapper-tui` passes.
+- `cargo test -p eggsec-tui` passes.
 - Tests specifically cover the deferred restore and user override behavior.
 
 ## Phase 8: Validation commands
@@ -307,26 +307,26 @@ Run:
 
 ```bash
 cargo fmt --all
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
 ```
 
 If practical:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 Run packaging determinism check:
 
 ```bash
 python3 scripts/package_themes.py
-git diff -- crates/slapper-tui/src/theme/packaged.rs
+git diff -- crates/eggsec-tui/src/theme/packaged.rs
 python3 scripts/package_themes.py
-git diff -- crates/slapper-tui/src/theme/packaged.rs
+git diff -- crates/eggsec-tui/src/theme/packaged.rs
 ```
 
 The second run should produce no diff.
@@ -341,7 +341,7 @@ This pass is complete when:
 - Duplicate loader spawn is guarded.
 - Settings selector labels are readable while values remain stable.
 - `Ctrl+T` behavior is deterministic and selector-synced.
-- `cargo check -p slapper-tui` and `cargo test -p slapper-tui` pass.
+- `cargo check -p eggsec-tui` and `cargo test -p eggsec-tui` pass.
 
 ## Implementation notes for smaller models
 

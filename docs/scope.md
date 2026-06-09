@@ -1,6 +1,6 @@
 # Scope Model
 
-Slapper uses a scope file to constrain all target-bearing operations to authorized systems. Scope enforcement prevents accidental testing of out-of-scope infrastructure.
+Eggsec uses a scope file to constrain all target-bearing operations to authorized systems. Scope enforcement prevents accidental testing of out-of-scope infrastructure.
 
 ## Scope File Format
 
@@ -99,7 +99,7 @@ description = "Local development"
 **Note:** Direct IP `127.0.0.1` is blocked by the private IP check. Use `localhost` as the hostname instead, or run against a non-loopback address in a lab network.
 
 ```bash
-slapper scan localhost --profile quick --scope examples/scope-localhost.toml
+eggsec scan localhost --profile quick --scope examples/scope-localhost.toml
 ```
 
 ## Example: Internal Lab Scope

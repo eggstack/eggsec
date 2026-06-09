@@ -4,8 +4,8 @@ debug/
 release/
 
 # Pre-built binaries
-/slapper
-slapper.exe
+/eggsec
+eggsec.exe
 *.o
 *.a
 *.so

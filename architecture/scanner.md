@@ -10,7 +10,7 @@ High-performance TCP and UDP port scanning.
 
 - **TCP Connect Scan**: Standard TCP connection using `tokio::net::TcpStream` with semaphore-controlled concurrency
 - **SYN Scan**: Raw socket scanning via `pnet` crate (requires `stress-testing` feature + Unix + root privileges)
-- **Service Fingerprinting**: Once a port is found open, Slapper attempts to identify the running service and version
+- **Service Fingerprinting**: Once a port is found open, Eggsec attempts to identify the running service and version
 - **Spoofed Scanning**: IP spoofing with decoy support (Simultaneous or Staggered modes)
 - **Timing Templates**: Nmap-style T0-T5 presets controlling parallelism, timeouts, and rate limits
 

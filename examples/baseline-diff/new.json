@@ -31,7 +31,7 @@
     "remediation": "Use parameterized queries",
     "discovered_at": "2026-05-29T10:00:00Z",
     "source": {
-      "tool": "slapper",
+      "tool": "eggsec",
       "module": "fuzzer",
       "run_id": "rescan"
     },
@@ -70,7 +70,7 @@
     "remediation": "Escape output and use CSP",
     "discovered_at": "2026-05-29T10:00:00Z",
     "source": {
-      "tool": "slapper",
+      "tool": "eggsec",
       "module": "fuzzer",
       "run_id": "rescan"
     },

@@ -16,12 +16,12 @@ We needed to handle errors across different layers of the application:
 
 We use three error handling patterns, each serving different purposes:
 
-### 1. `SlapperError` (Core Library)
+### 1. `EggsecError` (Core Library)
 
-`crate::error::SlapperError` is a structured error enum for the core library:
+`crate::error::EggsecError` is a structured error enum for the core library:
 
 ```rust
-pub enum SlapperError {
+pub enum EggsecError {
     Timeout { message: String },
     Network { message: String },
     Config(String),
@@ -29,7 +29,7 @@ pub enum SlapperError {
 }
 ```
 
-Used in core modules with `crate::error::Result<T>` (which is `Result<T, SlapperError>`).
+Used in core modules with `crate::error::Result<T>` (which is `Result<T, EggsecError>`).
 
 **Rationale**: Structured errors allow callers to match on specific error types and handle them appropriately.
 
@@ -64,10 +64,10 @@ Commands and tests use `anyhow::Result<T>` which is `Result<T, anyhow::Error>`.
 ## Conversion Between Types
 
 ```rust
-// SlapperError implements From<ConfigError>
-impl From<ConfigError> for SlapperError {
+// EggsecError implements From<ConfigError>
+impl From<ConfigError> for EggsecError {
     fn from(e: ConfigError) -> Self {
-        SlapperError::Config(e.to_string())
+        EggsecError::Config(e.to_string())
     }
 }
 ```
@@ -79,6 +79,6 @@ Feature-gated conversions exist for:
 
 ## References
 
-- `crates/slapper/src/error/mod.rs` - `SlapperError` definition
-- `crates/slapper/src/config/mod.rs` - `ConfigError` definition
+- `crates/eggsec/src/error/mod.rs` - `EggsecError` definition
+- `crates/eggsec/src/config/mod.rs` - `ConfigError` definition
 - `AGENTS.md` - Error handling guidelines

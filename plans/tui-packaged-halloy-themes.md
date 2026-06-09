@@ -1,14 +1,14 @@
-# Slapper TUI Packaged Halloy Themes Plan
+# Eggsec TUI Packaged Halloy Themes Plan
 
 ## Purpose
 
-Implement packaged Halloy-style themes for `slapper-tui` so that:
+Implement packaged Halloy-style themes for `eggsec-tui` so that:
 
 - Halloy `.toml` theme files in the repository `themes/` directory can be packaged into the binary.
-- Packaged themes are installed idempotently into the user's Slapper theme directory.
+- Packaged themes are installed idempotently into the user's Eggsec theme directory.
 - Theme installation is best-effort and must not block or visibly slow TUI startup.
 - Themes from the user theme directory are selectable in the Settings tab theme selector.
-- Slapper ships with all packaged themes as defaults.
+- Eggsec ships with all packaged themes as defaults.
 - `cyber red` is always available as an in-binary fallback even when theme directory reads/writes fail.
 
 This pass should build on the current TUI theme refactor. `Theme.name` is already an owned `String`, `ThemeManager.current` is private, shell/popup rendering is mostly explicit-theme, and the settings tab already has a Theme section. This plan should add bundled theme installation and selection, not restart the earlier refactors.
@@ -27,31 +27,31 @@ The TUI must remain usable if:
 - the filesystem is read-only,
 - `themes/` is missing from the source checkout when packaging is not being regenerated.
 
-In all of those cases, Slapper should fall back to an in-binary `cyber red` theme and log a warning. It may surface a non-fatal notification after the UI is visible, but it must not panic or abort TUI startup.
+In all of those cases, Eggsec should fall back to an in-binary `cyber red` theme and log a warning. It may surface a non-fatal notification after the UI is visible, but it must not panic or abort TUI startup.
 
-Theme installation should be idempotent. On each startup, Slapper should ensure bundled themes are installed, but it should only write missing bundled theme files by default. It must not overwrite user-edited files unless a future explicit reset/update command is added.
+Theme installation should be idempotent. On each startup, Eggsec should ensure bundled themes are installed, but it should only write missing bundled theme files by default. It must not overwrite user-edited files unless a future explicit reset/update command is added.
 
 Startup should not appear slower to the user. If extraction or disk IO is more than trivial, run it in a non-blocking/background task after the first frame, then refresh the theme list when complete. It is acceptable for the initial settings dropdown to show only in-memory fallback themes briefly, then update after packaged/user themes are loaded.
 
 ## Current codebase notes
 
-`crates/slapper-tui/src/theme/palette.rs` defines `Theme` with `name: String`, `mode`, and `ThemeColors`.
+`crates/eggsec-tui/src/theme/palette.rs` defines `Theme` with `name: String`, `mode`, and `ThemeColors`.
 
-`crates/slapper-tui/src/theme/builtin.rs` currently provides in-code built-in dark/light themes.
+`crates/eggsec-tui/src/theme/builtin.rs` currently provides in-code built-in dark/light themes.
 
-`crates/slapper-tui/src/theme/manager.rs` owns theme registration and current theme selection.
+`crates/eggsec-tui/src/theme/manager.rs` owns theme registration and current theme selection.
 
-`crates/slapper-tui/src/theme/legacy.rs` still contains thread-local compatibility macros. Do not expand macro usage.
+`crates/eggsec-tui/src/theme/legacy.rs` still contains thread-local compatibility macros. Do not expand macro usage.
 
-`crates/slapper-tui/src/tabs/settings/main.rs` currently has a Theme section with `dark_mode: Checkbox` and `accent_color: Selector`. The Theme section has `max_focus_index` of 1 and focus behavior for those two controls.
+`crates/eggsec-tui/src/tabs/settings/main.rs` currently has a Theme section with `dark_mode: Checkbox` and `accent_color: Selector`. The Theme section has `max_focus_index` of 1 and focus behavior for those two controls.
 
 The desired Settings tab UI should become a theme selector based on `ThemeManager::list_themes()` or equivalent metadata. Dark-mode/accent controls can be removed, hidden, or retained as non-authoritative compatibility only, but theme selection by name should be the primary behavior.
 
 ## Dependency plan
 
-Add `lzma-rs` to `crates/slapper-tui/Cargo.toml` dependencies.
+Add `lzma-rs` to `crates/eggsec-tui/Cargo.toml` dependencies.
 
-Use the existing `base64` workspace dependency if already available to `slapper-tui`; if not, add it explicitly from workspace dependencies.
+Use the existing `base64` workspace dependency if already available to `eggsec-tui`; if not, add it explicitly from workspace dependencies.
 
 Do not add a C-backed LZMA dependency. The goal is decode-only pure Rust extraction.
 
@@ -63,23 +63,23 @@ Add:
 
 ```text
 scripts/package_themes.py
-crates/slapper-tui/src/theme/packaged.rs   # generated by script, committed
-crates/slapper-tui/src/theme/archive.rs    # tiny custom archive encoder/decoder structs/tests, Rust decode side
-crates/slapper-tui/src/theme/install.rs    # best-effort install to user theme dir
-crates/slapper-tui/src/theme/loader.rs     # parse Halloy TOML into Slapper Theme
+crates/eggsec-tui/src/theme/packaged.rs   # generated by script, committed
+crates/eggsec-tui/src/theme/archive.rs    # tiny custom archive encoder/decoder structs/tests, Rust decode side
+crates/eggsec-tui/src/theme/install.rs    # best-effort install to user theme dir
+crates/eggsec-tui/src/theme/loader.rs     # parse Halloy TOML into Eggsec Theme
 ```
 
 Modify:
 
 ```text
-crates/slapper-tui/Cargo.toml
-crates/slapper-tui/src/theme/mod.rs
-crates/slapper-tui/src/theme/builtin.rs
-crates/slapper-tui/src/theme/manager.rs
-crates/slapper-tui/src/app/mod.rs
-crates/slapper-tui/src/tabs/settings/main.rs
-crates/slapper-tui/src/tabs/settings/render.rs
-crates/slapper-tui/src/app/key_handler.rs or relevant settings event path
+crates/eggsec-tui/Cargo.toml
+crates/eggsec-tui/src/theme/mod.rs
+crates/eggsec-tui/src/theme/builtin.rs
+crates/eggsec-tui/src/theme/manager.rs
+crates/eggsec-tui/src/app/mod.rs
+crates/eggsec-tui/src/tabs/settings/main.rs
+crates/eggsec-tui/src/tabs/settings/render.rs
+crates/eggsec-tui/src/app/key_handler.rs or relevant settings event path
 ```
 
 The exact event file may differ; follow the current Settings tab key handling implementation.
@@ -120,7 +120,7 @@ Responsibilities:
 3. Build the custom binary archive format.
 4. Compress with Python stdlib `lzma.compress(...)`.
 5. Base64 encode with Python stdlib `base64.b64encode(...)`.
-6. Emit `crates/slapper-tui/src/theme/packaged.rs`.
+6. Emit `crates/eggsec-tui/src/theme/packaged.rs`.
 7. Include metadata: package version, generated timestamp or deterministic package id, file count, and source file names.
 
 Prefer deterministic output. Avoid embedding wall-clock timestamps unless useful. A deterministic package hash is better:
@@ -162,7 +162,7 @@ python3 scripts/package_themes.py
 Optionally support:
 
 ```bash
-python3 scripts/package_themes.py --themes-dir themes --out crates/slapper-tui/src/theme/packaged.rs
+python3 scripts/package_themes.py --themes-dir themes --out crates/eggsec-tui/src/theme/packaged.rs
 ```
 
 ## Cyber Red fallback requirement
@@ -203,9 +203,9 @@ pub fn user_theme_dir() -> Option<PathBuf>
 Use a platform-appropriate config/data path, e.g. via `ProjectDirs`:
 
 ```text
-Linux:   $XDG_CONFIG_HOME/slapper/themes or ~/.config/slapper/themes
-macOS:   ~/Library/Application Support/slapper/themes
-Windows: %APPDATA%/slapper/themes
+Linux:   $XDG_CONFIG_HOME/eggsec/themes or ~/.config/eggsec/themes
+macOS:   ~/Library/Application Support/eggsec/themes
+Windows: %APPDATA%/eggsec/themes
 ```
 
 Keep repository `themes/` as source input for the packaging script only. Runtime should not assume the repository root exists.
@@ -240,17 +240,17 @@ The report can be logged and optionally surfaced as a low-severity notification 
 
 ## Theme loader design
 
-Add `theme/loader.rs` to parse Halloy `.toml` into Slapper `Theme`.
+Add `theme/loader.rs` to parse Halloy `.toml` into Eggsec `Theme`.
 
-Do not deserialize directly into `ThemeColors` unless Halloy schema exactly matches Slapper. Use an intermediate struct with permissive optional fields.
+Do not deserialize directly into `ThemeColors` unless Halloy schema exactly matches Eggsec. Use an intermediate struct with permissive optional fields.
 
 The loader should:
 
 - parse TOML using the existing `toml` dependency,
 - identify a canonical theme id from file stem or a name field,
 - parse colors from strings such as `#RRGGBB`, `#RGB` if present, and basic named colors if needed,
-- map Halloy palette fields into Slapper semantic colors,
-- fill missing Slapper-specific colors via fallback defaults.
+- map Halloy palette fields into Eggsec semantic colors,
+- fill missing Eggsec-specific colors via fallback defaults.
 
 Suggested fallback strategy:
 
@@ -416,26 +416,26 @@ Run:
 
 ```bash
 cargo fmt --all
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
 ```
 
 If practical:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 Also run the packaging script and verify generated file changes are deterministic:
 
 ```bash
 python3 scripts/package_themes.py
-git diff -- crates/slapper-tui/src/theme/packaged.rs
+git diff -- crates/eggsec-tui/src/theme/packaged.rs
 python3 scripts/package_themes.py
-git diff -- crates/slapper-tui/src/theme/packaged.rs
+git diff -- crates/eggsec-tui/src/theme/packaged.rs
 ```
 
 The second run should produce no diff if the input themes have not changed.

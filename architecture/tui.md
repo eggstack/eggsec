@@ -1,6 +1,6 @@
 # TUI (Terminal User Interface)
 
-Slapper includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 28 different tabs.
+Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 28 different tabs.
 
 ## Core Components (`src/tui/`)
 
@@ -242,8 +242,8 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 | `manager.rs` | `ThemeManager` - holds registered themes, private `current`, canonical ID lookup, theme switching |
 | `style.rs` | Theme style methods for rendering (currently unused helper methods) |
 | `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
-| `loader.rs` | Parses Halloy `.toml` themes into Slapper `Theme` structs; missing fields use defaults from built-in themes |
-| `install.rs` | Idempotent installer: writes packaged themes to `~/.config/slapper/themes`, never overwrites existing files |
+| `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; missing fields use defaults from built-in themes |
+| `install.rs` | Idempotent installer: writes packaged themes to `~/.config/eggsec/themes`, never overwrites existing files |
 | `archive.rs` | LZMA decode for packaged theme data |
 | `packaged.rs` | Auto-generated LZMA-compressed blob of 50 Halloy themes (regenerated via `scripts/package_themes.py`) |
 
@@ -266,7 +266,7 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 ### Session Management (`session.rs`)
 
-`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/slapper/sessions/` on Linux via `directories::ProjectDirs`, with `~/.slapper/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request in `ThemeLoadState` until the background loader registers it.
+`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/eggsec/sessions/` on Linux via `directories::ProjectDirs`, with `~/.eggsec/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request in `ThemeLoadState` until the background loader registers it.
 
 ### Adding a New Tab
 

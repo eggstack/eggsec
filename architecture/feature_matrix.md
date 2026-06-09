@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Comprehensive reference for all Cargo feature flags in the `slapper` crate.
+Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 ## Summary
 
@@ -15,34 +15,34 @@ Comprehensive reference for all Cargo feature flags in the `slapper` crate.
 
 | Feature | Declared | Has deps | In `full` | Primary module | Stability | Build command |
 |---------|----------|----------|-----------|----------------|-----------|---------------|
-| `default` | yes | no | - | (core) | Stable | `cargo check -p slapper` |
-| `tool-api` | yes | no | - | `tool/` | Stable | `cargo check -p slapper --features tool-api` |
-| `insecure-tls` | yes | no | - | `utils/` | Testing-only | `cargo check -p slapper --features insecure-tls` |
-| `rest-api` | yes | yes | yes | `tool/`, `agent/` | Stable | `cargo check -p slapper --features rest-api` |
-| `ws-api` | yes | yes | - | (WebSocket API) | Beta | `cargo check -p slapper --features ws-api` |
-| `grpc-api` | yes | yes | - | `tool/` | Stable | `cargo check -p slapper --features grpc-api` |
-| `stress-testing` | yes | yes | yes | `stress/`, `packet/` | Stable | `cargo check -p slapper --features stress-testing` |
-| `packet-inspection` | yes | yes | yes | `packet/` | Stable | `cargo check -p slapper --features packet-inspection` |
-| `nse` | yes | yes | yes | `slapper-nse` | Stable | `cargo check -p slapper --features nse` |
-| `nse-ssh2` | yes | yes | - | `slapper-nse` | Stable | `cargo check -p slapper --features nse-ssh2` |
-| `nse-sandbox` | yes | yes | - | `slapper-nse` | Stable | `cargo check -p slapper --features nse-sandbox` |
-| `ai-integration` | yes | yes | yes | `ai/` | Stable | `cargo check -p slapper --features ai-integration` |
-| `websocket` | yes | yes | yes | `websocket/` | Stable | `cargo check -p slapper --features websocket` |
-| `headless-browser` | yes | yes | yes | `browser/` | Stable | `cargo check -p slapper --features headless-browser` |
-| `database` | yes | yes | yes | `storage/` | Stable | `cargo check -p slapper --features database` |
-| `container` | yes | yes | yes | `container/` | Stable | `cargo check -p slapper --features container` |
-| `cloud` | yes | no | - | `recon/cloud/` | Stable | `cargo check -p slapper --features cloud` |
-| `sbom` | yes | yes | yes | `supply_chain/` | Stable | `cargo check -p slapper --features sbom` |
-| `advanced-hunting` | yes | no | yes | `hunt/` | Stable | `cargo check -p slapper --features advanced-hunting` |
-| `compliance` | yes | no | yes | `compliance/` | Stable | `cargo check -p slapper --features compliance` |
-| `external-integrations` | yes | no | yes | `integrations/` | Stable | `cargo check -p slapper --features external-integrations` |
-| `finding-workflow` | yes | no | yes | `workflow/` | Stable | `cargo check -p slapper --features finding-workflow` |
-| `vuln-management` | yes | no | yes | `vuln/` | Stable | `cargo check -p slapper --features vuln-management` |
-| `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p slapper --features git-secrets` |
-| `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p slapper --features wireless` |
-| `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p slapper --features pdf` |
-| `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p slapper --features api-schema` |
-| `full` | yes | yes | - | (all) | Deprecated | `cargo check -p slapper --features full` |
+| `default` | yes | no | - | (core) | Stable | `cargo check -p eggsec` |
+| `tool-api` | yes | no | - | `tool/` | Stable | `cargo check -p eggsec --features tool-api` |
+| `insecure-tls` | yes | no | - | `utils/` | Testing-only | `cargo check -p eggsec --features insecure-tls` |
+| `rest-api` | yes | yes | yes | `tool/`, `agent/` | Stable | `cargo check -p eggsec --features rest-api` |
+| `ws-api` | yes | yes | - | (WebSocket API) | Beta | `cargo check -p eggsec --features ws-api` |
+| `grpc-api` | yes | yes | - | `tool/` | Stable | `cargo check -p eggsec --features grpc-api` |
+| `stress-testing` | yes | yes | yes | `stress/`, `packet/` | Stable | `cargo check -p eggsec --features stress-testing` |
+| `packet-inspection` | yes | yes | yes | `packet/` | Stable | `cargo check -p eggsec --features packet-inspection` |
+| `nse` | yes | yes | yes | `eggsec-nse` | Stable | `cargo check -p eggsec --features nse` |
+| `nse-ssh2` | yes | yes | - | `eggsec-nse` | Stable | `cargo check -p eggsec --features nse-ssh2` |
+| `nse-sandbox` | yes | yes | - | `eggsec-nse` | Stable | `cargo check -p eggsec --features nse-sandbox` |
+| `ai-integration` | yes | yes | yes | `ai/` | Stable | `cargo check -p eggsec --features ai-integration` |
+| `websocket` | yes | yes | yes | `websocket/` | Stable | `cargo check -p eggsec --features websocket` |
+| `headless-browser` | yes | yes | yes | `browser/` | Stable | `cargo check -p eggsec --features headless-browser` |
+| `database` | yes | yes | yes | `storage/` | Stable | `cargo check -p eggsec --features database` |
+| `container` | yes | yes | yes | `container/` | Stable | `cargo check -p eggsec --features container` |
+| `cloud` | yes | no | - | `recon/cloud/` | Stable | `cargo check -p eggsec --features cloud` |
+| `sbom` | yes | yes | yes | `supply_chain/` | Stable | `cargo check -p eggsec --features sbom` |
+| `advanced-hunting` | yes | no | yes | `hunt/` | Stable | `cargo check -p eggsec --features advanced-hunting` |
+| `compliance` | yes | no | yes | `compliance/` | Stable | `cargo check -p eggsec --features compliance` |
+| `external-integrations` | yes | no | yes | `integrations/` | Stable | `cargo check -p eggsec --features external-integrations` |
+| `finding-workflow` | yes | no | yes | `workflow/` | Stable | `cargo check -p eggsec --features finding-workflow` |
+| `vuln-management` | yes | no | yes | `vuln/` | Stable | `cargo check -p eggsec --features vuln-management` |
+| `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
+| `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` |
+| `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |
+| `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p eggsec --features api-schema` |
+| `full` | yes | yes | - | (all) | Deprecated | `cargo check -p eggsec --features full` |
 
 ## Stability Levels
 

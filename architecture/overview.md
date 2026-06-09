@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Slapper is a high-performance, async-first security testing toolkit built in Rust. This document provides a birds-eye view of the entire system, serving as an index to detailed architecture documentation for each component.
+Eggsec is a high-performance, async-first security testing toolkit built in Rust. This document provides a birds-eye view of the entire system, serving as an index to detailed architecture documentation for each component.
 
 ## Table of Contents
 
@@ -22,18 +22,18 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 
 ## Crate Layout
 
-Slapper is organized as a Cargo workspace. The first-level crate boundary is:
+Eggsec is organized as a Cargo workspace. The first-level crate boundary is:
 
-- **`slapper-core`**: dependency-light domain types (`Severity`, `SensitiveString`), constants, and shared primitives. Designed for fast independent compilation with a small dependency set.
-- **`slapper-tool-core`**: core data types for the tool abstraction layer (requests, responses, findings, errors). Dependency-light types shared between `slapper` and tool protocol integrations.
-- **`slapper`**: main engine, CLI command model/dispatch, assessment modules, remaining API/agent adapters, feature-gated integrations, and the canonical `SlapperError` type.
-- **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
-- **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.
-- **`slapper-cli`**: CLI binary entry point. Depends on both `slapper` and `slapper-tui`.
-- **`slapper-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `slapper` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `slapper`.
-- **`slapper-agent`**: agent coordination primitives extracted from `slapper::tool::agents` (registry, scheduler, lifecycle, communication, delegation, aggregation). Depends on `slapper-core` but not the main engine crate.
+- **`eggsec-core`**: dependency-light domain types (`Severity`, `SensitiveString`), constants, and shared primitives. Designed for fast independent compilation with a small dependency set.
+- **`eggsec-tool-core`**: core data types for the tool abstraction layer (requests, responses, findings, errors). Dependency-light types shared between `eggsec` and tool protocol integrations.
+- **`eggsec`**: main engine, CLI command model/dispatch, assessment modules, remaining API/agent adapters, feature-gated integrations, and the canonical `EggsecError` type.
+- **`eggsec-nse`**: optional Nmap NSE compatibility runtime and libraries.
+- **`eggsec-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Eggsec engine APIs but should not be required for engine-only builds.
+- **`eggsec-cli`**: CLI binary entry point. Depends on both `eggsec` and `eggsec-tui`.
+- **`eggsec-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `eggsec` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `eggsec`.
+- **`eggsec-agent`**: agent coordination primitives extracted from `eggsec::tool::agents` (registry, scheduler, lifecycle, communication, delegation, aggregation). Depends on `eggsec-core` but not the main engine crate.
 
-New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate or in `slapper-tui` as appropriate.
+New modules should avoid adding heavy runtime dependencies to `eggsec-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `eggsec` crate or in `eggsec-tui` as appropriate.
 
 ---
 
@@ -82,90 +82,90 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`recon/`](../crates/slapper/src/recon/) | DNS enumeration, WHOIS, SSL analysis, subdomain discovery, technology detection, CVE mapping, cloud asset discovery | [recon.md](recon.md) |
-| [`scanner/`](../crates/slapper/src/scanner/) | TCP/UDP port scanning, endpoint discovery, service fingerprinting, IP spoofing | [scanner.md](scanner.md) |
-| [`probe.rs`](../crates/slapper/src/probe.rs) | ICMP probing, probe intent classification, risk assessment | [probe.md](probe.md) |
+| [`recon/`](../crates/eggsec/src/recon/) | DNS enumeration, WHOIS, SSL analysis, subdomain discovery, technology detection, CVE mapping, cloud asset discovery | [recon.md](recon.md) |
+| [`scanner/`](../crates/eggsec/src/scanner/) | TCP/UDP port scanning, endpoint discovery, service fingerprinting, IP spoofing | [scanner.md](scanner.md) |
+| [`probe.rs`](../crates/eggsec/src/probe.rs) | ICMP probing, probe intent classification, risk assessment | [probe.md](probe.md) |
 
 ### Security Testing
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`fuzzer/`](../crates/slapper/src/fuzzer/) | Security fuzzing engine with 30 payload types (SQLi, XSS, SSRF, Path Traversal, ReDoS, etc.) | [fuzzer.md](fuzzer.md) |
-| [`waf/`](../crates/slapper/src/waf/) | WAF detection (34 products), bypass techniques, evasion-resistance testing | [waf.md](waf.md) |
-| [`auth/`](../crates/slapper/src/auth/) | Authentication testing (brute force, credential stuffing, MFA bypass, JWT analysis, OAuth/OIDC) | [auth.md](auth.md) |
-| [`hunt/`](../crates/slapper/src/hunt/) | Advanced threat hunting (authorization bypass, race conditions, advanced injection) | [hunt.md](hunt.md) |
-| [`browser/`](../crates/slapper/src/browser/) | Headless browser for DOM XSS detection, SPA crawling | [browser.md](browser.md) |
-| [`websocket/`](../crates/slapper/src/websocket/) | WebSocket security testing | [websocket.md](websocket.md) |
+| [`fuzzer/`](../crates/eggsec/src/fuzzer/) | Security fuzzing engine with 30 payload types (SQLi, XSS, SSRF, Path Traversal, ReDoS, etc.) | [fuzzer.md](fuzzer.md) |
+| [`waf/`](../crates/eggsec/src/waf/) | WAF detection (34 products), bypass techniques, evasion-resistance testing | [waf.md](waf.md) |
+| [`auth/`](../crates/eggsec/src/auth/) | Authentication testing (brute force, credential stuffing, MFA bypass, JWT analysis, OAuth/OIDC) | [auth.md](auth.md) |
+| [`hunt/`](../crates/eggsec/src/hunt/) | Advanced threat hunting (authorization bypass, race conditions, advanced injection) | [hunt.md](hunt.md) |
+| [`browser/`](../crates/eggsec/src/browser/) | Headless browser for DOM XSS detection, SPA crawling | [browser.md](browser.md) |
+| [`websocket/`](../crates/eggsec/src/websocket/) | WebSocket security testing | [websocket.md](websocket.md) |
 
 ### Performance & Stress
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`loadtest/`](../crates/slapper/src/loadtest/) | HTTP load testing with detailed latency metrics, concurrency control | [loadtest.md](loadtest.md) |
-| [`stress/`](../crates/slapper/src/stress/) | Network stress testing (SYN, UDP, HTTP, TCP, ICMP floods), IP spoofing | [stress.md](stress.md) |
-| [`packet/`](../crates/slapper/src/packet/) | Packet capture, crafting, parsing (pnet-based), traceroute | [networking.md](networking.md) |
+| [`loadtest/`](../crates/eggsec/src/loadtest/) | HTTP load testing with detailed latency metrics, concurrency control | [loadtest.md](loadtest.md) |
+| [`stress/`](../crates/eggsec/src/stress/) | Network stress testing (SYN, UDP, HTTP, TCP, ICMP floods), IP spoofing | [stress.md](stress.md) |
+| [`packet/`](../crates/eggsec/src/packet/) | Packet capture, crafting, parsing (pnet-based), traceroute | [networking.md](networking.md) |
 
 ### Orchestration & Pipeline
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`pipeline/`](../crates/slapper/src/pipeline/) | Chained security assessment profiles (11 built-in profiles) | [pipeline.md](pipeline.md) |
-| [`tool/`](../crates/slapper/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration; core DTOs in `slapper-tool-core` | [ai_agents.md](ai_agents.md) |
-| [`agent/`](../crates/slapper/src/agent/) | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
-| [`distributed/`](../crates/slapper/src/distributed/) | Worker/coordinator cluster architecture for parallel scanning | [distributed.md](distributed.md) |
+| [`pipeline/`](../crates/eggsec/src/pipeline/) | Chained security assessment profiles (11 built-in profiles) | [pipeline.md](pipeline.md) |
+| [`tool/`](../crates/eggsec/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration; core DTOs in `eggsec-tool-core` | [ai_agents.md](ai_agents.md) |
+| [`agent/`](../crates/eggsec/src/agent/) | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
+| [`distributed/`](../crates/eggsec/src/distributed/) | Worker/coordinator cluster architecture for parallel scanning | [distributed.md](distributed.md) |
 
 ### Infrastructure & Output
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`output/`](../crates/slapper/src/output/) | Compatibility facade over `slapper-output` plus engine-coupled report modules (PDF, report, report_summary, run_manifest, attack_graph) | [output.md](output.md) |
-| [`proxy/`](../crates/slapper/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies | [proxy.md](proxy.md) |
-| [`config/`](../crates/slapper/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
-| [`storage/`](../crates/slapper/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
-| [`workflow/`](../crates/slapper/src/workflow/) | Finding lifecycle management (assignment, SLA tracking, status transitions) | [workflow.md](workflow.md) |
+| [`output/`](../crates/eggsec/src/output/) | Compatibility facade over `eggsec-output` plus engine-coupled report modules (PDF, report, report_summary, run_manifest, attack_graph) | [output.md](output.md) |
+| [`proxy/`](../crates/eggsec/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies | [proxy.md](proxy.md) |
+| [`config/`](../crates/eggsec/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
+| [`storage/`](../crates/eggsec/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
+| [`workflow/`](../crates/eggsec/src/workflow/) | Finding lifecycle management (assignment, SLA tracking, status transitions) | [workflow.md](workflow.md) |
 
 ### Compliance & Risk
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`compliance/`](../crates/slapper/src/compliance/) | HIPAA, PCI, SOC2, OWASP compliance scanning and reporting | [compliance.md](compliance.md) |
-| [`vuln/`](../crates/slapper/src/vuln/) | Vulnerability triage, CVSS scoring, prioritization | [vuln.md](vuln.md) |
-| [`supply_chain/`](../crates/slapper/src/supply_chain/) | SBOM generation (CycloneDX, SPDX), typosquat detection | [supply_chain.md](supply_chain.md) |
-| [`container/`](../crates/slapper/src/container/) | Kubernetes/Docker security scanning | [container.md](container.md) |
+| [`compliance/`](../crates/eggsec/src/compliance/) | HIPAA, PCI, SOC2, OWASP compliance scanning and reporting | [compliance.md](compliance.md) |
+| [`vuln/`](../crates/eggsec/src/vuln/) | Vulnerability triage, CVSS scoring, prioritization | [vuln.md](vuln.md) |
+| [`supply_chain/`](../crates/eggsec/src/supply_chain/) | SBOM generation (CycloneDX, SPDX), typosquat detection | [supply_chain.md](supply_chain.md) |
+| [`container/`](../crates/eggsec/src/container/) | Kubernetes/Docker security scanning | [container.md](container.md) |
 
 ### Integration & External Services
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`ai/`](../crates/slapper/src/ai/) | AI/LLM client (OpenAI, Anthropic, Azure), cache, planner, script generation, WAF bypass suggestions | [ai_agents.md](ai_agents.md) |
-| [`slapper-nse/`](../crates/slapper-nse/) | Nmap Scripting Engine support (Lua 5.4), 169 NSE libraries | [nse_integration.md](nse_integration.md) |
-| [`integrations/`](../crates/slapper/src/integrations/) | Jira, GitHub, GitLab external connectors | [integrations.md](integrations.md) |
-| [`notify/`](../crates/slapper/src/notify/) | Webhook, Slack, Discord, Teams notifications | [notify.md](notify.md) |
+| [`ai/`](../crates/eggsec/src/ai/) | AI/LLM client (OpenAI, Anthropic, Azure), cache, planner, script generation, WAF bypass suggestions | [ai_agents.md](ai_agents.md) |
+| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 169 NSE libraries | [nse_integration.md](nse_integration.md) |
+| [`integrations/`](../crates/eggsec/src/integrations/) | Jira, GitHub, GitLab external connectors | [integrations.md](integrations.md) |
+| [`notify/`](../crates/eggsec/src/notify/) | Webhook, Slack, Discord, Teams notifications | [notify.md](notify.md) |
 
 ### User Interfaces
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`cli/`](../crates/slapper/src/cli/) | Command-line argument parsing (clap-based), 37+ commands | [cli_commands.md](cli_commands.md) |
-| [`tui/`](../crates/slapper-tui/src/) | Real-time terminal UI (ratatui-based), 28+ tabs, event loop | [tui.md](tui.md) |
+| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 37+ commands | [cli_commands.md](cli_commands.md) |
+| [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 28+ tabs, event loop | [tui.md](tui.md) |
 
 ### Supporting Modules
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`slapper-core`](../crates/slapper-core/) | Dependency-light shared types (Severity, SensitiveString), constants | [types.md](types.md) |
-| [`slapper-tool-core`](../crates/slapper-tool-core/) | Protocol-neutral tool request/response/error/history DTOs | [ai_agents.md](ai_agents.md) |
-| [`slapper-output`](../crates/slapper-output/src/) | Portable report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) | [output.md](output.md) |
-| [`types.rs`](../crates/slapper/src/types.rs) | Main-crate compatibility facade plus CLI-facing types such as `OutputFormat` | [types.md](types.md) |
-| [`constants.rs`](../crates/slapper/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
-| [`error/`](../crates/slapper/src/error/) | Canonical error type with domain-specific variants | [error.md](error.md) |
-| [`findings/`](../crates/slapper/src/findings/) | Finding store, lifecycle management, fingerprinting | [findings.md](findings.md) |
-| [`diff/`](../crates/slapper/src/diff/) | Scan result diffing, baseline comparison | [diff.md](diff.md) |
-| [`logging/`](../crates/slapper/src/logging/) | Structured logging with tracing | [logging.md](logging.md) |
-| [`utils/`](../crates/slapper/src/utils/) | 23 submodules (HTTP client, rate limiting, circuit breaker, formatting) | [utils.md](utils.md) |
-| [`auth_context/`](../crates/slapper/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
-| [`generated/`](../crates/slapper/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
-| [`wireless/`](../crates/slapper/src/wireless/) | WiFi scanning, authentication testing | [wireless.md](wireless.md) |
+| [`eggsec-core`](../crates/eggsec-core/) | Dependency-light shared types (Severity, SensitiveString), constants | [types.md](types.md) |
+| [`eggsec-tool-core`](../crates/eggsec-tool-core/) | Protocol-neutral tool request/response/error/history DTOs | [ai_agents.md](ai_agents.md) |
+| [`eggsec-output`](../crates/eggsec-output/src/) | Portable report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) | [output.md](output.md) |
+| [`types.rs`](../crates/eggsec/src/types.rs) | Main-crate compatibility facade plus CLI-facing types such as `OutputFormat` | [types.md](types.md) |
+| [`constants.rs`](../crates/eggsec/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
+| [`error/`](../crates/eggsec/src/error/) | Canonical error type with domain-specific variants | [error.md](error.md) |
+| [`findings/`](../crates/eggsec/src/findings/) | Finding store, lifecycle management, fingerprinting | [findings.md](findings.md) |
+| [`diff/`](../crates/eggsec/src/diff/) | Scan result diffing, baseline comparison | [diff.md](diff.md) |
+| [`logging/`](../crates/eggsec/src/logging/) | Structured logging with tracing | [logging.md](logging.md) |
+| [`utils/`](../crates/eggsec/src/utils/) | 23 submodules (HTTP client, rate limiting, circuit breaker, formatting) | [utils.md](utils.md) |
+| [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
+| [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
+| [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning, authentication testing | [wireless.md](wireless.md) |
 
 ---
 
@@ -176,22 +176,22 @@ Use this index to navigate to detailed architecture documentation for each compo
 The command-line interface is built with `clap` and provides 37+ commands organized into functional groups:
 
 ```
-slapper scan      # Port scanning, service fingerprinting
-slapper fuzz      # Vulnerability fuzzing
-slapper waf       # WAF detection and bypass
-slapper recon     # Reconnaissance operations
-slapper load      # Load testing
-slapper agent     # Autonomous agent control
-slapper pipeline  # Pipeline profile execution
+eggsec scan      # Port scanning, service fingerprinting
+eggsec fuzz      # Vulnerability fuzzing
+eggsec waf       # WAF detection and bypass
+eggsec recon     # Reconnaissance operations
+eggsec load      # Load testing
+eggsec agent     # Autonomous agent control
+eggsec pipeline  # Pipeline profile execution
 ```
 
-- **Entry point**: `crates/slapper/src/cli/mod.rs`
-- **Handlers**: `crates/slapper/src/commands/handlers/`
+- **Entry point**: `crates/eggsec/src/cli/mod.rs`
+- **Handlers**: `crates/eggsec/src/commands/handlers/`
 - **Documentation**: [cli_commands.md](cli_commands.md)
 
 ### TUI (`tui/`)
 
-The terminal user interface uses `ratatui` with 28+ tabs organized by function. The TUI is now a separate crate (`slapper-tui`), extracted from the main `slapper` crate.
+The terminal user interface uses `ratatui` with 28+ tabs organized by function. The TUI is now a separate crate (`eggsec-tui`), extracted from the main `eggsec` crate.
 
 | Tab Group | Tabs |
 |-----------|------|
@@ -367,7 +367,7 @@ LLM integration for intelligent security testing:
 
 - **Documentation**: [ai_agents.md](ai_agents.md)
 
-### NSE (`slapper-nse/`)
+### NSE (`eggsec-nse/`)
 
 Nmap Scripting Engine compatibility:
 
@@ -384,7 +384,7 @@ Nmap Scripting Engine compatibility:
 
 ## Feature Flags
 
-Slapper uses Cargo feature flags to conditionally compile optional capabilities:
+Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 
 | Flag | Modules | Description |
 |------|---------|-------------|
@@ -393,7 +393,7 @@ Slapper uses Cargo feature flags to conditionally compile optional capabilities:
 | `rest-api` | `tool/protocol/rest` | HTTP REST API server |
 | `grpc-api` | `tool/protocol/grpc` | gRPC API server |
 | `ws-api` | `tool/protocol/ws` | WebSocket pub/sub |
-| `nse` | `slapper-nse` | Nmap NSE script support |
+| `nse` | `eggsec-nse` | Nmap NSE script support |
 | `nse-ssh2` | NSE SSH2 libs | Full SSH2/libssh2 support |
 | `nse-sandbox` | NSE sandbox | Restrict dangerous Lua operations |
 | `ai-integration` | `ai/` | AI planner, script generation |
@@ -472,12 +472,12 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| `SlapperConfig` | `config/settings.rs` | Main configuration struct |
-| `Severity` | `slapper-core::types` (re-exported by `types.rs`) | Canonical severity rating (Critical→Info) |
-| `SensitiveString` | `slapper-core::types` (re-exported by `types.rs`) | Zeroized credential wrapper |
+| `EggsecConfig` | `config/settings.rs` | Main configuration struct |
+| `Severity` | `eggsec-core::types` (re-exported by `types.rs`) | Canonical severity rating (Critical→Info) |
+| `SensitiveString` | `eggsec-core::types` (re-exported by `types.rs`) | Zeroized credential wrapper |
 | `OutputFormat` | `types.rs` | Report format enum (8 variants) |
 | `PayloadType` | `fuzzer/payloads/mod.rs` | 30 payload categories |
-| `SlapperError` | `error/mod.rs` | Canonical error type |
+| `EggsecError` | `error/mod.rs` | Canonical error type |
 | `TargetScope` | `config/scope.rs` | Target scope enforcement |
 | `Finding` | `findings/mod.rs` | Canonical finding structure |
 | `ProbeIntent` | `probe.rs` | Probe classification intent |
@@ -517,18 +517,18 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 
 ```
                 ┌──────────────┐
-                │ slapper-core │
+                │ eggsec-core │
                 └──────┬───────┘
                        │
                 ┌──────┴───────┐
-                │   slapper    │
+                │   eggsec    │
                 └──────┬───────┘
                        │
          ┌─────────────┼─────────────────┐
          │             │                 │
          ▼             ▼                 ▼
     ┌─────────┐  ┌──────────┐    ┌─────────────┐
-    │  config │  │  scanner │    │  slapper-nse│
+    │  config │  │  scanner │    │  eggsec-nse│
     └────┬────┘  └────┬─────┘    └─────────────┘
          │            │
          └────────────┼─────────────────┘
@@ -562,7 +562,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | `agent` | `tool`, `config`, `output`, `ai` (optional) |
 | `distributed` | `tool`, `config` |
 | `output` | `types`, `findings` |
-| `tui` | `config`, `commands`, `output` (in `slapper-tui`) |
+| `tui` | `config`, `commands`, `output` (in `eggsec-tui`) |
 | `ai` | `config`, `error`, `types` |
 | `nse` | `scanner`, `recon` (via Lua bindings) |
 
@@ -572,7 +572,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 
 ### Error Handling
 
-- **Library code**: Uses `SlapperError` via `Result<T>`
+- **Library code**: Uses `EggsecError` via `Result<T>`
 - **Command handlers**: Use `anyhow::Result` for convenience
 - **Bridging**: `.map_err()` converts between types at boundaries
 - See [error.md](error.md) for error variant catalog
@@ -580,7 +580,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 ### Configuration
 
 - **File format**: TOML (primary), YAML (secondary)
-- **Location**: `~/.config/slapper/slapper.toml`
+- **Location**: `~/.config/eggsec/eggsec.toml`
 - **Scope enforcement**: `TargetScope` validates targets before scanning
 - **TUI settings**: Partial save with field exposure control
 - See [config.md](config.md) for details
@@ -597,11 +597,11 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 
 | Test Suite | Command |
 |------------|---------|
-| Unit tests | `cargo test --lib -p slapper` |
-| TUI tests | `cargo test --lib -p slapper-tui` |
-| Integration tests | `cargo test --test scanner_tests -p slapper` |
-| Negative tests | `cargo test --test negative_tests -p slapper` |
-| Clippy | `cargo clippy --lib -p slapper` |
+| Unit tests | `cargo test --lib -p eggsec` |
+| TUI tests | `cargo test --lib -p eggsec-tui` |
+| Integration tests | `cargo test --test scanner_tests -p eggsec` |
+| Negative tests | `cargo test --test negative_tests -p eggsec` |
+| Clippy | `cargo clippy --lib -p eggsec` |
 
 - **Test count**: 1324 base, 1469+ with full features
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
@@ -610,7 +610,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 
 ## Defense-Lab Mode
 
-Slapper supports local, repeatable profiles against defensive systems for regression testing:
+Eggsec supports local, repeatable profiles against defensive systems for regression testing:
 
 | Profile | Purpose |
 |---------|---------|

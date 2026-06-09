@@ -1,16 +1,16 @@
 # NSE Integration
 
-Slapper includes optional Nmap Scripting Engine (NSE) compatibility through the `slapper-nse` crate. The goal is broad practical compatibility for useful script categories, not perfect Nmap runtime parity.
+Eggsec includes optional Nmap Scripting Engine (NSE) compatibility through the `eggsec-nse` crate. The goal is broad practical compatibility for useful script categories, not perfect Nmap runtime parity.
 
-## NSE (Nmap Scripting Engine) Compatibility (`slapper-nse`)
+## NSE (Nmap Scripting Engine) Compatibility (`eggsec-nse`)
 
-Slapper includes a Lua interpreter (via `mlua`) that can run a curated set of Nmap NSE scripts.
+Eggsec includes a Lua interpreter (via `mlua`) that can run a curated set of Nmap NSE scripts.
 
 ### Core Features
 
-- **Compatibility**: Broad practical compatibility for safe discovery, version, and default-style scripts within Slapper scope and budgets.
+- **Compatibility**: Broad practical compatibility for safe discovery, version, and default-style scripts within Eggsec scope and budgets.
 - **Sandbox**: Optionally restricts dangerous Lua operations (e.g., file system access, network connections) for safer execution of untrusted scripts.
-- **NSE Tool**: Provides a high-level API for running NSE scripts against targets discovered by Slapper.
+- **NSE Tool**: Provides a high-level API for running NSE scripts against targets discovered by Eggsec.
 - **Async Executor**: `async_executor.rs` manages asynchronous execution of NSE scripts with timeout and resource budget controls.
 
 ### Sandbox Configuration
@@ -18,7 +18,7 @@ Slapper includes a Lua interpreter (via `mlua`) that can run a curated set of Nm
 ```rust
 pub struct SandboxConfig {
     pub enabled: bool,                    // Controlled by `sandbox` feature
-    pub allowed_dir: Option<PathBuf>,     // Restrict file ops to directory (default: /tmp/slapper-nse)
+    pub allowed_dir: Option<PathBuf>,     // Restrict file ops to directory (default: /tmp/eggsec-nse)
     pub allowed_commands: Vec<String>,   // Whitelist for io.popen
     pub log_violations: bool,             // Log instead of block
     pub allowed_networks: Vec<IpNetwork>, // CIDR allowlist for sockets
@@ -38,11 +38,11 @@ pub struct SandboxConfig {
 
 - **Community Scripts**: Access to thousands of community-developed security checks.
 - **Lua Scripting**: Simple and familiar scripting language for custom security logic.
-- **Integrated Reporting**: NSE results are integrated into Slapper's finding management and reporting system.
+- **Integrated Reporting**: NSE results are integrated into Eggsec's finding management and reporting system.
 
 ### NSE Libraries
 
-169 NSE-style library modules implemented including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. All located in `crates/slapper-nse/src/libraries/`.
+169 NSE-style library modules implemented including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. All located in `crates/eggsec-nse/src/libraries/`.
 
 ### CVE Integration
 
@@ -65,7 +65,7 @@ The `vulns` library provides access to CVE databases:
 | `lfs.rs` path traversal check bypass | Removed weak `!path.contains("..")` check; rely on canonicalization only |
 | Multiple `HashMap`/`HashSet` in libraries | Changed to `FxHashMap`/`FxHashSet` for performance in 13+ library files |
 | Mutex poisoning could cause panic in httpspider, pcre | Changed `.unwrap()` to `.unwrap_or_else(\|e\| e.into_inner())` |
-| `rustc-hash` not in slapper-nse dependencies | Added `rustc-hash.workspace = true` to Cargo.toml |
+| `rustc-hash` not in eggsec-nse dependencies | Added `rustc-hash.workspace = true` to Cargo.toml |
 | `CveCache` missing closing bracket in type definition | Fixed typo in struct definition |
 | Async `.await` on parking_lot RwLock (sync) | Removed `.await` since parking_lot RwLock is synchronous |
 | Missing `std::io::{Read, Write}` imports in libraries | Added to brute, io, nmap, openssl, ldap, and other libraries |
@@ -80,10 +80,10 @@ NSE scripts are categorized into support tiers based on risk and resource requir
 
 | Tier | Category | Description |
 |------|----------|-------------|
-| **Tier 1** | Safe discovery/version/default | Scripts that operate within Slapper scope and budgets (e.g., `http-enum`, `ssl-cert`, `ssh-hostkey`). |
+| **Tier 1** | Safe discovery/version/default | Scripts that operate within Eggsec scope and budgets (e.g., `http-enum`, `ssl-cert`, `ssh-hostkey`). |
 | **Tier 2** | Service-specific | Scripts requiring additional protocol libraries or credentials (e.g., `mysql-info`, `smb-enum-shares`). |
 | **Tier 3** | Intrusive/brute-force/exploit-adjacent | Scripts requiring explicit opt-in (e.g., `http-brute`, `smb-vuln-*`). |
-| **Unsupported** | Restricted | Scripts requiring unrestricted filesystem/process access, uncontrolled network reachability, or behavior incompatible with Slapper guardrails. |
+| **Unsupported** | Restricted | Scripts requiring unrestricted filesystem/process access, uncontrolled network reachability, or behavior incompatible with Eggsec guardrails. |
 
 ## NSE as a Knowledge Source
 
@@ -91,9 +91,9 @@ NSE libraries and scripts encode mature protocol-testing concepts developed over
 
 - **Protocol patterns**: NSE scripts demonstrate correct packet construction, response parsing, and error handling for dozens of protocols.
 - **Detection logic**: Scripts encode fingerprint databases, version detection heuristics, and vulnerability signatures.
-- **Bypass techniques**: Scripts document evasion methods that Slapper can study and re-implement as Rust-native probes where repeatability, performance, and safety matter.
+- **Bypass techniques**: Scripts document evasion methods that Eggsec can study and re-implement as Rust-native probes where repeatability, performance, and safety matter.
 
-Selected NSE behaviors may be promoted into Rust-native probes over time, particularly for high-value categories where Slapper's execution model offers advantages in speed, determinism, or safety.
+Selected NSE behaviors may be promoted into Rust-native probes over time, particularly for high-value categories where Eggsec's execution model offers advantages in speed, determinism, or safety.
 
 ## Sandbox Defaults
 

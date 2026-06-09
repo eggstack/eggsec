@@ -1,6 +1,6 @@
 # Canonical Findings Schema
 
-Slapper uses a canonical finding schema for consistent security result reporting.
+Eggsec uses a canonical finding schema for consistent security result reporting.
 
 ## Finding Structure
 
@@ -39,4 +39,4 @@ Evidence containing secrets is automatically redacted:
 - Private keys → `[REDACTED PRIVATE KEY]`
 - Connection strings → `[REDACTED CONNECTION STRING]`
 
-See `crates/slapper/src/findings/mod.rs` for the complete schema.
+See `crates/eggsec/src/findings/mod.rs` for the complete schema.

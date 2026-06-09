@@ -47,7 +47,7 @@ pub struct LoadTestRunner {
 | `new_with_tui_mode(...)` | Constructor with explicit TUI mode flag |
 | `from_args(args)` | From CLI `LoadArgs` |
 | `from_args_with_tui_mode(args, tui_mode)` | CLI args with TUI mode |
-| `from_args_with_config(args, config)` | CLI args merged with `SlapperConfig` (used by pipeline) |
+| `from_args_with_config(args, config)` | CLI args merged with `EggsecConfig` (used by pipeline) |
 
 **Important**: Use `from_args_with_config()` for pipeline integration to ensure config file settings (proxy, TLS verification, rate limits) are properly merged.
 
@@ -67,7 +67,7 @@ The `mod.rs` file provides the `run_cli()` function which serves as the CLI entr
 #### `run_cli()` Function
 
 ```rust
-pub async fn run_cli(args: LoadArgs, config: &SlapperConfig) -> Result<()>
+pub async fn run_cli(args: LoadArgs, config: &EggsecConfig) -> Result<()>
 ```
 
 Parses CLI arguments, instantiates a runner, executes the load test, and outputs results. Used by the main CLI dispatcher.
@@ -105,17 +105,17 @@ pub struct LoadTestResults {
 Load testing is typically invoked via the `load` subcommand:
 
 ```bash
-slapper load https://target.com --requests 10000 --concurrency 100
+eggsec load https://target.com --requests 10000 --concurrency 100
 ```
 
 With authentication:
 ```bash
-slapper load https://target.com/api -n 5000 -c 50 -H "Authorization:Bearer token123"
+eggsec load https://target.com/api -n 5000 -c 50 -H "Authorization:Bearer token123"
 ```
 
 With body and custom headers:
 ```bash
-slapper load https://target.com/api -n 1000 -c 20 -m POST -d '{"query":"test"}' -H 'Content-Type:application/json'
+eggsec load https://target.com/api -n 1000 -c 20 -m POST -d '{"query":"test"}' -H 'Content-Type:application/json'
 ```
 
 ## Integration
@@ -140,4 +140,4 @@ When non-success responses (4xx/5xx) are received, the response body is consumed
 ## Override File
 
 For specialized guidance on the loadtest module, see:
-- `crates/slapper/src/loadtest/AGENTS.override.md` - Module-specific patterns and bug fixes
+- `crates/eggsec/src/loadtest/AGENTS.override.md` - Module-specific patterns and bug fixes

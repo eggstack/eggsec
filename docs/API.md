@@ -1,6 +1,6 @@
-# Slapper API Documentation
+# Eggsec API Documentation
 
-This document provides detailed API documentation for using Slapper as a Rust library.
+This document provides detailed API documentation for using Eggsec as a Rust library.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ This document provides detailed API documentation for using Slapper as a Rust li
 ### Loading Configuration
 
 ```rust
-use slapper::{load_config, load_scope, SlapperConfig, Scope};
+use eggsec::{load_config, load_scope, EggsecConfig, Scope};
 
 let config = load_config(Some("path/to/config.toml"))?;
 let scope = load_scope(Some("path/to/scope.toml"))?;
@@ -30,7 +30,7 @@ let scope = load_scope(Some("path/to/scope.toml"))?;
 ### Configuration Structure
 
 ```rust
-pub struct SlapperConfig {
+pub struct EggsecConfig {
     pub http: HttpConfig,
     pub scan: ScanConfig,
     pub output: OutputConfig,
@@ -53,7 +53,7 @@ pub struct HttpConfig {
 
 ### Geolocation Configuration
 
-Slapper supports multiple geolocation providers with automatic fallback:
+Eggsec supports multiple geolocation providers with automatic fallback:
 
 ```rust
 pub struct ApiConfig {
@@ -101,7 +101,7 @@ account_id = 12345
 license_key = "your-maxmind-license-key"
 edition_ids = ["GeoLite2-City", "GeoLite2-Country"]
 auto_update = true
-data_dir = "~/.slapper/geoip"
+data_dir = "~/.eggsec/geoip"
 use_geoipupdate_binary = false  # Set true to use external geoipupdate tool
 ```
 
@@ -134,7 +134,7 @@ pub struct Scope {
 ### Running Load Tests
 
 ```rust
-use slapper::loadtest::{self, LoadTestArgs, CommonHttpArgs};
+use eggsec::loadtest::{self, LoadTestArgs, CommonHttpArgs};
 
 let args = LoadTestArgs {
     url: "https://example.com".to_string(),
@@ -190,7 +190,7 @@ pub struct LatencyMetrics {
 ### Scanning Ports
 
 ```rust
-use slapper::scanner::ports::{self, PortScanArgs};
+use eggsec::scanner::ports::{self, PortScanArgs};
 
 let args = PortScanArgs {
     host: "example.com".to_string(),
@@ -226,7 +226,7 @@ pub struct PortInfo {
 ### Discovering Endpoints
 
 ```rust
-use slapper::scanner::endpoints::{self, EndpointScanArgs};
+use eggsec::scanner::endpoints::{self, EndpointScanArgs};
 
 let args = EndpointScanArgs {
     url: "https://example.com".to_string(),
@@ -246,7 +246,7 @@ let results = scanner::endpoints::run_cli(args, &config).await?;
 ### Fingerprinting Services
 
 ```rust
-use slapper::scanner::fingerprint::{self, FingerprintArgs};
+use eggsec::scanner::fingerprint::{self, FingerprintArgs};
 
 let args = FingerprintArgs {
     host: "example.com".to_string(),
@@ -281,7 +281,7 @@ pub struct ServiceInfo {
 ### Running Fuzz Tests
 
 ```rust
-use slapper::fuzzer::{self, FuzzArgs, FuzzMode};
+use eggsec::fuzzer::{self, FuzzArgs, FuzzMode};
 
 let args = FuzzArgs {
     url: "https://example.com/api".to_string(),
@@ -340,7 +340,7 @@ pub struct FuzzFinding {
 ### Detecting WAFs
 
 ```rust
-use slapper::waf::{self, WafArgs};
+use eggsec::waf::{self, WafArgs};
 
 let args = WafArgs {
     url: "https://example.com".to_string(),
@@ -398,7 +398,7 @@ pub enum BypassTechnique {
 ### Running Reconnaissance
 
 ```rust
-use slapper::recon::{self, ReconArgs};
+use eggsec::recon::{self, ReconArgs};
 
 let args = ReconArgs {
     target: "example.com".to_string(),
@@ -450,7 +450,7 @@ pub struct ReconResult {
 
 ### Scan Profiles
 
-Slapper provides 11 pre-configured scan profiles:
+Eggsec provides 11 pre-configured scan profiles:
 
 ```rust
 pub enum ScanProfile {
@@ -471,7 +471,7 @@ pub enum ScanProfile {
 ### Running a Scan Pipeline
 
 ```rust
-use slapper::pipeline::{self, ScanArgs, ScanProfile};
+use eggsec::pipeline::{self, ScanArgs, ScanProfile};
 
 let args = ScanArgs {
     target: "example.com".to_string(),
@@ -530,7 +530,7 @@ pub struct StageResult {
 ### Output Formats
 
 ```rust
-use slapper::pipeline::report::{generate_html, generate_csv};
+use eggsec::pipeline::report::{generate_html, generate_csv};
 use serde_json;
 
 // Generate HTML report
@@ -546,7 +546,7 @@ let json = serde_json::to_string_pretty(&report)?;
 ### SARIF Output (Internal)
 
 ```rust
-use slapper::output::sarif::SarifBuilder;
+use eggsec::output::sarif::SarifBuilder;
 
 let sarif = SarifBuilder::new()
     .with_report(&report)
@@ -556,9 +556,9 @@ let sarif = SarifBuilder::new()
 ### JUnit XML Output (Internal)
 
 ```rust
-use slapper::output::junit::JUnitBuilder;
+use eggsec::output::junit::JUnitBuilder;
 
-let junit = JUnitBuilder::new("slapper")
+let junit = JUnitBuilder::new("eggsec")
     .with_report(&report)
     .build();
 let xml = junit.to_xml()?;
@@ -566,21 +566,21 @@ let xml = junit.to_xml()?;
 
 ## Error Handling
 
-Slapper uses `anyhow` for application errors and `thiserror` for library errors:
+Eggsec uses `anyhow` for application errors and `thiserror` for library errors:
 
 ```rust
-use slapper::{SlapperError, Result};
+use eggsec::{EggsecError, Result};
 
-pub enum SlapperError {
+pub enum EggsecError {
     Config(String),
     Network(String),
     Scan(String),
     Output(String),
 }
 
-impl std::error::Error for SlapperError {}
+impl std::error::Error for EggsecError {}
 
-impl std::fmt::Display for SlapperError {
+impl std::fmt::Display for EggsecError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Config(msg) => write!(f, "Configuration error: {}", msg),
@@ -618,7 +618,7 @@ async fn run_scan() -> Result<()> {
 You can implement custom scanning logic using the existing modules:
 
 ```rust
-use slapper::fuzzer::engine::FuzzerEngine;
+use eggsec::fuzzer::engine::FuzzerEngine;
 
 let mut engine = FuzzerEngine::new(config.clone());
 engine.add_payloads_from_file("custom_payloads.toml")?;

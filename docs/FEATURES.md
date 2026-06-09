@@ -1,10 +1,10 @@
-# Slapper Build Features
+# Eggsec Build Features
 
-This document explains the available build configurations and feature flags for Slapper.
+This document explains the available build configurations and feature flags for Eggsec.
 
 ## Feature Flags Overview
 
-Slapper uses Cargo feature flags to enable optional capabilities. This allows users to build a minimal binary or include all features depending on their needs.
+Eggsec uses Cargo feature flags to enable optional capabilities. This allows users to build a minimal binary or include all features depending on their needs.
 
 | Feature | Description | Dependencies |
 |---------|-------------|--------------|
@@ -14,8 +14,8 @@ Slapper uses Cargo feature flags to enable optional capabilities. This allows us
 | `grpc-api` | gRPC API server for external tool integration | `tool-api`, tonic, prost |
 | `stress-testing` | DoS testing tools, proxy management, ICMP, IP spoofing | pnet, pnet_packet, socket2, nix, libc, surge-ping |
 | `packet-inspection` | Live packet capture, advanced packet tools | pnet, pnet_packet, libc |
-| `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, slapper-nse |
-| `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, slapper-nse/sandbox |
+| `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, eggsec-nse |
+| `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, eggsec-nse/sandbox |
 | `full` | All features combined | stress-testing, packet-inspection, rest-api, nse |
 
 ## Available Builds
@@ -96,7 +96,7 @@ full
 │   └── async-stream
 └── nse
     ├── tool-api
-    └── slapper-nse
+    └── eggsec-nse
         └── sandbox (optional)
 
 grpc-api (standalone)
@@ -141,9 +141,9 @@ cargo build --release --features nse
 Adds:
 - Run Lua NSE scripts
 - NSE script loading and execution
-- Integration with Slapper's scanning pipeline
+- Integration with Eggsec's scanning pipeline
 
-**Note:** `slapper-nse` uses `native-tls` (OpenSSL) for TLS support. This is intentional — Nmap NSE scripts expect OpenSSL-based TLS behavior. Do not migrate to `rustls`.
+**Note:** `eggsec-nse` uses `native-tls` (OpenSSL) for TLS support. This is intentional — Nmap NSE scripts expect OpenSSL-based TLS behavior. Do not migrate to `rustls`.
 
 ### NSE Sandbox Mode
 
@@ -173,13 +173,13 @@ Adds:
 To see which features are enabled in your current build:
 
 ```bash
-./slapper --version
+./eggsec --version
 ```
 
 To check available commands:
 
 ```bash
-slapper --help
+eggsec --help
 ```
 
 If a command is not available, rebuild with the required feature flag.

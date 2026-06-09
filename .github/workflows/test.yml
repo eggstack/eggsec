@@ -30,7 +30,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --lib -p slapper -- -D warnings
+      - run: cargo clippy --lib -p eggsec -- -D warnings
 
   check:
     name: Check (${{ matrix.name }})
@@ -42,25 +42,25 @@ jobs:
           - name: default
             args: ""
           - name: minimal-cli
-            args: "-p slapper"
+            args: "-p eggsec"
           - name: rest-api
-            args: "-p slapper --features rest-api"
+            args: "-p eggsec --features rest-api"
           - name: grpc-api
-            args: "-p slapper --features grpc-api"
+            args: "-p eggsec --features grpc-api"
           - name: packet-inspection
-            args: "-p slapper --features packet-inspection"
+            args: "-p eggsec --features packet-inspection"
           - name: stress-testing
-            args: "-p slapper --features stress-testing"
+            args: "-p eggsec --features stress-testing"
           - name: nse
-            args: "-p slapper --features nse"
+            args: "-p eggsec --features nse"
           - name: nse-sandbox
-            args: "-p slapper --features nse,nse-sandbox"
+            args: "-p eggsec --features nse,nse-sandbox"
           - name: api-schema
-            args: "-p slapper --features api-schema"
+            args: "-p eggsec --features api-schema"
           - name: sbom
-            args: "-p slapper --features sbom"
+            args: "-p eggsec --features sbom"
           - name: full
-            args: "-p slapper --features full"
+            args: "-p eggsec --features full"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -78,15 +78,15 @@ jobs:
       matrix:
         include:
           - name: lib-default
-            args: "--lib -p slapper"
+            args: "--lib -p eggsec"
           - name: lib-rest-api
-            args: "--lib -p slapper --features rest-api"
+            args: "--lib -p eggsec --features rest-api"
           - name: lib-api-schema
-            args: "--lib -p slapper --features api-schema"
+            args: "--lib -p eggsec --features api-schema"
           - name: lib-sbom
-            args: "--lib -p slapper --features sbom"
+            args: "--lib -p eggsec --features sbom"
           - name: feature-surface
-            args: "--test feature_surface -p slapper"
+            args: "--test feature_surface -p eggsec"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -115,7 +115,7 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Run coverage
-        run: cargo tarpaulin -p slapper --features rest-api,nse --out xml --output-dir coverage --skip-clean
+        run: cargo tarpaulin -p eggsec --features rest-api,nse --out xml --output-dir coverage --skip-clean
       
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -142,7 +142,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Build
-        run: cargo build -p slapper --release
+        run: cargo build -p eggsec --release
 
   security-audit:
     name: Security Audit

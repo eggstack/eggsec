@@ -44,8 +44,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path("crates/slapper-tui/src/theme/packaged.rs"),
-        help="Output Rust source file (default: crates/slapper-tui/src/theme/packaged.rs)",
+        default=Path("crates/eggsec-tui/src/theme/packaged.rs"),
+        help="Output Rust source file (default: crates/eggsec-tui/src/theme/packaged.rs)",
     )
     return parser.parse_args()
 

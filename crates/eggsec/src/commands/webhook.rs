@@ -1,0 +1,95 @@
+use crate::error::{Result, EggsecError};
+use crate::notify::{NotificationPayload, WebhookConfig, WebhookEvent, WebhookNotifier};
+use crate::types::SensitiveString;
+
+pub struct WebhookTestConfig {
+    pub slack: Option<String>,
+    pub discord: Option<String>,
+    pub teams: Option<String>,
+    pub webhook: Option<String>,
+    pub secret: Option<String>,
+}
+
+pub async fn send_webhook_notifications(
+    config: &WebhookTestConfig,
+    payload: &NotificationPayload,
+) -> Result<()> {
+    let notifier = WebhookNotifier::new(vec![])?;
+
+    let mut errors = Vec::new();
+
+    if let Some(ref slack_url) = config.slack {
+        println!("Sending test to Slack: {}", slack_url);
+        if let Err(e) = notifier.notify_slack(slack_url, payload, None).await {
+            println!("  ✗ Slack failed: {}", e);
+            errors.push("Slack");
+        } else {
+            println!("  ✓ Slack notification sent successfully!");
+        }
+    }
+
+    if let Some(ref discord_url) = config.discord {
+        println!("Sending test to Discord: {}", discord_url);
+        if let Err(e) = notifier.notify_discord(discord_url, payload, None).await {
+            println!("  ✗ Discord failed: {}", e);
+            errors.push("Discord");
+        } else {
+            println!("  ✓ Discord notification sent successfully!");
+        }
+    }
+
+    if let Some(ref teams_url) = config.teams {
+        println!("Sending test to Teams: {}", teams_url);
+        if let Err(e) = notifier.notify_teams(teams_url, payload, None).await {
+            println!("  ✗ Teams failed: {}", e);
+            errors.push("Teams");
+        } else {
+            println!("  ✓ Teams notification sent successfully!");
+        }
+    }
+
+    if let Some(ref webhook_url) = config.webhook {
+        println!("Sending test to custom webhook: {}", webhook_url);
+        let webhook_config = vec![WebhookConfig {
+            name: Some("test".to_string()),
+            url: webhook_url.clone(),
+            secret: config.secret.clone().map(SensitiveString::new),
+            headers: rustc_hash::FxHashMap::default(),
+            events: vec![WebhookEvent::ScanComplete],
+        }];
+        let notifier = WebhookNotifier::new(webhook_config)?;
+        match notifier.notify(payload).await.first() {
+            Some(Ok(_)) => println!("  ✓ Test notification sent successfully!"),
+            Some(Err(e)) => {
+                println!("  ✗ Failed: {}", e);
+                errors.push("Webhook");
+            }
+            None => println!("  No webhooks configured"),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(EggsecError::Config(format!(
+            "Failed to send notifications to: {}",
+            errors.join(", ")
+        )))
+    }
+}
+
+pub fn has_any_webhook(config: &WebhookTestConfig) -> bool {
+    config.slack.is_some()
+        || config.discord.is_some()
+        || config.teams.is_some()
+        || config.webhook.is_some()
+}
+
+pub fn print_webhook_usage() {
+    println!("No webhook URL provided.");
+    println!("Usage:");
+    println!("  eggsec notify test --slack <url>");
+    println!("  eggsec notify test --discord <url>");
+    println!("  eggsec notify test --teams <url>");
+    println!("  eggsec notify test --webhook <url> [--secret <secret>]");
+}

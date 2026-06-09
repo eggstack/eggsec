@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shared probe intent and risk vocabulary defined in `crates/slapper/src/probe.rs`. Used across scanner, NSE, WAF, loadtest, and defense-lab profiles.
+Shared probe intent and risk vocabulary defined in `crates/eggsec/src/probe.rs`. Used across scanner, NSE, WAF, loadtest, and defense-lab profiles.
 
 ## Key Types
 

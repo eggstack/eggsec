@@ -1,5 +1,5 @@
 # Codegg MCP Server - Local Development Profile
-# Usage: slapper mcp-serve --stdio --profile coding-agent
+# Usage: eggsec mcp-serve --stdio --profile coding-agent
 
 [mcp]
 profile = "coding-agent"

@@ -24,7 +24,7 @@ on:
           - recon
 
 env:
-  SLAPPER_VERSION: 'latest'
+  EGGSEC_VERSION: 'latest'
 
 jobs:
   security-scan:
@@ -38,22 +38,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Slapper
+      - name: Download Eggsec
         run: |
-          curl -sL "https://github.com/dbowm91/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
-          chmod +x slapper
+          curl -sL "https://github.com/dbowm91/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
+          chmod +x eggsec
 
       - name: Run Quick Scan
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'quick')
         run: |
-          ./slapper scan ${{ github.event.inputs.target || 'example.com' }} --profile quick \
+          ./eggsec scan ${{ github.event.inputs.target || 'example.com' }} --profile quick \
             --json scan-results.json \
             --sarif scan-results.sarif
 
       - name: Run Full Scan
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'full'
         run: |
-          ./slapper scan ${{ github.event.inputs.target }} --profile full \
+          ./eggsec scan ${{ github.event.inputs.target }} --profile full \
             --json scan-results.json \
             --sarif scan-results.sarif \
             --html report.html
@@ -61,28 +61,28 @@ jobs:
       - name: Run Fuzzing
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
         run: |
-          ./slapper fuzz ${{ github.event.inputs.target }} -t all \
+          ./eggsec fuzz ${{ github.event.inputs.target }} -t all \
             --json fuzz-results.json \
             --sarif fuzz-results.sarif
 
       - name: Run Reconnaissance
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'recon'
         run: |
-          ./slapper recon ${{ github.event.inputs.target }} \
+          ./eggsec recon ${{ github.event.inputs.target }} \
             --json recon-results.json
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scan-results.sarif
-          category: slapper-scan
+          category: eggsec-scan
 
       - name: Upload Fuzz SARIF
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: fuzz-results.sarif
-          category: slapper-fuzz
+          category: eggsec-fuzz
 
       - name: Upload Security Report
         uses: actions/upload-artifact@v4
@@ -114,10 +114,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Slapper
+      - name: Download Eggsec
         run: |
-          curl -sL "https://github.com/dbowm91/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
-          chmod +x slapper
+          curl -sL "https://github.com/dbowm91/eggsec/releases/download/${EGGSEC_VERSION}/eggsec-linux-amd64" -o eggsec
+          chmod +x eggsec
 
       - name: Load targets from file
         run: |
@@ -133,7 +133,7 @@ jobs:
         run: |
           while read target; do
             echo "Scanning: $target"
-            ./slapper scan "$target" --profile quick --json "scan-$target.json" || true
+            ./eggsec scan "$target" --profile quick --json "scan-$target.json" || true
           done < targets.txt
 
       - name: Aggregate results

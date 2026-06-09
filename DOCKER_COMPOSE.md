@@ -4,9 +4,9 @@
 
 | Profile | Services | Use Case |
 |---------|----------|----------|
-| `scanner` | slapper only | Run slapper against external targets |
-| `testing` | slapper + dvwa + juice-shop + webhook-receiver | Test against vulnerable containers |
-| `storage` | elasticsearch + kibana | Store/visualize results from external slapper |
+| `scanner` | eggsec only | Run eggsec against external targets |
+| `testing` | eggsec + dvwa + juice-shop + webhook-receiver | Test against vulnerable containers |
+| `storage` | elasticsearch + kibana | Store/visualize results from external eggsec |
 | `full` | everything | Complete testing environment |
 
 ---
@@ -18,8 +18,8 @@
 # Start vulnerable targets only
 docker-compose --profile testing up -d dvwa
 
-# Wait for DVWA to be ready, then run slapper
-docker-compose --profile testing run --rm slapper scan-endpoints http://dvwa.target.local
+# Wait for DVWA to be ready, then run eggsec
+docker-compose --profile testing run --rm eggsec scan-endpoints http://dvwa.target.local
 ```
 
 ### 2. Full Test Environment
@@ -28,11 +28,11 @@ docker-compose --profile testing run --rm slapper scan-endpoints http://dvwa.tar
 docker-compose --profile full up -d
 
 # Run scans against DVWA
-docker-compose --profile full run --rm slapper fuzz http://dvwa.target.local/login -t xss,sqli
-docker-compose --profile full run --rm slapper scan-endpoints http://dvwa.target.local
+docker-compose --profile full run --rm eggsec fuzz http://dvwa.target.local/login -t xss,sqli
+docker-compose --profile full run --rm eggsec scan-endpoints http://dvwa.target.local
 
 # Run scans against Juice Shop
-docker-compose --profile full run --rm slapper scan-endpoints http://juice-shop.target.local:3000
+docker-compose --profile full run --rm eggsec scan-endpoints http://juice-shop.target.local:3000
 
 # View results in Kibana (http://localhost:5601)
 ```
@@ -40,7 +40,7 @@ docker-compose --profile full run --rm slapper scan-endpoints http://juice-shop.
 ### 3. Scanner Mode (against external targets)
 ```bash
 # Note: Use host networking or configure proxy for external targets
-docker-compose --profile scanner run --rm slapper scan example.com
+docker-compose --profile scanner run --rm eggsec scan example.com
 ```
 
 ---
@@ -49,30 +49,30 @@ docker-compose --profile scanner run --rm slapper scan example.com
 
 ### Port Scanning
 ```bash
-docker-compose --profile testing run --rm slapper scan-ports dvwa.target.local -p 1-1000
+docker-compose --profile testing run --rm eggsec scan-ports dvwa.target.local -p 1-1000
 ```
 
 ### Endpoint Discovery
 ```bash
-docker-compose --profile testing run --rm slapper scan-endpoints http://dvwa.target.local
-docker-compose --profile testing run --rm slapper scan-endpoints http://juice-shop.target.local:3000
+docker-compose --profile testing run --rm eggsec scan-endpoints http://dvwa.target.local
+docker-compose --profile testing run --rm eggsec scan-endpoints http://juice-shop.target.local:3000
 ```
 
 ### Fuzzing
 ```bash
 # Basic XSS scan
-docker-compose --profile testing run --rm slapper fuzz http://dvwa.target.local/login -t xss
+docker-compose --profile testing run --rm eggsec fuzz http://dvwa.target.local/login -t xss
 
 # SQL Injection
-docker-compose --profile testing run --rm slapper fuzz http://dvwa.target.local/vulnerabilities/sqli/ -t sqli
+docker-compose --profile testing run --rm eggsec fuzz http://dvwa.target.local/vulnerabilities/sqli/ -t sqli
 
 # All payloads
-docker-compose --profile testing run --rm slapper fuzz http://dvwa.target.local/vulnerabilities/fi/ -t all
+docker-compose --profile testing run --rm eggsec fuzz http://dvwa.target.local/vulnerabilities/fi/ -t all
 ```
 
 ### Full Pipeline Scan
 ```bash
-docker-compose --profile testing run --rm slapper scan http://dvwa.target.local --profile deep
+docker-compose --profile testing run --rm eggsec scan http://dvwa.target.local --profile deep
 ```
 
 ### With Storage (Elasticsearch)
@@ -80,8 +80,8 @@ docker-compose --profile testing run --rm slapper scan http://dvwa.target.local 
 # Start storage services
 docker-compose --profile storage up -d
 
-# Index results (requires slapper config for elasticsearch)
-docker-compose --profile full run -e SLAPPER_OUTPUT_ELASTIC=http://elasticsearch:9200 slapper scan http://dvwa.target.local
+# Index results (requires eggsec config for elasticsearch)
+docker-compose --profile full run -e EGGSEC_OUTPUT_ELASTIC=http://elasticsearch:9200 eggsec scan http://dvwa.target.local
 ```
 
 ---
@@ -112,8 +112,8 @@ docker-compose --profile testing exec dvwa service mysql start && php /var/www/h
 
 ### Network issues
 ```bash
-# Verify network connectivity from slapper
-docker-compose --profile testing run --rm slapper sh -c "curl -v http://dvwa.target.local"
+# Verify network connectivity from eggsec
+docker-compose --profile testing run --rm eggsec sh -c "curl -v http://dvwa.target.local"
 ```
 
 ### View scan results
@@ -122,5 +122,5 @@ docker-compose --profile testing run --rm slapper sh -c "curl -v http://dvwa.tar
 ls -la scan-results/
 
 # Or view in container
-docker-compose --profile testing run --rm slapper ls /app/results
+docker-compose --profile testing run --rm eggsec ls /app/results
 ```

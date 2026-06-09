@@ -1,8 +1,8 @@
 # Agent Workflows
 
-Slapper is designed as a **controlled assessment backend** for automated and agent-driven security testing. It is not an autonomous scanner - it operates within explicit scope boundaries, produces structured output, and respects human approval gates.
+Eggsec is designed as a **controlled assessment backend** for automated and agent-driven security testing. It is not an autonomous scanner - it operates within explicit scope boundaries, produces structured output, and respects human approval gates.
 
-## Why Agents Use Slapper
+## Why Agents Use Eggsec
 
 | Property | Benefit |
 |----------|---------|
@@ -14,7 +14,7 @@ Slapper is designed as a **controlled assessment backend** for automated and age
 
 ## Tool / API / MCP Surfaces
 
-Agents interact with Slapper through three interfaces:
+Agents interact with Eggsec through three interfaces:
 
 | Surface | Use Case |
 |---------|----------|
@@ -26,16 +26,16 @@ All three surfaces enforce the same scope rules. There is no bypass path.
 
 ```bash
 # CLI invocation from an agent script
-slapper scan "$TARGET" \
+eggsec scan "$TARGET" \
   --profile full \
-  --scope /etc/slapper/scope.toml \
+  --scope /etc/eggsec/scope.toml \
   --output json \
   --output-dir /tmp/scan-results
 
 # REST API invocation
 curl -X POST http://localhost:8080/api/v1/scan \
   -H 'Content-Type: application/json' \
-  -d '{"target": "web.example.com", "scope": "/etc/slapper/scope.toml"}'
+  -d '{"target": "web.example.com", "scope": "/etc/eggsec/scope.toml"}'
 ```
 
 ## Scope-First Execution
@@ -44,22 +44,22 @@ Every agent workflow must define scope **before** execution:
 
 1. **Load scope file** - Agent reads and validates the scope configuration
 2. **Verify targets** - All intended targets must appear in `allowed_targets`
-3. **Execute within bounds** - Slapper rejects any target not matching scope rules
+3. **Execute within bounds** - Eggsec rejects any target not matching scope rules
 4. **Report scope violations** - Failed scope checks are logged and returned as errors
 
 This is not optional. Even if an agent attempts to scan `evil.com`, the scope check rejects it and returns a structured error.
 
 ## CI / Regression Usage
 
-Slapper integrates into CI pipelines for continuous security regression testing:
+Eggsec integrates into CI pipelines for continuous security regression testing:
 
 ```yaml
 # GitHub Actions example
 - name: Security scan
   run: |
-    slapper scan "$DEPLOYED_URL" \
+    eggsec scan "$DEPLOYED_URL" \
       --profile quick \
-      --scope .slapper/scope.toml \
+      --scope .eggsec/scope.toml \
       --output sarif \
       --output-dir security-results/
 
@@ -73,7 +73,7 @@ Slapper integrates into CI pipelines for continuous security regression testing:
 # Makefile integration
 .PHONY: security-scan
 security-scan:
-	slapper scan $(TARGET_URL) \
+	eggsec scan $(TARGET_URL) \
 		--profile full \
 		--scope scopes/$(ENV).toml \
 		--output json \
@@ -91,9 +91,9 @@ For ongoing monitoring of production-like environments:
 
 ```bash
 # Run agent with a portfolio of targets
-slapper agent run \
-  --portfolio ~/.config/slapper/portfolio.json \
-  --scope /etc/slapper/scope.toml \
+eggsec agent run \
+  --portfolio ~/.config/eggsec/portfolio.json \
+  --scope /etc/eggsec/scope.toml \
   --once
 ```
 
@@ -101,14 +101,14 @@ The agent respects scan budgets (max duration, max requests, max findings) and c
 
 ## Coding-Agent Defense-Lab Usage
 
-Slapper serves as a controlled backend for coding agents building security tooling:
+Eggsec serves as a controlled backend for coding agents building security tooling:
 
 ```python
-# Pseudocode: coding agent using Slapper
+# Pseudocode: coding agent using Eggsec
 target = deploy_test_container()
 scope = create_scope_file(allowed=[target.hostname])
 
-result = run_slapper(
+result = run_eggsec(
     command="scan",
     target=target.hostname,
     scope=scope.path,
@@ -137,18 +137,18 @@ Coding agents should:
 
 ```bash
 # JSON for programmatic use
-slapper scan example.com --output json -o results.json
+eggsec scan example.com --output json -o results.json
 
 # SARIF for code scanning dashboards
-slapper scan example.com --output sarif -o results.sarif
+eggsec scan example.com --output sarif -o results.sarif
 
 # JUnit for CI test results
-slapper scan example.com --output junit -o results.xml
+eggsec scan example.com --output junit -o results.xml
 ```
 
 ## Human Approval Boundaries
 
-Slapper enforces human-in-the-loop at critical decision points:
+Eggsec enforces human-in-the-loop at critical decision points:
 
 | Operation | Risk Tier | Approval Required |
 |-----------|-----------|-------------------|

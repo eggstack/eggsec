@@ -40,7 +40,7 @@ The `tokio-tungstenite` dependency is gated behind `#[cfg(feature = "websocket")
 
 ## Integration
 
-The `WebSocketFuzzer` integrates via the `AdvancedFuzzer` trait in `fuzzer/advanced.rs`. When invoked via `slapper fuzz <url> -t websocket`, it:
+The `WebSocketFuzzer` integrates via the `AdvancedFuzzer` trait in `fuzzer/advanced.rs`. When invoked via `eggsec fuzz <url> -t websocket`, it:
 
 1. Generates local test cases (always available)
 2. When `websocket` feature is enabled, runs live connection tests:

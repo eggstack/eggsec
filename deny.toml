@@ -1,4 +1,4 @@
-# Cargo deny configuration for Slapper
+# Cargo deny configuration for Eggsec
 # Run with: cargo deny check
 
 [advisories]

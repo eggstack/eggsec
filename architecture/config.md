@@ -4,9 +4,9 @@ The configuration system handles loading settings from files, environment variab
 
 ## Core Components (`src/config/`)
 
-### `SlapperConfig` (`settings.rs`)
+### `EggsecConfig` (`settings.rs`)
 
-The main configuration struct that holds all tool settings. It is typically loaded from `slapper.toml` or `slapper.yaml`.
+The main configuration struct that holds all tool settings. It is typically loaded from `eggsec.toml` or `eggsec.yaml`.
 
 **Sub-configs:**
 - `HttpConfig` - HTTP client settings (timeout, retries, proxy, TLS, `retry_delay_ms`)
@@ -45,7 +45,7 @@ The `Scope` struct is critical for security and compliance. It defines which tar
   - `AlertChannelsConfig.channels` (`settings.rs:21`)
   - `WebhookConfigEntry.headers` (`settings.rs:38`)
   - `HttpConfig.default_headers` (`http.rs:39`)
-  - `SlapperConfig.profiles` (`settings.rs:109`)
+  - `EggsecConfig.profiles` (`settings.rs:109`)
   - `WebhookConfig.headers` (`scan.rs:132`)
 
 ### `Loader` (`loader.rs`)
@@ -71,16 +71,16 @@ The editor is still a quick-settings surface, but saving it is no longer destruc
 
 ## Configuration Files
 
-Slapper looks for config in this order:
+Eggsec looks for config in this order:
 1. `--config` / `-c` command-line argument
-2. `./slapper.toml`
-3. `./.slapper/slapper.toml`
-4. `./config/slapper.toml`
-5. `~/.config/slapper/slapper.toml` (via `ProjectDirs`)
+2. `./eggsec.toml`
+3. `./.eggsec/eggsec.toml`
+4. `./config/eggsec.toml`
+5. `~/.config/eggsec/eggsec.toml` (via `ProjectDirs`)
 
 ## Validation
 
-`SlapperConfig::validate()` orchestrates all sub-validations. Config files with secrets should be `chmod 600` - `check_config_file_permissions()` warns about world/group-readable permissions but does not enforce.
+`EggsecConfig::validate()` orchestrates all sub-validations. Config files with secrets should be `chmod 600` - `check_config_file_permissions()` warns about world/group-readable permissions but does not enforce.
 
 ## Error Handling
 

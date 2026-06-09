@@ -1,6 +1,6 @@
-# Slapper Security Documentation
+# Eggsec Security Documentation
 
-This document provides security-related information for using Slapper, including TLS verification, secure configuration, and responsible disclosure guidelines.
+This document provides security-related information for using Eggsec, including TLS verification, secure configuration, and responsible disclosure guidelines.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This document provides security-related information for using Slapper, including
 
 ### Default Behavior
 
-By default, Slapper performs full TLS certificate verification for all HTTPS connections. This includes:
+By default, Eggsec performs full TLS certificate verification for all HTTPS connections. This includes:
 
 - Validating certificate chains of trust
 - Checking certificate expiration dates
@@ -25,7 +25,7 @@ By default, Slapper performs full TLS certificate verification for all HTTPS con
 
 ### Configuration
 
-TLS verification can be configured in `slapper.toml`:
+TLS verification can be configured in `eggsec.toml`:
 
 ```toml
 [http]
@@ -60,13 +60,13 @@ The `--insecure` flag (`-k` shorthand) disables TLS certificate verification for
 
 ```bash
 # Skip TLS verification for a single scan
-slapper scan-endpoints https://localhost:8443 --insecure
+eggsec scan-endpoints https://localhost:8443 --insecure
 
 # Skip TLS verification for fuzzing
-slapper fuzz https://dev-server.local/api -t sqli --insecure
+eggsec fuzz https://dev-server.local/api -t sqli --insecure
 
 # Skip TLS verification in the TUI
-slapper tui --insecure
+eggsec tui --insecure
 ```
 
 ### CLI Help
@@ -81,7 +81,7 @@ slapper tui --insecure
 
 When `--insecure` is enabled, attackers on your network can:
 
-1. **Intercept Traffic**: Read all data transmitted between Slapper and the target server, including:
+1. **Intercept Traffic**: Read all data transmitted between Eggsec and the target server, including:
    - Session tokens and authentication cookies
    - API keys and credentials
    - Sensitive personal or business data
@@ -164,7 +164,7 @@ If you must test on production systems:
 
 ### Denial of Service Considerations
 
-Some Slapper modules can generate significant load:
+Some Eggsec modules can generate significant load:
 
 | Module | Risk Level | Mitigation |
 |--------|-----------|------------|
@@ -175,7 +175,7 @@ Some Slapper modules can generate significant load:
 
 ### Information Disclosure
 
-Slapper is designed to discover information about target systems. Be aware that:
+Eggsec is designed to discover information about target systems. Be aware that:
 
 - Scan results may reveal sensitive system information
 - Endpoint discovery can expose hidden or internal paths
@@ -203,23 +203,23 @@ pattern = "internal.example.com"
 
 ### Scope Enforcement
 
-When `require_explicit_scope = true`, Slapper will refuse to scan targets not explicitly listed in the scope file.
+When `require_explicit_scope = true`, Eggsec will refuse to scan targets not explicitly listed in the scope file.
 
 ### Verifying Scope
 
 ```bash
 # Dry-run to verify scope application
-slapper scan example.com --scope scope.toml --dry-run
+eggsec scan example.com --scope scope.toml --dry-run
 
 # Test scope matching
-slapper scope test scope.toml target.example.com
+eggsec scope test scope.toml target.example.com
 ```
 
 ## Credential Handling
 
 ### SensitiveString
 
-Slapper uses `SensitiveString` for credential storage, which provides:
+Eggsec uses `SensitiveString` for credential storage, which provides:
 
 - Automatic zeroization on drop
 - Constant-time equality comparison
@@ -254,17 +254,17 @@ Ensure these files have appropriate access controls (`chmod 600`).
 ### Default Output
 
 By default, results are written to:
-- `slapper.log` (operational logs)
-- `slapper-results.json` (scan results)
+- `eggsec.log` (operational logs)
+- `eggsec-results.json` (scan results)
 
 ### Securing Output Files
 
 ```bash
 # Set restrictive permissions
-chmod 600 slapper-results.json
+chmod 600 eggsec-results.json
 
 # Encrypt sensitive reports
-gpg --encrypt slapper-results.json
+gpg --encrypt eggsec-results.json
 ```
 
 ### SARIF Output for CI/CD
@@ -295,7 +295,7 @@ Store and transmit securely.
 
 > **Note**: This is a placeholder for responsible disclosure guidelines. Modify and implement according to your organization's policies.
 
-If you discover vulnerabilities using Slapper:
+If you discover vulnerabilities using Eggsec:
 
 1. **Verify**: Confirm the vulnerability exists and document reproduction steps.
 
@@ -318,7 +318,7 @@ If you discover vulnerabilities using Slapper:
 Vulnerability Report
 ====================
 Target: [URL/IP]
-Tool Used: Slapper
+Tool Used: Eggsec
 Date: [Discovery Date]
 Severity: [Critical/High/Medium/Low]
 
@@ -384,7 +384,7 @@ For critical vulnerabilities affecting many systems:
 
 > **Note**: Replace with your organization's security contact information.
 
-For security concerns related to Slapper itself:
+For security concerns related to Eggsec itself:
 - Email: security@example.com
 -PGP Key: [Key fingerprint]
 -HackerOne: [If applicable]

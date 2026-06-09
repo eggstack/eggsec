@@ -40,5 +40,5 @@ We use `SensitiveString` (defined in `types.rs`) instead of `SecretString` from 
 
 ## References
 
-- `crates/slapper/src/types.rs` - `SensitiveString` implementation
+- `crates/eggsec/src/types.rs` - `SensitiveString` implementation
 - [zeroize crate documentation](https://docs.rs/zeroize)

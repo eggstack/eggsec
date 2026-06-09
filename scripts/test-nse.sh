@@ -6,7 +6,7 @@ export PKG_CONFIG_LIBDIR="${PKG_CONFIG_LIBDIR:-/usr/lib/pkgconfig:/usr/share/pkg
 export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:-}"
 
 if [ "$#" -eq 0 ]; then
-  cargo test --test nse_tests -p slapper --features nse
+  cargo test --test nse_tests -p eggsec --features nse
 else
   cargo "$@"
 fi

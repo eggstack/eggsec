@@ -7,7 +7,7 @@ Compare scan results over time to track changes.
 Compare two JSON result files:
 
 ```bash
-slapper report diff old.json new.json
+eggsec report diff old.json new.json
 ```
 
 ## Output

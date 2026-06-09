@@ -1,5 +1,5 @@
 # Minimal localhost scope for safe testing
-# Use with: slapper scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml
+# Use with: eggsec scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml
 
 require_explicit_scope = true
 

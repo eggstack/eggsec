@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Slapper has multiple optional features that increase binary size and compilation time. We needed a strategy to manage these features while maintaining usability and build flexibility.
+Eggsec has multiple optional features that increase binary size and compilation time. We needed a strategy to manage these features while maintaining usability and build flexibility.
 
 ## Decision
 
@@ -54,5 +54,5 @@ We use Cargo feature flags with the following design principles:
 
 ## References
 
-- `crates/slapper/Cargo.toml` - Feature definitions
+- `crates/eggsec/Cargo.toml` - Feature definitions
 - `AGENTS.md` - Feature flag documentation

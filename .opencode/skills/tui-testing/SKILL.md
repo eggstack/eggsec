@@ -2,35 +2,35 @@
 
 ## Description
 
-Guidance for testing terminal UI changes in the Slapper project.
+Guidance for testing terminal UI changes in the Eggsec project.
 
 ## Test Commands
 
 ```bash
 # Run all TUI tests
-cargo test --lib -p slapper tui::
+cargo test --lib -p eggsec tui::
 
 # Run specific tab tests
-cargo test --lib -p slapper tui::tabs::recon
-cargo test --lib -p slapper tui::tabs::fuzz
+cargo test --lib -p eggsec tui::tabs::recon
+cargo test --lib -p eggsec tui::tabs::fuzz
 
 # Run app tests
-cargo test --lib -p slapper tui::app::
+cargo test --lib -p eggsec tui::app::
 
 # Run render tests at various terminal sizes
-cargo test --lib -p slapper tui::app::navigation::render_tests
+cargo test --lib -p eggsec tui::app::navigation::render_tests
 
 # Run state struct tests
-cargo test --lib -p slapper tui::app::state
+cargo test --lib -p eggsec tui::app::state
 
 # Run ThemeManager tests
-cargo test --lib -p slapper tui::theme::manager
+cargo test --lib -p eggsec tui::theme::manager
 
 # Run TabStore tests
-cargo test --lib -p slapper tui::app::tab_store
+cargo test --lib -p eggsec tui::app::tab_store
 
 # Run UI rendering tests
-cargo test --lib -p slapper tui::ui::tests
+cargo test --lib -p eggsec tui::ui::tests
 ```
 
 ## Key Test Patterns
@@ -109,7 +109,7 @@ fn test_render_tab_has_content() {
 - Check that buffer has content, not exact text matches
 - Text content may vary based on theme and terminal size
 - Test that tabs render without panicking at various sizes (80x24, 120x24, 40x20, etc.)
-- Avoid checking for specific text like "Slapper", "NORMAL", etc. as content varies
+- Avoid checking for specific text like "Eggsec", "NORMAL", etc. as content varies
 
 ## Render Tests
 

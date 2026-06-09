@@ -2,9 +2,9 @@
 
 The Output module handles the formatting, deduplication, and export of security findings and scan data into various standardized formats.
 
-## Supported Formats (`crates/slapper-output/src/`)
+## Supported Formats (`crates/eggsec-output/src/`)
 
-Most output code now lives in the `slapper-output` crate (`crates/slapper-output/src/`). Modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `crates/slapper/src/output/`. Slapper supports a wide range of output formats to integrate with different tools and workflows:
+Most output code now lives in the `eggsec-output` crate (`crates/eggsec-output/src/`). Modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `crates/eggsec/src/output/`. Eggsec supports a wide range of output formats to integrate with different tools and workflows:
 
 | Format | File | Purpose |
 |--------|------|---------|
@@ -206,7 +206,7 @@ pub struct RunManifest {
     pub run_id: String,
     pub started_at: DateTime<Utc>,
     pub ended_at: DateTime<Utc>,
-    pub slapper_version: String,
+    pub eggsec_version: String,
     pub target_scope: String,
     pub profile: String,
     pub probe_intents: Vec<ProbeIntent>,
@@ -303,10 +303,10 @@ Both SARIF and JUnit modules are immune to XXE attacks:
 
 ## Integration
 
-The Output module is typically the final stage in any Slapper operation. It can also be used independently to convert or merge existing Slapper result files.
+The Output module is typically the final stage in any Eggsec operation. It can also be used independently to convert or merge existing Eggsec result files.
 
 ```rust
-use slapper::output::{convert_to_csv, load_scan_report};
+use eggsec::output::{convert_to_csv, load_scan_report};
 
 let report = load_scan_report("scan.json")?;
 let csv = convert_to_csv(&report);

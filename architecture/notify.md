@@ -30,7 +30,7 @@ Fully implemented. `NotifyManager` dispatches to webhooks, Slack, Discord, and T
 
 ## Wiring
 
-`NotifyManager` is created in `CommandContext::new()` from `SlapperConfig` and is available on all CLI scan handlers. Each handler calls `notify_scan_started`, `notify_scan_complete`, and `notify_error` at appropriate lifecycle points.
+`NotifyManager` is created in `CommandContext::new()` from `EggsecConfig` and is available on all CLI scan handlers. Each handler calls `notify_scan_started`, `notify_scan_complete`, and `notify_error` at appropriate lifecycle points.
 
 ## Retry Logic
 

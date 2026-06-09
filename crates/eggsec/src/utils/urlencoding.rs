@@ -1,0 +1,136 @@
+use crate::error::{Result, EggsecError};
+
+pub fn encode(s: &str) -> String {
+    let mut encoded = String::with_capacity(s.len() * 3);
+    for c in s.chars() {
+        match c {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
+                encoded.push(c);
+            }
+            '+' => {
+                encoded.push_str("%2B");
+            }
+            _ => {
+                for byte in c.to_string().as_bytes() {
+                    use std::fmt::Write;
+                    let _ = write!(&mut encoded, "%{:02X}", byte);
+                }
+            }
+        }
+    }
+    encoded
+}
+
+pub fn decode(s: &str) -> Result<String> {
+    let mut decoded = String::new();
+    let mut bytes_buf: Vec<u8> = Vec::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if hex.len() != 2 {
+                return Err(EggsecError::Parse(
+                    "Invalid URL encoding: incomplete hex sequence".to_string(),
+                ));
+            }
+            match u8::from_str_radix(&hex, 16) {
+                Ok(byte) => bytes_buf.push(byte),
+                Err(_) => {
+                    return Err(EggsecError::Parse(format!(
+                        "Invalid hex in URL encoding: {}",
+                        hex
+                    )))
+                }
+            }
+        } else {
+            if !bytes_buf.is_empty() {
+                match std::str::from_utf8(&bytes_buf) {
+                    Ok(valid) => decoded.push_str(valid),
+                    Err(_) => {
+                        return Err(EggsecError::Parse(
+                            "Invalid UTF-8 in URL encoding".to_string(),
+                        ))
+                    }
+                }
+                bytes_buf.clear();
+            }
+            if c == '+' {
+                decoded.push(' ');
+            } else {
+                decoded.push(c);
+            }
+        }
+    }
+
+    if !bytes_buf.is_empty() {
+        match std::str::from_utf8(&bytes_buf) {
+            Ok(valid) => decoded.push_str(valid),
+            Err(_) => {
+                return Err(EggsecError::Parse(
+                    "Invalid UTF-8 in URL encoding".to_string(),
+                ))
+            }
+        }
+    }
+
+    Ok(decoded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[test]
+    fn test_encode_simple() {
+        assert_eq!(encode("hello"), "hello");
+    }
+
+    #[test]
+    fn test_encode_space() {
+        assert_eq!(encode("hello world"), "hello%20world");
+    }
+
+    #[test]
+    fn test_encode_special() {
+        assert_eq!(encode("hello/world"), "hello%2Fworld");
+    }
+
+    #[test]
+    fn test_encode_unicode() {
+        let encoded = encode("hello\u{1F600}");
+        assert!(encoded.starts_with("hello%F0%9F%98%80"));
+    }
+
+    #[test]
+    fn test_decode_simple() {
+        assert_eq!(decode("hello").unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_decode_space() {
+        assert_eq!(decode("hello%20world").unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_decode_plus() {
+        assert_eq!(decode("hello+world").unwrap(), "hello world");
+    }
+
+    proptest! {
+        #[test]
+        fn test_encode_decode_roundtrip(s in "[ -~]{0,100}") {
+            let encoded = encode(&s);
+            let decoded = decode(&encoded).unwrap();
+            prop_assert_eq!(decoded, s);
+        }
+
+        #[test]
+        fn test_decode_plus_is_space(input in "[a-zA-Z0-9]{0,20}") {
+            let encoded = format!("{}+{}", input, input);
+            let decoded = decode(&encoded).unwrap();
+            prop_assert_eq!(decoded, format!("{} {}", input, input));
+        }
+    }
+}

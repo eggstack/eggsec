@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Canonical `Finding` schema with confidence levels, evidence kinds, and lifecycle management. Defines the target data model for unifying finding representations across all Slapper modules.
+Canonical `Finding` schema with confidence levels, evidence kinds, and lifecycle management. Defines the target data model for unifying finding representations across all Eggsec modules.
 
 ## Key Types
 

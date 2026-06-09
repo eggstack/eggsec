@@ -48,7 +48,7 @@ waf/
 
 ### Detection (`detector/`)
 
-Slapper can identify **34 different WAF products** by analyzing HTTP responses for specific headers, cookies, body patterns, and IP ranges.
+Eggsec can identify **34 different WAF products** by analyzing HTTP responses for specific headers, cookies, body patterns, and IP ranges.
 
 - **WAF Patterns (`data/patterns.rs`)**: A collection of signatures for well-known WAFs stored in a `FxHashMap<String, WafSignature>` (keys are lowercase names)
 - **Detector Logic**: Orchestrates probes to trigger WAF responses and matches them against known patterns.
@@ -63,7 +63,7 @@ Slapper can identify **34 different WAF products** by analyzing HTTP responses f
 
 `get_waf_profiles()` and `get_profile_by_name()` in `profiles.rs` use a static `LazyLock<Vec<WafProfile>>` to cache profiles and avoid recreation on every call.
 
-Once a WAF is identified, Slapper can apply specialized bypass techniques across five categories:
+Once a WAF is identified, Eggsec can apply specialized bypass techniques across five categories:
 
 - **Encodings**: Using different character encodings (e.g., URL, Double URL, Unicode, Hex) to evade simple pattern matching.
 - **Header Manipulation**: Injecting or modifying headers (e.g., `X-Forwarded-For`, `User-Agent`) that might influence WAF behavior.

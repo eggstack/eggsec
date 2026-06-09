@@ -8,7 +8,7 @@ There is no single "diff module." Finding comparison, response diffing, and diff
 
 ## 1. Output Baseline Comparison
 
-**File:** `crates/slapper/src/output/baseline.rs` (192 lines)
+**File:** `crates/eggsec/src/output/baseline.rs` (192 lines)
 
 Compares two `AgentFinding` slices by `id` field and classifies results into new, resolved, and unchanged categories. This is the actual finding-level comparison engine.
 
@@ -47,7 +47,7 @@ Matching uses `FxHashSet` of finding `id` fields:
 
 ## 2. Output Diff Summary
 
-**File:** `crates/slapper/src/output/diff.rs` (27 lines)
+**File:** `crates/eggsec/src/output/diff.rs` (27 lines)
 
 A minimal numeric summary struct for attaching diff results to pipeline run manifests.
 
@@ -79,7 +79,7 @@ Re-exported at `output/mod.rs:88`. Used in `RunManifest` (`output/run_manifest.r
 
 ## 3. Fuzzer Response Diff Engine
 
-**File:** `crates/slapper/src/fuzzer/diff.rs` (336 lines)
+**File:** `crates/eggsec/src/fuzzer/diff.rs` (336 lines)
 
 HTTP response diff engine for comparing responses during fuzzing sessions. Detects anomalies by scoring differences between a baseline and current response.
 
@@ -131,7 +131,7 @@ Used in `FuzzEngine` (`fuzzer/engine/core.rs:106`) as `differ: Option<ResponseDi
 
 ## 4. WAF Response Diff (Separate)
 
-**File:** `crates/slapper/src/waf/detector/types.rs:25-34`
+**File:** `crates/eggsec/src/waf/detector/types.rs:25-34`
 
 A completely separate `ResponseDiff` type for WAF detection, comparing normal vs. malicious request responses. Uses different logic (`is_waf_blocked()`) checking status codes, length diffs, and header keywords. Not related to the output or fuzzer diff modules.
 

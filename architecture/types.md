@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shared types for the Slapper workspace. `Severity` and `SensitiveString` are defined in `crates/slapper-core/src/types.rs` and re-exported by `crates/slapper/src/types.rs`. `OutputFormat` and `check_config_file_permissions` remain in the main crate.
+Shared types for the Eggsec workspace. `Severity` and `SensitiveString` are defined in `crates/eggsec-core/src/types.rs` and re-exported by `crates/eggsec/src/types.rs`. `OutputFormat` and `check_config_file_permissions` remain in the main crate.
 
 ## Key Types
 

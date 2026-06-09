@@ -14,9 +14,9 @@ We needed a TLS library for HTTPS connections that:
 
 ## Decision
 
-We use `rustls` (with `tokio-rustls`) for the main `slapper` crate, but retain `native-tls` (OpenSSL) for `slapper-nse`.
+We use `rustls` (with `tokio-rustls`) for the main `eggsec` crate, but retain `native-tls` (OpenSSL) for `eggsec-nse`.
 
-### Main Slapper Crate
+### Main Eggsec Crate
 
 Uses `rustls` 0.23 + `tokio-rustls` 0.26:
 
@@ -28,7 +28,7 @@ Uses `rustls` 0.23 + `tokio-rustls` 0.26:
 
 4. **Insecure Mode for Internal Use**: We use `NoVerifier` for internal TLS connections that bypass verification (with runtime warnings).
 
-### slapper-nse Exception
+### eggsec-nse Exception
 
 The NSE module uses `native-tls` because:
 
@@ -48,6 +48,6 @@ The NSE module uses `native-tls` because:
 
 ## References
 
-- `crates/slapper/src/distributed/io.rs` - TLS implementation
-- `crates/slapper/src/recon/ssl.rs` - SSL certificate extraction
-- `slapper-nse/src/lib.rs` - NSE module TLS
+- `crates/eggsec/src/distributed/io.rs` - TLS implementation
+- `crates/eggsec/src/recon/ssl.rs` - SSL certificate extraction
+- `eggsec-nse/src/lib.rs` - NSE module TLS

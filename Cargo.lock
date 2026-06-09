@@ -1542,6 +1542,249 @@ dependencies = [
 ]
 
 [[package]]
+name = "eggsec"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "anyhow",
+ "async-channel",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "clap_complete",
+ "criterion",
+ "crossbeam",
+ "cyclonedx-bom",
+ "dashmap",
+ "directories",
+ "ed25519-dalek",
+ "eggsec-agent",
+ "eggsec-core",
+ "eggsec-nse",
+ "eggsec-output",
+ "eggsec-tool-core",
+ "eventsource-stream",
+ "flate2",
+ "futures",
+ "hdrhistogram",
+ "headless_chrome",
+ "hex",
+ "hickory-resolver",
+ "hmac",
+ "hostname",
+ "indicatif",
+ "ipnetwork 0.20.0",
+ "k8s-openapi",
+ "kube",
+ "lettre",
+ "libc",
+ "lru 0.18.0",
+ "maxminddb",
+ "md-5",
+ "nix",
+ "notify",
+ "notify-debouncer-mini",
+ "parking_lot",
+ "pem",
+ "pnet",
+ "pnet_packet 0.35.0",
+ "printpdf",
+ "proptest",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "quick-xml",
+ "rand 0.8.5",
+ "rcgen",
+ "regex",
+ "reqwest",
+ "rustc-hash",
+ "rustls",
+ "rustls-pki-types",
+ "scraper",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_yaml_neo",
+ "sha2",
+ "shellexpand",
+ "smallvec",
+ "socket2 0.5.10",
+ "spdx 0.10.9",
+ "sqlx",
+ "ssh2",
+ "strum 0.26.3",
+ "subtle",
+ "surge-ping",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-tungstenite 0.26.2",
+ "tokio-util",
+ "toml",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tonic-reflection",
+ "tower 0.4.13",
+ "tower-http 0.6.8",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+ "urlencoding",
+ "uuid",
+ "walkdir",
+ "webpki-roots 0.26.11",
+ "wiremock",
+ "zeroize",
+]
+
+[[package]]
+name = "eggsec-agent"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "eggsec-core",
+ "reqwest",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "eggsec-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "eggsec",
+ "eggsec-tui",
+ "shellexpand",
+ "tokio",
+]
+
+[[package]]
+name = "eggsec-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "eggsec-nse"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "dashmap",
+ "des",
+ "flate2",
+ "hex",
+ "hickory-resolver",
+ "hostname",
+ "ipnetwork 0.20.0",
+ "md-5",
+ "mlua",
+ "mlua-luau-scheduler",
+ "native-tls",
+ "openssl",
+ "parking_lot",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "rustc-hash",
+ "scraper",
+ "serde",
+ "serde_json",
+ "sha1",
+ "ssh2",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "eggsec-output"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "eggsec-core",
+ "hostname",
+ "lru 0.18.0",
+ "quick-xml",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "tokio",
+ "unicode-normalization",
+ "uuid",
+]
+
+[[package]]
+name = "eggsec-tool-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "eggsec-core",
+ "parking_lot",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "toml",
+ "uuid",
+]
+
+[[package]]
+name = "eggsec-tui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "crossterm",
+ "directories",
+ "eggsec",
+ "eggsec-core",
+ "eggsec-nse",
+ "futures",
+ "lzma-rs",
+ "parking_lot",
+ "pnet",
+ "pnet_packet 0.35.0",
+ "ratatui",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "ego-tree"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5565,249 +5808,6 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
-
-[[package]]
-name = "slapper"
-version = "0.1.0"
-dependencies = [
- "aho-corasick",
- "anyhow",
- "async-channel",
- "async-stream",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "chrono-tz",
- "clap",
- "clap_complete",
- "criterion",
- "crossbeam",
- "cyclonedx-bom",
- "dashmap",
- "directories",
- "ed25519-dalek",
- "eventsource-stream",
- "flate2",
- "futures",
- "hdrhistogram",
- "headless_chrome",
- "hex",
- "hickory-resolver",
- "hmac",
- "hostname",
- "indicatif",
- "ipnetwork 0.20.0",
- "k8s-openapi",
- "kube",
- "lettre",
- "libc",
- "lru 0.18.0",
- "maxminddb",
- "md-5",
- "nix",
- "notify",
- "notify-debouncer-mini",
- "parking_lot",
- "pem",
- "pnet",
- "pnet_packet 0.35.0",
- "printpdf",
- "proptest",
- "prost",
- "prost-build",
- "prost-types",
- "quick-xml",
- "rand 0.8.5",
- "rcgen",
- "regex",
- "reqwest",
- "rustc-hash",
- "rustls",
- "rustls-pki-types",
- "scraper",
- "semver",
- "serde",
- "serde_json",
- "serde_yaml_neo",
- "sha2",
- "shellexpand",
- "slapper-agent",
- "slapper-core",
- "slapper-nse",
- "slapper-output",
- "slapper-tool-core",
- "smallvec",
- "socket2 0.5.10",
- "spdx 0.10.9",
- "sqlx",
- "ssh2",
- "strum 0.26.3",
- "subtle",
- "surge-ping",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tokio-tungstenite 0.26.2",
- "tokio-util",
- "toml",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
- "tonic-reflection",
- "tower 0.4.13",
- "tower-http 0.6.8",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
- "urlencoding",
- "uuid",
- "walkdir",
- "webpki-roots 0.26.11",
- "wiremock",
- "zeroize",
-]
-
-[[package]]
-name = "slapper-agent"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "reqwest",
- "rustc-hash",
- "serde",
- "serde_json",
- "slapper-core",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "slapper-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "shellexpand",
- "slapper",
- "slapper-tui",
- "tokio",
-]
-
-[[package]]
-name = "slapper-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "slapper-nse"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "dashmap",
- "des",
- "flate2",
- "hex",
- "hickory-resolver",
- "hostname",
- "ipnetwork 0.20.0",
- "md-5",
- "mlua",
- "mlua-luau-scheduler",
- "native-tls",
- "openssl",
- "parking_lot",
- "rand 0.8.5",
- "regex",
- "reqwest",
- "rustc-hash",
- "scraper",
- "serde",
- "serde_json",
- "sha1",
- "ssh2",
- "tokio",
- "tracing",
- "url",
- "urlencoding",
-]
-
-[[package]]
-name = "slapper-output"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "hostname",
- "lru 0.18.0",
- "quick-xml",
- "rustc-hash",
- "serde",
- "serde_json",
- "slapper-core",
- "tokio",
- "unicode-normalization",
- "uuid",
-]
-
-[[package]]
-name = "slapper-tool-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "parking_lot",
- "rustc-hash",
- "serde",
- "serde_json",
- "slapper-core",
- "toml",
- "uuid",
-]
-
-[[package]]
-name = "slapper-tui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arboard",
- "base64 0.22.1",
- "chrono",
- "chrono-tz",
- "crossterm",
- "directories",
- "futures",
- "lzma-rs",
- "parking_lot",
- "pnet",
- "pnet_packet 0.35.0",
- "ratatui",
- "rustc-hash",
- "serde",
- "serde_json",
- "slapper",
- "slapper-core",
- "slapper-nse",
- "thiserror 2.0.18",
- "tokio",
- "toml",
- "tracing",
- "url",
- "uuid",
-]
 
 [[package]]
 name = "smallvec"

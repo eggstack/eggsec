@@ -1,10 +1,10 @@
-# Slapper TUI Simplification Plan Before Halloy-Style Theming
+# Eggsec TUI Simplification Plan Before Halloy-Style Theming
 
 ## Purpose
 
-This plan prepares `slapper-tui` for a later Halloy-style theming pass by simplifying the current TUI architecture first. Do not implement Halloy theme loading, external theme import, or large theme format changes in this pass. The objective is to make the existing TUI easier to maintain, easier to test, and easier to theme later without changing user-facing behavior.
+This plan prepares `eggsec-tui` for a later Halloy-style theming pass by simplifying the current TUI architecture first. Do not implement Halloy theme loading, external theme import, or large theme format changes in this pass. The objective is to make the existing TUI easier to maintain, easier to test, and easier to theme later without changing user-facing behavior.
 
-The current crate boundary is mostly correct: `slapper-tui` is already a dedicated workspace crate and Ratatui/Crossterm dependencies are isolated there. The remaining problem is internal architecture. `App` currently owns too many unrelated concerns, rendering code reads theme state implicitly through thread-local macros, and task/session/search/help/tab state is centralized in one large struct. This pass should reduce those maintenance risks while keeping behavior stable.
+The current crate boundary is mostly correct: `eggsec-tui` is already a dedicated workspace crate and Ratatui/Crossterm dependencies are isolated there. The remaining problem is internal architecture. `App` currently owns too many unrelated concerns, rendering code reads theme state implicitly through thread-local macros, and task/session/search/help/tab state is centralized in one large struct. This pass should reduce those maintenance risks while keeping behavior stable.
 
 ## Non-goals
 
@@ -16,27 +16,27 @@ Do not rewrite every tab.
 
 Do not change the CLI invocation model.
 
-Do not move engine functionality out of `slapper` in this pass.
+Do not move engine functionality out of `eggsec` in this pass.
 
 Do not attempt a full frontend/backend IPC boundary. The TUI may continue to call engine APIs through the existing worker/task layer for now.
 
 ## Current codebase observations
 
-The workspace already contains separate crates for `slapper-core`, `slapper`, `slapper-tui`, and `slapper-cli`. This is the correct top-level direction.
+The workspace already contains separate crates for `eggsec-core`, `eggsec`, `eggsec-tui`, and `eggsec-cli`. This is the correct top-level direction.
 
-`slapper-core` is dependency-light and should remain free of Ratatui/Crossterm or presentation concerns.
+`eggsec-core` is dependency-light and should remain free of Ratatui/Crossterm or presentation concerns.
 
-`slapper-tui` currently depends on both `slapper-core` and `slapper`, which is acceptable for the current binary model, but it means the TUI is an adapter over the engine crate rather than a fully isolated frontend.
+`eggsec-tui` currently depends on both `eggsec-core` and `eggsec`, which is acceptable for the current binary model, but it means the TUI is an adapter over the engine crate rather than a fully isolated frontend.
 
-`slapper-cli` depends on both `slapper` and `slapper-tui`; it launches the TUI when no command is passed and stdout is a terminal. Leave this behavior unchanged.
+`eggsec-cli` depends on both `eggsec` and `eggsec-tui`; it launches the TUI when no command is passed and stdout is a terminal. Leave this behavior unchanged.
 
-`crates/slapper-tui/src/lib.rs` already has a useful module outline: `app`, `components`, `help`, `search`, `session`, `state`, `tabs`, `theme`, `ui`, `utils`, and `workers`.
+`crates/eggsec-tui/src/lib.rs` already has a useful module outline: `app`, `components`, `help`, `search`, `session`, `state`, `tabs`, `theme`, `ui`, `utils`, and `workers`.
 
-`crates/slapper-tui/src/app/mod.rs` is the primary complexity hotspot. `App` owns current tab state, mode state, session persistence, theme management, all tab instances, global HTTP options, search state, task handles, result/progress receivers, help state, command palette state, bookmarks, pause state, notifications, quick switch state, and multiple feature-gated tabs.
+`crates/eggsec-tui/src/app/mod.rs` is the primary complexity hotspot. `App` owns current tab state, mode state, session persistence, theme management, all tab instances, global HTTP options, search state, task handles, result/progress receivers, help state, command palette state, bookmarks, pause state, notifications, quick switch state, and multiple feature-gated tabs.
 
-`crates/slapper-tui/src/theme.rs` currently defines hardcoded dark/light themes and a `ThemeManager`, plus thread-local theme state and macros. This is workable but not ideal for a later config-backed theming layer.
+`crates/eggsec-tui/src/theme.rs` currently defines hardcoded dark/light themes and a `ThemeManager`, plus thread-local theme state and macros. This is workable but not ideal for a later config-backed theming layer.
 
-`crates/slapper-tui/src/ui.rs` renders the main shell and several popups directly, and uses implicit `tc!(...)` theme lookups throughout.
+`crates/eggsec-tui/src/ui.rs` renders the main shell and several popups directly, and uses implicit `tc!(...)` theme lookups throughout.
 
 ## Desired end state after this pass
 
@@ -55,24 +55,24 @@ Before editing, run the relevant checks and note any existing failures:
 
 ```bash
 cargo fmt --all -- --check
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
 ```
 
 If feature combinations are commonly used in this repo, also run:
 
 ```bash
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
+cargo check -p eggsec-cli --features full
 ```
 
 If `full` is too heavy or currently fails for unrelated optional dependencies, document that and continue with the narrower checks. Do not hide pre-existing failures.
 
 ## Phase 2: Split TUI state into focused structs
 
-Create or expand a state module under `crates/slapper-tui/src/app/state.rs` or `crates/slapper-tui/src/state/` depending on the existing module layout. Prefer the least disruptive location.
+Create or expand a state module under `crates/eggsec-tui/src/app/state.rs` or `crates/eggsec-tui/src/state/` depending on the existing module layout. Prefer the least disruptive location.
 
 Introduce focused structs with narrow responsibilities. Suggested initial grouping:
 
@@ -117,7 +117,7 @@ Acceptance criteria for this phase:
 - `App` no longer directly owns all search, quick-switch, overlay, and task fields as flat top-level fields.
 - The constructor still restores session state and initializes defaults correctly.
 - Behavior of help, search, command palette, task execution, and quick switch is unchanged.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 3: Extract tab ownership and tab access into a registry-like layer
 
@@ -164,16 +164,16 @@ Acceptance criteria for this phase:
 - All tab instances are initialized through `TabStore::new()` or `Default`.
 - Feature-gated tab fields remain behind the same feature gates.
 - Existing tab navigation and task dispatch still work.
-- `cargo check -p slapper-tui` passes with default features and at least `--features nse`.
+- `cargo check -p eggsec-tui` passes with default features and at least `--features nse`.
 
 ## Phase 4: Split `theme.rs` into a small module tree without changing behavior
 
 This phase prepares for future Halloy-style theming, but does not implement it.
 
-Replace the single `crates/slapper-tui/src/theme.rs` file with a module directory:
+Replace the single `crates/eggsec-tui/src/theme.rs` file with a module directory:
 
 ```text
-crates/slapper-tui/src/theme/
+crates/eggsec-tui/src/theme/
   mod.rs
   palette.rs
   builtin.rs
@@ -200,7 +200,7 @@ Acceptance criteria for this phase:
 - Existing calls to `ThemeManager::new()`, `current()`, `set_theme()`, `toggle()`, and `list_themes()` continue to work.
 - Existing dark/light colors remain unchanged unless a compile error forces a mechanical relocation.
 - `tc!` and `theme!` macros may remain, but they should be clearly marked as legacy/compatibility in comments.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 5: Begin moving rendering toward explicit theme access
 
@@ -227,7 +227,7 @@ Acceptance criteria for this phase:
 - The main shell rendering path demonstrates explicit theme dependency.
 - Legacy `tc!` remains available for unmigrated components.
 - No visual behavior should intentionally change.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 6: Separate layout shell helpers from popup rendering
 
@@ -236,7 +236,7 @@ Acceptance criteria for this phase:
 Suggested structure:
 
 ```text
-crates/slapper-tui/src/ui/
+crates/eggsec-tui/src/ui/
   mod.rs
   shell.rs
   popups.rs
@@ -259,21 +259,21 @@ Acceptance criteria for this phase:
 - `ui.rs` is no longer a large mixed rendering file, or it becomes a thin module root.
 - Top-level rendering remains easy to find.
 - Popups are grouped separately from the main shell.
-- `cargo check -p slapper-tui` passes.
+- `cargo check -p eggsec-tui` passes.
 
 ## Phase 7: Reduce direct feature-surface noise where low-risk
 
 The TUI crate currently forwards many engine features. Do not redesign the feature model now. Instead, clean obvious duplication and document intent.
 
-Add comments in `crates/slapper-tui/Cargo.toml` explaining that TUI feature flags mirror engine capabilities only where the TUI exposes corresponding tabs or controls.
+Add comments in `crates/eggsec-tui/Cargo.toml` explaining that TUI feature flags mirror engine capabilities only where the TUI exposes corresponding tabs or controls.
 
-If a feature is forwarded but has no TUI code behind it, consider removing that forwarded TUI feature only if `cargo check` confirms it is unused and `slapper-cli` does not require it for user-facing behavior. Be conservative.
+If a feature is forwarded but has no TUI code behind it, consider removing that forwarded TUI feature only if `cargo check` confirms it is unused and `eggsec-cli` does not require it for user-facing behavior. Be conservative.
 
 Acceptance criteria for this phase:
 
 - Feature forwarding remains stable for existing users.
 - Any removed feature forwarding has a clear justification.
-- `cargo check -p slapper-cli --features <affected-feature>` passes for affected features.
+- `cargo check -p eggsec-cli --features <affected-feature>` passes for affected features.
 
 ## Phase 8: Add targeted tests for the refactor seams
 
@@ -293,7 +293,7 @@ Avoid snapshot tests for full terminal rendering in this pass unless the project
 
 Acceptance criteria:
 
-- `cargo test -p slapper-tui` passes.
+- `cargo test -p eggsec-tui` passes.
 - Tests cover the new state structs and theme module split enough to catch mechanical regressions.
 
 ## Phase 9: Final validation
@@ -302,22 +302,22 @@ Run:
 
 ```bash
 cargo fmt --all
-cargo check -p slapper-tui
-cargo check -p slapper-cli
-cargo test -p slapper-tui
+cargo check -p eggsec-tui
+cargo check -p eggsec-cli
+cargo test -p eggsec-tui
 ```
 
 Also run at least:
 
 ```bash
-cargo check -p slapper-tui --features nse
-cargo check -p slapper-cli --features nse
+cargo check -p eggsec-tui --features nse
+cargo check -p eggsec-cli --features nse
 ```
 
 If practical, run:
 
 ```bash
-cargo check -p slapper-cli --features full
+cargo check -p eggsec-cli --features full
 ```
 
 Document any failures that are unrelated to this refactor.
@@ -334,7 +334,7 @@ When moving files, preserve public re-exports from module roots to reduce churn.
 
 Do not change behavior and architecture in the same edit. Move first, then simplify.
 
-After each phase, run `cargo check -p slapper-tui` before continuing.
+After each phase, run `cargo check -p eggsec-tui` before continuing.
 
 ## Expected follow-up after this plan
 

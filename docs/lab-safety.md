@@ -1,6 +1,6 @@
 # Lab Safety
 
-Slapper includes high-risk features that can disrupt networks, lock out accounts, or cause denial of service. This document covers safe use of these features.
+Eggsec includes high-risk features that can disrupt networks, lock out accounts, or cause denial of service. This document covers safe use of these features.
 
 **All high-risk features should only be used against systems you own or have explicit written authorization to test.**
 
@@ -23,7 +23,7 @@ Stress testing generates high volumes of traffic against a target. It can:
 
 ```bash
 # Stress test with explicit limits
-slapper stress "$TARGET" \
+eggsec stress "$TARGET" \
   --rate-limit 100 \
   --concurrency 10 \
   --duration 60 \
@@ -49,13 +49,13 @@ Raw packet operations (crafted packets, IP spoofing, packet capture) require roo
 
 ```bash
 # Packet capture in isolated environment
-sudo slapper packet capture \
+sudo eggsec packet capture \
   --interface eth1 \
   --filter "tcp port 80" \
   --output captures/
 
 # Packet crafting with explicit target
-sudo slapper packet craft \
+sudo eggsec packet craft \
   --target lab-host \
   --protocol tcp \
   --dport 80 \
@@ -80,7 +80,7 @@ WAF bypass testing sends payloads designed to evade web application firewalls. I
 
 ```bash
 # WAF testing with scope and rate limiting
-slapper waf detect "$TARGET" \
+eggsec waf detect "$TARGET" \
   --scope scopes/authorized.toml \
   --rate-limit 50
 ```
@@ -89,7 +89,7 @@ slapper waf detect "$TARGET" \
 
 **Risk: Legal considerations, route leaks, attribution issues**
 
-Using Slapper through proxies or Tor:
+Using Eggsec through proxies or Tor:
 - May violate terms of service for proxy providers
 - Route leaks can expose your real IP
 - Some jurisdictions restrict Tor usage
@@ -103,7 +103,7 @@ Using Slapper through proxies or Tor:
 
 ```bash
 # Proxy usage with explicit configuration
-slapper scan "$TARGET" \
+eggsec scan "$TARGET" \
   --proxy socks5://127.0.0.1:9050 \
   --scope scopes/authorized.toml
 ```
@@ -126,7 +126,7 @@ Auth testing attempts credential stuffing, brute force, or session manipulation.
 
 ```bash
 # Auth testing with explicit limits
-slapper auth test "$TARGET" \
+eggsec auth test "$TARGET" \
   --wordlist test-credentials.txt \
   --rate-limit 5 \
   --concurrency 2 \
@@ -170,8 +170,8 @@ Run high-risk features in an isolated environment:
 
 ```bash
 # Docker-based isolated lab
-docker network create --driver bridge slapper-lab
-docker run -d --name target --network slapper-lab vulnerable-app:latest
+docker network create --driver bridge eggsec-lab
+docker run -d --name target --network eggsec-lab vulnerable-app:latest
 
 # Scope the lab network
 cat > /tmp/lab-scope.toml << 'EOF'
@@ -181,7 +181,7 @@ cidr = "172.20.0.0/16"
 description = "Docker lab network"
 EOF
 
-slapper scan target --scope /tmp/lab-scope.toml
+eggsec scan target --scope /tmp/lab-scope.toml
 ```
 
 ## Monitoring and Rollback
@@ -189,8 +189,8 @@ slapper scan target --scope /tmp/lab-scope.toml
 When running high-risk features:
 
 1. **Monitor the target** - Watch for service degradation, error spikes, or resource exhaustion
-2. **Have a kill switch** - Know how to stop the scan immediately (`Ctrl+C` or `slapper stop`)
-3. **Log everything** - Slapper logs all operations; review after testing
+2. **Have a kill switch** - Know how to stop the scan immediately (`Ctrl+C` or `eggsec stop`)
+3. **Log everything** - Eggsec logs all operations; review after testing
 4. **Expect rollback** - Have a plan to restore the target to its pre-test state
 5. **Document the test** - Record what was tested, when, and what the results were
 

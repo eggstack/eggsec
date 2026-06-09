@@ -1,4 +1,4 @@
-# Slapper Implementation Plan
+# Eggsec Implementation Plan
 
 **Created:** 2026-05-30
 **Last Updated:** 2026-06-05
@@ -35,9 +35,9 @@
 
 | Item | Description | Reference |
 |------|-------------|-----------|
-| NSE TOCTOU vulnerability | `get_allowed_path()` method added to lfs/os libraries to prevent race conditions | `slapper-nse/src/sandbox/lfs.rs` |
-| NSE DNS rebinding mitigation | `is_host_allowed()` limitation documented; `resolve_host()` returns bound IPs | `slapper-nse/src/sandbox/mod.rs` |
-| NSE sandbox integration tests | 17 new tests for path/command/network restrictions | `slapper-nse/tests/` |
+| NSE TOCTOU vulnerability | `get_allowed_path()` method added to lfs/os libraries to prevent race conditions | `eggsec-nse/src/sandbox/lfs.rs` |
+| NSE DNS rebinding mitigation | `is_host_allowed()` limitation documented; `resolve_host()` returns bound IPs | `eggsec-nse/src/sandbox/mod.rs` |
+| NSE sandbox integration tests | 17 new tests for path/command/network restrictions | `eggsec-nse/tests/` |
 | Docker shell injection | FIXED - `inspect_image()` validates image names before shell | `container/docker.rs:208-209` |
 
 ### Auth Module
@@ -69,7 +69,7 @@
 |------|-------------|-----------|
 | Unified StoredFinding type | `StoredFinding` re-exported from `findings::lifecycle` for database persistence | `storage/models.rs` |
 | SQLx implementation | Full CRUD operations with PostgreSQL via `PgPool` and parameterized queries | `storage/postgres.rs` |
-| Migrations | Schema creation for scans, findings, and users tables | `crates/slapper/migrations/` |
+| Migrations | Schema creation for scans, findings, and users tables | `crates/eggsec/migrations/` |
 
 ### Vuln Assessment
 
@@ -110,7 +110,7 @@
 | Item | Description | Reference |
 |------|-------------|-----------|
 | Output format count | Fixed overview.md:103 format list (was 7 wrong names, now 8 correct) | `architecture/overview.md` |
-| Stress skill fields | Added 6 missing StressConfig fields to skill doc | `.opencode/skills/slapper-stress/SKILL.md` |
+| Stress skill fields | Added 6 missing StressConfig fields to skill doc | `.opencode/skills/eggsec-stress/SKILL.md` |
 | Stale review entries | Removed false claims from review skill and review plan | Various |
 
 ---
@@ -171,31 +171,31 @@
 
 | Module | Location |
 |--------|----------|
-| Agent | `crates/slapper/src/agent/` |
-| AI | `crates/slapper/src/ai/` |
-| Auth | `crates/slapper/src/auth/` |
-| Browser | `crates/slapper/src/browser/` |
-| Config | `crates/slapper/src/config/` |
-| Container | `crates/slapper/src/container/` |
-| Distributed | `crates/slapper/src/distributed/` |
-| Findings | `crates/slapper/src/findings/` |
-| Fuzzer | `crates/slapper/src/fuzzer/` |
-| Hunt | `crates/slapper/src/hunt/` |
-| Loadtest | `crates/slapper/src/loadtest/` |
-| Networking | `crates/slapper/src/networking/` |
-| NSE | `slapper-nse/` |
-| Output | `crates/slapper/src/output/` |
-| Pipeline | `crates/slapper/src/pipeline/` |
-| Proxy | `crates/slapper/src/proxy/` |
-| Recon | `crates/slapper/src/recon/` |
-| Scanner | `crates/slapper/src/scanner/` |
-| Storage | `crates/slapper/src/storage/` |
-| Stress | `crates/slapper/src/stress/` |
-| Supply Chain | `crates/slapper/src/supply_chain/` |
-| TUI | `crates/slapper/src/tui/` |
-| Vuln | `crates/slapper/src/vuln/` |
-| WAF | `crates/slapper/src/waf/` |
-| Workflow | `crates/slapper/src/workflow/` |
+| Agent | `crates/eggsec/src/agent/` |
+| AI | `crates/eggsec/src/ai/` |
+| Auth | `crates/eggsec/src/auth/` |
+| Browser | `crates/eggsec/src/browser/` |
+| Config | `crates/eggsec/src/config/` |
+| Container | `crates/eggsec/src/container/` |
+| Distributed | `crates/eggsec/src/distributed/` |
+| Findings | `crates/eggsec/src/findings/` |
+| Fuzzer | `crates/eggsec/src/fuzzer/` |
+| Hunt | `crates/eggsec/src/hunt/` |
+| Loadtest | `crates/eggsec/src/loadtest/` |
+| Networking | `crates/eggsec/src/networking/` |
+| NSE | `eggsec-nse/` |
+| Output | `crates/eggsec/src/output/` |
+| Pipeline | `crates/eggsec/src/pipeline/` |
+| Proxy | `crates/eggsec/src/proxy/` |
+| Recon | `crates/eggsec/src/recon/` |
+| Scanner | `crates/eggsec/src/scanner/` |
+| Storage | `crates/eggsec/src/storage/` |
+| Stress | `crates/eggsec/src/stress/` |
+| Supply Chain | `crates/eggsec/src/supply_chain/` |
+| TUI | `crates/eggsec/src/tui/` |
+| Vuln | `crates/eggsec/src/vuln/` |
+| WAF | `crates/eggsec/src/waf/` |
+| Workflow | `crates/eggsec/src/workflow/` |
 
 ---
 

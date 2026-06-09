@@ -1,6 +1,6 @@
 # Autonomous Security Agent
 
-The Slapper autonomous agent provides continuous security monitoring, scheduled assessments, and AI-guided security testing for your infrastructure.
+The Eggsec autonomous agent provides continuous security monitoring, scheduled assessments, and AI-guided security testing for your infrastructure.
 
 ## Overview
 
@@ -38,10 +38,10 @@ Idle → Paused → Idle (manual resume)
 
 ### Runtime State Persistence
 
-Agent runtime state is persisted to `~/.config/slapper/memory/runtime/`:
+Agent runtime state is persisted to `~/.config/eggsec/memory/runtime/`:
 
 ```
-~/.config/slapper/memory/runtime/
+~/.config/eggsec/memory/runtime/
 ├── agent-state.json         # Global agent state (start time, last poll)
 ├── targets/
 │   ├── example.com.json     # Per-target runtime state
@@ -141,13 +141,13 @@ cargo build --release --features "full"
 
 ```bash
 # Create config directory
-mkdir -p ~/.config/slapper
+mkdir -p ~/.config/eggsec
 
 # Create memory directory (for longitudinal storage)
-mkdir -p ~/.config/slapper/memory
+mkdir -p ~/.config/eggsec/memory
 
 # Create skills directory
-mkdir -p ~/.config/slapper/skills
+mkdir -p ~/.config/eggsec/skills
 ```
 
 ## Quick Start
@@ -182,11 +182,11 @@ A portfolio defines the targets to monitor:
 
 ### 2. Configure Alerts
 
-Add webhook configuration to `~/.config/slapper/config.toml`:
+Add webhook configuration to `~/.config/eggsec/config.toml`:
 
 ```toml
 [agent]
-memory_dir = "~/.config/slapper/memory"
+memory_dir = "~/.config/eggsec/memory"
 poll_interval_secs = 60
 
 [[agent.alert_channels]]
@@ -206,16 +206,16 @@ service_key = "your-pagerduty-key"
 
 ```bash
 # Continuous monitoring
-./slapper agent run --portfolio ~/.config/slapper/portfolio.json
+./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json
 
 # With AI integration
-./slapper agent run --portfolio ~/.config/slapper/portfolio.json --with-ai --ai-config ~/.config/slapper/ai.toml
+./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json --with-ai --ai-config ~/.config/eggsec/ai.toml
 
 # Run once (useful for testing)
-./slapper agent run --portfolio ~/.config/slapper/portfolio.json --once
+./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json --once
 
 # Custom memory directory
-./slapper agent run --portfolio ~/.config/slapper/portfolio.json --memory-dir /var/lib/slapper/memory
+./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json --memory-dir /var/lib/eggsec/memory
 ```
 
 ## CLI Commands
@@ -224,47 +224,47 @@ service_key = "your-pagerduty-key"
 
 ```bash
 # Show agent status
-./slapper agent status
+./eggsec agent status
 
 # Run agent (default or explicit)
-./slapper agent run
-./slapper agent run --once
-./slapper agent run --with-ai --ai-config /path/to/ai.toml
+./eggsec agent run
+./eggsec agent run --once
+./eggsec agent run --with-ai --ai-config /path/to/ai.toml
 ```
 
 ### Target Management
 
 ```bash
 # List all targets
-./slapper agent targets list
+./eggsec agent targets list
 
 # Add a new target
-./slapper agent targets add mytarget \
+./eggsec agent targets add mytarget \
   --target https://example.com \
   --schedule "0 0 * * *" \
   --priority high
 
 # Remove a target
-./slapper agent targets remove mytarget
+./eggsec agent targets remove mytarget
 
 # Enable/disable a target
-./slapper agent targets enable mytarget
-./slapper agent targets disable mytarget
+./eggsec agent targets enable mytarget
+./eggsec agent targets disable mytarget
 ```
 
 ### Skills Management
 
 ```bash
 # List available skills
-./slapper agent skills list
+./eggsec agent skills list
 
 # Load skills from directory
-./slapper agent skills load ~/.config/slapper/skills/
+./eggsec agent skills load ~/.config/eggsec/skills/
 
 # Show skill details
-./slapper agent skills show dns_reconnaissance
-./slapper agent skills show sql_injection_fuzzing
-./slapper agent skills show waf_detection_bypass
+./eggsec agent skills show dns_reconnaissance
+./eggsec agent skills show sql_injection_fuzzing
+./eggsec agent skills show waf_detection_bypass
 ```
 
 ## Configuration Reference
@@ -320,10 +320,10 @@ to = ["security@example.com"]
 
 ## Memory Structure
 
-The agent stores scan history in `~/.config/slapper/memory/`:
+The agent stores scan history in `~/.config/eggsec/memory/`:
 
 ```
-~/.config/slapper/memory/
+~/.config/eggsec/memory/
 ├── targets/
 │   ├── example.com.json      # Scan history per target
 │   └── api.example.com.json
@@ -337,7 +337,7 @@ The agent stores scan history in `~/.config/slapper/memory/`:
 
 ## Skills
 
-Skills define agent capabilities using YAML frontmatter + Markdown. See `slapper_skills/` for all available skills.
+Skills define agent capabilities using YAML frontmatter + Markdown. See `eggsec_skills/` for all available skills.
 
 ### Skill Format
 
@@ -388,7 +388,7 @@ Keywords that activate this skill
 
 ### Configuration
 
-Create `~/.config/slapper/ai.toml`:
+Create `~/.config/eggsec/ai.toml`:
 
 ```toml
 provider = "openai"           # or "ollama" for local
@@ -409,7 +409,7 @@ path = "./reports"
 
 ```bash
 # Run with AI analysis
-./slapper agent run --with-ai --ai-config ~/.config/slapper/ai.toml
+./eggsec agent run --with-ai --ai-config ~/.config/eggsec/ai.toml
 
 # AI features:
 # - Adaptive scan strategy based on findings
@@ -447,8 +447,8 @@ When an alert is triggered, the agent sends:
 Webhook requests include HMAC signature for verification:
 
 ```http
-X-Slapper-Signature: sha256=<hmac-sha256>
-X-Slapper-Timestamp: <unix-timestamp>
+X-Eggsec-Signature: sha256=<hmac-sha256>
+X-Eggsec-Timestamp: <unix-timestamp>
 ```
 
 Verify in your webhook handler:
@@ -497,28 +497,28 @@ def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
 
 ```bash
 # Check portfolio file syntax
-./slapper agent run --portfolio /path/to/portfolio.json --once
+./eggsec agent run --portfolio /path/to/portfolio.json --once
 
 # Verify config
-./slapper agent status
+./eggsec agent status
 ```
 
 ### Memory errors
 
 ```bash
 # Check memory directory permissions
-ls -la ~/.config/slapper/memory/
+ls -la ~/.config/eggsec/memory/
 
 # Recreate if corrupted
-rm -rf ~/.config/slapper/memory
-mkdir ~/.config/slapper/memory
+rm -rf ~/.config/eggsec/memory
+mkdir ~/.config/eggsec/memory
 ```
 
 ### AI integration fails
 
 ```bash
 # Verify AI config
-cat ~/.config/slapper/ai.toml
+cat ~/.config/eggsec/ai.toml
 
 # Test AI provider connectivity
 curl https://api.openai.com/v1/models
@@ -537,16 +537,16 @@ curl https://api.openai.com/v1/models
 
 ```bash
 # General help
-./slapper --help
-./slapper agent --help
+./eggsec --help
+./eggsec agent --help
 
 # Subcommand help
-./slapper agent run --help
-./slapper agent targets --help
-./slapper agent skills --help
+./eggsec agent run --help
+./eggsec agent targets --help
+./eggsec agent skills --help
 ```
 
 ## See Also
 
-- [slapper_skills/README.md](../slapper_skills/README.md) - All available skills
+- [eggsec_skills/README.md](../eggsec_skills/README.md) - All available skills
 - [AGENTS.md](../AGENTS.md) - Developer documentation for the codebase

@@ -1,6 +1,6 @@
-# Slapper Usage Guide
+# Eggsec Usage Guide
 
-This guide provides detailed examples for common security testing scenarios with Slapper.
+This guide provides detailed examples for common security testing scenarios with Eggsec.
 
 ## Build Features
 
@@ -31,13 +31,13 @@ cargo build --release --features full
 
 | Task | Command |
 |------|---------|
-| Quick port scan | `slapper scan-ports target.com -p 1-1000` |
-| Find hidden paths | `slapper scan-endpoints https://target.com` |
-| Test for SQLi | `slapper fuzz https://target.com/api?id=1 -t sqli` |
-| Test for XSS | `slapper fuzz https://target.com/search?q=test -t xss` |
-| Full web scan | `slapper scan target.com --profile web` |
-| Load test | `slapper load https://target.com -n 1000 -c 50` |
-| Reconnaissance | `slapper recon target.com` |
+| Quick port scan | `eggsec scan-ports target.com -p 1-1000` |
+| Find hidden paths | `eggsec scan-endpoints https://target.com` |
+| Test for SQLi | `eggsec fuzz https://target.com/api?id=1 -t sqli` |
+| Test for XSS | `eggsec fuzz https://target.com/search?q=test -t xss` |
+| Full web scan | `eggsec scan target.com --profile web` |
+| Load test | `eggsec load https://target.com -n 1000 -c 50` |
+| Reconnaissance | `eggsec recon target.com` |
 
 ## Port Scanning
 
@@ -46,7 +46,7 @@ cargo build --release --features full
 Scan the most common 1000 ports:
 
 ```bash
-slapper scan-ports example.com
+eggsec scan-ports example.com
 ```
 
 ### Specific Port Range
@@ -55,13 +55,13 @@ Scan a specific range:
 
 ```bash
 # Scan ports 1-10000
-slapper scan-ports example.com -p 1-10000
+eggsec scan-ports example.com -p 1-10000
 
 # Scan specific ports
-slapper scan-ports example.com -p 22,80,443,3306,5432,6379
+eggsec scan-ports example.com -p 22,80,443,3306,5432,6379
 
 # Scan common web ports
-slapper scan-ports example.com -p 80,443,8080,8443,8888
+eggsec scan-ports example.com -p 80,443,8080,8443,8888
 ```
 
 ### High-Speed Scan
@@ -69,7 +69,7 @@ slapper scan-ports example.com -p 80,443,8080,8443,8888
 For faster scanning on reliable networks:
 
 ```bash
-slapper scan-ports example.com -p 1-65535 -c 200 --timeout 1
+eggsec scan-ports example.com -p 1-65535 -c 200 --timeout 1
 ```
 
 ### Service Fingerprinting
@@ -78,10 +78,10 @@ After finding open ports, identify services:
 
 ```bash
 # Fingerprint discovered services
-slapper fingerprint example.com -p 22,80,443,3306
+eggsec fingerprint example.com -p 22,80,443,3306
 
 # Full fingerprint scan
-slapper fingerprint example.com -p 1-1000
+eggsec fingerprint example.com -p 1-1000
 ```
 
 ## Web Application Testing
@@ -92,13 +92,13 @@ Find hidden directories and files:
 
 ```bash
 # Basic endpoint discovery
-slapper scan-endpoints https://example.com
+eggsec scan-endpoints https://example.com
 
 # With custom wordlist
-slapper scan-endpoints https://example.com -w /path/to/wordlist.txt
+eggsec scan-endpoints https://example.com -w /path/to/wordlist.txt
 
 # Faster discovery
-slapper scan-endpoints https://example.com -c 50
+eggsec scan-endpoints https://example.com -c 50
 ```
 
 ### Vulnerability Scanning
@@ -107,46 +107,46 @@ slapper scan-endpoints https://example.com -c 50
 
 ```bash
 # Test a single parameter
-slapper fuzz "https://example.com/api/user?id=1" -t sqli
+eggsec fuzz "https://example.com/api/user?id=1" -t sqli
 
 # Test multiple parameters
-slapper fuzz "https://example.com/search?q=test&category=1" -t sqli -p q,category
+eggsec fuzz "https://example.com/search?q=test&category=1" -t sqli -p q,category
 
 # With specific concurrency
-slapper fuzz "https://example.com/login" -t sqli -c 20 --method POST
+eggsec fuzz "https://example.com/login" -t sqli -c 20 --method POST
 ```
 
 #### Cross-Site Scripting (XSS)
 
 ```bash
 # Basic XSS test
-slapper fuzz "https://example.com/search?q=test" -t xss
+eggsec fuzz "https://example.com/search?q=test" -t xss
 
 # Test all inputs with mutation
-slapper fuzz https://example.com -t xss --mutate -m 10
+eggsec fuzz https://example.com -t xss --mutate -m 10
 
 # Test for stored XSS (requires session handling)
-slapper fuzz https://example.com/comment -t xss --session
+eggsec fuzz https://example.com/comment -t xss --session
 ```
 
 #### Server-Side Request Forgery (SSRF)
 
 ```bash
 # Test URL parameter
-slapper fuzz "https://example.com/url?url=http://example.com" -t ssrf
+eggsec fuzz "https://example.com/url?url=http://example.com" -t ssrf
 
 # Test for cloud metadata
-slapper fuzz "https://example.com/fetch?url=TEST" -t ssrf
+eggsec fuzz "https://example.com/fetch?url=TEST" -t ssrf
 ```
 
 #### All Common Vulnerabilities
 
 ```bash
 # Full web vulnerability scan
-slapper fuzz https://example.com -t all
+eggsec fuzz https://example.com -t all
 
 # With enhanced detection
-slapper fuzz https://example.com -t all --enhanced-redos --diffing --capture-baseline
+eggsec fuzz https://example.com -t all --enhanced-redos --diffing --capture-baseline
 ```
 
 ## API Security Testing
@@ -155,35 +155,35 @@ slapper fuzz https://example.com -t all --enhanced-redos --diffing --capture-bas
 
 ```bash
 # Full GraphQL security test
-slapper graphql https://api.example.com/graphql
+eggsec graphql https://api.example.com/graphql
 
 # Test introspection
-slapper graphql https://api.example.com/graphql --introspection
+eggsec graphql https://api.example.com/graphql --introspection
 
 # Test for injection
-slapper graphql https://api.example.com/graphql --inject
+eggsec graphql https://api.example.com/graphql --inject
 
 # Test depth limits
-slapper graphql https://api.example.com/graphql --depth-bypass
+eggsec graphql https://api.example.com/graphql --depth-bypass
 
 # Test alias overload DoS
-slapper graphql https://api.example.com/graphql --alias-overload
+eggsec graphql https://api.example.com/graphql --alias-overload
 ```
 
 ### JWT Testing
 
 ```bash
 # Test JWT vulnerabilities
-slapper fuzz https://api.example.com/auth -t jwt
+eggsec fuzz https://api.example.com/auth -t jwt
 ```
 
 ### OAuth/OIDC
 
 ```bash
 # Test OAuth security
-slapper o-auth https://oauth.example.com/authorize --redirect-test
-slapper o-auth https://oauth.example.com/authorize --scope-test
-slapper o-auth https://oauth.example.com/authorize --state-test
+eggsec o-auth https://oauth.example.com/authorize --redirect-test
+eggsec o-auth https://oauth.example.com/authorize --scope-test
+eggsec o-auth https://oauth.example.com/authorize --state-test
 ```
 
 ## Advanced Fuzzing
@@ -193,7 +193,7 @@ slapper o-auth https://oauth.example.com/authorize --state-test
 Automatically adjusts request rate based on server responses:
 
 ```bash
-slapper fuzz https://example.com -t sqli --adaptive-rate
+eggsec fuzz https://example.com -t sqli --adaptive-rate
 ```
 
 ### Request Chaining
@@ -201,7 +201,7 @@ slapper fuzz https://example.com -t sqli --adaptive-rate
 Chain multiple requests for complex attacks:
 
 ```bash
-slapper fuzz https://example.com -t ssrf --chaining --chain-file examples/chain.yaml
+eggsec fuzz https://example.com -t ssrf --chaining --chain-file examples/chain.yaml
 ```
 
 ### Grammar-Based Fuzzing
@@ -210,10 +210,10 @@ Generate inputs based on grammar:
 
 ```bash
 # JSON fuzzing
-slapper fuzz https://example.com/api -t json --grammar-fuzz --grammar-type json
+eggsec fuzz https://example.com/api -t json --grammar-fuzz --grammar-type json
 
 # GraphQL fuzzing
-slapper fuzz https://example.com/graphql -t graphql --grammar-fuzz --grammar-type graphql
+eggsec fuzz https://example.com/graphql -t graphql --grammar-fuzz --grammar-type graphql
 ```
 
 ### Target-Specific Payloads
@@ -222,13 +222,13 @@ Use payloads tailored to specific technologies:
 
 ```bash
 # PHP-specific payloads
-slapper fuzz https://example.com -t sqli --target php
+eggsec fuzz https://example.com -t sqli --target php
 
 # Apache-specific
-slapper fuzz https://example.com -t xss --target apache
+eggsec fuzz https://example.com -t xss --target apache
 
 # Nginx-specific
-slapper fuzz https://example.com -t xss --target nginx
+eggsec fuzz https://example.com -t xss --target nginx
 ```
 
 ## CI/CD Integration
@@ -236,13 +236,13 @@ slapper fuzz https://example.com -t xss --target nginx
 ### SARIF Output (GitHub Advanced Security)
 
 ```bash
-slapper fuzz https://example.com -t sqli,xss --sarif -o results.sarif
+eggsec fuzz https://example.com -t sqli,xss --sarif -o results.sarif
 ```
 
 ### JUnit XML (CI Test Reports)
 
 ```bash
-slapper fuzz https://example.com -t all --junit -o results.xml
+eggsec fuzz https://example.com -t all --junit -o results.xml
 ```
 
 ### GitHub Actions Example
@@ -250,7 +250,7 @@ slapper fuzz https://example.com -t all --junit -o results.xml
 ```yaml
 - name: Security Scan
   run: |
-    slapper fuzz ${{ secrets.TARGET_URL }} -t sqli,xss,ssrf \
+    eggsec fuzz ${{ secrets.TARGET_URL }} -t sqli,xss,ssrf \
       --sarif -o results.sarif \
       --rate-limit 10
 
@@ -265,7 +265,7 @@ slapper fuzz https://example.com -t all --junit -o results.xml
 ```yaml
 security_scan:
   script:
-    - slapper fuzz $TARGET_URL -t sqli,xss --junit -o gl-sast-report.xml
+    - eggsec fuzz $TARGET_URL -t sqli,xss --junit -o gl-sast-report.xml
   artifacts:
     reports:
       sast: gl-sast-report.xml
@@ -276,13 +276,13 @@ security_scan:
 ### Basic Load Test
 
 ```bash
-slapper load https://example.com -n 1000 -c 50
+eggsec load https://example.com -n 1000 -c 50
 ```
 
 ### POST Request Load Test
 
 ```bash
-slapper load https://api.example.com/endpoint \
+eggsec load https://api.example.com/endpoint \
   -n 500 -c 20 \
   -m POST \
   -d '{"username":"test","password":"test"}'
@@ -291,7 +291,7 @@ slapper load https://api.example.com/endpoint \
 ### With Authentication
 
 ```bash
-slapper load https://example.com/api \
+eggsec load https://example.com/api \
   -n 100 -c 10 \
   --bearer "your-token"
 ```
@@ -301,17 +301,17 @@ slapper load https://example.com/api \
 ### Full Recon
 
 ```bash
-slapper recon example.com
+eggsec recon example.com
 ```
 
 ### Targeted Recon
 
 ```bash
 # Skip certain checks
-slapper recon example.com --no-tech --no-whois
+eggsec recon example.com --no-tech --no-whois
 
 # Just tech detection
-slapper recon example.com --no-dns --no-whois --no-subdomains
+eggsec recon example.com --no-dns --no-whois --no-subdomains
 ```
 
 ## Using Scope Files
@@ -335,7 +335,7 @@ pattern = "admin.example.com"
 Use the scope file:
 
 ```bash
-slapper scan example.com --scope scope.toml
+eggsec scan example.com --scope scope.toml
 ```
 
 ## Rate Limiting and Stealth
@@ -344,29 +344,29 @@ Avoid detection and respect target resources:
 
 ```bash
 # Rate limit to 10 requests/second
-slapper fuzz https://example.com -t all --rate-limit 10
+eggsec fuzz https://example.com -t all --rate-limit 10
 
 # Add random jitter
-slapper fuzz https://example.com -t all --jitter 100-500
+eggsec fuzz https://example.com -t all --jitter 100-500
 
 # Full stealth mode
-slapper scan example.com --profile stealth
+eggsec scan example.com --profile stealth
 ```
 
 ## Output Formats
 
 ```bash
 # Pretty output (default)
-slapper scan example.com
+eggsec scan example.com
 
 # JSON
-slapper scan example.com --json
+eggsec scan example.com --json
 
 # HTML report
-slapper scan example.com --format html -o report.html
+eggsec scan example.com --format html -o report.html
 
 # CSV
-slapper scan example.com --format csv -o results.csv
+eggsec scan example.com --format csv -o results.csv
 ```
 
 ## Stress Testing
@@ -381,25 +381,25 @@ slapper scan example.com --format csv -o results.csv
 ### HTTP Stress Test
 
 ```bash
-slapper stress example.com --type http -r 1000 -d 60
+eggsec stress example.com --type http -r 1000 -d 60
 ```
 
 ### SYN Flood
 
 ```bash
-slapper stress example.com --type syn -r 5000 -d 30
+eggsec stress example.com --type syn -r 5000 -d 30
 ```
 
 ### UDP Flood
 
 ```bash
-slapper stress 192.168.1.1:80 --type udp -r 10000 -d 120 --payload-size 512
+eggsec stress 192.168.1.1:80 --type udp -r 10000 -d 120 --payload-size 512
 ```
 
 ### With Proxy Pool
 
 ```bash
-slapper stress example.com --type http -r 1000 -d 60 --use-proxies --proxy-file proxies.txt
+eggsec stress example.com --type http -r 1000 -d 60 --use-proxies --proxy-file proxies.txt
 ```
 
 ## Proxy Management
@@ -409,7 +409,7 @@ slapper stress example.com --type http -r 1000 -d 60 --use-proxies --proxy-file 
 ### Add Proxies
 
 ```bash
-slapper proxy add --file proxies.txt
+eggsec proxy add --file proxies.txt
 ```
 
 Proxy file format (one per line):
@@ -423,26 +423,26 @@ https://proxy2.example.com:443
 
 ```bash
 # List all proxies
-slapper proxy list
+eggsec proxy list
 
 # Show only healthy proxies
-slapper proxy list --healthy
+eggsec proxy list --healthy
 
 # Verbose output
-slapper proxy list --verbose
+eggsec proxy list --verbose
 ```
 
 ### Test Proxies
 
 ```bash
 # Test a single proxy
-slapper proxy test http://127.0.0.1:8080 --test-url https://example.com
+eggsec proxy test http://127.0.0.1:8080 --test-url https://example.com
 ```
 
 ### Health Check
 
 ```bash
-slapper proxy health-check --test-url https://google.com --timeout 10
+eggsec proxy health-check --test-url https://google.com --timeout 10
 ```
 
 ## Distributed Cluster Mode
@@ -450,23 +450,23 @@ slapper proxy health-check --test-url https://google.com --timeout 10
 ### Start Coordinator
 
 ```bash
-slapper cluster coordinator --port 9000
+eggsec cluster coordinator --port 9000
 ```
 
 ### Start Workers
 
 ```bash
-slapper cluster worker --coordinator localhost:9000 --workers 4
+eggsec cluster worker --coordinator localhost:9000 --workers 4
 ```
 
 ### Check Cluster Status
 
 ```bash
 # Local status
-slapper cluster status
+eggsec cluster status
 
 # Remote status
-slapper cluster status --coordinator localhost:9000
+eggsec cluster status --coordinator localhost:9000
 ```
 
 ## Notifications
@@ -475,26 +475,26 @@ slapper cluster status --coordinator localhost:9000
 
 ```bash
 # Test Slack webhook
-slapper notify test --slack https://hooks.slack.com/services/XXX/YYY/ZZZ
+eggsec notify test --slack https://hooks.slack.com/services/XXX/YYY/ZZZ
 
 # Test Discord webhook
-slapper notify test --discord https://discord.com/api/webhooks/XXX/YYY
+eggsec notify test --discord https://discord.com/api/webhooks/XXX/YYY
 
 # Test Teams webhook
-slapper notify test --teams https://example.webhook.office.com/XXX
+eggsec notify test --teams https://example.webhook.office.com/XXX
 
 # Test custom webhook
-slapper notify test --webhook https://example.com/hook --secret mysecret
+eggsec notify test --webhook https://example.com/hook --secret mysecret
 ```
 
 ### Send Notifications
 
 ```bash
 # Send to Slack
-slapper notify send "Vulnerability found: SQL Injection" --slack https://hooks.slack.com/services/XXX --severity critical --target example.com
+eggsec notify send "Vulnerability found: SQL Injection" --slack https://hooks.slack.com/services/XXX --severity critical --target example.com
 
 # Send to multiple channels
-slapper notify send "Scan complete" --slack <url> --discord <url> --target example.com
+eggsec notify send "Scan complete" --slack <url> --discord <url> --target example.com
 ```
 
 ### Configuration File
@@ -525,33 +525,33 @@ notify_on_findings = true
 
 ```bash
 # Capture from interface (requires root)
-slapper packet capture -i eth0 --max 100
+eggsec packet capture -i eth0 --max 100
 
 # With BPF filter
-slapper packet capture -i eth0 --filter "tcp port 80" --max 50
+eggsec packet capture -i eth0 --filter "tcp port 80" --max 50
 ```
 
 ### Traceroute
 
 ```bash
 # UDP traceroute (default)
-slapper packet traceroute example.com
+eggsec packet traceroute example.com
 
 # ICMP traceroute (requires root)
-slapper packet traceroute example.com --icmp
+eggsec packet traceroute example.com --icmp
 ```
 
 ### Packet Crafting
 
 ```bash
 # Send TCP SYN packet
-slapper packet send 192.168.1.1 --dst-port 80 --flags SYN
+eggsec packet send 192.168.1.1 --dst-port 80 --flags SYN
 
 # Send ICMP ping
-slapper packet send 8.8.8.8 --icmp
+eggsec packet send 8.8.8.8 --icmp
 
 # Custom payload
-slapper packet send example.com:8080 --payload "GET / HTTP/1.1\r\n\r\n"
+eggsec packet send example.com:8080 --payload "GET / HTTP/1.1\r\n\r\n"
 ```
 
 ## ICMP Probes
@@ -560,22 +560,22 @@ slapper packet send example.com:8080 --payload "GET / HTTP/1.1\r\n\r\n"
 
 ```bash
 # Basic ping
-slapper icmp 8.8.8.8
+eggsec icmp 8.8.8.8
 
 # Multiple probes
-slapper icmp example.com -c 10
+eggsec icmp example.com -c 10
 
 # With timeout
-slapper icmp 192.168.1.1 --timeout 5 --json
+eggsec icmp 192.168.1.1 --timeout 5 --json
 
 # Traceroute (UDP mode, default)
-slapper traceroute 8.8.8.8
+eggsec traceroute 8.8.8.8
 
 # Traceroute with ICMP
-slapper traceroute example.com --icmp
+eggsec traceroute example.com --icmp
 
 # Traceroute with custom settings
-slapper traceroute 192.168.1.1 --max-hops 30 --probes 5
+eggsec traceroute 192.168.1.1 --max-hops 30 --probes 5
 ```
 
 ## Report Management
@@ -586,19 +586,19 @@ Convert scan results between formats:
 
 ```bash
 # Convert JSON to HTML
-slapper report convert input.json -f html -o report.html
+eggsec report convert input.json -f html -o report.html
 
 # Convert JSON to CSV
-slapper report convert results.json -f csv -o results.csv
+eggsec report convert results.json -f csv -o results.csv
 
 # Convert to SARIF (for CI/CD)
-slapper report convert scan.json -f sarif -o results.sarif
+eggsec report convert scan.json -f sarif -o results.sarif
 
 # Convert to JUnit XML (for test integration)
-slapper report convert scan.json -f junit -o results.xml
+eggsec report convert scan.json -f junit -o results.xml
 
 # Convert to Markdown
-slapper report convert scan.json -f markdown -o report.md
+eggsec report convert scan.json -f markdown -o report.md
 ```
 
 ### Trend Analysis
@@ -606,7 +606,7 @@ slapper report convert scan.json -f markdown -o report.md
 Compare scan results over time:
 
 ```bash
-slapper report trend before.json after.json -o trends.json
+eggsec report trend before.json after.json -o trends.json
 ```
 
 ### Scheduled Scans
@@ -615,58 +615,58 @@ Manage scheduled scans:
 
 ```bash
 # List scheduled scans
-slapper report schedule list
+eggsec report schedule list
 
 # Add scheduled scan (cron expression)
-slapper report schedule add "0 */6 * * *" example.com --scan-type web
+eggsec report schedule add "0 */6 * * *" example.com --scan-type web
 
 # Generate crontab entry
-slapper report schedule cron
+eggsec report schedule cron
 
 # Remove scheduled scan
-slapper report schedule remove <id>
+eggsec report schedule remove <id>
 ```
 
 ## Remote Execution
 
-Slapper supports remote execution via a listener/agent architecture for distributed command execution.
+Eggsec supports remote execution via a listener/agent architecture for distributed command execution.
 
 ### Generate Authentication Key
 
 ```bash
 # Generate a pre-shared key for authentication
-slapper remote generate-key
+eggsec remote generate-key
 ```
 
 ### Generate TLS Certificate
 
 ```bash
 # Generate instructions for TLS cert
-slapper remote cert --openssl
+eggsec remote cert --openssl
 ```
 
 ### Start Remote Listener
 
 ```bash
 # Start on default port (7890)
-slapper remote start
+eggsec remote start
 
 # Start with custom port and PSK
-slapper remote start --port 9000 --auth your-psk
+eggsec remote start --port 9000 --auth your-psk
 
 # Start with TLS
-slapper remote start --port 9000 --tls-cert cert.p12 --tls-password password
+eggsec remote start --port 9000 --tls-cert cert.p12 --tls-password password
 ```
 
 ### Execute Remote Commands
 
 ```bash
 # Execute on single target
-slapper exec --target 192.168.1.1:7890 --auth your-psk "scan-ports example.com -p 1-1000"
+eggsec exec --target 192.168.1.1:7890 --auth your-psk "scan-ports example.com -p 1-1000"
 
 # Execute on multiple targets
-slapper exec --targets targets.txt --auth your-psk "recon example.com"
+eggsec exec --targets targets.txt --auth your-psk "recon example.com"
 
 # With TLS
-slapper exec --target host:7890 --tls-cert cert.p12 "fuzz https://example.com -t xss"
+eggsec exec --target host:7890 --tls-cert cert.p12 "fuzz https://example.com -t xss"
 ```

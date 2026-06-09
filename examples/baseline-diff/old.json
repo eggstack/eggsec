@@ -31,7 +31,7 @@
     "remediation": "Use parameterized queries",
     "discovered_at": "2026-05-28T10:00:00Z",
     "source": {
-      "tool": "slapper",
+      "tool": "eggsec",
       "module": "fuzzer",
       "run_id": "baseline"
     },
@@ -70,7 +70,7 @@
     "remediation": "Add X-Content-Type-Options: nosniff header",
     "discovered_at": "2026-05-28T10:00:00Z",
     "source": {
-      "tool": "slapper",
+      "tool": "eggsec",
       "module": "scanner",
       "run_id": "baseline"
     },

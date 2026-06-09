@@ -5,9 +5,9 @@ echo "Building release..."
 cargo build --release
 
 echo "Deleting old version../"
-rm slapper
+rm eggsec
 
 echo "Copying release to root directory..."
-cp target/release/slapper ./slapper
+cp target/release/eggsec ./eggsec
 
-echo "Done! Binary available at ./slapper"
+echo "Done! Binary available at ./eggsec"

@@ -10,7 +10,7 @@ Brief description of the changes in this PR.
 - [ ] Chore (CI, deps, build)
 
 ## Checklist
-- [ ] Code compiles (`cargo check --lib -p slapper`)
-- [ ] Tests pass (`cargo test --lib -p slapper`)
+- [ ] Code compiles (`cargo check --lib -p eggsec`)
+- [ ] Tests pass (`cargo test --lib -p eggsec`)
 - [ ] Docs updated (if applicable)
 - [ ] No secrets committed

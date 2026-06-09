@@ -1,10 +1,10 @@
-# Slapper - Rust Security Assessment Engine
+# Eggsec - Rust Security Assessment Engine
 
-Slapper is a Rust-native, scope-enforced security assessment and defense-validation engine for authorized testing, local lab validation, WAF regression, CI security checks, and agent-readable security workflows.
+Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine for authorized testing, local lab validation, WAF regression, CI security checks, and agent-readable security workflows.
 
-## What Slapper is
+## What Eggsec is
 
-Slapper is a command-line security assessment tool designed for security professionals, developers, and defensive teams who need to:
+Eggsec is a command-line security assessment tool designed for security professionals, developers, and defensive teams who need to:
 
 - **Discover attack surfaces** - Reconnaissance, subdomain enumeration, technology detection
 - **Assess web application security** - Find vulnerabilities like SQL injection, XSS, SSRF, and more
@@ -13,7 +13,7 @@ Slapper is a command-line security assessment tool designed for security profess
 - **Load test** - Measure application performance under controlled load
 - **Repeat assessments** - Pipeline scans with customizable profiles for regression workflows
 
-### Why Slapper?
+### Why Eggsec?
 
 | Capability | Description |
 |------------|-------------|
@@ -39,13 +39,13 @@ Slapper is a command-line security assessment tool designed for security profess
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Repeatable Profiles** | 11 pipeline profiles, session resumption, multiple output formats |
 
-## What Slapper is not
+## What Eggsec is not
 
-Slapper is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
+Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
 
 ## Safety Model
 
-Slapper enforces a defense-in-depth safety model built around scope control, configuration defaults, and feature gating.
+Eggsec enforces a defense-in-depth safety model built around scope control, configuration defaults, and feature gating.
 
 **Scope files** restrict every scan to explicitly authorized targets. Define allowed domains, CIDR ranges, and exclusions in a TOML file. When `require_explicit_scope = true`, any target not in the allowed list is rejected before a single packet is sent.
 
@@ -66,7 +66,7 @@ pattern = "admin.lab.internal"
 description = "Admin panel - excluded"
 ```
 
-**Configuration defaults** keep aggressive capabilities disabled until you opt in. Rate limits, concurrency caps, and timeouts are configurable per profile. Dry-run planning (`slapper plan`) previews what a scan will do without sending traffic.
+**Configuration defaults** keep aggressive capabilities disabled until you opt in. Rate limits, concurrency caps, and timeouts are configurable per profile. Dry-run planning (`eggsec plan`) previews what a scan will do without sending traffic.
 
 **Feature gating** ensures intrusive modules (stress testing, raw packet crafting, IP spoofing) require explicit build flags like `--features stress-testing` and cannot be invoked accidentally.
 
@@ -76,18 +76,18 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ### Workspace Layout
 
-Slapper is organized as a Cargo workspace with eight crates:
+Eggsec is organized as a Cargo workspace with eight crates:
 
 | Crate | Purpose |
 |-------|---------|
-| `slapper-core` | Dependency-light types, constants, shared primitives |
-| `slapper-tool-core` | Core data types for the tool abstraction layer (requests, responses, findings, errors) |
-| `slapper` | Assessment engine library (no binary) |
-| `slapper-nse` | Optional Nmap NSE compatibility runtime |
-| `slapper-tui` | Terminal UI adapter (`ratatui`/`crossterm`, packaged themes, non-blocking background loading) |
-| `slapper-cli` | CLI binary entry point |
-| `slapper-output` | Report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) |
-| `slapper-agent` | Agent coordination primitives (registry, scheduler, lifecycle, communication) |
+| `eggsec-core` | Dependency-light types, constants, shared primitives |
+| `eggsec-tool-core` | Core data types for the tool abstraction layer (requests, responses, findings, errors) |
+| `eggsec` | Assessment engine library (no binary) |
+| `eggsec-nse` | Optional Nmap NSE compatibility runtime |
+| `eggsec-tui` | Terminal UI adapter (`ratatui`/`crossterm`, packaged themes, non-blocking background loading) |
+| `eggsec-cli` | CLI binary entry point |
+| `eggsec-output` | Report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) |
+| `eggsec-agent` | Agent coordination primitives (registry, scheduler, lifecycle, communication) |
 
 ### Prerequisites
 
@@ -103,26 +103,26 @@ sudo dnf install libpcap-devel openssl-devel libusb1-devel
 
 ```bash
 # Clone and build
-git clone https://github.com/dbowm91/slapper.git
-cd slapper
-cargo build --release -p slapper-cli
+git clone https://github.com/dbowm91/eggsec.git
+cd eggsec
+cargo build --release -p eggsec-cli
 
 # Generate a config file
-./target/release/slapper --generate-config > slapper.toml
+./target/release/eggsec --generate-config > eggsec.toml
 
 # Validate your config
-./target/release/slapper config validate --config slapper.toml
+./target/release/eggsec config validate --config eggsec.toml
 
 # Plan a scan (dry-run, no traffic sent)
-./target/release/slapper plan --scope examples/scope-localhost.toml --target http://127.0.0.1:8080
+./target/release/eggsec plan --scope examples/scope-localhost.toml --target http://127.0.0.1:8080
 
 # Run a scoped scan against localhost
-./target/release/slapper scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml --json
+./target/release/eggsec scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml --json
 ```
 
 ## Pipeline Profiles
 
-Slapper includes 11 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
+Eggsec includes 11 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
 
 | Profile | Use Case |
 |---------|----------|
@@ -140,16 +140,16 @@ Slapper includes 11 built-in profiles that chain multiple security tests togethe
 
 ```bash
 # Quick scan - port scan + fingerprinting
-./slapper scan example.com --profile quick
+./eggsec scan example.com --profile quick
 
 # Web assessment - endpoint discovery + vulnerability fuzzing
-./slapper scan example.com --profile web
+./eggsec scan example.com --profile web
 
 # Full assessment - all stages including load testing
-./slapper scan example.com --profile full
+./eggsec scan example.com --profile full
 
 # API-focused - GraphQL/JWT/OAuth testing
-./slapper scan example.com --profile api
+./eggsec scan example.com --profile api
 ```
 
 ## Core Workflows
@@ -164,28 +164,28 @@ Slapper includes 11 built-in profiles that chain multiple security tests togethe
 
 ```bash
 # Load testing
-./slapper load https://example.com -n 1000 -c 50
+./eggsec load https://example.com -n 1000 -c 50
 
 # Port scanning
-./slapper scan-ports example.com -p 1-1000 -c 100
+./eggsec scan-ports example.com -p 1-1000 -c 100
 
 # Endpoint discovery
-./slapper scan-endpoints https://example.com
+./eggsec scan-endpoints https://example.com
 
 # Vulnerability fuzzing
-./slapper fuzz https://example.com/api -t sqli,xss
+./eggsec fuzz https://example.com/api -t sqli,xss
 
 # GraphQL security testing
-./slapper graphql https://api.example.com/graphql
+./eggsec graphql https://api.example.com/graphql
 
 # WAF detection and bypass testing
-./slapper waf https://example.com --bypass
+./eggsec waf https://example.com --bypass
 
 # Reconnaissance
-./slapper recon example.com
+./eggsec recon example.com
 
 # Resume a previous scan
-./slapper resume session.json
+./eggsec resume session.json
 ```
 
 For the full command reference with all options, see [docs/cli.md](docs/cli.md).
@@ -208,19 +208,19 @@ For the full command reference with all options, see [docs/cli.md](docs/cli.md).
 
 ```bash
 # Default build - load testing, scanning, fuzzing, WAF testing
-cargo build --release -p slapper-cli
+cargo build --release -p eggsec-cli
 
 # With stress testing (controlled flood testing, proxy pool)
-cargo build --release -p slapper-cli --features stress-testing
+cargo build --release -p eggsec-cli --features stress-testing
 
 # With packet inspection (live capture)
-cargo build --release -p slapper-cli --features packet-inspection
+cargo build --release -p eggsec-cli --features packet-inspection
 
 # With NSE support
-cargo build --release -p slapper-cli --features nse
+cargo build --release -p eggsec-cli --features nse
 
 # Full build - all features
-cargo build --release -p slapper-cli --features full
+cargo build --release -p eggsec-cli --features full
 ```
 
 ## System Dependencies
@@ -243,7 +243,7 @@ cargo build --release -p slapper-cli --features full
 
 ## Defense-Lab Mode
 
-Slapper can run local, repeatable profiles against defensive systems for regression testing.
+Eggsec can run local, repeatable profiles against defensive systems for regression testing.
 
 - **Repeatable adversarial traffic** - Run the same probe suite multiple times to measure changes in WAF or protocol behavior
 - **Structured observations and baseline diffs** - Compare current results against a saved baseline to identify regressions or improvements
@@ -251,30 +251,30 @@ Slapper can run local, repeatable profiles against defensive systems for regress
 
 ```bash
 # Run a profile against a local instance
-./slapper scan localhost:8080 --profile waf --json -o baseline.json
+./eggsec scan localhost:8080 --profile waf --json -o baseline.json
 
 # Later, compare against baseline
-./slapper diff baseline.json current.json
+./eggsec diff baseline.json current.json
 ```
 
 ## Relationship to Nmap/NSE
 
-Slapper borrows proven scanning concepts from Nmap but is not a drop-in replacement.
+Eggsec borrows proven scanning concepts from Nmap but is not a drop-in replacement.
 
 - **NSE is an optional compatibility layer.** Build with `--features nse` to enable curated Nmap NSE script support.
-- **No full Nmap parity.** Slapper does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
+- **No full Nmap parity.** Eggsec does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
 - **NSE is a protocol-testing knowledge source.** Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety.
 
 ## Agent and Orchestration
 
-Slapper includes a security agent for continuous monitoring and scheduled assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
+Eggsec includes a security agent for continuous monitoring and scheduled assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
 
 ```bash
 # Build with agent support
 cargo build --release --features rest-api
 
 # Run the agent
-./slapper agent run --portfolio /path/to/portfolio.json
+./eggsec agent run --portfolio /path/to/portfolio.json
 ```
 
 See [docs/AGENT.md](docs/AGENT.md) for full documentation.
@@ -286,7 +286,7 @@ See [docs/AGENT.md](docs/AGENT.md) for full documentation.
 docker-compose --profile testing up -d dvwa
 
 # Run scans against containerized target
-docker-compose --profile testing run --rm slapper fuzz http://dvwa.target.local/login -t xss
+docker-compose --profile testing run --rm eggsec fuzz http://dvwa.target.local/login -t xss
 ```
 
 See [DOCKER_COMPOSE.md](DOCKER_COMPOSE.md) for detailed Docker setup.
@@ -311,13 +311,13 @@ See [DOCKER_COMPOSE.md](DOCKER_COMPOSE.md) for detailed Docker setup.
 ## Troubleshooting
 
 **Permission denied when running packet capture**
-Packet capture requires root/sudo privileges. Run with `sudo slapper packet capture -i eth0`.
+Packet capture requires root/sudo privileges. Run with `sudo eggsec packet capture -i eth0`.
 
 **Panic: "command X alias X is duplicated"**
 Update to the latest version from the repository.
 
 **Target rejected by scope file**
-Ensure your target matches an `allowed_targets` pattern or CIDR range in your scope TOML file. Use `slapper plan` to preview what targets will be accepted.
+Ensure your target matches an `allowed_targets` pattern or CIDR range in your scope TOML file. Use `eggsec plan` to preview what targets will be accepted.
 
 **Build fails with missing system packages**
 Install the required system dependencies for your platform. See the System Dependencies section above.
@@ -327,7 +327,7 @@ Reduce concurrency with `--concurrency 10` or use a more targeted port range wit
 
 ## Responsible Use
 
-Slapper is designed for authorized security testing only. Use it against systems you own, operate, or have explicit written authorization to test. Always define scope files, use rate limits, and prefer local lab environments for development and regression testing.
+Eggsec is designed for authorized security testing only. Use it against systems you own, operate, or have explicit written authorization to test. Always define scope files, use rate limits, and prefer local lab environments for development and regression testing.
 
 ## License
 

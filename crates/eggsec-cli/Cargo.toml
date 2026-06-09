@@ -1,0 +1,53 @@
+[package]
+name = "eggsec-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "CLI binary for Eggsec security testing toolkit"
+
+[[bin]]
+name = "eggsec"
+path = "src/main.rs"
+
+[dependencies]
+eggsec = { path = "../eggsec" }
+eggsec-tui = { path = "../eggsec-tui" }
+
+tokio = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+shellexpand = "3"
+
+[features]
+default = []
+nse = ["eggsec/nse", "eggsec-tui/nse"]
+headless-browser = ["eggsec/headless-browser", "eggsec-tui/headless-browser"]
+compliance = ["eggsec/compliance", "eggsec-tui/compliance"]
+database = ["eggsec/database", "eggsec-tui/database"]
+external-integrations = ["eggsec/external-integrations", "eggsec-tui/external-integrations"]
+finding-workflow = ["eggsec/finding-workflow", "eggsec-tui/finding-workflow"]
+vuln-management = ["eggsec/vuln-management", "eggsec-tui/vuln-management"]
+wireless = ["eggsec/wireless", "eggsec-tui/wireless"]
+stress-testing = ["eggsec/stress-testing", "eggsec-tui/stress-testing"]
+packet-inspection = ["eggsec/packet-inspection", "eggsec-tui/packet-inspection"]
+advanced-hunting = ["eggsec/advanced-hunting", "eggsec-tui/advanced-hunting"]
+tool-api = ["eggsec/tool-api", "eggsec-tui/tool-api"]
+rest-api = ["eggsec/rest-api", "eggsec-tui/rest-api"]
+ai-integration = ["eggsec/ai-integration"]
+websocket = ["eggsec/websocket"]
+grpc-api = ["eggsec/grpc-api"]
+ws-api = ["eggsec/ws-api"]
+container = ["eggsec/container"]
+sbom = ["eggsec/sbom"]
+cloud = ["eggsec/cloud"]
+git-secrets = ["eggsec/git-secrets"]
+pdf = ["eggsec/pdf"]
+api-schema = ["eggsec/api-schema"]
+insecure-tls = ["eggsec/insecure-tls"]
+full = [
+    "eggsec/full",
+    "eggsec-tui/full",
+]

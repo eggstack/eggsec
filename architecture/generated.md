@@ -2,13 +2,13 @@
 
 ## Overview
 
-Auto-generated protobuf code in `crates/slapper/src/generated/`.
+Auto-generated protobuf code in `crates/eggsec/src/generated/`.
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `slapper.tool.v1.rs` | Generated protobuf types for the tool API protocol |
+| `eggsec.tool.v1.rs` | Generated protobuf types for the tool API protocol |
 
 ## Note
 

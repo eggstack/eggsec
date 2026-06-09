@@ -1,6 +1,6 @@
 # NSE Script Development Guide
 
-Slapper supports running Nmap Scripting Engine (NSE) Lua scripts for security scanning.
+Eggsec supports running Nmap Scripting Engine (NSE) Lua scripts for security scanning.
 
 ## Building with NSE Support
 
@@ -75,11 +75,11 @@ When sandbox is enabled, dangerous operations are restricted:
 ### Sandbox Configuration
 
 ```rust
-use slapper_nse::SandboxConfig;
+use eggsec_nse::SandboxConfig;
 
 let sandbox = SandboxConfig {
     enabled: true,
-    allowed_dir: Some("/tmp/slapper-nse".into()),
+    allowed_dir: Some("/tmp/eggsec-nse".into()),
     allowed_commands: vec!["curl".to_string(), "dig".to_string()],
     allowed_networks: vec!["10.0.0.0/8".parse().unwrap(), "192.168.0.0/16".parse().unwrap()], // Optional: restrict socket connections
     log_violations: true,
@@ -92,22 +92,22 @@ let sandbox = SandboxConfig {
 
 ```bash
 # Run a built-in script
-slapper nse --script default --target example.com
+eggsec nse --script default --target example.com
 
 # Run a custom script file
-slapper nse --script-file /path/to/script.nse --target example.com
+eggsec nse --script-file /path/to/script.nse --target example.com
 
 # With script arguments
-slapper nse --script http-headers --target example.com --script-args "timeout=10"
+eggsec nse --script http-headers --target example.com --script-args "timeout=10"
 ```
 
 ### Programmatic
 
 ```rust
-use slapper_nse::{NseExecutor, NseConfig};
+use eggsec_nse::{NseExecutor, NseConfig};
 
 let config = NseConfig::new("example.com", "default", None, None, false, false);
-slapper_nse::run_cli(config).await?;
+eggsec_nse::run_cli(config).await?;
 ```
 
 ## Writing Custom Scripts
@@ -140,7 +140,7 @@ end
 
 ### Security Considerations
 
-- Scripts run with the same permissions as the Slapper process
+- Scripts run with the same permissions as the Eggsec process
 - The `sandbox` feature restricts `io.popen` and filesystem access
 - Always validate user-provided script arguments
 - Use `--sandbox-dir` to limit filesystem access to a specific directory

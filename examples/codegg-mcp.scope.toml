@@ -1,5 +1,5 @@
 # Codegg MCP Server - Scoped Profile
-# Usage: slapper mcp-serve --stdio --profile coding-agent --scope-file scope.toml
+# Usage: eggsec mcp-serve --stdio --profile coding-agent --scope-file scope.toml
 
 [mcp]
 profile = "coding-agent"

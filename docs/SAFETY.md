@@ -1,6 +1,6 @@
 # Safety and Scope Enforcement
 
-Slapper is a security testing toolkit designed for **authorized testing only**.
+Eggsec is a security testing toolkit designed for **authorized testing only**.
 
 ## Scope Enforcement
 
@@ -11,7 +11,7 @@ All target-bearing operations go through scope validation:
 
 ## Operation Risk Tiers
 
-Slapper classifies operations by risk level:
+Eggsec classifies operations by risk level:
 
 | Risk Level | Description | Default |
 |------------|-------------|---------|
@@ -29,7 +29,7 @@ High-risk operations must be explicitly enabled in your config file.
 
 ## Authorization Requirements
 
-Before using Slapper:
+Before using Eggsec:
 1. Ensure you have explicit authorization to test the target
 2. Understand the scope of your testing engagement
 3. Review and configure operation policies appropriately
