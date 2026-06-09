@@ -3,6 +3,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::builtin::{dark_theme, light_theme};
+use super::canonical_theme_id;
 use super::palette::{Theme, ThemeColors, ThemeMode};
 
 #[derive(Debug, Error)]
@@ -275,7 +276,7 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
 
     Ok(Theme {
         mode,
-        name: file_stem.to_string(),
+        name: canonical_theme_id(file_stem),
         colors,
     })
 }
@@ -311,6 +312,16 @@ primary = "#D8DEE9"
         assert_eq!(theme.mode, ThemeMode::Dark);
         assert_eq!(theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
         assert_eq!(theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
+    }
+
+    #[test]
+    fn canonicalizes_theme_names_from_file_stems() {
+        let toml_content = r##"
+[general]
+background = "#2E3440"
+"##;
+        let theme = load_halloy_theme(toml_content, "Cyber Red").unwrap();
+        assert_eq!(theme.name, "cyber-red");
     }
 
     #[test]

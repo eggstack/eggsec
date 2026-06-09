@@ -1,7 +1,8 @@
 use rustc_hash::FxHashMap;
 
 use super::builtin::{cyber_red_theme, dark_theme, light_theme};
-use super::palette::{Theme, ThemeMode};
+use super::canonical_theme_id;
+use super::palette::Theme;
 
 pub struct ThemeManager {
     themes: FxHashMap<String, Theme>,
@@ -28,7 +29,8 @@ impl ThemeManager {
     }
 
     pub fn get_theme(&self, name: &str) -> Option<&Theme> {
-        self.themes.get(name)
+        let canonical = canonical_theme_id(name);
+        self.themes.get(canonical.as_str())
     }
 
     pub fn current(&self) -> &Theme {
@@ -36,7 +38,8 @@ impl ThemeManager {
     }
 
     pub fn set_theme(&mut self, name: &str) -> bool {
-        if let Some(theme) = self.themes.get(name) {
+        let canonical = canonical_theme_id(name);
+        if let Some(theme) = self.themes.get(canonical.as_str()) {
             self.current = theme.clone();
             true
         } else {
@@ -45,19 +48,12 @@ impl ThemeManager {
     }
 
     pub fn toggle(&mut self) {
-        let mut names: Vec<&str> = self.themes.keys().map(|s| s.as_str()).collect();
-        names.sort();
-        if names.is_empty() {
-            return;
-        }
-        let current_idx = names
-            .iter()
-            .position(|&n| n == self.current.name)
-            .unwrap_or(0);
-        let next_idx = (current_idx + 1) % names.len();
-        if let Some(next) = self.themes.get(names[next_idx]) {
-            self.current = next.clone();
-        }
+        let next = match self.current.name.as_str() {
+            "cyber-red" => "dark",
+            "dark" => "light",
+            _ => "cyber-red",
+        };
+        let _ = self.set_theme(next);
     }
 
     pub(crate) fn set_current_for_legacy_sync(&mut self, theme: &Theme) {
@@ -71,6 +67,8 @@ impl ThemeManager {
     }
 
     pub fn register_theme(&mut self, theme: Theme) {
+        let mut theme = theme;
+        theme.name = canonical_theme_id(&theme.name);
         let name = theme.name.clone();
         if name == "cyber-red" && self.themes.contains_key("cyber-red") {
             return;
@@ -79,17 +77,20 @@ impl ThemeManager {
     }
 
     pub fn register_theme_if_absent(&mut self, theme: Theme) -> bool {
-        let name = theme.name.clone();
+        let name = canonical_theme_id(&theme.name);
         if self.themes.contains_key(&name) {
             false
         } else {
+            let mut theme = theme;
+            theme.name = name.clone();
             self.themes.insert(name, theme);
             true
         }
     }
 
     pub fn set_current_by_name(&mut self, name: &str) -> bool {
-        if let Some(theme) = self.themes.get(name) {
+        let canonical = canonical_theme_id(name);
+        if let Some(theme) = self.themes.get(canonical.as_str()) {
             self.current = theme.clone();
             true
         } else {
@@ -119,14 +120,14 @@ mod tests {
     fn theme_manager_new_defaults_to_cyber_red() {
         let manager = ThemeManager::new();
         assert_eq!(manager.current().name, "cyber-red");
-        assert_eq!(manager.current().mode, ThemeMode::Dark);
+        assert_eq!(manager.current().mode, crate::theme::ThemeMode::Dark);
     }
 
     #[test]
     fn theme_manager_set_theme_succeeds() {
         let mut manager = ThemeManager::new();
         assert!(manager.set_theme("light"));
-        assert_eq!(manager.current().mode, ThemeMode::Light);
+        assert_eq!(manager.current().mode, crate::theme::ThemeMode::Light);
     }
 
     #[test]
@@ -145,6 +146,20 @@ mod tests {
         assert_eq!(manager.current().name, "dark");
         manager.toggle();
         assert_eq!(manager.current().name, "light");
+        manager.toggle();
+        assert_eq!(manager.current().name, "cyber-red");
+    }
+
+    #[test]
+    fn theme_manager_toggle_returns_to_cyber_red_from_custom_theme() {
+        let mut manager = ThemeManager::new();
+        let custom = crate::theme::palette::Theme {
+            mode: crate::theme::ThemeMode::Dark,
+            name: "custom".to_string(),
+            colors: crate::theme::builtin::dark_theme().colors,
+        };
+        manager.register_theme(custom);
+        assert!(manager.set_theme("custom"));
         manager.toggle();
         assert_eq!(manager.current().name, "cyber-red");
     }
@@ -179,7 +194,7 @@ mod tests {
         let mut manager = ThemeManager::new();
         let light = crate::theme::builtin::light_theme();
         manager.set_current_for_legacy_sync(&light);
-        assert_eq!(manager.current().mode, ThemeMode::Light);
+        assert_eq!(manager.current().mode, crate::theme::ThemeMode::Light);
         assert_eq!(manager.current().name, "light");
     }
 
@@ -187,7 +202,7 @@ mod tests {
     fn register_theme_inserts_new_theme() {
         let mut manager = ThemeManager::new();
         let custom = crate::theme::palette::Theme {
-            mode: ThemeMode::Dark,
+            mode: crate::theme::ThemeMode::Dark,
             name: "custom".to_string(),
             colors: crate::theme::builtin::dark_theme().colors,
         };
@@ -199,21 +214,30 @@ mod tests {
     fn register_theme_does_not_overwrite_cyber_red() {
         let mut manager = ThemeManager::new();
         let replacement = crate::theme::palette::Theme {
-            mode: ThemeMode::Dark,
-            name: "cyber-red".to_string(),
+            mode: crate::theme::ThemeMode::Dark,
+            name: "Cyber Red".to_string(),
             colors: crate::theme::builtin::dark_theme().colors,
         };
         manager.register_theme(replacement);
         assert_eq!(manager.current().name, "cyber-red");
         let current_colors = &manager.current().colors;
         assert_eq!(current_colors.primary, ratatui::style::Color::Red);
+        assert_eq!(manager.list_themes().len(), 3);
+        assert!(manager.list_themes().contains(&"cyber-red"));
+        assert!(!manager.list_themes().contains(&"Cyber Red"));
+        assert_eq!(
+            manager
+                .get_theme("Cyber Red")
+                .map(|theme| theme.name.as_str()),
+            Some("cyber-red")
+        );
     }
 
     #[test]
     fn register_theme_if_absent_returns_true_when_new() {
         let mut manager = ThemeManager::new();
         let custom = crate::theme::palette::Theme {
-            mode: ThemeMode::Dark,
+            mode: crate::theme::ThemeMode::Dark,
             name: "neon".to_string(),
             colors: crate::theme::builtin::dark_theme().colors,
         };
@@ -224,7 +248,7 @@ mod tests {
     fn register_theme_if_absent_returns_false_when_exists() {
         let mut manager = ThemeManager::new();
         let existing = crate::theme::palette::Theme {
-            mode: ThemeMode::Dark,
+            mode: crate::theme::ThemeMode::Dark,
             name: "dark".to_string(),
             colors: crate::theme::builtin::dark_theme().colors,
         };
@@ -234,7 +258,7 @@ mod tests {
     #[test]
     fn set_current_by_name_succeeds() {
         let mut manager = ThemeManager::new();
-        assert!(manager.set_current_by_name("light"));
+        assert!(manager.set_current_by_name("LIGHT"));
         assert_eq!(manager.current_name(), "light");
     }
 

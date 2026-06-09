@@ -36,7 +36,7 @@ use crate::session::{SessionConfig, SessionManager};
 use crate::state::SharedHistory;
 use crate::tabs;
 use crate::tabs::{Tab, TabInput};
-use crate::theme::ThemeManager;
+use crate::theme::{display_theme_name, ThemeManager};
 use crate::workers;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
@@ -69,6 +69,8 @@ pub struct App {
     pub bookmarks: FxHashSet<String>,
     pub theme_load_rx: Option<std::sync::mpsc::Receiver<crate::theme::install::ThemeInstallReport>>,
     pub theme_load_handle: Option<std::thread::JoinHandle<()>>,
+    pub deferred_theme_name: Option<String>,
+    pub theme_changed_by_user: bool,
 }
 
 impl App {
@@ -103,8 +105,11 @@ impl App {
             bookmarks: FxHashSet::default(),
             theme_load_rx: None,
             theme_load_handle: None,
+            deferred_theme_name: None,
+            theme_changed_by_user: false,
         };
         app.update_settings_theme_selector();
+        crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
         app
     }
 
@@ -181,19 +186,25 @@ impl App {
             bookmarks: restored_bookmarks,
             theme_load_rx: None,
             theme_load_handle: None,
+            deferred_theme_name: None,
+            theme_changed_by_user: false,
         };
 
-        // Restore theme from session immediately (cyber-red is already the default)
+        // Restore theme from session immediately if possible; otherwise retry after packaged
+        // themes are loaded in the background.
         if let Some(state) = &restored_state {
             if !app.theme_manager.set_theme(&state.theme_name) {
-                tracing::warn!("Unknown theme name in session: {}", state.theme_name);
+                tracing::warn!(
+                    theme = %state.theme_name,
+                    "theme unavailable at startup; will retry after theme load"
+                );
+                app.deferred_theme_name = Some(state.theme_name.clone());
             }
-            crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
         }
+        crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
 
-        // Sync settings with current theme
-        let theme = app.theme_manager.current().clone();
-        app.tabs.settings.sync_theme_selector(&theme.name);
+        // Sync settings with current theme and built-in list before the background loader runs.
+        app.update_settings_theme_selector();
 
         // Spawn background theme loading (non-blocking, non-fatal)
         app.spawn_theme_loader();
@@ -271,6 +282,7 @@ impl App {
         if self.current_tab == super::tabs::Tab::Settings {
             if let Some(theme_name) = self.tabs.settings.take_pending_theme() {
                 if self.theme_manager.set_theme(&theme_name) {
+                    self.theme_changed_by_user = true;
                     crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
                     self.update_settings_theme_selector();
                     self.needs_redraw = true;
@@ -576,12 +588,25 @@ impl App {
     }
 
     pub fn spawn_theme_loader(&mut self) {
+        if self.theme_load_rx.is_some() || self.theme_load_handle.is_some() {
+            tracing::debug!("theme loader already running");
+            return;
+        }
+
         let (tx, rx) = std::sync::mpsc::channel();
         self.theme_load_rx = Some(rx);
         self.theme_load_handle = Some(std::thread::spawn(move || {
             let report = crate::theme::install::load_and_install_themes();
             let _ = tx.send(report);
         }));
+    }
+
+    pub(crate) fn join_theme_loader_handle(&mut self) {
+        if let Some(handle) = self.theme_load_handle.take() {
+            if let Err(err) = handle.join() {
+                tracing::warn!(?err, "theme loading thread panicked");
+            }
+        }
     }
 
     pub fn handle_theme_install_report(
@@ -601,11 +626,24 @@ impl App {
                 Err(e) => tracing::warn!("Failed to load theme: {}", e),
             }
         }
+
+        if self.theme_changed_by_user {
+            self.deferred_theme_name = None;
+        } else if let Some(theme_name) = self.deferred_theme_name.take() {
+            if self.theme_manager.set_theme(&theme_name) {
+                crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
+                tracing::info!(theme = %theme_name, "restored deferred theme after theme load");
+            } else {
+                tracing::warn!(theme = %theme_name, "deferred theme still unavailable after theme load");
+            }
+        }
+
         self.update_settings_theme_selector();
     }
 
     pub fn toggle_theme(&mut self) {
         self.theme_manager.toggle();
+        self.theme_changed_by_user = true;
         crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
         self.update_settings_theme_selector();
     }
@@ -615,15 +653,10 @@ impl App {
             .theme_manager
             .list_themes()
             .iter()
-            .map(|id| (id.to_string(), id.to_string()))
+            .map(|id| (id.to_string(), display_theme_name(id)))
             .collect();
         let current = self.theme_manager.current_name().to_string();
         self.tabs.settings.set_available_themes(&themes, &current);
-    }
-
-    fn sync_theme_selector(&mut self) {
-        let current = self.theme_manager.current_name().to_string();
-        self.tabs.settings.sync_theme_selector(&current);
     }
 
     pub fn current_theme(&self) -> &crate::theme::Theme {
@@ -755,6 +788,28 @@ mod tests {
         App::new_for_testing(create_shared_history())
     }
 
+    fn make_theme(name: &str) -> crate::theme::Theme {
+        let colors = crate::theme::builtin::dark_theme().colors;
+        crate::theme::Theme {
+            mode: crate::theme::ThemeMode::Dark,
+            name: name.to_string(),
+            colors,
+        }
+    }
+
+    fn make_theme_install_report(
+        loaded_themes: Vec<Result<crate::theme::Theme, crate::theme::loader::ThemeLoadError>>,
+    ) -> crate::theme::install::ThemeInstallReport {
+        crate::theme::install::ThemeInstallReport {
+            theme_dir: None,
+            installed: 0,
+            skipped_existing: 0,
+            loaded: loaded_themes.iter().filter(|result| result.is_ok()).count(),
+            errors: Vec::new(),
+            loaded_themes,
+        }
+    }
+
     #[test]
     fn test_app_new_has_default_values() {
         let app = create_test_app();
@@ -765,6 +820,113 @@ mod tests {
         assert!(!app.overlay.show_search);
         assert!(app.search.query.is_empty());
         assert!(app.overlay.pending_action.is_none());
+    }
+
+    #[test]
+    fn test_new_for_testing_uses_cyber_red_and_display_labels() {
+        let app = create_test_app();
+        assert_eq!(app.current_theme().name, "cyber-red");
+        assert!(app.theme_load_rx.is_none());
+        assert!(app.theme_load_handle.is_none());
+        assert!(app.deferred_theme_name.is_none());
+        assert!(!app.theme_changed_by_user);
+
+        let items = &app.tabs.settings.theme_selector.items;
+        assert!(!items.is_empty());
+        assert_eq!(items[0].value, "cyber-red");
+        assert_eq!(items[0].label, "Cyber Red");
+    }
+
+    #[test]
+    fn test_deferred_theme_restore_applies_after_load() {
+        let mut app = create_test_app();
+        app.deferred_theme_name = Some("Catppuccin Mocha".to_string());
+
+        let report = make_theme_install_report(vec![Ok(make_theme("catppuccin-mocha"))]);
+        app.handle_theme_install_report(report);
+
+        assert_eq!(app.current_theme().name, "catppuccin-mocha");
+        assert_eq!(
+            app.tabs.settings.theme_selector.selected_value(),
+            Some("catppuccin-mocha")
+        );
+        assert!(app.deferred_theme_name.is_none());
+        assert!(!app.theme_changed_by_user);
+    }
+
+    #[test]
+    fn test_deferred_theme_restore_does_not_override_user_change() {
+        let mut app = create_test_app();
+        assert!(app.theme_manager.set_theme("dark"));
+        app.theme_changed_by_user = true;
+        app.deferred_theme_name = Some("catppuccin-mocha".to_string());
+
+        let report = make_theme_install_report(vec![Ok(make_theme("catppuccin-mocha"))]);
+        app.handle_theme_install_report(report);
+
+        assert_eq!(app.current_theme().name, "dark");
+        assert_eq!(
+            app.tabs.settings.theme_selector.selected_value(),
+            Some("dark")
+        );
+        assert!(app.deferred_theme_name.is_none());
+    }
+
+    #[test]
+    fn test_theme_loader_handle_is_joined_after_report() {
+        let mut app = create_test_app();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (sent_tx, sent_rx) = std::sync::mpsc::channel();
+        let report = make_theme_install_report(vec![]);
+
+        let handle = std::thread::spawn(move || {
+            tx.send(report).unwrap();
+            sent_tx.send(()).unwrap();
+        });
+
+        sent_rx.recv().unwrap();
+
+        app.theme_load_rx = Some(rx);
+        app.theme_load_handle = Some(handle);
+        app.update();
+
+        assert!(app.theme_load_rx.is_none());
+        assert!(app.theme_load_handle.is_none());
+    }
+
+    #[test]
+    fn test_theme_loader_disconnected_clears_state() {
+        let mut app = create_test_app();
+        let (tx, rx) = std::sync::mpsc::channel::<crate::theme::install::ThemeInstallReport>();
+        drop(tx);
+        let handle = std::thread::spawn(|| {});
+
+        app.theme_load_rx = Some(rx);
+        app.theme_load_handle = Some(handle);
+        app.update();
+
+        assert!(app.theme_load_rx.is_none());
+        assert!(app.theme_load_handle.is_none());
+    }
+
+    #[test]
+    fn test_spawn_theme_loader_is_guarded() {
+        let mut app = create_test_app();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(|| {});
+
+        app.theme_load_rx = Some(rx);
+        app.theme_load_handle = Some(handle);
+        app.spawn_theme_loader();
+
+        let report = make_theme_install_report(vec![]);
+        tx.send(report.clone()).unwrap();
+        let received = app.theme_load_rx.as_ref().unwrap().try_recv().unwrap();
+        assert_eq!(received.loaded, report.loaded);
+        assert_eq!(received.installed, report.installed);
+        assert_eq!(received.skipped_existing, report.skipped_existing);
+
+        app.theme_load_handle.take().unwrap().join().unwrap();
     }
 
     #[test]

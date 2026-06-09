@@ -1,6 +1,7 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem};
 use crate::tabs::{AppState, TabState};
+use crate::theme::{canonical_theme_id, display_theme_name};
 use slapper::config::{
     HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan, SlapperConfig,
 };
@@ -109,9 +110,9 @@ impl SettingsTab {
         ]);
 
         let theme_selector = Selector::new("Theme").items(vec![
-            SelectorItem::new("cyber-red", "cyber-red"),
-            SelectorItem::new("dark", "dark"),
-            SelectorItem::new("light", "light"),
+            SelectorItem::new(display_theme_name("cyber-red"), "cyber-red"),
+            SelectorItem::new(display_theme_name("dark"), "dark"),
+            SelectorItem::new(display_theme_name("light"), "light"),
         ]);
 
         Self {
@@ -487,11 +488,13 @@ impl SettingsTab {
     }
 
     pub fn sync_with_theme(&mut self, theme: &crate::theme::Theme) {
-        self.theme_selector.select_by_value(&theme.name);
+        let theme_name = canonical_theme_id(&theme.name);
+        self.theme_selector.select_by_value(&theme_name);
     }
 
     pub fn sync_theme_selector(&mut self, theme_name: &str) {
-        self.theme_selector.select_by_value(theme_name);
+        let theme_name = canonical_theme_id(theme_name);
+        self.theme_selector.select_by_value(&theme_name);
     }
 
     pub fn reset(&mut self) {
@@ -734,7 +737,13 @@ impl SettingsTab {
             .map(|(id, label)| crate::components::SelectorItem::new(label, id))
             .collect();
         self.theme_selector.set_items(items);
-        self.theme_selector.select_by_value(current_id);
+        let current_id = canonical_theme_id(current_id);
+        if !self.theme_selector.items.is_empty() {
+            self.theme_selector.select_by_value(&current_id);
+            if self.theme_selector.selected_value() != Some(current_id.as_str()) {
+                self.theme_selector.select(0);
+            }
+        }
     }
 
     pub fn is_input_focused(&self) -> bool {

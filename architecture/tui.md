@@ -238,7 +238,7 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 |------|---------|
 | `palette.rs` | `ThemeMode`, `Theme` (with `name: String`), `ThemeColors` structs |
 | `builtin.rs` | `dark_theme()`, `light_theme()`, `cyber_red_theme()` factory functions |
-| `manager.rs` | `ThemeManager` - holds registered themes, private `current`, theme switching |
+| `manager.rs` | `ThemeManager` - holds registered themes, private `current`, canonical ID lookup, theme switching |
 | `style.rs` | Theme style methods for rendering (currently unused helper methods) |
 | `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
 | `loader.rs` | Parses Halloy `.toml` themes into Slapper `Theme` structs; missing fields use defaults from built-in themes |
@@ -248,11 +248,11 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Built-in themes**: `cyber-red` (default fallback, always available), `dark`, `light`.
 
-**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`) and results are polled via `App::update()`. Failures are logged as warnings and do not block the UI.
+**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`), `App::update()` polls the channel, and the join handle is cleaned up once the final report arrives or the loader disconnects. Failures are logged as warnings and do not block the UI.
 
-**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. `Ctrl+T` cycles through all registered themes alphabetically. Session persistence saves and restores the selected theme name.
+**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles the built-in trio only (`cyber-red -> dark -> light -> cyber-red`). Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
 
-`ThemeManager` holds registered themes with 28 color fields. `Theme.name` is `String` to support file-loaded themes.
+`ThemeManager` holds registered themes with 28 color fields. `Theme.name` is the canonical stable ID for the theme, which keeps file-loaded themes and session restore aliases consistent.
 
 The main shell and popup layers use explicit `&Theme` parameters. Tab renderers and components still use the `tc!` macro for theme colors:
 
@@ -265,7 +265,7 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 ### Session Management (`session.rs`)
 
-`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/slapper/sessions/` on Linux via `directories::ProjectDirs`, with `~/.slapper/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions.
+`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/slapper/sessions/` on Linux via `directories::ProjectDirs`, with `~/.slapper/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request until the background loader registers it.
 
 ### Adding a New Tab
 
@@ -321,7 +321,7 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `Ctrl+P` | Command palette |
 | `Ctrl+X` | Quick switch (tab search) |
 | `Ctrl+F` | Global search |
-| `Ctrl+T` | Cycle through all registered themes |
+| `Ctrl+T` | Cycle built-in themes |
 | `Ctrl+Z` | Pause/resume active task updates |
 | `Ctrl+Y` | Resume when paused, otherwise copy |
 | `Space` | Toggle help |

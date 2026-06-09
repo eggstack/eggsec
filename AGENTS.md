@@ -186,10 +186,10 @@ No remaining stub implementations.
 - **AiClient Clone**: Uses `#[derive(Clone)]` at `client.rs:54`, not manual implementation. Don't claim manual implementation without verifying.
 - **Method call patterns**: A method being "called unconditionally" isn't a bug if the method internally handles `None` values appropriately.
 - **Packaged themes**: Run `python3 scripts/package_themes.py` after modifying `themes/*.toml` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
-- **Theme system**: 50 Halloy-format themes are packaged into the binary via LZMA compression. The `cyber-red` fallback theme is always available in-code, independent of file system access.
+- **Theme system**: 50 Halloy-format themes are packaged into the binary via LZMA compression. Packaged theme names are canonicalized to stable IDs, selector labels are display-friendly, and the `cyber-red` fallback theme is always available in-code, independent of file system access.
 - **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes into Slapper `Theme` structs. Missing fields use defaults from built-in themes.
 - **Theme install**: Packaged themes are installed idempotently to the user's config dir (`~/.config/slapper/themes` on Linux). Existing files are never overwritten.
-- **Theme background loading**: Theme loading runs in a background thread (`std::thread::spawn`) with results sent via `std::sync::mpsc`. `App::update()` polls the channel. `App::spawn_theme_loader()` starts the thread. `new_for_testing()` skips the loader.
+- **Theme background loading**: Theme loading runs in a background thread (`std::thread::spawn`) with results sent via `std::sync::mpsc`. `App::update()` polls the channel and joins the loader handle once the final report arrives. `App::spawn_theme_loader()` starts the thread. `new_for_testing()` skips the loader.
 
 ## Skills Directory
 

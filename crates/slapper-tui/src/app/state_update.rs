@@ -20,6 +20,7 @@ impl super::App {
             match rx.try_recv() {
                 Ok(report) => {
                     self.handle_theme_install_report(report);
+                    self.join_theme_loader_handle();
                     dirty = true;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -27,6 +28,7 @@ impl super::App {
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     tracing::warn!("Theme loading thread disconnected without sending report");
+                    self.join_theme_loader_handle();
                 }
             }
         }

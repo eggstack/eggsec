@@ -5,7 +5,7 @@ Specialized guidance for the terminal UI module.
 ## Recent Fixes (2026-05-29)
 
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
-- **Theme restoration**: SessionManager now restores theme when loading sessions
+- **Theme restoration**: SessionManager restores theme when loading sessions; packaged themes can be retried after the background loader finishes without blocking startup
 - **Settings save merge**: TUI settings now merge into the loaded config and preserve non-exposed sections
 - **waf.rs checkbox bounds check**: Fixed `waf.rs:519` to guard against out-of-bounds index when toggling technique checkboxes (matching `recon.rs:588-590` pattern)
 - **workers/security.rs error logging**: Fixed `security.rs:227,235` to use `tracing::warn!` instead of `tracing::debug!` for expected failure cases (finding list operations)
@@ -236,7 +236,7 @@ This ensures small terminals (< 24 rows) still show usable UI.
 
 ## Theme
 
-`Theme` has `name: String` (supports future file-loaded themes) and `ThemeManager.current` is private.
+`Theme.name` is the canonical stable ID for the theme, selector labels are derived separately for display, `Ctrl+T` cycles the built-in theme trio only, and `ThemeManager.current` is private.
 
 New rendering code should prefer explicit `&Theme` parameters:
 ```rust

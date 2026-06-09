@@ -174,7 +174,7 @@ All 29 tabs now properly guard input handlers with `!self.is_running()`. This pr
 
 ### Theming
 
-50+ Halloy-format themes are packaged into the binary via LZMA compression. The `cyber-red` fallback theme is always available in-code, independent of file system access.
+50+ Halloy-format themes are packaged into the binary via LZMA compression. Packaged theme names are canonicalized to stable IDs, selector labels are human-readable, and the `cyber-red` fallback theme is always available in-code, independent of file system access.
 
 New code should prefer explicit `&Theme` parameters:
 ```rust
@@ -191,7 +191,7 @@ let style = Style::default().fg(tc!(text));
 
 Semantic colors: `primary`, `secondary`, `accent`, `background`, `text`, `text_dim`, `success`, `warning`, `error`, `info`.
 
-The Settings tab has a theme selector dropdown. `Ctrl+T` cycles through all registered themes. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
+The Settings tab has a theme selector dropdown. `Ctrl+T` cycles the built-in theme trio only, while the selector exposes canonical values with readable labels. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
 
 ### Notifications
 

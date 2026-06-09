@@ -166,12 +166,13 @@ def emit_rust(files: list[tuple[str, bytes]], archive_bytes: bytes) -> str:
     lines.append(
         f"pub const PACKAGED_THEMES_FILE_COUNT: usize = {len(files)};"
     )
-    lines.append(f'pub const PACKAGED_THEMES_ARCHIVE_SHA256: &str = "{sha256}";')
+    lines.append("pub const PACKAGED_THEMES_ARCHIVE_SHA256: &str =")
+    lines.append(f'    "{sha256}";')
     lines.append("")
-    # Wrap long base64 string at ~80 chars per line for readability
-    lines.append("pub const PACKAGED_THEMES_LZMA_BASE64: &str =")
+    # Wrap long base64 string at ~80 chars per line for readability.
+    lines.append('pub const PACKAGED_THEMES_LZMA_BASE64: &str = "')
     _emit_long_string(lines, b64)
-    lines.append(";")
+    lines.append('    ";')
     lines.append("")
     lines.append("pub const PACKAGED_THEME_FILES: &[&str] = &[")
     for name in filenames:
@@ -186,12 +187,10 @@ def _emit_long_string(lines: list[str], s: str) -> None:
     """Emit a long string literal split across multiple lines."""
     CHUNK = 80
     if len(s) <= CHUNK:
-        lines.append(f'    "{s}"')
+        lines.append(s)
         return
-    lines.append('    "')
     for i in range(0, len(s), CHUNK):
         lines.append(s[i : i + CHUNK])
-    lines.append('    "')
 
 
 def main() -> None:
