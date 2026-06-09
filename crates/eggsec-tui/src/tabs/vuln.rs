@@ -4,15 +4,15 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::vuln::{
+    AssetCriticality, CvssScore, ExploitInfo, PrioritizedFinding, Remediation, TriageResult,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
-};
-use eggsec::vuln::{
-    AssetCriticality, CvssScore, ExploitInfo, PrioritizedFinding, Remediation, TriageResult,
 };
 
 pub struct VulnTab {

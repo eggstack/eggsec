@@ -9,8 +9,7 @@ async fn test_load_test_basic() {
     mock_ok("/").mount(&server).await;
 
     let runner =
-        eggsec::loadtest::LoadTestRunner::new(server.uri(), 10, 2, Duration::from_secs(5))
-            .unwrap();
+        eggsec::loadtest::LoadTestRunner::new(server.uri(), 10, 2, Duration::from_secs(5)).unwrap();
 
     let results = runner.run().await.unwrap();
 

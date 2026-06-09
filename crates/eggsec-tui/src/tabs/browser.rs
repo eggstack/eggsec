@@ -4,6 +4,7 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::browser::{BrowserConfig, BrowserReport};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -11,7 +12,6 @@ use ratatui::{
     widgets::{Block, Borders},
     Frame,
 };
-use eggsec::browser::{BrowserConfig, BrowserReport};
 
 pub struct BrowserTab {
     pub inputs: InputGroup,

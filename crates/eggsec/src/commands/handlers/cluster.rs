@@ -1,4 +1,5 @@
 use crate::commands::handlers::CommandContext;
+use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs) -> Result<()> {
@@ -185,9 +186,7 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                 println!("Cluster Status:");
                 println!("  No coordinator address provided.");
                 println!("  Start a coordinator with: eggsec cluster coordinator --psk <key>");
-                println!(
-                    "  Then check status with: eggsec cluster status --coordinator <address>"
-                );
+                println!("  Then check status with: eggsec cluster status --coordinator <address>");
             }
         }
         ClusterCommand::AddTask(add_args) => {
@@ -385,7 +384,17 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
     let mut results: Vec<RemoteResult> = Vec::new();
 
     for target in &targets {
-        ctx.ensure_scope(target)?;
+        ctx.evaluate_and_enforce_operation(OperationDescriptor {
+            operation: "exec".to_string(),
+            mode: crate::config::OperationMode::StandardAssessment,
+            risk: crate::config::OperationRisk::RemoteExecution,
+            intended_uses: vec![crate::config::IntendedUse::DistributedSystemStress],
+            target: Some(target.clone()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        })?;
         let (host, port) = crate::utils::parse_host_port(target, ctx.config.remote.default_port);
 
         println!("Executing on {}:{}...", host, port);

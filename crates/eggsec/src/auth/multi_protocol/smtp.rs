@@ -3,7 +3,7 @@
 //! Tests SMTP authentication mechanisms including PLAIN and LOGIN.
 
 use super::AuthTestResult;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::Severity;
 use std::net::TcpStream;
 use std::time::Duration;

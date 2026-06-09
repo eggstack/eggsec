@@ -206,7 +206,9 @@ mod tests {
             BudgetError::ZeroDuration.to_string(),
             "budget duration must be greater than zero"
         );
-        assert!(BudgetError::NoFiniteBound.to_string().contains("finite bound"));
+        assert!(BudgetError::NoFiniteBound
+            .to_string()
+            .contains("finite bound"));
         assert_eq!(
             BudgetError::ZeroConcurrency.to_string(),
             "concurrency must be greater than zero"

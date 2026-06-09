@@ -2,10 +2,10 @@
 //!
 //! Uses proptest to test invariants across arbitrary inputs.
 
-use proptest::prelude::*;
 use eggsec::config::ScopeRule;
 use eggsec::fuzzer::{generate_mutations, ReDosDetector};
 use eggsec::utils::target::{extract_domain, normalize_url};
+use proptest::prelude::*;
 
 // URL parsing should never panic on arbitrary input
 proptest! {

@@ -5,8 +5,8 @@
 
 #![cfg(feature = "nse")]
 
-use ipnetwork::IpNetwork;
 use eggsec::nse::SandboxConfig;
+use ipnetwork::IpNetwork;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use tempfile::TempDir;

@@ -1,4 +1,5 @@
-pub(crate) const REMOTE_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope, explicit authorization
+pub(crate) const REMOTE_ABOUT: &str =
+    "MODE: Hazardous Lab | REQUIRED: --scope, explicit authorization
 
 Start remote listener for distributed commands
 
@@ -11,7 +12,8 @@ Examples:
   eggsec remote start --port 7890 --tls-cert cert.pem --tls-key key.pem
   eggsec remote generate-key";
 
-pub(crate) const EXEC_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope, explicit authorization
+pub(crate) const EXEC_ABOUT: &str =
+    "MODE: Hazardous Lab | REQUIRED: --scope, explicit authorization
 
 Execute commands on remote systems
 

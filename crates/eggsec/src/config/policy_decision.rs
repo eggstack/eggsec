@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk, Scope};
+use super::{
+    ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk, Scope,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyDecision {
@@ -116,7 +118,10 @@ impl PolicyDecision {
     pub fn to_human_readable(&self) -> String {
         let mut lines = Vec::new();
         let status = if self.allowed { "ALLOWED" } else { "DENIED" };
-        lines.push(format!("Policy Decision [{}]: {}", status, self.decision_id));
+        lines.push(format!(
+            "Policy Decision [{}]: {}",
+            status, self.decision_id
+        ));
         lines.push(format!("  Operation: {}", self.operation));
         lines.push(format!("  Mode: {}", self.operation_mode));
         lines.push(format!("  Risk: {}", self.operation_risk));
@@ -131,7 +136,10 @@ impl PolicyDecision {
             lines.push(format!("  Normalized: {}", normalized));
         }
         if !self.resolved_addresses.is_empty() {
-            lines.push(format!("  Resolved: {}", self.resolved_addresses.join(", ")));
+            lines.push(format!(
+                "  Resolved: {}",
+                self.resolved_addresses.join(", ")
+            ));
         }
         if !self.matched_scope_rules.is_empty() {
             lines.push(format!(
@@ -234,10 +242,9 @@ pub fn evaluate_operation_policy(
     for feature in &descriptor.required_features {
         if !is_feature_enabled(feature) {
             decision = decision.with_missing_feature(feature);
-            decision.denied_reasons.push(format!(
-                "required feature '{}' is not enabled",
-                feature
-            ));
+            decision
+                .denied_reasons
+                .push(format!("required feature '{}' is not enabled", feature));
             decision.allowed = false;
         }
     }
@@ -258,12 +265,11 @@ pub fn evaluate_operation_policy(
                     decision.allowed = false;
                 }
                 Err(e) => {
-                    decision
-                        .warnings
-                        .push(format!("scope check error: {}", e));
+                    decision.warnings.push(format!("scope check error: {}", e));
                 }
             }
-        } else if descriptor.requires_explicit_scope || descriptor.requires_private_or_local_target {
+        } else if descriptor.requires_explicit_scope || descriptor.requires_private_or_local_target
+        {
             decision
                 .denied_reasons
                 .push("scope file required but not provided".to_string());
@@ -282,12 +288,10 @@ pub fn evaluate_operation_policy(
 
     // Check risk against execution policy
     if !descriptor.risk.is_allowed_by(policy) {
-        decision
-            .denied_reasons
-            .push(format!(
-                "operation risk '{}' is not allowed by current execution policy",
-                descriptor.risk
-            ));
+        decision.denied_reasons.push(format!(
+            "operation risk '{}' is not allowed by current execution policy",
+            descriptor.risk
+        ));
         decision.allowed = false;
     }
 
@@ -301,14 +305,10 @@ pub fn evaluate_operation_policy(
                         .push("require_explicit_scope is disabled in policy".to_string());
                     decision.allowed = false;
                 }
-                decision
-                    .required_policy_flags
-                    .push(flag.clone());
+                decision.required_policy_flags.push(flag.clone());
             }
             _ => {
-                decision
-                    .required_policy_flags
-                    .push(flag.clone());
+                decision.required_policy_flags.push(flag.clone());
             }
         }
     }

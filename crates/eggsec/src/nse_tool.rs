@@ -186,9 +186,7 @@ impl SecurityTool for NseTool {
 
     fn validate(&self, request: &ToolRequest) -> ToolResult<()> {
         if request.target.value.is_empty() {
-            return Err(EggsecError::InvalidTarget(
-                "Target is required".to_string(),
-            ));
+            return Err(EggsecError::InvalidTarget("Target is required".to_string()));
         }
 
         if !request.params.get("script").is_some() {

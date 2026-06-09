@@ -5,13 +5,13 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::scanner::ports::PortScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use eggsec::scanner::ports::PortScanResults;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScanPortsFocusArea {

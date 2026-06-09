@@ -161,9 +161,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
 
                 if config.schedule.is_empty() {
                     println!("No scheduled scans configured.");
-                    println!(
-                        "Add schedules with: eggsec report schedule add <cron_expr> <target>"
-                    );
+                    println!("Add schedules with: eggsec report schedule add <cron_expr> <target>");
                 } else {
                     let schedules_to_cron: Vec<_> = if let Some(id) = &cron_args.id {
                         let idx = id

@@ -205,11 +205,8 @@ mod tests {
     use std::fs;
 
     fn temp_theme_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "eggsec_theme_test_{}_{}",
-            std::process::id(),
-            name
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("eggsec_theme_test_{}_{}", std::process::id(), name));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

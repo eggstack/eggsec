@@ -47,7 +47,8 @@ Examples:
   eggsec stress 10.0.0.1:80 --type udp -r 10000 -d 120";
 
 #[cfg(feature = "stress-testing")]
-pub(crate) const PROXY_ABOUT: &str = "MODE: Hazardous Lab | REQUIRED: --scope, stress-testing feature, allow_stress_testing policy
+pub(crate) const PROXY_ABOUT: &str =
+    "MODE: Hazardous Lab | REQUIRED: --scope, stress-testing feature, allow_stress_testing policy
 
 Manage proxy pool and rotation
 

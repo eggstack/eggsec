@@ -18,7 +18,8 @@ Examples:
   eggsec fuzz https://api.example.com -t jwt  # JWT testing
   eggsec fuzz https://oauth.example.com -t oauth  # OAuth/OIDC testing";
 
-pub(crate) const WAF_STRESS_ABOUT: &str = "MODE: Defense Lab | REQUIRED: --scope (private/localhost), explicit scope
+pub(crate) const WAF_STRESS_ABOUT: &str =
+    "MODE: Defense Lab | REQUIRED: --scope (private/localhost), explicit scope
 
 WAF resilience validation
 

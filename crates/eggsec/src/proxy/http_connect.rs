@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::SensitiveString;
 use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
@@ -193,9 +193,9 @@ impl HttpConnectProxy {
             )));
         }
 
-        let status_code: u16 = parts[1].parse().map_err(|e| {
-            EggsecError::Proxy(format!("Invalid status code: {}: {}", parts[1], e))
-        })?;
+        let status_code: u16 = parts[1]
+            .parse()
+            .map_err(|e| EggsecError::Proxy(format!("Invalid status code: {}: {}", parts[1], e)))?;
 
         if !(200..300).contains(&status_code) {
             return Err(EggsecError::Proxy(format!(

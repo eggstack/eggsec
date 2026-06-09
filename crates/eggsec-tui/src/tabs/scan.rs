@@ -6,6 +6,8 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::cli::ScanProfile;
+use eggsec::pipeline::{PipelineReport, Stage};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -13,8 +15,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use eggsec::cli::ScanProfile;
-use eggsec::pipeline::{PipelineReport, Stage};
 
 pub struct ScanTab {
     pub inputs: InputGroup,

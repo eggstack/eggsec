@@ -588,7 +588,10 @@ description = "Critical database server"
 
         // Verify excluded target fields
         assert_eq!(scope.excluded_targets[0].pattern, "admin.example.com");
-        assert_eq!(scope.excluded_targets[1].cidr.as_deref(), Some("10.0.0.1/32"));
+        assert_eq!(
+            scope.excluded_targets[1].cidr.as_deref(),
+            Some("10.0.0.1/32")
+        );
     }
 
     #[test]

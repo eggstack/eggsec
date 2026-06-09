@@ -28,9 +28,9 @@ impl PdfGenerator {
 
         let (doc, page1, layer1) = PdfDocument::new(&config.title, Mm(210.0), Mm(297.0), "Layer 1");
 
-        let font = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| {
-            crate::error::EggsecError::Config(format!("Failed to add font: {}", e))
-        })?;
+        let font = doc
+            .add_builtin_font(BuiltinFont::Helvetica)
+            .map_err(|e| crate::error::EggsecError::Config(format!("Failed to add font: {}", e)))?;
 
         let current_layer = doc.get_page(page1).get_layer(layer1);
 
@@ -121,9 +121,9 @@ impl PdfGenerator {
             &font,
         );
 
-        let bytes = doc.save_to_bytes().map_err(|e| {
-            crate::error::EggsecError::Config(format!("Failed to save PDF: {}", e))
-        })?;
+        let bytes = doc
+            .save_to_bytes()
+            .map_err(|e| crate::error::EggsecError::Config(format!("Failed to save PDF: {}", e)))?;
 
         Ok(bytes)
     }

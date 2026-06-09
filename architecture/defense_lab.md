@@ -91,7 +91,7 @@ A defense-lab run produces structured output suitable for regression analysis. T
 | `baseline_id` | Reference to baseline run, if comparing |
 | `diff_summary` | Summary of differences against baseline (uses `DiffSummary` from `output::diff`) |
 
-The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The existing `DiffEngine` in `output/diff.rs` and `BaselineComparison` in `output/baseline.rs` provide the comparison logic.
+The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The `DiffSummary` type in `crates/eggsec-output/src/diff.rs` and `BaselineComparison` in `crates/eggsec-output/src/baseline.rs` provide the comparison logic.
 
 ## Shared Probe Vocabulary
 
@@ -99,7 +99,7 @@ Defense-lab profiles use the shared `ProbeIntent` and `ProbeRisk` enums defined 
 
 ## Defense-Lab Profiles
 
-All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:262-266`) and wired into the stage runner (`pipeline/stage.rs:92-107`).
+All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-352`) and wired into the stage runner (`pipeline/stage.rs:96-111`).
 
 | Profile | Semantics | Stages | Feature Requirements |
 |---------|-----------|--------|---------------------|

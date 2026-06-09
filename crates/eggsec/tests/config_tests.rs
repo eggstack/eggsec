@@ -1,4 +1,4 @@
-use eggsec::config::{Scope, ScopeRule, EggsecConfig, TargetScope};
+use eggsec::config::{EggsecConfig, Scope, ScopeRule, TargetScope};
 
 #[test]
 fn test_config_default() {

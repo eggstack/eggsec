@@ -148,6 +148,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **CommandContext Policy Wrapper**: Use `CommandContext::evaluate_and_enforce_operation()` for command handlers — it wraps `evaluate_operation_policy` with scope enforcement and structured denial output
 - **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile
 - **MCP Policy Helpers**: `classify_tool_risk()` and `infer_tool_category()` in MCP policy infer tool metadata from tool IDs; `policy_decision_for_mcp_call()` builds a `PolicyDecision` for MCP tool invocations
+- **MCP Policy Denials**: The `tools/call` handler in `tool/protocol/mcp/handlers/server.rs` now computes a full `PolicyDecision` via `policy_decision_for_mcp_call()` and embeds it in the MCP error response `data` field, enabling structured downstream consumption of denial reasons.
 - **Feature Availability Checks**: Use `is_feature_enabled()` in `config/policy_decision.rs` for compile-time feature availability checks in policy decisions
 - **eggsec-output Re-exports**: The `eggsec-output` crate re-exports key types (`Severity`, `AgentFinding`, `ScanReportData`, `DiffSummary`, `TrendAnalyzer`, etc.) at its crate root. Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity` directly.
 

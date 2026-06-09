@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use eggsec_core::types::Severity;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiOutput {

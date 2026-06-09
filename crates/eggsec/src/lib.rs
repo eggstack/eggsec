@@ -170,6 +170,6 @@ pub mod packet;
 #[cfg(feature = "wireless")]
 pub mod wireless;
 
-pub use config::{load_config, load_scope, Scope, EggsecConfig};
-pub use error::{Result, EggsecError};
+pub use config::{load_config, load_scope, EggsecConfig, Scope};
+pub use error::{EggsecError, Result};
 pub use types::Severity;

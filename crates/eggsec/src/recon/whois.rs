@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::utils::connect_with_nodelay;
 use crate::utils::extract_target_from_url;
 use serde::{Deserialize, Serialize};

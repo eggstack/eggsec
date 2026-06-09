@@ -346,10 +346,7 @@ mod tests {
             "standard-assessment"
         );
         assert_eq!(format!("{}", OperationMode::DefenseLab), "defense-lab");
-        assert_eq!(
-            format!("{}", OperationMode::HazardousLab),
-            "hazardous-lab"
-        );
+        assert_eq!(format!("{}", OperationMode::HazardousLab), "hazardous-lab");
     }
 
     #[test]

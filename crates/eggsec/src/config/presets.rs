@@ -46,8 +46,7 @@ impl DefenseLabPreset {
     pub fn synvoid_waf_regression() -> Self {
         Self {
             name: "synvoid-waf-regression".to_string(),
-            description: "WAF payload and evasion-resistance regression for Synvoid"
-                .to_string(),
+            description: "WAF payload and evasion-resistance regression for Synvoid".to_string(),
             operation_mode: OperationMode::DefenseLab,
             max_risk: OperationRisk::Intrusive,
             intended_uses: vec![IntendedUse::WafRegression],
@@ -67,8 +66,7 @@ impl DefenseLabPreset {
     pub fn synvoid_protocol_edge() -> Self {
         Self {
             name: "synvoid-protocol-edge".to_string(),
-            description: "Malformed protocol and TCP/TLS/HTTP edge behavior validation"
-                .to_string(),
+            description: "Malformed protocol and TCP/TLS/HTTP edge behavior validation".to_string(),
             operation_mode: OperationMode::DefenseLab,
             max_risk: OperationRisk::SafeActive,
             intended_uses: vec![IntendedUse::ProtocolEdgeValidation],

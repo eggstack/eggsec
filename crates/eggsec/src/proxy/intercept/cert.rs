@@ -2,7 +2,7 @@
 //!
 //! Generates on-the-fly SSL certificates for intercepting HTTPS traffic.
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use parking_lot::RwLock;
 use rcgen::{
     BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,

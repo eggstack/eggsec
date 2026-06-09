@@ -80,10 +80,7 @@ impl LabDefenseReportSection {
             "Policy: {} ({})",
             status, self.policy_summary.operation_mode
         ));
-        lines.push(format!(
-            "  Risk: {}",
-            self.policy_summary.operation_risk
-        ));
+        lines.push(format!("  Risk: {}", self.policy_summary.operation_risk));
 
         if !self.feature_flags_used.is_empty() {
             lines.push(format!(

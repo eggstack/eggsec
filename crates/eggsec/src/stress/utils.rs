@@ -1,5 +1,5 @@
 #[cfg(feature = "stress-testing")]
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 #[cfg(feature = "stress-testing")]
 use std::net::IpAddr;
 #[cfg(all(feature = "stress-testing", unix))]
@@ -47,9 +47,7 @@ pub fn create_channel(
 
     match datalink::channel(interface, config) {
         Ok(Ethernet(tx, rx)) => Ok((tx, rx)),
-        Ok(_) => Err(EggsecError::Runtime(
-            "Unsupported channel type".to_string(),
-        )),
+        Ok(_) => Err(EggsecError::Runtime("Unsupported channel type".to_string())),
         Err(e) => Err(EggsecError::Runtime(format!(
             "Failed to create channel: {}",
             e

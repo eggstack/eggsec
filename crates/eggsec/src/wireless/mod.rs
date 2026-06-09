@@ -6,7 +6,7 @@
 //!
 //! This module is feature-gated behind the `wireless` feature flag.
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
 

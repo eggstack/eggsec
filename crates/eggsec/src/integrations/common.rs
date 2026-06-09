@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use std::time::Duration;
 
 const MAX_ERROR_BODY_LEN: usize = 200;

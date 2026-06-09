@@ -165,7 +165,10 @@ fn evaluate_operation_policy_allowed_localhost() {
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
     assert!(decision.allowed);
-    assert!(decision.matched_scope_rules.iter().any(|r| r.contains("target in scope")));
+    assert!(decision
+        .matched_scope_rules
+        .iter()
+        .any(|r| r.contains("target in scope")));
 }
 
 #[test]

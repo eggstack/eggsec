@@ -2,8 +2,8 @@ use crate::cli::plan::PlanArgs;
 use crate::cli::ScanProfile;
 use crate::commands::handlers::CommandContext;
 use crate::config::{
-    evaluate_operation_policy, load_scope, OperationDescriptor, OperationMode,
-    OperationRisk, PolicyDecision,
+    evaluate_operation_policy, load_scope, OperationDescriptor, OperationMode, OperationRisk,
+    PolicyDecision,
 };
 use anyhow::Result;
 
@@ -212,10 +212,7 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
         )
     })?;
 
-    let scope = args
-        .scope
-        .as_deref()
-        .and_then(|s| load_scope(Some(s)).ok());
+    let scope = args.scope.as_deref().and_then(|s| load_scope(Some(s)).ok());
 
     let mode = profile.operation_mode();
     let risk = profile.max_risk_budget().to_operation_risk();
@@ -228,7 +225,9 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
 
     for stage in &stages {
         let mut required_features = stage.required_features.clone();
-        if profile.requires_packet_inspection() && !required_features.contains(&"packet-inspection".to_string()) {
+        if profile.requires_packet_inspection()
+            && !required_features.contains(&"packet-inspection".to_string())
+        {
             required_features.push("packet-inspection".to_string());
         }
         if profile.requires_nse() && !required_features.contains(&"nse".to_string()) {
@@ -247,7 +246,8 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             requires_explicit_scope: profile.requires_private_scope(),
         };
 
-        let decision = evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());
+        let decision =
+            evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());
         let stage_allowed = decision.allowed;
         policy_decisions.push(decision);
 
@@ -296,12 +296,7 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             }
             println!();
             for (i, stage) in output.stages.iter().enumerate() {
-                println!(
-                    "  {}. {} (risk: {})",
-                    i + 1,
-                    stage.name,
-                    stage.risk
-                );
+                println!("  {}. {} (risk: {})", i + 1, stage.name, stage.risk);
             }
             for skipped in &output.skipped_stages {
                 println!("  - {} [SKIPPED: {}]", skipped.name, skipped.reason);

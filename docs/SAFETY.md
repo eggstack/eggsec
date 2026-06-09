@@ -22,6 +22,7 @@ Eggsec classifies operations by risk level:
 | StressTest | Stress testing | Blocked |
 | RawPacket | Raw packet operations | Blocked |
 | CredentialTesting | Auth testing | Blocked |
+| ExploitAdjacent | Exploit-adjacent testing (e.g. chained primitives) | Blocked |
 | RemoteExecution | Remote command execution | Blocked |
 | AgentAutonomous | Agent-driven operations | Blocked |
 

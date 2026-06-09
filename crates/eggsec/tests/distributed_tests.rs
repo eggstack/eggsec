@@ -1,6 +1,6 @@
-use rustc_hash::FxHashMap;
 use eggsec::distributed::queue::{TaskQueue, TaskResult};
 use eggsec::distributed::{RemoteClient, RemoteListener, Task, TaskType};
+use rustc_hash::FxHashMap;
 
 fn make_task(id: &str, job_id: &str) -> Task {
     Task {

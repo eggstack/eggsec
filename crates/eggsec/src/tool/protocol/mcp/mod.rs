@@ -14,8 +14,8 @@ mod types;
 pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
 pub use policy::{
-    classify_tool_risk, denial_from_violation, McpPolicyDenial, McpProfilePolicy,
-    PolicyViolation, policy_decision_for_mcp_call, TargetPolicy, ToolSelector,
+    classify_tool_risk, denial_from_violation, policy_decision_for_mcp_call, McpPolicyDenial,
+    McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector,
 };
 pub use profile::McpProfile;
 pub use routes::{create_mcp_router, run_stdio};
@@ -698,8 +698,7 @@ mod tests {
             .collect();
 
         assert!(
-            uris.iter()
-                .any(|u| u.starts_with("eggsec://coding-agent/")),
+            uris.iter().any(|u| u.starts_with("eggsec://coding-agent/")),
             "should have coding-agent resources"
         );
         assert!(
@@ -732,9 +731,7 @@ mod tests {
             "should have ops-agent resources"
         );
         assert!(
-            !uris
-                .iter()
-                .any(|u| u.starts_with("eggsec://coding-agent/")),
+            !uris.iter().any(|u| u.starts_with("eggsec://coding-agent/")),
             "should not have coding-agent resources"
         );
     }

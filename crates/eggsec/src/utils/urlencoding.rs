@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 
 pub fn encode(s: &str) -> String {
     let mut encoded = String::with_capacity(s.len() * 3);

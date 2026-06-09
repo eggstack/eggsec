@@ -3,7 +3,7 @@
 //! Provides integration with template marketplaces for downloading
 //! and managing community-contributed vulnerability templates.
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::scanner::templates::verify::{SignedTemplate, TemplateVerifier};
 use crate::scanner::templates::{TemplateLoader, VulnerabilityTemplate};
 use serde::{Deserialize, Serialize};
@@ -114,10 +114,12 @@ impl TemplateMarketplace {
             self.base_url, template_id
         );
 
-        let response =
-            self.http_client.get(&url).send().await.map_err(|e| {
-                EggsecError::Network(format!("Failed to download template: {}", e))
-            })?;
+        let response = self
+            .http_client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| EggsecError::Network(format!("Failed to download template: {}", e)))?;
 
         if !response.status().is_success() {
             return Err(EggsecError::Network(format!(
@@ -126,9 +128,10 @@ impl TemplateMarketplace {
             )));
         }
 
-        let content = response.text().await.map_err(|e| {
-            EggsecError::Network(format!("Failed to read template content: {}", e))
-        })?;
+        let content = response
+            .text()
+            .await
+            .map_err(|e| EggsecError::Network(format!("Failed to read template content: {}", e)))?;
 
         let loader = TemplateLoader::default();
         let mut final_template = loader.parse_template(&content)?;
@@ -176,9 +179,8 @@ impl TemplateMarketplace {
             )));
         }
 
-        std::fs::create_dir_all(&self.local_cache).map_err(|e| {
-            EggsecError::Config(format!("Failed to create cache directory: {}", e))
-        })?;
+        std::fs::create_dir_all(&self.local_cache)
+            .map_err(|e| EggsecError::Config(format!("Failed to create cache directory: {}", e)))?;
 
         let cache_path = self.local_cache.join(format!("{}.yaml", template_id));
 

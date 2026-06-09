@@ -4,6 +4,7 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::scanner::endpoints::EndpointScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -11,7 +12,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use eggsec::scanner::endpoints::EndpointScanResults;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScanEndpointsFocusArea {
@@ -213,10 +213,7 @@ impl ScanEndpointsTab {
         if let Some(path_str) = wordlist_path {
             let path = std::path::Path::new(&path_str);
             if !path.exists() {
-                self.state = AppState::Error(format!(
-                    "Wordlist file not found: {}",
-                    path_str
-                ));
+                self.state = AppState::Error(format!("Wordlist file not found: {}", path_str));
                 self.error = Some(TabError::Config(format!(
                     "Wordlist file not found: {}",
                     path_str
@@ -224,10 +221,7 @@ impl ScanEndpointsTab {
                 return;
             }
             if !path.is_file() {
-                self.state = AppState::Error(format!(
-                    "Wordlist path is not a file: {}",
-                    path_str
-                ));
+                self.state = AppState::Error(format!("Wordlist path is not a file: {}", path_str));
                 self.error = Some(TabError::Config(format!(
                     "Wordlist path is not a file: {}",
                     path_str

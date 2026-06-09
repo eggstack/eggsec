@@ -73,9 +73,9 @@ pub use ai_analyze::*;
 
 use crate::cli::Cli;
 use crate::cli::Commands;
-use crate::config::OperationDescriptor;
 use crate::config::evaluate_operation_policy;
-use crate::config::{Scope, EggsecConfig};
+use crate::config::OperationDescriptor;
+use crate::config::{EggsecConfig, Scope};
 use crate::error::Result as ErrorResult;
 use anyhow::Result;
 

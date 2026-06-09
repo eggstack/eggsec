@@ -5,6 +5,7 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::waf::{BypassResult, WafDetectionResult};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -12,7 +13,6 @@ use ratatui::{
     widgets::{Block, Borders},
     Frame,
 };
-use eggsec::waf::{BypassResult, WafDetectionResult};
 
 pub struct WafTab {
     pub inputs: InputGroup,

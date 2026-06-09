@@ -3,7 +3,7 @@ use crate::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem
 use crate::tabs::{AppState, TabState};
 use crate::theme::{canonical_theme_id, display_theme_name};
 use eggsec::config::{
-    HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan, EggsecConfig,
+    EggsecConfig, HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

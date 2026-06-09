@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::utils::create_insecure_http_client;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;

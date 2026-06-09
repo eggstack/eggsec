@@ -3,7 +3,7 @@
 use std::net::IpAddr;
 use std::time::Duration;
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use surge_ping::{IcmpPacket, PingIdentifier, PingSequence};
 
 #[derive(Debug, Clone, serde::Serialize)]

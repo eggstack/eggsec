@@ -11,7 +11,7 @@ use tokio::sync::{broadcast, RwLock};
 use crate::distributed::command::{CommandExecutor, CommandMessage, ResponseMessage};
 use crate::distributed::io::{LineWriter, StreamWrapper, TlsClient, TlsServer};
 use crate::distributed::{queue::TaskQueue, CAPABILITIES};
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::utils::connect_with_nodelay_timeout;
 
 const MAX_CONNECTIONS: usize = 100;
@@ -655,9 +655,8 @@ impl RemoteClient {
     }
 
     pub fn with_tls(psk: String, domain: &str) -> Result<Self> {
-        let tls = TlsClient::new(domain).map_err(|e| {
-            EggsecError::Network(format!("Failed to initialize TLS client: {}", e))
-        })?;
+        let tls = TlsClient::new(domain)
+            .map_err(|e| EggsecError::Network(format!("Failed to initialize TLS client: {}", e)))?;
         Ok(Self {
             psk,
             tls: Some(tls),
@@ -741,10 +740,7 @@ impl RemoteClient {
                     Ok(s) => s,
                     Err(e) => {
                         tracing::error!("TLS handshake failed: {}", e);
-                        return Err(EggsecError::Network(format!(
-                            "TLS handshake failed: {}",
-                            e
-                        )));
+                        return Err(EggsecError::Network(format!("TLS handshake failed: {}", e)));
                     }
                 }
             }
@@ -769,9 +765,7 @@ impl RemoteClient {
                 Ok::<_, EggsecError>(serde_json::from_str::<ResponseMessage>(&line)?)
             })
             .await
-            .map_err(|_| {
-                EggsecError::Network("Authentication response timed out".to_string())
-            })??;
+            .map_err(|_| EggsecError::Network("Authentication response timed out".to_string()))??;
 
         if !auth_response.success {
             return Err(EggsecError::Validation(format!(
@@ -1025,10 +1019,7 @@ impl RemoteClient {
                     Ok(s) => s,
                     Err(e) => {
                         tracing::error!("TLS handshake failed: {}", e);
-                        return Err(EggsecError::Network(format!(
-                            "TLS handshake failed: {}",
-                            e
-                        )));
+                        return Err(EggsecError::Network(format!("TLS handshake failed: {}", e)));
                     }
                 }
             }
@@ -1054,9 +1045,7 @@ impl RemoteClient {
                 Ok::<_, EggsecError>(serde_json::from_str::<ResponseMessage>(&line)?)
             })
             .await
-            .map_err(|_| {
-                EggsecError::Network("Authentication response timed out".to_string())
-            })??;
+            .map_err(|_| EggsecError::Network("Authentication response timed out".to_string()))??;
 
         if !auth_response.success {
             return Err(EggsecError::Validation(format!(

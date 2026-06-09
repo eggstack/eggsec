@@ -14,7 +14,7 @@ pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
 pub use rules::{InterceptRule, RuleAction, RuleSet};
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use parking_lot::RwLock;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::net::{IpAddr, SocketAddr};

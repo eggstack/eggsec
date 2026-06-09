@@ -1,5 +1,5 @@
 use crate::config::Scope;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::utils::target::extract_target_from_url;
 
 pub fn check_scope(scope: &Scope, target: &str) -> Result<()> {

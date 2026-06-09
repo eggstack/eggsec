@@ -48,7 +48,6 @@ pub use agent::{
     AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,
     RemediationEffort,
 };
-pub use policy_summary::PolicySummary;
 pub use convert::{
     convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
     load_scan_report, FindingData, PortData, ScanReportData, ServiceData,
@@ -57,6 +56,7 @@ pub use convert::{
 pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
 pub use diff::DiffSummary;
 pub use junit::{JUnitBuilder, JUnitReport, JUnitTestResult};
+pub use policy_summary::PolicySummary;
 pub use sarif::{SarifBuilder, SarifReport};
 pub use schedule::{CronExpression, CronScheduler, Priority, ScanOptions, ScanQueue, ScanType};
 pub use session::{ScanSession, SessionInfo};

@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::SocketAddr;

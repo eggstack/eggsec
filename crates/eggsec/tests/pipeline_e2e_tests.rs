@@ -2,7 +2,7 @@
 //!
 //! Tests the complete scan pipeline from configuration through execution to output.
 
-use eggsec::config::{FuzzProfile, ScanConfig, EggsecConfig};
+use eggsec::config::{EggsecConfig, FuzzProfile, ScanConfig};
 use eggsec::utils::parsing::parse_ports;
 
 #[test]

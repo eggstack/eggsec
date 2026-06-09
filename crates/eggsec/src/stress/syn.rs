@@ -1,5 +1,5 @@
 #[cfg(all(feature = "stress-testing", unix))]
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 #[cfg(all(feature = "stress-testing", unix))]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(all(feature = "stress-testing", unix))]

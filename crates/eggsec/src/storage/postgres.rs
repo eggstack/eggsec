@@ -1,5 +1,5 @@
-use crate::error::Result;
 use crate::error::EggsecError;
+use crate::error::Result;
 use crate::findings::lifecycle::{FindingStatus, StoredFinding};
 use crate::storage::models::StoredScan;
 use crate::storage::StorageConfig;

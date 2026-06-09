@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::integrations::common::send_with_retry;
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;

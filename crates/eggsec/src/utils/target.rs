@@ -6,9 +6,8 @@ use crate::error::EggsecError;
 ///
 /// This replaces the `addr.parse().unwrap()` pattern used throughout the codebase.
 pub fn parse_socket_addr(addr: &str) -> Result<SocketAddr, EggsecError> {
-    addr.parse().map_err(|e| {
-        EggsecError::AddressParse(format!("Invalid socket address '{}': {}", addr, e))
-    })
+    addr.parse()
+        .map_err(|e| EggsecError::AddressParse(format!("Invalid socket address '{}': {}", addr, e)))
 }
 
 pub fn extract_target_from_url(url: &str) -> Option<String> {

@@ -19,7 +19,7 @@ use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
 use crate::tool::protocol::mcp::handlers::helpers::{
     build_capabilities_summary, build_input_schema,
 };
-use crate::tool::protocol::mcp::policy::McpProfilePolicy;
+use crate::tool::protocol::mcp::policy::{policy_decision_for_mcp_call, McpProfilePolicy};
 use crate::tool::protocol::mcp::profile::McpProfile;
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts_for_profile;
 use crate::tool::protocol::mcp::streaming::StreamEvent;
@@ -397,20 +397,38 @@ impl McpServer {
             self.policy
                 .validate_tool_call(&tool_id, capability.as_deref(), &arguments)
         {
+            let execution_policy = crate::config::ExecutionPolicy::default();
+            let scope_ref = self.scope.as_ref();
+            let decision = policy_decision_for_mcp_call(
+                &self.policy,
+                &tool_id,
+                &arguments,
+                &execution_policy,
+                scope_ref,
+            );
             return req.error_response(McpError {
                 code: violation.to_mcp_error_code(),
                 message: violation.to_string(),
-                data: None,
+                data: Some(serde_json::to_value(&decision).unwrap_or_default()),
             });
         }
 
         // Target policy enforcement
         if !target_value.is_empty() {
             if let Err(violation) = self.policy.validate_target(target_value) {
+                let execution_policy = crate::config::ExecutionPolicy::default();
+                let scope_ref = self.scope.as_ref();
+                let decision = policy_decision_for_mcp_call(
+                    &self.policy,
+                    &tool_id,
+                    &arguments,
+                    &execution_policy,
+                    scope_ref,
+                );
                 return req.error_response(McpError {
                     code: violation.to_mcp_error_code(),
                     message: violation.to_string(),
-                    data: None,
+                    data: Some(serde_json::to_value(&decision).unwrap_or_default()),
                 });
             }
         }

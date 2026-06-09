@@ -48,7 +48,7 @@ pub mod report;
 pub mod session;
 pub mod stage;
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::output::extensions::{JUnitBuilderExt, SarifBuilderExt};
 
 use crate::cli::ResumeArgs;

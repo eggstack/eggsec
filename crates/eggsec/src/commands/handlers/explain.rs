@@ -8,10 +8,7 @@ use crate::config::{
 };
 
 pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs) -> Result<()> {
-    let scope = args
-        .scope
-        .as_deref()
-        .and_then(|s| load_scope(Some(s)).ok());
+    let scope = args.scope.as_deref().and_then(|s| load_scope(Some(s)).ok());
     let decision = crate::cli::explain::evaluate_policy_decision(
         args.target.as_deref(),
         args.profile.as_deref(),
@@ -29,10 +26,7 @@ pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs
 }
 
 pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) -> Result<()> {
-    let scope = args
-        .scope
-        .as_deref()
-        .and_then(|s| load_scope(Some(s)).ok());
+    let scope = args.scope.as_deref().and_then(|s| load_scope(Some(s)).ok());
 
     let descriptor = OperationDescriptor {
         operation: "scope-explain".to_string(),
@@ -46,7 +40,8 @@ pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) 
         requires_explicit_scope: false,
     };
 
-    let decision = evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());
+    let decision =
+        evaluate_operation_policy(&descriptor, &ctx.config.execution_policy, scope.as_ref());
 
     if args.json || ctx.json {
         println!("{}", serde_json::to_string_pretty(&decision)?);

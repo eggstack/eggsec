@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::SensitiveString;
 use crate::utils::create_http_client_with_options;
 use maxminddb::geoip2;

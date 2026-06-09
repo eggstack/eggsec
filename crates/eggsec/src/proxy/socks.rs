@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::SensitiveString;
 use crate::utils::connect_with_nodelay_timeout;
 use std::net::{IpAddr, SocketAddr};

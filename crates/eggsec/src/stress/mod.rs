@@ -16,7 +16,7 @@ pub use authorization::StressAuthorization;
 pub use metrics::{StressMetrics, StressStats};
 pub use warning::{display_warning, require_confirmation};
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

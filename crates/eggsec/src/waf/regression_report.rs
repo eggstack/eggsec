@@ -54,12 +54,30 @@ pub struct WafBehaviorSummary {
 impl WafBehaviorSummary {
     pub fn from_cases(cases: &[WafRegressionCase]) -> Self {
         let total_cases = cases.len();
-        let blocked = cases.iter().filter(|c| c.behavior == WafBehavior::Blocked).count();
-        let allowed = cases.iter().filter(|c| c.behavior == WafBehavior::Allowed).count();
-        let challenged = cases.iter().filter(|c| c.behavior == WafBehavior::Challenged).count();
-        let tarpitted = cases.iter().filter(|c| c.behavior == WafBehavior::Tarpitted).count();
-        let errored = cases.iter().filter(|c| c.behavior == WafBehavior::Errored).count();
-        let skipped = cases.iter().filter(|c| c.behavior == WafBehavior::Skipped).count();
+        let blocked = cases
+            .iter()
+            .filter(|c| c.behavior == WafBehavior::Blocked)
+            .count();
+        let allowed = cases
+            .iter()
+            .filter(|c| c.behavior == WafBehavior::Allowed)
+            .count();
+        let challenged = cases
+            .iter()
+            .filter(|c| c.behavior == WafBehavior::Challenged)
+            .count();
+        let tarpitted = cases
+            .iter()
+            .filter(|c| c.behavior == WafBehavior::Tarpitted)
+            .count();
+        let errored = cases
+            .iter()
+            .filter(|c| c.behavior == WafBehavior::Errored)
+            .count();
+        let skipped = cases
+            .iter()
+            .filter(|c| c.behavior == WafBehavior::Skipped)
+            .count();
         let regression_count = cases.iter().filter(|c| c.regression).count();
         let new_bypass_count = cases
             .iter()
@@ -110,7 +128,10 @@ impl WafRegressionReport {
             self.started_at.format("%Y-%m-%d %H:%M:%S UTC"),
             self.ended_at.format("%Y-%m-%d %H:%M:%S UTC")
         ));
-        out.push_str(&format!("Families tested: {}\n", self.payload_families_tested.len()));
+        out.push_str(&format!(
+            "Families tested: {}\n",
+            self.payload_families_tested.len()
+        ));
         out.push_str("\nBehavior Summary:\n");
         out.push_str(&format!("  Total cases: {}\n", self.summary.total_cases));
         out.push_str(&format!("  Blocked: {}\n", self.summary.blocked));
@@ -119,8 +140,14 @@ impl WafRegressionReport {
         out.push_str(&format!("  Tarpitted: {}\n", self.summary.tarpitted));
         out.push_str(&format!("  Errored: {}\n", self.summary.errored));
         out.push_str(&format!("  Skipped: {}\n", self.summary.skipped));
-        out.push_str(&format!("  Regressions: {}\n", self.summary.regression_count));
-        out.push_str(&format!("  New bypasses: {}\n", self.summary.new_bypass_count));
+        out.push_str(&format!(
+            "  Regressions: {}\n",
+            self.summary.regression_count
+        ));
+        out.push_str(&format!(
+            "  New bypasses: {}\n",
+            self.summary.new_bypass_count
+        ));
 
         if self.summary.regression_count > 0 {
             out.push_str("\nRegressions detected:\n");
@@ -160,7 +187,11 @@ mod tests {
             payload_family: family.to_string(),
             payload_type: "sqli".to_string(),
             request_summary: format!("GET /test?param={}", family),
-            status_code: if behavior == WafBehavior::Blocked { 403 } else { 200 },
+            status_code: if behavior == WafBehavior::Blocked {
+                403
+            } else {
+                200
+            },
             behavior,
             response_time_ms: 50,
             baseline_behavior: baseline,
@@ -189,7 +220,12 @@ mod tests {
     #[test]
     fn regression_detected() {
         let cases = vec![
-            make_case("sqli", WafBehavior::Allowed, Some(WafBehavior::Blocked), true),
+            make_case(
+                "sqli",
+                WafBehavior::Allowed,
+                Some(WafBehavior::Blocked),
+                true,
+            ),
             make_case("xss", WafBehavior::Blocked, None, false),
         ];
         let summary = WafBehaviorSummary::from_cases(&cases);
@@ -199,8 +235,18 @@ mod tests {
     #[test]
     fn new_bypass_detected() {
         let cases = vec![
-            make_case("sqli", WafBehavior::Allowed, Some(WafBehavior::Blocked), true),
-            make_case("xss", WafBehavior::Allowed, Some(WafBehavior::Allowed), false),
+            make_case(
+                "sqli",
+                WafBehavior::Allowed,
+                Some(WafBehavior::Blocked),
+                true,
+            ),
+            make_case(
+                "xss",
+                WafBehavior::Allowed,
+                Some(WafBehavior::Allowed),
+                false,
+            ),
             make_case("ssrf", WafBehavior::Blocked, None, false),
         ];
         let summary = WafBehaviorSummary::from_cases(&cases);
@@ -211,7 +257,12 @@ mod tests {
     fn report_human_readable() {
         let cases = vec![
             make_case("sqli", WafBehavior::Blocked, None, false),
-            make_case("xss", WafBehavior::Allowed, Some(WafBehavior::Blocked), true),
+            make_case(
+                "xss",
+                WafBehavior::Allowed,
+                Some(WafBehavior::Blocked),
+                true,
+            ),
         ];
         let summary = WafBehaviorSummary::from_cases(&cases);
         let report = WafRegressionReport {

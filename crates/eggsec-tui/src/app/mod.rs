@@ -41,8 +41,8 @@ use crate::theme::{display_theme_name, ThemeManager};
 use crate::workers;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
-use rustc_hash::FxHashSet;
 use eggsec::types::OutputFormat;
+use rustc_hash::FxHashSet;
 use task_management::TaskBuilder;
 
 pub struct App {

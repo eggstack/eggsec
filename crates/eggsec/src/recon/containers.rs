@@ -5,7 +5,7 @@
 
 use crate::container::ContainerFinding;
 use crate::container::Severity;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 

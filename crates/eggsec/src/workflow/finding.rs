@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::Severity;
 use crate::workflow::status::StatusWorkflow;
 use serde::{Deserialize, Serialize};

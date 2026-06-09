@@ -108,9 +108,7 @@ pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
 
     for finding in &report.findings {
         let level = match parse_severity(&finding.severity) {
-            eggsec_core::types::Severity::Critical | eggsec_core::types::Severity::High => {
-                "error"
-            }
+            eggsec_core::types::Severity::Critical | eggsec_core::types::Severity::High => "error",
             eggsec_core::types::Severity::Medium => "warning",
             _ => "note",
         };

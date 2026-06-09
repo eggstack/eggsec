@@ -3,7 +3,7 @@
 //! Tests SSH authentication with password-based credentials.
 
 use super::AuthTestResult;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::Severity;
 use std::time::Duration;
 

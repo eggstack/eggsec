@@ -1,19 +1,40 @@
 use crate::commands::handlers::CommandContext;
+use crate::config::OperationDescriptor;
 use anyhow::Result;
 
-pub async fn handle_packet(_ctx: &CommandContext, _args: crate::cli::PacketArgs) -> Result<()> {
+pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -> Result<()> {
     #[cfg(feature = "packet-inspection")]
     {
         use crate::cli::PacketSubcommand;
         use crate::packet::cli as packet_cli;
 
-        // Scope check for subcommands that target external hosts
+        // Policy check for subcommands that target external hosts
         match &args.command {
             PacketSubcommand::Send(send_args) => {
-                ctx.ensure_scope(&send_args.target)?;
+                ctx.evaluate_and_enforce_operation(OperationDescriptor {
+                    operation: "packet-send".to_string(),
+                    mode: crate::config::OperationMode::StandardAssessment,
+                    risk: crate::config::OperationRisk::RawPacket,
+                    intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+                    target: Some(send_args.target.clone()),
+                    required_features: vec!["packet-inspection".to_string()],
+                    required_policy_flags: Vec::new(),
+                    requires_private_or_local_target: false,
+                    requires_explicit_scope: false,
+                })?;
             }
             PacketSubcommand::Traceroute(trace_args) => {
-                ctx.ensure_scope(&trace_args.target)?;
+                ctx.evaluate_and_enforce_operation(OperationDescriptor {
+                    operation: "packet-traceroute".to_string(),
+                    mode: crate::config::OperationMode::StandardAssessment,
+                    risk: crate::config::OperationRisk::RawPacket,
+                    intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+                    target: Some(trace_args.target.clone()),
+                    required_features: vec!["packet-inspection".to_string()],
+                    required_policy_flags: Vec::new(),
+                    requires_private_or_local_target: false,
+                    requires_explicit_scope: false,
+                })?;
             }
             _ => {}
         }
@@ -50,7 +71,17 @@ pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Re
     use crate::scanner::icmp_probe;
     use std::time::Duration;
 
-    ctx.ensure_scope(&args.target)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "icmp".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+        target: Some(args.target.clone()),
+        required_features: vec!["stress-testing".to_string()],
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
 
     let timeout = Duration::from_secs(args.timeout);
     let interval = Duration::from_secs_f64(args.interval);
@@ -132,7 +163,17 @@ pub async fn handle_traceroute(
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     use std::time::Duration;
 
-    ctx.ensure_scope(&args.target)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "traceroute".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::RawPacket,
+        intended_uses: vec![crate::config::IntendedUse::ProtocolEdgeValidation],
+        target: Some(args.target.clone()),
+        required_features: vec!["stress-testing".to_string()],
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
 
     let config = TracerouteConfig {
         target: args.target.clone(),

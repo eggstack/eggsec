@@ -1,5 +1,5 @@
 #[cfg(feature = "stress-testing")]
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 #[cfg(feature = "stress-testing")]
 use rand::Rng;
 #[cfg(feature = "stress-testing")]

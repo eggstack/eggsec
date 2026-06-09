@@ -2,6 +2,9 @@ use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::config::ProxyConfigEntry;
+use eggsec::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
+use eggsec::types::SensitiveString;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -9,9 +12,6 @@ use ratatui::{
     widgets::{Block, Borders},
     Frame,
 };
-use eggsec::config::ProxyConfigEntry;
-use eggsec::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
-use eggsec::types::SensitiveString;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ProxyView {

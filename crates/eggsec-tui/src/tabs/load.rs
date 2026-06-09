@@ -4,13 +4,13 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::loadtest::metrics::LoadTestResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use eggsec::loadtest::metrics::LoadTestResults;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoadFocusArea {

@@ -1,5 +1,5 @@
 use crate::distributed::{RemoteClient, Task, TaskResult, TaskType, CAPABILITIES};
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

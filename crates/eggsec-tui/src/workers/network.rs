@@ -136,8 +136,8 @@ pub async fn run_packet_capture(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use pnet::datalink;
     use eggsec::packet::capture::CaptureBuilder;
+    use pnet::datalink;
 
     let interfaces = datalink::interfaces();
     let iface = interfaces

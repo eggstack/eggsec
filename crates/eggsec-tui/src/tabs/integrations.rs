@@ -4,6 +4,7 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::integrations::IntegrationConfig;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -11,7 +12,6 @@ use ratatui::{
     widgets::{Block, Borders},
     Frame,
 };
-use eggsec::integrations::IntegrationConfig;
 
 pub struct IntegrationsTab {
     pub config_inputs: InputGroup,

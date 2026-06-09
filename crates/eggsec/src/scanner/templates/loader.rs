@@ -4,7 +4,7 @@
 //! directory scanning, and validation.
 
 use super::models::VulnerabilityTemplate;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::utils::validation::validate_path;
 use std::path::{Path, PathBuf};
 
@@ -123,9 +123,9 @@ impl TemplateLoader {
             )));
         }
 
-        let canonical_dir = dir.canonicalize().map_err(|e| {
-            EggsecError::Config(format!("Failed to canonicalize directory: {}", e))
-        })?;
+        let canonical_dir = dir
+            .canonicalize()
+            .map_err(|e| EggsecError::Config(format!("Failed to canonicalize directory: {}", e)))?;
 
         let valid_dir = self
             .template_dirs

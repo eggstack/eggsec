@@ -5,6 +5,8 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::fuzzer::engine::FuzzSession;
+use eggsec::fuzzer::PayloadType;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -12,8 +14,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use eggsec::fuzzer::engine::FuzzSession;
-use eggsec::fuzzer::PayloadType;
 
 pub struct FuzzTab {
     pub inputs: InputGroup,

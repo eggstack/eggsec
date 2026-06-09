@@ -18,9 +18,9 @@ impl Wordlist {
     /// each endpoint.
     pub async fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let content = tokio::fs::read_to_string(path)
-            .await
-            .map_err(|e| EggsecError::Config(format!("failed to read wordlist {}: {}", path.display(), e)))?;
+        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+            EggsecError::Config(format!("failed to read wordlist {}: {}", path.display(), e))
+        })?;
         Self::parse(&content)
     }
 

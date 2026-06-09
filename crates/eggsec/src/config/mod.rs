@@ -47,7 +47,7 @@ pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, Wa
 pub use budget::{BudgetError, ExecutionBudget};
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
-pub use policy::{ExecutionPolicy, OperationMode, OperationRisk, IntendedUse, OperationDescriptor};
+pub use policy::{ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk};
 pub use policy_decision::{evaluate_operation_policy, PolicyDecision};
 pub use presets::DefenseLabPreset;
 pub use scan::{
@@ -57,8 +57,9 @@ pub use scan::{
 pub use scope::{is_private_ip, Scope, ScopeError, ScopeRule, TargetScope};
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
-    ConfigError, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig, ProxyConfigEntry,
-    ReconConfig, RemoteConfig, ScheduledScan, SlackConfigEntry, EggsecConfig, WebhookConfigEntry,
+    ConfigError, EggsecConfig, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig,
+    ProxyConfigEntry, ReconConfig, RemoteConfig, ScheduledScan, SlackConfigEntry,
+    WebhookConfigEntry,
 };
 
 pub const ENV_PREFIX: &str = "EGGSEC_";

@@ -1,5 +1,5 @@
 #[cfg(all(feature = "stress-testing", unix))]
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet::packet::ip::IpNextHeaderProtocols;
 #[cfg(all(feature = "stress-testing", unix))]

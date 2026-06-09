@@ -1,5 +1,5 @@
 use crate::container::Severity;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 

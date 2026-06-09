@@ -13,7 +13,7 @@ pub use rotator::ProxyRotator;
 
 use socks::connect_through_with_domain;
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

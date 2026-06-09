@@ -1,4 +1,5 @@
 use crate::commands::handlers::CommandContext;
+use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_scan_ports(
@@ -93,7 +94,17 @@ pub async fn handle_fingerprint(
 
 #[cfg(feature = "nse")]
 pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> Result<()> {
-    ctx.ensure_scope(&args.target)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "nse".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::Intrusive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(args.target.clone()),
+        required_features: vec!["nse".to_string()],
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("nse-{}", chrono::Utc::now().timestamp());

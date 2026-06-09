@@ -6,7 +6,7 @@
 #[cfg(all(feature = "stress-testing", unix))]
 use super::get_service_name;
 use super::PortScanResults;
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::scanner::spoof::SpoofConfig;
 #[cfg(all(feature = "stress-testing", unix))]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -141,11 +141,7 @@ pub(crate) async fn scan_ports_spoofed(
 
     let (tx, rx) = match pnet::datalink::channel(&interface, Config::default()) {
         Ok(pnet::datalink::Channel::Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => {
-            return Err(EggsecError::Runtime(
-                "Unsupported channel type".to_string(),
-            ))
-        }
+        Ok(_) => return Err(EggsecError::Runtime("Unsupported channel type".to_string())),
         Err(e) => {
             return Err(EggsecError::Runtime(format!(
                 "Failed to create datalink channel: {}",

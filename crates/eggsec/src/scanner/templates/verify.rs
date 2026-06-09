@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::scanner::templates::models::VulnerabilityTemplate;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

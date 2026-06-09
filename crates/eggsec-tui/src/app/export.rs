@@ -381,10 +381,8 @@ impl super::App {
             Ok(report) => {
                 let converted = match self.export_format {
                     OutputFormat::Html => eggsec::output::convert::convert_to_html(&report),
-                    OutputFormat::Markdown => {
-                        eggsec::output::convert::convert_to_markdown(&report)
-                            .unwrap_or_else(|e| format!("Error: {}", e))
-                    }
+                    OutputFormat::Markdown => eggsec::output::convert::convert_to_markdown(&report)
+                        .unwrap_or_else(|e| format!("Error: {}", e)),
                     OutputFormat::Sarif => eggsec::output::convert::convert_to_sarif(&report)
                         .unwrap_or_else(|e| format!("Error: {}", e)),
                     OutputFormat::Junit => eggsec::output::convert::convert_to_junit(&report)

@@ -60,7 +60,10 @@ impl ToolMetadata {
     }
 
     #[cfg(feature = "rest-api")]
-    pub fn is_available_for_profile(&self, profile: &crate::tool::protocol::mcp::profile::McpProfile) -> bool {
+    pub fn is_available_for_profile(
+        &self,
+        profile: &crate::tool::protocol::mcp::profile::McpProfile,
+    ) -> bool {
         use crate::tool::protocol::mcp::profile::McpProfile;
         match profile {
             McpProfile::OpsAgent => true,
@@ -348,8 +351,11 @@ mod tests {
             input_schema: None,
             output_schema: None,
         };
-        assert!(!meta.is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::CodingAgent));
-        assert!(meta.is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::OpsAgent));
+        assert!(!meta.is_available_for_profile(
+            &crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+        ));
+        assert!(meta
+            .is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::OpsAgent));
     }
 
     #[test]
@@ -370,6 +376,8 @@ mod tests {
             input_schema: None,
             output_schema: None,
         };
-        assert!(meta.is_available_for_profile(&crate::tool::protocol::mcp::profile::McpProfile::CodingAgent));
+        assert!(meta.is_available_for_profile(
+            &crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+        ));
     }
 }

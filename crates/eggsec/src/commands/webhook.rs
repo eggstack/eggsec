@@ -1,4 +1,4 @@
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::notify::{NotificationPayload, WebhookConfig, WebhookEvent, WebhookNotifier};
 use crate::types::SensitiveString;
 

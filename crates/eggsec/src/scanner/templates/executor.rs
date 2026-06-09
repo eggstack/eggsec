@@ -6,7 +6,7 @@
 use super::loader::TemplateLoader;
 use super::matcher::{DnsResponse, HttpResponseData, TemplateMatcher};
 use super::models::{TemplateRequest, VulnerabilityTemplate};
-use crate::error::{Result, EggsecError};
+use crate::error::{EggsecError, Result};
 use crate::types::Severity;
 use crate::utils::{create_http_client, create_insecure_http_client};
 use reqwest::Client;

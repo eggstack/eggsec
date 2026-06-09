@@ -4,6 +4,8 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
+use eggsec::findings::lifecycle::StoredFinding;
+use eggsec::storage::{models::StoredScan, StorageConfig};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -11,8 +13,6 @@ use ratatui::{
     widgets::{Block, Borders},
     Frame,
 };
-use eggsec::findings::lifecycle::StoredFinding;
-use eggsec::storage::{models::StoredScan, StorageConfig};
 
 pub struct StorageTab {
     pub config_inputs: InputGroup,

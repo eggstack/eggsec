@@ -527,17 +527,13 @@ pub fn policy_decision_for_mcp_call(
 
     if let Err(violation) = profile_policy.validate_tool_call(tool_id, None, arguments) {
         decision.allowed = false;
-        decision
-            .denied_reasons
-            .push(violation.to_string());
+        decision.denied_reasons.push(violation.to_string());
     }
 
     if let Some(ref tgt) = target {
         if let Err(violation) = profile_policy.validate_target(tgt) {
             decision.allowed = false;
-            decision
-                .denied_reasons
-                .push(violation.to_string());
+            decision.denied_reasons.push(violation.to_string());
         }
     }
 
@@ -625,12 +621,6 @@ fn extract_hostname(target: &str) -> &str {
 /// Check if a target string points to a loopback or private network address.
 fn is_loopback_or_private(target: &str) -> bool {
     let host = extract_hostname(target);
-
-    // Handle IPv6 brackets
-    let host = host
-        .strip_prefix('[')
-        .and_then(|h| h.strip_suffix(']'))
-        .unwrap_or(host);
 
     if let Ok(ip) = IpAddr::from_str(host) {
         return is_loopback_ip(ip) || is_private_ip(ip);
@@ -1116,7 +1106,10 @@ mod tests {
         assert_eq!(infer_tool_category("scan"), ToolCategory::Scanning);
         assert_eq!(infer_tool_category("scan-ports"), ToolCategory::Scanning);
         assert_eq!(infer_tool_category("fingerprint"), ToolCategory::Scanning);
-        assert_eq!(infer_tool_category("scan-endpoints"), ToolCategory::Scanning);
+        assert_eq!(
+            infer_tool_category("scan-endpoints"),
+            ToolCategory::Scanning
+        );
     }
 
     #[test]
@@ -1205,5 +1198,81 @@ mod tests {
         let policy = McpProfilePolicy::coding_agent();
         let result = policy.validate_tool_call("ssh", None, &serde_json::json!({}));
         assert!(result.is_err());
+    }
+
+    // Phase 1: IPv6 edge case tests
+
+    #[test]
+    fn test_extract_hostname_bare_ipv6_loopback() {
+        assert_eq!(extract_hostname("::1"), "::1");
+    }
+
+    #[test]
+    fn test_extract_hostname_bare_ipv6_global() {
+        assert_eq!(extract_hostname("2001:db8::1"), "2001:db8::1");
+    }
+
+    #[test]
+    fn test_extract_hostname_bracketed_ipv6_with_port() {
+        assert_eq!(extract_hostname("http://[::1]:8080"), "::1");
+    }
+
+    #[test]
+    fn test_extract_hostname_bracketed_ipv6_no_port() {
+        assert_eq!(extract_hostname("[::1]"), "::1");
+    }
+
+    #[test]
+    fn test_extract_hostname_bracketed_ipv6_global() {
+        assert_eq!(extract_hostname("[2001:db8::1]:443"), "2001:db8::1");
+    }
+
+    #[test]
+    fn test_extract_hostname_url_with_ipv6() {
+        assert_eq!(extract_hostname("http://user:pass@[::1]:8080/path"), "::1");
+    }
+
+    #[test]
+    fn test_validate_target_bare_ipv6_loopback() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy.validate_target("::1").is_ok());
+    }
+
+    #[test]
+    fn test_validate_target_bare_ipv6_global_denied() {
+        let policy = McpProfilePolicy::coding_agent();
+        let result = policy.validate_target("2001:db8::1");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PolicyViolation::TargetDenied { target, .. } => {
+                assert_eq!(target, "2001:db8::1");
+            }
+            _ => panic!("Expected TargetDenied"),
+        }
+    }
+
+    #[test]
+    fn test_validate_target_bracketed_ipv6_loopback() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy.validate_target("[::1]:8080").is_ok());
+    }
+
+    #[test]
+    fn test_validate_target_ipv6_loopback_private() {
+        assert!(is_loopback_or_private("::1"));
+        assert!(is_loopback_or_private("[::1]"));
+        assert!(is_loopback_or_private("http://[::1]:8080"));
+    }
+
+    #[test]
+    fn test_validate_target_ipv6_link_local() {
+        assert!(is_loopback_or_private("fe80::1"));
+        assert!(is_loopback_or_private("[fe80::1]"));
+    }
+
+    #[test]
+    fn test_validate_target_ipv6_ula() {
+        // fd00::/8 is ULA
+        assert!(is_loopback_or_private("fd00::1"));
     }
 }
