@@ -69,3 +69,58 @@ Pre-first-pass and pre-second-pass timing data are not available.
 ## Interpretation
 
 The current crate split isolates terminal UI dependencies from the engine crate and moves portable output/tool DTO code into separate crates. The main `slapper` crate remains the largest compile unit because it still owns scanning, web/security modules, API adapters, command dispatch, config, and feature-gated integrations.
+
+## Final modularization stabilization pass
+
+### Workspace state
+
+```text
+crates/
+  slapper-core/      # Dependency-light types and constants
+  slapper-tool-core/ # Core data types for tool abstraction layer
+  slapper/           # Assessment engine library (no binary)
+  slapper-nse/       # Optional NSE compatibility
+  slapper-tui/       # Terminal UI adapter (ratatui/crossterm)
+  slapper-cli/       # CLI binary entry point (binary named "slapper")
+  slapper-output/    # Report formatting and output adapters
+  slapper-agent/     # Agent coordination primitives (extracted from tool/agents/)
+```
+
+### Commands run
+
+```bash
+cargo check -p slapper-core
+cargo check -p slapper-tool-core
+cargo check -p slapper-output
+cargo check -p slapper-agent
+cargo check -p slapper --no-default-features
+cargo check -p slapper-tui
+cargo check -p slapper-cli
+cargo check -p slapper-cli --features nse
+cargo check -p slapper-cli --features rest-api
+cargo check -p slapper-cli --features stress-testing
+cargo check -p slapper-cli --features pdf
+cargo test -p slapper-core
+cargo test -p slapper-tool-core
+cargo test -p slapper-output
+cargo test -p slapper-agent
+cargo test -p slapper --lib
+```
+
+### Results
+
+- `slapper-core`: pass
+- `slapper-tool-core`: pass
+- `slapper-output`: pass
+- `slapper-agent`: pass (new crate)
+- `slapper --no-default-features`: pass
+- `slapper-tui`: pass
+- `slapper-cli`: pass
+- `slapper-cli --features nse`: pass
+- `slapper-cli --features rest-api`: pass
+- `slapper-cli --features stress-testing`: pass
+- `slapper-cli --features pdf`: pass
+
+### Final interpretation
+
+This completes the initial crate modularization phase. The `slapper-agent` crate was extracted from `tool/agents/` with zero blockers — all constants already lived in `slapper-core` and the module had no coupling to engine types. Further splits should be driven by measured compile-time hot paths or clearly isolated adapter boundaries.

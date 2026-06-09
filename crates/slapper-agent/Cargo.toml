@@ -1,0 +1,20 @@
+[package]
+name = "slapper-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Agent coordination primitives for Slapper"
+
+[dependencies]
+slapper-core = { path = "../slapper-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v4", "serde"] }
+rustc-hash = { workspace = true }
+tracing = { workspace = true }
+reqwest = { version = "0.13", features = ["rustls"], default-features = false }

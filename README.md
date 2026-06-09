@@ -76,7 +76,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ### Workspace Layout
 
-Slapper is organized as a Cargo workspace with seven crates:
+Slapper is organized as a Cargo workspace with eight crates:
 
 | Crate | Purpose |
 |-------|---------|
@@ -87,6 +87,7 @@ Slapper is organized as a Cargo workspace with seven crates:
 | `slapper-tui` | Terminal UI adapter (`ratatui`/`crossterm`) |
 | `slapper-cli` | CLI binary entry point |
 | `slapper-output` | Report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) |
+| `slapper-agent` | Agent coordination primitives (registry, scheduler, lifecycle, communication) |
 
 ### Prerequisites
 

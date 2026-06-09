@@ -13,6 +13,7 @@
 //! - `slapper-nse`: optional Nmap NSE compatibility support.
 //! - `slapper-tui`: terminal UI adapter crate.
 //! - `slapper-cli`: user-facing binary package; binary name is `slapper`.
+//! - `slapper-agent`: agent coordination primitives (extracted from `tool/agents/`).
 //!
 //! The main `slapper` crate owns the assessment engine, command dispatch,
 //! scope/config loading, and feature-gated integrations.

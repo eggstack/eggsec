@@ -26,7 +26,7 @@ Slapper is organized as a Cargo workspace. The first-level crate boundary is:
 
 - **`slapper-core`**: dependency-light domain types (`Severity`, `SensitiveString`), constants, and shared primitives. Designed for fast independent compilation with a small dependency set.
 - **`slapper-tool-core`**: core data types for the tool abstraction layer (requests, responses, findings, errors). Dependency-light types shared between `slapper` and tool protocol integrations.
-- **`slapper`**: main engine, CLI dispatch, assessment modules, TUI/API adapters, feature-gated integrations, and the canonical `SlapperError` type.
+- **`slapper`**: main engine, CLI command model/dispatch, assessment modules, remaining API/agent adapters, feature-gated integrations, and the canonical `SlapperError` type.
 - **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
 - **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.
 - **`slapper-cli`**: CLI binary entry point. Depends on both `slapper` and `slapper-tui`.
@@ -155,8 +155,8 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`slapper-core`](../crates/slapper-core/) | Dependency-light shared types (Severity, SensitiveString), constants | [types.md](types.md) |
 | [`slapper-tool-core`](../crates/slapper-tool-core/) | Protocol-neutral tool request/response/error/history DTOs | [ai_agents.md](ai_agents.md) |
 | [`slapper-output`](../crates/slapper-output/src/) | Portable report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) | [output.md](output.md) |
-| [`types.rs`](../crates/slapper/src/types.rs) | Shared types (Severity, SensitiveString, OutputFormat, PayloadType) | [types.md](types.md) |
-| [`constants.rs`](../crates/slapper/src/constants.rs) | Centralized magic numbers, default values | [constants.md](constants.md) |
+| [`types.rs`](../crates/slapper/src/types.rs) | Main-crate compatibility facade plus CLI-facing types such as `OutputFormat` | [types.md](types.md) |
+| [`constants.rs`](../crates/slapper/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
 | [`error/`](../crates/slapper/src/error/) | Canonical error type with domain-specific variants | [error.md](error.md) |
 | [`findings/`](../crates/slapper/src/findings/) | Finding store, lifecycle management, fingerprinting | [findings.md](findings.md) |
 | [`diff/`](../crates/slapper/src/diff/) | Scan result diffing, baseline comparison | [diff.md](diff.md) |

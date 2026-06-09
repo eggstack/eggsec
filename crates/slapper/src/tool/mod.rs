@@ -45,7 +45,10 @@ pub mod traits;
 pub mod implementations;
 
 #[cfg(feature = "rest-api")]
-pub mod agents;
+pub mod agents {
+    //! Re-export of agent coordination types from `slapper-agent`.
+    pub use slapper_agent::*;
+}
 pub mod orchestrator;
 pub mod protocol;
 

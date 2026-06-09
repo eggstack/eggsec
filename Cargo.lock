@@ -5623,6 +5623,7 @@ dependencies = [
  "serde_yaml_neo",
  "sha2",
  "shellexpand",
+ "slapper-agent",
  "slapper-core",
  "slapper-nse",
  "slapper-output",
@@ -5659,6 +5660,22 @@ dependencies = [
  "webpki-roots 0.26.11",
  "wiremock",
  "zeroize",
+]
+
+[[package]]
+name = "slapper-agent"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "slapper-core",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

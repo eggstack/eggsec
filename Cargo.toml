@@ -7,6 +7,7 @@ members = [
     "crates/slapper-cli",
     "crates/slapper-output",
     "crates/slapper-tool-core",
+    "crates/slapper-agent",
 ]
 resolver = "2"
 
