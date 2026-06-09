@@ -64,8 +64,9 @@ fn atomic_write(dest: &Path, content: &[u8]) -> Result<(), std::io::Error> {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "no parent directory")
     })?;
     let tmp = parent.join(format!(
-        ".{} .tmp",
-        dest.file_name().and_then(|n| n.to_str()).unwrap_or("theme")
+        ".{}.{}.tmp",
+        dest.file_name().and_then(|n| n.to_str()).unwrap_or("theme"),
+        std::process::id()
     ));
     std::fs::write(&tmp, content)?;
     std::fs::rename(&tmp, dest)?;

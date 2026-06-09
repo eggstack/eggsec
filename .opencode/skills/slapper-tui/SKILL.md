@@ -191,7 +191,7 @@ let style = Style::default().fg(tc!(text));
 
 Semantic colors: `primary`, `secondary`, `accent`, `background`, `text`, `text_dim`, `success`, `warning`, `error`, `info`.
 
-The Settings tab has a theme selector dropdown. `Ctrl+T` toggles between dark/light themes. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
+The Settings tab has a theme selector dropdown. `Ctrl+T` cycles through all registered themes. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/slapper-tui/src/theme/packaged.rs`. The script is deterministic.
 
 ### Notifications
 

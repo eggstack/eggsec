@@ -67,6 +67,8 @@ pub struct App {
     pub tab_scroll_offset: u16,
     pub last_tab_area_width: u16,
     pub bookmarks: FxHashSet<String>,
+    pub theme_load_rx: Option<std::sync::mpsc::Receiver<crate::theme::install::ThemeInstallReport>>,
+    pub theme_load_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl App {
@@ -75,7 +77,35 @@ impl App {
     }
 
     pub fn new_for_testing(history: SharedHistory) -> Self {
-        Self::new_inner(history, false)
+        let session_manager = SessionManager::new(SessionConfig::default());
+        let mut app = Self {
+            current_tab: Tab::Recon,
+            should_quit: false,
+            mode: InputMode::Normal,
+            session_manager,
+            last_auto_save: std::time::Instant::now(),
+            theme_manager: ThemeManager::new(),
+            tabs: TabStore::new(),
+            http_options: GlobalHttpOptions::default(),
+            history,
+            overlay: OverlayState::default(),
+            search: SearchState::default(),
+            quick_switch: QuickSwitchState::default(),
+            task_state: TaskState::default(),
+            pending_key: None,
+            tab_scroll_offset: 0,
+            last_tab_area_width: 80,
+            export_format: OutputFormat::Json,
+            help_manager: HelpManager::new(),
+            command_palette: None,
+            help_context: HelpContext::Normal,
+            needs_redraw: true,
+            bookmarks: FxHashSet::default(),
+            theme_load_rx: None,
+            theme_load_handle: None,
+        };
+        app.update_settings_theme_selector();
+        app
     }
 
     fn new_inner(history: SharedHistory, restore_session: bool) -> Self {
@@ -149,8 +179,11 @@ impl App {
             help_context: HelpContext::Normal,
             needs_redraw: true,
             bookmarks: restored_bookmarks,
+            theme_load_rx: None,
+            theme_load_handle: None,
         };
 
+        // Restore theme from session immediately (cyber-red is already the default)
         if let Some(state) = &restored_state {
             if !app.theme_manager.set_theme(&state.theme_name) {
                 tracing::warn!("Unknown theme name in session: {}", state.theme_name);
@@ -160,28 +193,10 @@ impl App {
 
         // Sync settings with current theme
         let theme = app.theme_manager.current().clone();
-        app.tabs.settings.sync_with_theme(&theme);
+        app.tabs.settings.sync_theme_selector(&theme.name);
 
-        // Schedule background theme loading
-        let theme_report = crate::theme::install::load_and_install_themes();
-        tracing::info!(
-            "Theme loading: {} installed, {} loaded, {} skipped, {} errors",
-            theme_report.installed,
-            theme_report.loaded,
-            theme_report.skipped_existing,
-            theme_report.errors.len()
-        );
-
-        // Register loaded themes
-        for theme_result in theme_report.loaded_themes {
-            match theme_result {
-                Ok(theme) => app.theme_manager.register_theme(theme),
-                Err(e) => tracing::warn!("Failed to load theme: {}", e),
-            }
-        }
-
-        // Update settings selector with all available themes
-        app.update_settings_theme_selector();
+        // Spawn background theme loading (non-blocking, non-fatal)
+        app.spawn_theme_loader();
 
         app
     }
@@ -560,6 +575,35 @@ impl App {
         }
     }
 
+    pub fn spawn_theme_loader(&mut self) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.theme_load_rx = Some(rx);
+        self.theme_load_handle = Some(std::thread::spawn(move || {
+            let report = crate::theme::install::load_and_install_themes();
+            let _ = tx.send(report);
+        }));
+    }
+
+    pub fn handle_theme_install_report(
+        &mut self,
+        report: crate::theme::install::ThemeInstallReport,
+    ) {
+        tracing::info!(
+            "Theme loading complete: {} installed, {} loaded, {} skipped, {} errors",
+            report.installed,
+            report.loaded,
+            report.skipped_existing,
+            report.errors.len()
+        );
+        for theme_result in report.loaded_themes {
+            match theme_result {
+                Ok(theme) => self.theme_manager.register_theme(theme),
+                Err(e) => tracing::warn!("Failed to load theme: {}", e),
+            }
+        }
+        self.update_settings_theme_selector();
+    }
+
     pub fn toggle_theme(&mut self) {
         self.theme_manager.toggle();
         crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
@@ -575,6 +619,11 @@ impl App {
             .collect();
         let current = self.theme_manager.current_name().to_string();
         self.tabs.settings.set_available_themes(&themes, &current);
+    }
+
+    fn sync_theme_selector(&mut self) {
+        let current = self.theme_manager.current_name().to_string();
+        self.tabs.settings.sync_theme_selector(&current);
     }
 
     pub fn current_theme(&self) -> &crate::theme::Theme {

@@ -34,12 +34,16 @@ fn validate_path(path: &str) -> Result<(), ThemeArchiveError> {
     if path.is_empty() {
         return Err(ThemeArchiveError::UnsafePath("empty path".to_string()));
     }
-    if PathBuf::from(path).is_absolute() {
+    let p = PathBuf::from(path);
+    if p.is_absolute() {
         return Err(ThemeArchiveError::UnsafePath(format!(
             "absolute path: {path}"
         )));
     }
-    if path.contains("..") {
+    if !p
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)))
+    {
         return Err(ThemeArchiveError::UnsafePath(format!(
             "path traversal: {path}"
         )));
@@ -157,6 +161,23 @@ mod tests {
             decode_packaged_archive(&archive),
             Err(ThemeArchiveError::UnsafePath(_))
         ));
+    }
+
+    #[test]
+    fn rejects_nested_path_traversal() {
+        let archive = make_test_archive(&[("foo/../../bar.toml", b"content")]);
+        assert!(matches!(
+            decode_packaged_archive(&archive),
+            Err(ThemeArchiveError::UnsafePath(_))
+        ));
+    }
+
+    #[test]
+    fn accepts_benign_double_dot_filename() {
+        let archive = make_test_archive(&[("my..theme.toml", b"content")]);
+        let files = decode_packaged_archive(&archive).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].relative_path, PathBuf::from("my..theme.toml"));
     }
 
     #[test]

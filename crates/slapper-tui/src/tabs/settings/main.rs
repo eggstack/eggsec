@@ -171,6 +171,8 @@ impl SettingsTab {
             is_detail && self.current_section == SettingsSection::Proxy && idx == 2;
         let keep_severity_open =
             is_detail && self.current_section == SettingsSection::Notifications && idx == 6;
+        let keep_theme_selector_open =
+            is_detail && self.current_section == SettingsSection::Theme && idx == 0;
         // Reset all
         self.http_inputs.blur();
         self.scan_inputs.blur();
@@ -194,7 +196,7 @@ impl SettingsTab {
         if !keep_severity_open {
             self.severity_selector.close();
         }
-        if !self.theme_selector.focused {
+        if !keep_theme_selector_open {
             self.theme_selector.close();
         }
 
@@ -486,6 +488,10 @@ impl SettingsTab {
 
     pub fn sync_with_theme(&mut self, theme: &crate::theme::Theme) {
         self.theme_selector.select_by_value(&theme.name);
+    }
+
+    pub fn sync_theme_selector(&mut self, theme_name: &str) {
+        self.theme_selector.select_by_value(theme_name);
     }
 
     pub fn reset(&mut self) {

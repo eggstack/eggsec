@@ -146,7 +146,9 @@ impl TabRender for super::SettingsTab {
                 builder.render(f, inner, insert_mode);
 
                 let form_height: u16 = 5;
-                let theme_hint = Paragraph::new("Use Ctrl+T to toggle between dark/light themes");
+                let theme_hint = Paragraph::new(
+                    "Bundled themes are installed when possible; Cyber Red is always available as fallback",
+                );
                 let hint_y = inner.y + form_height;
                 if hint_y < inner.y + inner.height {
                     let hint_area = Rect {

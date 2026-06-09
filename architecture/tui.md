@@ -248,9 +248,9 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Built-in themes**: `cyber-red` (default fallback, always available), `dark`, `light`.
 
-**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Themes are loaded in a background task to avoid blocking the UI.
+**Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`) and results are polled via `App::update()`. Failures are logged as warnings and do not block the UI.
 
-**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. `Ctrl+T` still toggles between the current dark and light theme. Session persistence saves and restores the selected theme name.
+**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. `Ctrl+T` cycles through all registered themes alphabetically. Session persistence saves and restores the selected theme name.
 
 `ThemeManager` holds registered themes with 28 color fields. `Theme.name` is `String` to support file-loaded themes.
 
@@ -321,7 +321,7 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `Ctrl+P` | Command palette |
 | `Ctrl+X` | Quick switch (tab search) |
 | `Ctrl+F` | Global search |
-| `Ctrl+T` | Toggle light/dark theme |
+| `Ctrl+T` | Cycle through all registered themes |
 | `Ctrl+Z` | Pause/resume active task updates |
 | `Ctrl+Y` | Resume when paused, otherwise copy |
 | `Space` | Toggle help |

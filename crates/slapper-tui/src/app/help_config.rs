@@ -569,7 +569,7 @@ pub fn get_static_help_data() -> StaticHelpData {
         },
         HelpCommand {
             key: "Ctrl+T".to_string(),
-            description: "Toggle theme".to_string(),
+            description: "Cycle theme".to_string(),
             category: "Settings".to_string(),
         },
         HelpCommand {

@@ -45,17 +45,18 @@ impl ThemeManager {
     }
 
     pub fn toggle(&mut self) {
-        match self.current.mode {
-            ThemeMode::Dark => {
-                if let Some(light) = self.themes.get("light") {
-                    self.current = light.clone();
-                }
-            }
-            ThemeMode::Light => {
-                if let Some(dark) = self.themes.get("dark") {
-                    self.current = dark.clone();
-                }
-            }
+        let mut names: Vec<&str> = self.themes.keys().map(|s| s.as_str()).collect();
+        names.sort();
+        if names.is_empty() {
+            return;
+        }
+        let current_idx = names
+            .iter()
+            .position(|&n| n == self.current.name)
+            .unwrap_or(0);
+        let next_idx = (current_idx + 1) % names.len();
+        if let Some(next) = self.themes.get(names[next_idx]) {
+            self.current = next.clone();
         }
     }
 
@@ -139,11 +140,13 @@ mod tests {
     #[test]
     fn theme_manager_toggle_switches() {
         let mut manager = ThemeManager::new();
-        assert_eq!(manager.current().mode, ThemeMode::Dark);
+        assert_eq!(manager.current().name, "cyber-red");
         manager.toggle();
-        assert_eq!(manager.current().mode, ThemeMode::Light);
+        assert_eq!(manager.current().name, "dark");
         manager.toggle();
-        assert_eq!(manager.current().mode, ThemeMode::Dark);
+        assert_eq!(manager.current().name, "light");
+        manager.toggle();
+        assert_eq!(manager.current().name, "cyber-red");
     }
 
     #[test]
