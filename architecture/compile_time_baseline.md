@@ -24,7 +24,7 @@ crates/
 - Removed `ratatui`, `crossterm`, `arboard` from `slapper` crate (unused dependencies)
 - Added explicit `[[bin]] name = "slapper"` to `slapper-cli` (was relying on auto-discovery)
 - Created `slapper-output` crate for report formatting (JSON, CSV, HTML, SARIF, JUnit, Markdown)
-- Output modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `slapper`
+- Output modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `slapper`
 
 ## Third pass commands
 
@@ -65,3 +65,7 @@ cargo check -p slapper-cli --features stress-testing
 ## Notes
 
 Pre-first-pass and pre-second-pass timing data are not available.
+
+## Interpretation
+
+The current crate split isolates terminal UI dependencies from the engine crate and moves portable output/tool DTO code into separate crates. The main `slapper` crate remains the largest compile unit because it still owns scanning, web/security modules, API adapters, command dispatch, config, and feature-gated integrations.

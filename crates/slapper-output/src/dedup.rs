@@ -69,8 +69,8 @@ impl DedupEngine {
 mod tests {
     use super::*;
     use crate::agent::{AgentFinding, Confidence, Evidence, FindingStatus, Remediation};
-    use slapper_core::types::Severity;
     use chrono::Utc;
+    use slapper_core::types::Severity;
 
     fn make_finding(id: &str, severity: Severity, title: &str, target: &str) -> AgentFinding {
         AgentFinding {

@@ -133,7 +133,10 @@ impl Clone for ExecutionHistory {
 fn generate_summary(response: &ToolResponse) -> String {
     match response.status {
         ResponseStatus::Success => {
-            format!("Completed with {} findings", response.metadata.findings_count)
+            format!(
+                "Completed with {} findings",
+                response.metadata.findings_count
+            )
         }
         ResponseStatus::PartialSuccess => format!(
             "Partially completed with {} findings",

@@ -6,21 +6,33 @@
 //! and can be executed via the [`ToolRegistry`] or through protocol adapters
 //! (MCP, OpenAI, REST API).
 //!
-//! Core data types (request, response, error, etc.) live in the `slapper-tool-core`
-//! crate and are re-exported here for backward compatibility.
+//! # Re-export shim (intentionally stable)
+//!
+//! Core data types (request, response, error, history, rate-limiting) live in
+//! the `slapper-tool-core` crate and are re-exported here as both sub-modules
+//! (`tool_error`, `request`, `response`, `history`, `ratelimit`) and individual
+//! types for backward compatibility.
+//!
+//! **Local modules** — depend on engine-internal types (`PipelineReport`,
+//! `SlapperConfig`, scanner/fuzzer internals, etc.) and could not be moved
+//! to `slapper-tool-core`:
+//! - `finding`, `convert`, `dispatcher`, `metadata`, `openapi`, `planner`,
+//!   `registry`, `scripting`, `session`, `state`, `traits`, `implementations`,
+//!   `orchestrator`, `protocol`
+//! - `agents` (behind `rest-api` feature)
 
 // Re-export core data types from slapper-tool-core as modules
 // so that `crate::tool::tool_error::ToolError` etc. still work.
-pub use slapper_tool_core::tool_error;
-pub use slapper_tool_core::request;
-pub use slapper_tool_core::response;
 pub use slapper_tool_core::history;
 pub use slapper_tool_core::ratelimit;
+pub use slapper_tool_core::request;
+pub use slapper_tool_core::response;
+pub use slapper_tool_core::tool_error;
 
 // Local modules that depend on slapper-internal types
-pub mod finding;
 pub mod convert;
 pub mod dispatcher;
+pub mod finding;
 pub mod metadata;
 pub mod openapi;
 pub mod planner;

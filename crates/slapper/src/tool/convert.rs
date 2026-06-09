@@ -6,12 +6,7 @@ use crate::tool::response::{ResponseSeverity, ToolResponse};
 /// Extension trait for [`ToolResponse`] to convert findings to agent findings.
 pub trait ToolResponseExt {
     fn to_findings(&self) -> Vec<AgentFinding>;
-    fn to_single_finding(
-        &self,
-        vuln_type: &str,
-        title: &str,
-        description: &str,
-    ) -> AgentFinding;
+    fn to_single_finding(&self, vuln_type: &str, title: &str, description: &str) -> AgentFinding;
 }
 
 impl ToolResponseExt for ToolResponse {
@@ -39,12 +34,7 @@ impl ToolResponseExt for ToolResponse {
             .collect()
     }
 
-    fn to_single_finding(
-        &self,
-        vuln_type: &str,
-        title: &str,
-        description: &str,
-    ) -> AgentFinding {
+    fn to_single_finding(&self, vuln_type: &str, title: &str, description: &str) -> AgentFinding {
         AgentFinding::new(
             vuln_type,
             severity_from_status(&self.status),

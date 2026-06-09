@@ -1,6 +1,6 @@
 use crate::error::SlapperError;
-use crate::tool::{ToolRequest, ToolResponse, ToolRegistry};
 use crate::tool::response::{ResponseMetadata, ResponseStatus};
+use crate::tool::{ToolRegistry, ToolRequest, ToolResponse};
 use parking_lot::RwLock;
 use std::sync::Arc;
 

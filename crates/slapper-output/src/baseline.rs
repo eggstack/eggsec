@@ -52,8 +52,8 @@ mod tests {
     use super::*;
     use crate::agent::AttackSurface;
     use crate::agent::{AgentFinding, Confidence, Evidence, FindingStatus, Remediation};
-    use slapper_core::types::Severity;
     use chrono::Utc;
+    use slapper_core::types::Severity;
 
     fn make_finding(id: &str, title: &str) -> AgentFinding {
         AgentFinding {

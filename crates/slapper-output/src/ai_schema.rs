@@ -1,5 +1,5 @@
-use slapper_core::types::Severity;
 use serde::{Deserialize, Serialize};
+use slapper_core::types::Severity;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiOutput {

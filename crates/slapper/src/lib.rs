@@ -8,11 +8,14 @@
 //! ## Workspace Crates
 //!
 //! - `slapper-core`: dependency-light shared types and constants.
+//! - `slapper-tool-core`: protocol-neutral tool request/response/error/history types.
+//! - `slapper-output`: report formatting and output adapters.
 //! - `slapper-nse`: optional Nmap NSE compatibility support.
 //! - `slapper-tui`: terminal UI adapter crate.
+//! - `slapper-cli`: user-facing binary package; binary name is `slapper`.
 //!
 //! The main `slapper` crate owns the assessment engine, command dispatch,
-//! and feature-gated integrations.
+//! scope/config loading, and feature-gated integrations.
 //!
 //! ## Architecture
 //!
@@ -27,8 +30,8 @@
 //! - **`recon`** - Passive reconnaissance (DNS, WHOIS, SSL, tech detection, CVE mapping)
 //! - **`loadtest`** - HTTP load testing with metrics
 //! - **`pipeline`** - Chained security assessment profiles
-//! - **`tool`** - REST API/MCP/gRPC integration for AI agents (feature-gated)
-//! - **`output`** - Multiple report formats (JSON, HTML, CSV, SARIF, JUnit)
+//! - **`tool`** - Tool registry/execution framework; core DTOs live in `slapper-tool-core` (feature-gated)
+//! - **`output`** - Compatibility facade over `slapper-output` plus engine-coupled report modules
 //! - **`distributed`** - Worker/coordinator cluster architecture
 //! - **`proxy`** - SOCKS/HTTP/Tor proxy pool management
 //! - **`packet`** - Packet capture and crafting (feature-gated)

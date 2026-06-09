@@ -38,7 +38,7 @@ impl ToolResponse {
     /// # Example
     ///
     /// ```rust
-    /// use slapper::tool::response::ToolResponse;
+    /// use slapper_tool_core::response::ToolResponse;
     ///
     /// let response = ToolResponse::success(
     ///     "req-123",
@@ -282,7 +282,11 @@ mod tests {
 
     #[test]
     fn test_tool_response_success() {
-        let response = ToolResponse::success("req-123", "scanner", serde_json::json!({"ports": [80, 443]}));
+        let response = ToolResponse::success(
+            "req-123",
+            "scanner",
+            serde_json::json!({"ports": [80, 443]}),
+        );
         assert!(response.is_success());
         assert_eq!(response.request_id, "req-123");
         assert_eq!(response.tool_id, "scanner");
@@ -290,7 +294,11 @@ mod tests {
 
     #[test]
     fn test_tool_response_with_findings() {
-        let finding = Finding::new(FindingType::OpenPort, ResponseSeverity::Info, "Open port 80");
+        let finding = Finding::new(
+            FindingType::OpenPort,
+            ResponseSeverity::Info,
+            "Open port 80",
+        );
         let response = ToolResponse::success("req-1", "scanner", serde_json::json!({}))
             .with_findings(vec![finding]);
         assert_eq!(response.metadata.findings_count, 1);

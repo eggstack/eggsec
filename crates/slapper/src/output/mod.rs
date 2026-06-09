@@ -2,10 +2,18 @@
 //!
 //! Provides report generation, format conversion, trend analysis, and scan session management.
 //!
+//! # Re-export shim (intentionally stable)
+//!
 //! Most output types and renderers live in the `slapper-output` crate and are
-//! re-exported here for backward compatibility. Modules that depend on
-//! engine-internal types (`pdf`, `report`, `report_summary`, `run_manifest`,
-//! `attack_graph`) remain in this crate.
+//! re-exported here for backward compatibility (`pub use slapper_output::*`).
+//!
+//! **Local modules** — depend on engine-internal types (`PipelineReport`, etc.)
+//! and could not be moved to `slapper-output`:
+//! - `pdf`, `report`, `report_summary`, `run_manifest`
+//! - `attack_graph` (behind `advanced-hunting` feature)
+//!
+//! **`extensions` module** — provides `SarifBuilderExt` and `JUnitBuilderExt`
+//! traits that bridge engine-internal `PipelineReport` into slapper-output builders.
 
 // Re-export everything from slapper-output (agent, ai_schema, baseline, convert,
 // csv, dedup, diff, escape, html, junit, markdown, sarif, schedule, session,
@@ -49,10 +57,7 @@ pub mod extensions {
                         &rule_id,
                         &format!("Open Port {}", port.port),
                         "note",
-                        &format!(
-                            "Open port {} detected on {}",
-                            port.port, report.target
-                        ),
+                        &format!("Open port {} detected on {}", port.port, report.target),
                     );
                     self = self.add_result(
                         &rule_id,

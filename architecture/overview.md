@@ -30,7 +30,7 @@ Slapper is organized as a Cargo workspace. The first-level crate boundary is:
 - **`slapper-nse`**: optional Nmap NSE compatibility runtime and libraries.
 - **`slapper-tui`**: terminal UI adapter built on `ratatui`/`crossterm`. Depends on Slapper engine APIs but should not be required for engine-only builds.
 - **`slapper-cli`**: CLI binary entry point. Depends on both `slapper` and `slapper-tui`.
-- **`slapper-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `slapper` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `template`, `run_manifest`, `attack_graph`, `report`, `report_summary`) remain in `slapper`.
+- **`slapper-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `slapper` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `slapper`.
 
 New modules should avoid adding heavy runtime dependencies to `slapper-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `slapper` crate or in `slapper-tui` as appropriate.
 
@@ -109,7 +109,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`pipeline/`](../crates/slapper/src/pipeline/) | Chained security assessment profiles (11 built-in profiles) | [pipeline.md](pipeline.md) |
-| [`tool/`](../crates/slapper/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration | [ai_agents.md](ai_agents.md) |
+| [`tool/`](../crates/slapper/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration; core DTOs in `slapper-tool-core` | [ai_agents.md](ai_agents.md) |
 | [`agent/`](../crates/slapper/src/agent/) | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
 | [`distributed/`](../crates/slapper/src/distributed/) | Worker/coordinator cluster architecture for parallel scanning | [distributed.md](distributed.md) |
 
@@ -117,7 +117,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`output/`](../crates/slapper/src/output/) | Report generation in 8 formats (Pretty, JSON, Compact, HTML, CSV, SARIF, JUnit, Markdown) | [output.md](output.md) |
+| [`output/`](../crates/slapper/src/output/) | Compatibility facade over `slapper-output` plus engine-coupled report modules (PDF, report, report_summary, run_manifest, attack_graph) | [output.md](output.md) |
 | [`proxy/`](../crates/slapper/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies | [proxy.md](proxy.md) |
 | [`config/`](../crates/slapper/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
 | [`storage/`](../crates/slapper/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
@@ -152,6 +152,9 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
+| [`slapper-core`](../crates/slapper-core/) | Dependency-light shared types (Severity, SensitiveString), constants | [types.md](types.md) |
+| [`slapper-tool-core`](../crates/slapper-tool-core/) | Protocol-neutral tool request/response/error/history DTOs | [ai_agents.md](ai_agents.md) |
+| [`slapper-output`](../crates/slapper-output/src/) | Portable report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) | [output.md](output.md) |
 | [`types.rs`](../crates/slapper/src/types.rs) | Shared types (Severity, SensitiveString, OutputFormat, PayloadType) | [types.md](types.md) |
 | [`constants.rs`](../crates/slapper/src/constants.rs) | Centralized magic numbers, default values | [constants.md](constants.md) |
 | [`error/`](../crates/slapper/src/error/) | Canonical error type with domain-specific variants | [error.md](error.md) |
