@@ -17,7 +17,7 @@ The core loop that manages targets, payloads, and detections.
 
 ### Payloads (`payloads/`)
 
-Eggsec comes with a vast library of payloads for different vulnerability types. The `PayloadType` enum defines 30 categories:
+Eggsec comes with a vast library of payloads for different vulnerability types. The `PayloadType` enum defines 40 categories:
 
 - **Injection**: SQLi, XSS, Command Injection, Template Injection, LDAP, XXE, NoSQL, XPath, Expression.
 - **File System**: Path Traversal.
@@ -26,6 +26,9 @@ Eggsec comes with a vast library of payloads for different vulnerability types. 
 - **Client-Side**: Open Redirect, CSV Injection.
 - **API Security**: GraphQL, gRPC, WebSocket, SOAP.
 - **Infrastructure**: Host Header Injection, Cache Poisoning, Compression Bombs, Header Expansion, OAST.
+- **Additional**: SAML, HTML Injection, CSS Injection, SSI, DOM Clobbering, XSLT, ViewState, Dependency Confusion, XS-Leak, LaTeX.
+
+Six categories are treated as "advanced" (with dedicated fuzzer implementations and extra logic): GraphQL, OAuth, Jwt, Idor, Ssti, Grpc.
 
 Each payload type has its own module (e.g., `sqli.rs`, `xss.rs`). The `payload_vec!` macro in `macros.rs` builds payload vectors from inline data.
 

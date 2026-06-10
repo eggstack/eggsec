@@ -195,6 +195,16 @@ mod tests {
     }
 
     #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 20,
+            "Must have substantial host payload coverage, got {}",
+            payloads.len()
+        );
+    }
+
+    #[test]
     fn test_host_payloads_correct_type() {
         let payloads = get_payloads();
         for p in &payloads {

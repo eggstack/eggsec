@@ -88,7 +88,7 @@ impl GrpcFuzzer {
         for test in tests {
             results.push(crate::fuzzer::engine::FuzzResult {
                 payload: Payload {
-                    payload_type: PayloadType::Ssrf,
+                    payload_type: PayloadType::Grpc,
                     payload: test.request.clone(),
                     description: test.description.clone(),
                     severity: test.severity,
@@ -529,5 +529,29 @@ mod tests {
             GrpcVulnerability::AuthBypass.to_string(),
             "Authentication Bypass"
         );
+    }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 10,
+            "Must have gRPC payload coverage, got {}",
+            payloads.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_grpc_fuzz_produces_grpc_payload_type() {
+        let mut fuzzer = GrpcFuzzer::new("http://localhost:50051".to_string());
+        let client = reqwest::Client::new();
+        let results = fuzzer.fuzz(&client).await.expect("fuzz should not fail");
+        for r in results {
+            assert_eq!(
+                r.payload.payload_type,
+                PayloadType::Grpc,
+                "gRPC fuzz must produce Grpc payload type in FuzzResult"
+            );
+        }
     }
 }

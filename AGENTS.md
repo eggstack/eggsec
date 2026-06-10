@@ -112,7 +112,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `eggsec-tui` (`tui/app/tab_error.rs`)
 - `ThemeLoadState` - Grouped theme-load runtime state (`rx`, `handle`, deferred restore, user-change flag) in `eggsec-tui` (`tui/app/state.rs`)
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
-- `PayloadType` - Enum of 30 payload categories
+- `PayloadType` - Enum of 40 payload categories
 - `AiClient` / `Provider` - AI LLM client and provider enum
 - `AiCache` / `CacheKeyBuilder` - TTL cache for AI responses
 - `SmartWafBypass` - WAF bypass with knowledge base

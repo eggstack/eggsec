@@ -119,4 +119,14 @@ mod tests {
         assert!(has_data_uri, "Missing data URI payload");
         assert!(has_param, "Missing url parameter payload");
     }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 10,
+            "Must have substantial redirect payload coverage, got {}",
+            payloads.len()
+        );
+    }
 }

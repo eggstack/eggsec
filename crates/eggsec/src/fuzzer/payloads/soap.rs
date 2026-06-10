@@ -186,4 +186,14 @@ mod tests {
         assert!(has_sqli, "Missing SQL injection payload");
         assert!(has_soap_envelope, "Not all payloads contain soap:Envelope");
     }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 15,
+            "Must have substantial soap payload coverage, got {}",
+            payloads.len()
+        );
+    }
 }

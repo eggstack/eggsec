@@ -106,4 +106,14 @@ mod tests {
         assert!(!OAST_PLACEHOLDER.is_empty());
         assert!(!OAST_RANDOM_PLACEHOLDER.is_empty());
     }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_oast_payloads();
+        assert!(
+            payloads.len() >= 5,
+            "Must have substantial oast payload coverage, got {}",
+            payloads.len()
+        );
+    }
 }

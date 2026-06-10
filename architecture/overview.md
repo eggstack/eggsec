@@ -477,7 +477,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | `Severity` | `eggsec-core::types` (re-exported by `types.rs`) | Canonical severity rating (Critical→Info) |
 | `SensitiveString` | `eggsec-core::types` (re-exported by `types.rs`) | Zeroized credential wrapper |
 | `OutputFormat` | `types.rs` | Report format enum (8 variants) |
-| `PayloadType` | `fuzzer/payloads/mod.rs` | 30 payload categories |
+| `PayloadType` | `fuzzer/payloads/mod.rs` | 40 payload categories |
 | `EggsecError` | `error/mod.rs` | Canonical error type |
 | `TargetScope` | `config/scope.rs` | Target scope enforcement |
 | `Finding` | `findings/mod.rs` | Canonical finding structure |

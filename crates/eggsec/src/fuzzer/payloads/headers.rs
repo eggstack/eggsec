@@ -356,4 +356,14 @@ mod tests {
         assert!(has_crlf, "Missing CRLF injection payload");
         assert!(has_smuggling, "Missing HTTP smuggling payload");
     }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 30,
+            "Must have substantial headers payload coverage, got {}",
+            payloads.len()
+        );
+    }
 }

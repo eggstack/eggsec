@@ -472,4 +472,14 @@ mod tests {
             .iter()
             .any(|t| t.vulnerability == WebSocketVulnerability::AuthBypass));
     }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 10,
+            "Must have substantial websocket payload coverage, got {}",
+            payloads.len()
+        );
+    }
 }
