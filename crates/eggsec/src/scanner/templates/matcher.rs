@@ -3,16 +3,16 @@
 //! Executes match conditions from vulnerability templates against
 //! HTTP responses, DNS results, and other data sources.
 
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock};
 
 use super::models::{HttpMatcher, Matcher, SearchPattern, VulnerabilityTemplate};
 use crate::error::Result;
 use crate::types::Severity;
+use dashmap::DashMap;
 use regex::{Regex, RegexBuilder};
 use rustc_hash::FxHashMap;
 
-static REGEX_CACHE: LazyLock<Mutex<FxHashMap<String, Regex>>> =
-    LazyLock::new(|| Mutex::new(FxHashMap::default()));
+static REGEX_CACHE: LazyLock<DashMap<String, Arc<Regex>>> = LazyLock::new(DashMap::new);
 
 #[derive(Debug, Clone)]
 pub struct MatchResult {
@@ -187,32 +187,22 @@ impl TemplateMatcher {
         match search.mode {
             super::models::MatchMode::Word => text.contains(&search.pattern),
             super::models::MatchMode::Regex => {
-                let re = match REGEX_CACHE.lock().unwrap().get(&search.pattern) {
-                    Some(re) => re.clone(),
-                    None => {
-                        match RegexBuilder::new(&search.pattern)
-                            .size_limit(100_000)
-                            .build()
-                        {
-                            Ok(re) => {
-                                REGEX_CACHE
-                                    .lock()
-                                    .unwrap()
-                                    .insert(search.pattern.clone(), re.clone());
-                                re
-                            }
-                            Err(e) => {
-                                tracing::debug!(
-                                    "invalid regex pattern '{}': {}",
-                                    search.pattern,
-                                    e
-                                );
-                                return false;
-                            }
-                        }
+                let pattern = search.pattern.clone();
+                // Fast path: cache hit with concurrent read
+                if let Some(re) = REGEX_CACHE.get(&pattern).map(|r| r.value().clone()) {
+                    return re.is_match(text);
+                }
+                // Cache miss: compile outside the lock, then insert
+                let compiled = match RegexBuilder::new(&pattern).size_limit(100_000).build() {
+                    Ok(re) => Arc::new(re),
+                    Err(e) => {
+                        tracing::debug!("invalid regex pattern '{}': {}", pattern, e);
+                        return false;
                     }
                 };
-                re.is_match(text)
+                let arc = compiled.clone();
+                REGEX_CACHE.insert(pattern, arc);
+                compiled.is_match(text)
             }
             super::models::MatchMode::Binary => {
                 let decoded: Vec<u8> = if search.encoding == "base64" {
