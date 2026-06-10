@@ -20,7 +20,8 @@ use crate::tool::protocol::mcp::handlers::helpers::{
     build_capabilities_summary, build_input_schema,
 };
 use crate::tool::protocol::mcp::policy::{
-    policy_decision_for_mcp_call_with_enforcement, McpProfilePolicy,
+    operation_descriptor_for_mcp_call, policy_decision_for_mcp_call_with_enforcement,
+    McpProfilePolicy,
 };
 use crate::tool::protocol::mcp::profile::McpProfile;
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts_for_profile;
@@ -41,11 +42,15 @@ pub struct McpServer {
     stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
+    // Legacy/test-only: production paths use `enforcement.loaded_scope` exclusively.
+    // Kept to avoid churn in legacy constructors and `with_history`; always None under `with_enforcement`.
     #[cfg(feature = "rest-api")]
     scope: Option<Scope>,
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) profile: McpProfile,
     pub(crate) policy: McpProfilePolicy,
+    // Legacy/test-only mirror of enforcement.execution_policy for compatibility with old paths.
+    // Production dispatch and policy decisions use `self.enforcement` exclusively.
     pub(crate) execution_policy: crate::config::ExecutionPolicy,
     pub(crate) enforcement: crate::config::EnforcementContext,
 }
@@ -183,7 +188,10 @@ impl McpServer {
     /// This remains available for tests and transitional call sites, but
     /// production code should prefer the `with_enforcement` constructor to
     /// avoid "build default then patch" footguns.
-    pub fn with_enforcement_context(mut self, enforcement: crate::config::EnforcementContext) -> Self {
+    pub fn with_enforcement_context(
+        mut self,
+        enforcement: crate::config::EnforcementContext,
+    ) -> Self {
         self.enforcement = enforcement;
         // Also sync execution_policy for consistency in any legacy paths that read it directly
         self.execution_policy = self.enforcement.execution_policy.clone();
@@ -523,48 +531,14 @@ impl McpServer {
             }
         }
 
-        #[cfg(feature = "rest-api")]
-        {
-            if let Some(ref scope) = self.scope {
-                match scope.is_target_allowed(target_value) {
-                    Ok(false) | Err(_) => {
-                        return req.error_response(McpError::invalid_params(&format!(
-                            "Scope violation: {} not allowed",
-                            target_value
-                        )));
-                    }
-                    Ok(true) => {}
-                }
-            }
-        }
-
         // Shared enforcement evaluation
         {
-            use crate::config::{IntendedUse, OperationDescriptor, OperationMode};
-            use crate::tool::protocol::mcp::policy::classify_tool_risk;
-
-            let risk = classify_tool_risk(&tool_id);
-            let intended_uses = if self.profile.is_coding_agent() {
-                vec![IntendedUse::CodingAgentVerification]
-            } else {
-                vec![IntendedUse::WebAssessment]
-            };
-
-            let descriptor = OperationDescriptor {
-                operation: tool_id.clone(),
-                mode: OperationMode::StandardAssessment,
-                risk,
-                intended_uses,
-                target: if target_value.is_empty() { None } else { Some(target_value.to_string()) },
-                required_features: Vec::new(),
-                required_policy_flags: Vec::new(),
-                requires_private_or_local_target: false,
-                requires_explicit_scope: true,
-                required_capabilities: crate::tool::protocol::mcp::policy::required_capabilities_for_tool_call(
-                    &tool_id, capability.as_deref(), &arguments,
-                ),
-            };
-
+            let descriptor = operation_descriptor_for_mcp_call(
+                &self.policy,
+                &tool_id,
+                capability.as_deref(),
+                &arguments,
+            );
             let outcome = self.enforcement.evaluate(&descriptor);
             if let crate::config::EnforcementOutcome::Deny(decision) = outcome {
                 return req.error_response(McpError {

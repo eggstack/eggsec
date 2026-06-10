@@ -21,13 +21,9 @@ Tool abstraction layer workflows and patterns for security tool integration.
 
 ### MCP Enforcement Boundary
 
-The MCP server (`handlers/server.rs`) now stores `execution_policy` and receives `scope` from `CommandContext`. All MCP tool executions pass through:
-1. `McpProfilePolicy::validate_tool_call()` - profile-level enforcement
-2. `McpProfilePolicy::validate_target()` - target policy enforcement
-3. `scope.is_target_allowed()` - scope enforcement
-4. `ToolDispatcher::dispatch()` - actual execution
+The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` only for test/legacy constructors (always `None` under production `with_enforcement`). All MCP tool executions pass through the mandatory `EnforcementContext::evaluate(descriptor)` pre-dispatch gate (via `policy_decision_for_mcp_call_with_enforcement` + `operation_descriptor_for_mcp_call`); `McpProfilePolicy` overlays. Production `create_mcp_router`/`run_stdio` take only `enforcement: EnforcementContext` (scope provenance is `enforcement.loaded_scope`).
 
-The `create_mcp_router()` and `run_stdio()` functions accept `scope: Option<Scope>` parameter.
+> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 
 ### Agent Routes (REST API)
 `tool/protocol/agent_routes.rs` - Agent and task management:

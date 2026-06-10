@@ -554,11 +554,7 @@ pub fn operation_descriptor_for_mcp_call(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: profile_policy.require_explicit_scope,
-        required_capabilities: required_capabilities_for_tool_call(
-            tool_id,
-            capability,
-            arguments,
-        ),
+        required_capabilities: required_capabilities_for_tool_call(tool_id, capability, arguments),
     }
 }
 
@@ -583,8 +579,7 @@ pub fn policy_decision_for_mcp_call(
 
     let descriptor = operation_descriptor_for_mcp_call(profile_policy, tool_id, None, arguments);
 
-    let mut decision =
-        evaluate_operation_policy(&descriptor, execution_policy, scope);
+    let mut decision = evaluate_operation_policy(&descriptor, execution_policy, scope);
 
     if let Err(violation) = profile_policy.validate_tool_call(tool_id, None, arguments) {
         decision.allowed = false;
@@ -615,7 +610,8 @@ pub fn policy_decision_for_mcp_call_with_enforcement(
     arguments: &serde_json::Value,
     enforcement: &crate::config::EnforcementContext,
 ) -> crate::config::PolicyDecision {
-    let descriptor = operation_descriptor_for_mcp_call(profile_policy, tool_id, capability, arguments);
+    let descriptor =
+        operation_descriptor_for_mcp_call(profile_policy, tool_id, capability, arguments);
     let outcome = enforcement.evaluate(&descriptor);
     let mut decision = outcome.decision().clone();
 
@@ -1540,7 +1536,8 @@ mod tests {
 
     #[test]
     fn test_required_capabilities_for_unknown_tool() {
-        let caps = required_capabilities_for_tool_call("unknown-tool", None, &serde_json::json!({}));
+        let caps =
+            required_capabilities_for_tool_call("unknown-tool", None, &serde_json::json!({}));
         assert!(caps.is_empty());
     }
 

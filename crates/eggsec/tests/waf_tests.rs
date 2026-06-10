@@ -102,7 +102,7 @@ fn test_waf_auto_profile() {
 fn test_waf_profile_bypass_techniques() {
     let profiles = get_waf_profiles();
 
-    for profile in &profiles {
+    for profile in profiles.iter() {
         // Each profile should have some bypass techniques
         assert!(
             !profile.detection_signatures.is_empty(),

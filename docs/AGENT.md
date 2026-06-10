@@ -99,6 +99,8 @@ Budgets can be set per-target in the portfolio:
 
 **Enforcement (2026-06-10):** `handle_agent()` requires explicit scope manifest (`LoadedScope::is_explicit_manifest()`) and refuses to run without it. `EnforcementContext::agent_strict` is passed to `AgentConfig`; per-scan `enforcement.evaluate` (central boundary: provenance, DenialClass downgrade for ManualPermissive only, positive capability checks) is re-evaluated immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating).
 
+> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
+
 ### Cooldowns
 
 After a scan completes, the target enters a cooldown period before the next scan is allowed:

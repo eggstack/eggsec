@@ -12,7 +12,7 @@ pub use crate::fuzzer::payloads::ssti::{SstiFuzzer, SstiTestResult, TemplateEngi
 pub use crate::fuzzer::payloads::websocket::{
     WebSocketFuzzer, WebSocketTestResult, WebSocketVulnerability,
 };
-use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use crate::fuzzer::payloads::{Payload, PayloadType};
 use reqwest::Client;
 
 pub trait AdvancedFuzzer {

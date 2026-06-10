@@ -73,6 +73,10 @@ Eggsec distinguishes caller trust contexts through execution profiles. All paths
 
 `LoadedScope` provenance (`ScopeSource`: DefaultEmpty vs. ConfigFile/CliScopeFile/GeneratedPreset) is the source of truth for strict automated manifest checks inside `EnforcementContext::evaluate`. `requires_explicit_manifest_for` + `is_explicit_manifest()` produce the canonical denial reason for automated networked operations.
 
+> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
+
+**Baseline capabilities for strict automated profiles** (`McpStrict`, `AgentStrict`, `CiStrict`): `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect` (positive capability allow not required). All other capabilities require explicit `allowed_capabilities` in `ExecutionPolicy` (plus matching risk/feature gates). **ManualPermissive** downgrades *only* safe scope-selection misses (`ScopeMissing`/`TargetOutOfScope` with no positive rules and no exclusions); explicit exclusions, feature gates, risk gates, capability denials, and hazards remain hard denials. Strict profiles never downgrade.
+
 ### Usage Examples
 
 ```bash

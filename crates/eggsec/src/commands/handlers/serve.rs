@@ -65,8 +65,6 @@ pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeAr
         _ => McpProfile::OpsAgent,
     };
 
-    let scope = Some(ctx.scope.clone());
-
     let enforcement = crate::config::EnforcementContext::mcp_strict(
         ctx.config.execution_policy.clone(),
         ctx.enforcement.loaded_scope.clone(),
@@ -77,10 +75,10 @@ pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeAr
             "Starting MCP server in STDIO mode (profile: {})",
             args.profile
         );
-        run_stdio(registry, args.api_key, profile, scope, enforcement).await;
+        run_stdio(registry, args.api_key, profile, enforcement).await;
         Ok(())
     } else {
-        let router = create_mcp_router(registry, args.api_key.clone(), profile, scope, enforcement).await;
+        let router = create_mcp_router(registry, args.api_key.clone(), profile, enforcement).await;
 
         let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
             .parse()

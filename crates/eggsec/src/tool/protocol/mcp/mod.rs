@@ -779,4 +779,175 @@ mod tests {
         assert_eq!(requests[0].method, "ping");
         assert_eq!(requests[1].method, "initialize");
     }
+
+    // Pass 6: dispatch-prevention regression tests for MCP (per final-enforcement-cleanup-plan)
+    // These prove that `EnforcementContext::evaluate()` is the pre-dispatch gate for production `with_enforcement` paths.
+
+    use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
+    use crate::tool::protocol::mcp::profile::McpProfile;
+    use crate::tool::traits::{SecurityTool, ToolCategory};
+    use crate::tool::{ToolRequest, ToolResponse, ToolResult};
+    use async_trait::async_trait;
+
+    struct DispatchRecordingTool {
+        called: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    #[async_trait]
+    impl SecurityTool for DispatchRecordingTool {
+        fn id(&self) -> &'static str {
+            "dispatch-recording-tool"
+        }
+        fn name(&self) -> &'static str {
+            "Dispatch Recording Tool"
+        }
+        fn category(&self) -> ToolCategory {
+            ToolCategory::Recon
+        }
+        fn description(&self) -> &'static str {
+            "Test double that records if execute was reached"
+        }
+
+        async fn execute(&self, _request: ToolRequest) -> ToolResult<ToolResponse> {
+            self.called.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(ToolResponse::success(
+                "rec-1",
+                self.id(),
+                serde_json::json!({"reached": true}),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mcp_enforcement_with_default_empty_denies_networked_call_and_prevents_dispatch() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let mut registry = create_default_registry();
+        registry
+            .register(DispatchRecordingTool {
+                called: flag.clone(),
+            })
+            .unwrap();
+
+        let server = McpServer::with_enforcement(
+            registry,
+            Some("test-api-key".to_string()),
+            McpProfile::OpsAgent,
+            EnforcementContext::mcp_strict(
+                ExecutionPolicy::default(),
+                LoadedScope::default_empty(),
+            ),
+        );
+
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "dispatch-recording-tool",
+                "arguments": {"target": "https://example.com"}
+            })),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(
+            response.error.is_some(),
+            "expected enforcement denial error"
+        );
+        let error = response.error.unwrap();
+        // Enforcement denials in handle_tools_call use code -32025
+        assert_eq!(error.code, -32025);
+        assert!(
+            !flag.load(Ordering::SeqCst),
+            "dispatch must not have been reached on denial"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_mcp_enforcement_with_explicit_scope_allows_and_reaches_dispatch() {
+        use crate::config::{Scope, ScopeRule, ScopeSource};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let mut registry = create_default_registry();
+        registry
+            .register(DispatchRecordingTool {
+                called: flag.clone(),
+            })
+            .unwrap();
+
+        let mut scope = Scope::default();
+        scope
+            .allowed_targets
+            .push(ScopeRule::new("example.com".to_string()));
+        let loaded = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+
+        let server = McpServer::with_enforcement(
+            registry,
+            Some("test-api-key".to_string()),
+            McpProfile::OpsAgent,
+            EnforcementContext::mcp_strict(ExecutionPolicy::default(), loaded),
+        );
+
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "dispatch-recording-tool",
+                "arguments": {"target": "https://example.com"}
+            })),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(
+            response.error.is_none(),
+            "expected success with explicit in-scope manifest"
+        );
+        assert!(
+            flag.load(Ordering::SeqCst),
+            "dispatch should have been reached for allowed call"
+        );
+    }
+
+    #[test]
+    fn test_operation_descriptor_for_mcp_call_is_single_source_for_pre_dispatch() {
+        // Exercises the helper that is now the only production construction path in handle_tools_call.
+        use crate::tool::protocol::mcp::policy::operation_descriptor_for_mcp_call;
+        use crate::tool::protocol::mcp::policy::McpProfilePolicy;
+
+        let policy = McpProfilePolicy::for_profile(McpProfile::OpsAgent);
+        let args = serde_json::json!({"target": "https://example.com"});
+        let desc = operation_descriptor_for_mcp_call(&policy, "scan", None, &args);
+
+        assert_eq!(desc.operation, "scan");
+        assert!(desc.target.is_some());
+        assert!(desc.requires_explicit_scope); // Ops and Coding both set true
+                                               // required_capabilities populated by the helper (exact contents depend on registry mapping; non-emptiness for scan is typical)
+    }
+
+    #[test]
+    fn production_mcp_handler_uses_operation_descriptor_helper_not_inline_construction() {
+        // Guard that the deduplication (Pass 1) holds: the enforcement block calls the helper.
+        let src = include_str!("handlers/server.rs");
+        assert!(
+            src.contains("operation_descriptor_for_mcp_call("),
+            "production handler must use the shared descriptor helper"
+        );
+        // The previous inline construction used a local `let risk = classify_tool_risk` + manual OperationDescriptor in the enforcement block.
+        // After dedup that pattern is removed from the shared enforcement evaluation site.
+        // We assert the old classify+manual combo no longer appears in that context by checking for the removed marker.
+        // (classify_tool_risk may still exist in policy.rs; we look for the specific combination that was the hand-build.)
+        let has_old_inline_hand_build = src.contains("let risk = classify_tool_risk(&tool_id)")
+            && src.contains("OperationDescriptor {");
+        assert!(
+            !has_old_inline_hand_build,
+            "handler must not hand-build OperationDescriptor in the shared enforcement block"
+        );
+    }
 }

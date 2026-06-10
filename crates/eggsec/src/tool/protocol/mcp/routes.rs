@@ -79,11 +79,15 @@ pub async fn create_mcp_router(
     registry: ToolRegistry,
     api_key: Option<String>,
     profile: McpProfile,
-    scope: Option<crate::config::Scope>,
     enforcement: crate::config::EnforcementContext,
 ) -> Router {
     // Use the production constructor that directly accepts EnforcementContext (no build-then-patch).
-    let server = Arc::new(McpServer::with_enforcement(registry.clone(), api_key, profile, enforcement));
+    let server = Arc::new(McpServer::with_enforcement(
+        registry.clone(),
+        api_key,
+        profile,
+        enforcement,
+    ));
     let planner = ChainPlanner::new(registry.clone());
     let openapi_generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
 
@@ -281,11 +285,21 @@ mod tests {
     }
 }
 
-pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile: McpProfile, scope: Option<crate::config::Scope>, enforcement: crate::config::EnforcementContext) {
+pub async fn run_stdio(
+    registry: ToolRegistry,
+    api_key: Option<String>,
+    profile: McpProfile,
+    enforcement: crate::config::EnforcementContext,
+) {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 
     // Use the production constructor that directly accepts EnforcementContext (no build-then-patch).
-    let server = Arc::new(McpServer::with_enforcement(registry, api_key, profile, enforcement));
+    let server = Arc::new(McpServer::with_enforcement(
+        registry,
+        api_key,
+        profile,
+        enforcement,
+    ));
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
