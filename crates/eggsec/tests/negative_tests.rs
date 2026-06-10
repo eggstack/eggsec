@@ -85,13 +85,13 @@ fn test_parse_ports_large_range() {
 
 #[test]
 fn test_parse_ports_duplicate() {
-    // Duplicate ports - parse_ports doesn't deduplicate
+    // parse_ports uses a BTreeSet internally, so duplicates collapse
+    // to unique entries. Both 80 and 443 are preserved; the result is
+    // sorted ascending.
     let result = parse_ports("80,80,443,443");
     assert!(result.is_ok(), "Should accept duplicates");
     let ports = result.unwrap();
-    assert_eq!(ports.len(), 4, "Should keep all 4 entries");
-    assert!(ports.contains(&80));
-    assert!(ports.contains(&443));
+    assert_eq!(ports, vec![80, 443], "Should deduplicate to 2 entries");
 }
 
 #[test]
