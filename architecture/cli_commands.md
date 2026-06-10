@@ -67,8 +67,8 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 
 ### `evaluate_and_enforce_operation()` Method
 
-`CommandContext::evaluate_and_enforce_operation()` wraps `evaluate_enforcement()` (`config/policy_decision.rs`) with profile-aware scope enforcement and structured denial output:
-1. Calls `evaluate_enforcement(&descriptor, &self.config.execution_policy, Some(&self.scope), self.execution_profile)`
+`CommandContext::evaluate_and_enforce_operation()` wraps `self.enforcement.evaluate(&descriptor)` (central `EnforcementContext::evaluate` in `config/policy_decision.rs`) with profile-aware scope enforcement and structured denial output. The central `evaluate` performs LoadedScope provenance checks, DenialClass downgrade (ManualPermissive only), positive capability checks for strict profiles, and risk/feature/policy enforcement; legacy direct `evaluate_enforcement`/`evaluate_operation_policy` calls are internal/deprecated for denial paths.
+1. Calls `self.enforcement.evaluate(&descriptor)`
 2. On `Allow`: returns the `PolicyDecision`
 3. On `Warn`: logs warnings and returns the `PolicyDecision` (manual permissive mode)
 4. On `Deny`: returns an error containing the `PolicyDecision` details (JSON or human-readable)

@@ -91,11 +91,14 @@ pub struct CommandContext {
 impl CommandContext {
     pub fn new(config: EggsecConfig, scope: Scope, json: bool) -> Self {
         let notify_manager = crate::notify::NotifyManager::from_settings(&config);
-        let loaded_scope = crate::config::LoadedScope::explicit(
-            scope.clone(),
-            crate::config::ScopeSource::DefaultEmpty,
-            None,
-        );
+        // Use explicit provenance when the provided scope has rules (simulates --scope / config file).
+        // Tests that pass an empty/default scope will still get DefaultEmpty.
+        let source = if scope.allowed_targets.is_empty() && !scope.require_explicit_scope {
+            crate::config::ScopeSource::DefaultEmpty
+        } else {
+            crate::config::ScopeSource::CliScopeFile
+        };
+        let loaded_scope = crate::config::LoadedScope::explicit(scope.clone(), source, None);
         let enforcement = crate::config::EnforcementContext::manual_permissive(
             config.execution_policy.clone(),
             loaded_scope,

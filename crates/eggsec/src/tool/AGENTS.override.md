@@ -86,4 +86,4 @@ for tool in &stage.tools {
 - `TargetPolicy` enum controls which targets each profile can access
 - `extract_hostname()` counts colons to distinguish bare IPv6 (>=2, returned as-is) from host:port (1 colon, port stripped if valid u16)
 - `classify_tool_risk()` maps tool IDs to `OperationRisk` for MCP policy decisions
-- `policy_decision_for_mcp_call()` builds a full `PolicyDecision` combining MCP profile policy with shared execution policy
+- `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext::evaluate`) builds a full `PolicyDecision` (capabilities populated, provenance enforced); legacy `policy_decision_for_mcp_call` deprecated for denial paths (2026-06-10). MCP server preferred constructor: `McpServer::with_enforcement`.

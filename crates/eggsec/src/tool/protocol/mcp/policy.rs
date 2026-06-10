@@ -517,15 +517,19 @@ pub fn required_capabilities_for_tool_call(
     }
 }
 
-/// Build a [`PolicyDecision`] for an MCP tool call by evaluating the tool
-/// against both the MCP profile policy and the shared execution policy.
-pub fn policy_decision_for_mcp_call(
+/// Build an [`OperationDescriptor`] for an MCP tool call.
+///
+/// Populates `required_capabilities` via `required_capabilities_for_tool_call`,
+/// sets `requires_explicit_scope` from the profile policy, and chooses the
+/// appropriate `IntendedUse` based on whether the profile is a coding agent.
+/// This descriptor is the single source of truth for both pre-dispatch
+/// enforcement and denial reporting helpers.
+pub fn operation_descriptor_for_mcp_call(
     profile_policy: &McpProfilePolicy,
     tool_id: &str,
+    capability: Option<&str>,
     arguments: &serde_json::Value,
-    execution_policy: &crate::config::ExecutionPolicy,
-    scope: Option<&crate::config::Scope>,
-) -> crate::config::PolicyDecision {
+) -> crate::config::OperationDescriptor {
     use crate::config::{IntendedUse, OperationDescriptor, OperationMode};
 
     let risk = classify_tool_risk(tool_id);
@@ -540,28 +544,89 @@ pub fn policy_decision_for_mcp_call(
         vec![IntendedUse::WebAssessment]
     };
 
-    let descriptor = OperationDescriptor {
+    OperationDescriptor {
         operation: tool_id.to_string(),
         mode: OperationMode::StandardAssessment,
         risk,
         intended_uses,
-        target: target.clone(),
+        target,
         required_features: Vec::new(),
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: profile_policy.require_explicit_scope,
-        required_capabilities: Vec::new(),
-    };
+        required_capabilities: required_capabilities_for_tool_call(
+            tool_id,
+            capability,
+            arguments,
+        ),
+    }
+}
+
+/// Build a [`PolicyDecision`] for an MCP tool call by evaluating the tool
+/// against both the MCP profile policy and the shared execution policy.
+///
+/// Deprecated in favor of paths that go through `EnforcementContext::evaluate`
+/// (see `policy_decision_for_mcp_call_with_enforcement` and the main dispatch
+/// in handlers/server.rs). Kept for compatibility with limited callers;
+/// now populates required capabilities.
+#[deprecated(
+    note = "Prefer operation_descriptor_for_mcp_call + EnforcementContext::evaluate or policy_decision_for_mcp_call_with_enforcement for consistent capability and provenance handling."
+)]
+pub fn policy_decision_for_mcp_call(
+    profile_policy: &McpProfilePolicy,
+    tool_id: &str,
+    arguments: &serde_json::Value,
+    execution_policy: &crate::config::ExecutionPolicy,
+    scope: Option<&crate::config::Scope>,
+) -> crate::config::PolicyDecision {
+    use crate::config::evaluate_operation_policy;
+
+    let descriptor = operation_descriptor_for_mcp_call(profile_policy, tool_id, None, arguments);
 
     let mut decision =
-        crate::config::evaluate_operation_policy(&descriptor, execution_policy, scope);
+        evaluate_operation_policy(&descriptor, execution_policy, scope);
 
     if let Err(violation) = profile_policy.validate_tool_call(tool_id, None, arguments) {
         decision.allowed = false;
         decision.denied_reasons.push(violation.to_string());
     }
 
-    if let Some(ref tgt) = target {
+    if let Some(ref tgt) = descriptor.target {
+        if let Err(violation) = profile_policy.validate_target(tgt) {
+            decision.allowed = false;
+            decision.denied_reasons.push(violation.to_string());
+        }
+    }
+
+    decision
+}
+
+/// Build a [`PolicyDecision`] for an MCP tool call using the shared `EnforcementContext`.
+///
+/// This ensures:
+/// - required_capabilities are populated via the descriptor helper,
+/// - explicit-manifest provenance is enforced centrally by `EnforcementContext::evaluate`,
+/// - DenialClass / downgrade logic and positive capability allow checks for strict profiles apply,
+/// - the returned decision is consistent with the pre-dispatch check in `handle_tools_call`.
+pub fn policy_decision_for_mcp_call_with_enforcement(
+    profile_policy: &McpProfilePolicy,
+    tool_id: &str,
+    capability: Option<&str>,
+    arguments: &serde_json::Value,
+    enforcement: &crate::config::EnforcementContext,
+) -> crate::config::PolicyDecision {
+    let descriptor = operation_descriptor_for_mcp_call(profile_policy, tool_id, capability, arguments);
+    let outcome = enforcement.evaluate(&descriptor);
+    let mut decision = outcome.decision().clone();
+
+    // Overlay MCP profile-specific violations so that the decision carried in error data
+    // explains both shared enforcement denials and profile visibility/target restrictions.
+    if let Err(violation) = profile_policy.validate_tool_call(tool_id, capability, arguments) {
+        decision.allowed = false;
+        decision.denied_reasons.push(violation.to_string());
+    }
+
+    if let Some(ref tgt) = descriptor.target {
         if let Err(violation) = profile_policy.validate_target(tgt) {
             decision.allowed = false;
             decision.denied_reasons.push(violation.to_string());
@@ -573,6 +638,13 @@ pub fn policy_decision_for_mcp_call(
 
 /// Convert a [`PolicyViolation`] into an [`McpPolicyDenial`] that includes
 /// a shared [`PolicyDecision`].
+///
+/// Deprecated: Prefer constructing a denial using `policy_decision_for_mcp_call_with_enforcement`
+/// + `McpPolicyDenial` directly when an `EnforcementContext` is available, to ensure
+/// consistent capability population and explicit-manifest provenance handling.
+#[deprecated(
+    note = "Use policy_decision_for_mcp_call_with_enforcement + McpPolicyDenial for consistent enforcement path."
+)]
 pub fn denial_from_violation(
     violation: &PolicyViolation,
     profile_policy: &McpProfilePolicy,
@@ -581,6 +653,7 @@ pub fn denial_from_violation(
     execution_policy: &crate::config::ExecutionPolicy,
     scope: Option<&crate::config::Scope>,
 ) -> McpPolicyDenial {
+    #[allow(deprecated)]
     let policy_decision =
         policy_decision_for_mcp_call(profile_policy, tool_id, arguments, execution_policy, scope);
     McpPolicyDenial {

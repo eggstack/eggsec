@@ -84,6 +84,8 @@ eggsec mcp-serve --stdio --profile coding-agent --scope-file scope.toml
 eggsec mcp-serve --stdio --profile coding-agent
 ```
 
+**Enforcement (2026-06-10):** MCP server forces `McpStrict` via `EnforcementContext::evaluate` (central boundary: LoadedScope provenance, explicit manifest required for networked ops, DenialClass/positive-capability checks, capabilities populated). Preferred production constructor: `McpServer::with_enforcement`. `tools/call` computes full `PolicyDecision` (via `policy_decision_for_mcp_call_with_enforcement` or legacy path) and embeds it in error `data`; legacy `policy_decision_for_mcp_call` / direct `evaluate_operation_policy` deprecated for denial paths.
+
 ## Endpoints
 
 | Method | Path | Description |

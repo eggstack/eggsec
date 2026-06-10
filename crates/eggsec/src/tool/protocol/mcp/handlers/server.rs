@@ -19,7 +19,9 @@ use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
 use crate::tool::protocol::mcp::handlers::helpers::{
     build_capabilities_summary, build_input_schema,
 };
-use crate::tool::protocol::mcp::policy::{policy_decision_for_mcp_call, McpProfilePolicy};
+use crate::tool::protocol::mcp::policy::{
+    policy_decision_for_mcp_call_with_enforcement, McpProfilePolicy,
+};
 use crate::tool::protocol::mcp::profile::McpProfile;
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts_for_profile;
 use crate::tool::protocol::mcp::streaming::StreamEvent;
@@ -49,10 +51,21 @@ pub struct McpServer {
 }
 
 impl McpServer {
+    /// Basic constructor for tests or minimal non-networked initialization.
+    ///
+    /// Creates a server with default McpProfile and a default (inert) McpStrict
+    /// EnforcementContext (DefaultEmpty scope). Production callers must use
+    /// `with_enforcement` (or the router/stdio helpers that accept an explicit
+    /// EnforcementContext) to ensure the correct McpStrict profile + LoadedScope
+    /// provenance + execution policy are wired in.
     pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
         Self::with_scope_and_profile(registry, api_key, None, McpProfile::default())
     }
 
+    /// Convenience constructor that builds a default McpStrict enforcement context.
+    ///
+    /// Intended for tests and transitional call sites. Production startup paths
+    /// (create_mcp_router / run_stdio) now use `with_enforcement` directly.
     pub fn with_scope(
         registry: ToolRegistry,
         api_key: Option<String>,
@@ -61,6 +74,13 @@ impl McpServer {
         Self::with_scope_and_profile(registry, api_key, scope, McpProfile::default())
     }
 
+    /// Legacy constructor that internally creates a default McpStrict enforcement
+    /// context with DefaultEmpty scope, then allows callers to patch via
+    /// `with_enforcement_context`.
+    ///
+    /// Marked for test/support use. Prefer the `with_enforcement` constructor
+    /// or the higher-level router/stdio entry points for production to avoid
+    /// "build default then patch" footguns.
     pub fn with_scope_and_profile(
         registry: ToolRegistry,
         api_key: Option<String>,
@@ -113,8 +133,60 @@ impl McpServer {
         self
     }
 
+    /// Construct an McpServer with a fully-configured EnforcementContext.
+    ///
+    /// This is the preferred production constructor: it accepts a pre-built
+    /// EnforcementContext (with McpStrict + explicit LoadedScope provenance + policy)
+    /// and avoids the "build default then patch" pattern that can lead to misuse.
+    /// The provided profile is still used to derive McpProfilePolicy for tool visibility
+    /// and target restrictions (MCP profile layer on top of shared enforcement).
+    pub fn with_enforcement(
+        registry: ToolRegistry,
+        api_key: Option<String>,
+        profile: McpProfile,
+        enforcement: crate::config::EnforcementContext,
+    ) -> Self {
+        let dispatcher = ToolDispatcher::new(registry.clone());
+        let (stream_events, _) = tokio::sync::broadcast::channel(1000);
+
+        let pending_cancellations = Arc::new(RwLock::new(FxHashMap::default()));
+        let completed_results = Arc::new(RwLock::new(FxHashMap::default()));
+        let mcp_policy = McpProfilePolicy::for_profile(profile);
+
+        let server = Self {
+            registry,
+            dispatcher,
+            api_key,
+            rate_limiter: RateLimiter::new(RateLimitConfig::default()),
+            session_manager: None,
+            pending_cancellations,
+            completed_results,
+            stream_events: Arc::new(stream_events),
+            #[cfg(feature = "ai-integration")]
+            ai_client: None,
+            #[cfg(feature = "rest-api")]
+            scope: None,
+            shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            profile,
+            policy: mcp_policy,
+            execution_policy: enforcement.execution_policy.clone(),
+            enforcement,
+        };
+
+        server.start_hashmap_reaper(60);
+
+        server
+    }
+
+    /// Patch the enforcement context after construction.
+    ///
+    /// This remains available for tests and transitional call sites, but
+    /// production code should prefer the `with_enforcement` constructor to
+    /// avoid "build default then patch" footguns.
     pub fn with_enforcement_context(mut self, enforcement: crate::config::EnforcementContext) -> Self {
         self.enforcement = enforcement;
+        // Also sync execution_policy for consistency in any legacy paths that read it directly
+        self.execution_policy = self.enforcement.execution_policy.clone();
         self
     }
 
@@ -416,14 +488,15 @@ impl McpServer {
             self.policy
                 .validate_tool_call(&tool_id, capability.as_deref(), &arguments)
         {
-            let execution_policy = self.execution_policy.clone();
-            let scope_ref = self.scope.as_ref();
-            let decision = policy_decision_for_mcp_call(
+            // Use shared enforcement + descriptor helper so that required_capabilities are populated,
+            // explicit-manifest provenance is enforced centrally, and DenialClass/downgrade/positive-capability
+            // checks apply. The helper overlays profile violations on top of the enforcement decision.
+            let decision = policy_decision_for_mcp_call_with_enforcement(
                 &self.policy,
                 &tool_id,
+                capability.as_deref(),
                 &arguments,
-                &execution_policy,
-                scope_ref,
+                &self.enforcement,
             );
             return req.error_response(McpError {
                 code: violation.to_mcp_error_code(),
@@ -435,14 +508,12 @@ impl McpServer {
         // Target policy enforcement
         if !target_value.is_empty() {
             if let Err(violation) = self.policy.validate_target(target_value) {
-                let execution_policy = self.execution_policy.clone();
-                let scope_ref = self.scope.as_ref();
-                let decision = policy_decision_for_mcp_call(
+                let decision = policy_decision_for_mcp_call_with_enforcement(
                     &self.policy,
                     &tool_id,
+                    capability.as_deref(),
                     &arguments,
-                    &execution_policy,
-                    scope_ref,
+                    &self.enforcement,
                 );
                 return req.error_response(McpError {
                     code: violation.to_mcp_error_code(),

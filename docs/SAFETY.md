@@ -61,15 +61,17 @@ Each CLI command's help text indicates its mode. Use `eggsec policy-explain` to 
 
 ## Execution Profiles
 
-Eggsec distinguishes caller trust contexts through execution profiles:
+Eggsec distinguishes caller trust contexts through execution profiles. All paths route through the shared `EnforcementContext::evaluate(descriptor)` (in `config/policy_decision.rs`), which centralizes scope-provenance checks, `DenialClass` classification for downgrade decisions, positive capability allow checks for strict profiles, and risk/feature/policy enforcement.
 
 | Profile | Behavior | Use Case |
 |---------|----------|----------|
-| **ManualPermissive** | Warnings for scope ambiguity, denials only for hazardous ops | Default CLI/TUI |
-| **ManualGuarded** | Denies missing scope, out-of-scope targets | CLI with `--strict-scope` |
-| **CiStrict** | Non-interactive, deterministic, strict | CI/CD pipelines |
-| **McpStrict** | Always strict, scope manifest required | MCP server |
-| **AgentStrict** | Always strict, cannot self-approve scope | Autonomous agent |
+| **ManualPermissive** | Warnings (not denials) for safe scope ambiguity / ScopeMissing / TargetOutOfScope when no positive rules declared and no exclusions/feature/risk/capability/hazard denials; downgrades use `classify_denial_reasons` + `may_downgrade_to_warning`. Higher-risk, exclusions, or declared positive scope rules remain hard denials. | Default CLI/TUI |
+| **ManualGuarded** | Denies missing scope, out-of-scope targets, ambiguous scope for target-bearing ops | CLI with `--strict-scope` |
+| **CiStrict** | Non-interactive, deterministic, strict; explicit manifest required; positive capability allow enforced for non-baseline | CI/CD pipelines |
+| **McpStrict** | Always strict, scope manifest (`LoadedScope::is_explicit_manifest()`) required for networked ops; warnings treated as denials; capabilities populated via `required_capabilities_for_tool_call` + `operation_descriptor_for_mcp_call`; MCP profile layer (visibility/target/arg restrictions) overlays shared enforcement decision | MCP server |
+| **AgentStrict** | Always strict, cannot self-approve scope; explicit manifest required; per-scan `enforcement.evaluate` immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating in `handle_agent`) | Autonomous agent |
+
+`LoadedScope` provenance (`ScopeSource`: DefaultEmpty vs. ConfigFile/CliScopeFile/GeneratedPreset) is the source of truth for strict automated manifest checks inside `EnforcementContext::evaluate`. `requires_explicit_manifest_for` + `is_explicit_manifest()` produce the canonical denial reason for automated networked operations.
 
 ### Usage Examples
 
@@ -80,14 +82,14 @@ eggsec scan example.com --profile quick
 # Manual strict
 eggsec scan example.com --profile quick --scope scope.toml --strict-scope
 
-# Strict MCP
+# Strict MCP (enforcement wired at construction via with_enforcement / create_mcp_router / run_stdio)
 eggsec codegg-mcp --scope scope.toml --stdio
 
-# Strict autonomous agent
+# Strict autonomous agent (enforcement passed through AgentConfig; re-evaluated per-scan)
 eggsec agent run --portfolio portfolio.json --scope scope.toml
 ```
 
-MCP and autonomous agent callers cannot use warn-only or downgrade flags. Enforcement is always in Rust code paths, not prompt-level instructions.
+MCP and autonomous agent callers cannot use warn-only or downgrade flags. Enforcement is always in Rust code paths (`EnforcementContext::evaluate` central boundary), not prompt-level instructions. Legacy MCP helpers (`policy_decision_for_mcp_call`) and direct `evaluate_operation_policy` are deprecated for denial paths; prefer `operation_descriptor_for_mcp_call` + `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`) to ensure required capabilities, provenance, and DenialClass/positive-capability logic are consistent. Preferred MCP production constructor: `McpServer::with_enforcement`.
 
 ## Policy Decision Records
 

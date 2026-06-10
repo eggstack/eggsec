@@ -83,10 +83,12 @@ description = "Admin panel - excluded"
 **Feature gating** ensures intrusive modules (stress testing, raw packet crafting, headless browser, NSE, database storage, container scanning, and more) require explicit build flags and cannot be invoked accidentally.
 
 **Execution profiles** separate manual CLI ergonomics from strict MCP/agent enforcement:
-- **Manual CLI/TUI** defaults to permissive scope assistance; `--strict-scope` activates guarded mode
-- **MCP server** always uses `McpStrict` internally, requires explicit scope manifest for networked operations
-- **Agent** requires explicit scope manifest, uses `AgentStrict`
+- **Manual CLI/TUI** defaults to permissive scope assistance (warnings for safe scope ambiguity/missing scope under `ManualPermissive`); `--strict-scope` activates guarded mode
+- **MCP server** always uses `McpStrict` internally (via `EnforcementContext`), requires explicit scope manifest (`LoadedScope::is_explicit_manifest()`) for networked operations; warnings treated as denials
+- **Agent** requires explicit scope manifest, uses `AgentStrict`; per-scan enforcement is re-evaluated immediately before dispatch in addition to startup gating
 - **CI** uses `CiStrict`
+
+`EnforcementContext::evaluate()` is the mandatory central boundary for all paths (CLI, TUI, MCP, agent, CI): performs LoadedScope provenance checks (strict profiles require explicit manifest for networked ops), applies DenialClass downgrade (ManualPermissive only for safe ScopeMissing/TargetOutOfScope when no positive rules), positive capability allow for strict, and full risk/feature/policy enforcement. `DenialClass` drives `ManualPermissive` downgrade logic for safe scope-selection misses only (never for explicit exclusions, feature/risk/capability/hazard denials, or when positive scope rules were declared). Strict profiles and higher-risk operations never downgrade. MCP production uses `McpServer::with_enforcement`; legacy `policy_decision_for_mcp_call` / direct `evaluate_operation_policy` deprecated for denial paths.
 
 MCP and autonomous agent paths are always strict and cannot be downgraded by model-supplied flags.
 

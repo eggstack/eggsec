@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode,
+    DenialClass, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode,
     OperationRisk, Scope,
 };
 
@@ -268,14 +268,42 @@ impl EnforcementContext {
         self.execution_profile.is_automated()
     }
 
+    /// Returns `true` if this profile + descriptor combination requires an explicit scope manifest.
+    ///
+    /// Strict automated profiles (CiStrict, McpStrict, AgentStrict) require an explicit
+    /// manifest (not DefaultEmpty) for target-bearing operations that set `requires_explicit_scope`.
+    /// ManualGuarded may require it for such ops; ManualPermissive generally does not
+    /// unless the descriptor itself is hazardous.
+    pub fn requires_explicit_manifest_for(&self, descriptor: &OperationDescriptor) -> bool {
+        self.execution_profile.is_automated()
+            && descriptor.target.is_some()
+            && descriptor.requires_explicit_scope
+    }
+
     /// Evaluate an operation descriptor against this enforcement context.
+    ///
+    /// Centralizes explicit-manifest provenance checks for strict profiles.
+    /// The inner evaluate_enforcement receives the scope rules, but provenance
+    /// (LoadedScope::is_explicit_manifest) is enforced here for automated profiles.
     pub fn evaluate(&self, descriptor: &OperationDescriptor) -> EnforcementOutcome {
-        evaluate_enforcement(
+        let outcome = evaluate_enforcement(
             descriptor,
             &self.execution_policy,
             Some(&self.loaded_scope.scope),
             self.execution_profile,
-        )
+        );
+
+        if self.requires_explicit_manifest_for(descriptor)
+            && !self.loaded_scope.is_explicit_manifest()
+        {
+            let mut decision = outcome.decision().clone().with_denied_reason(
+                "explicit scope manifest required for automated networked operation",
+            );
+            decision.allowed = false;
+            return EnforcementOutcome::Deny(decision);
+        }
+
+        outcome
     }
 }
 
@@ -363,9 +391,18 @@ pub fn evaluate_operation_policy(
                         .push("target in scope".to_string());
                 }
                 Ok(false) => {
-                    decision
-                        .denied_reasons
-                        .push("target not in scope".to_string());
+                    if scope.is_excluded(target) {
+                        decision
+                            .matched_exclusion_rules
+                            .push(format!("excluded: {}", target));
+                        decision
+                            .denied_reasons
+                            .push("target is explicitly excluded from scope".to_string());
+                    } else {
+                        decision
+                            .denied_reasons
+                            .push("target not in scope".to_string());
+                    }
                     decision.allowed = false;
                 }
                 Err(e) => {
@@ -420,41 +457,171 @@ pub fn evaluate_operation_policy(
     decision
 }
 
+/// Classify the denial reasons in a `PolicyDecision` into structured `DenialClass` values.
+///
+/// This enables profile-specific downgrade logic (e.g., ManualPermissive downgrading
+/// safe scope-selection misses to warnings) while keeping feature/risk/capability/exclusion
+/// denials as hard denials.
+pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
+    use std::collections::HashSet;
+    let mut classes: HashSet<DenialClass> = HashSet::new();
+    let reasons = &decision.denied_reasons;
+
+    if reasons.iter().any(|r| r.contains("scope file required") || r.contains("explicit scope manifest required")) {
+        classes.insert(DenialClass::ScopeMissing);
+    }
+
+    let has_exclusion = !decision.matched_exclusion_rules.is_empty()
+        || reasons.iter().any(|r| {
+            r.contains("excluded") || r.contains("explicitly excluded") || r.contains("exclusion")
+        });
+    if has_exclusion {
+        classes.insert(DenialClass::ExplicitExclusion);
+    } else if reasons.iter().any(|r| r.contains("target not in scope")) {
+        classes.insert(DenialClass::TargetOutOfScope);
+    }
+
+    if !decision.missing_features.is_empty()
+        || reasons.iter().any(|r| r.contains("required feature") || r.contains("not enabled"))
+    {
+        classes.insert(DenialClass::FeatureMissing);
+    }
+
+    if reasons.iter().any(|r| {
+        r.contains("operation risk") || r.contains("not allowed by current execution policy")
+    }) {
+        classes.insert(DenialClass::RiskPolicyDenied);
+    }
+
+    if reasons.iter().any(|r| r.contains("capability")) {
+        classes.insert(DenialClass::CapabilityDenied);
+    }
+
+    // Invalid target or scope parse/check errors
+    if reasons
+        .iter()
+        .any(|r| r.contains("invalid") || r.contains("scope check error") || r.contains("DNS resolution"))
+        || decision.target_original.as_deref().map_or(false, |t| t.trim().is_empty())
+    {
+        classes.insert(DenialClass::InvalidTarget);
+    }
+
+    if classes.is_empty() {
+        classes.insert(DenialClass::Unknown);
+    }
+
+    classes.into_iter().collect()
+}
+
+/// Returns whether the given denial classes for the descriptor/profile may be downgraded
+/// from denial to warning under ManualPermissive semantics.
+///
+/// Downgrade is allowed only for safe (Passive/SafeActive), StandardAssessment operations
+/// whose *only* denial classes are ScopeMissing or TargetOutOfScope (no exclusions, no
+/// feature/risk/capability denials). Strict and guarded profiles never downgrade.
+pub fn may_downgrade_to_warning(
+    descriptor: &OperationDescriptor,
+    classes: &[DenialClass],
+    profile: ExecutionProfile,
+) -> bool {
+    if profile != ExecutionProfile::ManualPermissive {
+        return false;
+    }
+    if !matches!(descriptor.risk, OperationRisk::Passive | OperationRisk::SafeActive) {
+        return false;
+    }
+    if descriptor.mode != OperationMode::StandardAssessment {
+        return false;
+    }
+    if classes.is_empty() {
+        return false;
+    }
+    // All classes must be safe-to-downgrade scope-related; presence of any other class blocks downgrade
+    let only_safe_scope = classes.iter().all(|c| {
+        matches!(c, DenialClass::ScopeMissing | DenialClass::TargetOutOfScope)
+    });
+    only_safe_scope
+}
+
 /// Evaluate an operation with profile-aware enforcement semantics.
 ///
 /// Calls [`evaluate_operation_policy`] internally, then transforms the
 /// resulting [`PolicyDecision`] into [`EnforcementOutcome::Allow`],
 /// [`EnforcementOutcome::Warn`], or [`EnforcementOutcome::Deny`] according
 /// to the given [`ExecutionProfile`].
+///
+/// For ManualPermissive, safe scope-selection denials (ScopeMissing / TargetOutOfScope
+/// for low-risk StandardAssessment ops with no explicit exclusions or other denials)
+/// are downgraded to Warn using DenialClass classification. Strict profiles and
+/// higher-risk/feature/risk/capability/exclusion denials are never downgraded.
 pub fn evaluate_enforcement(
     descriptor: &OperationDescriptor,
     policy: &ExecutionPolicy,
     scope: Option<&Scope>,
     profile: ExecutionProfile,
 ) -> EnforcementOutcome {
-    let decision = evaluate_operation_policy(descriptor, policy, scope);
+    let mut decision = evaluate_operation_policy(descriptor, policy, scope);
 
-    if !decision.allowed {
-        return EnforcementOutcome::Deny(decision);
-    }
-
-    // Check capability requirements against profile
+    // Capability checks (denied always deny; strict profiles require explicit allow for non-baseline)
     if !decision.required_features.is_empty() || !descriptor.required_capabilities.is_empty() {
-        // For strict profiles, missing capabilities deny
+        // Denied capabilities always deny, regardless of profile
+        for cap in &descriptor.required_capabilities {
+            if policy.denied_capabilities.contains(cap) {
+                decision.denied_reasons.push(format!(
+                    "capability '{}' is denied by execution policy",
+                    cap
+                ));
+                decision.allowed = false;
+                return EnforcementOutcome::Deny(decision);
+            }
+        }
+
+        // For strict automated profiles, non-baseline capabilities must be explicitly allowed
         if profile.is_strict() {
-            // Check denied capabilities
             for cap in &descriptor.required_capabilities {
-                if policy.denied_capabilities.contains(cap) {
-                    let mut d = decision.clone();
-                    d.denied_reasons.push(format!(
-                        "capability '{}' is denied by execution policy",
-                        cap
+                if !policy.allowed_capabilities.contains(cap)
+                    && !super::baseline_allowed_capability(*cap)
+                {
+                    decision.denied_reasons.push(format!(
+                        "capability '{}' requires explicit allow in {} execution policy",
+                        cap, profile
                     ));
-                    d.allowed = false;
-                    return EnforcementOutcome::Deny(d);
+                    decision.allowed = false;
+                    return EnforcementOutcome::Deny(decision);
                 }
             }
         }
+    }
+
+    if !decision.allowed {
+        // Base policy denied. For ManualPermissive, attempt to downgrade safe scope misses using DenialClass.
+        if profile == ExecutionProfile::ManualPermissive {
+            let classes = classify_denial_reasons(&decision);
+            if may_downgrade_to_warning(descriptor, &classes, profile) {
+                // Additional carve-out per hardening plan intent:
+                // "safe out-of-scope target can warn only when no explicit exclusion exists" AND
+                // when the user did not declare positive scope rules (i.e. truly ambiguous/empty scope).
+                // If a scope with non-empty allowed_targets was provided and target missed it,
+                // treat as hard denial even in permissive (user intent was explicit).
+                let has_positive_scope_rules = scope.map_or(false, |s| !s.allowed_targets.is_empty());
+                let is_pure_out_of_scope_miss = classes.iter().any(|c| matches!(c, DenialClass::TargetOutOfScope))
+                    && !classes.iter().any(|c| matches!(c, DenialClass::ExplicitExclusion));
+                if is_pure_out_of_scope_miss && has_positive_scope_rules {
+                    // Explicit rules declared; mismatch is denial, not a warnable miss.
+                    return EnforcementOutcome::Deny(decision);
+                }
+
+                // Move denial reasons to warnings and allow-as-warn
+                let mut d = decision;
+                if !d.denied_reasons.is_empty() {
+                    d.warnings
+                        .extend(d.denied_reasons.drain(..).map(|r| format!("downgraded: {}", r)));
+                }
+                d.allowed = true;
+                return EnforcementOutcome::Warn(d);
+            }
+        }
+        return EnforcementOutcome::Deny(decision);
     }
 
     // Check for warnings based on profile
@@ -1132,5 +1299,299 @@ mod tests {
         assert!(json.contains("\"allowed\""));
         assert!(json.contains("\"operation_risk\""));
         assert!(json.contains("\"denied_reasons\""));
+    }
+
+    // --- Pass 7 focused tests per enforcement-consistency-hardening-plan ---
+
+    #[test]
+    fn enforcement_context_evaluate_denies_strict_default_empty_explicit_manifest_required() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+        assert!(outcome
+            .decision()
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("explicit scope manifest required")));
+    }
+
+    #[test]
+    fn enforcement_context_evaluate_allows_strict_with_explicit_manifest_matching_target() {
+        use super::super::scope::{LoadedScope, ScopeRule};
+        let scope = super::super::Scope {
+            allowed_targets: vec![ScopeRule::new("127.0.0.1".to_string())],
+            ..Default::default()
+        };
+        let loaded = LoadedScope::explicit(scope, super::super::ScopeSource::CliScopeFile, None);
+        let ctx = EnforcementContext::agent_strict(ExecutionPolicy::default(), loaded);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_allowed());
+    }
+
+    #[test]
+    fn manual_permissive_downgrades_safe_target_out_of_scope_and_scope_missing_to_warning() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        // ScopeMissing case (no scope, requires_explicit_scope, safe risk)
+        let d1 = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let o1 = ctx.evaluate(&d1);
+        assert!(o1.is_allowed()); // downgraded to warn counts as allowed
+        assert!(matches!(o1, EnforcementOutcome::Warn(_)));
+
+        // TargetOutOfScope case: explicit empty scope with no rules + target provided
+        let empty_loaded = LoadedScope::explicit(
+            super::super::Scope::default(),
+            super::super::ScopeSource::CliScopeFile,
+            None,
+        );
+        let ctx2 = EnforcementContext::manual_permissive(ExecutionPolicy::default(), empty_loaded);
+        let d2 = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let o2 = ctx2.evaluate(&d2);
+        // With empty explicit scope and no rules, evaluate_enforcement treats as ambiguous -> warn in permissive
+        assert!(o2.is_allowed());
+    }
+
+    #[test]
+    fn manual_permissive_does_not_downgrade_explicit_exclusion() {
+        use super::super::scope::{LoadedScope, ScopeRule};
+        let scope = super::super::Scope {
+            allowed_targets: vec![ScopeRule::new("*".to_string())],
+            excluded_targets: vec![ScopeRule::new("admin.example.com".to_string())],
+            ..Default::default()
+        };
+        let loaded = LoadedScope::explicit(scope, super::super::ScopeSource::ConfigFile, None);
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), loaded);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("admin.example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+        // Exclusion should be classified as ExplicitExclusion and block downgrade
+        let classes = classify_denial_reasons(outcome.decision());
+        assert!(classes.contains(&DenialClass::ExplicitExclusion));
+    }
+
+    #[test]
+    fn manual_permissive_does_not_downgrade_risk_policy_denial() {
+        use super::super::scope::LoadedScope;
+        let mut policy = ExecutionPolicy::default();
+        // Intrusive not allowed by default policy
+        let ctx = EnforcementContext::manual_permissive(
+            policy,
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+        let classes = classify_denial_reasons(outcome.decision());
+        assert!(classes.contains(&DenialClass::RiskPolicyDenied));
+    }
+
+    #[test]
+    fn manual_permissive_does_not_downgrade_feature_missing_denial() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        // Use a real gated feature name that will be reported missing when the feature is off.
+        // "packet-inspection" is behind cfg; when disabled it will trigger missing feature path.
+        let descriptor = OperationDescriptor {
+            operation: "packet".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec!["packet-inspection".to_string()],
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        // If the feature is compiled in, this would allow; when off it should deny with FeatureMissing.
+        if !is_feature_enabled("packet-inspection") {
+            assert!(outcome.is_denied());
+            let classes = classify_denial_reasons(outcome.decision());
+            assert!(classes.contains(&DenialClass::FeatureMissing));
+        } else {
+            // When enabled, it should be allowed (or at worst warn for other reasons)
+            assert!(outcome.is_allowed() || outcome.decision().missing_features.is_empty());
+        }
+    }
+
+    #[test]
+    fn manual_permissive_does_not_downgrade_capability_denial() {
+        use super::super::scope::LoadedScope;
+        let mut policy = ExecutionPolicy::default();
+        policy.denied_capabilities = vec![crate::config::Capability::WafStressTest];
+        let ctx = EnforcementContext::manual_permissive(policy, LoadedScope::default_empty());
+        let descriptor = OperationDescriptor {
+            operation: "stress".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![crate::config::Capability::WafStressTest],
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+        let classes = classify_denial_reasons(outcome.decision());
+        assert!(classes.contains(&DenialClass::CapabilityDenied));
+    }
+
+    #[test]
+    fn classify_denial_reasons_maps_strings_and_exclusions() {
+        use super::super::scope::{LoadedScope, ScopeRule};
+        // Build a decision-like scenario via evaluate
+        let scope = super::super::Scope {
+            allowed_targets: vec![ScopeRule::new("*".to_string())],
+            excluded_targets: vec![ScopeRule::new("secret.example.com".to_string())],
+            ..Default::default()
+        };
+        let loaded = LoadedScope::explicit(scope, super::super::ScopeSource::ConfigFile, None);
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), loaded);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("secret.example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        let classes = classify_denial_reasons(outcome.decision());
+        assert!(classes.contains(&DenialClass::ExplicitExclusion));
+
+        // Scope missing string
+        let ctx2 = EnforcementContext::ci_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let d2 = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let o2 = ctx2.evaluate(&d2);
+        let c2 = classify_denial_reasons(o2.decision());
+        assert!(c2.contains(&DenialClass::ScopeMissing));
+    }
+
+    #[test]
+    fn strict_profiles_enforce_positive_capability_allow_for_non_baseline() {
+        use super::super::scope::LoadedScope;
+        // Default policy has no allowed_capabilities; strict should deny non-baseline like IntrusiveFuzz
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![crate::config::Capability::IntrusiveFuzz],
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+        assert!(outcome
+            .decision()
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("requires explicit allow")));
     }
 }

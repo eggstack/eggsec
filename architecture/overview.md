@@ -583,7 +583,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 - **Location**: `~/.config/eggsec/eggsec.toml`
 - **Scope enforcement**: `TargetScope` validates targets before scanning
 - **TUI settings**: Partial save with field exposure control
-- **Policy evaluation**: All operations use `evaluate_operation_policy()` (`config/policy_decision.rs`) via `OperationDescriptor` (`config/policy.rs`). Command handlers use `CommandContext::evaluate_and_enforce_operation()` which wraps the shared evaluator with scope enforcement.
+- **Policy evaluation**: All operations route through central `EnforcementContext::evaluate(descriptor)` (`config/policy_decision.rs`) which performs LoadedScope provenance, DenialClass downgrade (ManualPermissive only), positive capability checks for strict, and risk/feature/policy enforcement. Command handlers use `CommandContext::evaluate_and_enforce_operation()` which wraps it. Legacy direct `evaluate_operation_policy` is internal for base decisions; denial paths prefer the central evaluator. See [config.md](config.md).
 - See [config.md](config.md) for details
 
 ### Logging & Tracing

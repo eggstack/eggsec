@@ -73,9 +73,10 @@ impl EggsecConfig {
 
 ### Execution Profiles
 ```rust
-use eggsec::config::{ExecutionProfile, evaluate_enforcement};
+use eggsec::config::EnforcementContext;
 
-let outcome = evaluate_enforcement(&descriptor, &policy, Some(&scope), ExecutionProfile::McpStrict);
+let enforcement = EnforcementContext::mcp_strict(policy, loaded_scope);
+let outcome = enforcement.evaluate(&descriptor);
 match outcome {
     EnforcementOutcome::Allow(decision) => { /* proceed */ }
     EnforcementOutcome::Warn(decision) => { /* log warnings, proceed */ }
@@ -83,7 +84,7 @@ match outcome {
 }
 ```
 
-Profiles: `ManualPermissive` (default CLI), `ManualGuarded` (--strict-scope), `CiStrict` (CI), `McpStrict` (MCP), `AgentStrict` (agent).
+`EnforcementContext::evaluate(descriptor)` is the central boundary (provenance via LoadedScope, DenialClass downgrade for ManualPermissive only on safe scope misses, positive capability checks for strict, per-scan agent re-eval). Preferred MCP production constructor: `McpServer::with_enforcement`. Legacy direct `evaluate_enforcement` / `evaluate_operation_policy` and `policy_decision_for_mcp_call` deprecated for denial paths; prefer with-enforcement path. Profiles: `ManualPermissive` (default CLI), `ManualGuarded` (--strict-scope), `CiStrict` (CI), `McpStrict` (MCP), `AgentStrict` (agent).
 
 ### Capability Declarations
 ```rust

@@ -50,12 +50,12 @@ pub use discovery::DiscoveredTargetStatus;
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope, load_scope_with_source};
 pub use policy::{
-    Capability, DenialClass, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor,
-    OperationMode, OperationRisk,
+    baseline_allowed_capability, Capability, DenialClass, ExecutionPolicy, ExecutionProfile,
+    IntendedUse, OperationDescriptor, OperationMode, OperationRisk,
 };
 pub use policy_decision::{
-    evaluate_enforcement, evaluate_operation_policy, EnforcementContext, EnforcementOutcome,
-    PolicyDecision,
+    classify_denial_reasons, evaluate_enforcement, evaluate_operation_policy, may_downgrade_to_warning,
+    EnforcementContext, EnforcementOutcome, PolicyDecision,
 };
 pub use presets::DefenseLabPreset;
 pub use scan::{

@@ -84,23 +84,26 @@ pub enum ScopeSource {
 
 ### `EnforcementContext` (`policy_decision.rs`)
 
-`EnforcementContext` bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` into a single struct for shared enforcement across all execution paths. This eliminates the need to pass profile/policy/scope separately through the call stack.
+`EnforcementContext` bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` into a single struct for shared enforcement across all execution paths. This eliminates the need to pass profile/policy/scope separately through the call stack. `EnforcementContext::evaluate(descriptor)` is the mandatory central boundary: it performs LoadedScope provenance checks (strict profiles deny `DefaultEmpty` for `requires_explicit_scope` target-bearing ops), applies `DenialClass` downgrade logic (ManualPermissive only for safe ScopeMissing/TargetOutOfScope when no positive rules declared and no exclusions/feature/risk/capability/hazard denials), performs positive-capability allow checks for strict profiles, and runs full risk/feature/policy enforcement. Per-scan re-evaluation occurs for agents in `execute_scan_with_depth`.
+
+**Preferred constructors:** `EnforcementContext::manual_permissive`, `manual_guarded`, `ci_strict`, `mcp_strict`, `agent_strict` (no `cli(...)` helper; callers construct the appropriate profile).
 
 **Construction per execution path:**
-- CLI commands: `EnforcementContext::cli(...)` builds `ManualPermissive` (default) or `ManualGuarded` (when `--strict-scope` is used)
-- MCP server: Forces `McpStrict` profile regardless of caller input; requires explicit scope manifest
+- CLI commands: `EnforcementContext::manual_permissive(...)` (default) or `manual_guarded(...)` (when `--strict-scope` is used)
+- MCP server: Forces `McpStrict` profile; preferred production constructor is `McpServer::with_enforcement(registry, api_key, profile, enforcement)` (passes pre-built `EnforcementContext`)
 - Agent: Forces `AgentStrict` profile; `EnforcementContext::agent_strict` is passed to `AgentConfig`
 - CI mode: Uses `CiStrict` profile when detected
 
 **Key methods:**
-- `evaluate()` - Evaluates an `OperationDescriptor` against the bundled profile/policy/scope and returns `EnforcementOutcome`
+- `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally.
+- `requires_explicit_manifest_for(descriptor)` / `require_explicit_scope_for_networked()` - Provenance helpers used by `evaluate`.
 - `profile()` - Returns the `ExecutionProfile`
 - `scope()` - Returns the `LoadedScope`
 
 **Security enforcement:**
-- MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool
-- Agent refuses to run without an explicit scope manifest
-- Strict profiles require `is_explicit_manifest() == true` for all networked operations
+- MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; legacy `policy_decision_for_mcp_call` / direct `evaluate_operation_policy` calls are deprecated for denial paths (prefer `policy_decision_for_mcp_call_with_enforcement` + `EnforcementContext`).
+- Agent refuses to run without an explicit scope manifest; per-scan `enforcement.evaluate` immediately before dispatch.
+- Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
 
 ### `Loader` (`loader.rs`)
 

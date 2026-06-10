@@ -13,7 +13,7 @@ Tool abstraction layer workflows and patterns for security tool integration.
 ### Protocol Implementations
 `tool/protocol/`:
 - `mcp/` - MCP server (`handlers/server.rs`, `handlers/helpers.rs`)
-- `mcp/policy.rs` - MCP profile policy enforcement, `extract_hostname()` IPv6-aware parsing, `classify_tool_risk()`, `policy_decision_for_mcp_call()`
+- `mcp/policy.rs` - MCP profile policy enforcement, `extract_hostname()` IPv6-aware parsing, `classify_tool_risk()`, `operation_descriptor_for_mcp_call`, `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`); legacy `policy_decision_for_mcp_call` deprecated for denial paths.
 - `mcp/coding_agent_output.rs` - Typed `CodingAgentFindingReport` struct for coding-agent output
 - `openai/` - OpenAI-compatible chat completions
 - `rest.rs` - REST API (scope validation implemented)

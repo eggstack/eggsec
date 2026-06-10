@@ -349,6 +349,18 @@ impl std::fmt::Display for Capability {
     }
 }
 
+/// Returns true for low-risk baseline capabilities that automated strict profiles
+/// may allow without explicit listing in allowed_capabilities (safe defaults).
+pub fn baseline_allowed_capability(cap: Capability) -> bool {
+    matches!(
+        cap,
+        Capability::PassiveFingerprint
+            | Capability::ActiveProbe
+            | Capability::Crawl
+            | Capability::WafDetect
+    )
+}
+
 /// Classification of why an operation was denied.
 ///
 /// Used by [`super::policy_decision::evaluate_enforcement`] to determine

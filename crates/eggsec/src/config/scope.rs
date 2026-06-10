@@ -232,6 +232,18 @@ impl Scope {
         Ok(allowed)
     }
 
+    /// Returns true if the target string matches any explicit exclusion rule.
+    ///
+    /// Used by policy enforcement to classify ExplicitExclusion denials separately
+    /// from general "not in scope" denials, enabling precise downgrade logic in
+    /// permissive profiles.
+    pub fn is_excluded(&self, target: &str) -> bool {
+        match TargetScope::parse_hostname_only(target) {
+            Ok(ts) => self.is_explicitly_excluded(&ts),
+            Err(_) => false,
+        }
+    }
+
     pub fn is_port_allowed(&self, port: u16) -> bool {
         if self.excluded_ports.contains(&port) {
             return false;

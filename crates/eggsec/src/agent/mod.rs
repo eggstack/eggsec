@@ -818,6 +818,98 @@ impl Agent {
             .evaluate_rate_limit(target)
             .map_err(|e| anyhow::anyhow!("Rate limit exceeded: {:?}", e))?;
 
+        // Per-scan enforcement evaluation using the shared EnforcementContext (if configured at startup).
+        // This ensures scope provenance, capability allow/deny, risk policy, and explicit-manifest
+        // requirements are re-evaluated immediately before dispatch, not only at agent launch.
+        if let Some(ref enforcement) = self.config.enforcement {
+            use crate::config::{
+                Capability, EnforcementOutcome, IntendedUse, OperationDescriptor, OperationMode,
+                OperationRisk,
+            };
+
+            let risk = match depth {
+                crate::agent::portfolio::ScanDepth::Shallow => OperationRisk::SafeActive,
+                crate::agent::portfolio::ScanDepth::Deep => OperationRisk::Intrusive,
+            };
+
+            // Map scan depth and type to required capabilities. Deep scans imply low-impact fuzzing.
+            // If scan_type indicates stress/load/packet/raw/credential/remote, map to corresponding
+            // high-risk capabilities so that policy/capability gates apply.
+            let mut required_capabilities: Vec<Capability> = match depth {
+                crate::agent::portfolio::ScanDepth::Shallow => {
+                    vec![Capability::ActiveProbe, Capability::Crawl]
+                }
+                crate::agent::portfolio::ScanDepth::Deep => {
+                    vec![Capability::HttpFuzzLowImpact]
+                }
+            };
+            let st = scan_type.to_ascii_lowercase();
+            if st.contains("stress") || st.contains("syn") || st.contains("udp") || st.contains("icmp") {
+                required_capabilities.push(Capability::WafStressTest);
+            }
+            if st.contains("load") || st.contains("bench") {
+                required_capabilities.push(Capability::LoadTest);
+            }
+            if st.contains("packet") || st.contains("raw") {
+                required_capabilities.push(Capability::RawPacketProbe);
+            }
+            if st.contains("credential") || st.contains("brute") || st.contains("auth") {
+                required_capabilities.push(Capability::CredentialTesting);
+            }
+            if st.contains("remote") || st.contains("exec") || st.contains("ssh") {
+                required_capabilities.push(Capability::RemoteExecution);
+            }
+            if st.contains("fuzz") || st.contains("intrusive") {
+                // Ensure intrusive fuzz capability for explicit fuzz scans
+                if !required_capabilities.contains(&Capability::HttpFuzzLowImpact)
+                    && !required_capabilities.contains(&Capability::IntrusiveFuzz)
+                {
+                    required_capabilities.push(Capability::IntrusiveFuzz);
+                }
+            }
+
+            let descriptor = OperationDescriptor {
+                operation: scan_type.to_string(),
+                mode: OperationMode::StandardAssessment,
+                risk,
+                intended_uses: vec![IntendedUse::WebAssessment],
+                target: Some(target.to_string()),
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: true,
+                required_capabilities,
+            };
+
+            match enforcement.evaluate(&descriptor) {
+                EnforcementOutcome::Allow(_) => {}
+                EnforcementOutcome::Warn(decision) => {
+                    if enforcement.execution_profile.is_automated() {
+                        anyhow::bail!(
+                            "agent strict enforcement warning treated as denial for {} on {}: {}",
+                            scan_type,
+                            target,
+                            decision.denied_reasons.join("; ")
+                        );
+                    }
+                    tracing::warn!(
+                        target = %target,
+                        scan_type = %scan_type,
+                        reasons = ?decision.denied_reasons,
+                        "agent enforcement warning (non-strict profile)"
+                    );
+                }
+                EnforcementOutcome::Deny(decision) => {
+                    anyhow::bail!(
+                        "agent enforcement denied {} on {}: {}",
+                        scan_type,
+                        target,
+                        decision.denied_reasons.join("; ")
+                    );
+                }
+            }
+        }
+
         let params = match depth {
             crate::agent::portfolio::ScanDepth::Shallow => {
                 serde_json::json!({
