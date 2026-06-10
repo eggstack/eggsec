@@ -119,6 +119,10 @@ Use these sections as the canonical reference points when updating guidance or s
 - `McpProfile` - MCP agent profile (`OpsAgent`, `CodingAgent`) in `tool/protocol/mcp/profile.rs`
 - `McpProfilePolicy` - 18-field policy struct enforcing tool visibility and call restrictions per profile in `tool/protocol/mcp/policy.rs`
 - `McpPolicyDenial` - Wraps `PolicyViolation` and `PolicyDecision` together for MCP denials; embeds both structured denial info and the shared policy decision
+- `LoadedScope` - Scope with provenance metadata (`DefaultEmpty`, `ConfigFile`, `CliScopeFile`, `GeneratedPreset`) in `config/scope.rs`
+- `ScopeSource` - Enum tracking where a scope manifest was loaded from in `config/scope.rs`
+- `EnforcementContext` - Bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` for shared enforcement in `config/policy_decision.rs`
+- `DenialClass` - Classification of denial reasons (`ScopeMissing`, `TargetOutOfScope`, `ExplicitExclusion`, etc.) in `config/policy.rs`
 - `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
 - `CodingAgentFindingReport` - Typed output schema for coding-agent findings in `tool/protocol/mcp/coding_agent_output.rs`
 - `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs` (`ProbeRisk::ExploitAdjacent` maps to `OperationRisk::ExploitAdjacent`)
@@ -140,6 +144,11 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **Shared Policy Evaluator**: Use `evaluate_operation_policy()` in `config/policy_decision.rs` instead of building policy checks inline
+- **EnforcementContext**: Use `EnforcementContext` struct in `config/policy_decision.rs` instead of passing profile/policy/scope separately. CLI builds `ManualPermissive`/`ManualGuarded`/`CiStrict`, MCP forces `McpStrict`, agent forces `AgentStrict`.
+- **Scope Provenance**: Use `LoadedScope` to distinguish "no scope provided" from "explicit empty scope". Strict profiles require `is_explicit_manifest() == true` for networked operations.
+- **MCP Enforcement**: MCP tools/call handler evaluates shared enforcement via `self.enforcement.evaluate()` BEFORE dispatch. MCP always forces `McpStrict` profile.
+- **Agent Enforcement**: `handle_agent()` now requires explicit scope manifest and passes `EnforcementContext` to `AgentConfig`.
+- **Capability Mapping**: `required_capabilities_for_tool_call()` in `tool/protocol/mcp/policy.rs` maps tool IDs to required capabilities for enforcement.
 - **CommandContext Policy Wrapper**: Use `CommandContext::evaluate_and_enforce_operation()` for command handlers — it wraps `evaluate_enforcement()` with profile-aware scope enforcement and structured denial output
 - **Execution Profiles**: Use `ExecutionProfile` enum for caller trust boundary. `ManualPermissive` for CLI, `McpStrict` for MCP, `AgentStrict` for agents.
 - **Enforcement Outcomes**: `evaluate_enforcement()` returns `EnforcementOutcome` (Allow/Warn/Deny) wrapping `PolicyDecision`.
@@ -156,7 +165,7 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 3224 (2910 #[test] + 314 #[tokio::test]) |
+| Tests | 3224 (2910 #[test] + 314 #[tokio::test]) + ~20 enforcement scope/provenance tests |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 783 (.rs files in crates/) |
 | Payload types | 40 |
@@ -191,6 +200,11 @@ No remaining stub implementations.
 - **FindingStore Deduplication**: FIXED - now deduplicates by fingerprint before appending (2026-06-02)
 - **Remote Listener Policy**: `remote start` now uses `evaluate_and_enforce_operation` with `HazardousLab` mode and `RemoteExecution` risk (2026-06-10)
 - **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
+- **MCP Strict Enforcement**: MCP server now forces `ExecutionProfile::McpStrict` and requires explicit scope manifest for all networked tool calls. Shared `EnforcementContext` is used instead of parallel policy paths (2026-06-10)
+- **Agent Strict Enforcement**: `handle_agent()` now requires explicit scope manifest and refuses to run without it. `EnforcementContext::agent_strict` is passed to `AgentConfig` (2026-06-10)
+- **Scope Provenance Tracking**: `LoadedScope` tracks whether scope came from CLI (`--scope`), config file, or default empty. Strict profiles require `is_explicit_manifest()` for networked operations (2026-06-10)
+- **MCP Profile Tightening**: Both `OpsAgent` and `CodingAgent` MCP profiles now have `require_explicit_scope: true`. Ops-agent retains broader tool visibility but requires explicit scope for networked operations (2026-06-10)
+- **Capability Enforcement**: `required_capabilities_for_tool_call()` maps tool IDs to capability requirements. Denied capabilities are enforced across all profiles (2026-06-10)
 
 ### Key Patterns (Lessons Learned)
 

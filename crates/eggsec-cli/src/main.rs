@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     }
 
     let config = eggsec::config::load_config(cli.config.as_deref())?;
-    let scope = eggsec::config::load_scope(cli.scope.as_deref())?;
+    let loaded_scope = eggsec::config::load_scope_with_source(cli.scope.as_deref())?;
 
     let execution_profile = if matches!(cli.command.as_ref(), Some(eggsec::cli::Commands::Ci(_))) {
         eggsec::config::ExecutionProfile::CiStrict
@@ -65,9 +65,10 @@ async fn main() -> Result<()> {
         eggsec::config::ExecutionProfile::ManualPermissive
     };
 
-    let ctx = eggsec::commands::CommandContext::new(config, scope, cli.json)
+    let ctx = eggsec::commands::CommandContext::new(config, loaded_scope.scope.clone(), cli.json)
         .with_config_path(cli.config.clone())
-        .with_execution_profile(execution_profile);
+        .with_execution_profile(execution_profile)
+        .with_loaded_scope(loaded_scope);
     eggsec::commands::handle_command(cli, &ctx).await?;
 
     Ok(())

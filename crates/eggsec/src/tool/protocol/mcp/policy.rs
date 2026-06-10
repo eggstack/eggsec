@@ -107,7 +107,7 @@ impl McpProfilePolicy {
             allow_streaming: true,
             allow_sessions: true,
             allow_plan_endpoint: true,
-            require_explicit_scope: false,
+            require_explicit_scope: true,
             allow_external_network: true,
             allow_stress_testing: true,
             allow_packet_features: true,
@@ -141,7 +141,7 @@ impl McpProfilePolicy {
             allow_streaming: true,
             allow_sessions: false,
             allow_plan_endpoint: false,
-            require_explicit_scope: false,
+            require_explicit_scope: true,
             allow_external_network: false,
             allow_stress_testing: false,
             allow_packet_features: false,
@@ -484,6 +484,36 @@ pub fn classify_tool_risk(tool_id: &str) -> crate::config::OperationRisk {
         "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
         "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
         _ => OperationRisk::SafeActive,
+    }
+}
+
+/// Map an MCP tool call to the capabilities it requires.
+///
+/// Used by the shared enforcement evaluator to check whether the caller's
+/// execution policy permits the capabilities needed for the operation.
+pub fn required_capabilities_for_tool_call(
+    tool_id: &str,
+    _capability: Option<&str>,
+    _arguments: &serde_json::Value,
+) -> Vec<crate::config::Capability> {
+    use crate::config::Capability;
+    match tool_id {
+        "recon" | "recon-all" | "subdomain" => vec![Capability::PassiveFingerprint],
+        "scan" | "scan-ports" | "fingerprint" => vec![Capability::ActiveProbe],
+        "endpoints" | "scan-endpoints" => vec![Capability::Crawl],
+        "fuzz" | "api-fuzz" => vec![Capability::HttpFuzzLowImpact],
+        "waf-detect" => vec![Capability::WafDetect],
+        "waf-bypass" => vec![Capability::WafBypassSimulation],
+        "waf-stress" | "stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
+            vec![Capability::WafStressTest]
+        }
+        "load" | "loadtest" | "http-bench" => vec![Capability::LoadTest],
+        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => {
+            vec![Capability::RawPacketProbe]
+        }
+        "auth-test" | "credential" | "brute" => vec![Capability::CredentialTesting],
+        "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
+        _ => Vec::new(),
     }
 }
 
@@ -884,7 +914,7 @@ mod tests {
         assert_eq!(meta["profile"], "coding-agent");
         assert_eq!(meta["safety"]["max_concurrency"], 5);
         assert_eq!(meta["safety"]["max_timeout_ms"], 60000);
-        assert_eq!(meta["require_explicit_scope"], false);
+        assert_eq!(meta["require_explicit_scope"], true);
     }
 
     #[test]
@@ -1412,5 +1442,44 @@ mod tests {
         assert!(data.is_object());
         assert!(data.get("allowed").is_some());
         assert_eq!(data["allowed"], false);
+    }
+
+    #[test]
+    fn test_required_capabilities_for_scan_tool() {
+        use crate::config::Capability;
+        let caps = required_capabilities_for_tool_call("scan", None, &serde_json::json!({}));
+        assert!(caps.contains(&Capability::ActiveProbe));
+    }
+
+    #[test]
+    fn test_required_capabilities_for_stress_tool() {
+        use crate::config::Capability;
+        let caps = required_capabilities_for_tool_call("stress", None, &serde_json::json!({}));
+        assert!(caps.contains(&Capability::WafStressTest));
+    }
+
+    #[test]
+    fn test_required_capabilities_for_packet_tool() {
+        use crate::config::Capability;
+        let caps = required_capabilities_for_tool_call("packet", None, &serde_json::json!({}));
+        assert!(caps.contains(&Capability::RawPacketProbe));
+    }
+
+    #[test]
+    fn test_required_capabilities_for_unknown_tool() {
+        let caps = required_capabilities_for_tool_call("unknown-tool", None, &serde_json::json!({}));
+        assert!(caps.is_empty());
+    }
+
+    #[test]
+    fn test_ops_agent_requires_explicit_scope() {
+        let policy = McpProfilePolicy::ops_agent();
+        assert!(policy.require_explicit_scope);
+    }
+
+    #[test]
+    fn test_coding_agent_requires_explicit_scope() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy.require_explicit_scope);
     }
 }

@@ -67,15 +67,20 @@ pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeAr
 
     let scope = Some(ctx.scope.clone());
 
+    let enforcement = crate::config::EnforcementContext::mcp_strict(
+        ctx.config.execution_policy.clone(),
+        ctx.enforcement.loaded_scope.clone(),
+    );
+
     if args.stdio {
         tracing::info!(
             "Starting MCP server in STDIO mode (profile: {})",
             args.profile
         );
-        run_stdio(registry, args.api_key, profile, scope).await;
+        run_stdio(registry, args.api_key, profile, scope, enforcement).await;
         Ok(())
     } else {
-        let router = create_mcp_router(registry, args.api_key.clone(), profile, scope).await;
+        let router = create_mcp_router(registry, args.api_key.clone(), profile, scope, enforcement).await;
 
         let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
             .parse()

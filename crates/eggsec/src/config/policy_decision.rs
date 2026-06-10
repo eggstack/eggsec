@@ -209,6 +209,76 @@ impl EnforcementOutcome {
     }
 }
 
+/// Reusable enforcement context that bundles execution profile, policy, and scope.
+///
+/// Created once per execution path (CLI, MCP, agent) and used to evaluate
+/// every operation descriptor through the same shared enforcement logic.
+#[derive(Debug, Clone)]
+pub struct EnforcementContext {
+    pub execution_profile: ExecutionProfile,
+    pub execution_policy: ExecutionPolicy,
+    pub loaded_scope: super::scope::LoadedScope,
+}
+
+impl EnforcementContext {
+    pub fn manual_permissive(
+        policy: ExecutionPolicy,
+        loaded_scope: super::scope::LoadedScope,
+    ) -> Self {
+        Self {
+            execution_profile: ExecutionProfile::ManualPermissive,
+            execution_policy: policy,
+            loaded_scope,
+        }
+    }
+    pub fn manual_guarded(
+        policy: ExecutionPolicy,
+        loaded_scope: super::scope::LoadedScope,
+    ) -> Self {
+        Self {
+            execution_profile: ExecutionProfile::ManualGuarded,
+            execution_policy: policy,
+            loaded_scope,
+        }
+    }
+    pub fn ci_strict(policy: ExecutionPolicy, loaded_scope: super::scope::LoadedScope) -> Self {
+        Self {
+            execution_profile: ExecutionProfile::CiStrict,
+            execution_policy: policy,
+            loaded_scope,
+        }
+    }
+    pub fn mcp_strict(policy: ExecutionPolicy, loaded_scope: super::scope::LoadedScope) -> Self {
+        Self {
+            execution_profile: ExecutionProfile::McpStrict,
+            execution_policy: policy,
+            loaded_scope,
+        }
+    }
+    pub fn agent_strict(policy: ExecutionPolicy, loaded_scope: super::scope::LoadedScope) -> Self {
+        Self {
+            execution_profile: ExecutionProfile::AgentStrict,
+            execution_policy: policy,
+            loaded_scope,
+        }
+    }
+
+    /// Returns `true` if the profile requires an explicit scope manifest for networked tools.
+    pub fn require_explicit_scope_for_networked(&self) -> bool {
+        self.execution_profile.is_automated()
+    }
+
+    /// Evaluate an operation descriptor against this enforcement context.
+    pub fn evaluate(&self, descriptor: &OperationDescriptor) -> EnforcementOutcome {
+        evaluate_enforcement(
+            descriptor,
+            &self.execution_policy,
+            Some(&self.loaded_scope.scope),
+            self.execution_profile,
+        )
+    }
+}
+
 /// Check whether a named compile-time Cargo feature is enabled.
 ///
 /// Returns `true` for features that are always available or not relevant
@@ -790,6 +860,88 @@ mod tests {
     }
 
     #[test]
+    fn enforcement_context_manual_permissive_allows_safe_low_risk() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_allowed());
+    }
+
+    #[test]
+    fn enforcement_context_mcp_strict_denies_requires_explicit_scope() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+    }
+
+    #[test]
+    fn enforcement_context_agent_strict_denies_requires_explicit_scope() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+    }
+
+    #[test]
+    fn enforcement_context_require_explicit_scope_for_networked() {
+        use super::super::scope::LoadedScope;
+        let manual = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        assert!(!manual.require_explicit_scope_for_networked());
+        let mcp =
+            EnforcementContext::mcp_strict(ExecutionPolicy::default(), LoadedScope::default_empty());
+        assert!(mcp.require_explicit_scope_for_networked());
+    }
+
+    #[test]
     fn enforcement_outcome_json_serialization() {
         let descriptor = OperationDescriptor {
             operation: "scan".to_string(),
@@ -808,5 +960,177 @@ mod tests {
             evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
         let json = serde_json::to_string(&outcome).unwrap();
         assert!(json.contains("\"deny\"") || json.contains("\"Deny\""));
+    }
+
+    #[test]
+    fn manual_permissive_can_warn_for_safe_low_risk_missing_scope() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        // ManualPermissive should allow (with warning) even with missing explicit scope for safe ops
+        assert!(outcome.is_allowed());
+    }
+
+    #[test]
+    fn manual_guarded_denies_for_missing_explicit_scope() {
+        use super::super::scope::LoadedScope;
+        // ManualGuarded denies via evaluate_enforcement when scope is None,
+        // but EnforcementContext always provides Some(scope).
+        // Test the direct evaluate_enforcement path with None scope instead.
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let policy = ExecutionPolicy::default();
+        let outcome =
+            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualGuarded);
+        assert!(outcome.is_denied());
+    }
+
+    #[test]
+    fn ci_strict_denies_for_missing_explicit_scope() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::ci_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied());
+    }
+
+    #[test]
+    fn explicit_exclusion_denies_in_all_profiles() {
+        use super::super::scope::{LoadedScope, ScopeRule};
+        let scope = super::super::Scope {
+            allowed_targets: vec![super::super::ScopeRule::new("*".to_string())],
+            excluded_targets: vec![ScopeRule::new("admin.example.com".to_string())],
+            ..Default::default()
+        };
+        let loaded = LoadedScope::explicit(scope, super::super::ScopeSource::ConfigFile, None);
+
+        for profile in &[
+            ExecutionProfile::ManualPermissive,
+            ExecutionProfile::ManualGuarded,
+            ExecutionProfile::CiStrict,
+            ExecutionProfile::McpStrict,
+            ExecutionProfile::AgentStrict,
+        ] {
+            let ctx = EnforcementContext {
+                execution_profile: *profile,
+                execution_policy: ExecutionPolicy::default(),
+                loaded_scope: loaded.clone(),
+            };
+            let descriptor = OperationDescriptor {
+                operation: "scan".to_string(),
+                mode: OperationMode::StandardAssessment,
+                risk: OperationRisk::SafeActive,
+                intended_uses: vec![IntendedUse::WebAssessment],
+                target: Some("admin.example.com".to_string()),
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: false,
+                required_capabilities: Vec::new(),
+            };
+            let outcome = ctx.evaluate(&descriptor);
+            assert!(outcome.is_denied(), "Profile {:?} should deny excluded target", profile);
+        }
+    }
+
+    #[test]
+    fn denied_capability_denies_in_all_profiles() {
+        use super::super::scope::LoadedScope;
+        let mut policy = ExecutionPolicy::default();
+        policy.denied_capabilities = vec![crate::config::Capability::RawPacketProbe];
+        let loaded = LoadedScope::default_empty();
+
+        // Denied capability check only applies to strict profiles
+        for profile in &[
+            ExecutionProfile::CiStrict,
+            ExecutionProfile::McpStrict,
+            ExecutionProfile::AgentStrict,
+        ] {
+            let ctx = EnforcementContext {
+                execution_profile: *profile,
+                execution_policy: policy.clone(),
+                loaded_scope: loaded.clone(),
+            };
+            let descriptor = OperationDescriptor {
+                operation: "packet".to_string(),
+                mode: OperationMode::StandardAssessment,
+                risk: OperationRisk::SafeActive,
+                intended_uses: vec![IntendedUse::WebAssessment],
+                target: Some("127.0.0.1".to_string()),
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: false,
+                required_capabilities: vec![crate::config::Capability::RawPacketProbe],
+            };
+            let outcome = ctx.evaluate(&descriptor);
+            assert!(outcome.is_denied(), "Profile {:?} should deny denied capability", profile);
+        }
+    }
+
+    #[test]
+    fn json_denial_includes_decision_id_allowed_risk_reasons() {
+        use super::super::scope::LoadedScope;
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        let json = serde_json::to_string(&outcome).unwrap();
+        assert!(json.contains("\"decision_id\""));
+        assert!(json.contains("\"allowed\""));
+        assert!(json.contains("\"operation_risk\""));
+        assert!(json.contains("\"denied_reasons\""));
     }
 }

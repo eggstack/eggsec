@@ -45,6 +45,7 @@ pub struct McpServer {
     pub(crate) profile: McpProfile,
     pub(crate) policy: McpProfilePolicy,
     pub(crate) execution_policy: crate::config::ExecutionPolicy,
+    pub(crate) enforcement: crate::config::EnforcementContext,
 }
 
 impl McpServer {
@@ -90,6 +91,10 @@ impl McpServer {
             profile,
             policy,
             execution_policy: crate::config::ExecutionPolicy::default(),
+            enforcement: crate::config::EnforcementContext::mcp_strict(
+                crate::config::ExecutionPolicy::default(),
+                crate::config::LoadedScope::default_empty(),
+            ),
         };
 
         server.start_hashmap_reaper(60);
@@ -105,6 +110,11 @@ impl McpServer {
 
     pub fn with_execution_policy(mut self, policy: crate::config::ExecutionPolicy) -> Self {
         self.execution_policy = policy;
+        self
+    }
+
+    pub fn with_enforcement_context(mut self, enforcement: crate::config::EnforcementContext) -> Self {
+        self.enforcement = enforcement;
         self
     }
 
@@ -147,6 +157,7 @@ impl McpServer {
             profile: self.profile,
             policy: self.policy,
             execution_policy: self.execution_policy,
+            enforcement: self.enforcement,
         }
     }
 
@@ -453,6 +464,43 @@ impl McpServer {
                     }
                     Ok(true) => {}
                 }
+            }
+        }
+
+        // Shared enforcement evaluation
+        {
+            use crate::config::{IntendedUse, OperationDescriptor, OperationMode};
+            use crate::tool::protocol::mcp::policy::classify_tool_risk;
+
+            let risk = classify_tool_risk(&tool_id);
+            let intended_uses = if self.profile.is_coding_agent() {
+                vec![IntendedUse::CodingAgentVerification]
+            } else {
+                vec![IntendedUse::WebAssessment]
+            };
+
+            let descriptor = OperationDescriptor {
+                operation: tool_id.clone(),
+                mode: OperationMode::StandardAssessment,
+                risk,
+                intended_uses,
+                target: if target_value.is_empty() { None } else { Some(target_value.to_string()) },
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: true,
+                required_capabilities: crate::tool::protocol::mcp::policy::required_capabilities_for_tool_call(
+                    &tool_id, capability.as_deref(), &arguments,
+                ),
+            };
+
+            let outcome = self.enforcement.evaluate(&descriptor);
+            if let crate::config::EnforcementOutcome::Deny(decision) = outcome {
+                return req.error_response(McpError {
+                    code: -32025,
+                    message: format!("Enforcement denied: {}", decision.denied_reasons.join("; ")),
+                    data: Some(serde_json::to_value(&decision).unwrap_or_default()),
+                });
             }
         }
 

@@ -36,11 +36,37 @@ The `Scope` struct is critical for security and compliance. It defines which tar
 - `ScopeRule::new(pattern)` - Creates a scope rule from a glob/regex pattern string
 - `ScopeRule::with_cidr(cidr)` - Creates a scope rule from CIDR notation (e.g., `10.0.0.0/8`). Parses via `IpNetwork::from_str()` and stores the CIDR for IP-range matching
 
+### `LoadedScope` and `ScopeSource` (`scope.rs`)
+
+`LoadedScope` wraps a `Scope` with provenance metadata indicating where the scope was loaded from:
+
+```rust
+pub enum ScopeSource {
+    DefaultEmpty,       // No scope provided by user
+    ConfigFile,         // Loaded from eggsec.toml
+    CliScopeFile,       // Loaded from --scope CLI flag
+    GeneratedPreset,    // Generated from a profile or preset
+}
+```
+
+**Key methods on `LoadedScope`:**
+- `is_explicit_manifest()` - Returns `true` if the scope was provided via `--scope` or config file (not default empty)
+- `source()` - Returns the `ScopeSource`
+- `scope()` - Returns a reference to the underlying `Scope`
+
 **Security enforcement:**
-- **Private IP blocking**: Direct IP addresses (e.g., `127.0.0.1`, `169.254.169.254`) are blocked via `TargetScope::parse()` and `parse_hostname_only()` - they now properly go through private IP checks
-- **Included Targets**: IP ranges (CIDR), domains, or specific URLs
-- **Excluded Targets**: Blacklisted IPs or domains that should never be touched
-- **Enforcement**: Most scanning and fuzzing operations check the `Scope` before initiating a connection
+- Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `is_explicit_manifest() == true` for networked operations
+- `DefaultEmpty` scope blocks all networked operations in strict profiles
+- Private IP blocking: Direct IP addresses (e.g., `127.0.0.1`, `169.254.169.254`) are blocked via `TargetScope::parse()` and `parse_hostname_only()` - they now properly go through private IP checks
+- Included Targets: IP ranges (CIDR), domains, or specific URLs
+- Excluded Targets: Blacklisted IPs or domains that should never be touched
+- Enforcement: Most scanning and fuzzing operations check the `Scope` before initiating a connection
+
+**Scope loading:**
+- `load_scope_with_source()` loads a scope from a file and tags it with the appropriate `ScopeSource`
+- When `--scope` is provided, the result has `ScopeSource::CliScopeFile`
+- When loaded from config, the result has `ScopeSource::ConfigFile`
+- When no scope is provided, the result has `ScopeSource::DefaultEmpty`
 - **FxHashMap**: All HashMap usages use `rustc_hash::FxHashMap` for performance:
   - `AlertChannelsConfig.channels` (`settings.rs:21`)
   - `WebhookConfigEntry.headers` (`settings.rs:38`)
@@ -55,6 +81,26 @@ The `Scope` struct is critical for security and compliance. It defines which tar
 - `evaluate_enforcement()` - Wraps `evaluate_operation_policy()` with profile-specific behavior
 - `Capability` - Operation capability declarations for tool metadata
 - `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes
+
+### `EnforcementContext` (`policy_decision.rs`)
+
+`EnforcementContext` bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` into a single struct for shared enforcement across all execution paths. This eliminates the need to pass profile/policy/scope separately through the call stack.
+
+**Construction per execution path:**
+- CLI commands: `EnforcementContext::cli(...)` builds `ManualPermissive` (default) or `ManualGuarded` (when `--strict-scope` is used)
+- MCP server: Forces `McpStrict` profile regardless of caller input; requires explicit scope manifest
+- Agent: Forces `AgentStrict` profile; `EnforcementContext::agent_strict` is passed to `AgentConfig`
+- CI mode: Uses `CiStrict` profile when detected
+
+**Key methods:**
+- `evaluate()` - Evaluates an `OperationDescriptor` against the bundled profile/policy/scope and returns `EnforcementOutcome`
+- `profile()` - Returns the `ExecutionProfile`
+- `scope()` - Returns the `LoadedScope`
+
+**Security enforcement:**
+- MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool
+- Agent refuses to run without an explicit scope manifest
+- Strict profiles require `is_explicit_manifest() == true` for all networked operations
 
 ### `Loader` (`loader.rs`)
 

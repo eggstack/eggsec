@@ -268,6 +268,10 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 `SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in the platform-specific sessions directory (`~/.local/share/eggsec/sessions/` on Linux via `directories::ProjectDirs`, with `~/.eggsec/sessions/` as a fallback), writes a quick-save on exit, and restores the saved theme name when loading sessions. If a packaged theme is not available yet, `App` keeps a deferred restore request in `ThemeLoadState` until the background loader registers it.
 
+### Enforcement Context in TUI
+
+The TUI uses `CommandContext::evaluate_and_enforce_operation()` for all command handlers that accept targets. This wraps `evaluate_enforcement()` with profile-aware scope enforcement and structured denial output. When `--strict-scope` is active, the TUI builds a `ManualGuarded` enforcement context; otherwise it uses `ManualPermissive`.
+
 ### Adding a New Tab
 
 Adding a new tab requires changes in **7-9 locations**. Each new tab must be added to:

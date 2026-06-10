@@ -82,7 +82,27 @@ description = "Admin panel - excluded"
 
 **Feature gating** ensures intrusive modules (stress testing, raw packet crafting, headless browser, NSE, database storage, container scanning, and more) require explicit build flags and cannot be invoked accidentally.
 
-**Execution profiles** separate manual CLI ergonomics from strict MCP/agent enforcement. Manual usage defaults to permissive scope assistance; `--strict-scope` enables strict mode. MCP and autonomous agent paths are always strict and cannot be downgraded by model-supplied flags.
+**Execution profiles** separate manual CLI ergonomics from strict MCP/agent enforcement:
+- **Manual CLI/TUI** defaults to permissive scope assistance; `--strict-scope` activates guarded mode
+- **MCP server** always uses `McpStrict` internally, requires explicit scope manifest for networked operations
+- **Agent** requires explicit scope manifest, uses `AgentStrict`
+- **CI** uses `CiStrict`
+
+MCP and autonomous agent paths are always strict and cannot be downgraded by model-supplied flags.
+
+```bash
+# Manual permissive
+eggsec scan example.com --profile quick
+
+# Manual guarded
+eggsec scan example.com --profile quick --scope scope.toml --strict-scope
+
+# MCP strict
+eggsec codegg-mcp --stdio --scope scope.toml
+
+# Agent strict
+eggsec agent run --scope scope.toml --portfolio portfolio.json
+```
 
 See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation.
 
@@ -333,12 +353,14 @@ Eggsec borrows proven scanning concepts from Nmap but is not a drop-in replaceme
 
 Eggsec includes a security agent for continuous monitoring and scheduled assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
 
+The agent always requires an explicit scope manifest and uses `AgentStrict` execution profile. Networked operations are rejected without a valid scope file.
+
 ```bash
 # Build with agent support
 cargo build --release --features rest-api
 
-# Run the agent
-./eggsec agent run --portfolio /path/to/portfolio.json
+# Run the agent with explicit scope
+./eggsec agent run --scope scope.toml --portfolio /path/to/portfolio.json
 ```
 
 See [docs/AGENT.md](docs/AGENT.md) for full documentation.

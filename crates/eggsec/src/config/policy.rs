@@ -349,6 +349,46 @@ impl std::fmt::Display for Capability {
     }
 }
 
+/// Classification of why an operation was denied.
+///
+/// Used by [`super::policy_decision::evaluate_enforcement`] to determine
+/// whether a denial can be downgraded to a warning in permissive profiles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DenialClass {
+    /// No scope manifest was provided for a networked operation.
+    ScopeMissing,
+    /// Target does not match any allowed scope rule.
+    TargetOutOfScope,
+    /// Target matches an explicit exclusion rule.
+    ExplicitExclusion,
+    /// A required compile-time feature is not enabled.
+    FeatureMissing,
+    /// Operation risk exceeds policy limits.
+    RiskPolicyDenied,
+    /// A required capability is denied by policy.
+    CapabilityDenied,
+    /// Target is invalid or unresolvable.
+    InvalidTarget,
+    /// Catch-all for unclassified denials.
+    Unknown,
+}
+
+impl std::fmt::Display for DenialClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ScopeMissing => write!(f, "scope-missing"),
+            Self::TargetOutOfScope => write!(f, "target-out-of-scope"),
+            Self::ExplicitExclusion => write!(f, "explicit-exclusion"),
+            Self::FeatureMissing => write!(f, "feature-missing"),
+            Self::RiskPolicyDenied => write!(f, "risk-policy-denied"),
+            Self::CapabilityDenied => write!(f, "capability-denied"),
+            Self::InvalidTarget => write!(f, "invalid-target"),
+            Self::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,5 +575,50 @@ mod tests {
         assert!(json.contains("waf-bypass-simulation"));
         let deserialized: Capability = serde_json::from_str(&json).unwrap();
         assert_eq!(cap, deserialized);
+    }
+
+    #[test]
+    fn denial_class_display() {
+        assert_eq!(format!("{}", DenialClass::ScopeMissing), "scope-missing");
+        assert_eq!(
+            format!("{}", DenialClass::TargetOutOfScope),
+            "target-out-of-scope"
+        );
+        assert_eq!(
+            format!("{}", DenialClass::ExplicitExclusion),
+            "explicit-exclusion"
+        );
+        assert_eq!(
+            format!("{}", DenialClass::FeatureMissing),
+            "feature-missing"
+        );
+        assert_eq!(
+            format!("{}", DenialClass::RiskPolicyDenied),
+            "risk-policy-denied"
+        );
+        assert_eq!(
+            format!("{}", DenialClass::CapabilityDenied),
+            "capability-denied"
+        );
+        assert_eq!(format!("{}", DenialClass::InvalidTarget), "invalid-target");
+        assert_eq!(format!("{}", DenialClass::Unknown), "unknown");
+    }
+
+    #[test]
+    fn denial_class_serialization_roundtrip() {
+        for variant in [
+            DenialClass::ScopeMissing,
+            DenialClass::TargetOutOfScope,
+            DenialClass::ExplicitExclusion,
+            DenialClass::FeatureMissing,
+            DenialClass::RiskPolicyDenied,
+            DenialClass::CapabilityDenied,
+            DenialClass::InvalidTarget,
+            DenialClass::Unknown,
+        ] {
+            let json = serde_json::to_string(&variant).unwrap();
+            let deserialized: DenialClass = serde_json::from_str(&json).unwrap();
+            assert_eq!(variant, deserialized);
+        }
     }
 }

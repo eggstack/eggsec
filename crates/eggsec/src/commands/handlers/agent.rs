@@ -25,12 +25,20 @@ fn load_portfolio_for_cli(portfolio_path: Option<&str>) -> TargetPortfolio {
     TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new())
 }
 
-pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> {
+pub async fn handle_agent(ctx: &CommandContext, args: AgentArgs) -> Result<()> {
     let use_ai = args.with_ai;
     let ai_config_path = args.ai_config.clone();
     let portfolio_path = args.portfolio.clone();
     let memory_dir = expand_path(&args.memory_dir);
     let poll_interval = args.poll_interval;
+
+    // Agent requires explicit scope manifest for networked operations
+    if !ctx.enforcement.loaded_scope.is_explicit_manifest() {
+        anyhow::bail!(
+            "Agent run requires an explicit scope manifest. \
+             Use --scope <path> to provide a scope file."
+        );
+    }
 
     match args.command {
         None => {
@@ -49,6 +57,7 @@ pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> 
                 memory_dir,
                 poll_interval,
                 run_args,
+                ctx.enforcement.clone(),
             )
             .await
         }
@@ -69,6 +78,7 @@ async fn handle_agent_run_impl(
     memory_dir: PathBuf,
     poll_interval: u64,
     run_args: crate::cli::agent::RunArgs,
+    enforcement: crate::config::EnforcementContext,
 ) -> Result<()> {
     let mut config = AgentConfig {
         portfolio_path: portfolio_path.map(|p| expand_path(&p)),
@@ -76,6 +86,7 @@ async fn handle_agent_run_impl(
         poll_interval_secs: poll_interval,
         ai_config: None,
         operational_constraints: None,
+        enforcement: Some(enforcement),
     };
 
     if use_ai {

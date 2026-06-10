@@ -4,6 +4,70 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use url::Url;
 
+/// Provenance of a loaded scope manifest.
+///
+/// Used by [`LoadedScope`] to distinguish between "no scope provided" and
+/// "user explicitly supplied an empty scope". Strict execution profiles
+/// (MCP, agent, CI) require an explicit manifest for networked operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ScopeSource {
+    /// No scope file was found or provided.
+    DefaultEmpty,
+    /// Scope loaded from the config file's `[scope]` section or profile.
+    ConfigFile,
+    /// Scope loaded from a CLI `--scope` argument.
+    CliScopeFile,
+    /// Scope generated from a preset or template.
+    GeneratedPreset,
+}
+
+/// A scope with provenance metadata.
+///
+/// Wraps [`Scope`] with information about where it was loaded from, enabling
+/// strict execution paths to distinguish "no scope" from "explicit empty scope".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadedScope {
+    pub scope: Scope,
+    pub source: ScopeSource,
+    pub path: Option<String>,
+}
+
+impl LoadedScope {
+    /// Returns `true` if this scope came from an explicit manifest
+    /// (config file, CLI path, or generated preset).
+    pub fn is_explicit_manifest(&self) -> bool {
+        matches!(
+            self.source,
+            ScopeSource::ConfigFile | ScopeSource::CliScopeFile | ScopeSource::GeneratedPreset
+        )
+    }
+
+    /// Create a default empty scope (no manifest provided).
+    pub fn default_empty() -> Self {
+        Self {
+            scope: Scope::default(),
+            source: ScopeSource::DefaultEmpty,
+            path: None,
+        }
+    }
+
+    /// Create from an explicit scope with provenance.
+    pub fn explicit(scope: Scope, source: ScopeSource, path: Option<String>) -> Self {
+        Self {
+            scope,
+            source,
+            path,
+        }
+    }
+}
+
+impl Default for LoadedScope {
+    fn default() -> Self {
+        Self::default_empty()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Scope {
     #[serde(default)]
@@ -592,6 +656,21 @@ description = "Critical database server"
             scope.excluded_targets[1].cidr.as_deref(),
             Some("10.0.0.1/32")
         );
+    }
+
+    #[test]
+    fn test_loaded_scope_default_empty_is_not_explicit() {
+        let loaded = LoadedScope::default_empty();
+        assert!(!loaded.is_explicit_manifest());
+        assert_eq!(loaded.source, ScopeSource::DefaultEmpty);
+    }
+
+    #[test]
+    fn test_loaded_scope_explicit_is_explicit() {
+        let scope = Scope::default();
+        let loaded = LoadedScope::explicit(scope, ScopeSource::CliScopeFile, None);
+        assert!(loaded.is_explicit_manifest());
+        assert_eq!(loaded.source, ScopeSource::CliScopeFile);
     }
 
     #[test]

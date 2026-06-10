@@ -85,11 +85,21 @@ pub struct CommandContext {
     config_path: Option<String>,
     pub notify_manager: crate::notify::NotifyManager,
     pub execution_profile: ExecutionProfile,
+    pub enforcement: crate::config::EnforcementContext,
 }
 
 impl CommandContext {
     pub fn new(config: EggsecConfig, scope: Scope, json: bool) -> Self {
         let notify_manager = crate::notify::NotifyManager::from_settings(&config);
+        let loaded_scope = crate::config::LoadedScope::explicit(
+            scope.clone(),
+            crate::config::ScopeSource::DefaultEmpty,
+            None,
+        );
+        let enforcement = crate::config::EnforcementContext::manual_permissive(
+            config.execution_policy.clone(),
+            loaded_scope,
+        );
         Self {
             config,
             scope,
@@ -97,6 +107,7 @@ impl CommandContext {
             config_path: None,
             notify_manager,
             execution_profile: ExecutionProfile::ManualPermissive,
+            enforcement,
         }
     }
 
@@ -107,11 +118,60 @@ impl CommandContext {
 
     pub fn with_execution_profile(mut self, profile: ExecutionProfile) -> Self {
         self.execution_profile = profile;
+        self.enforcement = match profile {
+            ExecutionProfile::ManualPermissive => crate::config::EnforcementContext::manual_permissive(
+                self.config.execution_policy.clone(),
+                self.enforcement.loaded_scope.clone(),
+            ),
+            ExecutionProfile::ManualGuarded => crate::config::EnforcementContext::manual_guarded(
+                self.config.execution_policy.clone(),
+                self.enforcement.loaded_scope.clone(),
+            ),
+            ExecutionProfile::CiStrict => crate::config::EnforcementContext::ci_strict(
+                self.config.execution_policy.clone(),
+                self.enforcement.loaded_scope.clone(),
+            ),
+            ExecutionProfile::McpStrict => crate::config::EnforcementContext::mcp_strict(
+                self.config.execution_policy.clone(),
+                self.enforcement.loaded_scope.clone(),
+            ),
+            ExecutionProfile::AgentStrict => crate::config::EnforcementContext::agent_strict(
+                self.config.execution_policy.clone(),
+                self.enforcement.loaded_scope.clone(),
+            ),
+        };
         self
     }
 
     pub fn config_path(&self) -> Option<&str> {
         self.config_path.as_deref()
+    }
+
+    pub fn with_loaded_scope(mut self, loaded_scope: crate::config::LoadedScope) -> Self {
+        self.scope = loaded_scope.scope.clone();
+        self.enforcement = match self.execution_profile {
+            ExecutionProfile::ManualPermissive => crate::config::EnforcementContext::manual_permissive(
+                self.config.execution_policy.clone(),
+                loaded_scope,
+            ),
+            ExecutionProfile::ManualGuarded => crate::config::EnforcementContext::manual_guarded(
+                self.config.execution_policy.clone(),
+                loaded_scope,
+            ),
+            ExecutionProfile::CiStrict => crate::config::EnforcementContext::ci_strict(
+                self.config.execution_policy.clone(),
+                loaded_scope,
+            ),
+            ExecutionProfile::McpStrict => crate::config::EnforcementContext::mcp_strict(
+                self.config.execution_policy.clone(),
+                loaded_scope,
+            ),
+            ExecutionProfile::AgentStrict => crate::config::EnforcementContext::agent_strict(
+                self.config.execution_policy.clone(),
+                loaded_scope,
+            ),
+        };
+        self
     }
 
     pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()> {
@@ -131,12 +191,7 @@ impl CommandContext {
         &self,
         descriptor: OperationDescriptor,
     ) -> Result<crate::config::PolicyDecision> {
-        let outcome = crate::config::evaluate_enforcement(
-            &descriptor,
-            &self.config.execution_policy,
-            Some(&self.scope),
-            self.execution_profile,
-        );
+        let outcome = self.enforcement.evaluate(&descriptor);
 
         match &outcome {
             crate::config::EnforcementOutcome::Allow(decision) => Ok(decision.clone()),
@@ -559,5 +614,32 @@ mod tests {
         };
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn command_context_enforcement_context_is_built() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        assert_eq!(ctx.enforcement.execution_profile, ExecutionProfile::ManualPermissive);
+    }
+
+    #[test]
+    fn command_context_with_loaded_scope_updates_enforcement() {
+        use crate::config::{LoadedScope, ScopeSource};
+        let loaded = LoadedScope::explicit(
+            localhost_scope(),
+            ScopeSource::CliScopeFile,
+            Some("/path/to/scope.toml".to_string()),
+        );
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_loaded_scope(loaded);
+        assert!(ctx.enforcement.loaded_scope.is_explicit_manifest());
+        assert_eq!(ctx.enforcement.loaded_scope.source, ScopeSource::CliScopeFile);
+    }
+
+    #[test]
+    fn command_context_with_mcp_strict_profile_builds_mcp_enforcement() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_execution_profile(ExecutionProfile::McpStrict);
+        assert_eq!(ctx.enforcement.execution_profile, ExecutionProfile::McpStrict);
     }
 }

@@ -3,7 +3,7 @@ use directories::ProjectDirs;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::scope::Scope;
+use super::scope::{LoadedScope, Scope, ScopeSource};
 use super::settings::EggsecConfig;
 use crate::constants::{PROJECT_NAME, PROJECT_QUALIFIER};
 use crate::types::check_config_file_permissions;
@@ -91,6 +91,63 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
         .map_err(|e| anyhow::anyhow!("Scope validation failed: {}", e))?;
     check_config_file_permissions(&canonical_path);
     Ok(scope)
+}
+
+/// Load a scope with provenance metadata.
+///
+/// Unlike [`load_scope`], this returns a [`LoadedScope`] that tracks whether
+/// the scope was explicitly provided or is a default empty scope. Strict
+/// execution paths (MCP, agent, CI) use this to enforce the requirement
+/// that networked operations have an explicit scope manifest.
+pub fn load_scope_with_source(scope_path: Option<&str>) -> Result<LoadedScope> {
+    let (path, source) = match scope_path {
+        Some(p) => (Some(PathBuf::from(p)), ScopeSource::CliScopeFile),
+        None => match find_scope_file(None) {
+            Some(p) => (Some(p), ScopeSource::ConfigFile),
+            None => return Ok(LoadedScope::default_empty()),
+        },
+    };
+
+    let path = path.unwrap_or_else(default_scope_path);
+
+    let canonical_path = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!(
+                "No scope file found at {:?}, returning default empty scope",
+                path
+            );
+            return Ok(LoadedScope::default_empty());
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "Failed to canonicalize scope path '{}': {}",
+                path.display(),
+                e
+            ));
+        }
+    };
+
+    tracing::info!("Loading scope from {:?}", canonical_path);
+
+    let path_str = canonical_path.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Scope file path contains invalid UTF-8: {:?}",
+            canonical_path
+        )
+    })?;
+    let scope =
+        Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
+    scope
+        .validate()
+        .map_err(|e| anyhow::anyhow!("Scope validation failed: {}", e))?;
+    check_config_file_permissions(&canonical_path);
+
+    Ok(LoadedScope::explicit(
+        scope,
+        source,
+        Some(canonical_path.to_string_lossy().into_owned()),
+    ))
 }
 
 pub fn find_config_file(base_dir: Option<&Path>) -> Option<PathBuf> {
@@ -323,6 +380,55 @@ scan:
         let scope = scope.unwrap();
         assert!(scope.allowed_targets.is_empty());
         assert!(!scope.require_explicit_scope);
+    }
+
+    #[test]
+    fn test_load_scope_with_source_none_returns_default_empty() {
+        let loaded = load_scope_with_source(Some("/nonexistent/scope.toml")).unwrap();
+        assert_eq!(loaded.source, ScopeSource::DefaultEmpty);
+        assert!(!loaded.is_explicit_manifest());
+        assert!(loaded.scope.allowed_targets.is_empty());
+    }
+
+    #[test]
+    fn test_load_scope_with_source_cli_path_returns_cli_scope_file() {
+        let dir = std::env::temp_dir().join("eggsec_test_scope_source");
+        let _ = std::fs::create_dir_all(&dir);
+        let scope_path = dir.join("scope.toml");
+        std::fs::write(
+            &scope_path,
+            r#"
+require_explicit_scope = true
+[[allowed_targets]]
+pattern = "example.com"
+"#,
+        )
+        .unwrap();
+
+        let loaded =
+            load_scope_with_source(Some(scope_path.to_str().unwrap())).unwrap();
+        assert_eq!(loaded.source, ScopeSource::CliScopeFile);
+        assert!(loaded.is_explicit_manifest());
+        assert!(loaded.path.is_some());
+        assert!(loaded.scope.require_explicit_scope);
+        assert_eq!(loaded.scope.allowed_targets.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_loaded_scope_default_empty_is_not_explicit() {
+        let loaded = LoadedScope::default_empty();
+        assert!(!loaded.is_explicit_manifest());
+        assert_eq!(loaded.source, ScopeSource::DefaultEmpty);
+    }
+
+    #[test]
+    fn test_loaded_scope_explicit_is_explicit() {
+        let scope = Scope::default();
+        let loaded = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        assert!(loaded.is_explicit_manifest());
+        assert_eq!(loaded.source, ScopeSource::ConfigFile);
     }
 
     #[test]

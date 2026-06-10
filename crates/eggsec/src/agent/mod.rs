@@ -114,6 +114,7 @@ pub struct AgentConfig {
     pub poll_interval_secs: u64,
     pub ai_config: Option<crate::config::AiConfig>,
     pub operational_constraints: Option<crate::agent::constraints::OperationalConstraints>,
+    pub enforcement: Option<crate::config::EnforcementContext>,
 }
 
 impl Default for AgentConfig {
@@ -128,6 +129,7 @@ impl Default for AgentConfig {
             poll_interval_secs: 60,
             ai_config: None,
             operational_constraints: None,
+            enforcement: None,
         }
     }
 }

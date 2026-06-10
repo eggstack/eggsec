@@ -48,20 +48,21 @@ pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, Wa
 pub use budget::{BudgetError, ExecutionBudget};
 pub use discovery::DiscoveredTargetStatus;
 pub use http::{HttpConfig, Verbosity};
-pub use loader::{config_dir, load_config, load_scope};
+pub use loader::{config_dir, load_config, load_scope, load_scope_with_source};
 pub use policy::{
-    Capability, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode,
-    OperationRisk,
+    Capability, DenialClass, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor,
+    OperationMode, OperationRisk,
 };
 pub use policy_decision::{
-    evaluate_enforcement, evaluate_operation_policy, EnforcementOutcome, PolicyDecision,
+    evaluate_enforcement, evaluate_operation_policy, EnforcementContext, EnforcementOutcome,
+    PolicyDecision,
 };
 pub use presets::DefenseLabPreset;
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
     WebhookEvent,
 };
-pub use scope::{is_private_ip, Scope, ScopeError, ScopeRule, TargetScope};
+pub use scope::{is_private_ip, LoadedScope, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope};
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
     ConfigError, EggsecConfig, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig,

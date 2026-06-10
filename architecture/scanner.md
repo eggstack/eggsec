@@ -46,6 +46,10 @@ The scanner uses "Timing Templates" (similar to Nmap's -T0 through -T5) to contr
 
 Discovered information is often fed into the **Fuzzer** or **Vulnerability Management** modules for further analysis.
 
+## Scope Enforcement
+
+All scanner operations check the `Scope` before initiating connections. The scanner uses the shared `EnforcementContext` to evaluate whether targets are in scope. In strict profiles (`McpStrict`, `AgentStrict`, `CiStrict`), targets must match an explicit scope rule before scanning begins. Private IP addresses are blocked by default unless explicitly allowed via scope rules.
+
 ## Key Design Patterns
 
 | Pattern | Usage |
