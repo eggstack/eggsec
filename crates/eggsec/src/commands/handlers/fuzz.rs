@@ -123,7 +123,19 @@ pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> 
 }
 
 pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlArgs) -> Result<()> {
-    ctx.ensure_scope_url(&args.url)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "graphql".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::Intrusive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(
+            crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone()),
+        ),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("graphql-{}", chrono::Utc::now().timestamp());
@@ -150,7 +162,19 @@ pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlA
 }
 
 pub async fn handle_oauth(ctx: &CommandContext, mut args: crate::cli::OAuthArgs) -> Result<()> {
-    ctx.ensure_scope_url(&args.url)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "oauth".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::Intrusive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(
+            crate::utils::extract_target_from_url(&args.url).unwrap_or_else(|| args.url.clone()),
+        ),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("oauth-{}", chrono::Utc::now().timestamp());

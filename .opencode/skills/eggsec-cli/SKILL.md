@@ -92,6 +92,8 @@ pub struct CommandContext {
 }
 
 impl CommandContext {
+    pub fn evaluate_and_enforce_operation(&self, descriptor: OperationDescriptor) -> Result<PolicyDecision>
+    // Legacy methods (still present but no longer used in handlers):
     pub fn ensure_scope(&self, target: &str) -> ErrorResult<()>
     pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()>
 }
@@ -137,11 +139,23 @@ impl CommandContext {
 
 ## Common Patterns
 
-### Scope Validation
-Most handlers call `ctx.ensure_scope()` or `ctx.ensure_scope_url()` before processing:
+### Policy Enforcement
+All target-bearing handlers call `ctx.evaluate_and_enforce_operation()` with an `OperationDescriptor` before processing:
 ```rust
 pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
-    ctx.ensure_scope_url(&args.url)?;
+    let target = crate::utils::extract_target_from_url(&args.url)
+        .unwrap_or_else(|| args.url.clone());
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "fuzz".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::Intrusive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(target),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     // ... proceed with fuzzing
 }
 ```
@@ -175,7 +189,7 @@ cargo test --lib -p eggsec cli::
 ### Writing Tests
 - Test argument parsing with `Cli::parse_from()`
 - Test handler dispatch by mocking `CommandContext`
-- Verify scope validation calls
+- Verify policy enforcement via `evaluate_and_enforce_operation` (see `commands::handlers::tests`)
 
 ## Common Tasks
 
@@ -185,19 +199,19 @@ cargo test --lib -p eggsec cli::
 3. Add handler function in `commands/handlers/*.rs`
 4. Add dispatch arm in `handle_command()` (exhaustive match)
 5. Gate with feature flag if needed
-6. Add scope validation in handler
+6. Add `evaluate_and_enforce_operation` with appropriate `OperationDescriptor` in handler
 7. Add tests
 
 ### Bug Fixes in Handlers
 - **Never use `unwrap()`** - Use `ok_or_else()` or `context()`
 - **Never call `std::process::exit()`** - Return `Err(...)` instead
-- **Always validate scope** - Call `ensure_scope()` or `ensure_scope_url()`
+- **Always validate policy** - Call `evaluate_and_enforce_operation()` with an `OperationDescriptor`
 - **Never use `unwrap_or()` with constants** - Use `unwrap_or_else(|| ...)` to avoid panics
 
 ### Known Bug Fixes (2026-05-22)
 | Issue | Fix | Location |
 |-------|-----|----------|
-| Missing scope validation in auth-test | Added `ctx.ensure_scope_url(&args.target)?` | `handlers/auth_test.rs:10` |
+| Missing policy validation in auth-test | Migrated to `evaluate_and_enforce_operation` with `CredentialTesting` risk | `handlers/auth_test.rs` |
 | Hardcoded list in `handle_no_command` | Replaced with `eggsec --help` guidance | `handlers/mod.rs:155-169` |
 | `unwrap_or(22)` in cluster parse | Changed to `unwrap_or_else(\|_\| 22)` | `handlers/cluster.rs:350` |
 | Unused `-o` flag in `ClusterArgs` | Removed dead code | `cli/cluster.rs` |

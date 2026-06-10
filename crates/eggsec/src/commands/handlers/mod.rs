@@ -234,3 +234,259 @@ async fn handle_no_command(cli: &Cli) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{
+        ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk, Scope,
+    };
+
+    fn make_ctx(policy: ExecutionPolicy, scope: Scope, json: bool) -> CommandContext {
+        let config = EggsecConfig {
+            execution_policy: policy,
+            ..Default::default()
+        };
+        CommandContext::new(config, scope, json)
+    }
+
+    fn localhost_scope() -> Scope {
+        Scope {
+            allowed_targets: vec![crate::config::ScopeRule::new("127.0.0.1".to_string())],
+            ..Default::default()
+        }
+    }
+
+    fn descriptor(operation: &str, risk: OperationRisk) -> OperationDescriptor {
+        OperationDescriptor {
+            operation: operation.to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        }
+    }
+
+    #[test]
+    fn safe_active_allowed_by_default() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("scan", OperationRisk::SafeActive));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn intrusive_denied_by_default() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn intrusive_allowed_when_enabled() {
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn stress_test_denied_without_policy_flag() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("stress", OperationRisk::StressTest));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn stress_test_allowed_with_policy_flag() {
+        let policy = ExecutionPolicy {
+            allow_stress_testing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("stress", OperationRisk::StressTest));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn raw_packet_denied_without_policy_flag() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("packet", OperationRisk::RawPacket));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn raw_packet_allowed_with_policy_flag() {
+        let policy = ExecutionPolicy {
+            allow_raw_packets: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("packet", OperationRisk::RawPacket));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn load_test_denied_without_policy_flag() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("load", OperationRisk::LoadTest));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_test_allowed_with_policy_flag() {
+        let policy = ExecutionPolicy {
+            allow_load_testing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("load", OperationRisk::LoadTest));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn remote_execution_denied_by_default() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("exec", OperationRisk::RemoteExecution));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn remote_execution_allowed_with_policy_flag() {
+        let policy = ExecutionPolicy {
+            allow_remote_execution: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("exec", OperationRisk::RemoteExecution));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn json_mode_denial_includes_structured_data() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), true);
+        let err = ctx
+            .evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("\"allowed\":false"),
+            "denial should contain allowed:false: {}",
+            msg
+        );
+        assert!(
+            msg.contains("\"operation_risk\""),
+            "denial should contain operation_risk: {}",
+            msg
+        );
+        assert!(
+            msg.contains("\"denied_reasons\""),
+            "denial should contain denied_reasons: {}",
+            msg
+        );
+        assert!(
+            msg.contains("\"decision_id\""),
+            "denial should contain decision_id: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn human_mode_denial_is_readable() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let err = ctx
+            .evaluate_and_enforce_operation(descriptor("stress", OperationRisk::StressTest))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("DENIED"),
+            "human denial should contain DENIED: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn denied_public_target_out_of_scope() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn allowed_target_passes_scope_check() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn exploit_adjacent_denied_by_default() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("proxy", OperationRisk::ExploitAdjacent));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn credential_testing_denied_by_default() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result = ctx.evaluate_and_enforce_operation(descriptor(
+            "auth-test",
+            OperationRisk::CredentialTesting,
+        ));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn credential_testing_allowed_with_policy_flag() {
+        let policy = ExecutionPolicy {
+            allow_credential_testing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let result = ctx.evaluate_and_enforce_operation(descriptor(
+            "auth-test",
+            OperationRisk::CredentialTesting,
+        ));
+        assert!(result.is_ok());
+    }
+}

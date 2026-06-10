@@ -1,8 +1,19 @@
 use crate::commands::handlers::CommandContext;
+use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_browser(ctx: &CommandContext, mut args: crate::cli::BrowserArgs) -> Result<()> {
-    ctx.ensure_scope(&args.target)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "browser".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(args.target.clone()),
+        required_features: vec!["headless-browser".to_string()],
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
 
     let config = crate::browser::BrowserConfig {

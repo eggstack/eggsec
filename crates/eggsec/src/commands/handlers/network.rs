@@ -1,11 +1,11 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -> Result<()> {
     #[cfg(feature = "packet-inspection")]
     {
         use crate::cli::PacketSubcommand;
+        use crate::config::OperationDescriptor;
         use crate::packet::cli as packet_cli;
 
         // Policy check for subcommands that target external hosts
@@ -68,6 +68,7 @@ pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -
 
 #[cfg(feature = "stress-testing")]
 pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Result<()> {
+    use crate::config::OperationDescriptor;
     use crate::scanner::icmp_probe;
     use std::time::Duration;
 
@@ -160,6 +161,7 @@ pub async fn handle_traceroute(
     ctx: &CommandContext,
     args: crate::cli::TracerouteArgs,
 ) -> Result<()> {
+    use crate::config::OperationDescriptor;
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     use std::time::Duration;
 

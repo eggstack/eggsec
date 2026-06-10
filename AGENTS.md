@@ -191,6 +191,7 @@ No remaining stub implementations.
 - **Browser ClientIssueType**: FIXED - now detects all 8 variants (was only 3) (2026-06-02)
 - **FindingStore Deduplication**: FIXED - now deduplicates by fingerprint before appending (2026-06-02)
 - **Remote Listener Policy**: `remote start` now uses `evaluate_and_enforce_operation` with `HazardousLab` mode and `RemoteExecution` risk (2026-06-10)
+- **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
 
 ### Key Patterns (Lessons Learned)
 

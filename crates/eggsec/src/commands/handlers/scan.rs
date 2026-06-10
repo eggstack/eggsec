@@ -6,7 +6,17 @@ pub async fn handle_scan_ports(
     ctx: &CommandContext,
     mut args: crate::cli::PortScanArgs,
 ) -> Result<()> {
-    ctx.ensure_scope(&args.host)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(args.host.clone()),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.host.clone();
     let scan_id = format!("port-{}", chrono::Utc::now().timestamp());
@@ -36,7 +46,17 @@ pub async fn handle_scan_endpoints(
     ctx: &CommandContext,
     mut args: crate::cli::EndpointScanArgs,
 ) -> Result<()> {
-    ctx.ensure_scope_url(&args.url)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "scan-endpoints".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(args.url.clone()),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("endpoint-{}", chrono::Utc::now().timestamp());
@@ -66,7 +86,17 @@ pub async fn handle_fingerprint(
     ctx: &CommandContext,
     mut args: crate::cli::FingerprintArgs,
 ) -> Result<()> {
-    ctx.ensure_scope(&args.host)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "fingerprint".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(args.host.clone()),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.host.clone();
     let scan_id = format!("fingerprint-{}", chrono::Utc::now().timestamp());
@@ -136,7 +166,17 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
 }
 
 pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -> Result<()> {
-    ctx.ensure_scope(&args.target)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "scan".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(args.target.clone()),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("scan-{}", chrono::Utc::now().timestamp());
@@ -166,7 +206,17 @@ pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -
     let session = crate::pipeline::session::load(&args.session)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    ctx.ensure_scope(&session.target)?;
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "scan-resume".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::SafeActive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(session.target.clone()),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     let target = session.target.clone();
     let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());
     ctx.notify_manager

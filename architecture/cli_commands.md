@@ -18,7 +18,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 - **Global flags**: `--json`, `--config`, `--scope` apply to all commands
 - **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`
 - **Output flag**: Use `-o` / `--output` for file output (consistent across commands)
-- **Scope validation**: Handlers call `ensure_scope()` or `ensure_scope_url()` to validate targets
+- **Scope validation**: Handlers call `evaluate_and_enforce_operation()` with an `OperationDescriptor` to validate targets against scope and execution policy
 
 ## Command Dispatch (`src/commands/`)
 
@@ -40,9 +40,21 @@ Examples:
 ### Handler Patterns
 
 ```rust
-// Scope validation (required for target-based commands)
+// Policy enforcement (required for all target-based commands)
 pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
-    ctx.ensure_scope_url(&args.url)?;
+    let target = crate::utils::extract_target_from_url(&args.url)
+        .unwrap_or_else(|| args.url.clone());
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "fuzz".to_string(),
+        mode: crate::config::OperationMode::StandardAssessment,
+        risk: crate::config::OperationRisk::Intrusive,
+        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+        target: Some(target),
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+    })?;
     // ... proceed
 }
 
@@ -51,9 +63,6 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
     load_config(config_path).map_err(|e| anyhow::anyhow!("Configuration validation failed: {}", e))?;
     Ok(())
 }
-
-// Operation policy enforcement (wraps shared policy evaluator with scope enforcement)
-ctx.evaluate_and_enforce_operation(descriptor)?;
 ```
 
 ### `evaluate_and_enforce_operation()` Method
@@ -81,7 +90,7 @@ ctx.evaluate_and_enforce_operation(descriptor)?;
 3. **`http.rs`**: Added `-o` short form to `load` and `graphql` output flags for consistency
 4. **`handlers/mod.rs:197-206`**: `handle_no_command` launches TUI in interactive terminal, otherwise prints guidance
 5. **`handlers/cluster.rs:348`**: Replaced `unwrap_or(22)` with `unwrap_or_else(|_| 22)` to avoid panic on invalid parsing
-6. **`handlers/auth_test.rs:10`**: Added missing scope validation `ctx.ensure_scope_url(&args.target)?`
+6. **`handlers/auth_test.rs:10`**: Migrated from `ensure_scope_url` to `evaluate_and_enforce_operation` with `CredentialTesting` risk tier
 7. **`cli/scan.rs`**: Added `-o` short flag to `PortScanArgs`, `EndpointScanArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`
 8. **`cli/fuzz.rs`**: Added `-o` short flag to `WafStressArgs`; preserved `From<WafStressArgs>` implementation
 9. **`cli/http.rs`**: Added `-o` short flag to `ReconArgs`
