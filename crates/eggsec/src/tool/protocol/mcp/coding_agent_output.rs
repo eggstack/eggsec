@@ -89,6 +89,20 @@ impl CodingAgentFindingReport {
         }
     }
 
+    /// Build the summary from a slice of [`CodingAgentFinding`]s.
+    pub fn build_summary(findings: &[CodingAgentFinding]) -> CodingAgentSummary {
+        let mut by_severity: FxHashMap<String, usize> = FxHashMap::default();
+        for f in findings {
+            *by_severity.entry(f.severity.clone()).or_insert(0) += 1;
+        }
+        CodingAgentSummary {
+            total_findings: findings.len(),
+            by_severity,
+        }
+    }
+}
+
+impl CodingAgentFinding {
     /// Convert a tool [`Finding`] into a [`CodingAgentFinding`].
     ///
     /// This intentionally strips raw exploit payloads — only metadata and
@@ -110,22 +124,14 @@ impl CodingAgentFindingReport {
             title: finding.title.clone(),
             category: format!("{}", finding.finding_type),
             severity: finding.severity.as_str().to_string(),
-            confidence: Self::confidence_for_severity(&finding.severity).to_string(),
+            confidence: CodingAgentFindingReport::confidence_for_severity(&finding.severity)
+                .to_string(),
             observed_behavior: finding.description.clone(),
             evidence,
-            patch_relevance: Self::patch_relevance_for_severity(&finding.severity).to_string(),
-        }
-    }
-
-    /// Build the summary from a slice of [`CodingAgentFinding`]s.
-    pub fn build_summary(findings: &[CodingAgentFinding]) -> CodingAgentSummary {
-        let mut by_severity: FxHashMap<String, usize> = FxHashMap::default();
-        for f in findings {
-            *by_severity.entry(f.severity.clone()).or_insert(0) += 1;
-        }
-        CodingAgentSummary {
-            total_findings: findings.len(),
-            by_severity,
+            patch_relevance: CodingAgentFindingReport::patch_relevance_for_severity(
+                &finding.severity,
+            )
+            .to_string(),
         }
     }
 }
@@ -154,7 +160,7 @@ mod tests {
     #[test]
     fn test_from_finding_maps_fields() {
         let f = make_test_finding(ResponseSeverity::High);
-        let caf = CodingAgentFindingReport::from_finding(&f);
+        let caf = CodingAgentFinding::from_finding(&f);
 
         assert_eq!(caf.id, "test-id-001");
         assert_eq!(caf.severity, "high");
@@ -171,7 +177,7 @@ mod tests {
     fn test_from_finding_no_evidence() {
         let mut f = make_test_finding(ResponseSeverity::Medium);
         f.evidence = None;
-        let caf = CodingAgentFindingReport::from_finding(&f);
+        let caf = CodingAgentFinding::from_finding(&f);
 
         assert!(caf.evidence.is_empty());
         assert_eq!(caf.patch_relevance, "should_fix");
@@ -181,9 +187,9 @@ mod tests {
     #[test]
     fn test_build_summary() {
         let findings = vec![
-            CodingAgentFindingReport::from_finding(&make_test_finding(ResponseSeverity::High)),
-            CodingAgentFindingReport::from_finding(&make_test_finding(ResponseSeverity::Medium)),
-            CodingAgentFindingReport::from_finding(&make_test_finding(ResponseSeverity::Medium)),
+            CodingAgentFinding::from_finding(&make_test_finding(ResponseSeverity::High)),
+            CodingAgentFinding::from_finding(&make_test_finding(ResponseSeverity::Medium)),
+            CodingAgentFinding::from_finding(&make_test_finding(ResponseSeverity::Medium)),
         ];
         let summary = CodingAgentFindingReport::build_summary(&findings);
 
@@ -200,7 +206,7 @@ mod tests {
             profile: "coding-agent".to_string(),
             run_id: "req-123".to_string(),
             status: "completed".to_string(),
-            findings: vec![CodingAgentFindingReport::from_finding(&make_test_finding(
+            findings: vec![CodingAgentFinding::from_finding(&make_test_finding(
                 ResponseSeverity::Critical,
             ))],
             summary: CodingAgentSummary {

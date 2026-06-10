@@ -409,7 +409,8 @@ fn test_payload_audit_all_types_substantial() {
             assert!(
                 !p.payload.is_empty(),
                 "{:?} payload empty: {:?}",
-                pt, p.description
+                pt,
+                p.description
             );
             assert!(
                 !p.description.is_empty(),
@@ -451,7 +452,13 @@ fn test_payload_audit_all_types_substantial() {
 #[test]
 fn test_payload_audit_no_placeholders() {
     const BANNED: &[&str] = &[
-        "TODO", "FIXME", "XXX", "lorem ipsum", "PLACEHOLDER", "REPLACE_ME", "<insert ",
+        "TODO",
+        "FIXME",
+        "XXX",
+        "lorem ipsum",
+        "PLACEHOLDER",
+        "REPLACE_ME",
+        "<insert ",
     ];
 
     for pt in PayloadType::all_variants() {

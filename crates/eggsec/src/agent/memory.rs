@@ -17,6 +17,18 @@ use tokio::sync::Mutex;
 
 use crate::tool::response::Finding;
 
+fn response_severity_to_severity(
+    s: crate::tool::response::ResponseSeverity,
+) -> crate::types::Severity {
+    match s {
+        crate::tool::response::ResponseSeverity::Critical => crate::types::Severity::Critical,
+        crate::tool::response::ResponseSeverity::High => crate::types::Severity::High,
+        crate::tool::response::ResponseSeverity::Medium => crate::types::Severity::Medium,
+        crate::tool::response::ResponseSeverity::Low => crate::types::Severity::Low,
+        _ => crate::types::Severity::Info,
+    }
+}
+
 const ALERTED_FINDINGS_FILE: &str = "alerted_findings.json";
 const SNAPSHOT_FILE: &str = "portfolio_snapshot.json";
 
@@ -568,7 +580,9 @@ impl LongitudinalMemory {
                                             first_seen: scan.timestamp,
                                             last_seen: scan.timestamp,
                                             total_occurrences: 0,
-                                            severity: finding.severity.to_agent_severity(),
+                                            severity: response_severity_to_severity(
+                                                finding.severity,
+                                            ),
                                         }
                                     });
 

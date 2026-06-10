@@ -11,6 +11,7 @@ pub mod alerts;
 pub mod channels;
 pub mod config_watcher;
 pub mod constraints;
+pub(crate) mod enforcement;
 pub mod events;
 pub mod memory;
 pub mod portfolio;
@@ -563,10 +564,7 @@ impl Agent {
 
         for (target_id, config) in targets {
             if let Some(ref schedule) = config.schedule {
-                if self
-                    .scheduler
-                    .should_run_target(schedule, config.last_scan, &now)
-                {
+                if cron_should_run_target(&self.scheduler, schedule, config.last_scan, &now) {
                     if let Some(ref window) = config.off_peak_window {
                         if !window.is_in_window(&now) {
                             tracing::debug!("Skipping {} - outside off-peak window", target_id);
@@ -795,93 +793,6 @@ impl Agent {
         .await
     }
 
-    fn risk_for_agent_scan_depth(
-        depth: crate::agent::portfolio::ScanDepth,
-        scan_type: &str,
-    ) -> crate::config::OperationRisk {
-        let st = scan_type.to_ascii_lowercase();
-        if st.contains("stress") || st.contains("syn") || st.contains("udp") || st.contains("icmp")
-        {
-            return crate::config::OperationRisk::StressTest;
-        }
-        if st.contains("load") || st.contains("bench") {
-            return crate::config::OperationRisk::LoadTest;
-        }
-        if st.contains("packet") || st.contains("raw") {
-            return crate::config::OperationRisk::RawPacket;
-        }
-        if st.contains("credential") || st.contains("brute") || st.contains("auth") {
-            return crate::config::OperationRisk::CredentialTesting;
-        }
-        if st.contains("remote") || st.contains("exec") || st.contains("ssh") {
-            return crate::config::OperationRisk::RemoteExecution;
-        }
-        match depth {
-            crate::agent::portfolio::ScanDepth::Shallow => crate::config::OperationRisk::SafeActive,
-            crate::agent::portfolio::ScanDepth::Deep => crate::config::OperationRisk::Intrusive,
-        }
-    }
-
-    fn capabilities_for_agent_scan(
-        scan_type: &str,
-        depth: crate::agent::portfolio::ScanDepth,
-    ) -> Vec<crate::config::Capability> {
-        use crate::config::Capability;
-        let mut caps: Vec<Capability> = match depth {
-            crate::agent::portfolio::ScanDepth::Shallow => {
-                vec![Capability::ActiveProbe, Capability::Crawl]
-            }
-            crate::agent::portfolio::ScanDepth::Deep => {
-                vec![Capability::HttpFuzzLowImpact]
-            }
-        };
-        let st = scan_type.to_ascii_lowercase();
-        if st.contains("stress") || st.contains("syn") || st.contains("udp") || st.contains("icmp")
-        {
-            caps.push(Capability::WafStressTest);
-        }
-        if st.contains("load") || st.contains("bench") {
-            caps.push(Capability::LoadTest);
-        }
-        if st.contains("packet") || st.contains("raw") {
-            caps.push(Capability::RawPacketProbe);
-        }
-        if st.contains("credential") || st.contains("brute") || st.contains("auth") {
-            caps.push(Capability::CredentialTesting);
-        }
-        if st.contains("remote") || st.contains("exec") || st.contains("ssh") {
-            caps.push(Capability::RemoteExecution);
-        }
-        if st.contains("fuzz") || st.contains("intrusive") {
-            if !caps.contains(&Capability::HttpFuzzLowImpact)
-                && !caps.contains(&Capability::IntrusiveFuzz)
-            {
-                caps.push(Capability::IntrusiveFuzz);
-            }
-        }
-        caps
-    }
-
-    fn operation_descriptor_for_agent_scan(
-        target: &str,
-        scan_type: &str,
-        depth: crate::agent::portfolio::ScanDepth,
-    ) -> crate::config::OperationDescriptor {
-        use crate::config::{IntendedUse, OperationDescriptor, OperationMode};
-        OperationDescriptor {
-            operation: scan_type.to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: Self::risk_for_agent_scan_depth(depth, scan_type),
-            intended_uses: vec![IntendedUse::WebAssessment],
-            target: Some(target.to_string()),
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Self::capabilities_for_agent_scan(scan_type, depth),
-        }
-    }
-
     pub async fn execute_scan_with_depth(
         &self,
         target: &str,
@@ -911,7 +822,8 @@ impl Agent {
         if let Some(ref enforcement) = self.config.enforcement {
             use crate::config::EnforcementOutcome;
 
-            let descriptor = Self::operation_descriptor_for_agent_scan(target, scan_type, depth);
+            let descriptor =
+                enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
 
             match enforcement.evaluate(&descriptor) {
                 EnforcementOutcome::Allow(_) => {}
@@ -1213,42 +1125,40 @@ fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::S
     }
 }
 
-impl CronScheduler {
-    pub fn should_run_for(&self, schedule: &str, now: &DateTime<Utc>) -> bool {
-        if let Ok(expr) = crate::output::schedule::CronExpression::parse(schedule) {
-            expr.matches(now)
-        } else {
-            false
-        }
+fn cron_should_run_for(scheduler: &CronScheduler, schedule: &str, now: &DateTime<Utc>) -> bool {
+    if let Ok(expr) = crate::output::schedule::CronExpression::parse(schedule) {
+        expr.matches(now)
+    } else {
+        false
+    }
+}
+
+/// Check if a scheduled target should run, considering last_scan to prevent duplicates in same window
+fn cron_should_run_target(
+    scheduler: &CronScheduler,
+    schedule: &str,
+    last_scan: Option<DateTime<Utc>>,
+    now: &DateTime<Utc>,
+) -> bool {
+    // First check if cron matches now
+    if !cron_should_run_for(scheduler, schedule, now) {
+        return false;
     }
 
-    /// Check if a scheduled target should run, considering last_scan to prevent duplicates in same window
-    pub fn should_run_target(
-        &self,
-        schedule: &str,
-        last_scan: Option<DateTime<Utc>>,
-        now: &DateTime<Utc>,
-    ) -> bool {
-        // First check if cron matches now
-        if !self.should_run_for(schedule, now) {
-            return false;
-        }
+    // If no last scan, run
+    let Some(last) = last_scan else {
+        return true;
+    };
 
-        // If no last scan, run
-        let Some(last) = last_scan else {
-            return true;
-        };
-
-        // If last scan is in the same minute as now, don't run again (cron triggers at minute granularity)
-        if last.minute() == now.minute()
-            && last.hour() == now.hour()
-            && last.date_naive() == now.date_naive()
-        {
-            return false;
-        }
-
-        true
+    // If last scan is in the same minute as now, don't run again (cron triggers at minute granularity)
+    if last.minute() == now.minute()
+        && last.hour() == now.hour()
+        && last.date_naive() == now.date_naive()
+    {
+        return false;
     }
+
+    true
 }
 
 #[cfg(test)]
@@ -1471,7 +1381,7 @@ mod tests {
             .unwrap()
             .and_utc();
         assert!(
-            scheduler.should_run_for("0 * * * *", &test_time),
+            cron_should_run_for(&scheduler, "0 * * * *", &test_time),
             "At minute 0 should match"
         );
     }
@@ -1480,7 +1390,7 @@ mod tests {
     fn test_cron_scheduler_should_not_run_for_invalid_expression() {
         let scheduler = CronScheduler::new();
         let now = chrono::Utc::now();
-        assert!(!scheduler.should_run_for("invalid", &now));
+        assert!(!cron_should_run_for(&scheduler, "invalid", &now));
     }
 
     #[test]
@@ -1692,7 +1602,9 @@ mod tests {
         let schedule = "0 * * * *"; // Minute 0
         let last_scan = None;
 
-        assert!(scheduler.should_run_target(schedule, last_scan, &now));
+        assert!(cron_should_run_target(
+            &scheduler, schedule, last_scan, &now
+        ));
     }
 
     #[test]
@@ -1702,7 +1614,9 @@ mod tests {
         let schedule = "* * * * *";
         let last_scan = Some(now); // Same time
 
-        assert!(!scheduler.should_run_target(schedule, last_scan, &now));
+        assert!(!cron_should_run_target(
+            &scheduler, schedule, last_scan, &now
+        ));
     }
 
     #[test]
@@ -1717,7 +1631,9 @@ mod tests {
         let last_scan = Some(now - chrono::Duration::minutes(1));
         let schedule = "* * * * *"; // Every minute
 
-        assert!(scheduler.should_run_target(schedule, last_scan, &now));
+        assert!(cron_should_run_target(
+            &scheduler, schedule, last_scan, &now
+        ));
     }
 
     // Phase 4/7: Scheduled scan idempotent test
@@ -1755,6 +1671,7 @@ mod tests {
                 "pipeline",
                 serde_json::json!({"status": "success"}),
             )))),
+            call_count: std::sync::Arc::new(std::sync::Mutex::new(0)),
         };
         let alert_sender = MockAlertSender {
             sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
@@ -1773,7 +1690,7 @@ mod tests {
     #[tokio::test]
     async fn test_critical_alert_only_critical_finding_ids() {
         use crate::tool::finding::{Finding, FindingType, ResponseSeverity};
-        use std::collections::HashMap;
+        use rustc_hash::FxHashMap;
         use std::sync::Arc as StdArc;
         use tempfile::TempDir;
 
@@ -1807,7 +1724,7 @@ mod tests {
                 cve_ids: vec![],
                 remediation: None,
                 references: vec![],
-                metadata: HashMap::new(),
+                metadata: FxHashMap::default(),
             },
             Finding {
                 id: "high-1".to_string(),
@@ -1820,7 +1737,7 @@ mod tests {
                 cve_ids: vec![],
                 remediation: None,
                 references: vec![],
-                metadata: HashMap::new(),
+                metadata: FxHashMap::default(),
             },
         ];
 
@@ -1862,7 +1779,7 @@ mod tests {
     #[tokio::test]
     async fn test_high_alert_only_high_finding_ids() {
         use crate::tool::finding::{Finding, FindingType, ResponseSeverity};
-        use std::collections::HashMap;
+        use rustc_hash::FxHashMap;
         use std::sync::Arc as StdArc;
         use tempfile::TempDir;
 
@@ -1896,7 +1813,7 @@ mod tests {
                 cve_ids: vec![],
                 remediation: None,
                 references: vec![],
-                metadata: HashMap::new(),
+                metadata: FxHashMap::default(),
             },
             Finding {
                 id: "high-1".to_string(),
@@ -1909,20 +1826,20 @@ mod tests {
                 cve_ids: vec![],
                 remediation: None,
                 references: vec![],
-                metadata: HashMap::new(),
+                metadata: FxHashMap::default(),
             },
             Finding {
-                id: "med-1".to_string(),
+                id: "high-1".to_string(),
                 finding_type: FindingType::Vulnerability,
-                severity: ResponseSeverity::Medium,
-                title: "Medium SSRF".to_string(),
-                description: "Medium".to_string(),
+                severity: ResponseSeverity::High,
+                title: "High XSS".to_string(),
+                description: "High".to_string(),
                 location: "url".to_string(),
                 evidence: None,
                 cve_ids: vec![],
                 remediation: None,
                 references: vec![],
-                metadata: HashMap::new(),
+                metadata: FxHashMap::default(),
             },
         ];
 
@@ -2173,7 +2090,7 @@ mod tests {
     async fn test_integration_findings_and_baseline() {
         use crate::tool::finding::Finding as ToolFinding;
         use crate::tool::response::{Finding, FindingType, ResponseSeverity, ToolResponse};
-        use std::collections::HashMap;
+        use rustc_hash::FxHashMap;
         use std::sync::Arc as StdArc;
         use tempfile::TempDir;
 
@@ -2206,7 +2123,7 @@ mod tests {
             cve_ids: vec![],
             remediation: None,
             references: vec![],
-            metadata: HashMap::new(),
+            metadata: FxHashMap::default(),
         };
 
         let new_finding = ToolFinding {
@@ -2220,7 +2137,7 @@ mod tests {
             cve_ids: vec![],
             remediation: None,
             references: vec![],
-            metadata: HashMap::new(),
+            metadata: FxHashMap::default(),
         };
 
         // Set baseline with baseline_finding
@@ -2405,6 +2322,7 @@ mod tests {
 
         let dispatcher = MockDispatcher {
             response: StdArc::new(std::sync::Mutex::new(None)),
+            call_count: StdArc::new(std::sync::Mutex::new(0)),
         };
         let alert_sender = MockAlertSender {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
@@ -2441,6 +2359,7 @@ mod tests {
 
         let dispatcher = MockDispatcher {
             response: StdArc::new(std::sync::Mutex::new(None)),
+            call_count: StdArc::new(std::sync::Mutex::new(0)),
         };
         let alert_sender = MockAlertSender {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
@@ -2483,6 +2402,7 @@ mod tests {
 
         let dispatcher = MockDispatcher {
             response: StdArc::new(std::sync::Mutex::new(None)),
+            call_count: StdArc::new(std::sync::Mutex::new(0)),
         };
         let alert_sender = MockAlertSender {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),

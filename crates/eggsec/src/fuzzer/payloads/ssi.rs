@@ -63,16 +63,22 @@ mod tests {
 
     #[test]
     fn contains_exec_directive() {
-        assert!(get_payloads().iter().any(|p| p.payload.contains("#exec cmd=")));
+        assert!(get_payloads()
+            .iter()
+            .any(|p| p.payload.contains("#exec cmd=")));
     }
 
     #[test]
     fn contains_include_directive() {
-        assert!(get_payloads().iter().any(|p| p.payload.contains("#include")));
+        assert!(get_payloads()
+            .iter()
+            .any(|p| p.payload.contains("#include")));
     }
 
     #[test]
     fn contains_echo_directive() {
-        assert!(get_payloads().iter().any(|p| p.payload.contains("#echo var=")));
+        assert!(get_payloads()
+            .iter()
+            .any(|p| p.payload.contains("#echo var=")));
     }
 }

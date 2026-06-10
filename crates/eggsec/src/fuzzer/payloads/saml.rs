@@ -161,7 +161,9 @@ mod tests {
     #[test]
     fn contains_assertion_injection() {
         let payloads = get_payloads();
-        let has = payloads.iter().any(|p| p.tags.contains(&"assertion-injection".to_string()));
+        let has = payloads
+            .iter()
+            .any(|p| p.tags.contains(&"assertion-injection".to_string()));
         assert!(has, "Missing assertion-injection payloads");
     }
 
@@ -175,13 +177,19 @@ mod tests {
     #[test]
     fn contains_signature_wrapping() {
         let payloads = get_payloads();
-        let has = payloads.iter().any(|p| p.tags.contains(&"signature-wrapping".to_string()));
+        let has = payloads
+            .iter()
+            .any(|p| p.tags.contains(&"signature-wrapping".to_string()));
         assert!(has, "Missing signature-wrapping payloads");
     }
 
     #[test]
     fn minimum_payload_count() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 15, "Expected >= 15 payloads, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 15,
+            "Expected >= 15 payloads, got {}",
+            payloads.len()
+        );
     }
 }

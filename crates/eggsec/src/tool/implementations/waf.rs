@@ -191,9 +191,21 @@ impl SecurityTool for WafTool {
 
     fn capabilities(&self) -> Vec<ToolCapability> {
         let (cap_name, policy_cap_name, policy_cap_desc) = match self.mode {
-            WafMode::Detect => ("detect", "waf-detect", "WAF detection capability required by policy"),
-            WafMode::Bypass => ("bypass", "waf-bypass-simulation", "WAF bypass simulation capability required by policy"),
-            WafMode::Stress => ("stress", "waf-stress-test", "WAF stress testing capability required by policy"),
+            WafMode::Detect => (
+                "detect",
+                "waf-detect",
+                "WAF detection capability required by policy",
+            ),
+            WafMode::Bypass => (
+                "bypass",
+                "waf-bypass-simulation",
+                "WAF bypass simulation capability required by policy",
+            ),
+            WafMode::Stress => (
+                "stress",
+                "waf-stress-test",
+                "WAF stress testing capability required by policy",
+            ),
         };
 
         let description = match self.mode {
@@ -229,25 +241,26 @@ impl SecurityTool for WafTool {
             },
             ToolCapability {
                 name: cap_name.to_string(),
-            description: description.to_string(),
-            parameters: vec![ParameterDef {
-                name: "target".to_string(),
-                param_type: ParameterType::Url,
-                required: true,
-                default: None,
-                description: "Target URL".to_string(),
-            }],
-            examples: vec![CapabilityExample {
-                description: format!("{} on target", description),
-                params: serde_json::json!({
-                    "target": "https://example.com"
-                }),
-            }],
-            attack_surface,
-            severity_potential,
-            prerequisites: vec![],
-            estimated_duration_ms: estimated_duration,
-        }]
+                description: description.to_string(),
+                parameters: vec![ParameterDef {
+                    name: "target".to_string(),
+                    param_type: ParameterType::Url,
+                    required: true,
+                    default: None,
+                    description: "Target URL".to_string(),
+                }],
+                examples: vec![CapabilityExample {
+                    description: format!("{} on target", description),
+                    params: serde_json::json!({
+                        "target": "https://example.com"
+                    }),
+                }],
+                attack_surface,
+                severity_potential,
+                prerequisites: vec![],
+                estimated_duration_ms: estimated_duration,
+            },
+        ]
     }
 
     fn validate(&self, request: &ToolRequest) -> ToolResult<()> {

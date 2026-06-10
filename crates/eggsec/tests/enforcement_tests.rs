@@ -1,7 +1,7 @@
 use eggsec::config::{
-    Capability, EnforcementOutcome, ExecutionPolicy, ExecutionProfile, IntendedUse,
-    OperationDescriptor, OperationMode, OperationRisk, PolicyDecision, Scope, ScopeRule,
-    DiscoveredTargetStatus, evaluate_enforcement,
+    evaluate_enforcement, Capability, DiscoveredTargetStatus, EnforcementOutcome, ExecutionPolicy,
+    ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode, OperationRisk,
+    PolicyDecision, Scope, ScopeRule,
 };
 
 fn make_descriptor(target: &str, risk: OperationRisk) -> OperationDescriptor {
@@ -148,8 +148,16 @@ fn missing_scope_manual_safe_warns() {
     let mut policy = ExecutionPolicy::default();
     policy.require_explicit_scope = false;
 
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
-    assert!(outcome.is_allowed(), "ManualPermissive with no scope and requires_explicit_scope=false should allow (may warn)");
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
+    assert!(
+        outcome.is_allowed(),
+        "ManualPermissive with no scope and requires_explicit_scope=false should allow (may warn)"
+    );
 }
 
 #[test]
@@ -169,7 +177,10 @@ fn missing_scope_mcp_networked_denies() {
     let policy = ExecutionPolicy::default();
 
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
-    assert!(outcome.is_denied(), "McpStrict with no scope and requires_explicit_scope=true should deny");
+    assert!(
+        outcome.is_denied(),
+        "McpStrict with no scope and requires_explicit_scope=true should deny"
+    );
 }
 
 #[test]
@@ -185,7 +196,11 @@ fn load_test_denied_without_policy_flag() {
         ExecutionProfile::AgentStrict,
     ] {
         let outcome = evaluate_enforcement(&descriptor, &policy, None, *profile);
-        assert!(outcome.is_denied(), "profile {:?} should deny load test without policy flag", profile);
+        assert!(
+            outcome.is_denied(),
+            "profile {:?} should deny load test without policy flag",
+            profile
+        );
     }
 }
 
@@ -204,7 +219,11 @@ fn stress_test_allowed_with_policy_flag() {
         ExecutionProfile::AgentStrict,
     ] {
         let outcome = evaluate_enforcement(&descriptor, &policy, Some(&scope), *profile);
-        assert!(outcome.is_allowed(), "profile {:?} should allow stress test with policy flag", profile);
+        assert!(
+            outcome.is_allowed(),
+            "profile {:?} should allow stress test with policy flag",
+            profile
+        );
     }
 }
 
@@ -226,7 +245,10 @@ fn mcp_strict_denies_denied_capability() {
     policy.denied_capabilities = vec![Capability::LoadTest];
 
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
-    assert!(outcome.is_denied(), "McpStrict should deny operation with denied capability");
+    assert!(
+        outcome.is_denied(),
+        "McpStrict should deny operation with denied capability"
+    );
 }
 
 #[test]
@@ -247,7 +269,10 @@ fn agent_strict_denies_denied_capability() {
     policy.denied_capabilities = vec![Capability::RemoteExecution];
 
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::AgentStrict);
-    assert!(outcome.is_denied(), "AgentStrict should deny operation with denied capability");
+    assert!(
+        outcome.is_denied(),
+        "AgentStrict should deny operation with denied capability"
+    );
 }
 
 #[test]
@@ -350,8 +375,14 @@ fn enforcement_outcome_warn_serializes() {
 
 #[test]
 fn execution_profile_display() {
-    assert_eq!(format!("{}", ExecutionProfile::ManualPermissive), "manual-permissive");
-    assert_eq!(format!("{}", ExecutionProfile::ManualGuarded), "manual-guarded");
+    assert_eq!(
+        format!("{}", ExecutionProfile::ManualPermissive),
+        "manual-permissive"
+    );
+    assert_eq!(
+        format!("{}", ExecutionProfile::ManualGuarded),
+        "manual-guarded"
+    );
     assert_eq!(format!("{}", ExecutionProfile::CiStrict), "ci-strict");
     assert_eq!(format!("{}", ExecutionProfile::McpStrict), "mcp-strict");
     assert_eq!(format!("{}", ExecutionProfile::AgentStrict), "agent-strict");
@@ -446,7 +477,10 @@ fn manual_guarded_denies_missing_scope_for_networked() {
     let policy = ExecutionPolicy::default();
 
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualGuarded);
-    assert!(outcome.is_denied(), "ManualGuarded should deny when requires_explicit_scope=true and no scope");
+    assert!(
+        outcome.is_denied(),
+        "ManualGuarded should deny when requires_explicit_scope=true and no scope"
+    );
 }
 
 #[test]
@@ -466,7 +500,10 @@ fn ci_strict_denies_missing_scope_for_networked() {
     let policy = ExecutionPolicy::default();
 
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::CiStrict);
-    assert!(outcome.is_denied(), "CiStrict should deny when requires_explicit_scope=true and no scope");
+    assert!(
+        outcome.is_denied(),
+        "CiStrict should deny when requires_explicit_scope=true and no scope"
+    );
 }
 
 #[test]
@@ -486,7 +523,10 @@ fn agent_strict_denies_missing_scope_for_networked() {
     let policy = ExecutionPolicy::default();
 
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::AgentStrict);
-    assert!(outcome.is_denied(), "AgentStrict should deny when requires_explicit_scope=true and no scope");
+    assert!(
+        outcome.is_denied(),
+        "AgentStrict should deny when requires_explicit_scope=true and no scope"
+    );
 }
 
 #[test]
@@ -513,7 +553,10 @@ fn strict_profiles_deny_ambiguous_scope() {
         Some(&scope),
         ExecutionProfile::McpStrict,
     );
-    assert!(outcome.is_allowed(), "McpStrict should allow when target matches scope");
+    assert!(
+        outcome.is_allowed(),
+        "McpStrict should allow when target matches scope"
+    );
 
     // Without scope, target is ambiguous -> strict profiles deny
     let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
@@ -526,13 +569,23 @@ fn risk_policy_enforcement_all_risks() {
     let policy = ExecutionPolicy::default();
 
     // Intrusive not allowed by default
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_denied());
 
     // Enable it
     let mut policy = ExecutionPolicy::default();
     policy.allow_intrusive_fuzzing = true;
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_allowed());
 }
 
@@ -540,7 +593,12 @@ fn risk_policy_enforcement_all_risks() {
 fn raw_packet_denied_without_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::RawPacket);
     let policy = ExecutionPolicy::default();
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_denied());
 }
 
@@ -549,7 +607,12 @@ fn raw_packet_allowed_with_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::RawPacket);
     let mut policy = ExecutionPolicy::default();
     policy.allow_raw_packets = true;
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_allowed());
 }
 
@@ -557,7 +620,12 @@ fn raw_packet_allowed_with_policy() {
 fn credential_testing_denied_without_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::CredentialTesting);
     let policy = ExecutionPolicy::default();
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_denied());
 }
 
@@ -566,7 +634,12 @@ fn credential_testing_allowed_with_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::CredentialTesting);
     let mut policy = ExecutionPolicy::default();
     policy.allow_credential_testing = true;
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_allowed());
 }
 
@@ -574,7 +647,12 @@ fn credential_testing_allowed_with_policy() {
 fn exploit_adjacent_denied_without_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::ExploitAdjacent);
     let policy = ExecutionPolicy::default();
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_denied());
 }
 
@@ -583,7 +661,12 @@ fn exploit_adjacent_allowed_with_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::ExploitAdjacent);
     let mut policy = ExecutionPolicy::default();
     policy.allow_exploit_adjacent = true;
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_allowed());
 }
 
@@ -591,7 +674,12 @@ fn exploit_adjacent_allowed_with_policy() {
 fn remote_execution_denied_without_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::RemoteExecution);
     let policy = ExecutionPolicy::default();
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_denied());
 }
 
@@ -600,7 +688,12 @@ fn remote_execution_allowed_with_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::RemoteExecution);
     let mut policy = ExecutionPolicy::default();
     policy.allow_remote_execution = true;
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_allowed());
 }
 
@@ -608,7 +701,12 @@ fn remote_execution_allowed_with_policy() {
 fn agent_autonomous_denied_without_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::AgentAutonomous);
     let policy = ExecutionPolicy::default();
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_denied());
 }
 
@@ -617,7 +715,12 @@ fn agent_autonomous_allowed_with_policy() {
     let descriptor = make_descriptor("127.0.0.1", OperationRisk::AgentAutonomous);
     let mut policy = ExecutionPolicy::default();
     policy.allow_agent_autonomous = true;
-    let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+    let outcome = evaluate_enforcement(
+        &descriptor,
+        &policy,
+        None,
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(outcome.is_allowed());
 }
 

@@ -39,6 +39,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | Module | Override File |
 |--------|---------------|
 | `agent/` | `crates/eggsec/src/agent/AGENTS.override.md` |
+| `agent/enforcement.rs` | `crates/eggsec/src/agent/enforcement.rs` (scan-depth risk/capability mapping, per-scan descriptor construction) |
 | `ai/` | `crates/eggsec/src/ai/AGENTS.override.md` |
 | `fuzzer/` | `crates/eggsec/src/fuzzer/AGENTS.override.md` |
 | `scanner/` | `crates/eggsec/src/scanner/AGENTS.override.md` |

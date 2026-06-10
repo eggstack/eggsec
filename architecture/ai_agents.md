@@ -88,6 +88,7 @@ pub enum AiError {
 Eggsec can run as an agent-readable scanning orchestrator that executes configured schedules, enforces operational constraints, and handles alert routing.
 
 - **Agent Runner (`mod.rs`)**: Core polling loop, scheduled scan dispatch, and event handling.
+- **Enforcement (`enforcement.rs`)**: Factored helper functions for per-scan enforcement — maps scan depth and scan type to `OperationRisk` and `Capability` lists (`risk_for_agent_scan_depth`, `capabilities_for_agent_scan`, `operation_descriptor_for_agent_scan`). Called immediately before dispatch in `execute_scan_with_depth` to re-evaluate enforcement per-scan.
 - **Memory (`memory.rs`)**: Maintains longitudinal context and baseline-aware finding comparisons.
 - **Portfolio (`portfolio.rs`)**: Stores targets, schedules, and scan history metadata.
 - **Constraints (`constraints/`)**: Enforces do-not-do rules, target restrictions, and scan/rate limits.
@@ -104,6 +105,8 @@ Eggsec implements the **Model Context Protocol (MCP)**, allowing it to be used a
 ### Profile-Based Policy Enforcement
 
 The MCP server uses profiles to control tool availability, safety policies, and output schemas.
+
+> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution. Baseline strict-automated capabilities are `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`; non-baseline require explicit `allowed_capabilities`. Manual permissive can downgrade only safe scope-selection misses; explicit exclusions, feature gates, risk gates, and capability denials remain hard denials.
 
 ```rust
 pub enum McpProfile {

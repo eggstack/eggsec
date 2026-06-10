@@ -737,7 +737,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: "exp=0".to_string(),
         description: "JWT exp=0 expiration bypass".to_string(),
         severity: Severity::Medium,
-        tags: vec!["jwt".to_string(), "expiration".to_string(), "bypass".to_string()],
+        tags: vec![
+            "jwt".to_string(),
+            "expiration".to_string(),
+            "bypass".to_string(),
+        ],
     });
 
     // 8. nbf far future
@@ -746,7 +750,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: "nbf=9999999999".to_string(),
         description: "JWT nbf far future not-before bypass".to_string(),
         severity: Severity::Medium,
-        tags: vec!["jwt".to_string(), "claims".to_string(), "bypass".to_string()],
+        tags: vec![
+            "jwt".to_string(),
+            "claims".to_string(),
+            "bypass".to_string(),
+        ],
     });
 
     // 9. missing exp claim
@@ -788,7 +796,11 @@ pub fn get_payloads() -> Vec<Payload> {
             payload: format!("{}.{}.sig", header, body),
             description: "X5C header injection with XSS payload".to_string(),
             severity: Severity::High,
-            tags: vec!["jwt".to_string(), "injection".to_string(), "xss".to_string()],
+            tags: vec![
+                "jwt".to_string(),
+                "injection".to_string(),
+                "xss".to_string(),
+            ],
         });
     }
 
@@ -804,7 +816,11 @@ pub fn get_payloads() -> Vec<Payload> {
             payload: format!("{}.{}.sig", header, body),
             description: "KID path traversal to read /etc/passwd".to_string(),
             severity: Severity::High,
-            tags: vec!["jwt".to_string(), "injection".to_string(), "path_traversal".to_string()],
+            tags: vec![
+                "jwt".to_string(),
+                "injection".to_string(),
+                "path_traversal".to_string(),
+            ],
         });
     }
 
@@ -820,7 +836,11 @@ pub fn get_payloads() -> Vec<Payload> {
             payload: format!("{}.{}.sig", header, body),
             description: "KID null byte injection for key path bypass".to_string(),
             severity: Severity::High,
-            tags: vec!["jwt".to_string(), "injection".to_string(), "null_byte".to_string()],
+            tags: vec![
+                "jwt".to_string(),
+                "injection".to_string(),
+                "null_byte".to_string(),
+            ],
         });
     }
 
@@ -836,7 +856,11 @@ pub fn get_payloads() -> Vec<Payload> {
             payload: format!("{}.{}.sig", header, body),
             description: "KID SQL injection in header".to_string(),
             severity: Severity::High,
-            tags: vec!["jwt".to_string(), "injection".to_string(), "sqli".to_string()],
+            tags: vec![
+                "jwt".to_string(),
+                "injection".to_string(),
+                "sqli".to_string(),
+            ],
         });
     }
 
@@ -852,7 +876,11 @@ pub fn get_payloads() -> Vec<Payload> {
             payload: format!("{}.{}.sig", header, body),
             description: "JWK embedded public key injection".to_string(),
             severity: Severity::High,
-            tags: vec!["jwt".to_string(), "injection".to_string(), "jwk".to_string()],
+            tags: vec![
+                "jwt".to_string(),
+                "injection".to_string(),
+                "jwk".to_string(),
+            ],
         });
     }
 

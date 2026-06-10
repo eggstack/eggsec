@@ -67,18 +67,19 @@ mod tests {
     #[test]
     fn contains_command_execution() {
         let payloads = get_payloads();
-        let has_cmd_exec = payloads
-            .iter()
-            .any(|p| p.payload.contains("\\write18{"));
-        assert!(has_cmd_exec, "Must contain LaTeX command execution payloads");
+        let has_cmd_exec = payloads.iter().any(|p| p.payload.contains("\\write18{"));
+        assert!(
+            has_cmd_exec,
+            "Must contain LaTeX command execution payloads"
+        );
     }
 
     #[test]
     fn contains_ssrf() {
         let payloads = get_payloads();
-        let has_ssrf = payloads.iter().any(|p| {
-            p.payload.contains("evil.com") || p.payload.contains("169.254.169.254")
-        });
+        let has_ssrf = payloads
+            .iter()
+            .any(|p| p.payload.contains("evil.com") || p.payload.contains("169.254.169.254"));
         assert!(has_ssrf, "Must contain LaTeX SSRF payloads");
     }
 

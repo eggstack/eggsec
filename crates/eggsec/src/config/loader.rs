@@ -405,8 +405,7 @@ pattern = "example.com"
         )
         .unwrap();
 
-        let loaded =
-            load_scope_with_source(Some(scope_path.to_str().unwrap())).unwrap();
+        let loaded = load_scope_with_source(Some(scope_path.to_str().unwrap())).unwrap();
         assert_eq!(loaded.source, ScopeSource::CliScopeFile);
         assert!(loaded.is_explicit_manifest());
         assert!(loaded.path.is_some());

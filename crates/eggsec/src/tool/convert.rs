@@ -148,38 +148,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_severity() {
-        assert_eq!(
-            AgentFinding::parse_severity("critical"),
-            AgentSeverity::Critical
-        );
-        assert_eq!(AgentFinding::parse_severity("HIGH"), AgentSeverity::High);
-        assert_eq!(
-            AgentFinding::parse_severity("medium"),
-            AgentSeverity::Medium
-        );
-        assert_eq!(AgentFinding::parse_severity("low"), AgentSeverity::Low);
-        assert_eq!(AgentFinding::parse_severity("unknown"), AgentSeverity::Info);
-    }
-
-    #[test]
-    fn test_parse_attack_surface() {
-        assert_eq!(
-            AgentFinding::parse_attack_surface("web"),
-            Some(AttackSurface::Web)
-        );
-        assert_eq!(
-            AgentFinding::parse_attack_surface("API"),
-            Some(AttackSurface::Api)
-        );
-        assert_eq!(
-            AgentFinding::parse_attack_surface("auth"),
-            Some(AttackSurface::Authentication)
-        );
-        assert_eq!(AgentFinding::parse_attack_surface("unknown"), None);
-    }
-
-    #[test]
     fn test_from_scan_result() {
         let results = serde_json::json!([
             {

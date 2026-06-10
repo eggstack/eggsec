@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    DenialClass, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode,
-    OperationRisk, Scope,
+    DenialClass, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor,
+    OperationMode, OperationRisk, Scope,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -467,7 +467,9 @@ pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
     let mut classes: HashSet<DenialClass> = HashSet::new();
     let reasons = &decision.denied_reasons;
 
-    if reasons.iter().any(|r| r.contains("scope file required") || r.contains("explicit scope manifest required")) {
+    if reasons.iter().any(|r| {
+        r.contains("scope file required") || r.contains("explicit scope manifest required")
+    }) {
         classes.insert(DenialClass::ScopeMissing);
     }
 
@@ -482,7 +484,9 @@ pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
     }
 
     if !decision.missing_features.is_empty()
-        || reasons.iter().any(|r| r.contains("required feature") || r.contains("not enabled"))
+        || reasons
+            .iter()
+            .any(|r| r.contains("required feature") || r.contains("not enabled"))
     {
         classes.insert(DenialClass::FeatureMissing);
     }
@@ -498,10 +502,12 @@ pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
     }
 
     // Invalid target or scope parse/check errors
-    if reasons
-        .iter()
-        .any(|r| r.contains("invalid") || r.contains("scope check error") || r.contains("DNS resolution"))
-        || decision.target_original.as_deref().map_or(false, |t| t.trim().is_empty())
+    if reasons.iter().any(|r| {
+        r.contains("invalid") || r.contains("scope check error") || r.contains("DNS resolution")
+    }) || decision
+        .target_original
+        .as_deref()
+        .map_or(false, |t| t.trim().is_empty())
     {
         classes.insert(DenialClass::InvalidTarget);
     }
@@ -527,7 +533,10 @@ pub fn may_downgrade_to_warning(
     if profile != ExecutionProfile::ManualPermissive {
         return false;
     }
-    if !matches!(descriptor.risk, OperationRisk::Passive | OperationRisk::SafeActive) {
+    if !matches!(
+        descriptor.risk,
+        OperationRisk::Passive | OperationRisk::SafeActive
+    ) {
         return false;
     }
     if descriptor.mode != OperationMode::StandardAssessment {
@@ -537,9 +546,9 @@ pub fn may_downgrade_to_warning(
         return false;
     }
     // All classes must be safe-to-downgrade scope-related; presence of any other class blocks downgrade
-    let only_safe_scope = classes.iter().all(|c| {
-        matches!(c, DenialClass::ScopeMissing | DenialClass::TargetOutOfScope)
-    });
+    let only_safe_scope = classes
+        .iter()
+        .all(|c| matches!(c, DenialClass::ScopeMissing | DenialClass::TargetOutOfScope));
     only_safe_scope
 }
 
@@ -603,9 +612,14 @@ pub fn evaluate_enforcement(
                 // when the user did not declare positive scope rules (i.e. truly ambiguous/empty scope).
                 // If a scope with non-empty allowed_targets was provided and target missed it,
                 // treat as hard denial even in permissive (user intent was explicit).
-                let has_positive_scope_rules = scope.map_or(false, |s| !s.allowed_targets.is_empty());
-                let is_pure_out_of_scope_miss = classes.iter().any(|c| matches!(c, DenialClass::TargetOutOfScope))
-                    && !classes.iter().any(|c| matches!(c, DenialClass::ExplicitExclusion));
+                let has_positive_scope_rules =
+                    scope.map_or(false, |s| !s.allowed_targets.is_empty());
+                let is_pure_out_of_scope_miss = classes
+                    .iter()
+                    .any(|c| matches!(c, DenialClass::TargetOutOfScope))
+                    && !classes
+                        .iter()
+                        .any(|c| matches!(c, DenialClass::ExplicitExclusion));
                 if is_pure_out_of_scope_miss && has_positive_scope_rules {
                     // Explicit rules declared; mismatch is denial, not a warnable miss.
                     return EnforcementOutcome::Deny(decision);
@@ -614,8 +628,11 @@ pub fn evaluate_enforcement(
                 // Move denial reasons to warnings and allow-as-warn
                 let mut d = decision;
                 if !d.denied_reasons.is_empty() {
-                    d.warnings
-                        .extend(d.denied_reasons.drain(..).map(|r| format!("downgraded: {}", r)));
+                    d.warnings.extend(
+                        d.denied_reasons
+                            .drain(..)
+                            .map(|r| format!("downgraded: {}", r)),
+                    );
                 }
                 d.allowed = true;
                 return EnforcementOutcome::Warn(d);
@@ -634,7 +651,8 @@ pub fn evaluate_enforcement(
                 && decision.matched_scope_rules.is_empty()
                 && decision.denied_reasons.is_empty()
             {
-                warnings.push("target scope is ambiguous; consider using --strict-scope".to_string());
+                warnings
+                    .push("target scope is ambiguous; consider using --strict-scope".to_string());
             }
             if !warnings.is_empty() {
                 let mut d = decision;
@@ -655,14 +673,14 @@ pub fn evaluate_enforcement(
             }
             EnforcementOutcome::Allow(decision)
         }
-        ExecutionProfile::CiStrict | ExecutionProfile::McpStrict | ExecutionProfile::AgentStrict => {
+        ExecutionProfile::CiStrict
+        | ExecutionProfile::McpStrict
+        | ExecutionProfile::AgentStrict => {
             // Strict profiles: missing scope for networked operations denies
             if descriptor.requires_explicit_scope && scope.is_none() {
                 let mut d = decision;
-                d.denied_reasons.push(format!(
-                    "scope file required in {} mode",
-                    profile
-                ));
+                d.denied_reasons
+                    .push(format!("scope file required in {} mode", profile));
                 d.allowed = false;
                 return EnforcementOutcome::Deny(d);
             }
@@ -672,10 +690,8 @@ pub fn evaluate_enforcement(
                 && decision.denied_reasons.is_empty()
             {
                 let mut d = decision;
-                d.denied_reasons.push(format!(
-                    "target scope is ambiguous in {} mode",
-                    profile
-                ));
+                d.denied_reasons
+                    .push(format!("target scope is ambiguous in {} mode", profile));
                 d.allowed = false;
                 return EnforcementOutcome::Deny(d);
             }
@@ -981,8 +997,12 @@ mod tests {
             required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
-        let outcome =
-            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+        let outcome = evaluate_enforcement(
+            &descriptor,
+            &policy,
+            None,
+            ExecutionProfile::ManualPermissive,
+        );
         assert!(outcome.is_allowed());
     }
 
@@ -1001,8 +1021,7 @@ mod tests {
             required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
-        let outcome =
-            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
+        let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
         assert!(outcome.is_denied());
     }
 
@@ -1103,8 +1122,10 @@ mod tests {
             LoadedScope::default_empty(),
         );
         assert!(!manual.require_explicit_scope_for_networked());
-        let mcp =
-            EnforcementContext::mcp_strict(ExecutionPolicy::default(), LoadedScope::default_empty());
+        let mcp = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
         assert!(mcp.require_explicit_scope_for_networked());
     }
 
@@ -1123,8 +1144,7 @@ mod tests {
             required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
-        let outcome =
-            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
+        let outcome = evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
         let json = serde_json::to_string(&outcome).unwrap();
         assert!(json.contains("\"deny\"") || json.contains("\"Deny\""));
     }
@@ -1180,10 +1200,8 @@ mod tests {
     #[test]
     fn ci_strict_denies_for_missing_explicit_scope() {
         use super::super::scope::LoadedScope;
-        let ctx = EnforcementContext::ci_strict(
-            ExecutionPolicy::default(),
-            LoadedScope::default_empty(),
-        );
+        let ctx =
+            EnforcementContext::ci_strict(ExecutionPolicy::default(), LoadedScope::default_empty());
         let descriptor = OperationDescriptor {
             operation: "scan".to_string(),
             mode: OperationMode::StandardAssessment,
@@ -1235,7 +1253,11 @@ mod tests {
                 required_capabilities: Vec::new(),
             };
             let outcome = ctx.evaluate(&descriptor);
-            assert!(outcome.is_denied(), "Profile {:?} should deny excluded target", profile);
+            assert!(
+                outcome.is_denied(),
+                "Profile {:?} should deny excluded target",
+                profile
+            );
         }
     }
 
@@ -1270,7 +1292,11 @@ mod tests {
                 required_capabilities: vec![crate::config::Capability::RawPacketProbe],
             };
             let outcome = ctx.evaluate(&descriptor);
-            assert!(outcome.is_denied(), "Profile {:?} should deny denied capability", profile);
+            assert!(
+                outcome.is_denied(),
+                "Profile {:?} should deny denied capability",
+                profile
+            );
         }
     }
 
@@ -1438,10 +1464,7 @@ mod tests {
         use super::super::scope::LoadedScope;
         let mut policy = ExecutionPolicy::default();
         // Intrusive not allowed by default policy
-        let ctx = EnforcementContext::manual_permissive(
-            policy,
-            LoadedScope::default_empty(),
-        );
+        let ctx = EnforcementContext::manual_permissive(policy, LoadedScope::default_empty());
         let descriptor = OperationDescriptor {
             operation: "fuzz".to_string(),
             mode: OperationMode::StandardAssessment,
@@ -1545,10 +1568,8 @@ mod tests {
         assert!(classes.contains(&DenialClass::ExplicitExclusion));
 
         // Scope missing string
-        let ctx2 = EnforcementContext::ci_strict(
-            ExecutionPolicy::default(),
-            LoadedScope::default_empty(),
-        );
+        let ctx2 =
+            EnforcementContext::ci_strict(ExecutionPolicy::default(), LoadedScope::default_empty());
         let d2 = OperationDescriptor {
             operation: "scan".to_string(),
             mode: OperationMode::StandardAssessment,

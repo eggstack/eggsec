@@ -54,7 +54,10 @@ mod tests {
     #[test]
     fn payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(!payloads.is_empty(), "HTML injection payloads must not be empty");
+        assert!(
+            !payloads.is_empty(),
+            "HTML injection payloads must not be empty"
+        );
     }
 
     #[test]
@@ -88,9 +91,7 @@ mod tests {
     #[test]
     fn contains_svg_payloads() {
         let payloads = get_payloads();
-        let has_svg = payloads
-            .iter()
-            .any(|p| p.tags.contains(&"svg".to_string()));
+        let has_svg = payloads.iter().any(|p| p.tags.contains(&"svg".to_string()));
         assert!(has_svg, "Must contain SVG injection payloads");
     }
 

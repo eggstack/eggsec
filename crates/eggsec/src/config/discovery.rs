@@ -50,7 +50,10 @@ mod tests {
 
     #[test]
     fn display_format() {
-        assert_eq!(format!("{}", DiscoveredTargetStatus::Candidate), "candidate");
+        assert_eq!(
+            format!("{}", DiscoveredTargetStatus::Candidate),
+            "candidate"
+        );
         assert_eq!(
             format!("{}", DiscoveredTargetStatus::PendingApproval),
             "pending-approval"

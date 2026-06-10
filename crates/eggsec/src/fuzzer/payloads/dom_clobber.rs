@@ -47,7 +47,10 @@ mod tests {
     #[test]
     fn payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(!payloads.is_empty(), "DOM Clobber payloads must not be empty");
+        assert!(
+            !payloads.is_empty(),
+            "DOM Clobber payloads must not be empty"
+        );
     }
 
     #[test]

@@ -112,6 +112,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`pipeline/`](../crates/eggsec/src/pipeline/) | Chained security assessment profiles (16 built-in profiles) | [pipeline.md](pipeline.md) |
 | [`tool/`](../crates/eggsec/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration; core DTOs in `eggsec-tool-core` | [ai_agents.md](ai_agents.md) |
 | [`agent/`](../crates/eggsec/src/agent/) | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
+| [`agent/enforcement.rs`](../crates/eggsec/src/agent/enforcement.rs) | Agent scan enforcement helpers (risk/capability mapping from scan depth and type) | [ai_agents.md](ai_agents.md) |
 | [`distributed/`](../crates/eggsec/src/distributed/) | Worker/coordinator cluster architecture for parallel scanning | [distributed.md](distributed.md) |
 
 ### Infrastructure & Output

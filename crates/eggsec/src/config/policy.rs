@@ -280,10 +280,7 @@ pub enum ExecutionProfile {
 impl ExecutionProfile {
     /// Returns `true` if this profile enforces strict scope rules.
     pub fn is_strict(&self) -> bool {
-        matches!(
-            self,
-            Self::CiStrict | Self::McpStrict | Self::AgentStrict
-        )
+        matches!(self, Self::CiStrict | Self::McpStrict | Self::AgentStrict)
     }
 
     /// Returns `true` if this profile is an automated (non-human) caller.
@@ -553,8 +550,14 @@ mod tests {
 
     #[test]
     fn execution_profile_display() {
-        assert_eq!(format!("{}", ExecutionProfile::ManualPermissive), "manual-permissive");
-        assert_eq!(format!("{}", ExecutionProfile::ManualGuarded), "manual-guarded");
+        assert_eq!(
+            format!("{}", ExecutionProfile::ManualPermissive),
+            "manual-permissive"
+        );
+        assert_eq!(
+            format!("{}", ExecutionProfile::ManualGuarded),
+            "manual-guarded"
+        );
         assert_eq!(format!("{}", ExecutionProfile::CiStrict), "ci-strict");
         assert_eq!(format!("{}", ExecutionProfile::McpStrict), "mcp-strict");
         assert_eq!(format!("{}", ExecutionProfile::AgentStrict), "agent-strict");
@@ -562,7 +565,10 @@ mod tests {
 
     #[test]
     fn capability_display() {
-        assert_eq!(format!("{}", Capability::PassiveFingerprint), "passive-fingerprint");
+        assert_eq!(
+            format!("{}", Capability::PassiveFingerprint),
+            "passive-fingerprint"
+        );
         assert_eq!(format!("{}", Capability::ActiveProbe), "active-probe");
         assert_eq!(format!("{}", Capability::Crawl), "crawl");
         assert_eq!(format!("{}", Capability::IntrusiveFuzz), "intrusive-fuzz");

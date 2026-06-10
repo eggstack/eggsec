@@ -344,6 +344,8 @@ mod tests {
             do_not_do_list: do_not_do,
             rate_limit_budget: Some(100),
             require_approval_for: vec!["exploit".to_string()],
+            max_concurrent_scans: None,
+            per_target_cooldown_secs: None,
         }
     }
 

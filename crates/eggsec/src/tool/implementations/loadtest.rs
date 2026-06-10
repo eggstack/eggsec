@@ -127,43 +127,44 @@ impl SecurityTool for LoadTestTool {
             },
             ToolCapability {
                 name: "http_load_test".to_string(),
-            description: "Run HTTP load test".to_string(),
-            parameters: vec![
-                ParameterDef {
-                    name: "target".to_string(),
-                    param_type: ParameterType::Url,
-                    required: true,
-                    default: None,
-                    description: "Target URL".to_string(),
-                },
-                ParameterDef {
-                    name: "requests".to_string(),
-                    param_type: ParameterType::Integer,
-                    required: false,
-                    default: Some(serde_json::json!(100)),
-                    description: "Total number of requests".to_string(),
-                },
-                ParameterDef {
-                    name: "concurrency".to_string(),
-                    param_type: ParameterType::Integer,
-                    required: false,
-                    default: Some(serde_json::json!(10)),
-                    description: "Number of concurrent connections".to_string(),
-                },
-            ],
-            examples: vec![CapabilityExample {
-                description: "Load test with 1000 requests".to_string(),
-                params: serde_json::json!({
-                    "target": "https://example.com/api",
-                    "requests": 1000,
-                    "concurrency": 20
-                }),
-            }],
-            attack_surface: vec![AttackSurface::Web, AttackSurface::Api],
-            severity_potential: vec![],
-            prerequisites: vec![],
-            estimated_duration_ms: 60_000,
-        }]
+                description: "Run HTTP load test".to_string(),
+                parameters: vec![
+                    ParameterDef {
+                        name: "target".to_string(),
+                        param_type: ParameterType::Url,
+                        required: true,
+                        default: None,
+                        description: "Target URL".to_string(),
+                    },
+                    ParameterDef {
+                        name: "requests".to_string(),
+                        param_type: ParameterType::Integer,
+                        required: false,
+                        default: Some(serde_json::json!(100)),
+                        description: "Total number of requests".to_string(),
+                    },
+                    ParameterDef {
+                        name: "concurrency".to_string(),
+                        param_type: ParameterType::Integer,
+                        required: false,
+                        default: Some(serde_json::json!(10)),
+                        description: "Number of concurrent connections".to_string(),
+                    },
+                ],
+                examples: vec![CapabilityExample {
+                    description: "Load test with 1000 requests".to_string(),
+                    params: serde_json::json!({
+                        "target": "https://example.com/api",
+                        "requests": 1000,
+                        "concurrency": 20
+                    }),
+                }],
+                attack_surface: vec![AttackSurface::Web, AttackSurface::Api],
+                severity_potential: vec![],
+                prerequisites: vec![],
+                estimated_duration_ms: 60_000,
+            },
+        ]
     }
 
     fn validate(&self, request: &ToolRequest) -> ToolResult<()> {

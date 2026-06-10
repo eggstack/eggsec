@@ -13,6 +13,16 @@ Specialized guidance for the security agent module.
 - `TaskStatus` - Task lifecycle state (`tool/agents/scheduler.rs`): `Pending`, `Leased`, `Completed`, `Failed`, `Cancelled`
 - `TaskScheduler` - Manages task queue with priority and scheduled_for ordering
 
+## Enforcement Helpers (`enforcement.rs`)
+
+Factored helper functions for per-scan enforcement, called immediately before dispatch in `execute_scan_with_depth`:
+
+- `risk_for_agent_scan_depth(depth, scan_type)` - Maps `ScanDepth` + scan type string to `OperationRisk`. Pattern-matches scan type for stress/load/packet/credential/remote keywords; falls back to depth-based mapping.
+- `capabilities_for_agent_scan(scan_type, depth)` - Builds the `Vec<Capability>` for the scan. Shallow gets `ActiveProbe`+`Crawl`; deep gets `HttpFuzzLowImpact`. Additional capabilities appended based on scan type keywords.
+- `operation_descriptor_for_agent_scan(...)` - Constructs the `OperationDescriptor` with mode, risk, and capabilities for `EnforcementContext::evaluate()`.
+
+These replace inline risk/capability mapping that was previously duplicated in `execute_scan_with_depth`. The enforcement invariant holds: `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate; scope provenance must come from `LoadedScope`.
+
 ## Test Seams
 
 Prefer small test seams over making private fields public:

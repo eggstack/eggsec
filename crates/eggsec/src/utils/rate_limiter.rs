@@ -4,6 +4,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
+pub use eggsec_tool_core::ratelimit::RateLimitStatus;
+
+#[derive(Debug, Clone)]
 pub struct RateLimiter {
     permits_per_second: u32,
     interval: Duration,
@@ -45,6 +48,25 @@ impl RateLimiter {
 
     pub fn available(&self) -> f64 {
         self.available
+    }
+
+    pub fn check_rate_limit(&self, _client_id: &str) -> Result<(), String> {
+        if self.available >= 1.0 {
+            Ok(())
+        } else {
+            Err("Rate limit exceeded".to_string())
+        }
+    }
+
+    pub fn get_status(&self, _client_id: &str) -> RateLimitStatus {
+        RateLimitStatus {
+            tokens_available: self.available,
+            requests_this_minute: 0,
+            requests_per_minute: self.permits_per_second * 60,
+            concurrent_available: 1,
+            concurrent_limit: 1,
+            concurrent_in_use: 0,
+        }
     }
 }
 

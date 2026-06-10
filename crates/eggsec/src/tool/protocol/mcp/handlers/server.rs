@@ -7,10 +7,12 @@ use tokio::time::{Duration, Interval};
 #[cfg(feature = "rest-api")]
 use crate::config::Scope;
 
+use crate::tool::ratelimit::RateLimitConfig;
 use crate::tool::{
-    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions,
-    SessionManager, Target, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse,
+    CancellationToken, ExecutionHistory, RequestOptions, SessionManager, Target, ToolDispatcher,
+    ToolRegistry, ToolRequest, ToolResponse,
 };
+use crate::utils::rate_limiter::RateLimiter;
 
 #[cfg(feature = "ai-integration")]
 use crate::ai::AiClient;
@@ -103,7 +105,7 @@ impl McpServer {
             registry,
             dispatcher,
             api_key,
-            rate_limiter: RateLimiter::new(RateLimitConfig::default()),
+            rate_limiter: RateLimiter::new(RateLimitConfig::default().requests_per_minute),
             session_manager: None,
             pending_cancellations,
             completed_results,
@@ -162,7 +164,7 @@ impl McpServer {
             registry,
             dispatcher,
             api_key,
-            rate_limiter: RateLimiter::new(RateLimitConfig::default()),
+            rate_limiter: RateLimiter::new(RateLimitConfig::default().requests_per_minute),
             session_manager: None,
             pending_cancellations,
             completed_results,
@@ -1159,12 +1161,14 @@ impl McpServer {
         target: &str,
         response: &ToolResponse,
     ) -> serde_json::Value {
-        use crate::tool::protocol::mcp::coding_agent_output::CodingAgentFindingReport;
+        use crate::tool::protocol::mcp::coding_agent_output::{
+            CodingAgentFinding, CodingAgentFindingReport,
+        };
 
         let findings: Vec<_> = response
             .findings
             .iter()
-            .map(CodingAgentFindingReport::from_finding)
+            .map(CodingAgentFinding::from_finding)
             .collect();
 
         let summary = CodingAgentFindingReport::build_summary(&findings);

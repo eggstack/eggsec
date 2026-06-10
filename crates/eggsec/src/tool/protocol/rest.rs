@@ -15,8 +15,9 @@ use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 use crate::config::Scope;
 use crate::distributed::TlsConfig;
 use crate::error::EggsecError;
-use crate::tool::ratelimit::{RateLimitConfig, RateLimiter};
+use crate::tool::ratelimit::RateLimitConfig;
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
+use crate::utils::rate_limiter::RateLimiter;
 
 const MAX_PAYLOAD_SIZE: usize = 10 * 1024 * 1024;
 const MAX_URL_LENGTH: usize = 2048;
@@ -40,7 +41,7 @@ impl RestState {
         tls_config: Option<TlsConfig>,
     ) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
-        let rate_limiter = RateLimiter::new(RateLimitConfig::standard());
+        let rate_limiter = RateLimiter::new(RateLimitConfig::standard().requests_per_minute);
         Self {
             registry,
             dispatcher,
@@ -651,7 +652,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_allows_within_limit() {
-        let limiter = RateLimiter::new(RateLimitConfig::standard());
+        let limiter = RateLimiter::new(RateLimitConfig::standard().requests_per_minute);
         assert!(limiter.check_rate_limit("client-1").is_ok());
         assert!(limiter.check_rate_limit("client-1").is_ok());
         assert!(limiter.check_rate_limit("client-1").is_ok());
@@ -659,7 +660,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_blocks_over_limit() {
-        let limiter = RateLimiter::new(RateLimitConfig::strict());
+        let limiter = RateLimiter::new(RateLimitConfig::strict().requests_per_minute);
         for _ in 0..5 {
             assert!(
                 limiter.check_rate_limit("client-1").is_ok(),
@@ -674,7 +675,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_separate_keys() {
-        let limiter = RateLimiter::new(RateLimitConfig::strict());
+        let limiter = RateLimiter::new(RateLimitConfig::strict().requests_per_minute);
         for _ in 0..5 {
             assert!(
                 limiter.check_rate_limit("client-1").is_ok(),

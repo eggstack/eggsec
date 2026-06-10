@@ -131,7 +131,8 @@ pub fn get_payloads() -> Vec<Payload> {
         },
         Payload {
             payload_type: PayloadType::Ldap,
-            payload: "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))".to_string(),
+            payload: "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))"
+                .to_string(),
             description: "AD normal user account filter".to_string(),
             severity: Severity::Medium,
             tags: vec!["ldap".to_string(), "active-directory".to_string()],

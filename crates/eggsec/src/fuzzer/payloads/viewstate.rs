@@ -69,10 +69,11 @@ mod tests {
             "Must have at least 3 detection payloads, got {}",
             detection.len()
         );
-        let has_viewstate_field = detection
-            .iter()
-            .any(|p| p.payload.contains("__VIEWSTATE"));
-        assert!(has_viewstate_field, "Detection payloads must include __VIEWSTATE probe");
+        let has_viewstate_field = detection.iter().any(|p| p.payload.contains("__VIEWSTATE"));
+        assert!(
+            has_viewstate_field,
+            "Detection payloads must include __VIEWSTATE probe"
+        );
     }
 
     #[test]
@@ -87,9 +88,7 @@ mod tests {
             "Must have at least 3 deserialization payloads, got {}",
             deser.len()
         );
-        let has_los_formatter = deser
-            .iter()
-            .any(|p| p.payload.contains("LOSFormatter"));
+        let has_los_formatter = deser.iter().any(|p| p.payload.contains("LOSFormatter"));
         assert!(
             has_los_formatter,
             "Deserialization payloads must include LosFormatter detection"

@@ -1154,11 +1154,15 @@ mod tests {
     fn test_tool_selector_capability() {
         let sel = ToolSelector::Capability(vec!["xss-detect".to_string()]);
         let mut tool = make_tool("scan", ToolCategory::Scanning);
-        tool.capabilities.push(crate::tool::ToolCapability {
+        tool.capabilities.push(crate::tool::traits::ToolCapability {
             name: "xss-detect".to_string(),
             description: "XSS detection".to_string(),
+            parameters: vec![],
+            examples: vec![],
             attack_surface: vec![],
             severity_potential: vec![],
+            prerequisites: vec![],
+            estimated_duration_ms: 30000,
         });
         assert!(sel.matches(&tool));
 

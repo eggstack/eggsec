@@ -54,15 +54,17 @@ pub use policy::{
     IntendedUse, OperationDescriptor, OperationMode, OperationRisk,
 };
 pub use policy_decision::{
-    classify_denial_reasons, evaluate_enforcement, evaluate_operation_policy, may_downgrade_to_warning,
-    EnforcementContext, EnforcementOutcome, PolicyDecision,
+    classify_denial_reasons, evaluate_enforcement, evaluate_operation_policy,
+    may_downgrade_to_warning, EnforcementContext, EnforcementOutcome, PolicyDecision,
 };
 pub use presets::DefenseLabPreset;
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
     WebhookEvent,
 };
-pub use scope::{is_private_ip, LoadedScope, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope};
+pub use scope::{
+    is_private_ip, LoadedScope, Scope, ScopeError, ScopeRule, ScopeSource, TargetScope,
+};
 pub use settings::{
     AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
     ConfigError, EggsecConfig, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig,

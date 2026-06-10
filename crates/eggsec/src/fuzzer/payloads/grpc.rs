@@ -339,7 +339,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"fileDescriptorProtos":{"omitSymbolDependencies":true}}"#.to_string(),
         description: "gRPC reflection - full introspection query".to_string(),
         severity: Severity::Info,
-        tags: vec!["grpc".to_string(), "reflection".to_string(), "introspection".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "reflection".to_string(),
+            "introspection".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -347,7 +351,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"fileByFilename":"google/protobuf/descriptor.proto"}"#.to_string(),
         description: "gRPC reflection - get proto file descriptor".to_string(),
         severity: Severity::Medium,
-        tags: vec!["grpc".to_string(), "reflection".to_string(), "proto-leak".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "reflection".to_string(),
+            "proto-leak".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -355,7 +363,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: "authorization=Bearer fake-token".to_string(),
         description: "gRPC metadata injection - auth spoof via metadata header".to_string(),
         severity: Severity::High,
-        tags: vec!["grpc".to_string(), "auth".to_string(), "metadata-injection".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "auth".to_string(),
+            "metadata-injection".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -363,7 +375,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"message":"'; DROP TABLE users--"}"#.to_string(),
         description: "gRPC SQL injection in message field".to_string(),
         severity: Severity::Critical,
-        tags: vec!["grpc".to_string(), "sqli".to_string(), "injection".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "sqli".to_string(),
+            "injection".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -371,7 +387,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"name":"<script>alert(1)</script>"}"#.to_string(),
         description: "gRPC XSS in field value".to_string(),
         severity: Severity::High,
-        tags: vec!["grpc".to_string(), "xss".to_string(), "injection".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "xss".to_string(),
+            "injection".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -379,7 +399,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"filename":"../../etc/passwd"}"#.to_string(),
         description: "gRPC path traversal in filename field".to_string(),
         severity: Severity::Critical,
-        tags: vec!["grpc".to_string(), "path-traversal".to_string(), "lfi".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "path-traversal".to_string(),
+            "lfi".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -395,7 +419,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"input":"; cat /etc/passwd"}"#.to_string(),
         description: "gRPC command injection in input field".to_string(),
         severity: Severity::Critical,
-        tags: vec!["grpc".to_string(), "command-injection".to_string(), "rce".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "command-injection".to_string(),
+            "rce".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -411,7 +439,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: format!(r#"{{"data":"{}"}}"#, "A".repeat(10000)),
         description: "gRPC large message payload (10KB) - buffer/limit test".to_string(),
         severity: Severity::Medium,
-        tags: vec!["grpc".to_string(), "fuzz".to_string(), "overflow".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "fuzz".to_string(),
+            "overflow".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -419,7 +451,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"input":"test\x00admin"}"#.to_string(),
         description: "gRPC null byte injection in input field".to_string(),
         severity: Severity::High,
-        tags: vec!["grpc".to_string(), "null-byte".to_string(), "injection".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "null-byte".to_string(),
+            "injection".to_string(),
+        ],
     });
 
     payloads.push(Payload {
@@ -427,7 +463,11 @@ pub fn get_payloads() -> Vec<Payload> {
         payload: r#"{"a":{"b":{"c":{"d":{"e":"f"}}}}}"#.to_string(),
         description: "gRPC deep nesting - depth limit and parser stress test".to_string(),
         severity: Severity::Medium,
-        tags: vec!["grpc".to_string(), "fuzz".to_string(), "depth-limit".to_string()],
+        tags: vec![
+            "grpc".to_string(),
+            "fuzz".to_string(),
+            "depth-limit".to_string(),
+        ],
     });
 
     payloads

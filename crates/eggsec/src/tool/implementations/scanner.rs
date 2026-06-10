@@ -276,42 +276,44 @@ impl SecurityTool for ScannerTool {
                 },
                 ToolCapability {
                     name: "scan_ports".to_string(),
-                description: "Scan TCP ports on target".to_string(),
-                parameters: vec![
-                    ParameterDef {
-                        name: "target".to_string(),
-                        param_type: ParameterType::Ip,
-                        required: true,
-                        default: None,
-                        description: "Target IP or hostname".to_string(),
-                    },
-                    ParameterDef {
-                        name: "ports".to_string(),
-                        param_type: ParameterType::String,
-                        required: false,
-                        default: Some(serde_json::json!("1-1000")),
-                        description: "Port range or list (e.g., 1-1000, 80,443,8080)".to_string(),
-                    },
-                    ParameterDef {
-                        name: "concurrency".to_string(),
-                        param_type: ParameterType::Integer,
-                        required: false,
-                        default: Some(serde_json::json!(50)),
-                        description: "Number of concurrent connections".to_string(),
-                    },
-                ],
-                examples: vec![CapabilityExample {
-                    description: "Scan common ports on 192.168.1.1".to_string(),
-                    params: serde_json::json!({
-                        "target": "192.168.1.1",
-                        "ports": "1-1000"
-                    }),
-                }],
-                attack_surface: vec![AttackSurface::Network],
-                severity_potential: vec![AgentSeverity::Info],
-                prerequisites: vec![],
-                estimated_duration_ms: 60000,
-            }],
+                    description: "Scan TCP ports on target".to_string(),
+                    parameters: vec![
+                        ParameterDef {
+                            name: "target".to_string(),
+                            param_type: ParameterType::Ip,
+                            required: true,
+                            default: None,
+                            description: "Target IP or hostname".to_string(),
+                        },
+                        ParameterDef {
+                            name: "ports".to_string(),
+                            param_type: ParameterType::String,
+                            required: false,
+                            default: Some(serde_json::json!("1-1000")),
+                            description: "Port range or list (e.g., 1-1000, 80,443,8080)"
+                                .to_string(),
+                        },
+                        ParameterDef {
+                            name: "concurrency".to_string(),
+                            param_type: ParameterType::Integer,
+                            required: false,
+                            default: Some(serde_json::json!(50)),
+                            description: "Number of concurrent connections".to_string(),
+                        },
+                    ],
+                    examples: vec![CapabilityExample {
+                        description: "Scan common ports on 192.168.1.1".to_string(),
+                        params: serde_json::json!({
+                            "target": "192.168.1.1",
+                            "ports": "1-1000"
+                        }),
+                    }],
+                    attack_surface: vec![AttackSurface::Network],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec![],
+                    estimated_duration_ms: 60000,
+                },
+            ],
             ScanMode::Fingerprint => vec![
                 ToolCapability {
                     name: "passive-fingerprint".to_string(),
@@ -325,35 +327,36 @@ impl SecurityTool for ScannerTool {
                 },
                 ToolCapability {
                     name: "fingerprint".to_string(),
-                description: "Fingerprint services on open ports".to_string(),
-                parameters: vec![
-                    ParameterDef {
-                        name: "target".to_string(),
-                        param_type: ParameterType::Ip,
-                        required: true,
-                        default: None,
-                        description: "Target IP or hostname".to_string(),
-                    },
-                    ParameterDef {
-                        name: "ports".to_string(),
-                        param_type: ParameterType::String,
-                        required: false,
-                        default: Some(serde_json::json!("22,80,443,3306")),
-                        description: "Comma-separated port list".to_string(),
-                    },
-                ],
-                examples: vec![CapabilityExample {
-                    description: "Fingerprint services on common ports".to_string(),
-                    params: serde_json::json!({
-                        "target": "192.168.1.1",
-                        "ports": "22,80,443,3306"
-                    }),
-                }],
-                attack_surface: vec![AttackSurface::Network],
-                severity_potential: vec![AgentSeverity::Info],
-                prerequisites: vec!["scan_ports".to_string()],
-                estimated_duration_ms: 30000,
-            }],
+                    description: "Fingerprint services on open ports".to_string(),
+                    parameters: vec![
+                        ParameterDef {
+                            name: "target".to_string(),
+                            param_type: ParameterType::Ip,
+                            required: true,
+                            default: None,
+                            description: "Target IP or hostname".to_string(),
+                        },
+                        ParameterDef {
+                            name: "ports".to_string(),
+                            param_type: ParameterType::String,
+                            required: false,
+                            default: Some(serde_json::json!("22,80,443,3306")),
+                            description: "Comma-separated port list".to_string(),
+                        },
+                    ],
+                    examples: vec![CapabilityExample {
+                        description: "Fingerprint services on common ports".to_string(),
+                        params: serde_json::json!({
+                            "target": "192.168.1.1",
+                            "ports": "22,80,443,3306"
+                        }),
+                    }],
+                    attack_surface: vec![AttackSurface::Network],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec!["scan_ports".to_string()],
+                    estimated_duration_ms: 30000,
+                },
+            ],
             ScanMode::Endpoints => vec![
                 ToolCapability {
                     name: "crawl".to_string(),
@@ -377,34 +380,35 @@ impl SecurityTool for ScannerTool {
                 },
                 ToolCapability {
                     name: "scan_endpoints".to_string(),
-                description: "Discover HTTP endpoints".to_string(),
-                parameters: vec![
-                    ParameterDef {
-                        name: "target".to_string(),
-                        param_type: ParameterType::Url,
-                        required: true,
-                        default: None,
-                        description: "Target base URL".to_string(),
-                    },
-                    ParameterDef {
-                        name: "wordlist".to_string(),
-                        param_type: ParameterType::String,
-                        required: false,
-                        default: None,
-                        description: "Path to wordlist file".to_string(),
-                    },
-                ],
-                examples: vec![CapabilityExample {
-                    description: "Discover endpoints on a web application".to_string(),
-                    params: serde_json::json!({
-                        "target": "https://example.com"
-                    }),
-                }],
-                attack_surface: vec![AttackSurface::Web],
-                severity_potential: vec![AgentSeverity::Info],
-                prerequisites: vec![],
-                estimated_duration_ms: 120000,
-            }],
+                    description: "Discover HTTP endpoints".to_string(),
+                    parameters: vec![
+                        ParameterDef {
+                            name: "target".to_string(),
+                            param_type: ParameterType::Url,
+                            required: true,
+                            default: None,
+                            description: "Target base URL".to_string(),
+                        },
+                        ParameterDef {
+                            name: "wordlist".to_string(),
+                            param_type: ParameterType::String,
+                            required: false,
+                            default: None,
+                            description: "Path to wordlist file".to_string(),
+                        },
+                    ],
+                    examples: vec![CapabilityExample {
+                        description: "Discover endpoints on a web application".to_string(),
+                        params: serde_json::json!({
+                            "target": "https://example.com"
+                        }),
+                    }],
+                    attack_surface: vec![AttackSurface::Web],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec![],
+                    estimated_duration_ms: 120000,
+                },
+            ],
         }
     }
 

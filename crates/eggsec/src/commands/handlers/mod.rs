@@ -122,10 +122,12 @@ impl CommandContext {
     pub fn with_execution_profile(mut self, profile: ExecutionProfile) -> Self {
         self.execution_profile = profile;
         self.enforcement = match profile {
-            ExecutionProfile::ManualPermissive => crate::config::EnforcementContext::manual_permissive(
-                self.config.execution_policy.clone(),
-                self.enforcement.loaded_scope.clone(),
-            ),
+            ExecutionProfile::ManualPermissive => {
+                crate::config::EnforcementContext::manual_permissive(
+                    self.config.execution_policy.clone(),
+                    self.enforcement.loaded_scope.clone(),
+                )
+            }
             ExecutionProfile::ManualGuarded => crate::config::EnforcementContext::manual_guarded(
                 self.config.execution_policy.clone(),
                 self.enforcement.loaded_scope.clone(),
@@ -153,10 +155,12 @@ impl CommandContext {
     pub fn with_loaded_scope(mut self, loaded_scope: crate::config::LoadedScope) -> Self {
         self.scope = loaded_scope.scope.clone();
         self.enforcement = match self.execution_profile {
-            ExecutionProfile::ManualPermissive => crate::config::EnforcementContext::manual_permissive(
-                self.config.execution_policy.clone(),
-                loaded_scope,
-            ),
+            ExecutionProfile::ManualPermissive => {
+                crate::config::EnforcementContext::manual_permissive(
+                    self.config.execution_policy.clone(),
+                    loaded_scope,
+                )
+            }
             ExecutionProfile::ManualGuarded => crate::config::EnforcementContext::manual_guarded(
                 self.config.execution_policy.clone(),
                 loaded_scope,
@@ -622,7 +626,10 @@ mod tests {
     #[test]
     fn command_context_enforcement_context_is_built() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
-        assert_eq!(ctx.enforcement.execution_profile, ExecutionProfile::ManualPermissive);
+        assert_eq!(
+            ctx.enforcement.execution_profile,
+            ExecutionProfile::ManualPermissive
+        );
     }
 
     #[test]
@@ -636,13 +643,19 @@ mod tests {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
             .with_loaded_scope(loaded);
         assert!(ctx.enforcement.loaded_scope.is_explicit_manifest());
-        assert_eq!(ctx.enforcement.loaded_scope.source, ScopeSource::CliScopeFile);
+        assert_eq!(
+            ctx.enforcement.loaded_scope.source,
+            ScopeSource::CliScopeFile
+        );
     }
 
     #[test]
     fn command_context_with_mcp_strict_profile_builds_mcp_enforcement() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
             .with_execution_profile(ExecutionProfile::McpStrict);
-        assert_eq!(ctx.enforcement.execution_profile, ExecutionProfile::McpStrict);
+        assert_eq!(
+            ctx.enforcement.execution_profile,
+            ExecutionProfile::McpStrict
+        );
     }
 }

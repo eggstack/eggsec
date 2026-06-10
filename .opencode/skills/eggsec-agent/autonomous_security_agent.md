@@ -31,6 +31,7 @@ The autonomous security agent continuously monitors configured targets, executes
 | Component | Purpose |
 |-----------|---------|
 | Agent | Main event loop and orchestration |
+| Enforcement | Per-scan risk/capability mapping (`agent/enforcement.rs`); `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate |
 | TargetPortfolio | Multi-target configuration and scheduling |
 | LongitudinalMemory | Persistent scan history and pattern detection |
 | AlertRouter | Route alerts to configured channels |
