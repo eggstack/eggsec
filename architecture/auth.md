@@ -33,9 +33,9 @@ Authentication security testing module providing brute force, credential stuffin
 | `session.rs` | Session fixation, token leakage, and session management flaws |
 | `timing.rs` | Timing side-channel for user enumeration |
 | `multi_protocol.rs` | Multi-protocol authentication testing (SSH, FTP, SMTP) |
-| `ssh.rs` | SSH-specific authentication testing |
-| `ftp.rs` | FTP-specific authentication testing |
-| `smtp.rs` | SMTP-specific authentication testing |
+| `multi_protocol/ssh.rs` | SSH-specific authentication testing |
+| `multi_protocol/ftp.rs` | FTP-specific authentication testing |
+| `multi_protocol/smtp.rs` | SMTP-specific authentication testing |
 
 ## Implementation Status
 

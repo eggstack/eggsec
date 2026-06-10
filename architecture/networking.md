@@ -94,6 +94,8 @@ Generating massive amounts of network traffic to test the resilience of infrastr
 
 All stress tests require `stress-testing` feature flag. Raw socket operations require Unix platform.
 
+For detailed stress module architecture, see [stress.md](stress.md).
+
 ## Security & Privileges
 
 Many features in this module require elevated privileges (e.g., `root` or `CAP_NET_RAW` on Linux) as they interact with raw sockets.

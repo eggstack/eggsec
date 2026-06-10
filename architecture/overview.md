@@ -160,7 +160,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`constants.rs`](../crates/eggsec/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
 | [`error/`](../crates/eggsec/src/error/) | Canonical error type with domain-specific variants | [error.md](error.md) |
 | [`findings/`](../crates/eggsec/src/findings/) | Finding store, lifecycle management, fingerprinting | [findings.md](findings.md) |
-| [`diff/`](../crates/eggsec/src/diff/) | Scan result diffing, baseline comparison | [diff.md](diff.md) |
+| `diff/` (distributed across `output/`, `fuzzer/`, `waf/`) | Scan result diffing, baseline comparison | [diff.md](diff.md) |
 | [`logging/`](../crates/eggsec/src/logging/) | Structured logging with tracing | [logging.md](logging.md) |
 | [`utils/`](../crates/eggsec/src/utils/) | 23 submodules (HTTP client, rate limiting, circuit breaker, formatting) | [utils.md](utils.md) |
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |

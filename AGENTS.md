@@ -8,12 +8,7 @@ Eggsec is a Rust-based security testing toolkit organized as a workspace with 8 
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan with prioritized items.
-
-| Status | Scope |
-|--------|-------|
-| Completed (Waves 0-7) | Bug fixes, documentation corrections, new architecture docs |
-| Implementation complete | See plan.md for remaining items |
+All implementation items are complete. See `plans/` directory for historical policy-related plans.
 
 ## Quick Reference
 
@@ -157,17 +152,17 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 3032+ (2718 #[test] + 314 #[tokio::test]) |
+| Tests | 3224 (2910 #[test] + 314 #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
-| Source files | 763 (.rs files in crates/) |
-| Payload types | 30 |
+| Source files | 783 (.rs files in crates/) |
+| Payload types | 40 |
 | Tabs | 29 (Tab enum variants 0-28) |
 | WAF products | 34 |
 | NSE libraries | 164 public modules |
-| Modules | 38 |
+| Modules | 42 |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
-| CLI commands | 24 base, 39 with all features |
+| CLI commands | 26 base, 42 with all features |
 
 ### Codebase Issues (Known Stub Implementations)
 

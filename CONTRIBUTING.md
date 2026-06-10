@@ -98,27 +98,51 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows bui
 
 #### Available Features
 
-| Feature | Description | Dependencies |
-|---------|-------------|--------------|
-| `tool-api` | Base abstraction layer | None |
-| `rest-api` | REST API server with MCP | axum, tower, async-stream |
-| `grpc-api` | gRPC API server | tonic, prost |
-| `stress-testing` | Network stress testing | pnet, socket2, nix, surge-ping |
-| `packet-inspection` | Live packet capture | pnet, libc |
-| `nse` | Nmap Scripting Engine | mlua, openssl, ssh2 |
-| `full` | All features combined | All of the above |
+| Feature | Dependencies | Description |
+|---------|-------------|-------------|
+| `tool-api` | *(marker)* | Tool abstraction layer (always enabled internally) |
+| `insecure-tls` | *(marker)* | TLS bypass for testing only |
+| `rest-api` | `tool-api`, axum, tower, tower-http, async-stream | REST/MCP API server |
+| `ws-api` | axum/ws | WebSocket API server |
+| `grpc-api` | `tool-api`, tonic, prost, etc. | gRPC API server |
+| `stress-testing` | pnet, pnet_packet, socket2, nix, libc, surge-ping | Raw sockets, SYN floods, IP spoofing |
+| `packet-inspection` | pnet, pnet_packet, libc | Live capture, hexdump, traceroute |
+| `nse` | `tool-api`, dep:eggsec-nse | Nmap NSE Lua script support |
+| `nse-ssh2` | `nse`, dep:ssh2 | NSE with SSH2/libssh2 |
+| `nse-sandbox` | `nse`, sandbox | NSE sandbox restrictions |
+| `advanced-hunting` | *(marker)* | Advanced threat hunting |
+| `compliance` | *(marker)* | Compliance scanning |
+| `external-integrations` | *(marker)* | Jira, GitHub, GitLab |
+| `finding-workflow` | *(marker)* | Finding lifecycle |
+| `vuln-management` | *(marker)* | Vulnerability triage |
+| `ai-integration` | `tool-api`, eventsource-stream, semver | AI/LLM analysis |
+| `websocket` | tokio-tungstenite | WebSocket security testing |
+| `headless-browser` | headless_chrome | DOM XSS, SPA crawling |
+| `database` | sqlx | PostgreSQL persistence |
+| `container` | kube, k8s-openapi | Kubernetes/Docker scanning |
+| `cloud` | *(marker)* | AWS/GCP/Azure |
+| `sbom` | cyclonedx-bom, spdx, walkdir | SBOM generation |
+| `git-secrets` | *(marker)* | Git secrets scanning |
+| `pdf` | printpdf | PDF report generation |
+| `wireless` | *(marker)* | WiFi scanning |
+| `api-schema` | *(marker)* | OpenAPI schema-based fuzzing |
+| `full` | 16 sub-features | All features combined (excludes grpc-api, ws-api, pdf) |
 
 #### Feature Propagation
 
-Features are propagated between workspace crates:
+Features are propagated from the parent `eggsec` crate to workspace dependencies using Cargo's `dep:` syntax:
 
 ```
 eggsec (parent)
 ├── nse → eggsec-nse/nse
-└── stress-testing → eggsec-nse?/stress-testing (if nse enabled)
+├── nse-ssh2 → eggsec-nse/nse-ssh2
+├── nse-sandbox → eggsec-nse/nse-sandbox
+├── ai-integration → eggsec-tool-core/ai-integration
+├── database → eggsec-tool-core/database
+└── rest-api, grpc-api, ws-api → eggsec-tool-core/{rest-api, grpc-api, ws-api}
 ```
 
-The `?` syntax means "if the dependency is enabled, also enable this feature on it".
+Marker features (no dependencies) are defined inline and do not propagate to other crates.
 
 #### Testing Feature Combinations
 

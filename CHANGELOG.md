@@ -36,7 +36,7 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 - Configuration file support (TOML/YAML) at `~/.config/eggsec/eggsec.toml`
 - Environment variable support with `EGGSEC_` prefix
 - Scope file support for target authorization (`scope.toml`)
-- Multiple scan profiles (quick, deep, waf-test, full)
+- 16 scan profiles (quick, endpoint, web, waf, full, api, recon, stealth, deep, vuln, auth, defense-lab, synvoid-local, waf-regression, protocol-edge, nse-safe)
 - Custom scan profile definitions
 
 #### Output Formats

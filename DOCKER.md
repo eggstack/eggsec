@@ -89,17 +89,16 @@ docker compose run eggsec scan http://target --proxy socks5://tor-proxy:9050
 ```bash
 # Start coordinator
 docker compose --profile distributed up -d redis
-docker compose run eggsec coordinator --redis redis:6379
+docker compose run eggsec cluster coordinator --port 9000
 
 # In another terminal, start workers
-docker compose run eggsec worker --coordinator http://eggsec:8080
+docker compose run eggsec cluster worker --coordinator eggsec:9000
 ```
 
 ### WAF Detection & Bypass Testing
 ```bash
 docker compose --profile testing up -d dvwa
-docker compose run eggsec waf-detect http://dvwa-target
-docker compose run eggsec waf-bypass http://dvwa-target
+docker compose run eggsec waf --target http://dvwa-target
 ```
 
 ## Building for Specific Features

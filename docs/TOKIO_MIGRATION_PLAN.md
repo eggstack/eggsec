@@ -1,3 +1,5 @@
+> **Status**: This is a historical planning document. The NSE crate has been extracted to `crates/eggsec-nse/`. Some paths reference the original `src/nse/` location before extraction.
+
 # Tokio Migration Plan for NSE
 
 ## Overview

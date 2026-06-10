@@ -11,7 +11,7 @@
 
 All `.md` files in `architecture/` **except** `review_plan.md`. This excludes this meta-document itself.
 
-**Total documents:** 46
+**Total documents:** 45
 
 ---
 
@@ -55,15 +55,12 @@ All `.md` files in `architecture/` **except** `review_plan.md`. This excludes th
 | 34 | `workflow.md` | `src/workflow/` | ~30 | `plans/review_workflow.md` |
 | 35 | `auth_context.md` | `src/auth/` | ~27 | `plans/review_auth_context.md` |
 | 36 | `constants.md` | cross-cutting | ~32 | `plans/review_constants.md` |
-| 37 | `types.md` | `src/types/` | ~35 | `plans/review_types.md` |
+| 37 | `types.md` | `src/types.rs` | ~35 | `plans/review_types.md` |
 | 38 | `utils.md` | `src/utils/` | ~30 | `plans/review_utils.md` |
 | 39 | `probe.md` | `src/probe.rs` | ~28 | `plans/review_probe.md` |
 | 40 | `stress.md` | `src/stress/` | ~28 | `plans/review_stress.md` |
 | 41 | `logging.md` | `src/logging/` | ~18 | `plans/review_logging.md` |
-| 43 | `generated.md` | generated protobuf | ~12 | `plans/review_generated.md` |
-| 44 | `notify.md` | `src/notify/` | ~29 | `plans/review_notify.md` |
-| 45 | `container.md` | `src/container/` | ~31 | `plans/review_container.md` |
-| 46 | `compliance.md` | `src/compliance/` | ~29 | `plans/review_compliance.md` |
+| 42 | `generated.md` | generated protobuf | ~12 | `plans/review_generated.md` |
 
 ---
 
@@ -180,7 +177,7 @@ Each review file MUST use this structure:
 
 8 subagents launch in parallel. Each agent reads its assigned architecture doc(s), reads corresponding source module(s), verifies claims against code, interrogates code for bugs and improvements, and writes `plans/review_<module>.md` files.
 
-**Output:** 46 review files in `plans/` directory.
+**Output:** 45 review files in `plans/` directory.
 
 ---
 
@@ -200,7 +197,7 @@ After all reviews complete, a consolidation agent will:
 
 ## Phase 3: Consolidation
 
-1. Verify all 46 review files exist: `ls plans/review_*.md | wc -l`
+1. Verify all 45 review files exist: `ls plans/review_*.md | wc -l`
 2. Extract high-priority items to `plans/review_consolidated.md`
 3. Update this document with final status
 4. Commit to main
@@ -269,7 +266,7 @@ Before committing, verify and clean up:
 - **Historical bug fix tables** in tui.md and scanner.md are stale and should be archived
 
 ### Statistical Findings
-- **43 architecture docs** reviewed (46 planned, but 3 were duplicates in mapping table)
+- **43 architecture docs** reviewed
 - **41 modules** in `crates/eggsec/src/`
 - **169 NSE libraries** in `eggsec-nse/src/libraries/`
 - **34 WAF products** verified

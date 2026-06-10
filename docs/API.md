@@ -638,10 +638,9 @@ async fn run_scan() -> Result<()> {
 You can implement custom scanning logic using the existing modules:
 
 ```rust
-use eggsec::fuzzer::engine::FuzzerEngine;
+use eggsec::fuzzer::engine::FuzzEngine;
 
-let mut engine = FuzzerEngine::new(config.clone());
-engine.add_payloads_from_file("custom_payloads.toml")?;
+let mut engine = FuzzEngine::new(config.clone());
 
 for payload in engine.payloads() {
     let response = client.request(payload).await?;

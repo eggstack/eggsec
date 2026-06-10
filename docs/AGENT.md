@@ -556,5 +556,5 @@ When the agent runs defense-lab profiles, it:
 
 ## See Also
 
-- [eggsec_skills/README.md](../eggsec_skills/README.md) - All available skills
+- [.opencode/skills/](../.opencode/skills/) - All available skills
 - [AGENTS.md](../AGENTS.md) - Developer documentation for the codebase
