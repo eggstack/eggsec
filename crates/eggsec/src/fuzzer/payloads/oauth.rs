@@ -635,6 +635,150 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["oauth".to_string(), "implicit".to_string()],
     });
 
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "response_type=code&redirect_uri=https://evil.com".to_string(),
+        description: "Missing state parameter (CSRF)".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "csrf".to_string(), "state".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "code_challenge_method=plain&code_challenge=test".to_string(),
+        description: "PKCE bypass with plain challenge method".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "pkce".to_string(), "bypass".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "response_type=code".to_string(),
+        description: "PKCE missing (no code_challenge)".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["oauth".to_string(), "pkce".to_string(), "missing".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "scope=admin".to_string(),
+        description: "Scope escalation to admin".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["oauth".to_string(), "scope".to_string(), "escalation".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "scope=read write admin".to_string(),
+        description: "Scope escalation with multiple scopes".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["oauth".to_string(), "scope".to_string(), "escalation".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "redirect_uri=https://example.com/callback#access_token=leaked".to_string(),
+        description: "Token leakage via Referer header".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["oauth".to_string(), "leak".to_string(), "referer".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "client_id=app&client_secret=secret123&grant_type=authorization_code&code=abc".to_string(),
+        description: "Client credentials exposed in URL query".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["oauth".to_string(), "credential-leak".to_string(), "url".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "redirect_uri=https://evil.com/callback&error=access_denied&error_description=denied".to_string(),
+        description: "Open redirect via OAuth error response".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "redirect".to_string(), "error".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "grant_type=authorization_code&code=used_code_123".to_string(),
+        description: "Token replay after logout".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "replay".to_string(), "session".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "response_type=code&tenant_id=other_org".to_string(),
+        description: "Cross-tenant token request".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["oauth".to_string(), "multi-tenant".to_string(), "escalation".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "grant_type=password&username=admin&password=test".to_string(),
+        description: "Grant type confusion (resource owner password)".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "grant-type".to_string(), "deprecated".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "response_type=code".to_string(),
+        description: "Missing redirect_uri parameter".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["oauth".to_string(), "redirect".to_string(), "missing".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "redirect_uri=http://example.com/callback".to_string(),
+        description: "HTTP redirect_uri (not HTTPS)".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "redirect".to_string(), "tls".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "client_id=*".to_string(),
+        description: "Wildcard client_id".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "client".to_string(), "wildcard".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "grant_type=authorization_code&code=expired_code_here".to_string(),
+        description: "Expired authorization code".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["oauth".to_string(), "token".to_string(), "expired".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "grant_type=authorization_code&code=".to_string(),
+        description: "Empty authorization code".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["oauth".to_string(), "token".to_string(), "empty".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "response_type=code+token".to_string(),
+        description: "Invalid response type (code+token)".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["oauth".to_string(), "response-type".to_string(), "invalid".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::OAuth,
+        payload: "response_type=code&nonce=used_nonce&state=abc".to_string(),
+        description: "Nonce replay attack".to_string(),
+        severity: Severity::High,
+        tags: vec!["oauth".to_string(), "nonce".to_string(), "replay".to_string()],
+    });
+
     payloads
 }
 
@@ -651,7 +795,7 @@ mod tests {
     #[test]
     fn test_get_payloads_count_reasonable() {
         let payloads = get_payloads();
-        assert!(payloads.len() > 0);
+        assert!(payloads.len() >= 12);
         assert!(payloads.len() < 10000);
     }
 

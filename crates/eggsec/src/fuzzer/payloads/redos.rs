@@ -49,6 +49,26 @@ pub fn get_payloads() -> Vec<Payload> {
             (format!("{}X", "a".repeat(30)), "Suffix mismatch trigger", Severity::High),
             (format!("{}b", "a".repeat(30)), "Different suffix trigger", Severity::High),
         ];
+        "ipv4-regex", [
+            ("127.0.0.1", "IPv4 regex backtracking - valid IP", Severity::Medium),
+            ("255.255.255.255", "IPv4 regex backtracking - max IP", Severity::Medium),
+            ("999.999.999.999", "IPv4 regex backtracking - invalid IP", Severity::High),
+        ];
+        "phone-regex", [
+            ("+1-555-123-4567", "Phone number regex backtracking", Severity::Medium),
+            ("+44 20 7946 0958", "UK phone format backtracking", Severity::Medium),
+            ("555-123-4567", "US phone format backtracking", Severity::Medium),
+        ];
+        "credit-card", [
+            ("4111-1111-1111-1111", "Credit card regex backtracking", Severity::Medium),
+            ("5500 0000 0000 0004", "Mastercard regex backtracking", Severity::Medium),
+            ("378282246310005", "Amex regex backtracking", Severity::Medium),
+        ];
+        "date-regex", [
+            ("2024-01-01", "ISO date regex backtracking", Severity::Medium),
+            ("01/31/2024", "US date regex backtracking", Severity::Medium),
+            ("31-12-2024", "EU date regex backtracking", Severity::Medium),
+        ];
     )
 }
 
@@ -63,9 +83,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_payloads_count_reasonable() {
+    fn minimum_payload_count() {
         let payloads = get_payloads();
-        assert!(payloads.len() > 0);
+        assert!(payloads.len() >= 25);
         assert!(payloads.len() < 10000);
     }
 

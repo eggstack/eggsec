@@ -21,15 +21,25 @@ pub mod prototype;
 pub mod race;
 pub mod redirect;
 pub mod redos;
+pub mod saml;
 pub mod soap;
 pub mod sqli;
 pub mod ssrf;
+pub mod ssi;
 pub mod ssti;
 pub mod traversal;
 pub mod websocket;
 pub mod xpath;
+pub mod css_inject;
+pub mod dom_clobber;
+pub mod html_inject;
 pub mod xss;
 pub mod xxe;
+pub mod viewstate;
+pub mod xslt;
+pub mod dep_confusion;
+pub mod latex;
+pub mod xs_leak;
 
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -67,6 +77,16 @@ pub enum PayloadType {
     Race,
     MassAssign,
     Oast,
+    Saml,
+    HtmlInject,
+    CssInject,
+    Ssi,
+    DomClobber,
+    Xslt,
+    Viewstate,
+    DepConfusion,
+    XsLeak,
+    Latex,
 }
 
 impl std::fmt::Display for PayloadType {
@@ -102,6 +122,16 @@ impl std::fmt::Display for PayloadType {
             PayloadType::Race => write!(f, "Race Condition"),
             PayloadType::MassAssign => write!(f, "Mass Assignment"),
             PayloadType::Oast => write!(f, "OAST"),
+            PayloadType::Saml => write!(f, "SAML"),
+            PayloadType::HtmlInject => write!(f, "HTML Injection"),
+            PayloadType::CssInject => write!(f, "CSS Injection"),
+            PayloadType::Ssi => write!(f, "SSI Injection"),
+            PayloadType::DomClobber => write!(f, "DOM Clobbering"),
+            PayloadType::Xslt => write!(f, "XSLT Injection"),
+            PayloadType::Viewstate => write!(f, "ViewState Deserialization"),
+            PayloadType::DepConfusion => write!(f, "Dependency Confusion"),
+            PayloadType::XsLeak => write!(f, "XS-Leak"),
+            PayloadType::Latex => write!(f, "LaTeX Injection"),
         }
     }
 }
@@ -181,6 +211,16 @@ pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
         PayloadType::Race => race::get_payloads(),
         PayloadType::MassAssign => mass_assign::get_payloads(),
         PayloadType::Oast => oast::get_oast_payloads(),
+        PayloadType::Saml => saml::get_payloads(),
+        PayloadType::HtmlInject => html_inject::get_payloads(),
+        PayloadType::CssInject => css_inject::get_payloads(),
+        PayloadType::DomClobber => dom_clobber::get_payloads(),
+        PayloadType::Ssi => ssi::get_payloads(),
+        PayloadType::Xslt => xslt::get_payloads(),
+        PayloadType::Viewstate => viewstate::get_payloads(),
+        PayloadType::Latex => latex::get_payloads(),
+        PayloadType::DepConfusion => dep_confusion::get_payloads(),
+        PayloadType::XsLeak => xs_leak::get_payloads(),
     }
 }
 

