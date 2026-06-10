@@ -20,6 +20,7 @@ pub async fn handle_grpc_server(ctx: &CommandContext, args: GrpcServerArgs) -> a
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     info!("Starting gRPC server on {}:{}", args.host, args.port);
 

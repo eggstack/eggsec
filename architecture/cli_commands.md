@@ -15,7 +15,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 
 ### Key CLI Patterns
 
-- **Global flags**: `--json`, `--config`, `--scope` apply to all commands
+- **Global flags**: `--json`, `--config`, `--scope`, `--strict-scope` apply to all commands
 - **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`
 - **Output flag**: Use `-o` / `--output` for file output (consistent across commands)
 - **Scope validation**: Handlers call `evaluate_and_enforce_operation()` with an `OperationDescriptor` to validate targets against scope and execution policy
@@ -24,7 +24,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 
 Once arguments are parsed, the `main` function initializes a `CommandContext` and calls `handle_command` via `src/commands/mod.rs` re-exports. The implementation lives in `src/commands/handlers/mod.rs`.
 
-- **`CommandContext`**: Carries global state including the loaded `EggsecConfig`, `Scope`, and output preferences.
+- **`CommandContext`**: Carries global state including the loaded `EggsecConfig`, `Scope`, output preferences, and `execution_profile` (defaults to `ManualPermissive`; set to `ManualGuarded` by `--strict-scope`, `CiStrict` in CI mode).
 - **`handle_command`**: A large exhaustive match statement that dispatches to the correct handler based on the subcommand.
   Because it is exhaustive (no wildcard arm), adding/removing `Commands` variants requires updating dispatch at compile time.
 
@@ -67,10 +67,11 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 
 ### `evaluate_and_enforce_operation()` Method
 
-`CommandContext::evaluate_and_enforce_operation()` wraps the shared `evaluate_operation_policy()` evaluator (`config/policy_decision.rs`) with scope enforcement and structured denial output:
-1. Calls `evaluate_operation_policy(&descriptor, &self.config.execution_policy, Some(&self.scope))`
-2. If denied, returns an error containing the `PolicyDecision` details
-3. If allowed, returns the `PolicyDecision` so callers can attach it to reports/logs
+`CommandContext::evaluate_and_enforce_operation()` wraps `evaluate_enforcement()` (`config/policy_decision.rs`) with profile-aware scope enforcement and structured denial output:
+1. Calls `evaluate_enforcement(&descriptor, &self.config.execution_policy, Some(&self.scope), self.execution_profile)`
+2. On `Allow`: returns the `PolicyDecision`
+3. On `Warn`: logs warnings and returns the `PolicyDecision` (manual permissive mode)
+4. On `Deny`: returns an error containing the `PolicyDecision` details (JSON or human-readable)
 
 ## Workflow
 

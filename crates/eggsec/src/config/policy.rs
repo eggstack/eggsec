@@ -55,6 +55,14 @@ pub struct ExecutionPolicy {
 
     #[serde(default = "default_max_risk")]
     pub max_risk_without_confirm: OperationRisk,
+
+    /// Capabilities explicitly allowed by this policy.
+    #[serde(default)]
+    pub allowed_capabilities: Vec<Capability>,
+
+    /// Capabilities explicitly denied by this policy (deny wins over allow).
+    #[serde(default)]
+    pub denied_capabilities: Vec<Capability>,
 }
 
 fn default_true() -> bool {
@@ -78,6 +86,8 @@ impl Default for ExecutionPolicy {
             allow_remote_execution: false,
             allow_agent_autonomous: false,
             max_risk_without_confirm: OperationRisk::SafeActive,
+            allowed_capabilities: Vec::new(),
+            denied_capabilities: Vec::new(),
         }
     }
 }
@@ -240,6 +250,103 @@ pub struct OperationDescriptor {
     /// If `true`, an explicit scope file must be configured.
     #[serde(default)]
     pub requires_explicit_scope: bool,
+    /// Capabilities required by this operation (e.g. "active-probe", "crawl").
+    #[serde(default)]
+    pub required_capabilities: Vec<Capability>,
+}
+
+/// Caller trust boundary for scope enforcement.
+///
+/// Determines how strictly scope violations are treated. Manual CLI/TUI
+/// usage gets permissive defaults; MCP and autonomous agent paths are
+/// always strict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionProfile {
+    /// Default CLI/TUI: warnings for scope ambiguity, denials only for
+    /// hazardous operations or explicit exclusions.
+    ManualPermissive,
+    /// CLI/TUI with `--strict-scope`: denies missing scope, out-of-scope
+    /// targets, and risky operations without policy approval.
+    ManualGuarded,
+    /// Non-interactive CI: strict, deterministic, no downgrade flags.
+    CiStrict,
+    /// MCP server: always strict, scope manifest required for networked tools.
+    McpStrict,
+    /// Autonomous agent: always strict, cannot self-approve scope expansion.
+    AgentStrict,
+}
+
+impl ExecutionProfile {
+    /// Returns `true` if this profile enforces strict scope rules.
+    pub fn is_strict(&self) -> bool {
+        matches!(
+            self,
+            Self::CiStrict | Self::McpStrict | Self::AgentStrict
+        )
+    }
+
+    /// Returns `true` if this profile is an automated (non-human) caller.
+    pub fn is_automated(&self) -> bool {
+        matches!(self, Self::CiStrict | Self::McpStrict | Self::AgentStrict)
+    }
+}
+
+impl std::fmt::Display for ExecutionProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ManualPermissive => write!(f, "manual-permissive"),
+            Self::ManualGuarded => write!(f, "manual-guarded"),
+            Self::CiStrict => write!(f, "ci-strict"),
+            Self::McpStrict => write!(f, "mcp-strict"),
+            Self::AgentStrict => write!(f, "agent-strict"),
+        }
+    }
+}
+
+/// Operation capability declaration.
+///
+/// Used by [`OperationDescriptor`] to declare what a tool needs, and by
+/// [`super::policy_decision::evaluate_enforcement`] to check whether the
+/// caller profile permits that capability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Capability {
+    PassiveFingerprint,
+    ActiveProbe,
+    Crawl,
+    HttpFuzzLowImpact,
+    IntrusiveFuzz,
+    WafDetect,
+    WafBypassSimulation,
+    WafStressTest,
+    LoadTest,
+    RawPacketProbe,
+    CredentialTesting,
+    RemoteExecution,
+    NseSafe,
+    NseIntrusive,
+}
+
+impl std::fmt::Display for Capability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PassiveFingerprint => write!(f, "passive-fingerprint"),
+            Self::ActiveProbe => write!(f, "active-probe"),
+            Self::Crawl => write!(f, "crawl"),
+            Self::HttpFuzzLowImpact => write!(f, "http-fuzz-low-impact"),
+            Self::IntrusiveFuzz => write!(f, "intrusive-fuzz"),
+            Self::WafDetect => write!(f, "waf-detect"),
+            Self::WafBypassSimulation => write!(f, "waf-bypass-simulation"),
+            Self::WafStressTest => write!(f, "waf-stress-test"),
+            Self::LoadTest => write!(f, "load-test"),
+            Self::RawPacketProbe => write!(f, "raw-packet-probe"),
+            Self::CredentialTesting => write!(f, "credential-testing"),
+            Self::RemoteExecution => write!(f, "remote-execution"),
+            Self::NseSafe => write!(f, "nse-safe"),
+            Self::NseIntrusive => write!(f, "nse-intrusive"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -372,5 +479,61 @@ mod tests {
             format!("{}", IntendedUse::SynvoidRegression),
             "synvoid-regression"
         );
+    }
+
+    #[test]
+    fn execution_profile_is_strict() {
+        assert!(!ExecutionProfile::ManualPermissive.is_strict());
+        assert!(!ExecutionProfile::ManualGuarded.is_strict());
+        assert!(ExecutionProfile::CiStrict.is_strict());
+        assert!(ExecutionProfile::McpStrict.is_strict());
+        assert!(ExecutionProfile::AgentStrict.is_strict());
+    }
+
+    #[test]
+    fn execution_profile_is_automated() {
+        assert!(!ExecutionProfile::ManualPermissive.is_automated());
+        assert!(!ExecutionProfile::ManualGuarded.is_automated());
+        assert!(ExecutionProfile::CiStrict.is_automated());
+        assert!(ExecutionProfile::McpStrict.is_automated());
+        assert!(ExecutionProfile::AgentStrict.is_automated());
+    }
+
+    #[test]
+    fn execution_profile_display() {
+        assert_eq!(format!("{}", ExecutionProfile::ManualPermissive), "manual-permissive");
+        assert_eq!(format!("{}", ExecutionProfile::ManualGuarded), "manual-guarded");
+        assert_eq!(format!("{}", ExecutionProfile::CiStrict), "ci-strict");
+        assert_eq!(format!("{}", ExecutionProfile::McpStrict), "mcp-strict");
+        assert_eq!(format!("{}", ExecutionProfile::AgentStrict), "agent-strict");
+    }
+
+    #[test]
+    fn capability_display() {
+        assert_eq!(format!("{}", Capability::PassiveFingerprint), "passive-fingerprint");
+        assert_eq!(format!("{}", Capability::ActiveProbe), "active-probe");
+        assert_eq!(format!("{}", Capability::Crawl), "crawl");
+        assert_eq!(format!("{}", Capability::IntrusiveFuzz), "intrusive-fuzz");
+        assert_eq!(format!("{}", Capability::WafDetect), "waf-detect");
+        assert_eq!(format!("{}", Capability::NseSafe), "nse-safe");
+        assert_eq!(format!("{}", Capability::NseIntrusive), "nse-intrusive");
+    }
+
+    #[test]
+    fn execution_profile_serialization_roundtrip() {
+        let profile = ExecutionProfile::McpStrict;
+        let json = serde_json::to_string(&profile).unwrap();
+        assert!(json.contains("mcp-strict"));
+        let deserialized: ExecutionProfile = serde_json::from_str(&json).unwrap();
+        assert_eq!(profile, deserialized);
+    }
+
+    #[test]
+    fn capability_serialization_roundtrip() {
+        let cap = Capability::WafBypassSimulation;
+        let json = serde_json::to_string(&cap).unwrap();
+        assert!(json.contains("waf-bypass-simulation"));
+        let deserialized: Capability = serde_json::from_str(&json).unwrap();
+        assert_eq!(cap, deserialized);
     }
 }

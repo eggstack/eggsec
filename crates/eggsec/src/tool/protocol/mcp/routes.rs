@@ -79,11 +79,12 @@ pub async fn create_mcp_router(
     registry: ToolRegistry,
     api_key: Option<String>,
     profile: McpProfile,
+    scope: Option<crate::config::Scope>,
 ) -> Router {
     let server = Arc::new(McpServer::with_scope_and_profile(
         registry.clone(),
         api_key,
-        None,
+        scope,
         profile,
     ));
     let planner = ChainPlanner::new(registry.clone());
@@ -283,11 +284,11 @@ mod tests {
     }
 }
 
-pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile: McpProfile) {
+pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile: McpProfile, scope: Option<crate::config::Scope>) {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 
     let server = Arc::new(McpServer::with_scope_and_profile(
-        registry, api_key, None, profile,
+        registry, api_key, scope, profile,
     ));
 
     let stdin = tokio::io::stdin();

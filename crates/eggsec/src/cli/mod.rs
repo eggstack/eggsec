@@ -117,6 +117,9 @@ pub struct Cli {
     #[arg(long, global = true, help = "Scope file path")]
     pub scope: Option<String>,
 
+    #[arg(long, global = true, help = "Enforce strict scope rules (deny out-of-scope targets instead of warning)")]
+    pub strict_scope: bool,
+
     #[arg(long, help = "Generate default configuration file to stdout")]
     pub generate_config: bool,
 

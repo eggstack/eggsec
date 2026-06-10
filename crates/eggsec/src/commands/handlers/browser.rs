@@ -13,6 +13,7 @@ pub async fn handle_browser(ctx: &CommandContext, mut args: crate::cli::BrowserA
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
 

@@ -301,6 +301,7 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
                 required_policy_flags: Vec::new(),
                 requires_private_or_local_target: false,
                 requires_explicit_scope: false,
+                required_capabilities: Vec::new(),
             })?;
 
             let psk = start_args
@@ -407,6 +408,7 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
             required_policy_flags: Vec::new(),
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         })?;
         let (host, port) = crate::utils::parse_host_port(target, ctx.config.remote.default_port);
 

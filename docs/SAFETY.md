@@ -59,6 +59,36 @@ Eggsec operates in three modes:
 
 Each CLI command's help text indicates its mode. Use `eggsec policy-explain` to inspect decisions before running traffic-generating operations.
 
+## Execution Profiles
+
+Eggsec distinguishes caller trust contexts through execution profiles:
+
+| Profile | Behavior | Use Case |
+|---------|----------|----------|
+| **ManualPermissive** | Warnings for scope ambiguity, denials only for hazardous ops | Default CLI/TUI |
+| **ManualGuarded** | Denies missing scope, out-of-scope targets | CLI with `--strict-scope` |
+| **CiStrict** | Non-interactive, deterministic, strict | CI/CD pipelines |
+| **McpStrict** | Always strict, scope manifest required | MCP server |
+| **AgentStrict** | Always strict, cannot self-approve scope | Autonomous agent |
+
+### Usage Examples
+
+```bash
+# Manual permissive (default)
+eggsec scan example.com --profile quick
+
+# Manual strict
+eggsec scan example.com --profile quick --scope scope.toml --strict-scope
+
+# Strict MCP
+eggsec codegg-mcp --scope scope.toml --stdio
+
+# Strict autonomous agent
+eggsec agent run --portfolio portfolio.json --scope scope.toml
+```
+
+MCP and autonomous agent callers cannot use warn-only or downgrade flags. Enforcement is always in Rust code paths, not prompt-level instructions.
+
 ## Policy Decision Records
 
 Every target-bearing operation produces a structured policy decision with:

@@ -48,6 +48,14 @@ The `Scope` struct is critical for security and compliance. It defines which tar
   - `EggsecConfig.profiles` (`settings.rs:109`)
   - `WebhookConfig.headers` (`scan.rs:132`)
 
+### `ExecutionProfile` and `EnforcementOutcome` (`policy.rs`, `policy_decision.rs`)
+
+- `ExecutionProfile` - Caller trust boundary: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`
+- `EnforcementOutcome` - Profile-aware result: `Allow(PolicyDecision)`, `Warn(PolicyDecision)`, `Deny(PolicyDecision)`
+- `evaluate_enforcement()` - Wraps `evaluate_operation_policy()` with profile-specific behavior
+- `Capability` - Operation capability declarations for tool metadata
+- `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes
+
 ### `Loader` (`loader.rs`)
 
 Handles the mechanics of finding and parsing configuration files.

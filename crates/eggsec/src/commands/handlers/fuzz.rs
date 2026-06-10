@@ -15,6 +15,7 @@ pub async fn handle_fuzz(ctx: &CommandContext, mut args: crate::cli::FuzzArgs) -
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.url.clone();
@@ -57,6 +58,7 @@ pub async fn handle_waf_stress(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.url.clone();
@@ -96,6 +98,7 @@ pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> 
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.url.clone();
@@ -135,6 +138,7 @@ pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlA
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.url.clone();
@@ -174,6 +178,7 @@ pub async fn handle_oauth(ctx: &CommandContext, mut args: crate::cli::OAuthArgs)
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.url.clone();

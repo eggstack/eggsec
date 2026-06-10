@@ -23,6 +23,7 @@ pub async fn handle_auth_test(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);

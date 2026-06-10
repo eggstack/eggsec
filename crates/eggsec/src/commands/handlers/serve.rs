@@ -51,7 +51,7 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
 }
 
 #[cfg(feature = "rest-api")]
-pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
+pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
     use crate::tool::create_default_registry;
     use crate::tool::protocol::mcp::{create_mcp_router, run_stdio, McpProfile};
     use axum::serve;
@@ -65,15 +65,17 @@ pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeA
         _ => McpProfile::OpsAgent,
     };
 
+    let scope = Some(ctx.scope.clone());
+
     if args.stdio {
         tracing::info!(
             "Starting MCP server in STDIO mode (profile: {})",
             args.profile
         );
-        run_stdio(registry, args.api_key, profile).await;
+        run_stdio(registry, args.api_key, profile, scope).await;
         Ok(())
     } else {
-        let router = create_mcp_router(registry, args.api_key.clone(), profile).await;
+        let router = create_mcp_router(registry, args.api_key.clone(), profile, scope).await;
 
         let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
             .parse()

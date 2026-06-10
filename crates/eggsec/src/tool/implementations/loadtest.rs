@@ -114,8 +114,19 @@ impl SecurityTool for LoadTestTool {
     }
 
     fn capabilities(&self) -> Vec<ToolCapability> {
-        vec![ToolCapability {
-            name: "http_load_test".to_string(),
+        vec![
+            ToolCapability {
+                name: "load-test".to_string(),
+                description: "Load testing capability required by policy".to_string(),
+                parameters: vec![],
+                examples: vec![],
+                attack_surface: vec![AttackSurface::Web],
+                severity_potential: vec![],
+                prerequisites: vec![],
+                estimated_duration_ms: 0,
+            },
+            ToolCapability {
+                name: "http_load_test".to_string(),
             description: "Run HTTP load test".to_string(),
             parameters: vec![
                 ParameterDef {

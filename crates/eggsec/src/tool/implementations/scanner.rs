@@ -263,8 +263,19 @@ impl SecurityTool for ScannerTool {
 
     fn capabilities(&self) -> Vec<ToolCapability> {
         match self.mode {
-            ScanMode::Ports => vec![ToolCapability {
-                name: "scan_ports".to_string(),
+            ScanMode::Ports => vec![
+                ToolCapability {
+                    name: "active-probe".to_string(),
+                    description: "Active probing capability required by policy".to_string(),
+                    parameters: vec![],
+                    examples: vec![],
+                    attack_surface: vec![AttackSurface::Network],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec![],
+                    estimated_duration_ms: 0,
+                },
+                ToolCapability {
+                    name: "scan_ports".to_string(),
                 description: "Scan TCP ports on target".to_string(),
                 parameters: vec![
                     ParameterDef {
@@ -301,8 +312,19 @@ impl SecurityTool for ScannerTool {
                 prerequisites: vec![],
                 estimated_duration_ms: 60000,
             }],
-            ScanMode::Fingerprint => vec![ToolCapability {
-                name: "fingerprint".to_string(),
+            ScanMode::Fingerprint => vec![
+                ToolCapability {
+                    name: "passive-fingerprint".to_string(),
+                    description: "Passive fingerprinting capability required by policy".to_string(),
+                    parameters: vec![],
+                    examples: vec![],
+                    attack_surface: vec![AttackSurface::Network],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec![],
+                    estimated_duration_ms: 0,
+                },
+                ToolCapability {
+                    name: "fingerprint".to_string(),
                 description: "Fingerprint services on open ports".to_string(),
                 parameters: vec![
                     ParameterDef {
@@ -332,8 +354,29 @@ impl SecurityTool for ScannerTool {
                 prerequisites: vec!["scan_ports".to_string()],
                 estimated_duration_ms: 30000,
             }],
-            ScanMode::Endpoints => vec![ToolCapability {
-                name: "scan_endpoints".to_string(),
+            ScanMode::Endpoints => vec![
+                ToolCapability {
+                    name: "crawl".to_string(),
+                    description: "Web crawling capability required by policy".to_string(),
+                    parameters: vec![],
+                    examples: vec![],
+                    attack_surface: vec![AttackSurface::Web],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec![],
+                    estimated_duration_ms: 0,
+                },
+                ToolCapability {
+                    name: "active-probe".to_string(),
+                    description: "Active probing capability required by policy".to_string(),
+                    parameters: vec![],
+                    examples: vec![],
+                    attack_surface: vec![AttackSurface::Web],
+                    severity_potential: vec![AgentSeverity::Info],
+                    prerequisites: vec![],
+                    estimated_duration_ms: 0,
+                },
+                ToolCapability {
+                    name: "scan_endpoints".to_string(),
                 description: "Discover HTTP endpoints".to_string(),
                 parameters: vec![
                     ParameterDef {

@@ -73,9 +73,8 @@ pub use ai_analyze::*;
 
 use crate::cli::Cli;
 use crate::cli::Commands;
-use crate::config::evaluate_operation_policy;
 use crate::config::OperationDescriptor;
-use crate::config::{EggsecConfig, Scope};
+use crate::config::{EggsecConfig, ExecutionProfile, Scope};
 use crate::error::Result as ErrorResult;
 use anyhow::Result;
 
@@ -85,6 +84,7 @@ pub struct CommandContext {
     pub json: bool,
     config_path: Option<String>,
     pub notify_manager: crate::notify::NotifyManager,
+    pub execution_profile: ExecutionProfile,
 }
 
 impl CommandContext {
@@ -96,11 +96,17 @@ impl CommandContext {
             json,
             config_path: None,
             notify_manager,
+            execution_profile: ExecutionProfile::ManualPermissive,
         }
     }
 
     pub fn with_config_path(mut self, path: Option<String>) -> Self {
         self.config_path = path;
+        self
+    }
+
+    pub fn with_execution_profile(mut self, profile: ExecutionProfile) -> Self {
+        self.execution_profile = profile;
         self
     }
 
@@ -118,29 +124,38 @@ impl CommandContext {
 
     /// Evaluate an operation against the current execution policy and scope.
     ///
-    /// Wraps the shared [`evaluate_operation_policy`] evaluator. Returns the
+    /// Wraps the shared [`evaluate_operation_policy`] evaluator with
+    /// profile-aware enforcement via [`evaluate_enforcement`]. Returns the
     /// [`PolicyDecision`] on allow, or an error with denial details on deny.
     pub fn evaluate_and_enforce_operation(
         &self,
         descriptor: OperationDescriptor,
     ) -> Result<crate::config::PolicyDecision> {
-        let decision = evaluate_operation_policy(
+        let outcome = crate::config::evaluate_enforcement(
             &descriptor,
             &self.config.execution_policy,
             Some(&self.scope),
+            self.execution_profile,
         );
 
-        if !decision.allowed {
-            if self.json {
-                let json = serde_json::to_string(&decision)
-                    .unwrap_or_else(|_| "unable to serialize decision".to_string());
-                anyhow::bail!("{}", json);
-            } else {
-                anyhow::bail!("{}", decision.to_human_readable());
+        match &outcome {
+            crate::config::EnforcementOutcome::Allow(decision) => Ok(decision.clone()),
+            crate::config::EnforcementOutcome::Warn(decision) => {
+                for warning in &decision.warnings {
+                    tracing::warn!(warning = %warning, "Policy warning");
+                }
+                Ok(decision.clone())
+            }
+            crate::config::EnforcementOutcome::Deny(decision) => {
+                if self.json {
+                    let json = serde_json::to_string(decision)
+                        .unwrap_or_else(|_| "unable to serialize decision".to_string());
+                    anyhow::bail!("{}", json);
+                } else {
+                    anyhow::bail!("{}", decision.to_human_readable());
+                }
             }
         }
-
-        Ok(decision)
     }
 }
 
@@ -268,6 +283,7 @@ mod tests {
             required_policy_flags: Vec::new(),
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         }
     }
 
@@ -435,6 +451,7 @@ mod tests {
             required_policy_flags: Vec::new(),
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_err());
@@ -453,6 +470,7 @@ mod tests {
             required_policy_flags: Vec::new(),
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let result = ctx.evaluate_and_enforce_operation(desc);
         assert!(result.is_ok());
@@ -488,5 +506,58 @@ mod tests {
             OperationRisk::CredentialTesting,
         ));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn manual_permissive_execution_profile() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        assert_eq!(ctx.execution_profile, ExecutionProfile::ManualPermissive);
+    }
+
+    #[test]
+    fn with_execution_profile_sets_profile() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_execution_profile(ExecutionProfile::McpStrict);
+        assert_eq!(ctx.execution_profile, ExecutionProfile::McpStrict);
+    }
+
+    #[test]
+    fn mcp_strict_denies_requires_explicit_scope_without_scope() {
+        let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false)
+            .with_execution_profile(ExecutionProfile::McpStrict);
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn agent_strict_denies_requires_explicit_scope_without_scope() {
+        let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false)
+            .with_execution_profile(ExecutionProfile::AgentStrict);
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_err());
     }
 }

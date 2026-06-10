@@ -520,6 +520,7 @@ pub fn policy_decision_for_mcp_call(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: profile_policy.require_explicit_scope,
+        required_capabilities: Vec::new(),
     };
 
     let mut decision =

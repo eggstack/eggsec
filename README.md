@@ -82,6 +82,8 @@ description = "Admin panel - excluded"
 
 **Feature gating** ensures intrusive modules (stress testing, raw packet crafting, headless browser, NSE, database storage, container scanning, and more) require explicit build flags and cannot be invoked accidentally.
 
+**Execution profiles** separate manual CLI ergonomics from strict MCP/agent enforcement. Manual usage defaults to permissive scope assistance; `--strict-scope` enables strict mode. MCP and autonomous agent paths are always strict and cannot be downgraded by model-supplied flags.
+
 See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation.
 
 ## Quick Start

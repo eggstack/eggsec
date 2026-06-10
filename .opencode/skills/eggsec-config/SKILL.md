@@ -71,6 +71,27 @@ impl EggsecConfig {
 - **Slack**: webhook_url must start with http:// or https://
 - **PagerDuty**: routing_key cannot be empty
 
+### Execution Profiles
+```rust
+use eggsec::config::{ExecutionProfile, evaluate_enforcement};
+
+let outcome = evaluate_enforcement(&descriptor, &policy, Some(&scope), ExecutionProfile::McpStrict);
+match outcome {
+    EnforcementOutcome::Allow(decision) => { /* proceed */ }
+    EnforcementOutcome::Warn(decision) => { /* log warnings, proceed */ }
+    EnforcementOutcome::Deny(decision) => { /* deny */ }
+}
+```
+
+Profiles: `ManualPermissive` (default CLI), `ManualGuarded` (--strict-scope), `CiStrict` (CI), `McpStrict` (MCP), `AgentStrict` (agent).
+
+### Capability Declarations
+```rust
+use eggsec::config::Capability;
+// Tools declare required_capabilities in OperationDescriptor
+// Policies declare allowed_capabilities / denied_capabilities in ExecutionPolicy
+```
+
 ### Scope Enforcement
 ```rust
 let scope = load_scope(None)?;

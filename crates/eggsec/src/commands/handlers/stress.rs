@@ -21,6 +21,7 @@ pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
 
     let stress_type = match args.stress_type {
@@ -104,6 +105,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                     required_policy_flags: Vec::new(),
                     requires_private_or_local_target: false,
                     requires_explicit_scope: false,
+                    required_capabilities: Vec::new(),
                 })?;
             }
 
@@ -237,6 +239,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 required_policy_flags: Vec::new(),
                 requires_private_or_local_target: false,
                 requires_explicit_scope: false,
+                required_capabilities: Vec::new(),
             })?;
 
             let proxy_entry = crate::commands::proxy::create_proxy_entry(&test_args.proxy)?;

@@ -190,10 +190,10 @@ impl SecurityTool for WafTool {
     }
 
     fn capabilities(&self) -> Vec<ToolCapability> {
-        let cap_name = match self.mode {
-            WafMode::Detect => "detect",
-            WafMode::Bypass => "bypass",
-            WafMode::Stress => "stress",
+        let (cap_name, policy_cap_name, policy_cap_desc) = match self.mode {
+            WafMode::Detect => ("detect", "waf-detect", "WAF detection capability required by policy"),
+            WafMode::Bypass => ("bypass", "waf-bypass-simulation", "WAF bypass simulation capability required by policy"),
+            WafMode::Stress => ("stress", "waf-stress-test", "WAF stress testing capability required by policy"),
         };
 
         let description = match self.mode {
@@ -216,8 +216,19 @@ impl SecurityTool for WafTool {
             WafMode::Stress => (vec![AttackSurface::Web], vec![AgentSeverity::Info], 300000),
         };
 
-        vec![ToolCapability {
-            name: cap_name.to_string(),
+        vec![
+            ToolCapability {
+                name: policy_cap_name.to_string(),
+                description: policy_cap_desc.to_string(),
+                parameters: vec![],
+                examples: vec![],
+                attack_surface: vec![AttackSurface::Web],
+                severity_potential: vec![AgentSeverity::Info],
+                prerequisites: vec![],
+                estimated_duration_ms: 0,
+            },
+            ToolCapability {
+                name: cap_name.to_string(),
             description: description.to_string(),
             parameters: vec![ParameterDef {
                 name: "target".to_string(),

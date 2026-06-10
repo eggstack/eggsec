@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk, Scope,
+    ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode,
+    OperationRisk, Scope,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +176,39 @@ impl PolicyDecision {
     }
 }
 
+/// Outcome of evaluating an operation against a profile's enforcement rules.
+///
+/// Wraps a [`PolicyDecision`] with profile-aware semantics:
+/// - `Allow`: operation may proceed.
+/// - `Warn`: operation may proceed but warnings should be surfaced.
+/// - `Deny`: operation must not proceed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EnforcementOutcome {
+    Allow(PolicyDecision),
+    Warn(PolicyDecision),
+    Deny(PolicyDecision),
+}
+
+impl EnforcementOutcome {
+    /// Returns a reference to the inner `PolicyDecision`.
+    pub fn decision(&self) -> &PolicyDecision {
+        match self {
+            Self::Allow(d) | Self::Warn(d) | Self::Deny(d) => d,
+        }
+    }
+
+    /// Returns `true` if the outcome permits the operation to proceed.
+    pub fn is_allowed(&self) -> bool {
+        matches!(self, Self::Allow(_) | Self::Warn(_))
+    }
+
+    /// Returns `true` if the outcome is a hard denial.
+    pub fn is_denied(&self) -> bool {
+        matches!(self, Self::Deny(_))
+    }
+}
+
 /// Check whether a named compile-time Cargo feature is enabled.
 ///
 /// Returns `true` for features that are always available or not relevant
@@ -316,6 +350,109 @@ pub fn evaluate_operation_policy(
     decision
 }
 
+/// Evaluate an operation with profile-aware enforcement semantics.
+///
+/// Calls [`evaluate_operation_policy`] internally, then transforms the
+/// resulting [`PolicyDecision`] into [`EnforcementOutcome::Allow`],
+/// [`EnforcementOutcome::Warn`], or [`EnforcementOutcome::Deny`] according
+/// to the given [`ExecutionProfile`].
+pub fn evaluate_enforcement(
+    descriptor: &OperationDescriptor,
+    policy: &ExecutionPolicy,
+    scope: Option<&Scope>,
+    profile: ExecutionProfile,
+) -> EnforcementOutcome {
+    let decision = evaluate_operation_policy(descriptor, policy, scope);
+
+    if !decision.allowed {
+        return EnforcementOutcome::Deny(decision);
+    }
+
+    // Check capability requirements against profile
+    if !decision.required_features.is_empty() || !descriptor.required_capabilities.is_empty() {
+        // For strict profiles, missing capabilities deny
+        if profile.is_strict() {
+            // Check denied capabilities
+            for cap in &descriptor.required_capabilities {
+                if policy.denied_capabilities.contains(cap) {
+                    let mut d = decision.clone();
+                    d.denied_reasons.push(format!(
+                        "capability '{}' is denied by execution policy",
+                        cap
+                    ));
+                    d.allowed = false;
+                    return EnforcementOutcome::Deny(d);
+                }
+            }
+        }
+    }
+
+    // Check for warnings based on profile
+    let mut warnings = decision.warnings.clone();
+
+    match profile {
+        ExecutionProfile::ManualPermissive => {
+            // Scope ambiguity becomes a warning, not a denial
+            if decision.target_original.is_some()
+                && decision.matched_scope_rules.is_empty()
+                && decision.denied_reasons.is_empty()
+            {
+                warnings.push("target scope is ambiguous; consider using --strict-scope".to_string());
+            }
+            if !warnings.is_empty() {
+                let mut d = decision;
+                d.warnings = warnings;
+                EnforcementOutcome::Warn(d)
+            } else {
+                EnforcementOutcome::Allow(decision)
+            }
+        }
+        ExecutionProfile::ManualGuarded => {
+            // Missing scope for target-networked operations denies
+            if descriptor.requires_explicit_scope && scope.is_none() {
+                let mut d = decision;
+                d.denied_reasons
+                    .push("scope file required in guarded mode".to_string());
+                d.allowed = false;
+                return EnforcementOutcome::Deny(d);
+            }
+            EnforcementOutcome::Allow(decision)
+        }
+        ExecutionProfile::CiStrict | ExecutionProfile::McpStrict | ExecutionProfile::AgentStrict => {
+            // Strict profiles: missing scope for networked operations denies
+            if descriptor.requires_explicit_scope && scope.is_none() {
+                let mut d = decision;
+                d.denied_reasons.push(format!(
+                    "scope file required in {} mode",
+                    profile
+                ));
+                d.allowed = false;
+                return EnforcementOutcome::Deny(d);
+            }
+            // Strict profiles: scope ambiguity denies
+            if decision.target_original.is_some()
+                && decision.matched_scope_rules.is_empty()
+                && decision.denied_reasons.is_empty()
+            {
+                let mut d = decision;
+                d.denied_reasons.push(format!(
+                    "target scope is ambiguous in {} mode",
+                    profile
+                ));
+                d.allowed = false;
+                return EnforcementOutcome::Deny(d);
+            }
+            if !warnings.is_empty() {
+                let mut d = decision;
+                d.warnings = warnings;
+                EnforcementOutcome::Deny(d)
+            } else {
+                EnforcementOutcome::Allow(decision)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -403,6 +540,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
@@ -426,6 +564,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
@@ -448,6 +587,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, None);
@@ -470,6 +610,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, None);
@@ -492,6 +633,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let mut policy = ExecutionPolicy::default();
         policy.allow_exploit_adjacent = true;
@@ -530,6 +672,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
@@ -548,6 +691,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let policy = ExecutionPolicy::default();
         let decision = evaluate_operation_policy(&descriptor, &policy, None);
@@ -573,6 +717,7 @@ mod tests {
             required_policy_flags: vec![],
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
         };
         let mut policy = ExecutionPolicy::default();
         policy.allow_intrusive_fuzzing = true;
@@ -582,5 +727,86 @@ mod tests {
         assert!(json.contains("\"defense-lab\""));
         assert!(json.contains("\"intrusive\""));
         assert!(json.contains("\"waf-regression\""));
+    }
+
+    #[test]
+    fn manual_permissive_warns_for_ambiguous_scope() {
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let policy = ExecutionPolicy::default();
+        let outcome =
+            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::ManualPermissive);
+        assert!(outcome.is_allowed());
+    }
+
+    #[test]
+    fn mcp_strict_denies_for_missing_scope() {
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let policy = ExecutionPolicy::default();
+        let outcome =
+            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
+        assert!(outcome.is_denied());
+    }
+
+    #[test]
+    fn agent_strict_denies_for_missing_scope() {
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let policy = ExecutionPolicy::default();
+        let outcome =
+            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::AgentStrict);
+        assert!(outcome.is_denied());
+    }
+
+    #[test]
+    fn enforcement_outcome_json_serialization() {
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+        let policy = ExecutionPolicy::default();
+        let outcome =
+            evaluate_enforcement(&descriptor, &policy, None, ExecutionProfile::McpStrict);
+        let json = serde_json::to_string(&outcome).unwrap();
+        assert!(json.contains("\"deny\"") || json.contains("\"Deny\""));
     }
 }

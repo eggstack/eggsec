@@ -219,6 +219,26 @@ impl SecurityTool for FuzzerTool {
     fn capabilities(&self) -> Vec<ToolCapability> {
         vec![
             ToolCapability {
+                name: "http-fuzz-low-impact".to_string(),
+                description: "Low-impact HTTP fuzzing capability required by policy".to_string(),
+                parameters: vec![],
+                examples: vec![],
+                attack_surface: vec![AttackSurface::Web],
+                severity_potential: vec![AgentSeverity::Info],
+                prerequisites: vec![],
+                estimated_duration_ms: 0,
+            },
+            ToolCapability {
+                name: "intrusive-fuzz".to_string(),
+                description: "Intrusive fuzzing capability required by policy".to_string(),
+                parameters: vec![],
+                examples: vec![],
+                attack_surface: vec![AttackSurface::Web, AttackSurface::Api],
+                severity_potential: vec![AgentSeverity::Medium],
+                prerequisites: vec![],
+                estimated_duration_ms: 0,
+            },
+            ToolCapability {
                 name: "sqli".to_string(),
                 description: "Test for SQL injection vulnerabilities".to_string(),
                 parameters: vec![ParameterDef {

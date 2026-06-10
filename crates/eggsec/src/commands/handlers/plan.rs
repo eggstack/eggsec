@@ -244,6 +244,7 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             required_policy_flags: vec![],
             requires_private_or_local_target: profile.requires_private_scope(),
             requires_explicit_scope: profile.requires_private_scope(),
+            required_capabilities: Vec::new(),
         };
 
         let decision =

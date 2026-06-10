@@ -140,7 +140,11 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **Shared Policy Evaluator**: Use `evaluate_operation_policy()` in `config/policy_decision.rs` instead of building policy checks inline
-- **CommandContext Policy Wrapper**: Use `CommandContext::evaluate_and_enforce_operation()` for command handlers — it wraps `evaluate_operation_policy` with scope enforcement and structured denial output
+- **CommandContext Policy Wrapper**: Use `CommandContext::evaluate_and_enforce_operation()` for command handlers — it wraps `evaluate_enforcement()` with profile-aware scope enforcement and structured denial output
+- **Execution Profiles**: Use `ExecutionProfile` enum for caller trust boundary. `ManualPermissive` for CLI, `McpStrict` for MCP, `AgentStrict` for agents.
+- **Enforcement Outcomes**: `evaluate_enforcement()` returns `EnforcementOutcome` (Allow/Warn/Deny) wrapping `PolicyDecision`.
+- **Capability Declarations**: Tools declare `required_capabilities` in `OperationDescriptor`. Policies control via `allowed_capabilities` / `denied_capabilities`.
+- **Discovery Promotion**: `DiscoveredTargetStatus` controls whether discovered targets can be scanned. Only `ApprovedInScope` allows scanning.
 - **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile
 - **MCP Policy Helpers**: `classify_tool_risk()` and `infer_tool_category()` in MCP policy infer tool metadata from tool IDs; `policy_decision_for_mcp_call()` builds a `PolicyDecision` for MCP tool invocations
 - **MCP Policy Denials**: The `tools/call` handler in `tool/protocol/mcp/handlers/server.rs` now computes a full `PolicyDecision` via `policy_decision_for_mcp_call()` and embeds it in the MCP error response `data` field, enabling structured downstream consumption of denial reasons.

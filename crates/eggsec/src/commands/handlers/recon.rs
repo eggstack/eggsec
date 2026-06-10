@@ -16,6 +16,7 @@ pub async fn handle_recon(ctx: &CommandContext, mut args: crate::cli::ReconArgs)
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.target.clone();

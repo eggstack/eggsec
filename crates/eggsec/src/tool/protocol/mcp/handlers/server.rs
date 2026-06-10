@@ -44,6 +44,7 @@ pub struct McpServer {
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) profile: McpProfile,
     pub(crate) policy: McpProfilePolicy,
+    pub(crate) execution_policy: crate::config::ExecutionPolicy,
 }
 
 impl McpServer {
@@ -88,6 +89,7 @@ impl McpServer {
             shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             profile,
             policy,
+            execution_policy: crate::config::ExecutionPolicy::default(),
         };
 
         server.start_hashmap_reaper(60);
@@ -98,6 +100,11 @@ impl McpServer {
     pub fn with_profile(mut self, profile: McpProfile) -> Self {
         self.profile = profile;
         self.policy = McpProfilePolicy::for_profile(self.profile);
+        self
+    }
+
+    pub fn with_execution_policy(mut self, policy: crate::config::ExecutionPolicy) -> Self {
+        self.execution_policy = policy;
         self
     }
 
@@ -139,6 +146,7 @@ impl McpServer {
             shutdown_requested: self.shutdown_requested,
             profile: self.profile,
             policy: self.policy,
+            execution_policy: self.execution_policy,
         }
     }
 
@@ -397,7 +405,7 @@ impl McpServer {
             self.policy
                 .validate_tool_call(&tool_id, capability.as_deref(), &arguments)
         {
-            let execution_policy = crate::config::ExecutionPolicy::default();
+            let execution_policy = self.execution_policy.clone();
             let scope_ref = self.scope.as_ref();
             let decision = policy_decision_for_mcp_call(
                 &self.policy,
@@ -416,7 +424,7 @@ impl McpServer {
         // Target policy enforcement
         if !target_value.is_empty() {
             if let Err(violation) = self.policy.validate_target(target_value) {
-                let execution_policy = crate::config::ExecutionPolicy::default();
+                let execution_policy = self.execution_policy.clone();
                 let scope_ref = self.scope.as_ref();
                 let decision = policy_decision_for_mcp_call(
                     &self.policy,

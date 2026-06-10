@@ -161,6 +161,7 @@ fn evaluate_operation_policy_allowed_localhost() {
         required_policy_flags: vec![],
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     };
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, Some(&scope));
@@ -183,6 +184,7 @@ fn evaluate_operation_policy_denied_by_risk() {
         required_policy_flags: vec![],
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     };
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, None);
@@ -205,6 +207,7 @@ fn evaluate_operation_policy_denied_missing_scope() {
         required_policy_flags: vec![],
         requires_private_or_local_target: false,
         requires_explicit_scope: true,
+        required_capabilities: Vec::new(),
     };
     let policy = ExecutionPolicy::default();
     let decision = evaluate_operation_policy(&descriptor, &policy, None);

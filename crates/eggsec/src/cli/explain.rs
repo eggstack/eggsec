@@ -68,6 +68,7 @@ pub fn evaluate_policy_decision(
         required_policy_flags,
         requires_private_or_local_target: profile.requires_private_scope(),
         requires_explicit_scope: profile.requires_private_scope(),
+        required_capabilities: Vec::new(),
     };
 
     evaluate_operation_policy(&descriptor, policy, scope)

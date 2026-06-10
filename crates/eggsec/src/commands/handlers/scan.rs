@@ -16,6 +16,7 @@ pub async fn handle_scan_ports(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.host.clone();
@@ -56,6 +57,7 @@ pub async fn handle_scan_endpoints(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.url.clone();
@@ -96,6 +98,7 @@ pub async fn handle_fingerprint(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.host.clone();
@@ -134,6 +137,7 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.target.clone();
@@ -176,6 +180,7 @@ pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
     let target = args.target.clone();
@@ -216,6 +221,7 @@ pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
     let target = session.target.clone();
     let scan_id = format!("resume-{}", chrono::Utc::now().timestamp());

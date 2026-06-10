@@ -19,6 +19,16 @@ Tool abstraction layer workflows and patterns for security tool integration.
 - `rest.rs` - REST API (scope validation implemented)
 - `grpc.rs` - gRPC service
 
+### MCP Enforcement Boundary
+
+The MCP server (`handlers/server.rs`) now stores `execution_policy` and receives `scope` from `CommandContext`. All MCP tool executions pass through:
+1. `McpProfilePolicy::validate_tool_call()` - profile-level enforcement
+2. `McpProfilePolicy::validate_target()` - target policy enforcement
+3. `scope.is_target_allowed()` - scope enforcement
+4. `ToolDispatcher::dispatch()` - actual execution
+
+The `create_mcp_router()` and `run_stdio()` functions accept `scope: Option<Scope>` parameter.
+
 ### Agent Routes (REST API)
 `tool/protocol/agent_routes.rs` - Agent and task management:
 - `validate_callback_url()` - SSRF protection for agent callback URLs

@@ -21,6 +21,7 @@ pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -
                     required_policy_flags: Vec::new(),
                     requires_private_or_local_target: false,
                     requires_explicit_scope: false,
+                    required_capabilities: Vec::new(),
                 })?;
             }
             PacketSubcommand::Traceroute(trace_args) => {
@@ -34,6 +35,7 @@ pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -
                     required_policy_flags: Vec::new(),
                     requires_private_or_local_target: false,
                     requires_explicit_scope: false,
+                    required_capabilities: Vec::new(),
                 })?;
             }
             _ => {}
@@ -82,6 +84,7 @@ pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Re
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
 
     let timeout = Duration::from_secs(args.timeout);
@@ -175,6 +178,7 @@ pub async fn handle_traceroute(
         required_policy_flags: Vec::new(),
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     })?;
 
     let config = TracerouteConfig {

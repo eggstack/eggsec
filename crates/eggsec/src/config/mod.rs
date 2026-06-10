@@ -34,6 +34,7 @@
 
 mod api;
 mod budget;
+mod discovery;
 mod http;
 mod loader;
 mod policy;
@@ -45,10 +46,16 @@ mod settings;
 
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
 pub use budget::{BudgetError, ExecutionBudget};
+pub use discovery::DiscoveredTargetStatus;
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
-pub use policy::{ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk};
-pub use policy_decision::{evaluate_operation_policy, PolicyDecision};
+pub use policy::{
+    Capability, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor, OperationMode,
+    OperationRisk,
+};
+pub use policy_decision::{
+    evaluate_enforcement, evaluate_operation_policy, EnforcementOutcome, PolicyDecision,
+};
 pub use presets::DefenseLabPreset;
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,

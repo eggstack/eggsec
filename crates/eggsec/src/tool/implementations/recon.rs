@@ -190,6 +190,16 @@ impl SecurityTool for ReconTool {
     fn capabilities(&self) -> Vec<ToolCapability> {
         vec![
             ToolCapability {
+                name: "passive-fingerprint".to_string(),
+                description: "Passive fingerprinting capability required by policy".to_string(),
+                parameters: vec![],
+                examples: vec![],
+                attack_surface: vec![AttackSurface::Network],
+                severity_potential: vec![AgentSeverity::Info],
+                prerequisites: vec![],
+                estimated_duration_ms: 0,
+            },
+            ToolCapability {
                 name: "full_recon".to_string(),
                 description: "Perform comprehensive reconnaissance".to_string(),
                 parameters: vec![

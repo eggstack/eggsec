@@ -38,6 +38,7 @@ pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) 
         required_policy_flags: vec![],
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
+        required_capabilities: Vec::new(),
     };
 
     let decision =
