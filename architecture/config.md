@@ -105,7 +105,7 @@ pub enum ScopeSource {
 - `scope()` - Returns the `LoadedScope`
 
 **Security enforcement:**
-- MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; legacy `policy_decision_for_mcp_call` / direct `evaluate_operation_policy` calls are deprecated for denial paths (prefer `policy_decision_for_mcp_call_with_enforcement` + `EnforcementContext`).
+- MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; `EnforcementContext` is the sole policy/scope authority. Legacy helpers (`policy_decision_for_mcp_call`, `denial_from_violation`, `with_scope`, `with_scope_and_profile`) have been removed.
 - Agent refuses to run without an explicit scope manifest; per-scan `enforcement.evaluate` immediately before dispatch.
 - Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
 

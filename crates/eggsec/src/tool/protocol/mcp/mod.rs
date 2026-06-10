@@ -14,8 +14,7 @@ mod types;
 pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
 pub use policy::{
-    classify_tool_risk, denial_from_violation, policy_decision_for_mcp_call, McpPolicyDenial,
-    McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector,
+    classify_tool_risk, McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector,
 };
 pub use profile::McpProfile;
 pub use routes::{create_mcp_router, run_stdio};
@@ -470,11 +469,15 @@ mod tests {
 
     fn create_coding_agent_server() -> McpServer {
         let registry = create_default_registry();
-        McpServer::with_scope_and_profile(
+        let enforcement = crate::config::EnforcementContext::mcp_strict(
+            crate::config::ExecutionPolicy::default(),
+            crate::config::LoadedScope::default_empty(),
+        );
+        McpServer::with_enforcement(
             registry,
             Some("test-api-key".to_string()),
-            None,
             super::profile::McpProfile::CodingAgent,
+            enforcement,
         )
     }
 

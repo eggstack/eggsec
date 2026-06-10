@@ -4,9 +4,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Interval};
 
-#[cfg(feature = "rest-api")]
-use crate::config::Scope;
-
 use crate::tool::ratelimit::RateLimitConfig;
 use crate::tool::{
     CancellationToken, ExecutionHistory, RequestOptions, SessionManager, Target, ToolDispatcher,
@@ -44,16 +41,9 @@ pub struct McpServer {
     stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
-    // Legacy/test-only: production paths use `enforcement.loaded_scope` exclusively.
-    // Kept to avoid churn in legacy constructors and `with_history`; always None under `with_enforcement`.
-    #[cfg(feature = "rest-api")]
-    scope: Option<Scope>,
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) profile: McpProfile,
     pub(crate) policy: McpProfilePolicy,
-    // Legacy/test-only mirror of enforcement.execution_policy for compatibility with old paths.
-    // Production dispatch and policy decisions use `self.enforcement` exclusively.
-    pub(crate) execution_policy: crate::config::ExecutionPolicy,
     pub(crate) enforcement: crate::config::EnforcementContext,
 }
 
@@ -66,77 +56,16 @@ impl McpServer {
     /// EnforcementContext) to ensure the correct McpStrict profile + LoadedScope
     /// provenance + execution policy are wired in.
     pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
-        Self::with_scope_and_profile(registry, api_key, None, McpProfile::default())
-    }
-
-    /// Convenience constructor that builds a default McpStrict enforcement context.
-    ///
-    /// Intended for tests and transitional call sites. Production startup paths
-    /// (create_mcp_router / run_stdio) now use `with_enforcement` directly.
-    pub fn with_scope(
-        registry: ToolRegistry,
-        api_key: Option<String>,
-        scope: Option<Scope>,
-    ) -> Self {
-        Self::with_scope_and_profile(registry, api_key, scope, McpProfile::default())
-    }
-
-    /// Legacy constructor that internally creates a default McpStrict enforcement
-    /// context with DefaultEmpty scope, then allows callers to patch via
-    /// `with_enforcement_context`.
-    ///
-    /// Marked for test/support use. Prefer the `with_enforcement` constructor
-    /// or the higher-level router/stdio entry points for production to avoid
-    /// "build default then patch" footguns.
-    pub fn with_scope_and_profile(
-        registry: ToolRegistry,
-        api_key: Option<String>,
-        scope: Option<Scope>,
-        profile: McpProfile,
-    ) -> Self {
-        let dispatcher = ToolDispatcher::new(registry.clone());
-        let (stream_events, _) = tokio::sync::broadcast::channel(1000);
-
-        let pending_cancellations = Arc::new(RwLock::new(FxHashMap::default()));
-        let completed_results = Arc::new(RwLock::new(FxHashMap::default()));
-        let policy = McpProfilePolicy::for_profile(profile);
-
-        let server = Self {
-            registry,
-            dispatcher,
-            api_key,
-            rate_limiter: RateLimiter::new(RateLimitConfig::default().requests_per_minute),
-            session_manager: None,
-            pending_cancellations,
-            completed_results,
-            stream_events: Arc::new(stream_events),
-            #[cfg(feature = "ai-integration")]
-            ai_client: None,
-            #[cfg(feature = "rest-api")]
-            scope,
-            shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            profile,
-            policy,
-            execution_policy: crate::config::ExecutionPolicy::default(),
-            enforcement: crate::config::EnforcementContext::mcp_strict(
-                crate::config::ExecutionPolicy::default(),
-                crate::config::LoadedScope::default_empty(),
-            ),
-        };
-
-        server.start_hashmap_reaper(60);
-
-        server
+        let enforcement = crate::config::EnforcementContext::mcp_strict(
+            crate::config::ExecutionPolicy::default(),
+            crate::config::LoadedScope::default_empty(),
+        );
+        Self::with_enforcement(registry, api_key, McpProfile::default(), enforcement)
     }
 
     pub fn with_profile(mut self, profile: McpProfile) -> Self {
         self.profile = profile;
         self.policy = McpProfilePolicy::for_profile(self.profile);
-        self
-    }
-
-    pub fn with_execution_policy(mut self, policy: crate::config::ExecutionPolicy) -> Self {
-        self.execution_policy = policy;
         self
     }
 
@@ -171,12 +100,9 @@ impl McpServer {
             stream_events: Arc::new(stream_events),
             #[cfg(feature = "ai-integration")]
             ai_client: None,
-            #[cfg(feature = "rest-api")]
-            scope: None,
             shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             profile,
             policy: mcp_policy,
-            execution_policy: enforcement.execution_policy.clone(),
             enforcement,
         };
 
@@ -195,8 +121,6 @@ impl McpServer {
         enforcement: crate::config::EnforcementContext,
     ) -> Self {
         self.enforcement = enforcement;
-        // Also sync execution_policy for consistency in any legacy paths that read it directly
-        self.execution_policy = self.enforcement.execution_policy.clone();
         self
     }
 
@@ -233,12 +157,9 @@ impl McpServer {
             stream_events: self.stream_events,
             #[cfg(feature = "ai-integration")]
             ai_client: self.ai_client,
-            #[cfg(feature = "rest-api")]
-            scope: self.scope,
             shutdown_requested: self.shutdown_requested,
             profile: self.profile,
             policy: self.policy,
-            execution_policy: self.execution_policy,
             enforcement: self.enforcement,
         }
     }

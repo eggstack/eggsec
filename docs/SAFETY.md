@@ -93,7 +93,7 @@ eggsec codegg-mcp --scope scope.toml --stdio
 eggsec agent run --portfolio portfolio.json --scope scope.toml
 ```
 
-MCP and autonomous agent callers cannot use warn-only or downgrade flags. Enforcement is always in Rust code paths (`EnforcementContext::evaluate` central boundary), not prompt-level instructions. Legacy MCP helpers (`policy_decision_for_mcp_call`) and direct `evaluate_operation_policy` are deprecated for denial paths; prefer `operation_descriptor_for_mcp_call` + `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`) to ensure required capabilities, provenance, and DenialClass/positive-capability logic are consistent. Preferred MCP production constructor: `McpServer::with_enforcement`.
+MCP and autonomous agent callers cannot use warn-only or downgrade flags. Enforcement is always in Rust code paths (`EnforcementContext::evaluate` central boundary), not prompt-level instructions. MCP enforcement uses `operation_descriptor_for_mcp_call` + `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`) to ensure required capabilities, provenance, and DenialClass/positive-capability logic are consistent. Preferred MCP production constructor: `McpServer::with_enforcement`.
 
 ## Policy Decision Records
 

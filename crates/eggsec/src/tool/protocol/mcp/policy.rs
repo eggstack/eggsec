@@ -413,42 +413,6 @@ impl PolicyViolation {
             PolicyViolation::TargetDenied { .. } => -32024,
         }
     }
-
-    /// Convert to an MCP error response with an embedded [`PolicyDecision`].
-    pub fn to_mcp_error_with_decision(
-        &self,
-        profile_policy: &McpProfilePolicy,
-        tool_id: &str,
-        arguments: &serde_json::Value,
-        execution_policy: &crate::config::ExecutionPolicy,
-        scope: Option<&crate::config::Scope>,
-    ) -> super::types::McpError {
-        let denial = denial_from_violation(
-            self,
-            profile_policy,
-            tool_id,
-            arguments,
-            execution_policy,
-            scope,
-        );
-        super::types::McpError {
-            code: denial.code,
-            message: denial.violation,
-            data: Some(serde_json::to_value(&denial.policy_decision).unwrap_or_default()),
-        }
-    }
-}
-
-/// A policy denial that embeds both the MCP-specific violation and a shared
-/// [`PolicyDecision`] for structured downstream consumption.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpPolicyDenial {
-    /// Human-readable description of the violation.
-    pub violation: String,
-    /// MCP JSON-RPC error code.
-    pub code: i32,
-    /// Shared policy decision providing full evaluation context.
-    pub policy_decision: crate::config::PolicyDecision,
 }
 
 /// Infer a [`ToolCategory`] from a tool ID string for selector matching.
@@ -558,44 +522,6 @@ pub fn operation_descriptor_for_mcp_call(
     }
 }
 
-/// Build a [`PolicyDecision`] for an MCP tool call by evaluating the tool
-/// against both the MCP profile policy and the shared execution policy.
-///
-/// Deprecated in favor of paths that go through `EnforcementContext::evaluate`
-/// (see `policy_decision_for_mcp_call_with_enforcement` and the main dispatch
-/// in handlers/server.rs). Kept for compatibility with limited callers;
-/// now populates required capabilities.
-#[deprecated(
-    note = "Prefer operation_descriptor_for_mcp_call + EnforcementContext::evaluate or policy_decision_for_mcp_call_with_enforcement for consistent capability and provenance handling."
-)]
-pub fn policy_decision_for_mcp_call(
-    profile_policy: &McpProfilePolicy,
-    tool_id: &str,
-    arguments: &serde_json::Value,
-    execution_policy: &crate::config::ExecutionPolicy,
-    scope: Option<&crate::config::Scope>,
-) -> crate::config::PolicyDecision {
-    use crate::config::evaluate_operation_policy;
-
-    let descriptor = operation_descriptor_for_mcp_call(profile_policy, tool_id, None, arguments);
-
-    let mut decision = evaluate_operation_policy(&descriptor, execution_policy, scope);
-
-    if let Err(violation) = profile_policy.validate_tool_call(tool_id, None, arguments) {
-        decision.allowed = false;
-        decision.denied_reasons.push(violation.to_string());
-    }
-
-    if let Some(ref tgt) = descriptor.target {
-        if let Err(violation) = profile_policy.validate_target(tgt) {
-            decision.allowed = false;
-            decision.denied_reasons.push(violation.to_string());
-        }
-    }
-
-    decision
-}
-
 /// Build a [`PolicyDecision`] for an MCP tool call using the shared `EnforcementContext`.
 ///
 /// This ensures:
@@ -630,33 +556,6 @@ pub fn policy_decision_for_mcp_call_with_enforcement(
     }
 
     decision
-}
-
-/// Convert a [`PolicyViolation`] into an [`McpPolicyDenial`] that includes
-/// a shared [`PolicyDecision`].
-///
-/// Deprecated: Prefer constructing a denial using `policy_decision_for_mcp_call_with_enforcement`
-/// + `McpPolicyDenial` directly when an `EnforcementContext` is available, to ensure
-/// consistent capability population and explicit-manifest provenance handling.
-#[deprecated(
-    note = "Use policy_decision_for_mcp_call_with_enforcement + McpPolicyDenial for consistent enforcement path."
-)]
-pub fn denial_from_violation(
-    violation: &PolicyViolation,
-    profile_policy: &McpProfilePolicy,
-    tool_id: &str,
-    arguments: &serde_json::Value,
-    execution_policy: &crate::config::ExecutionPolicy,
-    scope: Option<&crate::config::Scope>,
-) -> McpPolicyDenial {
-    #[allow(deprecated)]
-    let policy_decision =
-        policy_decision_for_mcp_call(profile_policy, tool_id, arguments, execution_policy, scope);
-    McpPolicyDenial {
-        violation: violation.to_string(),
-        code: violation.to_mcp_error_code(),
-        policy_decision,
-    }
 }
 
 /// Extract the hostname from a target string (strips scheme, port, path, userinfo).
@@ -1476,45 +1375,41 @@ mod tests {
 
     #[test]
     fn test_policy_decision_for_mcp_call_denied_tool() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
         let profile_policy = McpProfilePolicy::coding_agent();
-        let execution_policy = crate::config::ExecutionPolicy::default();
+        let enforcement = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
         let args = serde_json::json!({"tool_id": "stress"});
-        let decision =
-            policy_decision_for_mcp_call(&profile_policy, "stress", &args, &execution_policy, None);
+        let decision = policy_decision_for_mcp_call_with_enforcement(
+            &profile_policy,
+            "stress",
+            None,
+            &args,
+            &enforcement,
+        );
         assert!(!decision.allowed);
         assert!(!decision.denied_reasons.is_empty());
     }
 
     #[test]
     fn test_policy_decision_for_mcp_call_allowed_tool() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
         let profile_policy = McpProfilePolicy::coding_agent();
-        let execution_policy = crate::config::ExecutionPolicy::default();
-        let args = serde_json::json!({});
-        let decision =
-            policy_decision_for_mcp_call(&profile_policy, "scan", &args, &execution_policy, None);
-        assert!(decision.allowed);
-    }
-
-    #[test]
-    fn test_policy_violation_to_mcp_error_with_decision() {
-        let profile_policy = McpProfilePolicy::coding_agent();
-        let execution_policy = crate::config::ExecutionPolicy::default();
-        let violation = PolicyViolation::ToolDenied {
-            tool_id: "stress".to_string(),
-        };
-        let error = violation.to_mcp_error_with_decision(
-            &profile_policy,
-            "stress",
-            &serde_json::json!({}),
-            &execution_policy,
-            None,
+        let enforcement = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
         );
-        assert_eq!(error.code, -32020);
-        assert!(error.data.is_some());
-        let data = error.data.unwrap();
-        assert!(data.is_object());
-        assert!(data.get("allowed").is_some());
-        assert_eq!(data["allowed"], false);
+        let args = serde_json::json!({});
+        let decision = policy_decision_for_mcp_call_with_enforcement(
+            &profile_policy,
+            "scan",
+            None,
+            &args,
+            &enforcement,
+        );
+        assert!(decision.allowed);
     }
 
     #[test]

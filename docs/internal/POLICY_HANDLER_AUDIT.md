@@ -82,7 +82,7 @@ None remaining. All target-bearing handlers now use `evaluate_and_enforce_operat
 
 - **Entry point:** `handle_tools_call()` (JSON-RPC `tools/call`)
 - **Dispatches tool calls:** Yes (`dispatcher.dispatch()`)
-- **Policy enforcement:** Yes — `McpProfilePolicy::validate_tool_call()` + `validate_target()` + `policy_decision_for_mcp_call()`
+- **Policy enforcement:** Yes — `EnforcementContext::evaluate()` + `McpProfilePolicy::validate_tool_call()` + `validate_target()`
 - **Structured denials:** Yes — `PolicyDecision` serialized in MCP error `data` field
 - **Status:** fully migrated
 
