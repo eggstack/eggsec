@@ -601,17 +601,22 @@ fn extract_hostname(target: &str) -> &str {
         return s;
     }
 
-    // For non-bracketed hosts, split on ':' to remove port
-    // But distinguish bare IPv6 (multiple colons) from host:port (one colon + digits)
+    // For non-bracketed hosts, split on ':' to remove port.
+    // Bare IPv6 addresses always have >= 2 colons; a host:port pair has exactly 1.
     if s.contains(':') {
-        // If there's exactly one ':' and the part after it parses as u16, it's host:port
+        let colon_count = s.chars().filter(|c| *c == ':').count();
+        if colon_count >= 2 {
+            // Multiple colons — bare IPv6 address, return as-is
+            return s;
+        }
+        // Exactly one colon — treat as host:port only if suffix parses as u16
         if let Some(pos) = s.rfind(':') {
             let port_part = &s[pos + 1..];
             if port_part.is_empty() || port_part.parse::<u16>().is_ok() {
                 return &s[..pos];
             }
         }
-        // Multiple colons or non-numeric port part — treat as bare IPv6
+        // Single colon but non-numeric port part — return as-is (malformed)
         return s;
     }
 
@@ -1274,5 +1279,137 @@ mod tests {
     fn test_validate_target_ipv6_ula() {
         // fd00::/8 is ULA
         assert!(is_loopback_or_private("fd00::1"));
+    }
+
+    // Phase 2: Focused MCP policy tests
+
+    #[test]
+    fn test_classify_tool_risk_stress() {
+        assert_eq!(
+            classify_tool_risk("stress"),
+            crate::config::OperationRisk::StressTest
+        );
+    }
+
+    #[test]
+    fn test_classify_tool_risk_waf_stress() {
+        assert_eq!(
+            classify_tool_risk("waf-stress"),
+            crate::config::OperationRisk::StressTest
+        );
+    }
+
+    #[test]
+    fn test_classify_tool_risk_packet() {
+        assert_eq!(
+            classify_tool_risk("packet"),
+            crate::config::OperationRisk::RawPacket
+        );
+    }
+
+    #[test]
+    fn test_classify_tool_risk_proxy() {
+        assert_eq!(
+            classify_tool_risk("proxy"),
+            crate::config::OperationRisk::ExploitAdjacent
+        );
+    }
+
+    #[test]
+    fn test_classify_tool_risk_remote() {
+        assert_eq!(
+            classify_tool_risk("remote"),
+            crate::config::OperationRisk::RemoteExecution
+        );
+    }
+
+    #[test]
+    fn test_coding_agent_denies_stress() {
+        let policy = McpProfilePolicy::coding_agent();
+        let result = policy.validate_tool_call("stress", None, &serde_json::json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_denies_waf_stress() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("waf-stress", None, &serde_json::json!({}))
+            .is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_denies_packet() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("packet", None, &serde_json::json!({}))
+            .is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_denies_proxy() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("proxy", None, &serde_json::json!({}))
+            .is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_denies_remote() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("remote", None, &serde_json::json!({}))
+            .is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_denies_exec() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("exec", None, &serde_json::json!({}))
+            .is_err());
+    }
+
+    #[test]
+    fn test_policy_decision_for_mcp_call_denied_tool() {
+        let profile_policy = McpProfilePolicy::coding_agent();
+        let execution_policy = crate::config::ExecutionPolicy::default();
+        let args = serde_json::json!({"tool_id": "stress"});
+        let decision =
+            policy_decision_for_mcp_call(&profile_policy, "stress", &args, &execution_policy, None);
+        assert!(!decision.allowed);
+        assert!(!decision.denied_reasons.is_empty());
+    }
+
+    #[test]
+    fn test_policy_decision_for_mcp_call_allowed_tool() {
+        let profile_policy = McpProfilePolicy::coding_agent();
+        let execution_policy = crate::config::ExecutionPolicy::default();
+        let args = serde_json::json!({});
+        let decision =
+            policy_decision_for_mcp_call(&profile_policy, "scan", &args, &execution_policy, None);
+        assert!(decision.allowed);
+    }
+
+    #[test]
+    fn test_policy_violation_to_mcp_error_with_decision() {
+        let profile_policy = McpProfilePolicy::coding_agent();
+        let execution_policy = crate::config::ExecutionPolicy::default();
+        let violation = PolicyViolation::ToolDenied {
+            tool_id: "stress".to_string(),
+        };
+        let error = violation.to_mcp_error_with_decision(
+            &profile_policy,
+            "stress",
+            &serde_json::json!({}),
+            &execution_policy,
+            None,
+        );
+        assert_eq!(error.code, -32020);
+        assert!(error.data.is_some());
+        let data = error.data.unwrap();
+        assert!(data.is_object());
+        assert!(data.get("allowed").is_some());
+        assert_eq!(data["allowed"], false);
     }
 }

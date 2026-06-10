@@ -84,3 +84,6 @@ for tool in &stage.tools {
 - `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` — 18 fields controlling tool visibility and call restrictions
 - Policy enforcement must happen at **both** discovery and call time — discovery filtering alone is insufficient
 - `TargetPolicy` enum controls which targets each profile can access
+- `extract_hostname()` counts colons to distinguish bare IPv6 (>=2, returned as-is) from host:port (1 colon, port stripped if valid u16)
+- `classify_tool_risk()` maps tool IDs to `OperationRisk` for MCP policy decisions
+- `policy_decision_for_mcp_call()` builds a full `PolicyDecision` combining MCP profile policy with shared execution policy

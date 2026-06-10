@@ -10,7 +10,7 @@ handlers have been migrated to use `OperationDescriptor`-based policy checks.
 
 ## Migration Status
 
-### Migrated Handlers
+### Migrated Handlers (using `evaluate_and_enforce_operation`)
 
 | Handler | File | Operation | Risk | IntendedUse |
 |---------|------|-----------|------|-------------|
@@ -28,30 +28,51 @@ handlers have been migrated to use `OperationDescriptor`-based policy checks.
 | `handle_nse` | `handlers/scan.rs` | `nse` | Intrusive | WebAssessment |
 | `handle_load` | `handlers/load.rs` | `load` | LoadTest | WebAssessment |
 
-### Unchanged Handlers (Scope-Only or No Target)
+### Handlers Using `evaluate_operation_policy` Directly (no bail on deny)
 
-These handlers still use `ensure_scope`/`ensure_scope_url` only:
+These handlers call `evaluate_operation_policy` to read policy decisions for
+preview/output purposes rather than to enforce denials:
 
-- `handle_scan` — pipeline scan, lower risk (SafeActive), uses scope check
-- `handle_scan_ports` — port scanning, SafeActive
-- `handle_scan_endpoints` — endpoint discovery, SafeActive
-- `handle_fingerprint` — service fingerprinting, Passive/SafeActive
-- `handle_resume` — resumes existing session, target already validated
-- `handle_recon` — reconnaissance, SafeActive
-- `handle_auth_test` — auth testing, CredentialTesting
-- `handle_hunt` — advanced hunting, Intrusive (behind `advanced-hunting` feature)
-- `handle_wireless` — WiFi scanning, SafeActive
-- `handle_browser` — headless browser, SafeActive
-- `handle_cluster` (AddTask) — distributed task, uses scope on target
-- `handle_grpc_server` — gRPC server, SafeActive
-- `handle_serve` / `handle_mcp_serve` — API servers, no external target
-- `handle_remote` — remote listener, no external target
-- `handle_agent` — autonomous agent, manages its own portfolio
+| Handler | File | Notes |
+|---------|------|-------|
+| `handle_plan` | `handlers/plan.rs` | Reads policy decisions for preview output |
+| `handle_policy_explain` | `handlers/explain.rs` | Reads policy decisions for human/JSON output |
+| `handle_scope_explain` | `handlers/explain.rs` | Reads policy decisions for human/JSON output |
 
-### Not Target-Bearing
+### Scope-Only Handlers (use `ensure_scope`/`ensure_scope_url`)
 
-- `handle_config`, `handle_doctor`, `handle_notify`, `handle_report`,
-  `handle_sbom`, `handle_storage`, `handle_vuln`, `handle_ci`, `handle_ai_analyze`
+| Handler | File | Risk |
+|---------|------|------|
+| `handle_scan` | `handlers/scan.rs` | SafeActive |
+| `handle_scan_ports` | `handlers/scan.rs` | SafeActive |
+| `handle_scan_endpoints` | `handlers/scan.rs` | SafeActive |
+| `handle_fingerprint` | `handlers/scan.rs` | SafeActive |
+| `handle_resume` | `handlers/scan.rs` | Target already validated |
+| `handle_recon` | `handlers/recon.rs` | SafeActive |
+| `handle_auth_test` | `handlers/auth_test.rs` | CredentialTesting |
+| `handle_hunt` | `handlers/hunt.rs` | Intrusive (behind `advanced-hunting` feature) |
+| `handle_wireless` | `handlers/wireless.rs` | SafeActive |
+| `handle_browser` | `handlers/browser.rs` | SafeActive |
+| `handle_grpc_server` | `handlers/grpc.rs` | SafeActive |
+
+### No Policy Evaluation (no target or delegated enforcement)
+
+| Handler | File | Notes |
+|---------|------|-------|
+| `handle_remote` | `handlers/cluster.rs` | Opens a network listener; no target from CLI args (listens on a bind address) |
+| `handle_agent` | `handlers/agent.rs` | Autonomous agent; tool operations are enforced internally by the agent runtime |
+| `handle_cluster` (Coordinator/Worker) | `handlers/cluster.rs` | Infrastructure commands; no target-bearing risk |
+| `handle_cluster` (Status) | `handlers/cluster.rs` | Status query only |
+| `handle_serve` / `handle_mcp_serve` | `handlers/serve.rs` | API servers, no external target |
+| `handle_config` | `handlers/config.rs` | Not target-bearing |
+| `handle_doctor` | `handlers/doctor.rs` | Not target-bearing |
+| `handle_notify` | `handlers/notify.rs` | Not target-bearing |
+| `handle_report` | `handlers/report.rs` | Not target-bearing |
+| `handle_sbom` | `handlers/sbom.rs` | Not target-bearing |
+| `handle_storage` | `handlers/storage.rs` | Not target-bearing |
+| `handle_vuln` | `handlers/vuln.rs` | Not target-bearing |
+| `handle_ci` | `handlers/ci.rs` | Not target-bearing |
+| `handle_ai_analyze` | `handlers/ai_analyze.rs` | Not target-bearing |
 
 ## Notes
 

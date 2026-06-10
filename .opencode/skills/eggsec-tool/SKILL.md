@@ -13,6 +13,7 @@ Tool abstraction layer workflows and patterns for security tool integration.
 ### Protocol Implementations
 `tool/protocol/`:
 - `mcp/` - MCP server (`handlers/server.rs`, `handlers/helpers.rs`)
+- `mcp/policy.rs` - MCP profile policy enforcement, `extract_hostname()` IPv6-aware parsing, `classify_tool_risk()`, `policy_decision_for_mcp_call()`
 - `mcp/coding_agent_output.rs` - Typed `CodingAgentFindingReport` struct for coding-agent output
 - `openai/` - OpenAI-compatible chat completions
 - `rest.rs` - REST API (scope validation implemented)
@@ -108,6 +109,10 @@ Added timeout wrappers to prevent indefinite hangs:
 | `pipeline.rs` | 98 | `run_cli_with_callback` | 60s |
 | `loadtest.rs` | 78 | `run_cli` | 60s |
 | `routes.rs` | 182, 241 | `handle_request` (batch, stdio) | 30s |
+
+### IPv6 Hostname Parsing Fix (2026-06-10)
+
+`extract_hostname()` in `mcp/policy.rs` now correctly handles bare IPv6 addresses. The fix counts colons: >=2 colons means bare IPv6 (returned as-is), 1 colon means host:port (port stripped if valid u16). Previously, `::1` and `2001:db8::1` were incorrectly truncated.
 
 ### FxHashMap Replacements (2026-06-05)
 

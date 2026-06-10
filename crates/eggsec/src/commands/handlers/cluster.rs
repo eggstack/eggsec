@@ -290,6 +290,19 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
             println!("Note: Both certificate and key paths must be provided.");
         }
         RemoteCommand::Start(start_args) => {
+            let target = format!("localhost:{}", start_args.port);
+            ctx.evaluate_and_enforce_operation(OperationDescriptor {
+                operation: "remote-start".to_string(),
+                mode: crate::config::OperationMode::HazardousLab,
+                risk: crate::config::OperationRisk::RemoteExecution,
+                intended_uses: vec![crate::config::IntendedUse::DistributedSystemStress],
+                target: Some(target),
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: false,
+            })?;
+
             let psk = start_args
                 .auth
                 .clone()
