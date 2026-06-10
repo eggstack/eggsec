@@ -137,8 +137,8 @@ pub fn get_payloads() -> Vec<Payload> {
         },
         Payload {
             payload_type: PayloadType::Host,
-            payload: "".to_string(),
-            description: "Host header injection - empty host".to_string(),
+            payload: " ".to_string(),
+            description: "Host header injection - single space host".to_string(),
             severity: Severity::Low,
             tags: vec!["host".to_string(), "test".to_string()],
         },

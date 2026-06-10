@@ -17,10 +17,10 @@ pub fn get_payloads() -> Vec<Payload> {
         "http-concurrent", [
             ("send 100 concurrent requests", "100 concurrent requests", Severity::High),
             ("send 50 parallel requests", "50 parallel requests", Severity::Medium),
-            ("send 200 concurrent POST", "200 concurrent POST", Severity:: High),
+            ("send 200 concurrent POST", "200 concurrent POST", Severity::High),
             ("send 1000 overlapping requests", "1000 overlapping requests", Severity::Critical),
             ("rapid-fire same endpoint", "Rapid-fire same endpoint", Severity::High),
-            ("concurrent different methods", "Concurrent different methods", Severity:: Medium),
+            ("concurrent different methods", "Concurrent different methods", Severity::Medium),
         ];
         "race-primitives", [
             ("{{timestamp}}", "Timestamp substitution", Severity::High),
@@ -33,7 +33,7 @@ pub fn get_payloads() -> Vec<Payload> {
         "header-races", [
             ("X-Forwarded-For: {{random}}", "X-Forwarded-For race", Severity::Medium),
             ("X-Original-IP: {{random}}", "X-Original-IP race", Severity::Medium),
-            ("CF-Connecting-IP: {{random}}", "CF-Connecting-IP race", Severity:: Medium),
+            ("CF-Connecting-IP: {{random}}", "CF-Connecting-IP race", Severity::Medium),
             ("True-Client-IP: {{random}}", "True-Client-IP race", Severity::Medium),
             ("X-Real-IP: {{random}}", "X-Real-IP race", Severity::Medium),
         ];

@@ -384,3 +384,115 @@ fn test_deserialization_payloads() {
     });
     assert!(has_ser, "Should have deserialization payloads");
 }
+
+/// Central audit ensuring every PayloadType has substantial, real (non-empty)
+/// payload coverage. Prevents accidental regression to stub-status modules.
+#[test]
+fn test_payload_audit_all_types_substantial() {
+    const MIN_PER_TYPE: usize = 10;
+    const MIN_TOTAL: usize = 1000;
+
+    let mut total = 0usize;
+    let mut counts: Vec<(PayloadType, usize)> = Vec::new();
+
+    for pt in PayloadType::all_variants() {
+        let payloads = get_payloads(*pt);
+        let n = payloads.len();
+        assert!(
+            n >= MIN_PER_TYPE,
+            "{:?} has only {} payloads (min {}); likely a stub or regression",
+            pt,
+            n,
+            MIN_PER_TYPE
+        );
+        for p in &payloads {
+            assert!(
+                !p.payload.is_empty(),
+                "{:?} payload empty: {:?}",
+                pt, p.description
+            );
+            assert!(
+                !p.description.is_empty(),
+                "{:?} description empty for payload {:?}",
+                pt,
+                p.payload
+            );
+            assert!(
+                !p.tags.is_empty(),
+                "{:?} tags empty for payload {:?}",
+                pt,
+                p.payload
+            );
+        }
+        total += n;
+        counts.push((*pt, n));
+    }
+
+    assert!(
+        total >= MIN_TOTAL,
+        "Total payload count {} is below minimum {}",
+        total,
+        MIN_TOTAL
+    );
+
+    // Sanity: every type is represented in the cached view
+    let all_cached = get_all_payloads_cached();
+    assert_eq!(
+        all_cached.len(),
+        total,
+        "Cached total {} differs from sum-of-types {}",
+        all_cached.len(),
+        total
+    );
+}
+
+/// Ensures no payload looks like a placeholder (TODO/FIXME/lorem ipsum/etc.).
+/// Real attack strings should never contain dev markers.
+#[test]
+fn test_payload_audit_no_placeholders() {
+    const BANNED: &[&str] = &[
+        "TODO", "FIXME", "XXX", "lorem ipsum", "PLACEHOLDER", "REPLACE_ME", "<insert ",
+    ];
+
+    for pt in PayloadType::all_variants() {
+        for p in get_payloads(*pt) {
+            for bad in BANNED {
+                assert!(
+                    !p.payload.contains(bad),
+                    "{:?} payload contains banned placeholder {:?}: {:?}",
+                    pt,
+                    bad,
+                    p.description
+                );
+            }
+        }
+    }
+}
+
+/// Severity distribution should have at least some Critical/High entries across
+/// the high-risk types. Some probe-heavy classes (e.g. GraphQL introspection,
+/// Oast placeholders) legitimately carry a mix of Info/Low/Medium probes, so
+/// we require an absolute minimum of high-impact payloads rather than a
+/// strict ratio.
+#[test]
+fn test_payload_audit_critical_severity_present() {
+    const MIN_HIGH_IMPACT: usize = 3;
+
+    for pt in PayloadType::all_variants() {
+        let payloads = get_payloads(*pt);
+        if payloads.is_empty() {
+            continue;
+        }
+        let critical_or_high = payloads
+            .iter()
+            .filter(|p| matches!(p.severity, Severity::Critical | Severity::High))
+            .count();
+        assert!(
+            critical_or_high >= MIN_HIGH_IMPACT,
+            "{:?} has only {} Critical/High severity payloads (min {})",
+            pt,
+            critical_or_high,
+            MIN_HIGH_IMPACT
+        );
+    }
+}
