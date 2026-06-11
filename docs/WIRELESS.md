@@ -244,7 +244,7 @@ An optional `to_scan_report_data()` bridge (in `wireless/mod.rs`) converts findi
   - `wireless-signal` for "Weak Signal Strength"
   - `wireless-transition` for "WPA2/WPA3 Transition Mode"
   - `wireless-other` for Enterprise / Unknown Security / other
-- Evidence is populated as a compact network identifier: e.g. `network=<ssid> bssid=<bssid>`.
+- Evidence is populated with network identifier plus channel/signal/security for context (e.g. `network=<ssid> bssid=<bssid> ch=6 sig=-60dBm sec=Open`). The compact id prefix is preserved for compatibility.
 - Remediation is mapped from the vulnerability recommendation.
 - The bridge always runs rogue analysis with `analyze_networks(..., None)` (known-good suppression is for human/repeat UX + diffs only; bridged findings always include rogue candidates).
 - Native `--json` (direct `WirelessScanResult` or the `--repeat > 1` wrapped form `{ "last_scan": <WirelessScanResult>, "repeat_count": N, "summary": "..." }`) is accepted directly by `eggsec report convert` (auto-bridged in the report handler when `wireless` feature is present; the bridge is invoked on the inner `last_scan` result for the "last" scan case). The bridge is per-result.

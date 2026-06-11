@@ -374,4 +374,38 @@ mod tests {
         assert!(data.wireless_networks.is_empty());
         assert!(data.policy_summary.is_none());
     }
+
+    #[test]
+    fn to_scan_report_data_android_exported_and_secret() {
+        // covers two APK-specific categories via add_finding path + bridge
+        let mut r = MobileScanReport::new("app.apk", MobilePlatform::Android);
+        r.findings.push(MobileFinding {
+            category: "exported-component".into(),
+            severity: Severity::High,
+            title: "Exported activity".into(),
+            description: "MainActivity is exported".into(),
+            recommendation: "Restrict export or add permission protection".into(),
+            evidence: Some("com.example:MainActivity".into()),
+        });
+        r.findings.push(MobileFinding {
+            category: "hardcoded-secret".into(),
+            severity: Severity::High,
+            title: "Hardcoded secret".into(),
+            description: "api key in asset".into(),
+            recommendation: "Remove secret".into(),
+            evidence: Some("assets/config.json: ...api_key=...".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.findings.len(), 2);
+        assert_eq!(data.findings[0].category, "mobile-android-exported-component");
+        assert_eq!(data.findings[1].category, "mobile-android-hardcoded-secret");
+        assert!(data.findings[0].remediation.is_some());
+        assert!(data.findings[1].remediation.is_some());
+        assert!(data.findings[0].evidence.is_some());
+        assert!(data.findings[1].evidence.is_some());
+        // roundtrip
+        let j = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.findings.len(), 2);
+    }
 }

@@ -427,7 +427,7 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
                                 name
                             ),
                             recommendation: "Remove all secrets, keys, and tokens from the IPA. Use remote configuration or Keychain-backed secure storage. Never embed production credentials.".to_string(),
-                            evidence: Some(secret.value_preview),
+                            evidence: Some(format!("{}: {}", name, secret.value_preview)),
                         });
                     }
                 }

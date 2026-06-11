@@ -530,17 +530,34 @@ fn wireless_category_for(vuln_type: &str) -> String {
 pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::convert::ScanReportData {
     use crate::output::convert::{FindingData, WirelessNetworkReportData};
 
+    // Bridge always analyzes with known_good=None (rogue suppression is UX-only for human/repeat/diff).
+    // Evidence includes channel/signal/security for richer context in SARIF/HTML/etc (compact id preserved).
+    // Timestamp is report-generation time; per-network last_seen carries actual scan time(s).
+    // Repeated-scan wrapped native JSON is unwrapped by the report convert handler before calling here.
     let findings: Vec<FindingData> = WirelessScanner::analyze_networks(&result.networks, None)
         .iter()
-        .map(|v| FindingData {
-            title: v.vulnerability_type.clone(),
-            severity: v.severity.as_str().to_string(),
-            category: wireless_category_for(&v.vulnerability_type),
-            description: v.description.clone(),
-            location: format!("{} ({})", v.ssid, v.bssid),
-            evidence: Some(format!("network={} bssid={}", v.ssid, v.bssid)),
-            remediation: Some(v.recommendation.clone()),
-            cwe_ids: Vec::new(),
+        .map(|v| {
+            let evidence = result
+                .networks
+                .iter()
+                .find(|n| n.bssid == v.bssid)
+                .map(|n| {
+                    format!(
+                        "network={} bssid={} ch={} sig={}dBm sec={}",
+                        v.ssid, v.bssid, n.channel, n.signal_strength, n.security_type.as_str()
+                    )
+                })
+                .unwrap_or_else(|| format!("network={} bssid={}", v.ssid, v.bssid));
+            FindingData {
+                title: v.vulnerability_type.clone(),
+                severity: v.severity.as_str().to_string(),
+                category: wireless_category_for(&v.vulnerability_type),
+                description: v.description.clone(),
+                location: format!("{} ({})", v.ssid, v.bssid),
+                evidence: Some(evidence),
+                remediation: Some(v.recommendation.clone()),
+                cwe_ids: Vec::new(),
+            }
         })
         .collect();
 
@@ -1230,7 +1247,11 @@ mod tests {
         assert!(f.title.contains("Open") || f.description.contains("no encryption"));
         assert!(f.remediation.is_some());
         assert!(f.evidence.is_some());
-        assert!(f.evidence.as_ref().unwrap().contains("network=OpenNet bssid=00:11:22:33:44:55"));
+        let ev = f.evidence.as_ref().unwrap();
+        assert!(ev.contains("network=OpenNet bssid=00:11:22:33:44:55"));
+        assert!(ev.contains(" ch=6 "));
+        assert!(ev.contains(" sig=-60dBm "));
+        assert!(ev.contains(" sec=Open"));
         assert!(f.cwe_ids.is_empty());
         assert_eq!(data.wireless_networks.len(), 1);
         let wn = &data.wireless_networks[0];
@@ -1293,7 +1314,11 @@ mod tests {
         for f in &data.findings {
             assert!(f.evidence.is_some());
             assert!(f.remediation.is_some());
-            assert!(f.evidence.as_ref().unwrap().starts_with("network="));
+            let ev = f.evidence.as_ref().unwrap();
+            assert!(ev.starts_with("network="));
+            assert!(ev.contains(" ch="));
+            assert!(ev.contains(" sig="));
+            assert!(ev.contains(" sec="));
         }
         assert_eq!(data.wireless_networks.len(), 7);
 
