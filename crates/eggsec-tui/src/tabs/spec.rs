@@ -473,7 +473,7 @@ impl Tab {
 }
 
 pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
-    let mut specs = vec![
+    let specs = vec![
         spec_for(Tab::Recon).unwrap(),
         spec_for(Tab::Load).unwrap(),
         spec_for(Tab::ScanPorts).unwrap(),

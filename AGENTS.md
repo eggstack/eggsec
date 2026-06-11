@@ -104,7 +104,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `vuln-management` - Vulnerability triage and CVSS scoring
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
-- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN). TUI tab present under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab surface).
+- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN). TUI tab present under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab surface). **Phase 0 complete (passive, 2026-06-11)**; active (Phase 1+) gated behind `wireless-advanced` per `plans/wireless-active-attacks-loadout-design-plan.md`. MCP/agent exposure absent for entire surface.
 - `mobile` - Mobile app static analysis (APK/IPA; Phase 1 static only, lab/defense framing)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
@@ -213,7 +213,7 @@ No remaining stub implementations.
 - **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
 - **Auth Test Policy Integration (post-2026-06-10)**: `auth-test` handler uses `evaluate_and_enforce_operation` with `CredentialTesting` risk (central `EnforcementContext`). TUI `AuthTab` is now fully integrated into the TUI as `Tab::Auth` (TabSpec, task system, policy enforcement, session save/restore). See `architecture/auth.md`, `commands/handlers/auth_test.rs`, `cli/auth.rs`, `docs/AUTH_LAB.md`. No dedicated credential-testing Cargo feature (runtime policy gate only). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth`); local `Auth*` types only (no `ScanReportData` conversion).
 - **Mobile Static Analysis**: Standalone defense-lab CLI (`eggsec mobile <path.{apk,ipa}>`) under `mobile` feature (gated command/module, not in TUI or pipeline profiles). Handler uses `evaluate_and_enforce_operation` with `SafeActive` risk + `required_features: ["mobile"]` (local file target, no scope). Pure-Rust ZIP/AXML/plist parsers only. Produces local `Mobile*` findings + `to_scan_report_data` bridge (like wireless). Phase 1 closed 2026-06-11. See `commands/handlers/mobile.rs`, `mobile/mod.rs`, `src/mobile/AGENTS.override.md`.
-- **Standalone Defense-Lab Surfaces (wireless, mobile, auth-test)**: Consolidated pattern post-integration-work-plan (2026-06-11). `auth-test`: fully integrated as `Tab::Auth` in the TUI (TabSpec, task system, policy enforcement, session save/restore); local findings only (`Auth*` types, no `ScanReportData` bridge, no pipeline). `wireless` + `mobile`: local types direct (CLI/TUI/human/JSON) + optional `to_scan_report_data` bridge (wired to eggsec-output; native --json auto-bridged in `report convert` handler when feature present). None participate in `ScanProfile` pipelines or have dedicated profiles/stages in this round (aspirational only; see `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, docs/WIRELESS.md + docs/MOBILE.md "Integration with Reporting Pipeline" sections, CAPABILITIES.md Lab Defense). Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`.
+- **Standalone Defense-Lab Surfaces (wireless, mobile, auth-test)**: Consolidated pattern post-integration-work-plan (2026-06-11). `auth-test`: fully integrated as `Tab::Auth` in the TUI (TabSpec, task system, policy enforcement, session save/restore); local findings only (`Auth*` types, no `ScanReportData` bridge, no pipeline). `wireless` + `mobile`: local types direct (CLI/TUI/human/JSON) + optional `to_scan_report_data` bridge (wired to eggsec-output; native --json auto-bridged in `report convert` handler when feature present). None participate in `ScanProfile` pipelines or have dedicated profiles/stages in this round (aspirational only; see `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, docs/WIRELESS.md + docs/MOBILE.md "Integration with Reporting Pipeline" sections, CAPABILITIES.md Lab Defense). Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. **Passive wireless = Phase 0 (complete 2026-06-11)**. Active wireless (deauth etc.) is designed in `plans/wireless-active-attacks-loadout-design-plan.md` (gated by `wireless-advanced`; same standalone + MCP-absent pattern).
   A short shared "Output Models" explanation (pipeline full `ScanReportData` vs. wireless/mobile optional bridge vs. `auth-test` local-only) lives in `docs/USAGE.md` (Report Management → Convert Reports). This is the canonical cross-reference; keep language consistent across README, CAPABILITIES, per-module docs, AGENTS, architecture/*.md, and skills. See also docs/WIRELESS.md + docs/MOBILE.md ("Integration with Reporting Pipeline") and architecture/{wireless,mobile,auth,output,cli_commands,defense_lab}.md.
 - **TUI Policy Alignment (2026-06-11)**: TUI is now aligned (uses the same central `EnforcementContext::evaluate()` evaluator and `ConfirmationClass` kebab strings for `RequireConfirmation` via `PendingPolicyConfirmation` + `PolicyConfirm` overlay; `PendingAction` remains separate).
 - **TUI Architecture & Usability Pass (2026-06-11)**: 10-phase refactor completed (plan: docs/plans/tui-architecture-usability-pass.md). Key artifacts:
@@ -315,7 +315,7 @@ Skills are located in `.opencode/skills/`:
 | `eggsec-waf/` | WAF module workflows |
 | `eggsec-wave-implementation/` | Historical wave implementation reference (all waves completed 2026-06-02) |
 
-Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance.
+Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance. Active loadout guidance will be added post-Phase 1 (see `plans/wireless-active-attacks-loadout-design-plan.md`).
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
@@ -367,7 +367,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition). TUI tab + TabSpec complete; MCP/agent exposure intentionally absent (standalone defense-lab). See also `docs/USAGE.md` Output Models. |
+| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition). TUI tab + TabSpec complete; MCP/agent exposure intentionally absent (standalone defense-lab). **Passive = Phase 0 (2026-06-11)**; see `plans/wireless-active-attacks-loadout-design-plan.md` for active phases (MCP/agent exposure absent). See also `docs/USAGE.md` Output Models. |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands
@@ -389,6 +389,10 @@ cargo check -p eggsec --features wireless
 cargo check -p eggsec-tui --features wireless
 cargo test --lib -p eggsec --features wireless
 cargo clippy --lib -p eggsec --features wireless
+
+# Wireless-advanced (future active loadout; not yet implemented; gated)
+# cargo check -p eggsec --features wireless-advanced
+# cargo test --lib -p eggsec --features wireless-advanced
 ```
 
 ## Planning Notes for Future Agents

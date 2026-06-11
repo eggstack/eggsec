@@ -4,6 +4,8 @@ Eggsec provides standalone-complete passive WiFi network reconnaissance and basi
 
 **This is passive reconnaissance only.** No packet injection, deauthentication, handshake capture, or active attacks are implemented in this standalone module.
 
+**(Phase 0 — complete 2026-06-11)**: Standalone-complete passive WiFi recon + rogue heuristic + reporting bridge + TUI tab + policy integration. See `plans/wireless-active-attacks-loadout-design-plan.md` for Phase 1+ (active attacks loadout, gated behind new `wireless-advanced` feature flag).
+
 ## Feature Gate
 
 Build with `--features wireless` (or `--features full`).
@@ -199,14 +201,12 @@ sudo eggsec wireless wlan0 --detect-suspicious --repeat 3
 
 ## Not In Scope (This Phase)
 
-- Active attacks (deauth, disassociation, Evil Twin AP creation)
+- Active attacks (deauth, disassociation, Evil Twin AP creation, handshake capture, etc.) — see `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1+ gated behind new `wireless-advanced` feature flag = ["wireless"]; heavily policy-gated with `--allow-active-wireless`, packet budgets, lab manifests, and explicit `ActiveWireless` risk tier; **MCP/agent tool exposure remains intentionally absent** for the entire wireless surface, including advanced — standalone defense-lab design decision, not registered as `SecurityTool`).
 - Handshake capture / PMKID / WPS PIN attacks / KRACK-style testing
 - Deep WPS enumeration beyond beacon flags
 - Bluetooth/BLE
 - Windows/macOS native scanning (iwlist Linux-only)
 - Full pipeline integration (wireless is a standalone-complete defense-lab surface; MCP and agentic tool exposure is intentionally absent per design decision — wireless is not registered as a SecurityTool and does not appear in tools/list or agent dispatch). Optional reporting bridge only. See architecture/wireless.md (MCP / Agentic section) and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note).
-
-Future phases may add a `wireless-advanced` sub-feature for gated active/lab-only capabilities.
 
 ## Troubleshooting
 
@@ -225,7 +225,11 @@ Future phases may add a `wireless-advanced` sub-feature for gated active/lab-onl
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`; `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI + MCP/agentic integration; resolution note at top records post-completion status)
+- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`; `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI + MCP/agentic integration; resolution note at top records post-completion status); `plans/wireless-active-attacks-loadout-design-plan.md` (active attacks loadout design; Phase 0 = passive standalone completion; Phase 1+ gated `wireless-advanced`)
+
+## Active Attacks (Future, Gated)
+
+See `plans/wireless-active-attacks-loadout-design-plan.md` for the full design (deauth P0/Phase 1, handshake P1/Phase 2, flood/rogue-sim P2+/Phase 3, etc.). All active paths will require `--features wireless-advanced`, runtime confirmations/overrides (`--allow-active-wireless` + reason), packet budgets, optional lab manifests, and lab-only framing. Reporting bridge will extend with `wireless-active-*` categories. Passive (current) remains Phase 0 complete. MCP/agent tool exposure remains intentionally absent for the entire wireless surface.
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.
 
@@ -253,3 +257,5 @@ An optional `to_scan_report_data()` bridge (in `wireless/mod.rs`) converts findi
 Use the native types (`WirelessScanResult` / direct `--json`) for lab-specific wireless workflows, repeated-scan temporal summaries, and `--known-good` UX. Use the bridge (or `report convert` on native `--json`) when you need unified reporting consumers (SARIF/JUnit/HTML/Markdown/CSV/trend/etc.). The integration is lightweight and opt-in. "standalone defense-lab" language is deliberate: wireless is a complete standalone CLI (with optional TUI tab) for passive lab/defense use; the bridge is only for optional unification of output formats.
 
 This is one of the consolidated "standalone defense-lab surfaces" (wireless + mobile + auth-test). Wireless and mobile provide local types directly + optional `to_scan_report_data` bridge (auto-bridged by `eggsec report convert` when the feature is present); auth-test is local-only (no bridge, no conversion). None participate in `ScanProfile` pipelines or dedicated profiles/stages in this round (aspirational only). See the short shared "Output Models" explanation in `docs/USAGE.md` (Report Management → Convert Reports), `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, AGENTS.md (standalone defense-lab surfaces note), and CAPABILITIES.md (Lab Defense table). MCP/agent tool exposure is intentionally absent for wireless (see architecture/wireless.md MCP/Agentic section and the handoff plan resolution).
+
+Phase 1+ active work (see `plans/wireless-active-attacks-loadout-design-plan.md`) will extend the bridge with `wireless-active-*` findings while preserving the standalone defense-lab + optional bridge model and MCP-absent design.

@@ -35,7 +35,7 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 
 ## Status
 
-Standalone completion achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture.
+Standalone completion (passive, Phase 0) achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture. Active expansion (Phase 1+) is designed in `plans/wireless-active-attacks-loadout-design-plan.md` (new `wireless-advanced` feature, `ActiveWireless` risk, standalone surface preserved, MCP exposure absent).
 
 ## MCP / Agentic / Tool Integration Status (post wireless-tui-mcp-agentic-handoff-plan 2026-06-11; see plan resolution note)
 
@@ -46,6 +46,7 @@ Wireless is a **standalone defense-lab surface** (CLI primary + optional TUI tab
 - In strict profiles (`McpStrict`, `AgentStrict`, `CiStrict`) the feature gate + explicit LoadedScope provenance rules apply if ever invoked; currently the only supported invocation path is the CLI handler (or direct library use under the same `EnforcementContext`).
 - This mirrors the consolidated "standalone defense-lab surfaces" pattern (wireless + mobile + auth-test). Wireless and mobile emit local types directly with an optional `to_scan_report_data` bridge (and CLI auto-bridge in `report convert`); auth-test is local-only with no bridge. None participate in `ScanProfile` pipelines or dedicated profiles/stages in this round. See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases), `architecture/output.md`, `docs/USAGE.md` (Output Models block), AGENTS.md (standalone defense-lab surfaces note), and the handoff plan resolution note.
 - If future work adds a `WirelessTool` impl + registry entry, it would also need updates in `tool/protocol/mcp/policy.rs` (classify_tool_risk, required_capabilities_for_tool_call, infer_tool_category, CodingAgent allowlist consideration) + special target handling for interface names, plus MCP handler tests. No such registration is planned in the current round (design decision: keep wireless as a focused passive defense-lab CLI/TUI capability; MCP/agent tool exposure intentionally absent).
+- Active attacks (when implemented under `wireless-advanced`) will follow the same standalone defense-lab rule: **MCP/agent tool exposure intentionally absent** (per plan recommendation; no `SecurityTool` registration). See `plans/wireless-active-attacks-loadout-design-plan.md` (non-goals + open questions).
 
 The optional `to_scan_report_data` bridge (and CLI `report convert` auto-bridge) works for any consumer that obtains a native JSON `WirelessScanResult` (or repeat-wrapped form), regardless of invocation surface.
 
@@ -63,4 +64,4 @@ Bridged findings use `wireless-*` categories (e.g. `wireless-rogue`, `wireless-s
 
 See docs/WIRELESS.md (Integration section), CAPABILITIES.md (Lab Defense row), and `crates/eggsec/src/commands/handlers/report.rs`.
 
-Post advanced-integration (this plan): CLI help polished (MODE prefix, more practical examples, --detect-suspicious canonical flag form), TUI descriptor now carries feature for policy parity, worker failure path made explicit. MCP exposure remains intentionally absent (standalone defense-lab). All changes preserve passive-only identity and policy model.
+Post passive standalone + integration (2026-06-11): CLI help polished (MODE prefix, more practical examples, --detect-suspicious canonical flag form), TUI descriptor now carries feature for policy parity, worker failure path made explicit. MCP exposure remains intentionally absent (standalone defense-lab). All changes preserve passive-only identity and policy model. Active phases per `plans/wireless-active-attacks-loadout-design-plan.md` (MCP exposure remains absent).

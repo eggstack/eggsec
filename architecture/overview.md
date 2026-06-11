@@ -172,7 +172,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`utils/`](../crates/eggsec/src/utils/) | 23 submodules (HTTP client, rate limiting, circuit breaker, formatting) | [utils.md](utils.md) |
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
-| [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition) | [wireless.md](wireless.md) |
+| [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition) | [wireless.md](wireless.md) (passive Phase 0 complete 2026-06-11; active per `plans/wireless-active-attacks-loadout-design-plan.md` under `wireless-advanced`) |
 | `mobile/` | Static analysis of Android APKs / iOS IPAs (Phase 1: pure-Rust manifest/config; SafeActive; standalone CLI + report bridge) | [mobile.md](mobile.md) |
 
 ---
@@ -415,7 +415,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `external-integrations` | `integrations/` | Jira, GitHub, GitLab |
 | `finding-workflow` | `workflow/` | Finding lifecycle management |
 | `vuln-management` | `vuln/` | Vulnerability triage |
-| `wireless` | `wireless/` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat/--known-good/--dry-run/--detect-suspicious; WPS/hidden/transition) |
+| `wireless` | `wireless/` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat/--known-good/--dry-run/--detect-suspicious; WPS/hidden/transition). **Passive = Phase 0 (2026-06-11)**; active gated by `wireless-advanced` (see `plans/wireless-active-attacks-loadout-design-plan.md`). |
 | `mobile` | `mobile/` | Static analysis of Android APKs and iOS IPAs (marker-only; zip/plist optional; pure-Rust Phase 1) |
 | `pdf` | `output/pdf` | PDF report generation |
 | `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only) |

@@ -35,13 +35,13 @@ impl AuthTab {
     pub fn new() -> Self {
         Self {
             inputs: InputGroup::new()
-                .add(InputField::new("Target URL").with_width(50).with_placeholder("https://target.lab"))
-                .add(InputField::new("Username / Userlist").with_width(40).with_placeholder("admin or users.txt"))
-                .add(InputField::new("Password List / Wordlist").with_width(45).with_placeholder("passwords.txt or rockyou.txt"))
-                .add(InputField::new("Credential File (optional)").with_width(45).with_placeholder("user:pass file"))
-                .add(InputField::new("Max Attempts").with_width(12).with_placeholder("50"))
-                .add(InputField::new("Concurrency").with_width(12).with_placeholder("5"))
-                .add(InputField::new("Timeout (sec)").with_width(12).with_placeholder("30")),
+                .add(InputField::new("Target URL").with_width(50).with_value("https://target.lab"))
+                .add(InputField::new("Username / Userlist").with_width(40).with_value("admin or users.txt"))
+                .add(InputField::new("Password List / Wordlist").with_width(45).with_value("passwords.txt or rockyou.txt"))
+                .add(InputField::new("Credential File (optional)").with_width(45).with_value("user:pass file"))
+                .add(InputField::new("Max Attempts").with_width(12).with_value("50"))
+                .add(InputField::new("Concurrency").with_width(12).with_value("5"))
+                .add(InputField::new("Timeout (sec)").with_width(12).with_value("30")),
             results: "Ready for authentication testing. Enter a target and press Enter.".to_string(),
             state: AppState::Idle,
             focus_area: AuthFocusArea::Target,
