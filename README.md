@@ -35,14 +35,14 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **WAF** | Detection of 34 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
 | **Load Testing** | High-concurrency HTTP testing with detailed metrics |
 | **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
-| **Auth Control Validation** | Brute-force, credential stuffing, lockout/MFA/rate-limit/timing testing via `eggsec auth-test` (defense-lab / high-risk, policy-gated; for validating auth controls, not credential attacks) |
+| **Auth Control Validation** | Brute-force, credential stuffing, lockout/MFA/rate-limit/timing testing via `eggsec auth-test` (standalone defense-lab CLI; runtime policy gate only via `CredentialTesting` + `allow_credential_testing`; local `AuthTestReport`/`AuthFinding` only; for validating auth controls in authorized labs, not credential attacks; see docs/AUTH_LAB.md + architecture/auth.md) |
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Repeatable Profiles** | 16 pipeline profiles, session resumption, multiple output formats |
 
 ## What Eggsec is not
 
-Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. The `auth-test` command exists for defense validation of authentication controls (lockout policies, MFA enforcement, rate limiting, etc.) under strict scope/policy gating — it is not a credential attack platform. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
+Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. The `auth-test` command exists for defense validation of authentication controls (lockout policies, MFA enforcement, rate limiting, etc.) under strict scope/policy gating — it is not a credential attack platform (see architecture/auth.md for adopted model details: runtime policy gate, local findings only, standalone CLI distinct from pipeline `ScanProfile::Auth`). Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
 
 ## Why Low-Level Features Exist
 
@@ -264,7 +264,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec scan --profile waf-regression` | defense-lab | WAF payload regression |
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
 | `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
-| `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated). See `docs/AUTH_LAB.md`. |
+| `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `CredentialTesting` risk + `allow_credential_testing`). Standalone CLI; local `Auth*` types only (no `ScanReportData` conversion). See `docs/AUTH_LAB.md` + architecture/auth.md. |
 
 ## Build Features
 

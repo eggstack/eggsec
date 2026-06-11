@@ -381,7 +381,7 @@ Keywords that activate this skill
 | **Reconnaissance** | dns_reconnaissance, ssl_tls_analysis, subdomain_enumeration, web_search_integration |
 | **Scanning** | port_scanning, endpoint_discovery |
 | **Fuzzing** | sql_injection, cross_site_scripting, path_traversal, ssrf, command_injection, ldap_injection |
-| **API Testing** | graphql_security, oauth_oidc_testing, cors_security, authentication_security |
+| **API Testing** | graphql_security, oauth_oidc_testing, cors_security, authentication_security (CLI `auth-test` defense-lab only; agents/MCP subject to strict `CredentialTesting` enforcement + explicit `Capability::CredentialTesting`; results local only; see architecture/auth.md) |
 | **WAF** | waf_detection_bypass |
 | **Load Testing** | http_load_testing |
 | **Compliance** | security_compliance_checks |

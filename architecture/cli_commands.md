@@ -91,7 +91,7 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 3. **`http.rs`**: Added `-o` short form to `load` and `graphql` output flags for consistency
 4. **`handlers/mod.rs:197-206`**: `handle_no_command` launches TUI in interactive terminal, otherwise prints guidance
 5. **`handlers/cluster.rs:348`**: Replaced `unwrap_or(22)` with `unwrap_or_else(|_| 22)` to avoid panic on invalid parsing
-6. **`handlers/auth_test.rs:10`**: Migrated from `ensure_scope_url` to `evaluate_and_enforce_operation` with `CredentialTesting` risk tier (central `EnforcementContext`)
+6. **`handlers/auth_test.rs:10`**: Migrated from `ensure_scope_url` to `evaluate_and_enforce_operation` with `CredentialTesting` risk tier (central `EnforcementContext`). Adopted model: standalone CLI command; local `AuthTestReport`/`AuthFinding` only (direct JSON/text output; no `ScanReportData`/eggsec-output conversion or pipeline profile integration). See architecture/auth.md.
 7. **`cli/scan.rs`**: Added `-o` short flag to `PortScanArgs`, `EndpointScanArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`
 8. **`cli/fuzz.rs`**: Added `-o` short flag to `WafStressArgs`; preserved `From<WafStressArgs>` implementation
 9. **`cli/http.rs`**: Added `-o` short flag to `ReconArgs`
@@ -109,3 +109,9 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 ## Skills Reference
 
 - `.opencode/skills/eggsec-cli/` - Full CLI patterns and handler guide
+
+## Special Cases (Standalone Commands)
+
+Some target-bearing commands are intentionally standalone and bypass the canonical `ScanReportData` / `eggsec-output` conversion pipeline (they emit module-local report types directly as JSON/text or to `-o` files). Example:
+
+- `auth-test` (handler: `commands/handlers/auth_test.rs`): Uses local `AuthTestReport`/`AuthFinding` (defined in `auth/mod.rs`). Policy gate via `evaluate_and_enforce_operation` with `OperationRisk::CredentialTesting`. No conversion to `FindingData`/`ScanReportData`, no SARIF/JUnit/etc. via the output crate, and no integration with `eggsec scan --profile` pipelines. Distinct from `ScanProfile::Auth` (JWT/OAuth/IDOR fuzzer stages). See `architecture/auth.md`, `docs/AUTH_LAB.md`, and `commands/handlers/auth_test.rs:274-285` (direct emit logic).

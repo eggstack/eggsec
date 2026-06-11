@@ -74,7 +74,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `architecture/recon.md` - Reconnaissance module
 - `architecture/distributed.md` - Distributed coordinator/worker architecture
 - `architecture/compile_time_baseline.md` - Workspace crate layout and compile-time baseline
-- `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` is CLI-only)
+- `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` is CLI-only). See plans/credential-access-*.md for historical context only (superseded by adopted runtime-policy + local-findings model).
 
 ### Feature Flags
 
@@ -205,7 +205,7 @@ No remaining stub implementations.
 - **FindingStore Deduplication**: FIXED - now deduplicates by fingerprint before appending (2026-06-02)
 - **Remote Listener Policy**: `remote start` now uses `evaluate_and_enforce_operation` with `HazardousLab` mode and `RemoteExecution` risk (2026-06-10)
 - **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
-- **Auth Test Policy Integration (post-2026-06-10)**: `auth-test` handler uses `evaluate_and_enforce_operation` with `CredentialTesting` risk (central `EnforcementContext`). TUI `AuthTab` exists as standalone code but is excluded from `Tab` enum (CLI-only surface). See `architecture/auth.md`, `commands/handlers/auth_test.rs`, `cli/auth.rs`, `docs/AUTH_LAB.md`. No dedicated credential-testing Cargo feature (runtime policy gate only).
+- **Auth Test Policy Integration (post-2026-06-10)**: `auth-test` handler uses `evaluate_and_enforce_operation` with `CredentialTesting` risk (central `EnforcementContext`). TUI `AuthTab` exists as standalone code but is excluded from `Tab` enum (CLI-only surface). See `architecture/auth.md`, `commands/handlers/auth_test.rs`, `cli/auth.rs`, `docs/AUTH_LAB.md`. No dedicated credential-testing Cargo feature (runtime policy gate only). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth`); local `Auth*` types only (no `ScanReportData` conversion). See plans/credential-access-*.md (historical, superseded).
 - **TUI Policy Alignment (2026-06-11)**: TUI is now aligned (uses the same central `EnforcementContext::evaluate()` evaluator and `ConfirmationClass` kebab strings for `RequireConfirmation` via `PendingPolicyConfirmation` + `PolicyConfirm` overlay; `PendingAction` remains separate).
 - **TUI Architecture & Usability Pass (2026-06-11)**: 10-phase refactor completed (plan: docs/plans/tui-architecture-usability-pass.md). Key artifacts:
   - Phase 1: `UiAction` + decode/apply split (`app/action.rs`; `KeyHandler` now returns actions; `App::apply_action` is the mutation point; decode tests added).

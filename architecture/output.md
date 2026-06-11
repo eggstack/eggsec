@@ -74,6 +74,12 @@ Detects regressions by comparing current findings against a baseline.
 
 Persists scan state across TUI sessions:
 
+**Note on standalone commands**: Not all CLI surfaces route through `ScanReportData` or the `eggsec-output` converters. `auth-test` (CredentialTesting risk) builds and emits `AuthTestReport`/`AuthFinding` (local types defined in `auth/mod.rs`) directly from its handler as pretty text or `--json` (see `commands/handlers/auth_test.rs:274-285`). These results are not loadable via `load_scan_report` or convertible to SARIF/JUnit/CSV/etc. via the output crate. `ScanProfile::Auth` is a separate pipeline profile (JWT/OAuth/IDOR fuzzing) that does not invoke the `auth/` testers. See `architecture/auth.md` and `architecture/cli_commands.md` (Special Cases section) for details. (This is the adopted model; no `AuthFinding` → canonical conversion was implemented.)
+
+### Session Persistence (`session.rs`)
+
+Persists scan state across TUI sessions:
+
 ```rust
 pub struct ScanSession {
     pub version: String,

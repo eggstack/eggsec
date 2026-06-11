@@ -69,7 +69,7 @@ Primary surface is the `eggsec auth-test <target>` CLI command (defense-lab / hi
 
 ## Implementation Status
 
-**Status as of 2026-06-11**: Feature complete under runtime policy model. See `plans/credential-access-implementation-next-steps.md` (Completed) and `plans/credential-access-implementation-plan.md` (historical, superseded with full resolution note at top). No dedicated `credential-testing` Cargo feature (runtime `allow_credential_testing` + `CredentialTesting` risk only). See new `docs/AUTH_LAB.md` for defense-lab usage.
+**Status as of 2026-06-11**: Feature complete under runtime policy model. See `plans/credential-access-implementation-next-steps.md` (Completed), `plans/credential-access-implementation-plan.md` (historical, superseded with full resolution note at top), and `plans/credential-access-completion-plan.md` (historical, superseded). No dedicated `credential-testing` Cargo feature (runtime `allow_credential_testing` + `CredentialTesting` risk only). See new `docs/AUTH_LAB.md` for defense-lab usage.
 
 Core module fully implemented (testers, `AuthEngine`, safety controls, `AUTH_BANNER`, multi-protocol under `nse-ssh2`). CLI command + handler + policy integration complete and tested (17 wiremock `auth_tests` + enforcement/policy contract tests green).
 

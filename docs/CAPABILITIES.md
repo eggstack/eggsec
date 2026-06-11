@@ -273,7 +273,7 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 |---------|------|-------------|
 | `policy-explain` | - | Explain policy decisions |
 | `scope-explain` | - | Explain scope matching |
-| `eggsec auth-test <target>` | defense-lab (high-risk) | Credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `allow_credential_testing`) |
+| `eggsec auth-test <target>` | defense-lab (high-risk) | Credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `allow_credential_testing`). Standalone CLI under runtime policy; local `AuthTestReport`/`AuthFinding` only (no canonical `ScanReportData`/SARIF conversion); see architecture/auth.md. |
 
 ---
 

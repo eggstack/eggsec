@@ -19,6 +19,8 @@ metadata:
   scope: targets
 ---
 
+**Note (adopted model)**: `eggsec auth-test` is a **standalone CLI defense-lab command** (not intended for autonomous/MCP agents). Agents and MCP servers are subject to strict `EnforcementContext` enforcement (`OperationRisk::CredentialTesting` + explicit `Capability::CredentialTesting` required; `allow_credential_testing` policy flag; explicit scope manifest). Results use local `AuthTestReport`/`AuthFinding` types only (no `ScanReportData` conversion or SARIF/JUnit output). `ScanProfile::Auth` (pipeline) is JWT/OAuth/IDOR fuzzer-focused and distinct. See `architecture/auth.md`, `docs/AUTH_LAB.md`, and `.opencode/skills/eggsec-auth/SKILL.md`.
+
 ## Overview
 
 Authentication testing evaluates the security of login mechanisms including resistance to brute force attacks, credential stuffing, MFA bypass techniques, and session security.
