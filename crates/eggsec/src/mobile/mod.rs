@@ -329,4 +329,49 @@ mod tests {
         assert_eq!(back.findings.len(), 2);
         assert_eq!(back.findings[0].category, "mobile-ios-transport");
     }
+
+    #[test]
+    fn to_scan_report_data_android_permission_evidence_roundtrip() {
+        // targeted: android permission category + useful evidence (e.g. permission name)
+        let mut r = MobileScanReport::new("vuln.apk", MobilePlatform::Android);
+        r.findings.push(MobileFinding {
+            category: "permission".into(),
+            severity: Severity::Medium,
+            title: "overprivileged permission".into(),
+            description: "app requests READ_SMS".into(),
+            recommendation: "remove if not needed".into(),
+            evidence: Some("READ_SMS".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.findings.len(), 1);
+        assert_eq!(data.findings[0].category, "mobile-android-permission");
+        assert_eq!(data.findings[0].evidence.as_deref(), Some("READ_SMS"));
+        assert_eq!(data.findings[0].severity, "medium");
+
+        // serde roundtrip of bridged data (permission case)
+        let json = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.findings.len(), 1);
+        assert_eq!(back.findings[0].category, "mobile-android-permission");
+        assert_eq!(back.findings[0].evidence.as_deref(), Some("READ_SMS"));
+    }
+
+    #[test]
+    fn to_scan_report_data_ios_category_evidence() {
+        // targeted iOS-specific category/evidence (e.g. secret pattern in bundle)
+        let mut r = MobileScanReport::new("app.ipa", MobilePlatform::Ios);
+        r.findings.push(MobileFinding {
+            category: "secret".into(),
+            severity: Severity::High,
+            title: "hardcoded secret".into(),
+            description: "api key in plist".into(),
+            recommendation: "use keychain".into(),
+            evidence: Some("api_key=sk_live_...".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.findings[0].category, "mobile-ios-secret");
+        assert_eq!(data.findings[0].evidence.as_deref(), Some("api_key=sk_live_..."));
+        assert!(data.wireless_networks.is_empty());
+        assert!(data.policy_summary.is_none());
+    }
 }

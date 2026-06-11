@@ -60,7 +60,14 @@ Primary surface is the `eggsec auth-test <target>` CLI command (defense-lab / hi
 
 - Local types only: `AuthTestReport`, `AuthFinding` (defined in `auth/mod.rs`)
 - No conversion to `StoredFinding`, `ScanReportData`, or `eggsec-output` canonical types (adopted model)
-- Standard output formats supported via handler (JSON/text; where applicable)
+- No `to_scan_report_data()` bridge or `FindingData` mapping exists or is planned
+- Standard output formats supported via handler (JSON/text; where applicable) — direct emit only
+
+**Why local findings only (standalone defense-lab design):** `eggsec auth-test` is a narrow, high-risk CLI surface (`OperationRisk::CredentialTesting`) for **controlled validation of authentication defenses** (lockout policies, MFA enforcement, rate limiting, brute-force resistance, timing side-channels, session handling) using dedicated lab test accounts only. It is intentionally **not** part of the main assessment pipeline or unified reporting system. Results are specialized per-test observations (attempt counts, observed lockout thresholds, MFA step-up responses, rate-limit behaviors, etc.) and are kept local to preserve the "lab-only control validation" framing and avoid scope creep or misuse as a general credential attack tool.
+
+This is the adopted model (see plans/credential-access-*.md historical notes and integration-priorities-1-2-plan.md §2.1 for rationale). Compare to `ScanProfile::Auth` (pipeline profile: PortScan + Fingerprint + EndpointScan + Fuzz for JWT/OAuth/IDOR issues; does not invoke `auth/` module testers).
+
+See `docs/AUTH_LAB.md` (especially the new "Output Model (Local Findings Only)" section) for full usage guidance, when to choose `auth-test` vs. pipeline `--profile auth`, safety requirements, and examples. Also see `architecture/cli_commands.md` (Special Cases) and `architecture/output.md` for how this differs from pipeline scans and the wireless/mobile optional bridges.
 
 ## TUI Status
 

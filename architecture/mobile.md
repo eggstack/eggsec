@@ -44,7 +44,7 @@ An optional `to_scan_report_data()` bridge (in `mobile/mod.rs`; mirrors wireless
 
 The `report convert` handler auto-bridges native `MobileScanReport` JSON when the `mobile` feature is enabled, so `eggsec mobile app.apk --json -o m.json ; eggsec report convert m.json -f ...` works directly.
 
-Categories in bridged output are `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`) to preserve the original finding category signal while satisfying the platform prefix requirement.
+Categories in bridged output are `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`, `mobile-android-permission`, `mobile-ios-secret`) to preserve the original finding category signal while satisfying the platform prefix requirement. Evidence carries through (e.g. permission name, manifest key, secret pattern); empty findings are valid (0 findings in bridge).
 
 **Design decision (Phase 1 close 2026-06-11)**: Standalone CLI-only (no TUI, no pipeline stages/profiles); optional bridge provides reporting unification without forcing `ScanProfile` integration (`mobile-static`/`mobile-regression` remain aspirational per `architecture/defense_lab.md` Future). Use native types for lab-specific flows; use bridge (or `report convert` on native JSON) for unified report consumers. Integration is lightweight and opt-in.
 

@@ -584,6 +584,14 @@ eggsec traceroute 192.168.1.1 --max-hops 30 --probes 5
 
 Convert scan results between formats. The converter accepts canonical `ScanReportData` JSON. It also accepts native JSON output from standalone defense-lab commands (`eggsec wireless` and `eggsec mobile`, when the corresponding feature is enabled) via an automatic bridge to `ScanReportData` — so you can directly pipe their `--json` outputs without manual conversion.
 
+**Output Models (standalone defense-lab surfaces vs. pipeline)**
+
+- **Pipeline scans** (`eggsec scan <target> --profile <p>` and most other assessment commands): always produce a full `ScanReportData` (unified findings + metadata). This is loadable via `load_scan_report`, diffable, and exportable to every format (JSON, SARIF, JUnit, HTML, Markdown, CSV, etc.) through the `eggsec-output` converters.
+- **Wireless / Mobile** (standalone defense-lab CLIs under their feature flags): emit their native local types directly (`WirelessScanResult` or `MobileScanReport`) for human-readable output, `--json`, and file writes. They also provide an *optional* `to_scan_report_data()` bridge (plus an auto-bridge inside `report convert`) so native `--json` can flow into the unified SARIF/JUnit/HTML/etc. consumers when desired. Use native shapes for lab-specific workflows and repeated-scan summaries; use the bridge (or `report convert` on native JSON) for reporting unification. Categories in bridged output are `wireless-*` or `mobile-{android,ios}-*`. See docs/WIRELESS.md and docs/MOBILE.md ("Integration with Reporting Pipeline" sections) and the per-module architecture docs.
+- **`auth-test`** (standalone defense-lab CLI): intentionally produces and emits only local `AuthTestReport` / `AuthFinding` types (direct text or `--json` from the handler). There is **no** `to_scan_report_data` bridge, no `FindingData` / `ScanReportData` conversion, and no SARIF/JUnit/etc. path. It is deliberately kept outside the unified reporting system to preserve its narrow "credential control validation in authorized labs" purpose. Distinct from the pipeline `ScanProfile::Auth` (which does produce `ScanReportData`). See docs/AUTH_LAB.md ("Output Model (Local Findings Only)" section) and architecture/auth.md.
+
+The three models are summarized here for discoverability; the detailed rationale and examples live in the linked per-module docs.
+
 ```bash
 # Convert canonical or bridged JSON to HTML
 eggsec report convert input.json -f html -o report.html
@@ -611,7 +619,7 @@ eggsec report convert mobile.json -f html -o mobile.html
 eggsec report convert mobile.json -f markdown -o mobile.md
 ```
 
-See `docs/WIRELESS.md` (Integration with Reporting Pipeline) and `docs/MOBILE.md` (same) for when to use the native types vs. the optional bridge, and for notes on rogue-in-bridge and category naming.
+See the "Output Models" block above, plus `docs/WIRELESS.md` (Integration with Reporting Pipeline) and `docs/MOBILE.md` (same) for when to use the native types vs. the optional bridge, and for notes on rogue-in-bridge and category naming. `auth-test` has no bridge (see its section above and docs/AUTH_LAB.md).
 
 ### Trend Analysis
 

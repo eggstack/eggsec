@@ -81,6 +81,8 @@ Persists scan state across TUI sessions:
 
 The converters (`load_scan_report`, `convert_to_*`) and `ScanReportData` shape are otherwise general.
 
+For a concise cross-module view of the three output models (full pipeline `ScanReportData`; wireless/mobile optional `to_scan_report_data` bridge + auto-bridge; `auth-test` local `Auth*` only with no bridge), see the "Output Models (standalone defense-lab surfaces vs. pipeline)" block in `docs/USAGE.md` (Report Management section). That is the canonical short reference; the per-module architecture docs and WIRELESS/MOBILE/AUTH_LAB.md provide the detailed rationale.
+
 ### Session Persistence (`session.rs`)
 
 Persists scan state across TUI sessions:

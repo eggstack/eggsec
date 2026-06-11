@@ -129,3 +129,4 @@ if DiffEngine::has_regressions(&diff) {
 - `crates/eggsec/src/output/AGENTS.override.md` - Detailed output patterns
 - `AGENTS.md` - General project guidelines
 - `architecture/output.md` - Module architecture documentation
+- `docs/USAGE.md` (Report Management) - short shared "Output Models" block explaining pipeline `ScanReportData` vs. wireless/mobile optional bridge vs. `auth-test` local-only (no bridge). See also per-module Integration sections and architecture/{output,cli_commands,defense_lab,wireless,mobile,auth}.md for the adopted standalone defense-lab pattern (integration-priorities-1-2-plan.md).

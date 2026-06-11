@@ -509,6 +509,24 @@ impl Default for WirelessScanner {
     }
 }
 
+fn wireless_category_for(vuln_type: &str) -> String {
+    if vuln_type.contains("Rogue") || vuln_type.contains("Evil Twin") {
+        "wireless-rogue".to_string()
+    } else if vuln_type == "Open Network" || vuln_type == "WEP Encryption" || vuln_type == "WPA Encryption" {
+        "wireless-security".to_string()
+    } else if vuln_type == "WPS Enabled" {
+        "wireless-wps".to_string()
+    } else if vuln_type == "Hidden SSID" {
+        "wireless-hidden".to_string()
+    } else if vuln_type == "Weak Signal Strength" {
+        "wireless-signal".to_string()
+    } else if vuln_type == "WPA2/WPA3 Transition Mode" {
+        "wireless-transition".to_string()
+    } else {
+        "wireless-other".to_string()
+    }
+}
+
 pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::convert::ScanReportData {
     use crate::output::convert::{FindingData, WirelessNetworkReportData};
 
@@ -517,10 +535,10 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
         .map(|v| FindingData {
             title: v.vulnerability_type.clone(),
             severity: v.severity.as_str().to_string(),
-            category: "wireless".to_string(),
+            category: wireless_category_for(&v.vulnerability_type),
             description: v.description.clone(),
             location: format!("{} ({})", v.ssid, v.bssid),
-            evidence: None,
+            evidence: Some(format!("network={} bssid={}", v.ssid, v.bssid)),
             remediation: Some(v.recommendation.clone()),
             cwe_ids: Vec::new(),
         })
@@ -1207,11 +1225,12 @@ mod tests {
         assert_eq!(data.scan_type, "wireless");
         assert!(!data.findings.is_empty());
         let f = &data.findings[0];
-        assert_eq!(f.category, "wireless");
+        assert_eq!(f.category, "wireless-security");
         assert_eq!(f.severity, "medium");
         assert!(f.title.contains("Open") || f.description.contains("no encryption"));
         assert!(f.remediation.is_some());
-        assert!(f.evidence.is_none());
+        assert!(f.evidence.is_some());
+        assert!(f.evidence.as_ref().unwrap().contains("network=OpenNet bssid=00:11:22:33:44:55"));
         assert!(f.cwe_ids.is_empty());
         assert_eq!(data.wireless_networks.len(), 1);
         let wn = &data.wireless_networks[0];
@@ -1240,6 +1259,55 @@ mod tests {
         assert_eq!(back.findings.len(), 1);
         assert_eq!(back.wireless_networks.len(), 1);
         // direct from_str simulates what load_scan_report does internally (used by report convert)
+        let loaded: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert_eq!(loaded.target, "wlan0");
+    }
+
+    #[test]
+    fn to_scan_report_data_wireless_multi_empty_and_roundtrip() {
+        // construct directly: rogue (wireless-rogue), wps (wireless-wps), hidden (wireless-hidden), signal (wireless-signal), transition (wireless-transition), wep (wireless-security)
+        let result = WirelessScanResult {
+            interface: "wlan0".into(),
+            networks: vec![
+                WirelessNetwork { ssid: "CorpNet".into(), bssid: "00:11:22:33:44:55".into(), channel: 6, security_type: SecurityType::WPA2, signal_strength: -50, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
+                WirelessNetwork { ssid: "CorpNet".into(), bssid: "aa:bb:cc:dd:ee:ff".into(), channel: 11, security_type: SecurityType::Open, signal_strength: -55, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
+                WirelessNetwork { ssid: "WPSNet".into(), bssid: "11:22:33:44:55:66".into(), channel: 1, security_type: SecurityType::WPA2, signal_strength: -60, last_seen: "t".into(), wps_enabled: true, is_hidden: false, transition_mode: false },
+                WirelessNetwork { ssid: "<hidden>".into(), bssid: "22:33:44:55:66:77".into(), channel: 6, security_type: SecurityType::WPA2, signal_strength: -65, last_seen: "t".into(), wps_enabled: false, is_hidden: true, transition_mode: false },
+                WirelessNetwork { ssid: "WeakNet".into(), bssid: "33:44:55:66:77:88".into(), channel: 11, security_type: SecurityType::WPA3, signal_strength: -85, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
+                WirelessNetwork { ssid: "TransNet".into(), bssid: "44:55:66:77:88:99".into(), channel: 36, security_type: SecurityType::WPA2, signal_strength: -50, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: true },
+                WirelessNetwork { ssid: "WEPNet".into(), bssid: "55:66:77:88:99:aa".into(), channel: 1, security_type: SecurityType::WEP, signal_strength: -70, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
+            ],
+            scan_duration_secs: 10,
+            recommendations: vec![],
+        };
+        let data = to_scan_report_data(&result);
+        assert_eq!(data.findings.len(), 7); // weak + wps + hidden + transition + open + wep + 1 rogue (from CorpNet ssid group with sec diff)
+        // categories asserted
+        let cats: Vec<_> = data.findings.iter().map(|f| f.category.as_str()).collect();
+        assert!(cats.contains(&"wireless-rogue"));
+        assert!(cats.contains(&"wireless-security"));
+        assert!(cats.contains(&"wireless-wps"));
+        assert!(cats.contains(&"wireless-hidden"));
+        assert!(cats.contains(&"wireless-signal"));
+        assert!(cats.contains(&"wireless-transition"));
+        for f in &data.findings {
+            assert!(f.evidence.is_some());
+            assert!(f.remediation.is_some());
+            assert!(f.evidence.as_ref().unwrap().starts_with("network="));
+        }
+        assert_eq!(data.wireless_networks.len(), 7);
+
+        // empty case
+        let empty = WirelessScanResult { interface: "wlanx".into(), networks: vec![], scan_duration_secs: 0, recommendations: vec![] };
+        let de = to_scan_report_data(&empty);
+        assert_eq!(de.findings.len(), 0);
+        assert!(de.wireless_networks.is_empty());
+
+        // serde roundtrip of bridged (simulates report convert load)
+        let j = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.findings.len(), 7);
+        assert_eq!(back.wireless_networks.len(), 7);
         let loaded: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
         assert_eq!(loaded.target, "wlan0");
     }

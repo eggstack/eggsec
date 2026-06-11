@@ -236,9 +236,18 @@ Always ensure explicit authorization. Prefer lab environments for development an
 An optional `to_scan_report_data()` bridge (in `wireless/mod.rs`) converts findings (from `analyze_networks`) + the full networks list into canonical `ScanReportData` (with `wireless_networks: Vec<WirelessNetworkReportData>` and `findings`). This enables SARIF, JUnit, HTML (with networks table), Markdown, CSV, JSON, trend, etc. via `eggsec-output`.
 
 - Native `--json` (or the `--repeat` wrapped form with `last_scan`) is accepted directly by `eggsec report convert` (auto-bridged in the report handler when `wireless` feature is present). This fulfills the documented "CI / regression" and "Reporting" flows.
-- Categories in the bridged findings are always `"wireless"`.
-- Evidence is not populated in the bridge (vulnerabilities carry description + recommendation); remediation is mapped from the vuln recommendation.
-- The bridge always runs rogue analysis (known-good suppression is for human/repeat UX only).
+- Categories in the bridged findings use consistent `wireless-*` naming based on vulnerability type:
+  - `wireless-rogue` for "Possible Rogue AP / Evil Twin (passive heuristic)"
+  - `wireless-security` for Open Network / WEP Encryption / WPA Encryption
+  - `wireless-wps` for "WPS Enabled"
+  - `wireless-hidden` for "Hidden SSID"
+  - `wireless-signal` for "Weak Signal Strength"
+  - `wireless-transition` for "WPA2/WPA3 Transition Mode"
+  - `wireless-other` for Enterprise / Unknown Security / other
+- Evidence is populated as a compact network identifier: e.g. `network=<ssid> bssid=<bssid>`.
+- Remediation is mapped from the vulnerability recommendation.
+- The bridge always runs rogue analysis with `analyze_networks(..., None)` (known-good suppression is for human/repeat UX + diffs only; bridged findings always include rogue candidates).
+- Native `--json` (direct `WirelessScanResult` or the `--repeat > 1` wrapped form `{ "last_scan": <WirelessScanResult>, "repeat_count": N, "summary": "..." }`) is accepted directly by `eggsec report convert` (auto-bridged in the report handler when `wireless` feature is present; the bridge is invoked on the inner `last_scan` result for the "last" scan case). The bridge is per-result.
 - Design decision (standalone completion 2026-06-11): wireless remains intentionally outside the main `ScanProfile` pipeline and has no dedicated wireless profiles/stages (aspirational only; see `architecture/defense_lab.md`, `architecture/cli_commands.md` Special Cases, and `architecture/wireless.md`).
 
-Use the native types for lab-specific wireless workflows. Use the bridge (or `report convert` on native JSON) when you need unified reporting consumers. The integration is lightweight and opt-in.
+Use the native types (`WirelessScanResult` / direct `--json`) for lab-specific wireless workflows, repeated-scan temporal summaries, and `--known-good` UX. Use the bridge (or `report convert` on native `--json`) when you need unified reporting consumers (SARIF/JUnit/HTML/Markdown/CSV/trend/etc.). The integration is lightweight and opt-in. "standalone defense-lab" language is deliberate: wireless is a complete standalone CLI (with optional TUI tab) for passive lab/defense use; the bridge is only for optional unification of output formats.

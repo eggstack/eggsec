@@ -106,7 +106,7 @@ See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` fo
 - No `ScanProfile` integration in Phase 1 (`mobile-static` / `mobile-regression` profiles are aspirational; see `architecture/defense_lab.md` Future and `architecture/mobile.md`).
 - Design decision (Phase 1 close 2026-06-11): keep the surface standalone and lightweight; the bridge provides reporting unification without forcing the module into the main chained pipeline.
 
-The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | report convert` flow work out of the box when built with `--features mobile`. Categories in bridged output are of the form `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`) to preserve signal while satisfying the platform prefix.
+The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | report convert` flow work out of the box when built with `--features mobile`. Categories in bridged output are of the form `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`, `mobile-android-permission`, `mobile-ios-secret`, `mobile-ios-transport`) to preserve signal while satisfying the platform prefix. Evidence in bridged findings carries through useful details (e.g. permission name like "READ_SMS", manifest key, secret pattern like "api_key=..."); empty findings produce a valid bridge with 0 findings (tested).
 
 ## Limitations (Phase 1)
 
