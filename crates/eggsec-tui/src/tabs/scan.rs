@@ -372,9 +372,10 @@ impl TabRender for ScanTab {
                 StageStatus::Failed(e) => {
                     let msg = make_friendly_error(&anyhow::anyhow!("{}", e));
                     // Truncate long error messages to keep the status column readable.
-                    // The full error is available in the result_summary column.
-                    if msg.len() > 10 {
-                        format!("{}…", &msg[..9])
+                    // Use char-aware truncation to avoid panicking on multi-byte UTF-8.
+                    if msg.chars().count() > 10 {
+                        let truncated: String = msg.chars().take(9).collect();
+                        format!("{}…", truncated)
                     } else {
                         msg
                     }

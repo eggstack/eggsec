@@ -208,7 +208,14 @@ where
                 Some(Some(Err(e))) => {
                     tracing::warn!("Terminal event error: {:?}", e);
                 }
-                _ => break,
+                Some(None) => {
+                    // Terminal event stream ended (e.g. terminal detached).
+                    // Quit gracefully instead of spinning in a busy-loop.
+                    tracing::warn!("Terminal event stream ended; quitting");
+                    app.should_quit = true;
+                    break;
+                }
+                None => break,
             }
         }
         if event_count == 0 {

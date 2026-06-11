@@ -80,6 +80,7 @@ impl super::App {
                 self.task_state.result_rx = None;
                 self.task_state.tab = None;
                 self.task_state.handle = None;
+                self.task_state.inner_abort = None;
             }
         }
 

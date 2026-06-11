@@ -867,11 +867,9 @@ impl TabInput for FuzzTab {
             return;
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        // At this point is_running() is guaranteed false (checked at line 823
+        // and would have returned). Unconditionally start.
+        self.start();
     }
 
     fn handle_escape(&mut self) {

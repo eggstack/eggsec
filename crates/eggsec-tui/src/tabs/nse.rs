@@ -178,6 +178,8 @@ impl TabRender for NseTab {
             ])
             .split(area);
 
+        let input_area = chunks.first().copied().unwrap_or(area);
+
         let input_block = Block::default()
             .title(" NSE Configuration ")
             .borders(Borders::ALL)
@@ -188,7 +190,7 @@ impl TabRender for NseTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(&input_block, chunks[0]);
+        f.render_widget(&input_block, input_area);
 
         // Input fields
         let input_chunks = Layout::default()
@@ -198,7 +200,7 @@ impl TabRender for NseTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(input_block.inner(chunks[0]));
+            .split(input_block.inner(input_area));
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(area) = input_chunks.get(i) {
@@ -209,15 +211,19 @@ impl TabRender for NseTab {
         // Script selector
         let mut selector = self.script_selector.clone();
         selector.focused = self.focus_area == NseFocusArea::ScriptSelector;
-        selector.render(f, chunks[1]);
+        if let Some(selector_area) = chunks.get(1) {
+            selector.render(f, *selector_area);
+        }
 
         // Results
-        if self.results_view.is_empty() {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, chunks[2]);
-        } else {
-            self.results_view.render(f, chunks[2], None);
+        if let Some(results_area) = chunks.get(2) {
+            if self.results_view.is_empty() {
+                let placeholder =
+                    empty_state_paragraph("Results", "Results will appear here after running");
+                f.render_widget(placeholder, *results_area);
+            } else {
+                self.results_view.render(f, *results_area, None);
+            }
         }
     }
 }
