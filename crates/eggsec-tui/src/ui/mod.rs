@@ -23,6 +23,27 @@ pub const TAB_BAR_HEIGHT: u16 = 3;
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     app.last_tab_area_width = area.width.saturating_sub(LAYOUT_MARGIN * 2);
+
+    // Phase 9: very small terminal fallback. Render clear message, skip normal complex layout/popups.
+    // Still allow policy confirm to render (clamped) for readability. Basic input (q/Esc/Ctrl-C) works via key path.
+    // 80x24 good, 60x20 usable, <40x10 triggers this.
+    if shell::is_terminal_too_small(area) {
+        let theme = app.theme_manager.current().clone();
+        let msg = "Terminal too small\nResize to at least 60x20 for full UI\n(q / Esc / Ctrl-C still work)";
+        let p = Paragraph::new(msg)
+            .style(Style::default().fg(theme.colors.text))
+            .alignment(ratatui::layout::Alignment::Center);
+        f.render_widget(p, area);
+
+        // Still render policy confirm even on very small (preserve readability per plan).
+        if let Some(ref pending) = app.overlay.pending_policy {
+            let (title, message) = pending.message();
+            let popup = confirm_popup(&title, &message);
+            popup.render(f, area); // will be clamped inside centered_rect
+        }
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(LAYOUT_MARGIN)

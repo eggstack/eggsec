@@ -496,4 +496,8 @@ impl TabInput for WirelessTab {
             }
         }
     }
+
+    fn primary_target(&self) -> Option<String> {
+        Some(self.interface().to_string())
+    }
 }

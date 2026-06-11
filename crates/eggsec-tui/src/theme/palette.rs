@@ -43,6 +43,15 @@ pub struct ThemeColors {
     pub focus_normal: Color,
     pub focus_input: Color,
     pub focus_results: Color,
+    pub safe: Color,
+    pub danger: Color,
+    pub muted: Color,
+    pub active_task: Color,
+    pub paused_task: Color,
+    pub scope_match: Color,
+    pub scope_miss: Color,
+    pub policy_required: Color,
+    pub policy_denied: Color,
 }
 
 impl Default for Theme {

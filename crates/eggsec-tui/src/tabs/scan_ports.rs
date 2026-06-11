@@ -640,4 +640,8 @@ impl TabInput for ScanPortsTab {
         }
         self.results_view.page_down(page_size);
     }
+
+    fn primary_target(&self) -> Option<String> {
+        Some(self.target().to_string())
+    }
 }

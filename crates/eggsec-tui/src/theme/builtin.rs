@@ -33,6 +33,15 @@ pub fn dark_theme() -> Theme {
             focus_normal: ratatui::style::Color::Indexed(220),
             focus_input: ratatui::style::Color::Indexed(51),
             focus_results: ratatui::style::Color::Indexed(82),
+            safe: ratatui::style::Color::Green,
+            danger: ratatui::style::Color::Red,
+            muted: ratatui::style::Color::DarkGray,
+            active_task: ratatui::style::Color::Green,
+            paused_task: ratatui::style::Color::Yellow,
+            scope_match: ratatui::style::Color::Green,
+            scope_miss: ratatui::style::Color::Yellow,
+            policy_required: ratatui::style::Color::Yellow,
+            policy_denied: ratatui::style::Color::Red,
         },
     }
 }
@@ -70,6 +79,15 @@ pub fn light_theme() -> Theme {
             focus_normal: ratatui::style::Color::Indexed(21),
             focus_input: ratatui::style::Color::Indexed(196),
             focus_results: ratatui::style::Color::Indexed(28),
+            safe: ratatui::style::Color::Green,
+            danger: ratatui::style::Color::Red,
+            muted: ratatui::style::Color::Gray,
+            active_task: ratatui::style::Color::Green,
+            paused_task: ratatui::style::Color::Yellow,
+            scope_match: ratatui::style::Color::Green,
+            scope_miss: ratatui::style::Color::Yellow,
+            policy_required: ratatui::style::Color::Yellow,
+            policy_denied: ratatui::style::Color::Red,
         },
     }
 }
@@ -107,6 +125,15 @@ pub fn cyber_red_theme() -> Theme {
             focus_normal: ratatui::style::Color::Indexed(196),
             focus_input: ratatui::style::Color::Indexed(51),
             focus_results: ratatui::style::Color::Indexed(82),
+            safe: ratatui::style::Color::Green,
+            danger: ratatui::style::Color::Red,
+            muted: ratatui::style::Color::DarkGray,
+            active_task: ratatui::style::Color::Green,
+            paused_task: ratatui::style::Color::Yellow,
+            scope_match: ratatui::style::Color::Green,
+            scope_miss: ratatui::style::Color::Yellow,
+            policy_required: ratatui::style::Color::Yellow,
+            policy_denied: ratatui::style::Color::Red,
         },
     }
 }

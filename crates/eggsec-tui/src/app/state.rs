@@ -81,6 +81,7 @@ pub struct TaskState {
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
     pub result_rx: Option<tokio::sync::mpsc::Receiver<crate::workers::TaskResult>>,
     pub paused: bool,
+    pub started_at: Option<std::time::Instant>,
 }
 
 impl Default for TaskState {
@@ -92,6 +93,7 @@ impl Default for TaskState {
             progress_rx: None,
             result_rx: None,
             paused: false,
+            started_at: None,
         }
     }
 }
@@ -175,6 +177,7 @@ mod tests {
         assert!(state.progress_rx.is_none());
         assert!(state.result_rx.is_none());
         assert!(!state.paused);
+        assert!(state.started_at.is_none());
     }
 
     #[test]

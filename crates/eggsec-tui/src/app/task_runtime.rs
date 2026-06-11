@@ -10,6 +10,41 @@ impl super::App {
             || self.task_state.result_rx.is_some()
     }
 
+    pub fn active_task_tab(&self) -> Option<super::tabs::Tab> {
+        self.task_state.tab
+    }
+
+    pub fn active_task_elapsed_secs(&self) -> Option<u64> {
+        self.task_state.started_at.map(|start| {
+            let elapsed = std::time::Instant::now().saturating_duration_since(start);
+            elapsed.as_secs()
+        })
+    }
+
+    pub fn task_status_summary(&self) -> Option<String> {
+        if !self.has_active_task() {
+            return None;
+        }
+        let tab_name = self.task_state.tab.map(|t| t.title()).unwrap_or("Task");
+        let state = if self.task_state.paused {
+            "paused"
+        } else if self.task_state.handle.is_some() {
+            "running"
+        } else {
+            "stopping"
+        };
+        let elapsed = self
+            .active_task_elapsed_secs()
+            .map(|s| format!(" {s}s"))
+            .unwrap_or_default();
+        let hints = if self.task_state.paused {
+            " [Ctrl-Y resume]"
+        } else {
+            " [Ctrl-C stop] [Ctrl-Z pause]"
+        };
+        Some(format!("Task: {tab_name} ({state}{elapsed}){hints}"))
+    }
+
     fn stop_tab_state(&mut self, tab: super::tabs::Tab) {
         let mut tab = tab;
         tab.as_tab_input(self).stop();
@@ -29,6 +64,7 @@ impl super::App {
         if let Some(rx) = self.task_state.result_rx.take() {
             drop(rx);
         }
+        self.task_state.started_at = None;
     }
 
     pub fn stop(&mut self) {
@@ -69,6 +105,7 @@ impl super::App {
             self.task_state.result_rx = Some(result_rx);
 
             self.task_state.tab = Some(self.current_tab);
+            self.task_state.started_at = Some(std::time::Instant::now());
 
             let inner_handle = tokio::spawn(async move { runner.run().await });
 

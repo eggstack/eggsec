@@ -883,4 +883,8 @@ impl TabInput for PacketTab {
             true
         }
     }
+
+    fn primary_target(&self) -> Option<String> {
+        Some(self.target().to_string())
+    }
 }

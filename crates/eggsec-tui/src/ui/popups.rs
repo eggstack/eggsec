@@ -12,10 +12,20 @@ use crate::App;
 pub fn draw_http_options_popup(f: &mut Frame, app: &App, theme: &Theme) {
     use ratatui::widgets::{Clear, Paragraph};
 
-    let popup_width = 50;
-    let popup_height = 18;
-
     let area = f.area();
+    // Phase 9: clamp popup to viewport so it never overflows on small terminals (<60 etc).
+    // centered_rect already clamps, but compute constrained min size for very small.
+    let popup_width = if area.width < 50 {
+        area.width.saturating_sub(4).max(20)
+    } else {
+        50
+    };
+    let popup_height = if area.height < 20 {
+        area.height.saturating_sub(4).max(6)
+    } else {
+        18
+    };
+
     let popup_area = centered_rect(popup_width, popup_height, area);
 
     f.render_widget(Clear, popup_area);
@@ -85,9 +95,20 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App, theme: &Theme) {
     };
     let area = f.area();
 
-    let popup_area = centered_rect(palette.popup_width, palette.popup_height, area);
+    // Phase 9: clamp to viewport; on very small use short message path (avoid overflow).
+    let constrained_w = area.width.saturating_sub(2).min(60).max(20);
+    let constrained_h = area.height.saturating_sub(4).min(20).max(6);
+    let popup_area = centered_rect(constrained_w, constrained_h, area);
 
     f.render_widget(Clear, popup_area);
+
+    if area.width < 50 {
+        // Phase 9: explicit short message on very small to avoid garble; still allows Enter/Esc via input.
+        let short = Paragraph::new("Palette (small term)\n[Esc] close [↑↓] sel [Enter] run")
+            .style(Style::default().fg(theme.colors.text));
+        f.render_widget(short, popup_area);
+        return;
+    }
 
     let block = Block::default()
         .title("Command Palette (Ctrl+P to close, Up/Down to navigate, Enter to select)")
@@ -170,10 +191,19 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App, theme: &Theme) {
 pub fn draw_search_popup(f: &mut Frame, app: &App, theme: &Theme) {
     use ratatui::widgets::{Clear, Paragraph};
 
-    let popup_width = 60;
-    let popup_height = 5;
-
     let area = f.area();
+    // Phase 9: clamp to avoid overflow on small viewports.
+    let popup_width = if area.width < 60 {
+        area.width.saturating_sub(4).max(16)
+    } else {
+        60
+    };
+    let popup_height = if area.height < 8 {
+        area.height.saturating_sub(2).max(3)
+    } else {
+        5
+    };
+
     let popup_area = centered_rect(popup_width, popup_height, area);
 
     f.render_widget(Clear, popup_area);
@@ -200,13 +230,30 @@ pub fn draw_search_popup(f: &mut Frame, app: &App, theme: &Theme) {
 pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
-    let popup_width = 60;
-    let popup_height = 18;
-
     let area = f.area();
+    // Phase 9: clamp to viewport; short path on very small.
+    let popup_width = if area.width < 60 {
+        area.width.saturating_sub(2).max(18)
+    } else {
+        60
+    };
+    let popup_height = if area.height < 20 {
+        area.height.saturating_sub(4).max(6)
+    } else {
+        18
+    };
+
     let popup_area = centered_rect(popup_width, popup_height, area);
 
     f.render_widget(Clear, popup_area);
+
+    if area.width < 50 {
+        // Phase 9 small viewport short message (input still works via overlay routing).
+        let short = Paragraph::new("Quick switch (small)\n[^X close] [↑↓] [Enter]")
+            .style(Style::default().fg(theme.colors.text));
+        f.render_widget(short, popup_area);
+        return;
+    }
 
     let block = Block::default()
         .title("Tab Search (Ctrl+X to close, Enter to select, Up/Down to navigate)")

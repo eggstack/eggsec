@@ -586,6 +586,42 @@ pub fn get_static_help_data() -> StaticHelpData {
             shortcut: Some("Ctrl+C".to_string()),
         },
         CommandPaletteResult {
+            command: "pause".to_string(),
+            description: "Pause active task".to_string(),
+            category: "System".to_string(),
+            shortcut: Some("Ctrl+Z".to_string()),
+        },
+        CommandPaletteResult {
+            command: "resume".to_string(),
+            description: "Resume paused task".to_string(),
+            category: "System".to_string(),
+            shortcut: Some("Ctrl+Y".to_string()),
+        },
+        CommandPaletteResult {
+            command: "resume-task".to_string(),
+            description: "Resume paused task".to_string(),
+            category: "System".to_string(),
+            shortcut: Some("Ctrl+Y".to_string()),
+        },
+        CommandPaletteResult {
+            command: "pause-task".to_string(),
+            description: "Pause active task".to_string(),
+            category: "System".to_string(),
+            shortcut: Some("Ctrl+Z".to_string()),
+        },
+        CommandPaletteResult {
+            command: "stop-task".to_string(),
+            description: "Stop active task".to_string(),
+            category: "System".to_string(),
+            shortcut: Some("Ctrl+C".to_string()),
+        },
+        CommandPaletteResult {
+            command: "jump-active".to_string(),
+            description: "Jump to active task tab (if any)".to_string(),
+            category: "System".to_string(),
+            shortcut: None,
+        },
+        CommandPaletteResult {
             command: "reset".to_string(),
             description: "Reset current tab".to_string(),
             category: "Navigation".to_string(),
@@ -604,7 +640,25 @@ pub fn get_static_help_data() -> StaticHelpData {
             shortcut: Some("Ctrl+/".to_string()),
         },
         CommandPaletteResult {
+            command: "help-current".to_string(),
+            description: "Open help for current tab".to_string(),
+            category: "Navigation".to_string(),
+            shortcut: Some("Ctrl+/".to_string()),
+        },
+        CommandPaletteResult {
             command: "search".to_string(),
+            description: "Toggle search (local)".to_string(),
+            category: "Navigation".to_string(),
+            shortcut: Some("/".to_string()),
+        },
+        CommandPaletteResult {
+            command: "global-search".to_string(),
+            description: "Toggle global search".to_string(),
+            category: "Navigation".to_string(),
+            shortcut: Some("Ctrl+Shift+/".to_string()),
+        },
+        CommandPaletteResult {
+            command: "open-search".to_string(),
             description: "Toggle search".to_string(),
             category: "Navigation".to_string(),
             shortcut: Some("/".to_string()),
@@ -618,6 +672,12 @@ pub fn get_static_help_data() -> StaticHelpData {
         CommandPaletteResult {
             command: "export".to_string(),
             description: "Export results".to_string(),
+            category: "Data".to_string(),
+            shortcut: Some("e".to_string()),
+        },
+        CommandPaletteResult {
+            command: "cycle-export".to_string(),
+            description: "Cycle export format".to_string(),
             category: "Data".to_string(),
             shortcut: None,
         },
@@ -824,6 +884,60 @@ pub fn get_static_help_data() -> StaticHelpData {
             description: "View HTTP options".to_string(),
             category: "Settings".to_string(),
             shortcut: None,
+        },
+        CommandPaletteResult {
+            command: "run".to_string(),
+            description: "Run current tab/action (Enter)".to_string(),
+            category: "Action".to_string(),
+            shortcut: Some("Enter".to_string()),
+        },
+        CommandPaletteResult {
+            command: "run-current".to_string(),
+            description: "Run current tab/action".to_string(),
+            category: "Action".to_string(),
+            shortcut: Some("Enter".to_string()),
+        },
+        CommandPaletteResult {
+            command: "quick-switch".to_string(),
+            description: "Open quick switch".to_string(),
+            category: "Navigation".to_string(),
+            shortcut: Some("Ctrl+Q".to_string()),
+        },
+        CommandPaletteResult {
+            command: "open-quick".to_string(),
+            description: "Open quick switch".to_string(),
+            category: "Navigation".to_string(),
+            shortcut: Some("Ctrl+Q".to_string()),
+        },
+        CommandPaletteResult {
+            command: "copy-cli".to_string(),
+            description: "Copy CLI equivalent of current tab".to_string(),
+            category: "Data".to_string(),
+            shortcut: None,
+        },
+        CommandPaletteResult {
+            command: "reload-scope".to_string(),
+            description: "Reload scope/config".to_string(),
+            category: "Settings".to_string(),
+            shortcut: None,
+        },
+        CommandPaletteResult {
+            command: "save-settings".to_string(),
+            description: "Save settings (contextual on Settings)".to_string(),
+            category: "Settings".to_string(),
+            shortcut: Some("s".to_string()),
+        },
+        CommandPaletteResult {
+            command: "clear-history".to_string(),
+            description: "Clear history (contextual on History)".to_string(),
+            category: "Data".to_string(),
+            shortcut: Some("r".to_string()),
+        },
+        CommandPaletteResult {
+            command: "delete-history".to_string(),
+            description: "Delete history entry (contextual on History)".to_string(),
+            category: "Data".to_string(),
+            shortcut: Some("d".to_string()),
         },
     ]);
 

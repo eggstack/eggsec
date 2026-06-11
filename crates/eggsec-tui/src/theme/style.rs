@@ -2,15 +2,6 @@ use ratatui::style::{Modifier, Style};
 
 use super::palette::Theme;
 
-// NOTE: These helper methods are currently unused because the TUI still uses
-// the thread-local `tc!` macro or constructs styles inline. They are retained
-// for future adoption by refactoring tab renderers to pass `&Theme` explicitly,
-// which aligns with the architectural guidance in AGENTS.override.md.  When
-// adopting these methods, double-check that `style_for_mode` uses the correct
-// foreground/background fields—the existing code used `selected_text` for the
-// mode badge, whereas the status bar renders with `mode_normal`/`mode_insert`
-// backgrounds.
-#[allow(dead_code)]
 impl Theme {
     pub fn style_for_tab(&self, active: bool) -> Style {
         if active {
@@ -51,6 +42,69 @@ impl Theme {
             Style::default().fg(self.colors.border_focused)
         } else {
             Style::default().fg(self.colors.border)
+        }
+    }
+
+    pub fn safe(&self) -> Style {
+        Style::default().fg(self.colors.safe)
+    }
+
+    pub fn danger(&self) -> Style {
+        Style::default().fg(self.colors.danger)
+    }
+
+    pub fn muted(&self) -> Style {
+        Style::default().fg(self.colors.muted)
+    }
+
+    pub fn active_task(&self) -> Style {
+        Style::default().fg(self.colors.active_task)
+    }
+
+    pub fn paused_task(&self) -> Style {
+        Style::default().fg(self.colors.paused_task)
+    }
+
+    pub fn scope_match(&self) -> Style {
+        Style::default().fg(self.colors.scope_match)
+    }
+
+    pub fn scope_miss(&self) -> Style {
+        Style::default().fg(self.colors.scope_miss)
+    }
+
+    pub fn policy_required(&self) -> Style {
+        Style::default().fg(self.colors.policy_required)
+    }
+
+    pub fn policy_denied(&self) -> Style {
+        Style::default().fg(self.colors.policy_denied)
+    }
+
+    pub fn style_for_risk(&self, risk: &str) -> Style {
+        match risk {
+            "passive" | "safe" => self.safe(),
+            "intrusive" => self.danger(),
+            "admin" | "administrative" => self.danger(),
+            _ => self.muted(),
+        }
+    }
+
+    pub fn style_for_policy_outcome(&self, outcome: &str) -> Style {
+        match outcome {
+            "run" | "allow" => self.safe(),
+            "warn" => self.policy_required(),
+            "confirm" | "require" => self.policy_required(),
+            "deny" => self.policy_denied(),
+            _ => self.muted(),
+        }
+    }
+
+    pub fn style_for_task_state(&self, state: &str) -> Style {
+        match state {
+            "running" | "active" => self.active_task(),
+            "paused" => self.paused_task(),
+            _ => self.muted(),
         }
     }
 }

@@ -1,3 +1,4 @@
+pub(crate) mod action;
 pub(crate) mod bookmarks;
 pub(crate) mod command;
 pub(crate) mod confirmation;
@@ -9,6 +10,7 @@ pub(crate) mod input;
 pub(crate) mod key_handler;
 pub(crate) mod navigation;
 mod options;
+pub(crate) mod overlay;
 pub(crate) mod runner;
 pub(crate) mod state;
 pub(crate) mod state_update;
@@ -29,6 +31,9 @@ pub use runner::run;
 pub use state::{OverlayState, QuickSwitchState, SearchState, TaskState, ThemeLoadState};
 pub use tab_store::TabStore;
 
+pub(crate) use action::{CommandPaletteInput, QuickSwitchInput, UiAction};
+pub(crate) use overlay::OverlayController;
+
 pub(crate) mod notifications;
 
 use super::error::make_friendly_error;
@@ -43,7 +48,7 @@ use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use eggsec::config::{
     confirmation_classes_for, EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
-    ManualOverride, OperationDescriptor, OperationMode, OperationRisk,
+    ManualOverride, OperationDescriptor, OperationMode,
 };
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
@@ -394,79 +399,28 @@ impl App {
     }
 
     fn is_direct_launch_tab(&self, tab: Tab) -> bool {
-        matches!(
-            tab,
-            Tab::Packet
-                | Tab::Stress
-                | Tab::Cluster
-                | Tab::Wireless
-                | Tab::OAuth
-                | Tab::Nse
-                | Tab::Hunt
-                | Tab::Browser
-        )
+        tab.is_direct_launch()
     }
 
     /// Build an OperationDescriptor for the current tab/action that is compatible with the
     /// shared enforcement evaluator (same risk/capability/operation strings used by CLI handlers).
     /// Returns None for tabs/operations that have no target-bearing networked action.
     pub fn build_current_operation_descriptor(&self) -> Option<OperationDescriptor> {
-        let target = self.current_tab_target().unwrap_or_default();
-        let op = match self.current_tab {
-            Tab::Recon => "recon",
-            Tab::ScanPorts => "scan-ports",
-            Tab::ScanEndpoints => "scan-endpoints",
-            Tab::Fingerprint => "fingerprint",
-            Tab::Fuzz => "fuzz",
-            Tab::Waf => "waf",
-            Tab::WafStress => "waf-stress",
-            Tab::Scan => "scan-pipeline",
-            Tab::Load => "load-test",
-            Tab::Stress => "stress-test",
-            Tab::Packet => "packet",
-            Tab::GraphQl => "graphql",
-            Tab::OAuth => "oauth",
-            Tab::Nse => "nse",
-            Tab::Hunt => "hunt",
-            Tab::Browser => "browser",
-            Tab::Compliance => "compliance",
-            Tab::Storage => "storage",
-            Tab::Integrations => "integrations",
-            Tab::Workflow => "workflow",
-            Tab::Vuln => "vuln",
-            Tab::Wireless => "wireless",
-            _ => return None,
-        };
-        // Risk mapping mirrors CLI OperationDescriptor construction in handlers.
-        let risk = match self.current_tab {
-            Tab::Fuzz | Tab::WafStress | Tab::Scan | Tab::Load | Tab::Stress | Tab::Packet => {
-                OperationRisk::Intrusive
-            }
-            Tab::Hunt | Tab::Browser => OperationRisk::Intrusive,
-            Tab::Waf | Tab::GraphQl | Tab::OAuth | Tab::Nse => OperationRisk::SafeActive,
-            Tab::Recon | Tab::ScanPorts | Tab::ScanEndpoints | Tab::Fingerprint => {
-                OperationRisk::SafeActive
-            }
-            Tab::Compliance | Tab::Storage | Tab::Integrations | Tab::Workflow | Tab::Vuln => {
-                OperationRisk::SafeActive
-            }
-            Tab::Wireless => OperationRisk::SafeActive,
-            _ => OperationRisk::SafeActive,
-        };
-        // Baseline capability set for TUI-launched work (most are covered by baseline or explicit policy flags).
-        // Non-baseline (e.g. raw packet, credential, remote) will surface NonBaselineCapability when the
-        // descriptor declares them; for now we declare none extra here and let the central evaluator decide.
+        let tab = self.current_tab;
+        let spec = crate::tabs::spec_for(tab).filter(|s| s.operation.is_some())?;
+        let target = self.current_tab_target();
+        let risk = crate::tabs::risk_from_group(spec.risk_group);
+        let op = spec.operation.unwrap().to_string();
         let required_capabilities: Vec<eggsec::config::Capability> = Vec::new();
-
         Some(OperationDescriptor {
-            operation: op.to_string(),
+            operation: op,
             mode: OperationMode::StandardAssessment,
             risk,
             intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: if target.is_empty() {
+            target: if target.as_deref().unwrap_or("").is_empty() {
                 None
             } else {
-                Some(target)
+                target
             },
             required_features: Vec::new(),
             required_policy_flags: Vec::new(),
@@ -477,34 +431,126 @@ impl App {
     }
 
     /// Best-effort extraction of the primary target string from the current tab (for descriptor).
-    fn current_tab_target(&self) -> Option<String> {
+    pub(crate) fn current_tab_target(&self) -> Option<String> {
         match self.current_tab {
-            Tab::Recon => Some(self.tabs.recon.target().to_string()),
-            Tab::ScanPorts => Some(self.tabs.scan_ports.target().to_string()),
-            Tab::ScanEndpoints => Some(self.tabs.scan_endpoints.target().to_string()),
-            Tab::Fingerprint => Some(self.tabs.fingerprint.target().to_string()),
-            Tab::Fuzz => Some(self.tabs.fuzz.target().to_string()),
-            Tab::Waf => Some(self.tabs.waf.target().to_string()),
-            Tab::WafStress => Some(self.tabs.waf_stress.target().to_string()),
-            Tab::Scan => Some(self.tabs.scan.target().to_string()),
-            Tab::Load => Some(self.tabs.load.target().to_string()),
-            Tab::Stress => Some(self.tabs.stress.target().to_string()),
-            Tab::Packet => Some(self.tabs.packet.target().to_string()),
-            Tab::GraphQl => Some(self.tabs.graphql.target().to_string()),
-            Tab::OAuth => Some(self.tabs.oauth.target().to_string()),
-            // Feature-gated tabs: only include when the variant is present at compile time.
+            Tab::Recon => self.tabs.recon.primary_target(),
+            Tab::ScanPorts => self.tabs.scan_ports.primary_target(),
+            Tab::ScanEndpoints => self.tabs.scan_endpoints.primary_target(),
+            Tab::Fingerprint => self.tabs.fingerprint.primary_target(),
+            Tab::Fuzz => self.tabs.fuzz.primary_target(),
+            Tab::Waf => self.tabs.waf.primary_target(),
+            Tab::WafStress => self.tabs.waf_stress.primary_target(),
+            Tab::Scan => self.tabs.scan.primary_target(),
+            Tab::Load => self.tabs.load.primary_target(),
+            Tab::Stress => self.tabs.stress.primary_target(),
+            Tab::Packet => self.tabs.packet.primary_target(),
+            Tab::GraphQl => self.tabs.graphql.primary_target(),
+            Tab::OAuth => self.tabs.oauth.primary_target(),
             #[cfg(feature = "nse")]
-            Tab::Nse => Some(self.tabs.nse.target().to_string()),
+            Tab::Nse => self.tabs.nse.primary_target(),
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => Some(self.tabs.hunt.target().to_string()),
+            Tab::Hunt => self.tabs.hunt.primary_target(),
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => Some(self.tabs.browser.target().to_string()),
+            Tab::Browser => self.tabs.browser.primary_target(),
             #[cfg(feature = "compliance")]
-            Tab::Compliance => Some(self.tabs.compliance.target().to_string()),
+            Tab::Compliance => self.tabs.compliance.primary_target(),
             #[cfg(feature = "wireless")]
-            Tab::Wireless => Some(self.tabs.wireless.interface().to_string()),
+            Tab::Wireless => self.tabs.wireless.primary_target(),
             _ => None,
         }
+    }
+
+    /// Produce a safe, minimal CLI equivalent for the current tab state.
+    /// Returns None for non-executable tabs (Settings, History, Dashboard, Report, etc.).
+    /// Never emits broad bypass flags (--yes, --allow-*, --insecure-tls, etc.).
+    /// Uses primary_target + App::export_format + App::loaded_scope.path (when explicit).
+    /// For Phase 8: only recon concurrency (if !=20), scan-ports ports (if != default), fuzz max-payloads (if >0) are appended as safe common options.
+    pub fn copy_cli_equivalent(&self) -> Option<String> {
+        use crate::utils::shell_escape;
+        let tab = self.current_tab;
+        let cmd = tab.cli_command();
+        // Non-executable / no cli_command tabs return None (per AC and plan).
+        // Report is listed in plan as example non-executable for this feature (even though spec has eggsec report).
+        if cmd == "unknown"
+            || cmd == "Settings"
+            || cmd == "History"
+            || cmd == "Dashboard"
+            || cmd == "eggsec report"
+            || tab == Tab::Report
+        {
+            return None;
+        }
+        // Only tabs that have cli_command starting with "eggsec " are executable.
+        if !cmd.starts_with("eggsec ") {
+            return None;
+        }
+
+        let target = self.current_tab_target().unwrap_or_default();
+        let target_esc = if target.is_empty() {
+            "''".to_string()
+        } else {
+            shell_escape(&target)
+        };
+
+        let mut out = format!("{} {}", cmd, target_esc);
+
+        // Tab-specific safe portable options (conservative per plan).
+        match tab {
+            Tab::Recon => {
+                let conc = self.tabs.recon.concurrency();
+                if conc != 20 {
+                    out.push_str(&format!(" --concurrency {}", conc));
+                }
+            }
+            Tab::ScanPorts => {
+                let ports = self.tabs.scan_ports.ports();
+                // Only append if user changed from the UI default shown in the field.
+                if ports != "1-1024" {
+                    out.push_str(&format!(" --ports {}", shell_escape(ports)));
+                }
+                // Concurrency and timeout are common but plan says "start with ..."; we keep minimal for tests.
+            }
+            Tab::Fuzz => {
+                // Intrusive example: include max-payloads if non-default (>0 means limited).
+                let mp = self.tabs.fuzz.max_payloads();
+                if mp > 0 {
+                    out.push_str(&format!(" --max-payloads {}", mp));
+                }
+            }
+            _ => {
+                // Other executable tabs fall back to target-only (per "target only + note" guidance).
+            }
+        }
+
+        // Append --format only if non-default (Pretty is CLI default).
+        if self.export_format != eggsec::types::OutputFormat::Pretty {
+            let fmt = match self.export_format {
+                eggsec::types::OutputFormat::Json => "json",
+                eggsec::types::OutputFormat::Compact => "compact",
+                eggsec::types::OutputFormat::Csv => "csv",
+                eggsec::types::OutputFormat::Html => "html",
+                eggsec::types::OutputFormat::Markdown => "markdown",
+                eggsec::types::OutputFormat::Sarif => "sarif",
+                eggsec::types::OutputFormat::Junit => "junit",
+                _ => "pretty",
+            };
+            if fmt != "pretty" {
+                out.push_str(&format!(" --format {}", fmt));
+            }
+        }
+
+        // Scope path: ONLY if explicit source with a path (CliScopeFile or ConfigFile with path).
+        // Do not invent; mirror LoadedScope usage in runner.
+        if let Some(ref p) = self.loaded_scope.path {
+            if self.loaded_scope.source == eggsec::config::ScopeSource::CliScopeFile
+                || self.loaded_scope.source == eggsec::config::ScopeSource::ConfigFile
+            {
+                out.push_str(&format!(" --scope {}", shell_escape(p)));
+            }
+        }
+
+        // NEVER append policy bypasses for Phase 8 (per verbatim AC and plan).
+        Some(out)
     }
 
     fn build_current_task(&self) -> Option<workers::TaskConfig> {
@@ -1081,6 +1127,568 @@ impl App {
     /// Check if any overlay is active (blocks tab content interaction)
     pub fn is_any_overlay_active(&self) -> bool {
         self.topmost_overlay().is_some()
+    }
+
+    // ---------------------------------------------------------------------
+    // Phase 1: UiAction apply layer (central mutation point for key-driven UI)
+    // ---------------------------------------------------------------------
+
+    /// Apply a single `UiAction`. This is the canonical mutation site for
+    /// actions originating from `KeyHandler` decode (Phase 1 of the
+    /// architecture pass). Existing direct-mutation helpers are preserved
+    /// and may be called by `apply_action` for compatibility during the
+    /// transition; they continue to be used by tests, command palette
+    /// execution, etc.
+    ///
+    /// All visible-state-changing actions set `needs_redraw = true`.
+    /// Clipboard I/O and task spawning are performed here (side effects
+    /// belong in apply, not in the pure-ish decode path).
+    pub fn apply_action(&mut self, action: UiAction) {
+        use crate::app::notifications::{Notification, NotificationSeverity};
+        use crate::utils::Clipboard;
+
+        match action {
+            UiAction::Noop => {}
+
+            UiAction::Quit => {
+                self.should_quit = true;
+                self.needs_redraw = true;
+            }
+
+            UiAction::StopActiveTask { message } => {
+                self.stop_with_message(&message);
+                self.needs_redraw = true;
+            }
+
+            UiAction::ToggleHelp => {
+                self.toggle_help();
+                self.needs_redraw = true;
+            }
+
+            UiAction::ToggleCommandPalette => {
+                self.toggle_command_palette();
+                self.needs_redraw = true;
+            }
+
+            UiAction::ToggleQuickSwitch => {
+                self.toggle_quick_switch();
+                self.needs_redraw = true;
+            }
+
+            UiAction::CloseQuickSwitch => {
+                self.close_quick_switch();
+                self.needs_redraw = true;
+            }
+
+            UiAction::ToggleSearch { global } => {
+                self.toggle_search(global);
+                self.needs_redraw = true;
+            }
+
+            UiAction::ToggleTheme => {
+                self.toggle_theme();
+                // toggle_theme already sets notification + needs_redraw
+            }
+
+            UiAction::TogglePause => {
+                self.toggle_pause();
+                self.needs_redraw = true;
+            }
+
+            UiAction::Resume => {
+                self.resume();
+                self.needs_redraw = true;
+            }
+
+            UiAction::FocusNext => {
+                self.handle_focus_next();
+                self.needs_redraw = true;
+            }
+
+            UiAction::FocusPrev => {
+                self.handle_focus_prev();
+                self.needs_redraw = true;
+            }
+
+            UiAction::PageUp => {
+                self.page_up();
+                self.needs_redraw = true;
+            }
+
+            UiAction::PageDown => {
+                self.page_down();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveUp => {
+                self.handle_up();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveDown => {
+                self.handle_down();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveLeft => {
+                self.handle_left();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveRight => {
+                self.handle_right();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveTop => {
+                self.handle_top();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveBottom => {
+                self.handle_bottom();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveWordForward => {
+                self.handle_word_forward();
+                self.needs_redraw = true;
+            }
+
+            UiAction::MoveWordBackward => {
+                self.handle_word_backward();
+                self.needs_redraw = true;
+            }
+
+            UiAction::Home => {
+                self.handle_home();
+                self.needs_redraw = true;
+            }
+
+            UiAction::End => {
+                self.handle_end();
+                self.needs_redraw = true;
+            }
+
+            UiAction::Enter => {
+                self.handle_enter();
+                self.needs_redraw = true;
+            }
+
+            UiAction::Escape => {
+                self.handle_escape();
+                self.needs_redraw = true;
+            }
+
+            UiAction::EnterInsertMode => {
+                self.mode = InputMode::Insert;
+                self.needs_redraw = true;
+            }
+
+            UiAction::InputChar(c) => {
+                self.handle_char(c);
+                self.needs_redraw = true;
+            }
+
+            UiAction::Backspace => {
+                self.handle_backspace();
+                self.needs_redraw = true;
+            }
+
+            UiAction::Delete => {
+                self.handle_delete();
+                self.needs_redraw = true;
+            }
+
+            UiAction::Paste(text) => {
+                if !self.has_active_task() {
+                    self.dispatcher_mut().handle_paste(&text);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::Copy => {
+                if let Some(text) = self.dispatcher_mut().handle_copy() {
+                    if !Clipboard::set(&text) {
+                        tracing::warn!("Clipboard write failed");
+                    }
+                }
+                self.needs_redraw = true;
+            }
+
+            UiAction::RequestPaste => {
+                if !self.has_active_task() {
+                    if let Some(text) = Clipboard::get() {
+                        self.dispatcher_mut().handle_paste(&text);
+                    } else {
+                        tracing::debug!("Clipboard read failed or clipboard is empty");
+                    }
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::RequestCopy => {
+                if let Some(text) = self.dispatcher_mut().handle_copy() {
+                    if !Clipboard::set(&text) {
+                        tracing::warn!("Clipboard write failed");
+                    }
+                }
+                self.needs_redraw = true;
+            }
+
+            UiAction::SelectTab(tab) => {
+                self.set_current_tab_if_available(tab);
+                self.adjust_tab_scroll();
+                self.needs_redraw = true;
+            }
+
+            UiAction::NextTab => {
+                self.next_tab();
+                self.needs_redraw = true;
+            }
+
+            UiAction::PrevTab => {
+                self.prev_tab();
+                self.needs_redraw = true;
+            }
+
+            UiAction::ToggleBookmark(tab) => {
+                self.toggle_bookmark(tab);
+                self.overlay.notification = Some(Notification::new(
+                    format!("Bookmarked: {}", tab.title()),
+                    NotificationSeverity::Info,
+                ));
+                self.needs_redraw = true;
+            }
+
+            UiAction::CycleExportFormat => {
+                self.cycle_export_format();
+                self.overlay.notification = Some(Notification::new(
+                    format!("Export format: {}", self.export_format),
+                    NotificationSeverity::Info,
+                ));
+                self.needs_redraw = true;
+            }
+
+            UiAction::ExportResults => {
+                self.export_results();
+                self.needs_redraw = true;
+            }
+
+            UiAction::ResetCurrent => {
+                if !self.has_active_task() {
+                    if self.current_tab == Tab::History {
+                        self.request_confirmation(PendingAction::ClearHistory);
+                    } else {
+                        self.request_confirmation(PendingAction::ResetTab);
+                    }
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::SaveSettings => {
+                if !self.has_active_task() && self.current_tab == Tab::Settings {
+                    self.request_confirmation(PendingAction::SaveSettings);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::DeleteHistoryEntry => {
+                if !self.has_active_task() && self.current_tab == Tab::History {
+                    self.request_confirmation(PendingAction::DeleteHistoryEntry);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::ConfirmPendingAction => {
+                self.confirm_action();
+                self.needs_redraw = true;
+            }
+
+            UiAction::CancelPendingAction => {
+                self.cancel_action();
+                self.needs_redraw = true;
+            }
+
+            UiAction::ConfirmPolicyAction => {
+                self.confirm_policy_action();
+                self.needs_redraw = true;
+            }
+
+            UiAction::CancelPolicyAction => {
+                self.cancel_policy_action();
+                self.needs_redraw = true;
+            }
+
+            UiAction::PolicyReasonChar(c) => {
+                if let Some(p) = &mut self.overlay.pending_policy {
+                    p.reason_input.push(c);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::PolicyReasonBackspace => {
+                if let Some(p) = &mut self.overlay.pending_policy {
+                    p.reason_input.pop();
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::CommandPaletteInput(pal_input) => {
+                match pal_input {
+                    CommandPaletteInput::Char(c) => {
+                        let q = if let Some(ref mut palette) = self.command_palette {
+                            palette.query.push(c);
+                            let q = palette.query.clone();
+                            let max_idx = palette.results.len().saturating_sub(1);
+                            if palette.selected_index > max_idx {
+                                palette.selected_index = max_idx;
+                            }
+                            Some(q)
+                        } else {
+                            None
+                        };
+                        if let Some(q) = q {
+                            self.update_command_palette_query(&q);
+                        }
+                    }
+                    CommandPaletteInput::Backspace => {
+                        let new_query = if let Some(ref mut palette) = self.command_palette {
+                            let query = palette.query.clone();
+                            if !query.is_empty() {
+                                palette.query.pop();
+                                let new_query = palette.query.clone();
+                                let max_idx = palette.results.len().saturating_sub(1);
+                                if palette.selected_index > max_idx {
+                                    palette.selected_index = max_idx;
+                                }
+                                Some(new_query)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        if let Some(q) = new_query {
+                            self.update_command_palette_query(&q);
+                        }
+                    }
+                    CommandPaletteInput::Enter => {
+                        let index = self
+                            .command_palette
+                            .as_ref()
+                            .map(|p| p.selected_index)
+                            .unwrap_or(0);
+                        self.select_command_palette_item(index);
+                    }
+                    CommandPaletteInput::Up => {
+                        if let Some(ref mut palette) = self.command_palette {
+                            if palette.selected_index > 0 {
+                                palette.selected_index -= 1;
+                            }
+                            if palette.selected_index < palette.scroll_offset {
+                                palette.scroll_offset = palette.selected_index;
+                            }
+                        }
+                    }
+                    CommandPaletteInput::Down => {
+                        if let Some(ref mut palette) = self.command_palette {
+                            let max_idx = palette.results.len().saturating_sub(1);
+                            if palette.selected_index < max_idx {
+                                palette.selected_index += 1;
+                            }
+                            palette.adjust_scroll_for_selection();
+                        }
+                    }
+                    CommandPaletteInput::Tab => {
+                        if let Some(ref mut palette) = self.command_palette {
+                            let max_idx = palette.results.len().saturating_sub(1);
+                            if palette.selected_index < max_idx {
+                                palette.selected_index += 1;
+                            }
+                            palette.adjust_scroll_for_selection();
+                        }
+                    }
+                    CommandPaletteInput::BackTab => {
+                        if let Some(ref mut palette) = self.command_palette {
+                            if palette.selected_index > 0 {
+                                palette.selected_index -= 1;
+                            }
+                            if palette.selected_index < palette.scroll_offset {
+                                palette.scroll_offset = palette.selected_index;
+                            }
+                        }
+                    }
+                    CommandPaletteInput::Esc | CommandPaletteInput::Close => {
+                        self.toggle_command_palette();
+                    }
+                }
+                self.needs_redraw = true;
+            }
+
+            UiAction::QuickSwitchInput(qs_input) => {
+                match qs_input {
+                    QuickSwitchInput::Char(c) => {
+                        self.quick_switch.query.push(c);
+                        self.clamp_quick_switch_selection_internal();
+                    }
+                    QuickSwitchInput::Backspace => {
+                        self.quick_switch.query.pop();
+                        self.clamp_quick_switch_selection_internal();
+                    }
+                    QuickSwitchInput::Enter => {
+                        let results = self.get_quick_switch_results();
+                        if !results.is_empty() && self.quick_switch.selected < results.len() {
+                            if let Some(tab) = results.get(self.quick_switch.selected) {
+                                self.current_tab = **tab;
+                                self.adjust_tab_scroll();
+                            }
+                        }
+                        self.close_quick_switch();
+                    }
+                    QuickSwitchInput::Up => {
+                        if self.quick_switch.selected > 0 {
+                            self.quick_switch.selected -= 1;
+                        }
+                    }
+                    QuickSwitchInput::Down => {
+                        let results = self.get_quick_switch_results();
+                        if self.quick_switch.selected < results.len().saturating_sub(1) {
+                            self.quick_switch.selected += 1;
+                        }
+                    }
+                    QuickSwitchInput::PageUp => {
+                        let results = self.get_quick_switch_results();
+                        if self.quick_switch.selected >= 10 {
+                            self.quick_switch.selected -= 10;
+                        } else {
+                            self.quick_switch.selected = 0;
+                        }
+                        if !results.is_empty() {
+                            self.quick_switch.selected =
+                                self.quick_switch.selected.min(results.len() - 1);
+                        }
+                    }
+                    QuickSwitchInput::PageDown => {
+                        let results = self.get_quick_switch_results();
+                        if !results.is_empty() {
+                            self.quick_switch.selected = (self.quick_switch.selected + 10)
+                                .min(results.len().saturating_sub(1));
+                        }
+                    }
+                    QuickSwitchInput::Home => {
+                        self.quick_switch.selected = 0;
+                    }
+                    QuickSwitchInput::End => {
+                        let results = self.get_quick_switch_results();
+                        self.quick_switch.selected = results.len().saturating_sub(1);
+                    }
+                    QuickSwitchInput::Esc | QuickSwitchInput::Close => {
+                        self.close_quick_switch();
+                    }
+                }
+                self.needs_redraw = true;
+            }
+
+            UiAction::SearchQueryChar(c) => {
+                if self.is_search_visible() {
+                    self.search.query.push(c);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::SearchQueryBackspace => {
+                if self.is_search_visible() {
+                    self.search.query.pop();
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::SearchQueryClear => {
+                if self.is_search_visible() {
+                    self.search.query.clear();
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::SearchPerform => {
+                if self.is_search_visible() {
+                    self.perform_search();
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HelpScrollUp => {
+                if self.is_help_visible() {
+                    self.overlay.help_scroll_offset =
+                        self.overlay.help_scroll_offset.saturating_sub(1);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HelpScrollDown => {
+                if self.is_help_visible() {
+                    self.overlay.help_scroll_offset =
+                        self.overlay.help_scroll_offset.saturating_add(1);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HelpScrollTop => {
+                if self.is_help_visible() {
+                    self.overlay.help_scroll_offset = 0;
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HelpScrollBottom => {
+                if self.is_help_visible() {
+                    self.overlay.help_scroll_offset = usize::MAX;
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HelpScrollPageUp => {
+                if self.is_help_visible() {
+                    self.overlay.help_scroll_offset =
+                        self.overlay.help_scroll_offset.saturating_sub(10);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HelpScrollPageDown => {
+                if self.is_help_visible() {
+                    self.overlay.help_scroll_offset =
+                        self.overlay.help_scroll_offset.saturating_add(10);
+                    self.needs_redraw = true;
+                }
+            }
+
+            UiAction::HttpOptionsClose => {
+                if self.is_http_options_visible() {
+                    self.overlay.show_http_options = false;
+                    self.needs_redraw = true;
+                }
+            }
+        }
+    }
+
+    /// Apply a batch of actions in order.
+    pub fn apply_actions(&mut self, actions: Vec<UiAction>) {
+        for a in actions {
+            self.apply_action(a);
+        }
+    }
+
+    /// Internal helper used by QuickSwitch apply (keeps clamp logic in one place).
+    fn clamp_quick_switch_selection_internal(&mut self) {
+        let results = self.get_quick_switch_results();
+        let len = results.len();
+        self.quick_switch.selected = if len == 0 {
+            0
+        } else {
+            self.quick_switch.selected.min(len - 1)
+        };
     }
 }
 

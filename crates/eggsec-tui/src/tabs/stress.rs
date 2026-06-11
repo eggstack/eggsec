@@ -572,6 +572,10 @@ impl TabInput for StressTab {
         }
         self.results_view.scroll_down(page_size);
     }
+
+    fn primary_target(&self) -> Option<String> {
+        Some(self.target().to_string())
+    }
 }
 
 impl StressTab {

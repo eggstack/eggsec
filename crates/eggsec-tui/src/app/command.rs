@@ -118,26 +118,78 @@ impl super::App {
             "quit" | "exit" if !self.is_running() => {
                 self.should_quit = true;
             }
-            "stop" => {
+            "stop" | "stop-task" => {
                 self.stop();
+            }
+            "pause" | "pause-task" => {
+                if self.has_active_task() && !self.is_paused() {
+                    self.toggle_pause();
+                } else if !self.has_active_task() {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "No active task to pause".to_string(),
+                        super::notifications::NotificationSeverity::Warning,
+                    ));
+                }
+            }
+            "resume" | "resume-task" => {
+                if self.has_active_task() && self.is_paused() {
+                    self.resume();
+                } else if !self.has_active_task() {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "No active task to resume".to_string(),
+                        super::notifications::NotificationSeverity::Warning,
+                    ));
+                }
+            }
+            "jump-active" => {
+                if let Some(t) = self.active_task_tab() {
+                    let _ = self.set_current_tab_if_available(t);
+                } else {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "No active task to jump to".to_string(),
+                        super::notifications::NotificationSeverity::Info,
+                    ));
+                }
             }
             "reset" => {
                 self.reset_current_tab();
             }
-            "save" => {
-                self.save_settings();
+            "save" | "save-settings" => {
+                if self.current_tab == Tab::Settings && !self.has_active_task() {
+                    self.request_confirmation(super::confirmation::PendingAction::SaveSettings);
+                } else if self.current_tab == Tab::Settings && self.has_active_task() {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "Cannot save settings while a task is running".to_string(),
+                        super::notifications::NotificationSeverity::Warning,
+                    ));
+                } else {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "Save settings is only available on the Settings tab".to_string(),
+                        super::notifications::NotificationSeverity::Info,
+                    ));
+                }
             }
-            "help" => {
+            "help" | "help-current" => {
                 self.toggle_help();
             }
-            "search" => {
+            "search" | "open-search" => {
                 self.toggle_search(true);
+            }
+            "global-search" => {
+                self.toggle_search(false);
             }
             "palette" => {
                 self.toggle_command_palette();
             }
             "export" => {
                 self.export_results();
+            }
+            "cycle-export" => {
+                self.cycle_export_format();
+                self.overlay.notification = Some(super::notifications::Notification::new(
+                    format!("Export format: {}", self.export_format),
+                    super::notifications::NotificationSeverity::Info,
+                ));
             }
             "next-tab" | "next" => {
                 self.next_tab();
@@ -156,6 +208,73 @@ impl super::App {
             }
             "theme" => {
                 self.toggle_theme();
+            }
+            "run" | "run-current" => {
+                if !self.is_running() {
+                    self.handle_enter();
+                } else {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "Cannot run while a task is active".to_string(),
+                        super::notifications::NotificationSeverity::Warning,
+                    ));
+                }
+            }
+            "quick-switch" | "open-quick" => {
+                self.toggle_quick_switch();
+            }
+            "copy-cli" | "copy-cli-equivalent" => {
+                if let Some(cmd) = self.copy_cli_equivalent() {
+                    if crate::utils::Clipboard::set(&cmd) {
+                        let short = if cmd.len() > 60 {
+                            format!("{}...", &cmd[..57])
+                        } else {
+                            cmd.clone()
+                        };
+                        self.overlay.notification = Some(super::notifications::Notification::new(
+                            format!("CLI command copied: {}", short),
+                            super::notifications::NotificationSeverity::Info,
+                        ));
+                    } else {
+                        tracing::warn!("Clipboard write failed for copy-cli");
+                        self.overlay.notification = Some(super::notifications::Notification::new(
+                            "Clipboard write failed".to_string(),
+                            super::notifications::NotificationSeverity::Warning,
+                        ));
+                    }
+                } else {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "No CLI equivalent for current tab".to_string(),
+                        super::notifications::NotificationSeverity::Info,
+                    ));
+                }
+            }
+            "reload-scope" => {
+                self.overlay.notification = Some(super::notifications::Notification::new(
+                    "Reload scope/config not supported in this build (use CLI or restart TUI)"
+                        .to_string(),
+                    super::notifications::NotificationSeverity::Info,
+                ));
+            }
+            "clear-history" | "delete-history" => {
+                if self.current_tab == Tab::History && !self.has_active_task() {
+                    if command == "clear-history" {
+                        self.request_confirmation(super::confirmation::PendingAction::ClearHistory);
+                    } else {
+                        self.request_confirmation(
+                            super::confirmation::PendingAction::DeleteHistoryEntry,
+                        );
+                    }
+                } else if self.current_tab == Tab::History && self.has_active_task() {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "Cannot modify history while a task is running".to_string(),
+                        super::notifications::NotificationSeverity::Warning,
+                    ));
+                } else {
+                    self.overlay.notification = Some(super::notifications::Notification::new(
+                        "History commands are only available on the History tab".to_string(),
+                        super::notifications::NotificationSeverity::Info,
+                    ));
+                }
             }
             _ => {}
         }
@@ -547,6 +666,209 @@ mod tests {
         assert!(
             !cluster_results.is_empty(),
             "Command palette should contain 'cluster' command"
+        );
+    }
+
+    #[test]
+    fn test_execute_command_global_action_theme() {
+        let mut app = create_test_app();
+        let initial = app.theme_manager.current_name().to_string();
+        app.execute_command("theme");
+        assert_ne!(
+            app.theme_manager.current_name(),
+            initial,
+            "theme command should cycle theme"
+        );
+        assert!(app.overlay.notification.is_some());
+    }
+
+    #[test]
+    fn test_execute_command_tab_action_recon() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Load;
+        app.execute_command("recon");
+        assert_eq!(app.current_tab, Tab::Recon);
+    }
+
+    #[test]
+    fn test_execute_command_unavailable_clear_history_when_not_on_history() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("clear-history");
+        assert!(app.overlay.notification.is_some());
+        let notif = app.overlay.notification.as_ref().unwrap();
+        assert!(notif
+            .message
+            .contains("History commands are only available on the History tab"));
+    }
+
+    #[test]
+    fn test_execute_command_run_current_when_idle() {
+        let mut app = create_test_app();
+        assert!(!app.is_running());
+        app.execute_command("run");
+        // handle_enter may change mode or start something; we just ensure it does not panic and palette path works
+        assert!(
+            app.overlay.notification.is_none()
+                || !app
+                    .overlay
+                    .notification
+                    .as_ref()
+                    .unwrap()
+                    .message
+                    .contains("Cannot run")
+        );
+    }
+
+    #[test]
+    fn test_execute_command_stop_pause_resume_jump_with_no_task_sets_notification() {
+        let mut app = create_test_app();
+        assert!(!app.has_active_task());
+        app.execute_command("stop");
+        // stop is unconditional but safe
+        app.execute_command("pause");
+        assert!(app.overlay.notification.is_some());
+        let msg = app.overlay.notification.as_ref().unwrap().message.clone();
+        assert!(msg.contains("No active task"));
+        app.execute_command("resume");
+        // resume notification may overwrite
+        app.execute_command("jump-active");
+        assert!(app.overlay.notification.is_some());
+    }
+
+    // ===== Phase 8: Copy CLI equivalent tests (AC-mandated cases) =====
+
+    #[test]
+    fn test_copy_cli_recon_produces_target_only_by_default() {
+        let app = create_test_app();
+        // Recon is default current_tab in test app; target empty in new_for_testing
+        let cli = app.copy_cli_equivalent();
+        assert!(cli.is_some());
+        let s = cli.unwrap();
+        assert!(s.starts_with("eggsec recon"));
+        // No --yes or broad flags
+        assert!(!s.contains("--yes"));
+        assert!(!s.contains("--allow-"));
+        // Default target is empty -> ''
+        assert!(s.contains("''") || s.contains("recon "));
+    }
+
+    #[test]
+    fn test_copy_cli_recon_with_target_and_concurrency() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        // Set target via tab input (first field)
+        if let Some(f) = app.tabs.recon.inputs.fields.first_mut() {
+            f.value = "example.com".to_string();
+        }
+        // Set non-default concurrency (second field)
+        if let Some(f) = app.tabs.recon.inputs.fields.get_mut(1) {
+            f.value = "50".to_string();
+        }
+        let cli = app.copy_cli_equivalent().unwrap();
+        // Safe hostname is unquoted by shell_escape
+        assert!(cli.contains("eggsec recon example.com"));
+        assert!(cli.contains("--concurrency 50"));
+        assert!(!cli.contains("--yes"));
+    }
+
+    #[test]
+    fn test_copy_cli_scan_ports_with_target_and_ports() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::ScanPorts;
+        if let Some(f) = app.tabs.scan_ports.inputs.fields.first_mut() {
+            f.value = "10.0.0.1".to_string();
+        }
+        if let Some(f) = app.tabs.scan_ports.inputs.fields.get_mut(1) {
+            f.value = "22,80,443".to_string();
+        }
+        let cli = app.copy_cli_equivalent().unwrap();
+        // Host unquoted (safe), ports with comma get quoted
+        assert!(cli.contains("eggsec scan-ports 10.0.0.1"));
+        assert!(cli.contains("--ports '22,80,443'"));
+        assert!(!cli.contains("--yes"));
+    }
+
+    #[test]
+    fn test_copy_cli_intrusive_fuzz_produces_command() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        if let Some(f) = app.tabs.fuzz.inputs.fields.first_mut() {
+            f.value = "https://target.test".to_string();
+        }
+        // Non-default max payloads to trigger option
+        if let Some(f) = app.tabs.fuzz.inputs.fields.get_mut(3) {
+            f.value = "100".to_string();
+        }
+        let cli = app.copy_cli_equivalent().unwrap();
+        // https:// has safe chars per our escape set, so unquoted
+        assert!(cli.contains("eggsec fuzz https://target.test"));
+        assert!(cli.contains("--max-payloads 100"));
+        assert!(!cli.contains("--yes"));
+    }
+
+    #[test]
+    fn test_copy_cli_non_executable_tabs_return_none() {
+        let mut app = create_test_app();
+        // Per plan AC: settings/history/dashboard (Report has cli_command but we treat UI tabs as non for this test)
+        for t in [Tab::Settings, Tab::History, Tab::Dashboard] {
+            app.current_tab = t;
+            let cli = app.copy_cli_equivalent();
+            assert!(cli.is_none(), "expected None for {:?}", t);
+        }
+    }
+
+    #[test]
+    fn test_copy_cli_appends_format_when_non_default() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        if let Some(f) = app.tabs.recon.inputs.fields.first_mut() {
+            f.value = "target".to_string();
+        }
+        app.export_format = eggsec::types::OutputFormat::Json;
+        let cli = app.copy_cli_equivalent().unwrap();
+        assert!(cli.contains("--format json"));
+        assert!(!cli.contains("--yes"));
+    }
+
+    #[test]
+    fn test_copy_cli_omits_broad_policy_flags() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        if let Some(f) = app.tabs.fuzz.inputs.fields.first_mut() {
+            f.value = "https://x".to_string();
+        }
+        // Even if we had overrides in enforcement (TUI never puts them in CLI copy)
+        let cli = app.copy_cli_equivalent().unwrap();
+        assert!(!cli.contains("--yes"));
+        assert!(!cli.contains("--allow-"));
+        assert!(!cli.contains("--insecure"));
+    }
+
+    #[test]
+    fn test_execute_command_copy_cli_non_executable_sets_notification() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.execute_command("copy-cli");
+        let n = app.overlay.notification.as_ref().unwrap();
+        assert!(n.message.contains("No CLI equivalent"));
+    }
+
+    #[test]
+    fn test_execute_command_copy_cli_executable_copies_or_fails_gracefully() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        if let Some(f) = app.tabs.recon.inputs.fields.first_mut() {
+            f.value = "safe-target".to_string();
+        }
+        app.execute_command("copy-cli");
+        // Either success message or graceful clipboard-fail message (both acceptable per AC)
+        let n = app.overlay.notification.as_ref().unwrap();
+        assert!(
+            n.message.contains("CLI command copied")
+                || n.message.contains("Clipboard write failed"),
+            "got: {}",
+            n.message
         );
     }
 }

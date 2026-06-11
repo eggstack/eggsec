@@ -37,6 +37,11 @@ pub mod wireless;
 #[cfg(feature = "finding-workflow")]
 pub mod workflow;
 
+mod spec;
+pub(crate) use spec::{
+    risk_from_group, spec_for, tab_specs, visible_tab_specs, TabCategory, TabRiskGroup, TabSpec,
+};
+
 #[cfg(feature = "headless-browser")]
 pub use browser::BrowserTab;
 pub use cluster::ClusterTab;
@@ -115,105 +120,15 @@ pub enum Tab {
 
 impl Tab {
     pub fn title(&self) -> &'static str {
-        match self {
-            Tab::Recon => "Recon",
-            Tab::Load => "Load",
-            Tab::ScanPorts => "Scan Ports",
-            Tab::ScanEndpoints => "Scan Endpoints",
-            Tab::Fingerprint => "Fingerprint",
-            Tab::Fuzz => "Fuzz",
-            Tab::Waf => "WAF",
-            Tab::WafStress => "WAF Stress",
-            Tab::Scan => "Scan",
-            Tab::Resume => "Resume",
-            Tab::Proxy => "Proxy",
-            Tab::Packet => "Packet",
-            Tab::GraphQl => "GraphQL",
-            Tab::OAuth => "OAuth",
-            Tab::Cluster => "Cluster",
-            Tab::Stress => "Stress",
-            Tab::Report => "Report",
-            Tab::Nse => "NSE",
-            Tab::Settings => "Settings",
-            Tab::History => "History",
-            Tab::Dashboard => "Dashboard",
-            Tab::Hunt => "Hunt",
-            Tab::Browser => "Browser",
-            Tab::Compliance => "Compliance",
-            Tab::Storage => "Storage",
-            Tab::Integrations => "Integrations",
-            Tab::Workflow => "Workflow",
-            Tab::Vuln => "Vuln",
-            Tab::Wireless => "Wireless",
-        }
+        spec_for(*self).map(|s| s.title).unwrap_or("Unknown")
     }
 
     pub fn cli_command(&self) -> &'static str {
-        match self {
-            Tab::Recon => "eggsec recon",
-            Tab::Load => "eggsec load",
-            Tab::ScanPorts => "eggsec scan-ports",
-            Tab::ScanEndpoints => "eggsec scan-endpoints",
-            Tab::Fingerprint => "eggsec fingerprint",
-            Tab::Fuzz => "eggsec fuzz",
-            Tab::Waf => "eggsec waf",
-            Tab::WafStress => "eggsec waf-stress",
-            Tab::Scan => "eggsec scan",
-            Tab::Resume => "eggsec resume",
-            Tab::Proxy => "eggsec proxy",
-            Tab::Packet => "eggsec packet",
-            Tab::GraphQl => "eggsec graphql",
-            Tab::OAuth => "eggsec oauth",
-            Tab::Cluster => "eggsec cluster",
-            Tab::Stress => "eggsec stress",
-            Tab::Report => "eggsec report",
-            Tab::Nse => "eggsec nse",
-            Tab::Settings => "Settings",
-            Tab::History => "History",
-            Tab::Dashboard => "Dashboard",
-            Tab::Hunt => "eggsec hunt",
-            Tab::Browser => "eggsec browser",
-            Tab::Compliance => "eggsec compliance",
-            Tab::Storage => "eggsec storage",
-            Tab::Integrations => "eggsec integrations",
-            Tab::Workflow => "eggsec workflow",
-            Tab::Vuln => "eggsec vuln",
-            Tab::Wireless => "eggsec wireless",
-        }
+        spec_for(*self).map(|s| s.cli_command).unwrap_or("unknown")
     }
 
     pub fn description(&self) -> &'static str {
-        match self {
-            Tab::Recon => "Gather reconnaissance information",
-            Tab::Load => "Run HTTP load test or stress test",
-            Tab::ScanPorts => "Scan ports on target host",
-            Tab::ScanEndpoints => "Discover sensitive HTTP endpoints",
-            Tab::Fingerprint => "Fingerprint services (AMAP-style)",
-            Tab::Fuzz => "Fuzz target with security payloads",
-            Tab::Waf => "Detect and bypass Web Application Firewalls",
-            Tab::WafStress => "Comprehensive WAF stress testing",
-            Tab::Scan => "Run chained security assessment pipeline",
-            Tab::Resume => "Resume a previous scan from session file",
-            Tab::Proxy => "Manage proxy pool and health checks",
-            Tab::Packet => "Packet capture, send, and analysis tools",
-            Tab::GraphQl => "Test GraphQL endpoints for security issues",
-            Tab::OAuth => "Test OAuth/OIDC endpoints for vulnerabilities",
-            Tab::Cluster => "Manage distributed scanning cluster",
-            Tab::Stress => "Run stress/load testing against target",
-            Tab::Report => "Convert reports, analyze trends, manage schedules",
-            Tab::Nse => "Run Nmap NSE scripts",
-            Tab::Settings => "Application settings",
-            Tab::History => "View scan history",
-            Tab::Dashboard => "View scan results dashboard",
-            Tab::Hunt => "Intelligent vulnerability hunting",
-            Tab::Browser => "Headless browser security testing",
-            Tab::Compliance => "Generate compliance reports (OWASP, PCI, HIPAA, SOC2)",
-            Tab::Storage => "Database storage and query management",
-            Tab::Integrations => "Issue tracker integration (Jira, GitHub, GitLab)",
-            Tab::Workflow => "Finding management and SLA tracking",
-            Tab::Vuln => "Vulnerability prioritization and risk scoring",
-            Tab::Wireless => "Scan wireless networks for security issues",
-        }
+        spec_for(*self).map(|s| s.description).unwrap_or("")
     }
 
     pub fn all() -> &'static [Tab] {
@@ -348,72 +263,14 @@ impl Tab {
     }
 
     pub fn stable_id(&self) -> &'static str {
-        match self {
-            Tab::Recon => "recon",
-            Tab::Load => "load",
-            Tab::ScanPorts => "scan_ports",
-            Tab::ScanEndpoints => "scan_endpoints",
-            Tab::Fingerprint => "fingerprint",
-            Tab::Fuzz => "fuzz",
-            Tab::Waf => "waf",
-            Tab::WafStress => "waf_stress",
-            Tab::Scan => "scan",
-            Tab::Resume => "resume",
-            Tab::Proxy => "proxy",
-            Tab::Packet => "packet",
-            Tab::GraphQl => "graphql",
-            Tab::OAuth => "oauth",
-            Tab::Cluster => "cluster",
-            Tab::Stress => "stress",
-            Tab::Report => "report",
-            Tab::Nse => "nse",
-            Tab::Settings => "settings",
-            Tab::History => "history",
-            Tab::Dashboard => "dashboard",
-            Tab::Hunt => "hunt",
-            Tab::Browser => "browser",
-            Tab::Compliance => "compliance",
-            Tab::Storage => "storage",
-            Tab::Integrations => "integrations",
-            Tab::Workflow => "workflow",
-            Tab::Vuln => "vuln",
-            Tab::Wireless => "wireless",
-        }
+        spec_for(*self).map(|s| s.stable_id).unwrap_or("unknown")
     }
 
     pub fn from_stable_id(id: &str) -> Option<Tab> {
-        let tab = match id {
-            "recon" => Tab::Recon,
-            "load" => Tab::Load,
-            "scan_ports" => Tab::ScanPorts,
-            "scan_endpoints" => Tab::ScanEndpoints,
-            "fingerprint" => Tab::Fingerprint,
-            "fuzz" => Tab::Fuzz,
-            "waf" => Tab::Waf,
-            "waf_stress" => Tab::WafStress,
-            "scan" => Tab::Scan,
-            "resume" => Tab::Resume,
-            "proxy" => Tab::Proxy,
-            "packet" => Tab::Packet,
-            "graphql" => Tab::GraphQl,
-            "oauth" => Tab::OAuth,
-            "cluster" => Tab::Cluster,
-            "stress" => Tab::Stress,
-            "report" => Tab::Report,
-            "nse" => Tab::Nse,
-            "settings" => Tab::Settings,
-            "history" => Tab::History,
-            "dashboard" => Tab::Dashboard,
-            "hunt" => Tab::Hunt,
-            "browser" => Tab::Browser,
-            "compliance" => Tab::Compliance,
-            "storage" => Tab::Storage,
-            "integrations" => Tab::Integrations,
-            "workflow" => Tab::Workflow,
-            "vuln" => Tab::Vuln,
-            "wireless" => Tab::Wireless,
-            _ => return None,
-        };
+        let tab = tab_specs()
+            .iter()
+            .find(|s| s.stable_id == id)
+            .map(|s| s.tab)?;
         tab.visible_index().and(Some(tab))
     }
 
@@ -628,37 +485,9 @@ impl Tab {
     }
 
     pub fn default_breadcrumb(&self) -> Vec<&'static str> {
-        let label = match self {
-            Tab::Recon => "Recon",
-            Tab::Load => "Load",
-            Tab::ScanPorts => "Scan Ports",
-            Tab::ScanEndpoints => "Scan Endpoints",
-            Tab::Fingerprint => "Fingerprint",
-            Tab::Fuzz => "Fuzz",
-            Tab::Waf => "WAF",
-            Tab::WafStress => "WAF Stress",
-            Tab::Scan => "Scan",
-            Tab::Resume => "Resume",
-            Tab::Proxy => "Proxy",
-            Tab::Packet => "Packet",
-            Tab::GraphQl => "GraphQL Security",
-            Tab::OAuth => "OAuth/OIDC Security",
-            Tab::Cluster => "Cluster Management",
-            Tab::Stress => "Stress Testing",
-            Tab::Report => "Report",
-            Tab::Nse => "NSE Scripts",
-            Tab::Settings => "Settings",
-            Tab::History => "History",
-            Tab::Dashboard => "Dashboard",
-            Tab::Hunt => "Hunt",
-            Tab::Browser => "Browser",
-            Tab::Compliance => "Compliance",
-            Tab::Storage => "Storage",
-            Tab::Integrations => "Integrations",
-            Tab::Workflow => "Workflow",
-            Tab::Vuln => "Vuln",
-            Tab::Wireless => "Wireless",
-        };
+        let label = spec_for(*self)
+            .map(|s| s.breadcrumb_label)
+            .unwrap_or("Unknown");
         vec![label]
     }
 
@@ -918,6 +747,9 @@ pub trait TabInput: TabState {
     fn stop(&mut self) {}
     fn page_up(&mut self, _page_size: usize) {}
     fn page_down(&mut self, _page_size: usize) {}
+    fn primary_target(&self) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -1065,5 +897,89 @@ mod tests {
             .find(|s| x >= s.x_start && x < s.x_end)
             .map(|s| s.tab);
         assert_ne!(clicked_tab, Some(Tab::ScanEndpoints));
+    }
+
+    #[test]
+    fn every_visible_tab_has_matching_spec_with_identical_metadata() {
+        for tab in Tab::all() {
+            let spec = spec_for(*tab).expect("every visible tab must have a spec");
+            assert_eq!(spec.tab, *tab);
+            assert_eq!(spec.title, tab.title());
+            assert_eq!(spec.cli_command, tab.cli_command());
+            assert_eq!(spec.description, tab.description());
+            assert_eq!(spec.stable_id, tab.stable_id());
+            assert_eq!(spec.breadcrumb_label, tab.default_breadcrumb()[0]);
+            // feature gating: if spec declares a feature, the tab must be present only when enabled
+            // (compile-time check is implicit; we just verify the visible list is consistent)
+            if spec.feature.is_some() {
+                assert!(Tab::all().contains(tab));
+            }
+        }
+    }
+
+    #[test]
+    fn from_stable_id_respects_visible_guard() {
+        // All visible tabs roundtrip
+        for tab in Tab::all() {
+            let id = tab.stable_id();
+            assert_eq!(Tab::from_stable_id(id), Some(*tab));
+        }
+        // Gated tabs not in the current all() must be rejected by from_stable_id
+        for spec in tab_specs() {
+            if spec.feature.is_some() && !Tab::all().contains(&spec.tab) {
+                assert!(
+                    Tab::from_stable_id(spec.stable_id).is_none(),
+                    "gated tab {:?} should be invisible to from_stable_id when feature disabled",
+                    spec.tab
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn numeric_order_and_next_prev_follow_visible_all() {
+        let all = Tab::all();
+        for (i, tab) in all.iter().enumerate() {
+            assert_eq!(Tab::from_index(i), Some(*tab));
+            assert_eq!(tab.visible_index(), Some(i));
+            assert_eq!(Tab::from_visible_index(i), Some(*tab));
+        }
+        // next/prev must stay inside the visible list and cycle correctly
+        if let Some(first) = all.first() {
+            let mut t = *first;
+            for _ in 0..all.len() {
+                let n = t.next();
+                assert!(
+                    all.contains(&n),
+                    "next() produced tab outside visible all()"
+                );
+                t = n;
+            }
+            assert_eq!(t, *first, "next() should cycle back after full loop");
+        }
+        if let Some(last) = all.last() {
+            let mut t = *last;
+            for _ in 0..all.len() {
+                let p = t.prev();
+                assert!(
+                    all.contains(&p),
+                    "prev() produced tab outside visible all()"
+                );
+                t = p;
+            }
+            assert_eq!(t, *last, "prev() should cycle back after full loop");
+        }
+    }
+
+    #[test]
+    fn visible_tab_specs_matches_all_order_and_set() {
+        let specs = visible_tab_specs();
+        let tabs_from_specs: Vec<Tab> = specs.iter().map(|s| s.tab).collect();
+        let all = Tab::all();
+        assert_eq!(tabs_from_specs, all.to_vec());
+        for s in &specs {
+            assert_eq!(s.title, s.tab.title());
+            assert_eq!(s.stable_id, s.tab.stable_id());
+        }
     }
 }

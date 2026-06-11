@@ -696,3 +696,34 @@ If visual consistency issues are found, verify the actual `.rs` files before cre
 ### Clippy .get(0) → .first() Fixes
 
 Changed `.get(0)` to `.first()` across 13 files (19 occurrences): fuzz.rs, graphql.rs, load.rs, oauth.rs, packet.rs, proxy.rs, report.rs, resume.rs, scan.rs, settings/render.rs, stress.rs, waf.rs, waf_stress.rs
+
+## TUI Architecture and Usability Pass (2026-06-11)
+
+Completed the 10-phase plan in `docs/plans/tui-architecture-usability-pass.md` (using subagents for context isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 301 tests green. Workspace/all-features run before handoff (pre-existing non-TUI protobuf/codegen errors in eggsec lib).
+
+Key new modules / surfaces (per phase):
+- `app/action.rs`: `UiAction`, `CommandPaletteInput`, `QuickSwitchInput`. Decode in KeyHandler; `App::apply_action` is the mutation point for global UI actions.
+- `app/overlay.rs`: `OverlayController` with single `decode(...)` routing fn that asks `topmost_overlay()` and owns all per-overlay input rules (PolicyConfirm/ConfirmPopup/CommandPalette/QuickSwitch/Search/Http/Help). Emits UiActions only; no mutations.
+- `tabs/spec.rs`: `TabSpec` / `TabCategory` / `TabRiskGroup` (later extended with operation/direct_launch). Single source for title/stable/cli/desc/category/risk/feature/breadcrumb. `Tab` methods delegate. `visible_tab_specs()` mirrors `Tab::all()` construction.
+- Delegated descriptors: `TabInput::primary_target` (default + impls), `Tab::operation_name`/`is_direct_launch`, `risk_from_group`, thin delegation in `build_current_operation_descriptor`/`current_tab_target`/`is_direct_launch_tab`. Enforcement stays central.
+- Visibility (shell.rs + preflight helpers): status bar now shows enforcement mode, scope provenance (LoadedScope source), risk badge (from spec), per-target preflight (target/scope-match/risk/op/"will: run|warn|confirm|deny" via live `EnforcementContext::evaluate`). Advisory only.
+- Global task strip: `TaskState.started_at`; status + help show active task tab/state/elapsed/hints even after nav away; pause/resume visible; quit-block not surprising.
+- Palette complete (command.rs + help_config.rs): all keybound actions + required list (run-current, stop/pause/resume/jump-active, quick-switch, help-current, search/global, theme, cycle/export, copy-cli, settings, reload-scope stub, save contextual, clear/delete contextual). Disabled-with-reason for no-task / wrong-tab cases.
+- Copy CLI (app/mod.rs + command.rs + utils): `copy_cli_equivalent` (cli_command + primary_target + safe options + --format + explicit --scope only); shell_escape; palette action; graceful clipboard fail; no broad bypass flags; tests for recon/scan-ports/intrusive/non-exec.
+- Small-terminal (shell.rs + mod.rs + popups.rs + tests): breadcrumb tab bar on narrow, too-small (<~40x10) clear fallback (input/quit still work), popups clamped, policy confirm preserved, low-pri status dropped first; 60x20 usable; layout tests added.
+- Semantic tokens (theme/palette.rs + builtin.rs + loader.rs + style.rs): 10 roles (safe/danger/muted/active_task/paused_task/scope_match/miss/policy_required/denied) + helpers (`style_for_risk`, `style_for_policy_outcome`, `style_for_task_state` etc.); adopted in preflight/status/task/policy paths; all themes + loader + cyber-red fallback + non-blocking load unchanged.
+
+Overlay precedence (topmost_overlay + controller) is now PolicyConfirm > ConfirmPopup > CommandPalette > QuickSwitch > Search > HttpOptions > Help. Non-topmost never receive input; overlay-local keys never leak.
+
+All acceptance criteria from the plan are met (decode/apply split testable; one overlay routing fn; single metadata truth + feature gating + stable_id roundtrips; descriptors delegated + risk from spec; manual visibility + preflight advisory; task strip visible after nav; palette action-complete with context; CLI copy with safe escape + no bypasses; small-terminal degraded + "too small" fallback + policy readable; semantic helpers used for scope/risk/task/policy).
+
+Validation (run after substantial phases and at end):
+```
+cargo fmt --all
+cargo check -p eggsec-tui
+cargo test -p eggsec-tui
+cargo check --workspace --all-features
+cargo test --workspace --all-features
+```
+
+Update any future TUI changes to preserve the decode/apply split, delegate through TabSpec where metadata/risk/operation are needed, keep enforcement central, and surface manual posture/preflight/task state via the status paths.

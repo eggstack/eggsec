@@ -272,6 +272,36 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
             &text.and_then(|t| t.success.clone()),
             defaults.colors.focus_results,
         ),
+        safe: parse_color_or(&text.and_then(|t| t.success.clone()), defaults.colors.safe),
+        danger: parse_color_or(&text.and_then(|t| t.error.clone()), defaults.colors.danger),
+        muted: parse_color_or(
+            &text.and_then(|t| t.secondary.clone()),
+            defaults.colors.muted,
+        ),
+        active_task: parse_color_or(
+            &text.and_then(|t| t.success.clone()),
+            defaults.colors.active_task,
+        ),
+        paused_task: parse_color_or(
+            &general.and_then(|g| g.unread_indicator.clone()),
+            defaults.colors.paused_task,
+        ),
+        scope_match: parse_color_or(
+            &text.and_then(|t| t.success.clone()),
+            defaults.colors.scope_match,
+        ),
+        scope_miss: parse_color_or(
+            &general.and_then(|g| g.unread_indicator.clone()),
+            defaults.colors.scope_miss,
+        ),
+        policy_required: parse_color_or(
+            &general.and_then(|g| g.unread_indicator.clone()),
+            defaults.colors.policy_required,
+        ),
+        policy_denied: parse_color_or(
+            &text.and_then(|t| t.error.clone()),
+            defaults.colors.policy_denied,
+        ),
     };
 
     Ok(Theme {

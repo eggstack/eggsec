@@ -1,5 +1,7 @@
 # Eggsec TUI Architecture and Usability Handoff Plan
 
+**Status: Completed 2026-06-11.** All 10 phases implemented using subagents for isolation. TUI crate checks and tests green after each phase and at end (`cargo fmt --all; cargo check -p eggsec-tui; cargo test -p eggsec-tui -- --test-threads=1`). Workspace/all-features run before handoff (pre-existing non-TUI errors in eggsec lib protobuf/codegen unrelated to this pass). README, AGENTS.md, AGENTS.override.md (TUI), and architecture/tui.md updated. See commit for full diff.
+
 ## Purpose
 
 This plan is for a focused TUI architecture and usability pass in `crates/eggsec-tui`. The goal is not to rewrite the terminal UI. The current TUI already has the right high-level crate boundary and several useful primitives: session restore, background theme loading, command palette, quick switch, bookmarks, overlay precedence, tab windowing, and shared enforcement context. The work here should reduce central coordination pressure, make manual-mode discretion clearer to the operator, and improve discoverability without changing scanner semantics.

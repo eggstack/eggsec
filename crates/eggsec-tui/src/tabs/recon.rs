@@ -843,6 +843,10 @@ impl TabInput for ReconTab {
     fn stop(&mut self) {
         ReconTab::stop(self);
     }
+
+    fn primary_target(&self) -> Option<String> {
+        Some(self.target().to_string())
+    }
 }
 
 #[cfg(test)]

@@ -83,8 +83,17 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
     };
 
     let area = f.area();
-    let width = 80u16;
-    let height = 20u16;
+    // Phase 9: clamp search results popup to viewport on small terminals.
+    let width = if area.width < 80 {
+        area.width.saturating_sub(4).max(20)
+    } else {
+        80u16
+    };
+    let height = if area.height < 22 {
+        area.height.saturating_sub(4).max(6)
+    } else {
+        20u16
+    };
 
     let search_area = centered_rect(width, height, area);
 

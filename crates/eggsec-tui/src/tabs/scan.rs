@@ -791,4 +791,8 @@ impl TabInput for ScanTab {
         }
         self.current_stage_output.page_down(page_size);
     }
+
+    fn primary_target(&self) -> Option<String> {
+        Some(self.target().to_string())
+    }
 }

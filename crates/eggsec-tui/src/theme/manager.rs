@@ -309,4 +309,37 @@ mod tests {
         let manager = ThemeManager::new();
         assert_eq!(manager.current_name(), "cyber-red");
     }
+
+    #[test]
+    fn semantic_colors_present_and_distinct_on_builtins() {
+        // Phase 10: verify the new semantic fields are initialized on all 3 builtins + default (cyber-red)
+        let cyber = crate::theme::builtin::cyber_red_theme();
+        assert_ne!(cyber.colors.safe, cyber.colors.danger);
+        assert_ne!(cyber.colors.active_task, cyber.colors.paused_task);
+        assert_ne!(cyber.colors.scope_match, cyber.colors.scope_miss);
+        assert_ne!(cyber.colors.policy_required, cyber.colors.policy_denied);
+        assert_ne!(cyber.colors.safe, cyber.colors.muted);
+
+        let dark = crate::theme::builtin::dark_theme();
+        assert_ne!(dark.colors.safe, dark.colors.danger);
+        assert_ne!(dark.colors.active_task, dark.colors.paused_task);
+
+        let light = crate::theme::builtin::light_theme();
+        assert_ne!(light.colors.safe, light.colors.danger);
+        assert_ne!(light.colors.active_task, light.colors.paused_task);
+
+        // default() must be cyber-red and have the fields set
+        let def = crate::theme::palette::Theme::default();
+        assert_eq!(def.name, "cyber-red");
+        assert_ne!(def.colors.safe, def.colors.danger);
+        // sanity that helpers resolve without panic and return fg
+        let s = def.safe();
+        assert!(s.fg.is_some());
+        let p = def.style_for_policy_outcome("confirm");
+        assert!(p.fg.is_some());
+        let t = def.style_for_task_state("running");
+        assert!(t.fg.is_some());
+        let r = def.style_for_risk("intrusive");
+        assert!(r.fg.is_some());
+    }
 }

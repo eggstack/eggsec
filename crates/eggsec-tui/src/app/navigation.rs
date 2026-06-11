@@ -470,6 +470,19 @@ mod tests {
         assert!(window.start <= window.total_tabs);
     }
 
+    // Phase 9: very narrow widths still produce a valid window (max_visible >=1); draw_tabs switches
+    // to breadcrumb when width<60 OR max_visible<=1 (per plan "or similar"). Existing narrow tests + render
+    // cover the degradation path. Keep a sanity check that computation remains stable (no panic, contains current).
+    #[test]
+    fn test_tab_window_very_narrow_stable() {
+        use crate::tabs::{Tab, TabWindow};
+        let window = TabWindow::for_width(25, Tab::Recon, 0);
+        assert!(window.max_visible >= 1);
+        assert!(window.start <= window.total_tabs);
+        let idx = Tab::Recon.visible_index().unwrap_or(0);
+        assert!(window.start <= idx && idx < window.end);
+    }
+
     #[test]
     fn test_tab_window_calculation_120_cols() {
         use crate::tabs::{Tab, TabWindow};

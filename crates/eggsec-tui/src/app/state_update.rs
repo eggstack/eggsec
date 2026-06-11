@@ -81,6 +81,8 @@ impl super::App {
                 self.task_state.tab = None;
                 self.task_state.handle = None;
                 self.task_state.inner_abort = None;
+                self.task_state.started_at = None;
+                self.task_state.paused = false;
             }
         }
 
