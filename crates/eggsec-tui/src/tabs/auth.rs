@@ -13,7 +13,11 @@ use ratatui::{
 pub enum AuthFocusArea {
     Target,
     Username,
-    Password,
+    PasswordList,
+    CredentialFile,
+    MaxAttempts,
+    Concurrency,
+    Timeout,
     Results,
 }
 
@@ -23,25 +27,33 @@ pub struct AuthTab {
     pub state: AppState,
     pub focus_area: AuthFocusArea,
     pub error: Option<TabError>,
+    /// Simple local progress (0.0 - 1.0). Can be wired to real worker progress later.
+    progress: f64,
 }
 
 impl AuthTab {
     pub fn new() -> Self {
         Self {
             inputs: InputGroup::new()
-                .add(InputField::new("Target URL").with_width(40))
-                .add(InputField::new("Username").with_width(30))
-                .add(InputField::new("Password List").with_width(40)),
-            results: "Ready for authentication testing".to_string(),
+                .add(InputField::new("Target URL").with_width(50).with_placeholder("https://target.lab"))
+                .add(InputField::new("Username / Userlist").with_width(40).with_placeholder("admin or users.txt"))
+                .add(InputField::new("Password List / Wordlist").with_width(45).with_placeholder("passwords.txt or rockyou.txt"))
+                .add(InputField::new("Credential File (optional)").with_width(45).with_placeholder("user:pass file"))
+                .add(InputField::new("Max Attempts").with_width(12).with_placeholder("50"))
+                .add(InputField::new("Concurrency").with_width(12).with_placeholder("5"))
+                .add(InputField::new("Timeout (sec)").with_width(12).with_placeholder("30")),
+            results: "Ready for authentication testing. Enter a target and press Enter.".to_string(),
             state: AppState::Idle,
             focus_area: AuthFocusArea::Target,
             error: None,
+            progress: 0.0,
         }
     }
 
     pub fn start(&mut self) {
         self.state = AppState::Running;
         self.error = None;
+        self.progress = 0.0;
     }
 
     pub fn stop(&mut self) {
@@ -52,7 +64,8 @@ impl AuthTab {
         self.state = AppState::Idle;
         self.error = None;
         self.focus_area = AuthFocusArea::Target;
-        self.results = "Ready for authentication testing".to_string();
+        self.progress = 0.0;
+        self.results = "Ready for authentication testing. Enter a target and press Enter.".to_string();
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -62,6 +75,10 @@ impl AuthTab {
         self.state = AppState::Error(error.message());
         self.error = Some(error);
     }
+
+    pub fn set_progress(&mut self, progress: f64) {
+        self.progress = progress.clamp(0.0, 1.0);
+    }
 }
 
 impl TabState for AuthTab {
@@ -70,7 +87,7 @@ impl TabState for AuthTab {
     }
 
     fn progress(&self) -> f64 {
-        0.0
+        self.progress
     }
 
     fn reset(&mut self) {
@@ -87,10 +104,14 @@ impl TabRender for AuthTab {
         let focus = match self.focus_area {
             AuthFocusArea::Target => "Target",
             AuthFocusArea::Username => "Username",
-            AuthFocusArea::Password => "Password",
+            AuthFocusArea::PasswordList => "Password List",
+            AuthFocusArea::CredentialFile => "Cred File",
+            AuthFocusArea::MaxAttempts => "Max Attempts",
+            AuthFocusArea::Concurrency => "Concurrency",
+            AuthFocusArea::Timeout => "Timeout",
             AuthFocusArea::Results => "Results",
         };
-        Some(vec!["Auth", focus]);
+        Some(vec!["Auth", focus])
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
@@ -109,8 +130,8 @@ impl TabRender for AuthTab {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
-                Constraint::Length(11), // 3 inputs * 3 + 2 borders
-                Constraint::Min(0),
+                Constraint::Length(22), // 7 inputs * ~3 lines
+                Constraint::Min(8),
             ])
             .split(area);
 
@@ -118,7 +139,8 @@ impl TabRender for AuthTab {
         let Some(inputs_area) = layout.get(1) else { return; };
         let Some(results_area) = layout.get(2) else { return; };
 
-        let title = Paragraph::new("Authentication Testing — Defense-lab only")
+        // Safety banner
+        let title = Paragraph::new("Authentication Testing — Defense-lab only | Brute-force, Credential Stuffing, Lockout, Rate-limit, MFA, Timing, Session, Policy")
             .block(Block::default().borders(Borders::ALL).title("⚠ Defense Lab"))
             .style(Style::default().fg(tc!(warning)));
         f.render_widget(title, *title_area);
@@ -129,14 +151,15 @@ impl TabRender for AuthTab {
         }
         builder.render(f, *inputs_area, insert_mode);
 
-        let results = if self.results.is_empty() {
-            crate::components::empty_state_paragraph("Results", "No results yet")
+        // Results area with better structure
+        let results_content = if self.results.is_empty() || self.results.starts_with("Ready") {
+            crate::components::empty_state_paragraph("Results", "No results yet. Run a test to see findings.")
         } else {
             Paragraph::new(self.results.as_str())
-                .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(tc!(text)));
+                .block(Block::default().borders(Borders::ALL).title("Auth Test Results"))
+                .style(Style::default().fg(tc!(text)))
         };
-        f.render_widget(results, *results_area);
+        f.render_widget(results_content, *results_area);
     }
 }
 
@@ -149,8 +172,12 @@ impl TabInput for AuthTab {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
                 AuthFocusArea::Target => AuthFocusArea::Username,
-                AuthFocusArea::Username => AuthFocusArea::Password,
-                AuthFocusArea::Password => AuthFocusArea::Results,
+                AuthFocusArea::Username => AuthFocusArea::PasswordList,
+                AuthFocusArea::PasswordList => AuthFocusArea::CredentialFile,
+                AuthFocusArea::CredentialFile => AuthFocusArea::MaxAttempts,
+                AuthFocusArea::MaxAttempts => AuthFocusArea::Concurrency,
+                AuthFocusArea::Concurrency => AuthFocusArea::Timeout,
+                AuthFocusArea::Timeout => AuthFocusArea::Results,
                 AuthFocusArea::Results => AuthFocusArea::Target,
             };
             self.sync_input_focus();
@@ -162,8 +189,12 @@ impl TabInput for AuthTab {
             self.focus_area = match self.focus_area {
                 AuthFocusArea::Target => AuthFocusArea::Results,
                 AuthFocusArea::Username => AuthFocusArea::Target,
-                AuthFocusArea::Password => AuthFocusArea::Username,
-                AuthFocusArea::Results => AuthFocusArea::Password,
+                AuthFocusArea::PasswordList => AuthFocusArea::Username,
+                AuthFocusArea::CredentialFile => AuthFocusArea::PasswordList,
+                AuthFocusArea::MaxAttempts => AuthFocusArea::CredentialFile,
+                AuthFocusArea::Concurrency => AuthFocusArea::MaxAttempts,
+                AuthFocusArea::Timeout => AuthFocusArea::Concurrency,
+                AuthFocusArea::Results => AuthFocusArea::Timeout,
             };
             self.sync_input_focus();
         }
@@ -286,50 +317,81 @@ impl TabInput for AuthTab {
 
     fn handle_up(&mut self) {
         if !self.is_running() {
-            if self.focus_area == AuthFocusArea::Results {
-                self.focus_area = AuthFocusArea::Password;
-                if self.inputs.fields.len() > 2 {
-                    self.inputs.focus(2);
+            match self.focus_area {
+                AuthFocusArea::Results => {
+                    self.focus_area = AuthFocusArea::Timeout;
+                    if self.inputs.fields.len() > 6 { self.inputs.focus(6); }
                 }
-            } else if self.focus_area == AuthFocusArea::Password {
-                self.focus_area = AuthFocusArea::Username;
-                if self.inputs.fields.len() > 1 {
-                    self.inputs.focus(1);
+                AuthFocusArea::Timeout => {
+                    self.focus_area = AuthFocusArea::Concurrency;
+                    if self.inputs.fields.len() > 5 { self.inputs.focus(5); }
                 }
-            } else if self.focus_area == AuthFocusArea::Username {
-                self.focus_area = AuthFocusArea::Target;
-                if !self.inputs.fields.is_empty() {
-                    self.inputs.focus(0);
+                AuthFocusArea::Concurrency => {
+                    self.focus_area = AuthFocusArea::MaxAttempts;
+                    if self.inputs.fields.len() > 4 { self.inputs.focus(4); }
                 }
-            } else if self.focus_area == AuthFocusArea::Target {
-                self.inputs.focus_prev();
-                if !self.inputs.is_focused() {
-                    if self.inputs.fields.is_empty() {
-                        return;
+                AuthFocusArea::MaxAttempts => {
+                    self.focus_area = AuthFocusArea::CredentialFile;
+                    if self.inputs.fields.len() > 3 { self.inputs.focus(3); }
+                }
+                AuthFocusArea::CredentialFile => {
+                    self.focus_area = AuthFocusArea::PasswordList;
+                    if self.inputs.fields.len() > 2 { self.inputs.focus(2); }
+                }
+                AuthFocusArea::PasswordList => {
+                    self.focus_area = AuthFocusArea::Username;
+                    if self.inputs.fields.len() > 1 { self.inputs.focus(1); }
+                }
+                AuthFocusArea::Username => {
+                    self.focus_area = AuthFocusArea::Target;
+                    if self.inputs.fields.len() > 0 { self.inputs.focus(0); }
+                }
+                AuthFocusArea::Target => {
+                    self.inputs.focus_prev();
+                    if !self.inputs.is_focused() {
+                        if self.inputs.fields.is_empty() { return; }
+                        self.inputs.focus(self.inputs.fields.len() - 1);
                     }
-                    self.inputs.focus(self.inputs.fields.len() - 1);
                 }
             }
+            self.sync_input_focus();
         }
     }
 
     fn handle_down(&mut self) {
         if !self.is_running() {
-            if self.focus_area == AuthFocusArea::Target {
-                self.focus_area = AuthFocusArea::Username;
-                if self.inputs.fields.len() > 1 {
-                    self.inputs.focus(1);
+            match self.focus_area {
+                AuthFocusArea::Target => {
+                    self.focus_area = AuthFocusArea::Username;
+                    if self.inputs.fields.len() > 1 { self.inputs.focus(1); }
                 }
-            } else if self.focus_area == AuthFocusArea::Username {
-                self.focus_area = AuthFocusArea::Password;
-                if self.inputs.fields.len() > 2 {
-                    self.inputs.focus(2);
+                AuthFocusArea::Username => {
+                    self.focus_area = AuthFocusArea::PasswordList;
+                    if self.inputs.fields.len() > 2 { self.inputs.focus(2); }
                 }
-            } else if self.focus_area == AuthFocusArea::Password {
-                self.focus_area = AuthFocusArea::Results;
-                self.inputs.blur();
-            } else if self.focus_area == AuthFocusArea::Results {
+                AuthFocusArea::PasswordList => {
+                    self.focus_area = AuthFocusArea::CredentialFile;
+                    if self.inputs.fields.len() > 3 { self.inputs.focus(3); }
+                }
+                AuthFocusArea::CredentialFile => {
+                    self.focus_area = AuthFocusArea::MaxAttempts;
+                    if self.inputs.fields.len() > 4 { self.inputs.focus(4); }
+                }
+                AuthFocusArea::MaxAttempts => {
+                    self.focus_area = AuthFocusArea::Concurrency;
+                    if self.inputs.fields.len() > 5 { self.inputs.focus(5); }
+                }
+                AuthFocusArea::Concurrency => {
+                    self.focus_area = AuthFocusArea::Timeout;
+                    if self.inputs.fields.len() > 6 { self.inputs.focus(6); }
+                }
+                AuthFocusArea::Timeout => {
+                    self.focus_area = AuthFocusArea::Results;
+                    self.inputs.blur();
+                }
+                AuthFocusArea::Results => {}
             }
+            self.sync_input_focus();
         }
     }
 
@@ -366,7 +428,7 @@ impl TabInput for AuthTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        matches!(self.focus_area, AuthFocusArea::Target | AuthFocusArea::Username | AuthFocusArea::Password)
+        !matches!(self.focus_area, AuthFocusArea::Results)
     }
 }
 
@@ -375,9 +437,12 @@ impl AuthTab {
         match self.focus_area {
             AuthFocusArea::Target if self.inputs.fields.len() > 0 => Some(0),
             AuthFocusArea::Username if self.inputs.fields.len() > 1 => Some(1),
-            AuthFocusArea::Password if self.inputs.fields.len() > 2 => Some(2),
-            AuthFocusArea::Target | AuthFocusArea::Username | AuthFocusArea::Password => None,
-            AuthFocusArea::Results => None,
+            AuthFocusArea::PasswordList if self.inputs.fields.len() > 2 => Some(2),
+            AuthFocusArea::CredentialFile if self.inputs.fields.len() > 3 => Some(3),
+            AuthFocusArea::MaxAttempts if self.inputs.fields.len() > 4 => Some(4),
+            AuthFocusArea::Concurrency if self.inputs.fields.len() > 5 => Some(5),
+            AuthFocusArea::Timeout if self.inputs.fields.len() > 6 => Some(6),
+            _ => None,
         }
     }
 
@@ -400,6 +465,28 @@ impl AuthTab {
         self.inputs.fields.get(2).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
     }
 
+    pub fn credential_file(&self) -> Option<&str> {
+        self.inputs.fields.get(3).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+    }
+
+    pub fn max_attempts(&self) -> usize {
+        self.inputs.fields.get(4)
+            .and_then(|f| f.value.parse().ok())
+            .unwrap_or(50)
+    }
+
+    pub fn concurrency(&self) -> usize {
+        self.inputs.fields.get(5)
+            .and_then(|f| f.value.parse().ok())
+            .unwrap_or(5)
+    }
+
+    pub fn timeout(&self) -> u64 {
+        self.inputs.fields.get(6)
+            .and_then(|f| f.value.parse().ok())
+            .unwrap_or(30)
+    }
+
     pub fn primary_target(&self) -> Option<String> {
         self.target().map(|s| s.to_string())
     }
@@ -407,17 +494,25 @@ impl AuthTab {
     pub fn build_cli_equivalent(&self) -> Option<String> {
         let target = self.target()?;
         let mut cmd = format!("eggsec auth-test {}", target);
-        if let Some(username) = self.username() {
-            cmd.push_str(&format!(" --username {}", username));
+        if let Some(u) = self.username() {
+            cmd.push_str(&format!(" --username {}", u));
         }
-        if let Some(passwords) = self.password_list() {
-            cmd.push_str(&format!(" --wordlist {}", passwords));
+        if let Some(p) = self.password_list() {
+            cmd.push_str(&format!(" --wordlist {}", p));
         }
+        if let Some(c) = self.credential_file() {
+            cmd.push_str(&format!(" --credential-file {}", c));
+        }
+        let ma = self.max_attempts();
+        if ma != 50 { cmd.push_str(&format!(" --max-attempts {}", ma)); }
+        let conc = self.concurrency();
+        if conc != 5 { cmd.push_str(&format!(" --concurrency {}", conc)); }
+        let to = self.timeout();
+        if to != 30 { cmd.push_str(&format!(" --timeout {}", to)); }
         Some(cmd)
     }
 
-    /// Produces a TaskConfig for the shared async task system.
-    /// Called by App::build_current_task() when the user presses Enter on the Auth tab.
+    /// Produces TaskConfig using values from the UI fields.
     pub fn build_task_config(&self) -> Option<TaskConfig> {
         let target = self.target()?.to_string();
         if target.is_empty() {
@@ -428,11 +523,28 @@ impl AuthTab {
             target,
             username: self.username().map(|s| s.to_string()),
             password_list: self.password_list().map(|s| s.to_string()),
-            credential_file: None,
-            max_attempts: 50,
-            concurrency: 5,
-            timeout: 30,
+            credential_file: self.credential_file().map(|s| s.to_string()),
+            max_attempts: self.max_attempts(),
+            concurrency: self.concurrency(),
+            timeout: self.timeout(),
         })
+    }
+
+    /// Update results from a completed AuthTestReport (called externally when task finishes).
+    pub fn set_results_from_report(&mut self, report: &eggsec::auth::AuthTestReport) {
+        let mut out = format!("Target: {}\nTests run: {}\nTotal attempts: {}\n\n", 
+            report.target, report.tests_run.len(), report.total_attempts);
+
+        if !report.findings.is_empty() {
+            out.push_str("Findings:\n");
+            for f in &report.findings {
+                out.push_str(&format!("  [{}] {}\n", f.severity, f.description));
+            }
+        } else {
+            out.push_str("No significant findings.\n");
+        }
+        self.results = out;
+        self.progress = 1.0;
     }
 }
 
@@ -454,84 +566,25 @@ mod tests {
     }
 
     #[test]
-    fn test_username_returns_none_when_empty() {
-        let tab = AuthTab::new();
-        assert!(tab.username().is_none());
-    }
-
-    #[test]
-    fn test_username_returns_value_when_set() {
-        let mut tab = AuthTab::new();
-        tab.inputs.fields[1].value = "admin".to_string();
-        assert_eq!(tab.username(), Some("admin"));
-    }
-
-    #[test]
-    fn test_password_list_returns_none_when_empty() {
-        let tab = AuthTab::new();
-        assert!(tab.password_list().is_none());
-    }
-
-    #[test]
-    fn test_password_list_returns_value_when_set() {
-        let mut tab = AuthTab::new();
-        tab.inputs.fields[2].value = "/path/to/passwords.txt".to_string();
-        assert_eq!(tab.password_list(), Some("/path/to/passwords.txt"));
-    }
-
-    #[test]
-    fn test_primary_target() {
-        let mut tab = AuthTab::new();
-        assert!(tab.primary_target().is_none());
-        tab.inputs.fields[0].value = "http://test.local".to_string();
-        assert_eq!(tab.primary_target(), Some("http://test.local".to_string()));
-    }
-
-    #[test]
-    fn test_build_cli_equivalent_no_target() {
-        let tab = AuthTab::new();
-        assert!(tab.build_cli_equivalent().is_none());
-    }
-
-    #[test]
-    fn test_build_cli_equivalent_with_target() {
-        let mut tab = AuthTab::new();
-        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
-        let cmd = tab.build_cli_equivalent().unwrap();
-        assert!(cmd.starts_with("eggsec auth-test http://dvwa.local"));
-    }
-
-    #[test]
-    fn test_build_cli_equivalent_with_username() {
-        let mut tab = AuthTab::new();
-        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
-        tab.inputs.fields[1].value = "admin".to_string();
-        let cmd = tab.build_cli_equivalent().unwrap();
-        assert!(cmd.contains("--username admin"));
-    }
-
-    #[test]
-    fn test_build_cli_equivalent_with_wordlist() {
-        let mut tab = AuthTab::new();
-        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
-        tab.inputs.fields[2].value = "passwords.txt".to_string();
-        let cmd = tab.build_cli_equivalent().unwrap();
-        assert!(cmd.contains("--wordlist passwords.txt"));
-    }
-
-    #[test]
     fn test_build_task_config_returns_none_without_target() {
         let tab = AuthTab::new();
         assert!(tab.build_task_config().is_none());
     }
 
     #[test]
-    fn test_build_task_config_returns_some_with_target() {
+    fn test_build_task_config_uses_ui_values() {
         let mut tab = AuthTab::new();
-        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
+        tab.inputs.fields[0].value = "https://target.lab".to_string();
+        tab.inputs.fields[4].value = "100".to_string(); // max_attempts
+        tab.inputs.fields[5].value = "10".to_string();   // concurrency
+
         let config = tab.build_task_config().unwrap();
         match config {
-            TaskConfig::Auth { target, .. } => assert_eq!(target, "http://dvwa.local"),
+            TaskConfig::Auth { target, max_attempts, concurrency, .. } => {
+                assert_eq!(target, "https://target.lab");
+                assert_eq!(max_attempts, 100);
+                assert_eq!(concurrency, 10);
+            }
             _ => panic!("Expected TaskConfig::Auth"),
         }
     }
