@@ -74,9 +74,9 @@ Defense-lab profiles should not be run against targets you do not own or control
 
 `mobile-static` is currently exposed as the standalone CLI command `eggsec mobile <apk-or-ipa>` (feature `mobile`). It performs pure-Rust static analysis of Android APKs and iOS IPAs on user-supplied lab binaries only (manifest, config, permissions, transport settings, hardcoded secrets, signing indicators, etc.). No dynamic instrumentation, Frida, or network activity. Policy gate uses `SafeActive` via `EnforcementContext`. Outputs local `MobileScanReport`/`MobileFinding` types directly (with optional `to_scan_report_data` bridge for unified report consumers). Not yet integrated with `ScanProfile` pipelines; `mobile-static`/`mobile-regression` profiles are aspirational per the handoff plan. See `architecture/mobile.md`, `architecture/cli_commands.md` (Special Cases), and `crates/eggsec/src/mobile/`.
 
-Wireless passive recon (`eggsec wireless <iface>`) is similarly a standalone-complete defense-lab surface (CLI primary + TUI tab under `wireless` feature; see `architecture/wireless.md`). It produces local `WirelessScanResult` + findings directly, with an optional `to_scan_report_data` bridge (and CLI auto-bridge for `report convert`). Not integrated into `ScanProfile` pipelines or dedicated profiles. No stages were added on standalone completion.
+Wireless passive recon (`eggsec wireless <iface>`) is similarly a standalone-complete defense-lab surface (CLI primary + TUI tab under `wireless` feature; see `architecture/wireless.md`). It produces local `WirelessScanResult` + findings directly, with an optional `to_scan_report_data` bridge (and CLI auto-bridge for `report convert`). Not integrated into `ScanProfile` pipelines or dedicated profiles. No stages were added on standalone completion. MCP/agent tool surface exposure is intentionally absent (consistent with mobile + auth-test patterns for standalone defense-lab commands).
 
-Both are lightweight, opt-in for reporting unification only; they preserve their standalone nature.
+Both are lightweight, opt-in for reporting unification only; they preserve their standalone nature. See also architecture/wireless.md (advanced-integration / MCP status) and cli_commands.md Special Cases.
 
 ## Output Model
 

@@ -839,16 +839,24 @@ pub async fn run_wireless_task(
 
     let scanner = eggsec::wireless::WirelessScanner::new();
     let scanner = scanner.with_interface(interface);
-    let result = tokio::time::timeout(std::time::Duration::from_secs(30), scanner.scan(10))
+    let scan_res = tokio::time::timeout(std::time::Duration::from_secs(30), scanner.scan(10))
         .await
-        .map_err(|_| anyhow::anyhow!("Wireless scan timed out after 30s"))?
-        .map_err(|e| anyhow::anyhow!("Wireless scan failed: {}", e))?;
+        .map_err(|_| anyhow::anyhow!("Wireless scan timed out after 30s"))
+        .and_then(|r| r.map_err(|e| anyhow::anyhow!("Wireless scan failed: {}", e)));
 
     if let Err(e) = progress_tx.send((2, 2)).await {
         tracing::warn!("Failed to send wireless progress: {}", e);
     }
-    if let Err(e) = result_tx.send(TaskResult::Wireless(result)).await {
-        tracing::warn!("Failed to send wireless result: {}", e);
+
+    match scan_res {
+        Ok(r) => {
+            if let Err(e) = result_tx.send(TaskResult::Wireless(r)).await {
+                tracing::warn!("Failed to send wireless result: {}", e);
+            }
+        }
+        Err(e) => {
+            let _ = result_tx.send(TaskResult::Error(e.to_string())).await;
+        }
     }
     Ok(())
 }

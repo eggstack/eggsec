@@ -8,7 +8,7 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 
 - Build with `--features wireless` (or `--features full`).
 - Real scans require Linux `iwlist` from `wireless-tools`, root or `CAP_NET_ADMIN`, and a wireless interface in managed mode and up.
-- Default human output summarizes rogue/suspicious candidates by count and hint; use `--detect_suspicious` to print the full findings list and recommendations.
+- Default human output summarizes rogue/suspicious candidates by count and hint; use `--detect-suspicious` to print the full findings list and recommendations.
 - `--known-good` suppresses rogue candidates that match the allowlist in human output and repeat-scan summaries.
 - `--repeat` adds per-scan diffs plus a temporal summary; `--dry-run` emits planning output without calling `iwlist`.
 
@@ -27,7 +27,7 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 | File | Description |
 |------|-------------|
 | `mod.rs` | Core: scanner, models, parse_scan_output (iwlist), analyze_networks (incl. rogue heuristic), generate_recommendations, run_cli, to_scan_report_data |
-| `cli/wireless.rs` | WirelessArgs + WIRELESS_ABOUT (repeat, detect_suspicious, warnings) |
+| `cli/wireless.rs` | WirelessArgs + WIRELESS_ABOUT (repeat, detect-suspicious, warnings) |
 | `commands/handlers/wireless.rs` | handle_wireless with EnforcementContext (SafeActive + wireless feature) |
 | `eggsec-tui/.../tabs/wireless.rs` | WirelessTab (inputs, results view, task integration) |
 | `eggsec-tui/.../workers/security.rs` | run_wireless_task (TUI worker) |
@@ -35,7 +35,19 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 
 ## Status
 
-Standalone completion achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect_suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture.
+Standalone completion achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture.
+
+## MCP / Agentic / Tool Integration Status (as of advanced-integration plan 2026-06-11)
+
+Wireless is a **standalone defense-lab surface** (CLI primary + optional TUI tab under the `wireless` feature). It is **not registered** as a `SecurityTool` in the tool registry (`tool/mod.rs`, `tool/registry.rs`) and is therefore **not listed or callable** via the MCP `tools/list` / `tools/call` surface (or agentic dispatch).
+
+- Policy enforcement for the CLI command (`commands/handlers/wireless.rs`) uses the central `CommandContext::evaluate_and_enforce_operation` with `OperationRisk::SafeActive` + `required_features: ["wireless"]` (no `requires_explicit_scope` because the "target" is a local interface name, not a network host).
+- The TUI tab participates in the same enforcement model via `TabSpec` (risk_group SafeActive, feature="wireless", direct_launch=true, operation="wireless") + `App::build_current_operation_descriptor` (which now propagates `spec.feature` into `required_features` for parity with CLI descriptors) + retro gate on direct-launch + shared `EnforcementContext` / `PendingPolicyConfirmation` / preflight.
+- In strict profiles (`McpStrict`, `AgentStrict`, `CiStrict`) the feature gate + explicit LoadedScope provenance rules apply if ever invoked; currently the only supported invocation path is the CLI handler (or direct library use under the same `EnforcementContext`).
+- This mirrors the mobile (CLI-only under feature, optional bridge) and auth-test (explicitly CLI-only, CredentialTesting risk, local findings only) patterns. See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases), `architecture/output.md`, `docs/USAGE.md` (Output Models block), and AGENTS.md standalone defense-lab surfaces note.
+- If future work adds a `WirelessTool` impl + registry entry, it would also need updates in `tool/protocol/mcp/policy.rs` (classify_tool_risk, required_capabilities_for_tool_call, infer_tool_category, CodingAgent allowlist consideration) + special target handling for interface names, plus MCP handler tests. No such registration is planned in the current round (design decision: keep wireless as a focused passive defense-lab CLI/TUI capability).
+
+The optional `to_scan_report_data` bridge (and CLI `report convert` auto-bridge) works for any consumer that obtains a native JSON `WirelessScanResult` (or repeat-wrapped form), regardless of invocation surface.
 
 See docs/WIRELESS.md for usage/safety/examples/best-practices; plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md, historical plans/wireless-first-handoff-plan.md, plans/integration-work-plan.md.
 
@@ -50,3 +62,5 @@ Bridged findings use `wireless-*` categories (e.g. `wireless-rogue`, `wireless-s
 **Design decision (standalone completion 2026-06-11)**: Wireless is intentionally a standalone-complete passive defense-lab capability (CLI primary + TUI tab). No `ScanProfile` pipeline stages or dedicated wireless profiles (aspirational only; see `architecture/defense_lab.md` Future Integration and `cli_commands.md` Special Cases). Report integration is an optional lightweight bridge, not mandatory participation in chained pipelines. The bridge always runs rogue analysis (known-good suppression is UX-only for human/repeat output).
 
 See docs/WIRELESS.md (Integration section), CAPABILITIES.md (Lab Defense row), and `crates/eggsec/src/commands/handlers/report.rs`.
+
+Post advanced-integration (this plan): CLI help polished (MODE prefix, more practical examples, --detect-suspicious canonical flag form), TUI descriptor now carries feature for policy parity, worker failure path made explicit. MCP exposure remains intentionally absent (standalone defense-lab). All changes preserve passive-only identity and policy model.

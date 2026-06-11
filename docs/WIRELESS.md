@@ -58,7 +58,7 @@ eggsec wireless wlan0 --dry-run --json
 eggsec wireless wlan0 --repeat 3 --known-good ./lab-aps.txt
 
 # Show full rogue/suspicious details (analysis always runs; default shows count + hint only)
-eggsec wireless wlan0 --detect_suspicious
+eggsec wireless wlan0 --detect-suspicious
 
 # Help
 eggsec wireless --help
@@ -66,7 +66,7 @@ eggsec wireless --help
 
 **Important**: The command prints a clear root/CAP_NET_ADMIN/iwlist permissions warning (unless `--quiet`). Use only in lab/defense-validation contexts.
 
-**Rogue / Suspicious Detection UX**: Analysis for rogue/Evil-Twin candidates (same SSID + differing BSSID or security type) **always runs**. In default human output, only a compact summary line is shown ("Rogue/suspicious candidates: N (use --detect_suspicious to show full details)"). Use `--detect_suspicious` for the full Findings list (with descriptions/recommendations). Use `--known-good` to suppress known-authorized APs from triggering the heuristic (recommended for lab baselines). A short explanatory note is included in output when candidates are present. Severity is Low (BSSID diff) or Medium (security config differences, possible downgrade). Heuristic only — always verify physically or via inventory.
+**Rogue / Suspicious Detection UX**: Analysis for rogue/Evil-Twin candidates (same SSID + differing BSSID or security type) **always runs**. In default human output, only a compact summary line is shown ("Rogue/suspicious candidates: N (use --detect-suspicious to show full details)"). Use `--detect-suspicious` for the full Findings list (with descriptions/recommendations). Use `--known-good` to suppress known-authorized APs from triggering the heuristic (recommended for lab baselines). A short explanatory note is included in output when candidates are present. Severity is Low (BSSID diff) or Medium (security config differences, possible downgrade). Heuristic only — always verify physically or via inventory.
 
 ## What It Detects (Passive)
 
@@ -152,7 +152,7 @@ Networks found: 3
   Findings / Vulnerabilities:
   - Open Network (Medium): ...
   - WPS Enabled (Medium): ...
-  Rogue/suspicious candidates: 1 (use --detect_suspicious to show full details)
+  Rogue/suspicious candidates: 1 (use --detect-suspicious to show full details)
   Note: Rogue/Evil-Twin detection is a passive heuristic (multiple BSSIDs or security differences for same SSID). Use --known-good for lab baselines; verify with physical survey or asset inventory.
 
   Recommendations:
@@ -166,7 +166,7 @@ Networks found: 3
 
 - **Lab / defense validation**: Repeated scans (`--repeat`) against known-good APs to baseline "normal" BSSIDs/channels/security; flag deviations.
 - **CI / regression**: JSON output + `to_scan_report_data` (or rely on CLI auto-bridge) into SARIF/JUnit for wireless posture checks (e.g. "no open/WEP/WPA in this environment").
-- **Rogue hunting (passive)**: Use `--repeat` and review the summarized rogue count in default output, or add `--detect_suspicious` for the full findings list. Cross-check against asset inventory. This is a heuristic only — follow up with authorized physical/radio validation.
+- **Rogue hunting (passive)**: Use `--repeat` and review the summarized rogue count in default output, or add `--detect-suspicious` for the full findings list. Cross-check against asset inventory. This is a heuristic only — follow up with authorized physical/radio validation.
 - **Reporting**: Pipe native `--json` to `eggsec report convert` (auto-bridged) or consume `ScanReportData` directly via the bridge.
 
 ## Best Practices (Lab / Defensive Use)
@@ -174,7 +174,7 @@ Networks found: 3
 - **Always run as root (or with CAP_NET_ADMIN)** for real scans; use `--dry-run --json` in CI or unprivileged planning to validate flags/JSON shape without privileges.
 - **Use `--known-good`** for your lab environment. Create a file with authorized SSID, BSSID, or "SSID,BSSID" entries (one per line; `#` comments supported). This suppresses false-positive rogue/Evil-Twin candidates for your known APs while still detecting new or changed ones.
 - **Use `--repeat`** (e.g. 3–10) with a short `--duration` (5–15s) for monitoring or change detection. Review per-scan "Changes since previous" diffs (new nets, sec changes, signal drift, new rogue candidates) and the final "Scan summary over time".
-- **Default rogue output is summarized**: Rogue/Evil-Twin candidates are always analyzed. Human output shows a count + hint by default. Add `--detect_suspicious` when you need the full details + recommendations for triage.
+- **Default rogue output is summarized**: Rogue/Evil-Twin candidates are always analyzed. Human output shows a count + hint by default. Add `--detect-suspicious` when you need the full details + recommendations for triage.
 - **JSON for automation**: `--json` (with or without `--repeat`) produces machine-readable `WirelessScanResult` (last successful scan). With `--repeat >1`, a `"summary"` envelope field is included (alongside `last_scan` and `repeat_count`). Pipe to `eggsec report` or your own post-processing.
 - **Baseline before hunting**: Run repeated scans in a clean lab state, save `--known-good` + JSON baselines. Re-run later to observe drift or new BSSIDs.
 - **Interpret findings conservatively**: Open/WEP/WPA are high-confidence issues. Rogue is a passive heuristic only — same SSID from multiple BSSIDs or security downgrade signals can be legitimate roaming or guest nets; always cross-check MAC inventory or perform physical survey.
@@ -194,7 +194,7 @@ eggsec wireless wlan0 --dry-run --repeat 3 --json
 sudo eggsec wireless wlan0 --repeat 5 --duration 10 --known-good ./authorized-aps.txt
 
 # Full rogue details on demand
-sudo eggsec wireless wlan0 --detect_suspicious --repeat 3
+sudo eggsec wireless wlan0 --detect-suspicious --repeat 3
 ```
 
 ## Not In Scope (This Phase)

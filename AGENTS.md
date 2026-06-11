@@ -104,7 +104,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `vuln-management` - Vulnerability triage and CVSS scoring
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
-- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect_suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN)
+- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN)
 - `mobile` - Mobile app static analysis (APK/IPA; Phase 1 static only, lab/defense framing)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
@@ -368,7 +368,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect_suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition) |
+| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition) |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands

@@ -253,10 +253,10 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec wireless wlan0 --repeat 3
 
 # Wireless with known-good baseline (suppress rogue heuristic for lab APs), dry-run, or full details; human output summarizes rogue candidates by default
-# Add --detect_suspicious for the full findings list
+# Add --detect-suspicious for the full findings list
 ./eggsec wireless wlan0 --repeat 5 --known-good ./lab-aps.txt
 ./eggsec wireless wlan0 --dry-run --json
-./eggsec wireless wlan0 --detect_suspicious --repeat 3
+./eggsec wireless wlan0 --detect-suspicious --repeat 3
 
 # Mobile static analysis (APK/IPA; requires --features mobile; lab binaries only)
 ./eggsec mobile app.apk
@@ -266,7 +266,7 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec resume session.json
 ```
 
-Human-readable wireless output summarizes rogue candidates by default; add `--detect_suspicious` when you want the full findings list.
+Human-readable wireless output summarizes rogue candidates by default; add `--detect-suspicious` when you want the full findings list.
 
 Run `eggsec --help` or `eggsec <command> --help` for the full command reference with all options.
 
@@ -281,7 +281,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
 | `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
 | `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `CredentialTesting` risk + `allow_credential_testing`). Standalone defense-lab CLI (intentionally separate from pipeline); local `AuthTestReport`/`AuthFinding` only (direct emit; no `ScanReportData`, no SARIF/JUnit/etc conversion or bridge). Distinct from `ScanProfile::Auth` (JWT/OAuth/IDOR fuzzing via pipeline stages). See `docs/AUTH_LAB.md` + architecture/auth.md. |
-| `eggsec wireless <iface>` | defense-lab (passive) | Standalone-complete passive WiFi recon (iwlist): Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition/weak-signal detection, vuln findings, rogue/Evil-Twin heuristic (passive; security-diff elevates to Medium). Supports `--repeat` (diffs + temporal summary), `--known-good` allowlist (suppresses rogue for lab baselines), `--dry-run` (plan/CI, valid JSON), `--detect_suspicious` (full rogue details; summarized by default in human output). Requires `--features wireless` + root/CAP_NET_ADMIN + wireless-tools/iwlist. Native `--json` auto-bridges to `ScanReportData` for `eggsec report convert` (SARIF/JUnit/etc). Optional explicit `to_scan_report_data` bridge. Bridged findings use `wireless-*` categories (e.g. wireless-rogue, wireless-security). See docs/WIRELESS.md (incl. Integration section). |
+| `eggsec wireless <iface>` | defense-lab (passive) | Standalone-complete passive WiFi recon (iwlist): Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition/weak-signal detection, vuln findings, rogue/Evil-Twin heuristic (passive; security-diff elevates to Medium). Supports `--repeat` (diffs + temporal summary), `--known-good` allowlist (suppresses rogue for lab baselines), `--dry-run` (plan/CI, valid JSON), `--detect-suspicious` (full rogue details; summarized by default in human output). Requires `--features wireless` + root/CAP_NET_ADMIN + wireless-tools/iwlist. Native `--json` auto-bridges to `ScanReportData` for `eggsec report convert` (SARIF/JUnit/etc). Optional explicit `to_scan_report_data` bridge. Bridged findings use `wireless-*` categories (e.g. wireless-rogue, wireless-security). See docs/WIRELESS.md (incl. Integration section). |
 | `eggsec mobile <path.{apk,ipa}>` | defense-lab (static) | Standalone static analysis of Android APKs and iOS IPAs (manifest, permissions, transport config, secrets, debug/backup/exported components, signing/provisioning). Pure-Rust offline on user-supplied lab binaries only. Feature-gated `mobile`. Policy via SafeActive + required_features:["mobile"]; local MobileScanReport/MobileFinding + optional to_scan_report_data bridge. Native `--json` auto-bridges for `eggsec report convert`. See docs/MOBILE.md (Integration section) and architecture/mobile.md. |
 
 ## Build Features
@@ -306,7 +306,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only Phase 1) | Stable |
 | `cloud` | AWS/GCP/Azure asset discovery | Stable |
 | `git-secrets` | Git secrets scanning | Stable |
-| `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect_suspicious) | Stable |
+| `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious) | Stable |
 | `pdf` | PDF report generation | Stable |
 | `advanced-hunting` | Advanced threat hunting | Stable |
 | `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |

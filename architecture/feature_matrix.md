@@ -39,7 +39,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `finding-workflow` | yes | no | yes | `workflow/` | Stable | `cargo check -p eggsec --features finding-workflow` |
 | `vuln-management` | yes | no | yes | `vuln/` | Stable | `cargo check -p eggsec --features vuln-management` |
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
-| `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect_suspicious; WPS/hidden/transition/rogue heuristic) |
+| `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition/rogue heuristic) |
 | `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` |
 | `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |
 | `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p eggsec --features api-schema` |

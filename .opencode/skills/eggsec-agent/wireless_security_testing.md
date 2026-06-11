@@ -33,7 +33,7 @@ Eggsec provides wireless network security testing capabilities through the `wire
 - **Security Type Detection**: Identify Open, WEP, WPA, WPA2, WPA3, Enterprise
 - **WPS / Hidden / Transition Detection**: Beacon-level indicators for WPS, hidden SSIDs, WPA2/WPA3 mixed mode
 - **Signal Strength Analysis**: Evaluate coverage; flag weak signals
-- **Basic Rogue / Suspicious Detection**: Passive heuristic for duplicate SSID with differing BSSID/security (summarized by default in human output; use `--detect_suspicious` for the full findings list; labeled "Possible Rogue AP / Evil Twin (passive heuristic)")
+- **Basic Rogue / Suspicious Detection**: Passive heuristic for duplicate SSID with differing BSSID/security (summarized by default in human output; use `--detect-suspicious` for the full findings list; labeled "Possible Rogue AP / Evil Twin (passive heuristic)")
 - **Vulnerability Detection**: Identify weak/legacy configs (Open/WEP/WPA), unknown, enterprise advisory, WPS, hidden, transition, weak signal
 - **Enterprise Security**: Support for WPA-Enterprise configurations
 - **Recommendations**: Actionable guidance + "run repeated scans for rogue observation"
@@ -109,7 +109,7 @@ eggsec wireless wlan0 --dry-run --json
 eggsec wireless wlan0 --repeat 3 --known-good ./lab-aps.txt
 
 # Full rogue/suspicious details (analysis always runs; summarized by default)
-eggsec wireless wlan0 --detect_suspicious
+eggsec wireless wlan0 --detect-suspicious
 ```
 
 ### API Usage
@@ -161,6 +161,6 @@ Keywords that activate this skill: `wifi`, `wireless`, `wpa`, `wpa2`, `wpa3`, `s
 
 - Passive-only (no injection, deauth, handshake capture, or active attacks).
 - Requires --features wireless + Linux `wireless-tools`/`iwlist` + root/CAP_NET_ADMIN + a managed/up wireless interface for real scans (use `--dry-run --json` for unprivileged/CI planning).
-- Supports --repeat (diffs + temporal summary), --known-good (rogue suppression for lab baselines), --detect_suspicious (full rogue details; summarized by default).
-- Human-readable output summarizes rogue candidates by default; the detection analysis always runs, and `--detect_suspicious` expands the findings list when you need triage detail.
+- Supports --repeat (diffs + temporal summary), --known-good (rogue suppression for lab baselines), --detect-suspicious (full rogue details; summarized by default).
+- Human-readable output summarizes rogue candidates by default; the detection analysis always runs, and `--detect-suspicious` expands the findings list when you need triage detail.
 - See docs/WIRELESS.md (incl. Best Practices + "Integration with Reporting Pipeline" for the optional `to_scan_report_data` bridge + auto-bridge for `eggsec report convert` on native --json), architecture/wireless.md (incl. new Integration section), plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md (completion), plans/integration-work-plan.md. Historical: plans/wireless-first-handoff-plan.md.

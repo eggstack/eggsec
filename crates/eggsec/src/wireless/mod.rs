@@ -728,7 +728,7 @@ pub async fn run_cli(
                     }
                 }
                 if rogue_count > 0 {
-                    buf.push_str(&format!("Rogue/suspicious candidates: {} (use --detect_suspicious to show full details)\n", rogue_count));
+                    buf.push_str(&format!("Rogue/suspicious candidates: {} (use --detect-suspicious to show full details)\n", rogue_count));
                     buf.push_str("Note: Rogue/Evil-Twin detection is a passive heuristic (multiple BSSIDs or security differences for same SSID). Use --known-good for lab baselines; verify with physical survey or asset inventory.\n");
                 }
             }

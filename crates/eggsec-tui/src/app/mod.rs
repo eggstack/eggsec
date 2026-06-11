@@ -412,6 +412,10 @@ impl App {
         let risk = crate::tabs::risk_from_group(spec.risk_group);
         let op = spec.operation.unwrap().to_string();
         let required_capabilities: Vec<eggsec::config::Capability> = Vec::new();
+        let required_features: Vec<String> = spec
+            .feature
+            .map(|f| vec![f.to_string()])
+            .unwrap_or_default();
         Some(OperationDescriptor {
             operation: op,
             mode: OperationMode::StandardAssessment,
@@ -422,7 +426,7 @@ impl App {
             } else {
                 target
             },
-            required_features: Vec::new(),
+            required_features,
             required_policy_flags: Vec::new(),
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
