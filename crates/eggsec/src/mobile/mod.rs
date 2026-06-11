@@ -263,4 +263,27 @@ mod tests {
         assert!(s.contains("Findings: 0"));
         assert!(s.contains("rec1"));
     }
+
+    #[test]
+    fn to_scan_report_data_produces_valid_bridge() {
+        let mut r = MobileScanReport::new("test.apk", MobilePlatform::Android);
+        r.app_id = Some("com.example".into());
+        r.findings.push(MobileFinding {
+            category: "manifest".into(),
+            severity: Severity::High,
+            title: "t".into(),
+            description: "d".into(),
+            recommendation: "r".into(),
+            evidence: Some("e".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.target, "test.apk");
+        assert_eq!(data.scan_type, "mobile-static");
+        assert_eq!(data.findings.len(), 1);
+        assert_eq!(data.findings[0].severity, "high");
+        assert!(data.findings[0].category.contains("mobile-android"));
+        assert_eq!(data.findings[0].remediation.as_deref(), Some("r"));
+        assert!(data.wireless_networks.is_empty());
+        assert!(data.policy_summary.is_none());
+    }
 }

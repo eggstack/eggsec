@@ -77,7 +77,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `architecture/recon.md` - Reconnaissance module
 - `architecture/distributed.md` - Distributed coordinator/worker architecture
 - `architecture/compile_time_baseline.md` - Workspace crate layout and compile-time baseline
-- `architecture/mobile.md` - Mobile app static analysis (APK/IPA; Phase 1 static only, pure-Rust parsers, lab/defense framing; standalone CLI + local reports + to_scan_report_data bridge; stub pending)
+- `architecture/mobile.md` - Mobile app static analysis (APK/IPA; Phase 1 static only, pure-Rust parsers, lab/defense framing; standalone CLI + local reports + to_scan_report_data bridge)
 - `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` is CLI-only). See plans/credential-access-*.md for historical context only (superseded by adopted runtime-policy + local-findings model).
 
 ### Feature Flags

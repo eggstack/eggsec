@@ -21,7 +21,7 @@ cargo build --release -p eggsec-cli --features mobile
 - Never run against production or customer-supplied binaries without explicit authorization and isolation.
 - Production impact: none (offline file analysis), but always operate in a controlled lab environment.
 
-See also: [docs/SAFETY.md](SAFETY.md), [docs/lab-safety.md](lab-safety.md), `architecture/mobile.md` (stub; to be expanded), AGENTS.md, and the central `EnforcementContext` policy gate (handler uses `SafeActive` risk tier + required `"mobile"` feature).
+See also: [docs/SAFETY.md](SAFETY.md), [docs/lab-safety.md](lab-safety.md), `architecture/mobile.md`, AGENTS.md, and the central `EnforcementContext` policy gate (handler uses `SafeActive` risk tier + required `"mobile"` feature).
 
 ## CLI Usage
 
@@ -53,7 +53,7 @@ The command auto-selects the analyzer based on `.apk` (Android) or `.ipa` (iOS) 
 
 ## What It Detects (High-Signal Static)
 
-Findings are severity-rated (Critical/High/Medium/Low/Info) with title, description, recommendation, category, and optional evidence. Common categories: `manifest`, `permission`, `transport`, `secret`, `storage`, `signing`, `build`, `url-scheme`, `webview`.
+Findings are severity-rated (Critical/High/Medium/Low/Info) with title, description, recommendation, category, and optional evidence. Common categories: `manifest`, `permission`, `transport`, `secret`, `storage`, `signing`, `build`, `url-scheme`.
 
 **Android (APK):**
 - `android:debuggable="true"` in release builds (High)
@@ -63,7 +63,7 @@ Findings are severity-rated (Critical/High/Medium/Low/Info) with title, descript
 - Dangerous / over-privileged permissions (e.g. READ_SMS, WRITE_EXTERNAL_STORAGE patterns) (Medium)
 - Insecure `network_security_config.xml` (cleartext, no pinning, weak trust anchors)
 - Hardcoded secrets, tokens, passwords, API keys in strings, XML, JSON, properties, JS assets (High/Medium)
-- Basic WebView/JS bridge and insecure storage hints
+- Insecure storage hints
 - v1 signing cert anomalies or debug keystores (Low)
 
 **iOS (IPA):**
@@ -73,7 +73,7 @@ Findings are severity-rated (Critical/High/Medium/Low/Info) with title, descript
 - Hardcoded secrets in bundle assets (.plist, .json, .strings, .js) (High/Medium)
 - Missing `_CodeSignature/` directory (Low)
 - Debug/ad-hoc/development provisioning indicators (`get-task-allow`, development `aps-environment`) (Low)
-- Guidance note for Keychain usage when secrets or transport issues are present (Info)
+- General guidance note recommending iOS Keychain for secrets (always emitted as defensive reminder; Info)
 
 General recommendations are always appended (prefer platform secure storage, HTTPS + pinning, destroy test builds, combine with SAST/dynamic review).
 
@@ -133,7 +133,7 @@ The feature must be present at compile time. `EnforcementContext` (CLI `ManualPe
 
 - **Phase 2**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
 - **Phase 3**: Optional pipeline integration (`mobile-static` / `mobile-regression` profiles), combined web+mobile backend testing, and gated dynamic capabilities (Frida-based instrumentation behind additional safety + capability flags and explicit lab authorization).
-- Architecture document: `architecture/mobile.md` (planned).
+- Architecture document: `architecture/mobile.md`.
 - TUI tab and broader `ScanProfile` support in later phases.
 
 ## Data Model (Key Types)

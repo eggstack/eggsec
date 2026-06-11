@@ -671,7 +671,7 @@ fn handle_permission(name: &str, report: &mut MobileScanReport) {
         add_finding(
             report,
             "permission",
-            Severity::High,
+            Severity::Medium,
             format!("Dangerous permission requested: {}", name),
             format!("The app requests the dangerous permission '{}'. This increases the app's attack surface and data access.", name),
             "Audit necessity. Prefer runtime permissions (Android 6+), least privilege, and scoped storage. Document why each dangerous permission is required.",
