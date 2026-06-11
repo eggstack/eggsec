@@ -232,7 +232,7 @@ Before committing, verify and clean up:
 
 1. Remove any `plans/*_review.md` files that don't match the `plans/review_*.md` naming convention
 2. Ensure no stale review files exist from prior runs
-3. Check `plans/plan.md` - archive or remove if all items are resolved
+3. Verify all plan items are resolved and plans directory is clean
 
 ---
 

@@ -141,5 +141,5 @@ The agent module also migrated to FxHashMap for performance:
 ## Resources
 - `crates/eggsec/src/ai/AGENTS.override.md` - Detailed AI patterns and bug fixes
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/overview.md` - Overall design
 - `architecture/ai_agents.md` - AI module architecture

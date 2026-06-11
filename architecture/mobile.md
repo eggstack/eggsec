@@ -32,9 +32,9 @@ Standalone static security analysis of Android APKs and iOS IPAs for authorized 
 
 ## Status
 
-Phase 1 static-only (pure-Rust, SafeActive, standalone CLI + optional report bridge). No dynamic capabilities, no Frida, no TUI tab, no pipeline profile integration (`mobile-static` / `mobile-regression` are aspirational). Phase 1 closed as complete standalone capability on 2026-06-11 (see plans/mobile-final-closeout-plan.md for verification details, added tests, and doc consistency pass).
+Phase 1 static-only (pure-Rust, SafeActive, standalone CLI + optional report bridge). No dynamic capabilities, no Frida, no TUI tab, no pipeline profile integration (`mobile-static` / `mobile-regression` are aspirational). Phase 1 closed as complete standalone capability on 2026-06-11.
 
-See plans/mobile-first-handoff-plan.md, plans/integration-work-plan.md and docs/MOBILE.md.
+See `docs/MOBILE.md`.
 
 ## Integration with Reporting Pipeline
 

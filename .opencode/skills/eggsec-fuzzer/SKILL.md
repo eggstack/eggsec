@@ -131,5 +131,5 @@ Follow existing test patterns in `fuzzer/` modules, using `FuzzEngine` and `Fuzz
 ## Resources
 - `crates/eggsec/src/fuzzer/AGENTS.override.md` - Detailed fuzzer patterns
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/overview.md` - Overall design
 - `architecture/fuzzer.md` - Fuzzer module architecture details

@@ -13,7 +13,7 @@ The "Wave" pattern organized implementation by priority:
   - Phase 7: CodingAgentFindingReport typed struct (new)
 - **Wave 3**: Output Module Documentation
 
-All items have been verified and completed. See `plans/plan.md` for details.
+All items have been verified and completed.
 
 ## Key Implementation Patterns (Historical)
 
@@ -120,6 +120,5 @@ These pitfalls were encountered during the wave implementation and are preserved
 
 ## Resources
 
-- `plans/plan.md` - Implementation plan (all items completed, contains future considerations)
 - `AGENTS.md` - General guidelines for all agents
 - `AGENTS.override.md` - Module-specific guidance (in each module directory)

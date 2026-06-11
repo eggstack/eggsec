@@ -116,3 +116,126 @@ Every target-bearing operation produces a structured policy decision with:
 - Denial reasons (when blocked)
 
 Use `eggsec policy-explain --json` to view a policy decision without executing.
+
+## High-Risk Feature Safety
+
+**All high-risk features should only be used against systems you own or have explicit written authorization to test.**
+
+### Stress Testing
+
+**Risk: Denial of Service**
+
+Stress testing generates high volumes of traffic against a target. It can overwhelm target services, saturate network links, trigger IDS/IPS alerts, and impact co-located services on shared infrastructure.
+
+**Requirements:** Written authorization, isolated lab environment, `--rate-limit` and `--concurrency` caps, shutdown plan.
+
+```bash
+eggsec stress "$TARGET" \
+  --rate-limit 100 \
+  --concurrency 10 \
+  --duration 60 \
+  --scope scopes/lab.toml
+```
+
+### Packet / Raw Socket Operations
+
+**Risk: Network disruption, requires elevated privileges**
+
+Raw packet operations (crafted packets, IP spoofing, packet capture) require root/sudo and can disrupt network connections if misconfigured.
+
+**Requirements:** Root/sudo, isolated network, `stress-testing` feature flag.
+
+```bash
+sudo eggsec packet capture \
+  --interface eth1 \
+  --filter "tcp port 80" \
+  --output captures/
+```
+
+### WAF Evasion-Resistance Testing
+
+**Risk: May trigger security responses**
+
+WAF bypass testing sends payloads designed to evade web application firewalls. It can trigger WAF alerts, IP blocks, and security team responses.
+
+**Requirements:** Authorization from both application owner and WAF operator; coordination with security operations.
+
+```bash
+eggsec waf detect "$TARGET" \
+  --scope scopes/authorized.toml \
+  --rate-limit 50
+```
+
+### Proxy / Tor Usage
+
+**Risk: Legal considerations, route leaks, attribution issues**
+
+Using Eggsec through proxies or Tor may violate provider ToS, leak real IP, or have legal implications. Verify proxy configuration and use only with authorized targets.
+
+### Authentication Testing
+
+**Risk: Account lockout, credential exposure, legal exposure**
+
+Auth testing attempts credential stuffing, brute force, or session manipulation. It can lock out legitimate accounts and generate audit logs requiring explanation.
+
+**Requirements:** Written authorization, dedicated test accounts, coordination with auth team, rate limiting.
+
+```bash
+eggsec auth-test "$TARGET" \
+  --wordlist test-credentials.txt \
+  --max-attempts 50 \
+  --concurrency 2 \
+  --scope scopes/authorized.toml
+```
+
+See `docs/AUTH_LAB.md` for full defense-lab usage guide.
+
+### Rate and Concurrency Limits
+
+**Always** use rate and concurrency limits with high-risk features:
+
+| Flag | Purpose | Recommended Range |
+|------|---------|-------------------|
+| `--rate-limit` | Max requests per second | 10-500 depending on target |
+| `--concurrency` | Max parallel connections | 5-50 depending on target |
+| `--timeout` | Per-request timeout | 10-30 seconds |
+
+Scope files can enforce rate limits globally:
+
+```toml
+max_requests_per_second = 100
+```
+
+### Private Lab Recommendation
+
+Run high-risk features in an isolated environment:
+
+| Method | Isolation Level | Setup Effort |
+|--------|----------------|--------------|
+| Docker containers | Good | Low |
+| VMs (Vagrant, libvirt) | Good | Medium |
+| Dedicated lab network | Best | High |
+| Cloud sandbox (VPC) | Good | Medium |
+
+```bash
+docker network create --driver bridge eggsec-lab
+docker run -d --name target --network eggsec-lab vulnerable-app:latest
+
+cat > /tmp/lab-scope.toml << 'EOF'
+require_explicit_scope = true
+[[allowed_targets]]
+cidr = "172.20.0.0/16"
+description = "Docker lab network"
+EOF
+
+eggsec scan target --scope /tmp/lab-scope.toml
+```
+
+### Monitoring and Rollback
+
+When running high-risk features:
+1. Monitor the target for service degradation, error spikes, or resource exhaustion
+2. Have a kill switch (Ctrl+C or `eggsec stop`)
+3. Log everything (Eggsec logs all operations)
+4. Have a rollback plan
+5. Document what was tested, when, and results

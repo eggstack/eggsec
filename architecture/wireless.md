@@ -49,7 +49,7 @@ Wireless is a **standalone defense-lab surface** (CLI primary + optional TUI tab
 
 The optional `to_scan_report_data` bridge (and CLI `report convert` auto-bridge) works for any consumer that obtains a native JSON `WirelessScanResult` (or repeat-wrapped form), regardless of invocation surface.
 
-See docs/WIRELESS.md for usage/safety/examples/best-practices; plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md, historical plans/wireless-first-handoff-plan.md, plans/integration-work-plan.md, and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note at top).
+See `docs/WIRELESS.md` for usage/safety/examples/best-practices.
 
 ## Integration with Reporting Pipeline
 

@@ -155,4 +155,4 @@ Follow existing test patterns in `tool/` modules, testing trait implementations,
 ## Resources
 - `crates/eggsec/src/tool/AGENTS.override.md` - Detailed tool patterns
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/overview.md` - Overall design

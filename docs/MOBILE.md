@@ -21,7 +21,7 @@ cargo build --release -p eggsec-cli --features mobile
 - Never run against production or customer-supplied binaries without explicit authorization and isolation.
 - Production impact: none (offline file analysis), but always operate in a controlled lab environment.
 
-See also: [docs/SAFETY.md](SAFETY.md), [docs/lab-safety.md](lab-safety.md), `architecture/mobile.md`, AGENTS.md, and the central `EnforcementContext` policy gate (handler uses `SafeActive` risk tier + required `"mobile"` feature).
+See also: [docs/SAFETY.md](SAFETY.md), `architecture/mobile.md`, AGENTS.md, and the central `EnforcementContext` policy gate (handler uses `SafeActive` risk tier + required `"mobile"` feature).
 
 ## CLI Usage
 

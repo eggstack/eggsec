@@ -43,7 +43,7 @@ if clipboard.is_available() {
 
 ## Implementation
 
-- `crates/eggsec/src/tui/utils/clipboard.rs` - Clipboard utility
+- `crates/eggsec-tui/src/utils/clipboard.rs` - Clipboard utility
 - Depends on `arboard = "3.4"` crate
 
 ## Key Methods

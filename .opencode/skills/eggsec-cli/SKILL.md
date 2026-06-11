@@ -232,4 +232,4 @@ Several `From` implementations exist for converting CLI args to `FuzzArgs`:
 ## Resources
 - `architecture/cli_commands.md` - CLI architecture documentation
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/overview.md` - Overall design

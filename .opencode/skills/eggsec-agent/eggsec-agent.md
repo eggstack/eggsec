@@ -7,8 +7,8 @@ Eggsec autonomous agent development — operational constraints, testable seams,
 - `crates/eggsec/src/agent/constraints/` — ConstraintChecker, OperationalConstraints
 - `crates/eggsec/src/agent/portfolio.rs` — TargetPortfolio, TargetConfig
 - `crates/eggsec/src/agent/memory.rs` — LongitudinalMemory, dedup
-- `crates/eggsec/src/tool/agents/scheduler.rs` — TaskScheduler with lease-based model
-- `crates/eggsec/src/tool/agents/lifecycle.rs` — LifecycleManager with health monitoring
+- `crates/eggsec-agent/src/scheduler.rs` — TaskScheduler with lease-based model
+- `crates/eggsec-agent/src/lifecycle.rs` — LifecycleManager with health monitoring
 - `crates/eggsec/src/tool/protocol/agent_routes.rs` — REST API for agents and tasks
 
 ## Common Tasks

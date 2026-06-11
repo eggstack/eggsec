@@ -99,7 +99,7 @@ See also the short "Distinct from..." bullet in Implementation Notes below.
 ## See Also
 
 - `docs/SAFETY.md` — risk tiers, execution profiles, `EnforcementContext`
-- `docs/lab-safety.md` — dedicated "Authentication Testing" section with lab requirements
+- `docs/SAFETY.md` — "Authentication Testing" section with lab requirements
 - `architecture/auth.md` — module types, CLI surface, policy integration, TUI status, local-findings-only decision
 - `crates/eggsec/src/commands/handlers/auth_test.rs` — handler, `evaluate_and_enforce_operation`, `AUTH_BANNER`, wordlist loading, reporting
 - `crates/eggsec/src/config/policy.rs` — `OperationRisk::CredentialTesting`, `allow_credential_testing`

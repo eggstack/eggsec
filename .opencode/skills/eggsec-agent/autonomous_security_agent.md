@@ -36,8 +36,8 @@ The autonomous security agent continuously monitors configured targets, executes
 | LongitudinalMemory | Persistent scan history and pattern detection |
 | AlertRouter | Route alerts to configured channels |
 | EventHandler | Custom event processing hooks |
-| TaskScheduler | Multi-agent task queue (tool/agents/scheduler.rs) |
-| LifecycleManager | Agent health and lifecycle (tool/agents/lifecycle.rs) |
+| TaskScheduler | Multi-agent task queue (`crates/eggsec-agent/src/scheduler.rs`) |
+| LifecycleManager | Agent health and lifecycle (`crates/eggsec-agent/src/lifecycle.rs`) |
 
 ## Agent Run Modes
 

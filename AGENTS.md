@@ -4,11 +4,11 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 8 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, and `eggsec-agent`. See `README.md` for features and `ARCHITECTURE.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 8 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, and `eggsec-agent`. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Implementation Plan
 
-All implementation items are complete. See `plans/` directory for historical policy-related plans.
+All implementation items are complete.
 
 ## Quick Reference
 
@@ -78,7 +78,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `architecture/distributed.md` - Distributed coordinator/worker architecture
 - `architecture/compile_time_baseline.md` - Workspace crate layout and compile-time baseline
 - `architecture/mobile.md` - Mobile app static analysis (APK/IPA; Phase 1 static only, pure-Rust parsers, lab/defense framing; standalone CLI + local reports + to_scan_report_data bridge)
-- `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` is CLI-only). See plans/credential-access-*.md for historical context only (superseded by adopted runtime-policy + local-findings model).
+- `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` is CLI-only). See `architecture/auth.md` for current design.
 
 ### Feature Flags
 
@@ -176,17 +176,17 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 3382 (3063 #[test] + 319 #[tokio::test]) |
+| Tests | 3450 (3118 #[test] + 332 #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
-| Source files | 786 (.rs files in crates/) |
+| Source files | 794 (.rs files in crates/) |
 | Payload types | 40 |
 | Tabs | 29 (Tab enum variants 0-28) |
 | WAF products | 34 |
 | NSE libraries | 166 public modules |
-| Modules | 42 (approximate; + gated modules under features e.g. `mobile`) |
+| Modules | 39 (top-level directories in `crates/eggsec/src/`) |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
-| CLI commands | 26 base, ~43 with all features (gated commands e.g. mobile) |
+| CLI commands | 30 base, ~42 with all features (gated commands e.g. mobile) |
 
 ### Codebase Issues (Known Stub Implementations)
 
@@ -211,11 +211,10 @@ No remaining stub implementations.
 - **FindingStore Deduplication**: FIXED - now deduplicates by fingerprint before appending (2026-06-02)
 - **Remote Listener Policy**: `remote start` now uses `evaluate_and_enforce_operation` with `HazardousLab` mode and `RemoteExecution` risk (2026-06-10)
 - **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
-- **Auth Test Policy Integration (post-2026-06-10)**: `auth-test` handler uses `evaluate_and_enforce_operation` with `CredentialTesting` risk (central `EnforcementContext`). TUI `AuthTab` exists as standalone code but is excluded from `Tab` enum (CLI-only surface). See `architecture/auth.md`, `commands/handlers/auth_test.rs`, `cli/auth.rs`, `docs/AUTH_LAB.md`. No dedicated credential-testing Cargo feature (runtime policy gate only). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth`); local `Auth*` types only (no `ScanReportData` conversion). See plans/credential-access-*.md (historical, superseded).
-- **Mobile Static Analysis**: Standalone defense-lab CLI (`eggsec mobile <path.{apk,ipa}>`) under `mobile` feature (gated command/module, not in TUI or pipeline profiles). Handler uses `evaluate_and_enforce_operation` with `SafeActive` risk + `required_features: ["mobile"]` (local file target, no scope). Pure-Rust ZIP/AXML/plist parsers only. Produces local `Mobile*` findings + `to_scan_report_data` bridge (like wireless). Phase 1 closed 2026-06-11 (see plans/mobile-final-closeout-plan.md). See `commands/handlers/mobile.rs`, `mobile/mod.rs`, `src/mobile/AGENTS.override.md`.
-- **Standalone Defense-Lab Surfaces (wireless, mobile, auth-test)**: Consolidated pattern post-integration-work-plan (2026-06-11). `auth-test`: local `Auth*` only, direct emit, no bridge/conversion, no pipeline (distinct from `ScanProfile::Auth`). `wireless` + `mobile`: local types direct (CLI/TUI/human/JSON) + optional `to_scan_report_data` bridge (wired to eggsec-output; native --json auto-bridged in `report convert` handler when feature present). None participate in `ScanProfile` pipelines or have dedicated profiles/stages in this round (aspirational only; see `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, docs/WIRELESS.md + docs/MOBILE.md "Integration with Reporting Pipeline" sections, CAPABILITIES.md Lab Defense, and plans/integration-work-plan.md). Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`.
+- **Auth Test Policy Integration (post-2026-06-10)**: `auth-test` handler uses `evaluate_and_enforce_operation` with `CredentialTesting` risk (central `EnforcementContext`). TUI `AuthTab` exists as standalone code but is excluded from `Tab` enum (CLI-only surface). See `architecture/auth.md`, `commands/handlers/auth_test.rs`, `cli/auth.rs`, `docs/AUTH_LAB.md`. No dedicated credential-testing Cargo feature (runtime policy gate only). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth`); local `Auth*` types only (no `ScanReportData` conversion).
+- **Mobile Static Analysis**: Standalone defense-lab CLI (`eggsec mobile <path.{apk,ipa}>`) under `mobile` feature (gated command/module, not in TUI or pipeline profiles). Handler uses `evaluate_and_enforce_operation` with `SafeActive` risk + `required_features: ["mobile"]` (local file target, no scope). Pure-Rust ZIP/AXML/plist parsers only. Produces local `Mobile*` findings + `to_scan_report_data` bridge (like wireless). Phase 1 closed 2026-06-11. See `commands/handlers/mobile.rs`, `mobile/mod.rs`, `src/mobile/AGENTS.override.md`.
+- **Standalone Defense-Lab Surfaces (wireless, mobile, auth-test)**: Consolidated pattern post-integration-work-plan (2026-06-11). `auth-test`: local `Auth*` only, direct emit, no bridge/conversion, no pipeline (distinct from `ScanProfile::Auth`). `wireless` + `mobile`: local types direct (CLI/TUI/human/JSON) + optional `to_scan_report_data` bridge (wired to eggsec-output; native --json auto-bridged in `report convert` handler when feature present). None participate in `ScanProfile` pipelines or have dedicated profiles/stages in this round (aspirational only; see `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, docs/WIRELESS.md + docs/MOBILE.md "Integration with Reporting Pipeline" sections, CAPABILITIES.md Lab Defense). Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`.
   A short shared "Output Models" explanation (pipeline full `ScanReportData` vs. wireless/mobile optional bridge vs. `auth-test` local-only) lives in `docs/USAGE.md` (Report Management → Convert Reports). This is the canonical cross-reference; keep language consistent across README, CAPABILITIES, per-module docs, AGENTS, architecture/*.md, and skills. See also docs/WIRELESS.md + docs/MOBILE.md ("Integration with Reporting Pipeline") and architecture/{wireless,mobile,auth,output,cli_commands,defense_lab}.md.
-  Final cleanup (polish + hygiene + verification) recorded in `plans/final-cleanup-new-modules-plan.md` (resolution note at top); broader close-out in `plans/new-modules-integration-and-closeout-plan.md`; wireless TUI/MCP/agentic resolution in `plans/wireless-tui-mcp-agentic-handoff-plan.md` (MCP/agent exposure intentionally absent).
 - **TUI Policy Alignment (2026-06-11)**: TUI is now aligned (uses the same central `EnforcementContext::evaluate()` evaluator and `ConfirmationClass` kebab strings for `RequireConfirmation` via `PendingPolicyConfirmation` + `PolicyConfirm` overlay; `PendingAction` remains separate).
 - **TUI Architecture & Usability Pass (2026-06-11)**: 10-phase refactor completed (plan: docs/plans/tui-architecture-usability-pass.md). Key artifacts:
   - Phase 1: `UiAction` + decode/apply split (`app/action.rs`; `KeyHandler` now returns actions; `App::apply_action` is the mutation point; decode tests added).
@@ -312,12 +311,11 @@ Skills are located in `.opencode/skills/`:
 | `eggsec-security/` | Security testing skill workflows |
 | `eggsec-stress/` | Stress module workflows |
 | `eggsec-tool/` | Tool module workflows |
-| `eggsec-tui/` | TUI module workflows |
+| `eggsec-tui/` | TUI module workflows (includes `tui_testing.md` for visual regression patterns) |
 | `eggsec-waf/` | WAF module workflows |
-| `tui-testing/` | TUI testing guidance and visual regression patterns |
-| `eggsec-wave-implementation/` | Historical wave implementation reference |
+| `eggsec-wave-implementation/` | Historical wave implementation reference (all waves completed 2026-06-02) |
 
-Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance. See also plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note at top) for TUI + MCP/agentic integration status.
+Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance.
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
@@ -369,7 +367,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition). Post wireless-tui-mcp-agentic-handoff-plan: TUI tab + TabSpec complete; MCP/agent exposure intentionally absent (standalone defense-lab; see plan resolution + MCP/Agentic section). See also `plans/final-cleanup-new-modules-plan.md` (resolution) and `docs/USAGE.md` Output Models. |
+| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition). TUI tab + TabSpec complete; MCP/agent exposure intentionally absent (standalone defense-lab). See also `docs/USAGE.md` Output Models. |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands
@@ -395,16 +393,12 @@ cargo clippy --lib -p eggsec --features wireless
 
 ## Planning Notes for Future Agents
 
-When implementing items from `plans/plan.md`:
+When implementing items:
 
-1. **Verify before implementing**: Many items in plan.md were verified and corrected during the 2026-06-02 review session, but always verify file paths, line numbers, and whether issues still exist before implementing.
+1. **Verify before implementing**: Always verify file paths, line numbers, and whether issues still exist before implementing.
 
-2. **Remaining items are mostly documentation fixes**: Most remaining items are documentation corrections or low-priority improvements. Security-critical items have been addressed.
+2. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.
 
-3. **No remaining stubs**: All previously-stub modules (Storage, VulnAssessment) are now fully implemented.
+3. **Wave plan verification**: When verifying plan claims, use subagents to check actual codebase state - plans may contain stale assertions that no longer match reality.
 
-4. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.
-
-5. **Wave plan verification**: When verifying plan claims, use subagents to check actual codebase state - plans may contain stale assertions that no longer match reality.
-
-6. **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source. Source file counts can vary by 200+ depending on whether nested crates are included.
+4. **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source. Source file counts can vary by 200+ depending on whether nested crates are included.

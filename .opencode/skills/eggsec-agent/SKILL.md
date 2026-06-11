@@ -87,4 +87,4 @@ Load individual skill files as needed based on the task:
 ## Resources
 - `crates/eggsec/src/agent/AGENTS.override.md` - Agent module guidance
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/overview.md` - Overall design

@@ -148,5 +148,5 @@ To test internal systems, use CIDR rules in your scope file (e.g., `cidr = "10.0
 ## See Also
 
 - [SAFETY.md](SAFETY.md) - Operation risk tiers and authorization requirements
-- [agent-workflows.md](agent-workflows.md) - Agent-oriented scope usage
-- [lab-safety.md](lab-safety.md) - Safe use of high-risk features
+- [AGENT.md](AGENT.md) - Agent configuration and operation
+- [SAFETY.md](SAFETY.md) - Risk tiers and lab safety guidance

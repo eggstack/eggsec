@@ -558,7 +558,72 @@ When the agent runs defense-lab profiles, it:
 ./eggsec agent skills --help
 ```
 
+## CI/CD Integration
+
+Eggsec integrates into CI pipelines for continuous security regression testing:
+
+```yaml
+# GitHub Actions example
+- name: Security scan
+  run: |
+    eggsec scan "$DEPLOYED_URL" \
+      --profile quick \
+      --scope .eggsec/scope.toml \
+      --output sarif \
+      --output-dir security-results/
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: security-results/
+```
+
+```makefile
+# Makefile integration
+.PHONY: security-scan
+security-scan:
+	eggsec scan $(TARGET_URL) \
+		--profile full \
+		--scope scopes/$(ENV).toml \
+		--output json \
+		--output-dir reports/security-$(CI_COMMIT_SHA)/
+```
+
+Key CI properties:
+- Deterministic - same inputs produce same output structure
+- Exit codes - non-zero on findings above severity threshold
+- SARIF output - integrates with GitHub, GitLab, and other code scanning dashboards
+
+## Coding-Agent Defense-Lab Usage
+
+Eggsec serves as a controlled backend for coding agents building security tooling:
+
+```python
+# Pseudocode: coding agent using Eggsec
+target = deploy_test_container()
+scope = create_scope_file(allowed=[target.hostname])
+
+result = run_eggsec(
+    command="scan",
+    target=target.hostname,
+    scope=scope.path,
+    output="json"
+)
+
+findings = parse_json(result.stdout)
+assert_no_critical(findings)
+teardown(target)
+```
+
+Coding agents should:
+- Deploy isolated test infrastructure (Docker, VMs)
+- Generate scope files dynamically for each target
+- Parse structured output for assertions
+- Tear down infrastructure after testing
+
 ## See Also
 
 - [.opencode/skills/](../.opencode/skills/) - All available skills
 - [AGENTS.md](../AGENTS.md) - Developer documentation for the codebase
+- [SAFETY.md](SAFETY.md) - Risk tiers and authorization requirements
+- [scope.md](scope.md) - Scope model and enforcement details

@@ -614,7 +614,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: 3382 (3063 #[test] + 319 #[tokio::test])
+- **Test count**: 3450 (3118 #[test] + 332 #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---
@@ -653,7 +653,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 
 ### Implementation Plan
 
-See [plans/plan.md](../plans/plan.md) for implementation history and completed waves.
+All implementation items are complete.
 
 ---
 

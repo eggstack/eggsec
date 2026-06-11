@@ -38,4 +38,4 @@ Follow existing test patterns in `proxy/` modules, testing interception and safe
 ## Resources
 - `crates/eggsec/src/proxy/AGENTS.override.md` - Detailed proxy patterns
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/overview.md` - Overall design
