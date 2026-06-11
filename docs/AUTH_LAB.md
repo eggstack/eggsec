@@ -96,6 +96,10 @@ See also the short "Distinct from..." bullet in Implementation Notes below.
 - Multi-protocol support lives under the `nse-ssh2` feature (libssh2-backed).
 - Distinct from the pipeline `auth` profile (`ScanProfile::Auth`), which performs PortScan + Fingerprint + EndpointScan + Fuzz focused on JWT/OAuth/IDOR issues (see `architecture/pipeline.md` and `architecture/auth.md`). The CLI `auth-test` command invokes the `auth/` module testers directly and does not use the pipeline.
 
+## TUI Integration
+
+The TUI `AuthTab` (`Tab::Auth`) is fully integrated with `TabSpec` (Intrusive risk_group, direct_launch: true), the shared task system (`TaskConfig::Auth` / `TaskResult::Auth`), policy enforcement via central `EnforcementContext`, session save/restore, and copy-CLI equivalent. Local findings only — no `ScanReportData` bridge.
+
 ## See Also
 
 - `docs/SAFETY.md` — risk tiers, execution profiles, `EnforcementContext`
