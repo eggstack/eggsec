@@ -357,7 +357,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | WiFi scanning (passive recon + security analysis) |
+| `architecture/wireless.md` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect_suspicious; WPS/hidden/transition) |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands

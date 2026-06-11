@@ -274,7 +274,7 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `policy-explain` | - | Explain policy decisions |
 | `scope-explain` | - | Explain scope matching |
 | `eggsec auth-test <target>` | defense-lab (high-risk) | Credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `allow_credential_testing`). Standalone CLI under runtime policy; local `AuthTestReport`/`AuthFinding` only (no canonical `ScanReportData`/SARIF conversion); see architecture/auth.md. |
-| `eggsec wireless <iface>` | defense-lab (passive) | Passive WiFi scan + security analysis (Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition + weak/rogue heuristics). Requires --features wireless. See docs/WIRELESS.md. |
+| `eggsec wireless <iface>` | defense-lab (passive) | Passive WiFi recon (iwlist): Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition/weak-signal detection, vuln findings, rogue/Evil-Twin heuristic (passive; security-diff elevates to Medium). Supports --repeat (per-scan diffs + temporal summary for change/rogue observation), --known-good FILE allowlist (SSID/BSSID/"SSID,BSSID"; suppresses rogue for lab baselines), --dry-run (plan/CI mode; no iwlist/privs; valid JSON + notes), --detect_suspicious (full rogue details; summarized by default in human output; analysis always runs). Recommendations generated. to_scan_report_data for unified reports (SARIF/JUnit/etc). Requires --features wireless + root/iwlist. See docs/WIRELESS.md. |
 
 ---
 
@@ -295,5 +295,5 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `sbom` | SBOM generation |
 | `advanced-hunting` | Advanced threat hunting |
 | `compliance` | Compliance scanning |
-| `wireless` | WiFi scanning (passive recon, security posture, rogue heuristic) |
+| `wireless` | WiFi scanning (passive recon + security posture + rogue heuristic; WPS/hidden/transition; --repeat/--known-good/--dry-run/--detect_suspicious) |
 | `full` | All features combined |

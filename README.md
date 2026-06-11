@@ -251,6 +251,11 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 # Wireless (passive, lab-only; requires --features wireless + root)
 ./eggsec wireless wlan0 --repeat 3
 
+# Wireless with known-good baseline (suppress rogue heuristic for lab APs), dry-run, or full details
+./eggsec wireless wlan0 --repeat 5 --known-good ./lab-aps.txt
+./eggsec wireless wlan0 --dry-run --json
+./eggsec wireless wlan0 --detect_suspicious --repeat 3
+
 # Resume a previous scan
 ./eggsec resume session.json
 ```
@@ -268,7 +273,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
 | `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
 | `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `CredentialTesting` risk + `allow_credential_testing`). Standalone CLI; local `Auth*` types only (no `ScanReportData` conversion). See `docs/AUTH_LAB.md` + architecture/auth.md. |
-| `eggsec wireless <iface>` | defense-lab (passive) | Passive WiFi reconnaissance (iwlist), security type detection (incl. WPS/hidden/transition), basic vuln analysis + rogue heuristic, recommendations. Requires --features wireless + root/iwlist. See docs/WIRELESS.md. |
+| `eggsec wireless <iface>` | defense-lab (passive) | Passive WiFi recon (iwlist): Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition/weak-signal detection, vuln findings, rogue/Evil-Twin heuristic (passive; security-diff elevates to Medium). Supports --repeat (diffs + temporal summary), --known-good allowlist (suppresses rogue for lab baselines), --dry-run (plan/CI, valid JSON), --detect_suspicious (full rogue details; summarized by default). Requires --features wireless + root/iwlist. See docs/WIRELESS.md. |
 
 ## Build Features
 
@@ -291,7 +296,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `container` | Kubernetes/Docker security scanning | Stable |
 | `cloud` | AWS/GCP/Azure asset discovery | Stable |
 | `git-secrets` | Git secrets scanning | Stable |
-| `wireless` | WiFi scanning (passive reconnaissance and basic security analysis) | Stable |
+| `wireless` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect_suspicious) | Stable |
 | `pdf` | PDF report generation | Stable |
 | `advanced-hunting` | Advanced threat hunting | Stable |
 | `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |

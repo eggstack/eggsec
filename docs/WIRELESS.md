@@ -51,11 +51,22 @@ eggsec wireless wlan0 --repeat 5 --duration 10
 # Quiet (minimal stderr)
 eggsec wireless wlan0 -q --json
 
+# Dry-run (plan/CI validation; no privileges or iwlist required; emits valid JSON + notes)
+eggsec wireless wlan0 --dry-run --json
+
+# Repeated scans with known-good allowlist (suppresses rogue heuristic for your lab APs)
+eggsec wireless wlan0 --repeat 3 --known-good ./lab-aps.txt
+
+# Show full rogue/suspicious details (analysis always runs; default shows count + hint only)
+eggsec wireless wlan0 --detect_suspicious
+
 # Help
 eggsec wireless --help
 ```
 
 **Important**: The command prints a clear root/iwlist/permissions warning (unless `--quiet`). Use only in lab/defense-validation contexts.
+
+**Rogue / Suspicious Detection UX**: Analysis for rogue/Evil-Twin candidates (same SSID + differing BSSID or security type) **always runs**. In default human output, only a compact summary line is shown ("Rogue/suspicious candidates: N (use --detect_suspicious to show full details)"). Use `--detect_suspicious` for the full Findings list (with descriptions/recommendations). Use `--known-good` to suppress known-authorized APs from triggering the heuristic (recommended for lab baselines). A short explanatory note is included in output when candidates are present. Severity is Low (BSSID diff) or Medium (security config differences, possible downgrade). Heuristic only — always verify physically or via inventory.
 
 ## What It Detects (Passive)
 
@@ -156,6 +167,34 @@ Recommendations:
 - **Rogue hunting (passive)**: Use `--repeat` + review "Possible Rogue..." findings; cross-check against asset inventory. This is a heuristic only — follow up with authorized physical/radio validation.
 - **Reporting**: Pipe JSON to `eggsec report` or consume `ScanReportData` directly.
 
+## Best Practices (Lab / Defensive Use)
+
+- **Always run as root (or with CAP_NET_ADMIN)** for real scans; use `--dry-run --json` in CI or unprivileged planning to validate flags/JSON shape without privileges.
+- **Use `--known-good`** for your lab environment. Create a file with authorized SSID, BSSID, or "SSID,BSSID" entries (one per line; `#` comments supported). This suppresses false-positive rogue/Evil-Twin candidates for your known APs while still detecting new or changed ones.
+- **Use `--repeat`** (e.g. 3–10) with a short `--duration` (5–15s) for monitoring or change detection. Review per-scan "Changes since previous" diffs (new nets, sec changes, signal drift, new rogue candidates) and the final "Scan summary over time".
+- **Default rogue output is summarized**: Rogue/Evil-Twin candidates are always analyzed. Human output shows a count + hint by default. Add `--detect_suspicious` when you need the full details + recommendations for triage.
+- **JSON for automation**: `--json` (with or without `--repeat`) produces machine-readable `WirelessScanResult` (last successful scan). With `--repeat >1`, a `repeat_summary` envelope field is included for convenience (see Task 3 polish). Pipe to `eggsec report` or your own post-processing.
+- **Baseline before hunting**: Run repeated scans in a clean lab state, save `--known-good` + JSON baselines. Re-run later to observe drift or new BSSIDs.
+- **Interpret findings conservatively**: Open/WEP/WPA are high-confidence issues. Rogue is a passive heuristic only — same SSID from multiple BSSIDs or security downgrade signals can be legitimate roaming or guest nets; always cross-check MAC inventory or perform physical survey.
+- **TUI**: The Wireless tab provides interactive entry + table view. Use for quick visual scans; exports and session features follow standard TUI patterns.
+- **Prefer lab environments**: Wireless is a defense-lab / regression tool. Do not use for unauthorized spectrum monitoring. Know your local regulations.
+
+Example practical flows:
+
+```bash
+# Single authoritative scan + JSON record
+sudo eggsec wireless wlan0 --json -o baseline.json
+
+# Dry-run to validate a CI command shape (no root needed)
+eggsec wireless wlan0 --dry-run --repeat 3 --json
+
+# Lab monitoring with known-good baseline (repeat 5x, 10s each)
+sudo eggsec wireless wlan0 --repeat 5 --duration 10 --known-good ./authorized-aps.txt
+
+# Full rogue details on demand
+sudo eggsec wireless wlan0 --detect_suspicious --repeat 3
+```
+
 ## Not In Scope (This Phase)
 
 - Active attacks (deauth, disassociation, Evil Twin AP creation)
@@ -184,6 +223,6 @@ Future phases may add a `wireless-advanced` sub-feature for gated active/lab-onl
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff)
+- Plan: `plans/wireless-remaining-work-plan.md` (final polish/docs/UX); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff)
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.

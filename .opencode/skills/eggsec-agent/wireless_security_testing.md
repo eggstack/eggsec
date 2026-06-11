@@ -42,7 +42,7 @@ Eggsec provides wireless network security testing capabilities through the `wire
 ## Key Types
 
 ```rust
-// Wireless network information
+// Wireless network information (updated post-standalone-completion)
 pub struct WirelessNetwork {
     pub ssid: String,              // Network name
     pub bssid: String,             // MAC address of AP
@@ -50,6 +50,9 @@ pub struct WirelessNetwork {
     pub security_type: SecurityType,
     pub signal_strength: i32,       // dBm
     pub last_seen: String,
+    pub wps_enabled: bool,          // WPS beacon indicator (attack surface)
+    pub is_hidden: bool,            // Hidden SSID (ESSID empty or flagged)
+    pub transition_mode: bool,      // WPA2/WPA3 mixed (downgrade risk)
 }
 
 // Security type enum
@@ -71,12 +74,12 @@ pub struct WirelessScanResult {
     pub recommendations: Vec<String>,
 }
 
-// Detected vulnerability
+// Detected vulnerability (from analyze_networks; rogue heuristic included)
 pub struct WirelessVulnerability {
     pub ssid: String,
     pub bssid: String,
-    pub vulnerability_type: String,
-    pub severity: Severity,
+    pub vulnerability_type: String,   // e.g. "Open Network", "Possible Rogue AP / Evil Twin (passive heuristic)"
+    pub severity: Severity,           // Low/Medium/High (security-diff rogue elevates to Medium)
     pub description: String,
     pub recommendation: String,
 }
@@ -98,6 +101,15 @@ eggsec wireless wlan0 --json -o results.json
 
 # Quiet + file
 eggsec wireless wlan0 -q -o out.json
+
+# Dry-run (plan/CI; no root/iwlist needed; valid JSON + notes)
+eggsec wireless wlan0 --dry-run --json
+
+# Lab baseline with known-good (suppresses rogue heuristic for authorized APs)
+eggsec wireless wlan0 --repeat 3 --known-good ./lab-aps.txt
+
+# Full rogue/suspicious details (analysis always runs; summarized by default)
+eggsec wireless wlan0 --detect_suspicious
 ```
 
 ### API Usage
@@ -145,8 +157,9 @@ let vulns = WirelessScanner::analyze_networks(&result.networks);
 
 Keywords that activate this skill: `wifi`, `wireless`, `wpa`, `wpa2`, `wpa3`, `ssid`, `bssid`, `handshake`, `access point`, `enterprise`, `wireless reconnaissance`, `wps`, `rogue ap`, `evil twin`
 
-## Notes (First Handoff)
+## Notes
 
-- Passive-only (no injection, deauth, or handshake capture).
-- Requires --features wireless + Linux iwlist + appropriate privileges.
-- See docs/WIRELESS.md, architecture/wireless.md, plans/wireless-first-handoff-plan.md.
+- Passive-only (no injection, deauth, handshake capture, or active attacks).
+- Requires --features wireless + Linux iwlist + root/CAP_NET_ADMIN for real scans (use --dry-run --json for unprivileged/CI planning).
+- Supports --repeat (diffs + temporal summary), --known-good (rogue suppression for lab baselines), --detect_suspicious (full rogue details; summarized by default).
+- See docs/WIRELESS.md (incl. Best Practices), architecture/wireless.md, plans/wireless-remaining-work-plan.md (final polish), plans/wireless-standalone-completion-plan.md (completion). Historical: plans/wireless-first-handoff-plan.md.

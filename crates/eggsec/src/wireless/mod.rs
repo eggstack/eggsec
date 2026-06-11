@@ -640,7 +640,17 @@ pub async fn run_cli(
     };
 
     let output = if args.json {
-        serde_json::to_string_pretty(&result)?
+        if args.repeat > 1 {
+            let summary_text = build_temporal_summary(&results, kg_ref);
+            let wrapped = serde_json::json!({
+                "last_scan": result,
+                "repeat_count": args.repeat,
+                "summary": summary_text.trim_end(),
+            });
+            serde_json::to_string_pretty(&wrapped)?
+        } else {
+            serde_json::to_string_pretty(&result)?
+        }
     } else {
         let mut buf = String::new();
         if args.dry_run {
@@ -701,6 +711,7 @@ pub async fn run_cli(
                 }
                 if rogue_count > 0 {
                     buf.push_str(&format!("Rogue/suspicious candidates: {} (use --detect_suspicious to show full details)\n", rogue_count));
+                    buf.push_str("Note: Rogue/Evil-Twin detection is a passive heuristic (multiple BSSIDs or security differences for same SSID). Use --known-good for lab baselines; verify with physical survey or asset inventory.\n");
                 }
             }
             buf.push('\n');
