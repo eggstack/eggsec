@@ -64,4 +64,6 @@ let is_locked = detector.detect_lockout(&response).await?;
 ## Module Notes
 See `architecture/auth.md` for architecture documentation. TUI `AuthTab` is standalone/CLI-primary (not in `Tab` enum). Policy enforcement uses central `EnforcementContext` + `CredentialTesting` risk tier (no feature flag). All 17 wiremock auth tests + enforcement/policy contract tests pass.
 
+Local `AuthTestReport`/`AuthFinding` only (no conversion to `StoredFinding`/`ScanReportData`/`eggsec-output` canonical types per adopted model; handler produces JSON/text directly). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth` which is JWT/OAuth/IDOR fuzzer-focused via stages + fuzzer payloads).
+
 See `docs/AUTH_LAB.md` for defense-lab usage, requirements (`allow_credential_testing=true` + explicit scope + dedicated test accounts), and command examples.

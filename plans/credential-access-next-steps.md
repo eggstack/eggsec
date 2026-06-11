@@ -1,8 +1,8 @@
 # Credential Access - Next Steps Plan (Phase 2)
 
-**Status**: Active Handoff  
+**Status**: Historical / Superseded (complete under adopted runtime policy model; no further implementation required)  
 **Date**: 2026-06-11  
-**Context**: Significant progress has been made since the initial plan. A real execution handler now exists, and documentation has been added. This plan focuses on completing integration, safety hardening, and polish.
+**Context**: Significant progress was made; core handler, policy integration, tests, and docs were delivered. This plan is retained for historical reference only. The "gaps" listed below (findings conversion to FindingData/ScanReportData, dedicated auth-validation/credential-regression pipeline profiles, etc.) were intentionally **not** implemented under the final adopted model: runtime policy gate only (`allow_credential_testing` + `OperationRisk::CredentialTesting` via central `EnforcementContext`), local `AuthTestReport`/`AuthFinding` only (handler emits JSON/text directly; no canonical conversion), `auth-test` as standalone CLI defense-lab command (distinct from pipeline `ScanProfile::Auth` which is JWT/OAuth/IDOR fuzzer-focused), TUI `AuthTab` as CLI-only surface (excluded from main `Tab` enum), no dedicated `credential-testing` Cargo feature. All relevant tests (auth wiremock 17+, enforcement credential_testing, policy contracts, lib) pass green. Safety is at the `CommandContext`/`evaluate_and_enforce_operation` boundary. See `architecture/auth.md`, `docs/AUTH_LAB.md`, and the resolution note at the top of `plans/credential-access-implementation-plan.md` for the final state. No code changes are required to close this plan.
 
 ---
 

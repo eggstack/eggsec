@@ -32,6 +32,9 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 
 ### Added
 
+#### Security
+- Auth control validation (`eggsec auth-test`): Stabilized under runtime policy gate only (`OperationRisk::CredentialTesting` + `allow_credential_testing` in `ExecutionPolicy`, default false; central `EnforcementContext::evaluate()`). Local `AuthTestReport`/`AuthFinding` only (no canonical conversion or pipeline profile integration). Distinct from `ScanProfile::Auth` (JWT/OAuth/IDOR). TUI `AuthTab` is CLI-only (excluded from `Tab` enum). No dedicated Cargo feature. See `docs/AUTH_LAB.md` and `architecture/auth.md`. All tests green.
+
 #### Configuration System
 - Configuration file support (TOML/YAML) at `~/.config/eggsec/eggsec.toml`
 - Environment variable support with `EGGSEC_` prefix

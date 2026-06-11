@@ -245,7 +245,7 @@ No remaining stub implementations.
 - **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source. Source file counts can vary by 200+ depending on whether nested crates are included
 - **TUI stale detection**: TUI styling fixes may already be applied in a previous pass - always verify before re-implementing. Check actual `.rs` files, not just plan descriptions
 - **PayloadType location**: `PayloadType` enum is in `fuzzer/payloads/mod.rs`, not `types.rs`. `types.rs` contains `OutputFormat`, `Severity`, etc.
-- **Fabricated claims**: Always verify module/file existence before documenting dead code. The `auth/multi_protocol/` directory was claimed to exist but doesn't.
+- **Verification before claims**: Always verify line numbers, file paths, and current implementation state before asserting (e.g. `auth/multi_protocol/` + `ProtocolAuthTester` under `nse-ssh2` feature + declaration in `auth/mod.rs` is implemented and gated, not dead/unreachable).
 - **Proxy features exist**: `Tor` ProxyType and `Weighted`/`LowestLatency` rotation strategies already exist in code — verify before claiming they're missing.
 - **Feature matrix math**: When verifying feature counts, sum the sub-counts to check for arithmetic errors (e.g., 18+12=30≠28). Correct counts: 16 features-with-deps + 12 marker-only = 28.
 - **`.ok()` vs `if let Ok`**: Not all `.ok()` calls are bugs - `if let Ok` is proper error handling that doesn't log, while `.ok()` silently converts `Result` to `Option`. Verify which pattern is used before claiming an issue.
