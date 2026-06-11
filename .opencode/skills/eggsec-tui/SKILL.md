@@ -75,6 +75,15 @@ crates/eggsec-tui/src/
 - `y` / `n` confirm/cancel in confirmation dialog
 - `pending_key` cleared on overlay open (fixes stale `gg` after opening quick switch)
 
+### Policy Enforcement Alignment (2026-06-11)
+- TUI now uses the shared `EnforcementContext::evaluate()` (via `App.enforcement` initialized to `manual_permissive` in runner.rs) for **all** target-bearing launches. Matches the CLI model exactly (narrow `--yes` semantics, dedicated `--allow-*` flags, stable kebab audit strings).
+- **Central gate**: in `handle_enter` / before `spawn_task` (via `build_current_task` + `build_current_operation_descriptor` producing `OperationDescriptor`).
+- **Retroactive gate**: for direct-launch tabs (packet views, stress, cluster, wireless, oauth, nse, hunt, browser, etc.) that start work inside their own `handle_enter`/`run_*` — if they enter `is_running()`, evaluate; on `RequireConfirmation` we stop the tab and open the policy overlay.
+- `RequireConfirmation` surfaces via highest-precedence `OverlayType::PolicyConfirm` (backed by `PendingPolicyConfirmation` in confirmation.rs + state.rs, with reason_input for the manual override reason).
+- On confirm: builds narrow `ManualOverride` (the confirm itself satisfies out-of-scope/target-expansion; other classes get their specific allow_* flags), re-evaluates via the central `enforcement.evaluate`, records audit via `decision.with_manual_override_record(reason, confirmation_class_strings(...))` using kebab strings from `ConfirmationClass::as_str()`, then spawns the captured `TaskConfig` (or re-dispatches for direct tabs) if permitted.
+- `PendingAction` (ResetTab/SaveSettings/DeleteHistoryEntry/ClearHistory) + `ConfirmPopup` overlay remain completely separate and lower precedence (for pure UI actions).
+- See: architecture/tui.md (Enforcement Context section), crates/eggsec-tui/src/AGENTS.override.md (Policy Enforcement Alignment), app/{mod,confirmation,state,key_handler,runner}.rs, ui/mod.rs, and the 2026-06-10 manual discretion ergonomics plan (CLI baseline that TUI now mirrors).
+
 ## is_at_left_edge Checkbox Guard (Critical - 2026-05-26 Session)
 
 Always add `is_empty()` guard for checkbox arrays in `is_at_left_edge()` and `is_at_right_edge()`:
@@ -550,7 +559,8 @@ When multiple overlays are active, use `topmost_overlay()` to determine which ha
 
 ```rust
 pub enum OverlayType {
-    ConfirmPopup,   // Highest priority
+    PolicyConfirm,  // Highest priority — RequireConfirmation from EnforcementContext (PendingPolicyConfirmation with reason input)
+    ConfirmPopup,   // PendingAction for UI actions (reset/save/delete/clear)
     CommandPalette,
     QuickSwitch,
     Search,
@@ -559,13 +569,28 @@ pub enum OverlayType {
 }
 ```
 
+`PolicyConfirm` is handled first in `key_handler.rs` (`handle_topmost_overlay`, `handle_enter` wrapper, `handle_escape`). It is backed by `PendingPolicyConfirmation` (message + reason_input + captured `TaskConfig` or direct-tab context). Confirming builds a narrow `ManualOverride`, re-evaluates via the central `enforcement.evaluate`, records audit with kebab `confirmation_class_strings`, and proceeds only if permitted. `ConfirmPopup` (for `PendingAction`) is now second-highest.
+
 ## Confirmation System
 
-Use `PendingAction` for destructive/confirmation actions:
-```rust
-app.request_confirmation(PendingAction::ResetTab);
-// Later: app.confirm_action() or app.cancel_action()
-```
+Two separate confirmation flows (they do not share state or precedence):
+
+1. **PendingAction** (pure UI / destructive actions: reset tab, save settings, delete history entry, clear history):
+   ```rust
+   app.request_confirmation(PendingAction::ResetTab);
+   // Later: app.confirm_action() or app.cancel_action()
+   ```
+   Renders via `ConfirmPopup`. Lower precedence than `PolicyConfirm`. `y` / `n` or Enter/Esc in the dialog.
+
+2. **PendingPolicyConfirmation** (policy / `RequireConfirmation` outcome from `EnforcementContext::evaluate` on target-bearing operations):
+   - Automatically triggered by the central gate (in `handle_enter` before `spawn_task`, via `build_current_operation_descriptor`) and retroactive gate (in `update()` for direct-launch tabs like packet/stress/cluster/wireless/oauth/nse/hunt/browser that start inside their own handlers).
+   - `app.request_policy_confirmation(descriptor, decision, required_classes, captured_task_config)`.
+   - Rich message (from `PendingPolicyConfirmation::message()`) includes operation, risk, target, kebab-case confirmation classes (via `ConfirmationClass::as_str()` + `confirmation_class_strings`), denied_reasons/warnings, and a live reason input line (analogous to `--manual-override-reason`).
+   - Typing edits the reason; Enter = confirm (builds narrow `ManualOverride` — the act of confirming satisfies low-risk scope classes; other classes get their dedicated `allow_*` flags), Esc = cancel (no launch).
+   - On successful confirm: `tracing::warn!` audit line, `with_manual_override_record`, notification, then spawn the captured task (or re-dispatch for direct tabs).
+   - Highest precedence overlay (`OverlayType::PolicyConfirm`).
+
+See: `app/confirmation.rs` (both enums), `state.rs`, `key_handler.rs:205+`, `mod.rs:322+` (gates + `request/confirm/cancel_policy_action` + `build_current_operation_descriptor`), `runner.rs:82` (init), `ui/mod.rs` (render), `architecture/tui.md` (Enforcement Context), and `crates/eggsec-tui/src/AGENTS.override.md`. This mirrors the CLI `evaluate_and_enforce_operation` + narrow MO semantics from the 2026-06-10 ergonomics cleanup (f245db52).
 
 ## Help System
 
