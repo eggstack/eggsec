@@ -523,9 +523,11 @@ impl App {
                 }
             }
             Tab::Auth => {
-                let target = self.tabs.auth.target().unwrap_or_default();
-                if !target.is_empty() {
-                    out.push_str(&format!(" --target {}", shell_escape(target)));
+                if let Some(username) = self.tabs.auth.username() {
+                    out.push_str(&format!(" --username {}", shell_escape(username)));
+                }
+                if let Some(passwords) = self.tabs.auth.password_list() {
+                    out.push_str(&format!(" --wordlist {}", shell_escape(passwords)));
                 }
             }
             _ => {

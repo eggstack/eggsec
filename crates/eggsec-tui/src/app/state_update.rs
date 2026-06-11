@@ -415,7 +415,21 @@ impl super::App {
                 self.tabs.wireless.set_results(r);
                 None
             }
-            TaskResult::Auth(_report) => {
+            TaskResult::Auth(report) => {
+                let mut display = String::new();
+                display.push_str(&format!("Target: {}\n", report.target));
+                display.push_str(&format!("Total Attempts: {}\n\n", report.total_attempts));
+                for finding in &report.findings {
+                    display.push_str(&format!(
+                        "[{:?}] {} - {}\n  {}\n\n",
+                        finding.severity, finding.title, finding.description, finding.recommendation
+                    ));
+                }
+                if report.findings.is_empty() {
+                    display.push_str("No findings detected.\n");
+                }
+                self.tabs.auth.results = display;
+                self.tabs.auth.state = super::tabs::AppState::Completed;
                 None
             }
             _ => Some(result),

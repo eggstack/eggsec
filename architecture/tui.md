@@ -1,6 +1,6 @@
 # TUI (Terminal User Interface)
 
-Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 29 different tabs.
+Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 30 different tabs.
 
 ## Core Components (`src/tui/`)
 
@@ -12,7 +12,7 @@ Manages the overall application state, event loop, and rendering.
 |------|---------|
 | `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
 | `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState`, `ThemeLoadState` |
-| `tab_store.rs` | `TabStore` - owns all 28 tab instances (19 always-present + 9 feature-gated; History tab shares Dashboard instance) |
+| `tab_store.rs` | `TabStore` - owns all 30 tab instances (20 always-present + 10 feature-gated; History tab shares Dashboard instance) |
 | `runner.rs` | Main event loop using crossterm/ratatui |
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
 | `state_update.rs` | Async task result handling and routing |
@@ -32,7 +32,7 @@ Manages the overall application state, event loop, and rendering.
 
 ### Tabs (`tabs/`)
 
-29 specialized tabs for different security testing functions:
+30 specialized tabs for different security testing functions:
 
 | Tab | File | Purpose |
 |-----|------|---------|
@@ -49,6 +49,7 @@ Manages the overall application state, event loop, and rendering.
 | Packet | `packet.rs` | Packet capture, send, traceroute |
 | GraphQL | `graphql.rs` | GraphQL security testing |
 | OAuth | `oauth.rs` | OAuth/OIDC vulnerability testing |
+| Auth Test | `auth.rs` | Authentication control validation (defense-lab only) |
 | Cluster | `cluster.rs` | Distributed scanning cluster management |
 | Proxy | `proxy.rs` | Proxy pool management |
 | NSE | `nse.rs` | Nmap NSE script execution |
@@ -70,7 +71,7 @@ Manages the overall application state, event loop, and rendering.
 - `TabInput` - Input: `handle_focus_next()`, `handle_char()`, `handle_enter()`, etc.
 - `TabRender` - Rendering: `render()`, `render_overlays()`, `breadcrumb()`
 
-**Note on `auth.rs`**: The `AuthTab` exists at `tabs/auth.rs` with a full `TabInput` implementation but is NOT part of the `Tab` enum. It is not rendered as a standalone tab in the TUI. It serves as a standalone authentication testing module accessible only via CLI.
+**Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
 
 ### TabInput Interface (27 methods)
 

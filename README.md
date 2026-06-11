@@ -35,7 +35,7 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **WAF** | Detection of 34 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
 | **Load Testing** | High-concurrency HTTP testing with detailed metrics |
 | **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
-| **Auth Control Validation** | Brute-force, credential stuffing, lockout/MFA/rate-limit/timing testing via `eggsec auth-test` (standalone defense-lab CLI; runtime policy gate only via `CredentialTesting` + `allow_credential_testing`; local `AuthTestReport`/`AuthFinding` only; for validating auth controls in authorized labs, not credential attacks; see docs/AUTH_LAB.md + architecture/auth.md) |
+| **Auth Control Validation** | Brute-force, credential stuffing, lockout/MFA/rate-limit/timing testing via `eggsec auth-test` / TUI Auth tab (standalone defense-lab CLI + TUI tab; runtime policy gate only via `CredentialTesting` + `allow_credential_testing`; local `AuthTestReport`/`AuthFinding` only; for validating auth controls in authorized labs, not credential attacks; see docs/AUTH_LAB.md + architecture/auth.md) |
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Repeatable Profiles** | 16 pipeline profiles, session resumption, multiple output formats |

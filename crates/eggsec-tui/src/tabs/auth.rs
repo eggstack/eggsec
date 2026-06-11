@@ -117,9 +117,9 @@ impl TabRender for AuthTab {
         let Some(inputs_area) = layout.get(1) else { return; };
         let Some(results_area) = layout.get(2) else { return; };
 
-        let title = Paragraph::new("Authentication Testing")
-            .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(tc!(info)));
+        let title = Paragraph::new("Authentication Testing — Defense-lab only")
+            .block(Block::default().borders(Borders::ALL).title("⚠ Defense Lab"))
+            .style(Style::default().fg(tc!(warning)));
         f.render_widget(title, *title_area);
 
         let mut builder = FormBuilder::new("Inputs").row_height(3);
@@ -412,5 +412,89 @@ impl AuthTab {
             cmd.push_str(&format!(" --wordlist {}", passwords));
         }
         Some(cmd)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_target_returns_none_when_empty() {
+        let tab = AuthTab::new();
+        assert!(tab.target().is_none());
+    }
+
+    #[test]
+    fn test_target_returns_value_when_set() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value = "http://example.com".to_string();
+        assert_eq!(tab.target(), Some("http://example.com"));
+    }
+
+    #[test]
+    fn test_username_returns_none_when_empty() {
+        let tab = AuthTab::new();
+        assert!(tab.username().is_none());
+    }
+
+    #[test]
+    fn test_username_returns_value_when_set() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[1].value = "admin".to_string();
+        assert_eq!(tab.username(), Some("admin"));
+    }
+
+    #[test]
+    fn test_password_list_returns_none_when_empty() {
+        let tab = AuthTab::new();
+        assert!(tab.password_list().is_none());
+    }
+
+    #[test]
+    fn test_password_list_returns_value_when_set() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[2].value = "/path/to/passwords.txt".to_string();
+        assert_eq!(tab.password_list(), Some("/path/to/passwords.txt"));
+    }
+
+    #[test]
+    fn test_primary_target() {
+        let mut tab = AuthTab::new();
+        assert!(tab.primary_target().is_none());
+        tab.inputs.fields[0].value = "http://test.local".to_string();
+        assert_eq!(tab.primary_target(), Some("http://test.local".to_string()));
+    }
+
+    #[test]
+    fn test_build_cli_equivalent_no_target() {
+        let tab = AuthTab::new();
+        assert!(tab.build_cli_equivalent().is_none());
+    }
+
+    #[test]
+    fn test_build_cli_equivalent_with_target() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
+        let cmd = tab.build_cli_equivalent().unwrap();
+        assert!(cmd.starts_with("eggsec auth-test http://dvwa.local"));
+    }
+
+    #[test]
+    fn test_build_cli_equivalent_with_username() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
+        tab.inputs.fields[1].value = "admin".to_string();
+        let cmd = tab.build_cli_equivalent().unwrap();
+        assert!(cmd.contains("--username admin"));
+    }
+
+    #[test]
+    fn test_build_cli_equivalent_with_wordlist() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
+        tab.inputs.fields[2].value = "passwords.txt".to_string();
+        let cmd = tab.build_cli_equivalent().unwrap();
+        assert!(cmd.contains("--wordlist passwords.txt"));
     }
 }
