@@ -134,6 +134,12 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`supply_chain/`](../crates/eggsec/src/supply_chain/) | SBOM generation (CycloneDX, SPDX), typosquat detection | [supply_chain.md](supply_chain.md) |
 | [`container/`](../crates/eggsec/src/container/) | Kubernetes/Docker security scanning | [container.md](container.md) |
 
+### Specialized / Lab
+
+| Module | Purpose | Architecture Doc |
+|--------|---------|------------------|
+| [`mobile/`](../crates/eggsec/src/mobile/) | Static analysis of Android APKs and iOS IPAs (Phase 1: pure-Rust manifest/config findings; SafeActive; standalone CLI + optional report bridge) | [mobile.md](mobile.md) |
+
 ### Integration & External Services
 
 | Module | Purpose | Architecture Doc |
@@ -167,6 +173,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
 | [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect_suspicious; WPS/hidden/transition) | [wireless.md](wireless.md) |
+| `mobile/` | Static analysis of Android APKs / iOS IPAs (Phase 1: pure-Rust manifest/config; SafeActive; standalone CLI + report bridge) | [mobile.md](mobile.md) |
 
 ---
 
@@ -409,7 +416,9 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `finding-workflow` | `workflow/` | Finding lifecycle management |
 | `vuln-management` | `vuln/` | Vulnerability triage |
 | `wireless` | `wireless/` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat/--known-good/--dry-run/--detect_suspicious; WPS/hidden/transition) |
+| `mobile` | `mobile/` | Static analysis of Android APKs and iOS IPAs (marker-only; zip/plist optional; pure-Rust Phase 1) |
 | `pdf` | `output/pdf` | PDF report generation |
+| `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only) |
 | `full` | All | All features combined |
 
 See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.

@@ -428,6 +428,7 @@ pub fn is_feature_enabled(feature: &str) -> bool {
         "cloud" => cfg!(feature = "cloud"),
         "git-secrets" => cfg!(feature = "git-secrets"),
         "wireless" => cfg!(feature = "wireless"),
+        "mobile" => cfg!(feature = "mobile"),
         "pdf" => cfg!(feature = "pdf"),
         "advanced-hunting" => cfg!(feature = "advanced-hunting"),
         _ => true, // Unknown features are assumed available

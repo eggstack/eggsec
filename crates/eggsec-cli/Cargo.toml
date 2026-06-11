@@ -32,6 +32,7 @@ external-integrations = ["eggsec/external-integrations", "eggsec-tui/external-in
 finding-workflow = ["eggsec/finding-workflow", "eggsec-tui/finding-workflow"]
 vuln-management = ["eggsec/vuln-management", "eggsec-tui/vuln-management"]
 wireless = ["eggsec/wireless", "eggsec-tui/wireless"]
+mobile = ["eggsec/mobile"]
 stress-testing = ["eggsec/stress-testing", "eggsec-tui/stress-testing"]
 packet-inspection = ["eggsec/packet-inspection", "eggsec-tui/packet-inspection"]
 advanced-hunting = ["eggsec/advanced-hunting", "eggsec-tui/advanced-hunting"]
@@ -51,4 +52,5 @@ insecure-tls = ["eggsec/insecure-tls"]
 full = [
     "eggsec/full",
     "eggsec-tui/full",
+    "mobile",
 ]

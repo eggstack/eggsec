@@ -39,10 +39,11 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Repeatable Profiles** | 16 pipeline profiles, session resumption, multiple output formats |
+| **Mobile Static Analysis** | APK/IPA manifest/config checks for lab use (requires `--features mobile`; static-only Phase 1; no execution or device interaction) |
 
 ## What Eggsec is not
 
-Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. The `auth-test` command exists for defense validation of authentication controls (lockout policies, MFA enforcement, rate limiting, etc.) under strict scope/policy gating — it is not a credential attack platform (see architecture/auth.md for adopted model details: runtime policy gate, local findings only, standalone CLI distinct from pipeline `ScanProfile::Auth`). Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
+Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. The `auth-test` command exists for defense validation of authentication controls (lockout policies, MFA enforcement, rate limiting, etc.) under strict scope/policy gating — it is not a credential attack platform (see architecture/auth.md for adopted model details: runtime policy gate, local findings only, standalone CLI distinct from pipeline `ScanProfile::Auth`). The `mobile` command performs static-only analysis of user-supplied .apk/.ipa files (manifest, permissions, transport config, secrets, debug/backup/exported components) for authorized lab/defense use only (feature-gated behind `mobile`; no execution, no device interaction, no network traffic to the app). Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
 
 ## Why Low-Level Features Exist
 
@@ -297,6 +298,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `headless-browser` | DOM XSS and SPA crawling | Stable |
 | `database` | SQLx-based PostgreSQL persistence | Stable |
 | `container` | Kubernetes/Docker security scanning | Stable |
+| `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only Phase 1) | Stable |
 | `cloud` | AWS/GCP/Azure asset discovery | Stable |
 | `git-secrets` | Git secrets scanning | Stable |
 | `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect_suspicious) | Stable |
@@ -323,7 +325,10 @@ cargo build --release -p eggsec-cli --features packet-inspection
 # With NSE support
 cargo build --release -p eggsec-cli --features nse
 
-# Full build - all features
+# With mobile static analysis (APK/IPA manifest/config checks for authorized lab/defense use only; static-only)
+cargo build --release -p eggsec-cli --features mobile
+
+# Full build - all features (includes mobile, wireless, container, etc.)
 cargo build --release -p eggsec-cli --features full
 ```
 

@@ -7,6 +7,7 @@ Comprehensive reference of all security testing capabilities available in Eggsec
 - [Reconnaissance Modules](#reconnaissance-modules)
 - [Fuzzing Payload Types](#fuzzing-payload-types)
 - [Detection Modules](#detection-modules)
+- [Mobile App Security (Static Analysis)](#mobile-app-security-static-analysis)
 - [Stress Testing Types](#stress-testing-types)
 - [Protocol Implementations](#protocol-implementations)
 - [Scan Profiles](#scan-profiles)
@@ -94,6 +95,26 @@ Advanced vulnerability detection capabilities:
 | **WAF Fingerprinter** | `crates/eggsec/src/fuzzer/waf_fingerprint.rs` | Identifies specific WAF products and versions |
 | **Diff Analyzer** | `crates/eggsec/src/fuzzer/diff.rs` | Compares responses to detect anomalies |
 | **Rate Limit Detector** | `crates/eggsec/src/fuzzer/rate_limit.rs` | Detects and analyzes rate limiting behavior |
+
+---
+
+## Mobile App Security (Static Analysis)
+
+Static analysis of Android APKs and iOS IPAs for authorized lab/defense use only. Feature-gated behind `mobile`; static-only Phase 1 (no execution, no dynamic instrumentation, no device interaction, no network traffic to the app). All work is offline on user-supplied lab binaries.
+
+| Area | Coverage | File |
+|------|----------|------|
+| **Manifest / Info.plist** | Package/app ID, version, platform metadata | `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` |
+| **Permissions** | Android permissions (normal/dangerous/signature); iOS usage descriptions and sensitive entitlements | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
+| **Transport / ATS** | Android `usesCleartextTraffic`, `networkSecurityConfig`; iOS `NSAppTransportSecurity` exceptions (allowsArbitraryLoads, domain exceptions) | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
+| **Secrets / Hardcoded Values** | Bounded scan of text assets for API keys, tokens, credentials (isolated scanner) | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
+| **Debug / Backup / Exported** | Android `debuggable`, `allowBackup`, `android:exported` on activities/services/receivers/providers; iOS `UIFileSharingEnabled`, `get-task-allow` profile markers | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
+| **Signing / Provisioning** | Android v1 signing (META-INF/*.RSA|DSA|EC|CERT.* presence); iOS `_CodeSignature` presence and `embedded.mobileprovision` markers (enterprise, debug/ad-hoc indicators) | `crates/eggsec/src/mobile/{apk,ipa}.rs` |
+| **Custom URL Schemes / Extensions** | iOS `CFBundleURLTypes`; Android intent-filter schemes; extension markers | `crates/eggsec/src/mobile/ipa.rs` |
+
+**Feature gate**: Requires `--features mobile` (or `--features full`, which includes it). Dependencies: `zip` (always under feature); `plist` (iOS path only, optional under feature).
+
+**Safety**: Pure-Rust ZIP + plist + bounded AXML extraction. No shelling out. Explicit `mobile` command; lab-only framing. See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs`, `crates/eggsec/src/cli/mobile.rs`, `crates/eggsec/src/commands/handlers/mobile.rs`, and policy integration in `config/policy_decision.rs`.
 
 ---
 

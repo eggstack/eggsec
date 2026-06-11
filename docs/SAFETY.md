@@ -24,10 +24,11 @@ Eggsec classifies operations by risk level:
 | CredentialTesting | Auth testing (auth-test CLI only; local `Auth*` types; see architecture/auth.md) | Blocked |
 | ExploitAdjacent | Exploit-adjacent testing (e.g. chained primitives) | Blocked |
 | (wireless passive) | Passive WiFi recon (iwlist scan, analysis only; no tx/injection/deauth/handshake). Detects security types (incl. WPS/hidden/transition), weak configs, and passive rogue/Evil-Twin heuristic. | Allowed under SafeActive (feature-gated `wireless`; requires root/CAP_NET_ADMIN + wireless-tools/iwlist; authorized lab/defense use only). Use --dry-run for unprivileged planning/CI. --known-good suppresses heuristic for baselines. See docs/WIRELESS.md. |
+| (mobile static) | Static analysis of user-supplied .apk/.ipa in lab (manifest, permissions, transport config, secrets, debug/backup flags, exported components). No execution, no device interaction. | Allowed under SafeActive (feature-gated `mobile`) |
 | RemoteExecution | Remote command execution | Blocked |
 | AgentAutonomous | Agent-driven operations | Blocked |
 
-High-risk operations must be explicitly enabled in your config file.
+High-risk operations (e.g. intrusive fuzzing, stress testing, raw packets, credential testing) must be explicitly enabled in your config file. Mobile static analysis is gated behind the `mobile` feature but classified under SafeActive (no execution, lab binaries only).
 
 ## Authorization Requirements
 
@@ -47,6 +48,8 @@ require_explicit_scope = true
 allow_intrusive_fuzzing = false
 allow_stress_testing = false
 ```
+
+The `mobile` feature (static-only APK/IPA analysis for lab binaries) must be enabled at build time (`--features mobile` or `--features full`). Mobile is intended for authorized lab/defense use on user-supplied .apk/.ipa files only; no execution or device interaction occurs. See `architecture/feature_matrix.md` for feature flags and `docs/CAPABILITIES.md` (Mobile App Security section) for coverage.
 
 See `architecture/feature_matrix.md` for feature flags.
 

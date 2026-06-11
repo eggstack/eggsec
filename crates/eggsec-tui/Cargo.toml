@@ -72,6 +72,7 @@ external-integrations = ["eggsec/external-integrations"]
 finding-workflow = ["eggsec/finding-workflow"]
 vuln-management = ["eggsec/vuln-management"]
 wireless = ["eggsec/wireless"]
+mobile = ["eggsec/mobile"]
 stress-testing = ["dep:pnet", "dep:pnet_packet", "eggsec/stress-testing"]
 packet-inspection = ["dep:pnet", "dep:pnet_packet", "eggsec/packet-inspection"]
 advanced-hunting = ["eggsec/advanced-hunting"]
@@ -86,6 +87,7 @@ full = [
     "finding-workflow",
     "vuln-management",
     "wireless",
+    "mobile",
     "stress-testing",
     "packet-inspection",
     "advanced-hunting",

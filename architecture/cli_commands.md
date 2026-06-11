@@ -16,7 +16,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 ### Key CLI Patterns
 
 - **Global flags**: `--json`, `--config`, `--scope`, `--strict-scope` apply to all commands
-- **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`
+- **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`, `mobile`
 - **Output flag**: Use `-o` / `--output` for file output (consistent across commands)
 - **Scope validation**: Handlers call `evaluate_and_enforce_operation()` with an `OperationDescriptor` to validate targets against scope and execution policy. For ManualPermissive, `RequireConfirmation` is satisfied only via narrow `--yes` (out-of-scope/target-expansion only) or dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc.; precise required-flag errors are returned; strict profiles ignore overrides.
 
@@ -115,3 +115,4 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 Some target-bearing commands are intentionally standalone and bypass the canonical `ScanReportData` / `eggsec-output` conversion pipeline (they emit module-local report types directly as JSON/text or to `-o` files). Example:
 
 - `auth-test` (handler: `commands/handlers/auth_test.rs`): Uses local `AuthTestReport`/`AuthFinding` (defined in `auth/mod.rs`). Policy gate via `evaluate_and_enforce_operation` with `OperationRisk::CredentialTesting`. No conversion to `FindingData`/`ScanReportData`, no SARIF/JUnit/etc. via the output crate, and no integration with `eggsec scan --profile` pipelines. Distinct from `ScanProfile::Auth` (JWT/OAuth/IDOR fuzzer stages). See `architecture/auth.md`, `docs/AUTH_LAB.md`, and `commands/handlers/auth_test.rs:274-285` (direct emit logic).
+- `mobile` (handler: `commands/handlers/mobile.rs`): Standalone defense-lab CLI (`eggsec mobile <apk-or-ipa>`). Uses local `MobileScanReport`/`MobileFinding` (defined in `mobile/mod.rs`). Policy via `evaluate_and_enforce_operation` with `OperationRisk::SafeActive` + `required_features: ["mobile"]`. Optional `to_scan_report_data` bridge for JSON/SARIF/JUnit consumers (mirrors wireless pattern); no pipeline profile integration in Phase 1 (no `mobile-static`/`mobile-regression` profiles yet). Pure-Rust static analysis only (APK/IPA manifest/config). See `architecture/mobile.md`, `crates/eggsec/src/mobile/mod.rs`, `crates/eggsec/src/commands/handlers/mobile.rs`, and `crates/eggsec/src/cli/mobile.rs`.

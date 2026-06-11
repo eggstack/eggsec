@@ -23,6 +23,8 @@ pub mod stress;
 pub mod vuln;
 #[cfg(feature = "wireless")]
 pub mod wireless;
+#[cfg(feature = "mobile")]
+pub mod mobile;
 pub use config::*;
 pub use doctor::*;
 pub use explain::*;
@@ -61,6 +63,8 @@ pub use stress::*;
 pub use vuln::*;
 #[cfg(feature = "wireless")]
 pub use wireless::*;
+#[cfg(feature = "mobile")]
+pub use mobile::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -436,6 +440,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,
         #[cfg(feature = "wireless")]
         Some(Commands::Wireless(args)) => handle_wireless(ctx, args).await,
+        #[cfg(feature = "mobile")]
+        Some(Commands::Mobile(args)) => handle_mobile(ctx, args).await,
         #[cfg(feature = "headless-browser")]
         Some(Commands::Browser(args)) => handle_browser(ctx, args).await,
         #[cfg(feature = "grpc-api")]
@@ -1305,5 +1311,15 @@ mod tests {
             "should record out-of-scope or target-expansion kebab class: {:?}",
             decision.manual_override_classes
         );
+    }
+
+    #[test]
+    fn mobile_static_safe_active_allowed_by_default() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let result = ctx.evaluate_and_enforce_operation(descriptor(
+            "mobile-static",
+            OperationRisk::SafeActive,
+        ));
+        assert!(result.is_ok());
     }
 }

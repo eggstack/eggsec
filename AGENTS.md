@@ -18,6 +18,8 @@ All implementation items are complete. See `plans/` directory for historical pol
 cargo check -p eggsec-core
 cargo check -p eggsec-tool-core
 cargo check --lib -p eggsec
+cargo check -p eggsec --features mobile
+cargo test --lib -p eggsec --features mobile
 cargo check -p eggsec-tui
 cargo check -p eggsec-cli
 cargo check -p eggsec-nse
@@ -54,6 +56,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `distributed/` | `crates/eggsec/src/distributed/AGENTS.override.md` |
 | `packet/` | `crates/eggsec/src/packet/AGENTS.override.md` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/eggsec/src/loadtest/AGENTS.override.md` |
+| `mobile/` | `crates/eggsec/src/mobile/AGENTS.override.md` (static analysis patterns, pure-Rust parsers) |
 | `pipeline/` | `crates/eggsec/src/pipeline/AGENTS.override.md` |
 | `nse/` | `crates/eggsec-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
 | `container/` | `crates/eggsec/src/container/AGENTS.override.md` |
@@ -74,6 +77,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `architecture/recon.md` - Reconnaissance module
 - `architecture/distributed.md` - Distributed coordinator/worker architecture
 - `architecture/compile_time_baseline.md` - Workspace crate layout and compile-time baseline
+- `architecture/mobile.md` - Mobile app static analysis (APK/IPA; Phase 1 static only, pure-Rust parsers, lab/defense framing; standalone CLI + local reports + to_scan_report_data bridge; stub pending)
 - `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` is CLI-only). See plans/credential-access-*.md for historical context only (superseded by adopted runtime-policy + local-findings model).
 
 ### Feature Flags
@@ -101,6 +105,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
 - `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect_suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN)
+- `mobile` - Mobile app static analysis (APK/IPA; Phase 1 static only, lab/defense framing)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
 - `full` - All features combined (16 sub-features, does not include `grpc-api`, `ws-api`, or `pdf`)
@@ -135,6 +140,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `StoredFinding` - Unified finding type in `findings::lifecycle`, re-exported by `storage::models` for database persistence
 - `Wordlist` - Validated endpoint wordlist parsing with normalization (`scanner/wordlist.rs`)
 - `OperationRisk::CredentialTesting`, `Capability::CredentialTesting`, `allow_credential_testing` in `ExecutionPolicy` (default false; high-risk tier for auth-test credential control validation)
+- `MobilePlatform` / `MobileFinding` / `MobileScanReport` - Mobile static analysis types (`mobile/mod.rs`; public under `mobile` feature; `MobileScanReport` provides `to_scan_report_data` bridge to unified reports)
 
 ### Important Patterns
 
@@ -177,10 +183,10 @@ Use these sections as the canonical reference points when updating guidance or s
 | Tabs | 29 (Tab enum variants 0-28) |
 | WAF products | 34 |
 | NSE libraries | 166 public modules |
-| Modules | 42 |
+| Modules | 42 (approximate; + gated modules under features e.g. `mobile`) |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
-| CLI commands | 26 base, 42 with all features |
+| CLI commands | 26 base, ~43 with all features (gated commands e.g. mobile) |
 
 ### Codebase Issues (Known Stub Implementations)
 
@@ -206,6 +212,7 @@ No remaining stub implementations.
 - **Remote Listener Policy**: `remote start` now uses `evaluate_and_enforce_operation` with `HazardousLab` mode and `RemoteExecution` risk (2026-06-10)
 - **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
 - **Auth Test Policy Integration (post-2026-06-10)**: `auth-test` handler uses `evaluate_and_enforce_operation` with `CredentialTesting` risk (central `EnforcementContext`). TUI `AuthTab` exists as standalone code but is excluded from `Tab` enum (CLI-only surface). See `architecture/auth.md`, `commands/handlers/auth_test.rs`, `cli/auth.rs`, `docs/AUTH_LAB.md`. No dedicated credential-testing Cargo feature (runtime policy gate only). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth`); local `Auth*` types only (no `ScanReportData` conversion). See plans/credential-access-*.md (historical, superseded).
+- **Mobile Static Analysis**: Standalone defense-lab CLI (`eggsec mobile <path.{apk,ipa}>`) under `mobile` feature (gated command/module, not in TUI or pipeline profiles). Handler uses `evaluate_and_enforce_operation` with `SafeActive` risk + `required_features: ["mobile"]` (local file target, no scope). Pure-Rust ZIP/AXML/plist parsers only. Produces local `Mobile*` findings + `to_scan_report_data` bridge (like wireless). See `commands/handlers/mobile.rs`, `mobile/mod.rs`, `src/mobile/AGENTS.override.md`.
 - **TUI Policy Alignment (2026-06-11)**: TUI is now aligned (uses the same central `EnforcementContext::evaluate()` evaluator and `ConfirmationClass` kebab strings for `RequireConfirmation` via `PendingPolicyConfirmation` + `PolicyConfirm` overlay; `PendingAction` remains separate).
 - **TUI Architecture & Usability Pass (2026-06-11)**: 10-phase refactor completed (plan: docs/plans/tui-architecture-usability-pass.md). Key artifacts:
   - Phase 1: `UiAction` + decode/apply split (`app/action.rs`; `KeyHandler` now returns actions; `App::apply_action` is the mutation point; decode tests added).

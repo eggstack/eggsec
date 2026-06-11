@@ -451,7 +451,7 @@ pub async fn handle_packet_traceroute(
         target: args.target.clone(),
         max_hops: args.max_hops,
         timeout: Duration::from_secs(args.timeout.unwrap_or(3)),
-        max_retries: args.probes,
+        max_retries: args.probes as u32,
         first_ttl: args.first_ttl.unwrap_or(1),
         port: 33434,
         use_icmp: use_icmp && is_root(),

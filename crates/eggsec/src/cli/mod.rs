@@ -22,6 +22,8 @@ pub(crate) mod timeout;
 pub mod vuln;
 #[cfg(feature = "wireless")]
 pub mod wireless;
+#[cfg(feature = "mobile")]
+pub mod mobile;
 
 pub use ci::*;
 pub use cluster::*;
@@ -45,6 +47,9 @@ pub use wireless::*;
 
 #[cfg(feature = "headless-browser")]
 pub use browser::*;
+
+#[cfg(feature = "mobile")]
+pub use mobile::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -331,6 +336,11 @@ pub enum Commands {
     #[cfg(feature = "headless-browser")]
     #[command(about = "Run headless browser security testing", long_about = BROWSER_ABOUT)]
     Browser(BrowserArgs),
+
+    // --- Mobile operations ---
+    #[cfg(feature = "mobile")]
+    #[command(about = "Static security analysis of Android APKs and iOS IPAs (lab/defense use only)", long_about = MOBILE_ABOUT)]
+    Mobile(MobileArgs),
 
     // --- gRPC server ---
     #[cfg(feature = "grpc-api")]

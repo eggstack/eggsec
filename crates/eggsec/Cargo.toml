@@ -211,6 +211,15 @@ optional = true
 version = "2"
 optional = true
 
+[dependencies.zip]
+version = "2"
+optional = true
+
+[dependencies.plist]
+version = "1.7"
+features = ["serde"]
+optional = true
+
 [build-dependencies.prost-build]
 version = "0.14"
 optional = true
@@ -265,7 +274,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless"]
+full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "mobile"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
@@ -296,6 +305,9 @@ pdf = ["printpdf"]
 
 # Wireless security testing (WiFi scanning (passive reconnaissance and basic security analysis))
 wireless = []
+
+# Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
+mobile = ["zip", "plist"]
 
 # OpenAPI schema ingestion and fuzz target generation
 api-schema = []

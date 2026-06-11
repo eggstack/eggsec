@@ -60,7 +60,7 @@ async fn test_single_origin(url: &str, origin: &str, timeout_secs: u64) -> Origi
     .await;
 
     match result {
-        Ok(Ok((ws, response))) => {
+        Ok(Ok((mut ws, response))) => {
             let status = response.status().as_u16();
             let accepted = status == 101;
             let details = if accepted {

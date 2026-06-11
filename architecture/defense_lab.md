@@ -70,6 +70,10 @@ Defense-lab mode enforces strict safety boundaries:
 
 Defense-lab profiles should not be run against targets you do not own or control.
 
+### Mobile Static Analysis (Phase 1)
+
+`mobile-static` is currently exposed as the standalone CLI command `eggsec mobile <apk-or-ipa>` (feature `mobile`). It performs pure-Rust static analysis of Android APKs and iOS IPAs on user-supplied lab binaries only (manifest, config, permissions, transport settings, hardcoded secrets, signing indicators, etc.). No dynamic instrumentation, Frida, or network activity. Policy gate uses `SafeActive` via `EnforcementContext`. Outputs local `MobileScanReport`/`MobileFinding` types directly (with optional `to_scan_report_data` bridge for unified report consumers). Not yet integrated with `ScanProfile` pipelines; `mobile-static`/`mobile-regression` profiles are aspirational per the handoff plan. See `architecture/mobile.md`, `architecture/cli_commands.md` (Special Cases), and `crates/eggsec/src/mobile/`.
+
 ## Output Model
 
 A defense-lab run produces structured output suitable for regression analysis. The canonical envelope for this is `RunManifest` defined in `crates/eggsec/src/output/run_manifest.rs` and documented in `architecture/output.md`.
@@ -123,6 +127,7 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-35
 - **Agent loop integration**: Automated defense-lab runs triggered on schedule or CI events
 - **Golden baseline fixtures**: Versioned baseline captures for regression testing
 - **CI-compatible regression profiles**: Lightweight profiles that run in CI pipelines to detect defense regressions early
+- **Mobile static/regression profiles**: `mobile-static` and `mobile-regression` pipeline profiles (aspirational; Phase 1 is standalone CLI `eggsec mobile` under `SafeActive` only, suitable for defense-lab use on lab-provided APKs/IPAs). See `architecture/mobile.md` and plans/mobile-first-handoff-plan.md.
 
 ## Integration with Policy System
 

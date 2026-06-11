@@ -14,7 +14,7 @@ pub struct TracerouteConfig {
     pub target: String,
     pub max_hops: u8,
     pub timeout: Duration,
-    pub max_retries: u8,
+    pub max_retries: u32,
     pub first_ttl: u8,
     pub port: u16,
     pub use_icmp: bool,
@@ -589,7 +589,7 @@ impl TracerouteBuilder {
         self
     }
 
-    pub fn max_retries(mut self, retries: u8) -> Self {
+    pub fn max_retries(mut self, retries: u32) -> Self {
         self.config.max_retries = retries;
         self
     }

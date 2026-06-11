@@ -6,10 +6,10 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 | Metric | Count |
 |--------|-------|
-| Total features | 28 |
+| Total features | 29 |
 | Features with deps | 16 |
-| Marker-only features | 12 |
-| In `full` | 16 |
+| Marker-only features | 13 |
+| In `full` | 17 |
 
 ## Feature Table
 
@@ -40,6 +40,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `vuln-management` | yes | no | yes | `vuln/` | Stable | `cargo check -p eggsec --features vuln-management` |
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
 | `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect_suspicious; WPS/hidden/transition/rogue heuristic) |
+| `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` |
 | `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |
 | `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p eggsec --features api-schema` |
 | `full` | yes | yes | - | (all) | Deprecated | `cargo check -p eggsec --features full` |
@@ -57,7 +58,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 ### `full` feature
 
-The `full` feature enables 16 sub-features. It does not include `grpc-api`, `ws-api`, or `pdf`.
+The `full` feature enables 17 sub-features. It does not include `grpc-api`, `ws-api`, or `pdf`.
 
 Note: The `container` feature pulls in `k8s-openapi` which requires a Kubernetes version feature (e.g., `v1_30`) to be enabled. This must be provided by the final binary crate.
 
@@ -78,9 +79,9 @@ full WebSocket pub/sub support.
 ### Marker-only features
 
 Features like `advanced-hunting`, `compliance`, `external-integrations`,
-`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, and `wireless` have no
-extra dependencies. They gate module compilation via `#[cfg(feature = "...")]` in
-`lib.rs`.
+`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, and `mobile`
+have no extra runtime dependencies beyond optional crates (`zip`/`plist` for `mobile`).
+They gate module compilation via `#[cfg(feature = "...")]` in `lib.rs`.
 
 ### Module gating pattern
 

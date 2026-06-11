@@ -170,6 +170,16 @@ pub mod packet;
 #[cfg(feature = "wireless")]
 pub mod wireless;
 
+#[cfg(feature = "mobile")]
+pub mod mobile;
+#[cfg(not(feature = "mobile"))]
+#[allow(dead_code)]
+mod mobile {
+    // Stub module so `crate::mobile` name resolves for cfg-gated call sites.
+    // Real implementation (and its optional `zip`/`plist` deps + cli::MobileArgs)
+    // is only compiled when the `mobile` feature is enabled.
+}
+
 pub use config::{load_config, load_scope, EggsecConfig, Scope};
 pub use error::{EggsecError, Result};
 pub use types::Severity;
