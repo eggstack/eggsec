@@ -667,7 +667,7 @@ fn handle_permission(name: &str, report: &mut MobileScanReport) {
         "android.permission.RECEIVE_MMS",
     ];
 
-    if DANGEROUS.iter().any(|&d| name.eq_ignore_ascii_case(d) || name.ends_with(d.split('.').last().unwrap_or(name))) {
+    if DANGEROUS.iter().any(|&d| name.eq_ignore_ascii_case(d) || name.ends_with(d.split('.').next_back().unwrap_or(name))) {
         add_finding(
             report,
             "permission",

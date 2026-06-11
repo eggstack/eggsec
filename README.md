@@ -258,6 +258,10 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec wireless wlan0 --dry-run --json
 ./eggsec wireless wlan0 --detect_suspicious --repeat 3
 
+# Mobile static analysis (APK/IPA; requires --features mobile; lab binaries only)
+./eggsec mobile app.apk
+./eggsec mobile MyApp.ipa --json -o mobile.json
+
 # Resume a previous scan
 ./eggsec resume session.json
 ```
