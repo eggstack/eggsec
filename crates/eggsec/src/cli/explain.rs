@@ -38,7 +38,7 @@ pub fn evaluate_policy_decision(
     use crate::cli::ScanProfile;
 
     let profile = profile_name
-        .and_then(|p| ScanProfile::from_str(p))
+        .and_then(ScanProfile::from_str)
         .unwrap_or(ScanProfile::Quick);
 
     let mode = profile.operation_mode();

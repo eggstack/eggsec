@@ -451,7 +451,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
     }
 }
 
-async fn handle_no_command(cli: &Cli) -> Result<()> {
+async fn handle_no_command(_cli: &Cli) -> Result<()> {
     if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         // TUI launch is handled by the binary via eggsec-tui.
         // This path should not be reached when using the binary.

@@ -602,7 +602,7 @@ pub fn classify_denial_reasons(decision: &PolicyDecision) -> Vec<DenialClass> {
     }) || decision
         .target_original
         .as_deref()
-        .map_or(false, |t| t.trim().is_empty())
+        .is_some_and(|t| t.trim().is_empty())
     {
         classes.insert(DenialClass::InvalidTarget);
     }
@@ -712,7 +712,7 @@ pub fn evaluate_enforcement(
                 // If a scope with non-empty allowed_targets was provided and target missed it,
                 // treat as hard denial even in permissive (user intent was explicit).
                 let has_positive_scope_rules =
-                    scope.map_or(false, |s| !s.allowed_targets.is_empty());
+                    scope.is_some_and(|s| !s.allowed_targets.is_empty());
                 let is_pure_out_of_scope_miss = classes
                     .iter()
                     .any(|c| matches!(c, DenialClass::TargetOutOfScope))
@@ -924,11 +924,10 @@ pub fn confirmation_classes_for(
 
     // Non-baseline capability required (and not already hard-denied)
     for cap in &descriptor.required_capabilities {
-        if !super::baseline_allowed_capability(*cap) {
-            if !classes.contains(&ConfirmationClass::NonBaselineCapability) {
+        if !super::baseline_allowed_capability(*cap)
+            && !classes.contains(&ConfirmationClass::NonBaselineCapability) {
                 classes.push(ConfirmationClass::NonBaselineCapability);
             }
-        }
     }
 
     // Resolver/redirect signals (best-effort; only if not hard-denied above).
@@ -947,35 +946,30 @@ pub fn confirmation_classes_for(
         (rl.contains("private") || rl.contains("loopback"))
             && (rl.contains("resolv") || rl.contains("public") || rl.contains("rebind"))
     });
-    if has_private_resolution_signal {
-        if !classes.contains(&ConfirmationClass::PrivateResolution) {
+    if has_private_resolution_signal
+        && !classes.contains(&ConfirmationClass::PrivateResolution) {
             classes.push(ConfirmationClass::PrivateResolution);
         }
-    }
-    if decision
+    if (decision
         .warnings
         .iter()
         .any(|w| w.contains("redirect") || w.contains("canonical"))
         || decision
             .denied_reasons
             .iter()
-            .any(|r| r.contains("redirect") || r.contains("host"))
-    {
-        if !classes.contains(&ConfirmationClass::CrossHostRedirect) {
+            .any(|r| r.contains("redirect") || r.contains("host")))
+        && !classes.contains(&ConfirmationClass::CrossHostRedirect) {
             classes.push(ConfirmationClass::CrossHostRedirect);
         }
-    }
 
     // Target expansion discovered outside original input (placeholder)
     if decision
         .warnings
         .iter()
         .any(|w| w.contains("expansion") || w.contains("discovered"))
-    {
-        if !classes.contains(&ConfirmationClass::TargetExpansion) {
+        && !classes.contains(&ConfirmationClass::TargetExpansion) {
             classes.push(ConfirmationClass::TargetExpansion);
         }
-    }
 
     classes
 }

@@ -55,7 +55,7 @@ impl Database {
         &self.pool
     }
 
-    pub async fn insert_scan(&self, scan: &StoredScan) -> Result<()> {
+    pub async fn insert_scan(&self, _scan: &StoredScan) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query(
@@ -135,7 +135,7 @@ impl Database {
         }
     }
 
-    pub async fn insert_finding(&self, stored: &StoredFinding) -> Result<()> {
+    pub async fn insert_finding(&self, _stored: &StoredFinding) -> Result<()> {
         #[cfg(feature = "database")]
         {
             let finding_json = serde_json::to_value(&stored.finding)
@@ -186,7 +186,7 @@ impl Database {
         }
     }
 
-    pub async fn update_finding_status(&self, id: &str, status: FindingStatus) -> Result<()> {
+    pub async fn update_finding_status(&self, _id: &str, _status: FindingStatus) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query("UPDATE findings SET status = $1, updated_at = NOW() WHERE id = $2")
@@ -282,7 +282,7 @@ impl Database {
         }
     }
 
-    pub async fn update_scan_findings_count(&self, scan_id: &str) -> Result<()> {
+    pub async fn update_scan_findings_count(&self, _scan_id: &str) -> Result<()> {
         #[cfg(feature = "database")]
         {
             sqlx::query(

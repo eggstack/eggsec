@@ -468,7 +468,7 @@ fn extract_host_and_port(addr: &str) -> (String, u16) {
     if let Some(addr) = addr.strip_prefix('[') {
         if let Some(bracket_end) = addr.find("]:") {
             let host = addr[..bracket_end].to_string();
-            let port: u16 = addr[bracket_end + 2..].parse().unwrap_or_else(|_| 22);
+            let port: u16 = addr[bracket_end + 2..].parse().unwrap_or(22);
             return (host, port);
         }
     }

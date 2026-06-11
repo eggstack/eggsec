@@ -279,7 +279,7 @@ impl LoadTestRunner {
 
         let client = client_builder
             .build()
-            .map_err(|e| crate::error::EggsecError::from(e))?;
+            .map_err(crate::error::EggsecError::from)?;
 
         let metrics = Arc::new(Mutex::new(Metrics::new(self.url.clone())));
 
