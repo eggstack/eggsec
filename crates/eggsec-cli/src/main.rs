@@ -79,8 +79,8 @@ async fn main() -> Result<()> {
         allow_explicit_exclusion: cli.allow_excluded_target,
         allow_high_risk: cli.allow_high_risk,
         allow_nonbaseline_capability: cli.allow_nonbaseline_capability,
-        allow_private_resolution: cli.allow_out_of_scope, // broad for now; specific future flags can refine
-        allow_cross_host_redirect: cli.allow_out_of_scope,
+        allow_private_resolution: cli.allow_private_resolution,
+        allow_cross_host_redirect: cli.allow_cross_host_redirect,
         reason: cli.manual_override_reason.clone(),
     };
     ctx = ctx.with_manual_override(manual_override);

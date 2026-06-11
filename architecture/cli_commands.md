@@ -18,7 +18,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 - **Global flags**: `--json`, `--config`, `--scope`, `--strict-scope` apply to all commands
 - **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`
 - **Output flag**: Use `-o` / `--output` for file output (consistent across commands)
-- **Scope validation**: Handlers call `evaluate_and_enforce_operation()` with an `OperationDescriptor` to validate targets against scope and execution policy
+- **Scope validation**: Handlers call `evaluate_and_enforce_operation()` with an `OperationDescriptor` to validate targets against scope and execution policy. For ManualPermissive, `RequireConfirmation` is satisfied only via narrow `--yes` (out-of-scope/target-expansion only) or dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc.; precise required-flag errors are returned; strict profiles ignore overrides.
 
 ## Command Dispatch (`src/commands/`)
 

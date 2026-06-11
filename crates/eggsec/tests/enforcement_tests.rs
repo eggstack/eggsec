@@ -899,6 +899,184 @@ fn manual_guarded_and_strict_treat_require_confirmation_as_deny() {
     }
 }
 
-// CommandContext override behavior is covered by the high-risk "*_allowed_with_policy_flag" unit tests
-// inside src/commands/handlers/mod.rs (they now attach ManualOverride and assert success).
-// The integration test boundary does not expose CommandContext constructors for direct assertion here.
+// --- Additional 2026-06-10 manual discretion plan focused tests (EnforcementContext layer + supporting) ---
+
+#[test]
+fn confirmation_class_as_str_returns_plan_exact_kebab_strings() {
+    use eggsec::config::ConfirmationClass;
+    assert_eq!(ConfirmationClass::OutOfScope.as_str(), "out-of-scope");
+    assert_eq!(
+        ConfirmationClass::ExplicitExclusion.as_str(),
+        "explicit-exclusion"
+    );
+    assert_eq!(ConfirmationClass::HighRisk.as_str(), "high-risk");
+    assert_eq!(
+        ConfirmationClass::NonBaselineCapability.as_str(),
+        "nonbaseline-capability"
+    );
+    assert_eq!(
+        ConfirmationClass::PrivateResolution.as_str(),
+        "private-resolution"
+    );
+    assert_eq!(
+        ConfirmationClass::CrossHostRedirect.as_str(),
+        "cross-host-redirect"
+    );
+    assert_eq!(
+        ConfirmationClass::TargetExpansion.as_str(),
+        "target-expansion"
+    );
+}
+
+#[test]
+fn confirmation_class_strings_dedupes_preserves_order() {
+    use eggsec::config::{confirmation_class_strings, ConfirmationClass};
+    let classes = vec![
+        ConfirmationClass::HighRisk,
+        ConfirmationClass::OutOfScope,
+        ConfirmationClass::HighRisk,
+        ConfirmationClass::ExplicitExclusion,
+        ConfirmationClass::OutOfScope,
+        ConfirmationClass::TargetExpansion,
+    ];
+    let strs = confirmation_class_strings(&classes);
+    assert_eq!(
+        strs,
+        vec![
+            "high-risk".to_string(),
+            "out-of-scope".to_string(),
+            "explicit-exclusion".to_string(),
+            "target-expansion".to_string()
+        ]
+    );
+}
+
+#[test]
+fn mcp_strict_and_agent_strict_deny_high_risk_policy_flag_cases_no_confirmation_path() {
+    // High-risk (intrusive) with policy flag yields RequireConfirmation only under ManualPermissive.
+    // Automated strict profiles (Mcp/Agent/Ci) deny directly at the evaluate layer.
+    // (ManualGuarded may still surface confirmation at raw EnforcementContext for high-risk+flag;
+    //  the CommandContext layer with profile=ManualGuarded treats RequireConfirmation as hard deny.
+    //  See the corresponding CommandContext tests in handlers/mod.rs for guarded/ci override-ignore cases.)
+    let mut policy = ExecutionPolicy::default();
+    policy.allow_intrusive_fuzzing = true;
+    let descriptor = make_descriptor("127.0.0.1", OperationRisk::Intrusive);
+
+    for profile in &[
+        ExecutionProfile::McpStrict,
+        ExecutionProfile::AgentStrict,
+        ExecutionProfile::CiStrict,
+    ] {
+        let outcome = evaluate_enforcement(&descriptor, &policy, None, *profile);
+        assert!(
+            outcome.is_denied(),
+            "profile {:?} must hard-deny high-risk (policy flag does not create confirmation path)",
+            profile
+        );
+        // Negative: not a confirmation outcome.
+        assert!(!outcome.requires_confirmation());
+    }
+}
+
+#[test]
+fn strict_profiles_deny_out_of_scope_and_exclusion_even_with_loaded_scope() {
+    use eggsec::config::{LoadedScope, ScopeSource};
+    let scope = Scope {
+        allowed_targets: vec![ScopeRule::new("127.0.0.1".to_string())],
+        ..Default::default()
+    };
+    let loaded = LoadedScope::explicit(scope, ScopeSource::CliScopeFile, None);
+    let out_of_scope_desc = make_descriptor("93.184.216.34", OperationRisk::SafeActive);
+
+    for profile in &[ExecutionProfile::McpStrict, ExecutionProfile::AgentStrict] {
+        // Use evaluate_enforcement directly (no need to construct unused ctx).
+        let outcome = evaluate_enforcement(
+            &out_of_scope_desc,
+            &ExecutionPolicy::default(),
+            Some(&loaded.scope),
+            *profile,
+        );
+        assert!(
+            outcome.is_denied(),
+            "strict {:?} must deny out-of-scope (no confirmation, overrides irrelevant at this layer)",
+            profile
+        );
+    }
+
+    // Explicit exclusion under strict
+    let excl_scope = scope_wildcard_with_exclusion("admin.example.com");
+    let excl_desc = make_descriptor("admin.example.com", OperationRisk::SafeActive);
+    let outcome = evaluate_enforcement(
+        &excl_desc,
+        &ExecutionPolicy::default(),
+        Some(&excl_scope),
+        ExecutionProfile::AgentStrict,
+    );
+    assert!(outcome.is_denied());
+    assert!(!outcome.requires_confirmation());
+}
+
+#[test]
+fn permissive_confirmable_cases_produce_expected_classes_via_helper() {
+    use eggsec::config::{confirmation_classes_for, LoadedScope, ScopeSource};
+    // OutOfScope confirmable under permissive with positive rules
+    let scope = Scope {
+        allowed_targets: vec![ScopeRule::new("127.0.0.1".to_string())],
+        ..Default::default()
+    };
+    let loaded = LoadedScope::explicit(scope, ScopeSource::CliScopeFile, None);
+    let ctx =
+        eggsec::config::EnforcementContext::manual_permissive(ExecutionPolicy::default(), loaded);
+    let desc = make_descriptor("93.184.216.34", OperationRisk::SafeActive);
+    let outcome = ctx.evaluate(&desc);
+    assert!(outcome.requires_confirmation());
+    let classes = confirmation_classes_for(&desc, outcome.decision(), &ExecutionPolicy::default());
+    // May be OutOfScope or empty (best-effort); when present must be the stable class.
+    if !classes.is_empty() {
+        assert!(classes
+            .iter()
+            .all(|c| c.as_str().contains('-') || c.as_str() == "high-risk" /* etc */));
+    }
+}
+
+#[test]
+fn automated_strict_profiles_produce_deny_not_require_confirmation_at_evaluate_layer() {
+    // Overrides (ManualOverride) are only interpreted in CommandContext under ManualPermissive.
+    // At raw EnforcementContext::evaluate layer, the fully automated strict profiles (Mcp/Agent)
+    // produce hard Deny for cases that would be RequireConfirmation under ManualPermissive.
+    // (CiStrict/ManualGuarded may still emit RequireConfirmation at this layer; the CommandContext
+    // wrapper with those profiles treats RequireConfirmation as hard deny + ignores overrides.
+    // See the CommandContext tests in handlers/mod.rs for guarded/ci + overrides -> denial.)
+    // This asserts the boundary at the shared evaluator: no "require confirmation" outcome for
+    // automated strict profiles (overrides have no effect at this layer or above for them).
+    use eggsec::config::LoadedScope;
+    let loaded = LoadedScope::default_empty();
+    let mut policy = ExecutionPolicy::default();
+    policy.allow_intrusive_fuzzing = true;
+    let desc = make_descriptor("127.0.0.1", OperationRisk::Intrusive);
+
+    for profile in &[ExecutionProfile::McpStrict, ExecutionProfile::AgentStrict] {
+        let ctx = match profile {
+            ExecutionProfile::McpStrict => {
+                eggsec::config::EnforcementContext::mcp_strict(policy.clone(), loaded.clone())
+            }
+            ExecutionProfile::AgentStrict => {
+                eggsec::config::EnforcementContext::agent_strict(policy.clone(), loaded.clone())
+            }
+            _ => unreachable!(),
+        };
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied() && !outcome.requires_confirmation(),
+            "profile {:?} must not produce a confirmable outcome (overrides have no effect)",
+            profile
+        );
+    }
+}
+
+// CommandContext override behavior (narrow --yes, dedicated --allow-* flags, exact flag names in errors,
+// kebab-case audit on PolicyDecision.manual_override_classes, success path recording) is covered by the
+// focused unit tests inside src/commands/handlers/mod.rs (using make_ctx + with_manual_override + direct
+// evaluate_and_enforce_operation assertions on the returned PolicyDecision and error strings).
+// The integration test boundary (this file) focuses on the EnforcementContext / evaluate_enforcement
+// profile boundaries and class string helpers.

@@ -98,6 +98,7 @@ impl CommandContext {
     pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()>
 }
 ```
+Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireConfirmation`: narrow `--yes` (only `out-of-scope`/`target-expansion`); dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. for their classes; stable kebab-case audit strings via `ConfirmationClass::as_str()` and `confirmation_class_strings` dedup helper; precise "required flag" error messages listing exactly what is missing. Strict profiles/MCP/agent treat RequireConfirmation as hard Deny and ignore overrides.
 
 ## Handler Files
 

@@ -65,7 +65,7 @@ Eggsec distinguishes caller trust contexts through execution profiles. All paths
 
 | Profile | Behavior | Use Case |
 |---------|----------|----------|
-| **ManualPermissive** | Warn for safe scope ambiguity (no positive rules); RequireConfirmation for operator-discretion cases (explicit positive-scope out-of-scope, exclusions, high-risk, non-baseline caps, etc). CLI overrides RequireConfirmation via --yes / --allow-out-of-scope / --allow-high-risk etc (manual-only, audited). | Default CLI/TUI |
+| **ManualPermissive** | Warn for safe scope ambiguity (no positive rules); RequireConfirmation for operator-discretion cases (explicit positive-scope out-of-scope, exclusions, high-risk, non-baseline caps, private-resolution, cross-host-redirect, target-expansion). `--yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. required for their classes (manual-only, audited on decision). Strict profiles/MCP/agent treat RequireConfirmation as Deny; never honor overrides. | Default CLI/TUI |
 | **ManualGuarded** | Hard-deny (no overrides) for missing scope, out-of-scope targets, ambiguous scope, high-risk etc. for target-bearing ops | CLI with `--strict-scope` |
 | **CiStrict** | Hard-deny (no overrides); non-interactive, deterministic, strict; explicit manifest required; positive capability allow enforced for non-baseline | CI/CD pipelines |
 | **McpStrict** | Hard-deny (no overrides); always strict, scope manifest (`LoadedScope::is_explicit_manifest()`) required for networked ops; warnings treated as denials; capabilities populated via `required_capabilities_for_tool_call` + `operation_descriptor_for_mcp_call`; MCP profile layer (visibility/target/arg restrictions) overlays shared enforcement decision | MCP server |
@@ -75,7 +75,7 @@ Eggsec distinguishes caller trust contexts through execution profiles. All paths
 
 > For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 
-**Baseline capabilities for strict automated profiles** (`McpStrict`, `AgentStrict`, `CiStrict`): `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect` (positive capability allow not required). All other capabilities require explicit `allowed_capabilities` in `ExecutionPolicy` (plus matching risk/feature gates). Strict profiles never downgrade or confirm; they treat RequireConfirmation as Deny with no overrides. **ManualPermissive** (default) uses Warn for safe scope ambiguity when no positive rules; RequireConfirmation for operator-discretion cases (explicit positive-scope out-of-scope, exclusions, high-risk, non-baseline caps, etc). Missing features and impossible cases are always hard Deny. CLI may satisfy RequireConfirmation via manual-only overrides.
+**Baseline capabilities for strict automated profiles** (`McpStrict`, `AgentStrict`, `CiStrict`): `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect` (positive capability allow not required). All other capabilities require explicit `allowed_capabilities` in `ExecutionPolicy` (plus matching risk/feature gates). Strict profiles never downgrade or confirm; they treat RequireConfirmation as Deny with no overrides. **ManualPermissive** (default) uses Warn for safe scope ambiguity when no positive rules; RequireConfirmation for operator-discretion cases (explicit positive-scope out-of-scope, exclusions, high-risk, non-baseline caps, private-resolution, cross-host-redirect, target-expansion). `--yes` narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-*` flags for others (manual-only, audited). Missing features and impossible cases are always hard Deny. Strict profiles/MCP/agent never honor overrides.
 
 ### Usage Examples
 
@@ -84,8 +84,10 @@ Eggsec distinguishes caller trust contexts through execution profiles. All paths
 eggsec scan example.com --profile quick
 
 # Manual permissive with explicit override for RequireConfirmation cases
+# (--yes is narrow: only out-of-scope/target-expansion; use dedicated for private/redirect)
 eggsec scan example.com --scope scope.toml --allow-out-of-scope --manual-override-reason "authorized boundary test"
 eggsec scan example.com --scope scope.toml --allow-high-risk --yes
+eggsec scan 10.0.0.5 --allow-private-resolution --manual-override-reason "lab private target"
 eggsec waf-stress https://lab.example --allow-high-risk --manual-override-reason "authorized Synvoid WAF regression"
 
 # Manual strict (hard-deny, no overrides)

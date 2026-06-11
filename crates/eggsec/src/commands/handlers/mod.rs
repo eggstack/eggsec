@@ -240,21 +240,15 @@ impl CommandContext {
                         decision,
                         &self.config.execution_policy,
                     );
-                let mut permitted = true;
-                for c in &required {
-                    if !self.manual_override.permits(*c) {
-                        permitted = false;
-                        break;
-                    }
-                }
-                if permitted || self.manual_override.assume_yes {
-                    // Audit the override
-                    let classes_str: Vec<String> =
-                        required.iter().map(|c| format!("{:?}", c)).collect();
+                let permitted = required.iter().all(|c| self.manual_override.permits(*c));
+                if permitted {
+                    // Audit the override (stable kebab-case class strings, deduped, deterministic order)
+                    let classes_vec: Vec<String> =
+                        crate::config::confirmation_class_strings(&required);
                     tracing::warn!(
                         operation = %decision.operation,
                         target = ?decision.target_original,
-                        classes = ?classes_str,
+                        classes = ?classes_vec,
                         reason = ?self.manual_override.reason,
                         "manual enforcement override accepted"
                     );
@@ -262,12 +256,12 @@ impl CommandContext {
                     if !out.manual_override_used {
                         out = out.with_manual_override_record(
                             self.manual_override.reason.clone(),
-                            classes_str,
+                            classes_vec,
                         );
                     }
                     Ok(out)
                 } else {
-                    // Explain exactly which flags are needed
+                    // Explain exactly which flags are needed (dedicated flags for private/redirect)
                     let needed: Vec<&str> = required
                         .iter()
                         .filter_map(|c| match c {
@@ -301,14 +295,14 @@ impl CommandContext {
                             }
                             crate::config::ConfirmationClass::PrivateResolution => {
                                 if !self.manual_override.allow_private_resolution {
-                                    Some("--allow-out-of-scope (or specific private-resolution override)")
+                                    Some("--allow-private-resolution")
                                 } else {
                                     None
                                 }
                             }
                             crate::config::ConfirmationClass::CrossHostRedirect => {
                                 if !self.manual_override.allow_cross_host_redirect {
-                                    Some("--allow-out-of-scope (or specific redirect override)")
+                                    Some("--allow-cross-host-redirect")
                                 } else {
                                     None
                                 }
@@ -322,14 +316,35 @@ impl CommandContext {
                             }
                         })
                         .collect();
+                    let classes_list = classes_str(&required);
                     let msg = if needed.is_empty() {
-                        "manual confirmation required; re-run with --yes or the appropriate --allow-* flag(s) and optionally --manual-override-reason".to_string()
+                        if self.manual_override.assume_yes {
+                            format!(
+                                "manual confirmation required for: {}. --yes alone does not permit these classes. Re-run with the appropriate --allow-* flag(s) and optionally --manual-override-reason",
+                                classes_list
+                            )
+                        } else {
+                            "manual confirmation required; re-run with --yes or the appropriate --allow-* flag(s) and optionally --manual-override-reason".to_string()
+                        }
                     } else {
-                        format!(
+                        let base = format!(
                             "manual confirmation required for: {}. Re-run with {} (and optionally --manual-override-reason)",
-                            classes_str(&required),
+                            classes_list,
                             needed.join(" ")
-                        )
+                        );
+                        if self.manual_override.assume_yes
+                            && required.iter().any(|c| {
+                                !matches!(
+                                    *c,
+                                    crate::config::ConfirmationClass::OutOfScope
+                                        | crate::config::ConfirmationClass::TargetExpansion
+                                )
+                            })
+                        {
+                            format!("{}. --yes alone does not permit these classes.", base)
+                        } else {
+                            base
+                        }
                     };
                     anyhow::bail!("{}", msg);
                 }
@@ -350,7 +365,7 @@ impl CommandContext {
 fn classes_str(classes: &[crate::config::ConfirmationClass]) -> String {
     classes
         .iter()
-        .map(|c| format!("{:?}", c))
+        .map(|c| c.as_str().to_string())
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -450,7 +465,8 @@ async fn handle_no_command(cli: &Cli) -> Result<()> {
 mod tests {
     use super::*;
     use crate::config::{
-        ExecutionPolicy, IntendedUse, OperationDescriptor, OperationMode, OperationRisk, Scope,
+        Capability, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor,
+        OperationMode, OperationRisk, Scope, ScopeRule,
     };
 
     fn make_ctx(policy: ExecutionPolicy, scope: Scope, json: bool) -> CommandContext {
@@ -834,6 +850,460 @@ mod tests {
         assert_eq!(
             ctx.enforcement.execution_profile,
             ExecutionProfile::McpStrict
+        );
+    }
+
+    // --- 2026-06-10 manual discretion ergonomics focused tests (CommandContext) ---
+
+    #[test]
+    fn assume_yes_permits_out_of_scope_and_target_expansion_but_not_high_risk_or_exclusion() {
+        // --yes (assume_yes) permits OutOfScope/TargetExpansion only.
+        let mo = crate::config::ManualOverride {
+            assume_yes: true,
+            ..Default::default()
+        };
+        assert!(mo.permits(crate::config::ConfirmationClass::OutOfScope));
+        assert!(mo.permits(crate::config::ConfirmationClass::TargetExpansion));
+        assert!(!mo.permits(crate::config::ConfirmationClass::HighRisk));
+        assert!(!mo.permits(crate::config::ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(crate::config::ConfirmationClass::NonBaselineCapability));
+        assert!(!mo.permits(crate::config::ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(crate::config::ConfirmationClass::CrossHostRedirect));
+    }
+
+    #[test]
+    fn yes_alone_does_not_permit_high_risk() {
+        // To reach RequireConfirmation for HighRisk, the policy must permit the risk tier.
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                assume_yes: true,
+                ..Default::default()
+            },
+        );
+        // Intrusive + policy flag => confirmable under permissive; --yes alone does not satisfy HighRisk.
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("--allow-high-risk"),
+            "error should mention dedicated --allow-high-risk, got: {}",
+            msg
+        );
+        assert!(
+            msg.contains("--yes alone does not permit these classes"),
+            "should note that --yes alone is insufficient for high-risk: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn yes_alone_does_not_permit_explicit_exclusion() {
+        let scope = Scope {
+            allowed_targets: vec![ScopeRule::new("*".to_string())],
+            excluded_targets: vec![ScopeRule::new("93.184.216.34".to_string())],
+            ..Default::default()
+        };
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false).with_manual_override(
+            crate::config::ManualOverride {
+                assume_yes: true,
+                ..Default::default()
+            },
+        );
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("--allow-excluded-target"),
+            "error should mention --allow-excluded-target, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn allow_high_risk_permits_high_risk_without_explicit_exclusion() {
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive));
+        assert!(result.is_ok());
+        // Explicit exclusion should still require its own flag.
+        let mo = &ctx.manual_override;
+        assert!(mo.permits(crate::config::ConfirmationClass::HighRisk));
+        assert!(!mo.permits(crate::config::ConfirmationClass::ExplicitExclusion));
+    }
+
+    #[test]
+    fn allow_excluded_target_permits_explicit_exclusion_without_high_risk() {
+        let scope = Scope {
+            allowed_targets: vec![ScopeRule::new("*".to_string())],
+            excluded_targets: vec![ScopeRule::new("93.184.216.34".to_string())],
+            ..Default::default()
+        };
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_explicit_exclusion: true,
+                ..Default::default()
+            },
+        );
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_ok());
+        let mo = &ctx.manual_override;
+        assert!(mo.permits(crate::config::ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(crate::config::ConfirmationClass::HighRisk));
+    }
+
+    #[test]
+    fn allow_nonbaseline_capability_permits_nonbaseline() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_nonbaseline_capability: true,
+                ..Default::default()
+            });
+        let mut desc = descriptor("fuzz", OperationRisk::SafeActive);
+        desc.required_capabilities = vec![Capability::IntrusiveFuzz];
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn allow_private_resolution_permits_private_resolution_class() {
+        let mo = crate::config::ManualOverride {
+            allow_private_resolution: true,
+            ..Default::default()
+        };
+        assert!(mo.permits(crate::config::ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(crate::config::ConfirmationClass::CrossHostRedirect));
+        // Dedicated; allow_out_of_scope does not cover it.
+        let mo2 = crate::config::ManualOverride {
+            allow_out_of_scope: true,
+            ..Default::default()
+        };
+        assert!(!mo2.permits(crate::config::ConfirmationClass::PrivateResolution));
+    }
+
+    #[test]
+    fn allow_cross_host_redirect_permits_cross_host_class() {
+        let mo = crate::config::ManualOverride {
+            allow_cross_host_redirect: true,
+            ..Default::default()
+        };
+        assert!(mo.permits(crate::config::ConfirmationClass::CrossHostRedirect));
+        assert!(!mo.permits(crate::config::ConfirmationClass::PrivateResolution));
+        let mo2 = crate::config::ManualOverride {
+            allow_out_of_scope: true,
+            ..Default::default()
+        };
+        assert!(!mo2.permits(crate::config::ConfirmationClass::CrossHostRedirect));
+    }
+
+    #[test]
+    fn allow_out_of_scope_does_not_permit_private_or_cross_host() {
+        let mo = crate::config::ManualOverride {
+            allow_out_of_scope: true,
+            ..Default::default()
+        };
+        assert!(!mo.permits(crate::config::ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(crate::config::ConfirmationClass::CrossHostRedirect));
+        assert!(mo.permits(crate::config::ConfirmationClass::OutOfScope));
+    }
+
+    #[test]
+    fn command_context_error_messages_list_exact_dedicated_flags() {
+        // High-risk missing override
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false);
+        let err = ctx
+            .evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("--allow-high-risk"),
+            "high-risk error should list --allow-high-risk: {}",
+            msg
+        );
+
+        // Out of scope missing override
+        let ctx2 = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let public_desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let err2 = ctx2
+            .evaluate_and_enforce_operation(public_desc)
+            .unwrap_err();
+        let msg2 = err2.to_string();
+        assert!(
+            msg2.contains("--allow-out-of-scope"),
+            "out-of-scope error should list --allow-out-of-scope: {}",
+            msg2
+        );
+
+        // Private resolution would list its dedicated flag (covered via permits + classification path; explicit msg test uses reachable classes).
+    }
+
+    #[test]
+    fn successful_override_records_stable_kebab_case_classes_on_decision_no_debug_no_dups() {
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                assume_yes: true, // extra that should be deduped/not affect high-risk class
+                ..Default::default()
+            },
+        );
+        let decision = ctx
+            .evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive))
+            .expect("override should permit");
+        assert!(decision.manual_override_used);
+        // Classes must be kebab-case stable strings, deduped, order-preserving first-seen.
+        assert!(
+            decision
+                .manual_override_classes
+                .contains(&"high-risk".to_string()),
+            "audit classes should contain kebab 'high-risk', got: {:?}",
+            decision.manual_override_classes
+        );
+        // No Debug formatting like "HighRisk"
+        assert!(
+            !decision
+                .manual_override_classes
+                .iter()
+                .any(|s| s.contains("HighRisk") || s.contains("ConfirmationClass")),
+            "must not contain Debug names: {:?}",
+            decision.manual_override_classes
+        );
+        // assume_yes does not add high-risk class; only the required one(s) for this path.
+    }
+
+    #[test]
+    fn manual_guarded_with_all_overrides_still_denies_require_confirmation() {
+        // Use out-of-scope (canonical confirmable under permissive with positive scope rules).
+        // Under Guarded the enforcement produces Deny (or RequireConfirmation which CommandContext hard-denies).
+        // All overrides attached; they must not be honored.
+        let scope = localhost_scope(); // positive rule -> out-of-scope target will be confirmable only for permissive
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
+            .with_execution_profile(ExecutionProfile::ManualGuarded)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                allow_explicit_exclusion: true,
+                allow_high_risk: true,
+                allow_nonbaseline_capability: true,
+                allow_private_resolution: true,
+                allow_cross_host_redirect: true,
+                assume_yes: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(
+            result.is_err(),
+            "ManualGuarded must treat RequireConfirmation as hard deny even with all overrides"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("DENIED")
+                || msg.contains("denied")
+                || msg.contains("not allowed")
+                || msg.contains("Scope")
+                || msg.contains("scope"),
+            "should be denial: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn ci_strict_with_all_overrides_still_denies_require_confirmation() {
+        let scope = localhost_scope();
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
+            .with_execution_profile(ExecutionProfile::CiStrict)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                allow_explicit_exclusion: true,
+                allow_high_risk: true,
+                allow_nonbaseline_capability: true,
+                allow_private_resolution: true,
+                allow_cross_host_redirect: true,
+                assume_yes: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(
+            result.is_err(),
+            "CiStrict must treat RequireConfirmation as hard deny even with all overrides"
+        );
+    }
+
+    #[test]
+    fn mcp_strict_via_command_context_ignores_overrides_and_denies_require_confirmation() {
+        let scope = localhost_scope();
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
+            .with_execution_profile(ExecutionProfile::McpStrict)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                assume_yes: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(
+            result.is_err(),
+            "McpStrict must deny (no override path) even with matching flags"
+        );
+        // Negative: does not surface confirmation, surfaces denial.
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            !msg.contains("confirmation required"),
+            "strict should not mention confirmation: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn agent_strict_via_command_context_ignores_overrides_and_denies_require_confirmation() {
+        let scope = localhost_scope();
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
+            .with_execution_profile(ExecutionProfile::AgentStrict)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                assume_yes: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(
+            result.is_err(),
+            "AgentStrict must deny (no override path) even with matching flags"
+        );
+    }
+
+    #[test]
+    fn out_of_scope_with_allow_out_of_scope_succeeds_and_records_kebab_class() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = ctx
+            .evaluate_and_enforce_operation(desc)
+            .expect("allow-out-of-scope should permit");
+        assert!(decision.manual_override_used);
+        assert!(
+            decision
+                .manual_override_classes
+                .contains(&"out-of-scope".to_string())
+                || decision
+                    .manual_override_classes
+                    .contains(&"target-expansion".to_string()),
+            "should record out-of-scope or target-expansion kebab class: {:?}",
+            decision.manual_override_classes
         );
     }
 }

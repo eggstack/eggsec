@@ -125,11 +125,12 @@ pub struct Cli {
     pub strict_scope: bool,
 
     // --- Manual discretion overrides (honored only for ManualPermissive / default CLI/TUI) ---
+    // --yes is narrow (low-risk scope prompts only). High-risk/exclusions/private/redirect/nonbaseline require specific --allow-* flags.
     // These are ignored or rejected under --strict-scope, CI, MCP, and agent paths.
     #[arg(
         long,
         global = true,
-        help = "Assume yes to confirmation prompts (manual-only; use specific --allow-* for high-risk/exclusions)"
+        help = "Assume yes to low-risk manual confirmation prompts (out-of-scope, target-expansion only). Does not authorize high-risk, explicit exclusions, non-baseline capabilities, private-resolution, or cross-host redirects. Use specific --allow-* flags for those classes. Manual-only."
     )]
     pub yes: bool,
 
@@ -160,6 +161,20 @@ pub struct Cli {
         help = "Allow non-baseline capabilities (manual-only)"
     )]
     pub allow_nonbaseline_capability: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow target resolution to private/loopback addresses when detected (manual-only)"
+    )]
+    pub allow_private_resolution: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow cross-host redirect/canonicalization boundary changes (manual-only)"
+    )]
+    pub allow_cross_host_redirect: bool,
 
     #[arg(
         long,

@@ -253,6 +253,22 @@ pub enum ConfirmationClass {
     TargetExpansion,
 }
 
+impl ConfirmationClass {
+    /// Stable kebab-case string for audit, JSON, warnings, and error messages.
+    /// Used instead of Debug formatting for machine-readable and consistent output.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConfirmationClass::OutOfScope => "out-of-scope",
+            ConfirmationClass::ExplicitExclusion => "explicit-exclusion",
+            ConfirmationClass::HighRisk => "high-risk",
+            ConfirmationClass::NonBaselineCapability => "nonbaseline-capability",
+            ConfirmationClass::PrivateResolution => "private-resolution",
+            ConfirmationClass::CrossHostRedirect => "cross-host-redirect",
+            ConfirmationClass::TargetExpansion => "target-expansion",
+        }
+    }
+}
+
 /// Manual override flags honored only for `ExecutionProfile::ManualPermissive`.
 /// These are never part of MCP request types, agent config, or tool serialization.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -269,20 +285,20 @@ pub struct ManualOverride {
 
 impl ManualOverride {
     /// Returns true if this override permits the given confirmation class.
-    /// `assume_yes` acts as a broad manual confirmation for classes that are otherwise
-    /// covered by a specific flag; specific flags are preferred for high-risk/excluded.
+    ///
+    /// `--yes` / `assume_yes` is prompt suppression for low-risk manual scope confirmations only
+    /// (OutOfScope, TargetExpansion). It does NOT authorize high-risk, explicit exclusions,
+    /// non-baseline capabilities, private-resolution, or cross-host redirects.
+    /// Those require their specific `--allow-*` flags.
     pub fn permits(&self, class: ConfirmationClass) -> bool {
-        if self.assume_yes {
-            return true;
-        }
         match class {
-            ConfirmationClass::OutOfScope => self.allow_out_of_scope,
+            ConfirmationClass::OutOfScope => self.allow_out_of_scope || self.assume_yes,
+            ConfirmationClass::TargetExpansion => self.allow_out_of_scope || self.assume_yes,
+            ConfirmationClass::PrivateResolution => self.allow_private_resolution,
+            ConfirmationClass::CrossHostRedirect => self.allow_cross_host_redirect,
             ConfirmationClass::ExplicitExclusion => self.allow_explicit_exclusion,
             ConfirmationClass::HighRisk => self.allow_high_risk,
             ConfirmationClass::NonBaselineCapability => self.allow_nonbaseline_capability,
-            ConfirmationClass::PrivateResolution => self.allow_private_resolution,
-            ConfirmationClass::CrossHostRedirect => self.allow_cross_host_redirect,
-            ConfirmationClass::TargetExpansion => self.allow_out_of_scope, // expansion treated like scope discretion
         }
     }
 }
@@ -961,6 +977,23 @@ pub fn confirmation_classes_for(
     }
 
     classes
+}
+
+/// Stable kebab-case strings for the given confirmation classes.
+/// Deduplicates while preserving first-seen order (for deterministic audit/JSON).
+pub fn confirmation_class_strings(classes: &[ConfirmationClass]) -> Vec<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    classes
+        .iter()
+        .filter_map(|c| {
+            let s = c.as_str().to_string();
+            if seen.insert(s.clone()) {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1880,5 +1913,105 @@ mod tests {
             .denied_reasons
             .iter()
             .any(|r| r.contains("requires explicit allow")));
+    }
+
+    #[test]
+    fn confirmation_class_as_str_returns_exact_kebab_strings() {
+        assert_eq!(ConfirmationClass::OutOfScope.as_str(), "out-of-scope");
+        assert_eq!(
+            ConfirmationClass::ExplicitExclusion.as_str(),
+            "explicit-exclusion"
+        );
+        assert_eq!(ConfirmationClass::HighRisk.as_str(), "high-risk");
+        assert_eq!(
+            ConfirmationClass::NonBaselineCapability.as_str(),
+            "nonbaseline-capability"
+        );
+        assert_eq!(
+            ConfirmationClass::PrivateResolution.as_str(),
+            "private-resolution"
+        );
+        assert_eq!(
+            ConfirmationClass::CrossHostRedirect.as_str(),
+            "cross-host-redirect"
+        );
+        assert_eq!(
+            ConfirmationClass::TargetExpansion.as_str(),
+            "target-expansion"
+        );
+    }
+
+    #[test]
+    fn confirmation_class_strings_dedupes_and_preserves_order() {
+        let classes = vec![
+            ConfirmationClass::HighRisk,
+            ConfirmationClass::OutOfScope,
+            ConfirmationClass::HighRisk,
+            ConfirmationClass::ExplicitExclusion,
+            ConfirmationClass::OutOfScope,
+            ConfirmationClass::TargetExpansion,
+        ];
+        let strs = confirmation_class_strings(&classes);
+        assert_eq!(
+            strs,
+            vec![
+                "high-risk".to_string(),
+                "out-of-scope".to_string(),
+                "explicit-exclusion".to_string(),
+                "target-expansion".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn manual_override_permits_narrow_yes_for_outofscope_targetexpansion_only() {
+        let mut mo = ManualOverride::default();
+        mo.assume_yes = true;
+        assert!(mo.permits(ConfirmationClass::OutOfScope));
+        assert!(mo.permits(ConfirmationClass::TargetExpansion));
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(ConfirmationClass::NonBaselineCapability));
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
+    }
+
+    #[test]
+    fn manual_override_dedicated_flags_permit_only_their_class() {
+        let mut mo = ManualOverride::default();
+        mo.allow_high_risk = true;
+        assert!(mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(ConfirmationClass::OutOfScope));
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+
+        let mut mo = ManualOverride::default();
+        mo.allow_explicit_exclusion = true;
+        assert!(mo.permits(ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::OutOfScope));
+
+        let mut mo = ManualOverride::default();
+        mo.allow_nonbaseline_capability = true;
+        assert!(mo.permits(ConfirmationClass::NonBaselineCapability));
+
+        let mut mo = ManualOverride::default();
+        mo.allow_private_resolution = true;
+        assert!(mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
+
+        let mut mo = ManualOverride::default();
+        mo.allow_cross_host_redirect = true;
+        assert!(mo.permits(ConfirmationClass::CrossHostRedirect));
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+
+        let mut mo = ManualOverride::default();
+        mo.allow_out_of_scope = true;
+        assert!(mo.permits(ConfirmationClass::OutOfScope));
+        assert!(mo.permits(ConfirmationClass::TargetExpansion));
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::ExplicitExclusion));
     }
 }

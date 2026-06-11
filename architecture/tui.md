@@ -270,7 +270,7 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 ### Enforcement Context in TUI
 
-The TUI uses `CommandContext::evaluate_and_enforce_operation()` for all command handlers that accept targets. This wraps `evaluate_enforcement()` with profile-aware scope enforcement and structured denial output. When `--strict-scope` is active, the TUI builds a `ManualGuarded` enforcement context; otherwise it uses `ManualPermissive`.
+CLI handlers use `CommandContext::evaluate_and_enforce_operation()` (wrapping `EnforcementContext::evaluate()`) for policy checks on target-bearing commands, with narrow `--yes` (only `out-of-scope`/`target-expansion`) + dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. for ManualPermissive `RequireConfirmation` cases (precise flag errors; strict profiles never honor overrides). The TUI does not use `CommandContext` or `ManualOverride`; it has its own confirmation flows (see `app/confirmation.rs`) and uses profile-aware enforcement via `EnforcementContext` (or internal paths). `--strict-scope` affects profile selection (ManualGuarded vs ManualPermissive) for both CLI and TUI.
 
 ### Adding a New Tab
 

@@ -85,13 +85,13 @@ pub enum ScopeSource {
 
 ### Manual discretion mode (plan 2026-06-10)
 
-Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `EnforcementOutcome::RequireConfirmation(PolicyDecision)` (instead of hard `Deny`) for operator-discretion cases: explicit allowlist miss with positive scope rules (`ConfirmationClass::OutOfScope`), explicit exclusion (`ExplicitExclusion`), high-risk operations (`HighRisk`), or non-baseline capability (`NonBaselineCapability`).
+Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `EnforcementOutcome::RequireConfirmation(PolicyDecision)` (instead of hard `Deny`) for operator-discretion cases: explicit allowlist miss with positive scope rules (`ConfirmationClass::OutOfScope`), explicit exclusion (`ExplicitExclusion`), high-risk operations (`HighRisk`), non-baseline capability (`NonBaselineCapability`), private resolution (`PrivateResolution`), cross-host redirect (`CrossHostRedirect`), or target expansion (`TargetExpansion`).
 
 `ManualGuarded`, `CiStrict`, `McpStrict`, and `AgentStrict` treat `RequireConfirmation` as `Deny` (no proceed path).
 
-`CommandContext::evaluate_and_enforce_operation` (in commands/handlers/mod.rs) matches on `RequireConfirmation` only for `ManualPermissive`: if the `CommandContext`'s `manual_override: ManualOverride` has flags permitting the required classes (e.g. `allow_out_of_scope`, `allow_explicit_exclusion`, `allow_high_risk`, `allow_nonbaseline_capability`, `assume_yes`), it proceeds and records the override (`manual_override_used`, `manual_override_reason`, `manual_override_classes` on the decision for audit). Without matching flags it bails with a message listing the required override flag(s). Automated profiles never reach a proceed path for `RequireConfirmation`.
+`CommandContext::evaluate_and_enforce_operation` (in commands/handlers/mod.rs) matches on `RequireConfirmation` only for `ManualPermissive`: if the `CommandContext`'s `manual_override: ManualOverride` has flags permitting the required classes (e.g. `allow_out_of_scope`, `allow_explicit_exclusion`, `allow_high_risk`, `allow_nonbaseline_capability`, `assume_yes`, `allow_private_resolution`, `allow_cross_host_redirect`), it proceeds and records the override (`manual_override_used`, `manual_override_reason`, `manual_override_classes` on the decision for audit, using stable kebab strings from `ConfirmationClass::as_str()`). `--yes` / `assume_yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. are required for their classes. Without matching flags it bails with a precise message listing the required override flag(s). Automated profiles never reach a proceed path for `RequireConfirmation`. `confirmation_class_strings` dedups classes for audit/JSON/warnings while preserving first-seen order.
 
-`ManualOverride` (with `permits(class: ConfirmationClass)`) and `ConfirmationClass` live in `policy_decision.rs`; they are not part of MCP/agent schemas or automated paths. Override flags are CLI-only (global, manual-only; ignored/rejected under `--strict-scope` or strict profiles).
+`ManualOverride` (with `permits(class: ConfirmationClass)`) and `ConfirmationClass` live in `policy_decision.rs`; they are not part of MCP/agent schemas or automated paths. Override flags are CLI-only (global, manual-only; ignored/rejected under `--strict-scope` or strict profiles). Strict profiles/MCP/agent never honor overrides.
 
 This preserves hard denials for missing features, invalid targets, and all automated enforcement. See `docs/plans/2026-06-10-manual-discretion-mode-plan.md`.
 
@@ -112,7 +112,7 @@ This preserves hard denials for missing features, invalid targets, and all autom
 - CI mode: Uses `CiStrict` profile when detected
 
 **Key methods:**
-- `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/RequireConfirmation/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally. (RequireConfirmation is produced only for ManualPermissive discretion cases per 2026-06-10 plan; automated profiles treat it as denial.)
+- `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/RequireConfirmation/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally. (RequireConfirmation is produced only for ManualPermissive discretion cases per 2026-06-10 plan with narrow `--yes` + dedicated `--allow-*` semantics; automated profiles treat it as denial.)
 - `requires_explicit_manifest_for(descriptor)` / `require_explicit_scope_for_networked()` - Provenance helpers used by `evaluate`.
 - `profile()` - Returns the `ExecutionProfile`
 - `scope()` - Returns the `LoadedScope`

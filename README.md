@@ -83,7 +83,7 @@ description = "Admin panel - excluded"
 **Feature gating** ensures intrusive modules (stress testing, raw packet crafting, headless browser, NSE, database storage, container scanning, and more) require explicit build flags and cannot be invoked accidentally.
 
 **Execution profiles** separate manual CLI/TUI operator-directed discretion from hard enforcement in strict and automated modes:
-- **Manual CLI/TUI (default)**: `ManualPermissive` — operator-directed: warnings for safe scope ambiguity/missing scope; `RequireConfirmation` (with confirm/override) for discretion cases (explicit allowlist miss with positive rules, exclusions, high-risk, non-baseline capabilities). Override flags (e.g. `--allow-high-risk`, `--manual-override-reason "..."`) are honored and audited only here.
+- **Manual CLI/TUI (default)**: `ManualPermissive` — operator-directed: warnings for safe scope ambiguity/missing scope; `RequireConfirmation` (with confirm/override) for discretion cases (explicit allowlist miss with positive rules, exclusions, high-risk, non-baseline capabilities, private resolution, cross-host redirect, target expansion). `--yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. are required for their classes. Override flags honored and audited only here; strict profiles/MCP/agent never honor overrides.
 - **Manual strict**: `--strict-scope` uses `ManualGuarded` — hard enforcement (no discretion path).
 - **MCP server**: always `McpStrict` (via `EnforcementContext`); explicit scope manifest (`LoadedScope::is_explicit_manifest()`) required for networked operations; warnings and `RequireConfirmation` treated as denials. Manual override flags ignored.
 - **Agent**: `AgentStrict`; explicit scope manifest required; per-scan enforcement re-evaluated immediately before dispatch (in addition to startup gating); override flags ignored.
@@ -99,8 +99,9 @@ MCP and autonomous agent paths are always strict and cannot be downgraded or ove
 # Manual permissive (default: operator-directed; warn + confirm/override for discretion)
 eggsec scan example.com --profile quick
 
-# Manual permissive with override (audited)
+# Manual permissive with override (audited; --yes narrow, use dedicated for private/redirect)
 eggsec waf-stress https://lab.example --allow-high-risk --manual-override-reason "authorized Synvoid regression"
+eggsec scan 10.0.0.5 --allow-private-resolution --manual-override-reason "lab private target"
 
 # Manual strict (hard enforcement)
 eggsec scan example.com --profile quick --scope scope.toml --strict-scope
