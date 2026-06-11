@@ -63,3 +63,5 @@ let is_locked = detector.detect_lockout(&response).await?;
 
 ## Module Notes
 See `architecture/auth.md` for architecture documentation. TUI `AuthTab` is standalone/CLI-primary (not in `Tab` enum). Policy enforcement uses central `EnforcementContext` + `CredentialTesting` risk tier (no feature flag). All 17 wiremock auth tests + enforcement/policy contract tests pass.
+
+See `docs/AUTH_LAB.md` for defense-lab usage, requirements (`allow_credential_testing=true` + explicit scope + dedicated test accounts), and command examples.

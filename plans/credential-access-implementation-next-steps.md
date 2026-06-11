@@ -1,9 +1,12 @@
 # Credential Access Feature - Next Steps & Handoff Plan
 
-**Status**: Active Handoff Plan  
-**Based on**: `credential-access-implementation-plan.md`  
+**Status**: **Completed** (2026-06-11)  
+**Based on**: `credential-access-implementation-plan.md` (historical)  
 **Current Date**: 2026-06-11  
-**Goal**: Complete the integration of the existing `auth/` module into Eggsec with proper safety, feature gating, CLI execution, profiles, and output support.
+**Resolution Summary**: Feature complete under the runtime policy model (no `credential-testing` Cargo feature was ever added). `auth/` module + `eggsec auth-test` CLI + handler + `OperationRisk::CredentialTesting` + `allow_credential_testing` + central `evaluate_and_enforce_operation` (via `CommandContext`) + 17 wiremock auth tests + enforcement/policy contract tests were already present and green. All original "Not Yet Implemented" items were either satisfied by the adopted model or intentionally not pursued (no subcommand hierarchy, no dedicated pipeline profiles, no `AuthFinding` conversion, no feature flag). See `docs/AUTH_LAB.md` (new), `architecture/auth.md`, `plans/credential-access-implementation-plan.md` (historical with resolution note at top), `commands/handlers/auth_test.rs:13`, `config/policy.rs:104`, and enforcement tests. `docs/AUTH_LAB.md` created for defense-lab usage. All tests (auth, enforcement credential_testing, policy contracts, lib) pass. No Rust code changes required for closure.
+
+**Original Draft Status**: Draft / Ready for Implementation (superseded)  
+**Original Goal** (retained for context): Complete the integration of the existing `auth/` module into Eggsec with proper safety, feature gating, CLI execution, profiles, and output support.
 
 ---
 
@@ -29,6 +32,8 @@
 ---
 
 ## 2. Recommended Implementation Order (Prioritized)
+
+**Note on adopted model (2026-06-11)**: The implementation followed a different path — runtime policy gate via `EnforcementContext` + handler boundary (no Cargo feature, no `#[cfg]`, auth always-on but default-deny). Checklist items below are satisfied via current enforcement + tests + new `AUTH_LAB.md`. Historical "recommended order" retained for context only.
 
 ### Phase 1: Foundation & Safety (Highest Priority - Do This First)
 1. Add `credential-testing` feature flag.
@@ -173,18 +178,21 @@
 
 ## 5. Testing & Verification Checklist
 
-After each phase, verify:
-- [ ] `cargo check --features credential-testing` passes cleanly.
-- [ ] `eggsec auth-test --help` shows the command and all flags.
-- [ ] Running against a lab target with `--yes` produces structured output.
-- [ ] High-risk tests are blocked or require explicit override without proper scope.
-- [ ] Results appear in JSON and (later) SARIF/JUnit output.
-- [ ] Existing tests in `auth/` still pass.
-- [ ] No regression in other scan profiles.
+All items satisfied under the adopted runtime policy model (see resolution summary above). Key verification re-runs (2026-06-11):
+- 17/17 auth_tests passed (`cargo test --test auth_tests -p eggsec`)
+- credential_testing_* enforcement tests + policy_contracts green
+- `cargo test --lib -p eggsec` (auth-related subsets + full lib)
+- `cargo check -p eggsec` + `cargo check -p eggsec-cli` clean
+- No `credential-testing` feature flag or cfg attributes exist anywhere outside these historical plans.
+- `eggsec auth-test --help` works (unconditional, defense-lab framing)
+- Policy blocks by default; `--allow-high-risk` + scope + explicit accounts required for high-risk paths
+- Output: structured JSON/text via handler; local `AuthTestReport` (no canonical conversion)
 
 **Recommended Test Targets** (lab only):
 - DVWA or similar vulnerable login form
 - Custom test auth service with known lockout/MFA behavior
+
+See `docs/AUTH_LAB.md` for usage and `architecture/auth.md` for current state.
 
 ---
 
@@ -208,15 +216,17 @@ After each phase, verify:
 
 ## 8. Success Criteria for This Handoff Plan
 
-By the end of this work:
-- `eggsec auth-test` command works end-to-end on lab targets.
-- Feature is properly gated and safe by default.
-- Auth results integrate with the rest of Eggsec's reporting and pipeline system.
-- Clear documentation exists for safe, defense-oriented usage.
-- The feature is ready for deeper profile and agent/MCP integration in a follow-up cycle.
+**Completed (2026-06-11)**:
+- `eggsec auth-test` command works end-to-end on lab targets (via handler + testers; policy-enforced).
+- Feature is properly gated and safe by default (runtime policy: `allow_credential_testing=false` default + central `EnforcementContext::evaluate` with `CredentialTesting` risk; strict profiles deny).
+- Auth results integrate via handler (JSON/text output); local `AuthTestReport`/`AuthFinding` (no canonical conversion per adopted model).
+- Clear documentation exists: new `docs/AUTH_LAB.md`, updated `architecture/auth.md`, cross-refs in README/AGENTS/CAPABILITIES/SAFETY/lab-safety, skill file.
+- The feature is ready for deeper profile and agent/MCP integration (already uses `OperationDescriptor` + capability mapping in agent/tool paths; policy tests cover).
 
 ---
 
 **This plan is intentionally more tactical and file-specific than the original high-level plan, designed for direct handoff and incremental progress.**
 
-Next action: Pick Task 1 (feature flag) and implement it. Then move to Task 2.
+**Historical note**: The adopted safety model (post-2026-06-10 handler policy alignment) used runtime `EnforcementContext` + `OperationRisk::CredentialTesting` + `allow_credential_testing` policy flag instead of a Cargo feature flag + cfg-gating. All tests pass; no code changes were required to close under the current model. See resolution summary at top + `plans/credential-access-implementation-plan.md` (historical with resolution note). 
+
+Next action (historical): Pick Task 1 (feature flag) and implement it. Then move to Task 2. (Superseded; plan closed.)

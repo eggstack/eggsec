@@ -135,6 +135,8 @@ eggsec auth-test "$TARGET" \
 
 **Never** use production credentials, test against accounts you do not own, or exceed the authorized testing scope.
 
+See `docs/AUTH_LAB.md` for full defense-lab usage guide, config examples, and safety requirements.
+
 ## Rate and Concurrency Limits
 
 **Always** use rate and concurrency limits with high-risk features:

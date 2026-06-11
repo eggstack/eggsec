@@ -53,14 +53,14 @@ Primary surface is the `eggsec auth-test <target>` CLI command (defense-lab / hi
 - `allow_credential_testing` flag in `ExecutionPolicy` (default `false`)
 - Routed through central `EnforcementContext::evaluate()` (post-2026-06-10 handler policy alignment)
 - Handler regression tests + `enforcement_tests.rs` cover credential_testing paths
-- No `credential-testing` Cargo feature (auth always compiled; gated at runtime by policy + scope)
+- No `credential-testing` Cargo feature (auth always compiled; gated at runtime by policy + scope). See `docs/AUTH_LAB.md`.
 - Multi-protocol testers (SSH/FTP/SMTP) gated on `nse-ssh2` feature
 
 ## Findings & Output
 
 - Local types only: `AuthTestReport`, `AuthFinding` (defined in `auth/mod.rs`)
-- No conversion to `StoredFinding`, `ScanReportData`, or `eggsec-output` canonical types
-- Standard output formats supported via handler (where applicable)
+- No conversion to `StoredFinding`, `ScanReportData`, or `eggsec-output` canonical types (adopted model)
+- Standard output formats supported via handler (JSON/text; where applicable)
 
 ## TUI Status
 
@@ -68,6 +68,8 @@ Primary surface is the `eggsec auth-test <target>` CLI command (defense-lab / hi
 - Explicitly **not** part of the `Tab` enum (CLI-only surface; see `architecture/tui.md`)
 
 ## Implementation Status
+
+**Status as of 2026-06-11**: Feature complete under runtime policy model. See `plans/credential-access-implementation-next-steps.md` (Completed) and `plans/credential-access-implementation-plan.md` (historical, superseded with full resolution note at top). No dedicated `credential-testing` Cargo feature (runtime `allow_credential_testing` + `CredentialTesting` risk only). See new `docs/AUTH_LAB.md` for defense-lab usage.
 
 Core module fully implemented (testers, `AuthEngine`, safety controls, `AUTH_BANNER`, multi-protocol under `nse-ssh2`). CLI command + handler + policy integration complete and tested (17 wiremock `auth_tests` + enforcement/policy contract tests green).
 
