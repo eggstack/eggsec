@@ -104,7 +104,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `vuln-management` - Vulnerability triage and CVSS scoring
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
-- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN)
+- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN). TUI tab present under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab surface).
 - `mobile` - Mobile app static analysis (APK/IPA; Phase 1 static only, lab/defense framing)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
@@ -316,7 +316,7 @@ Skills are located in `.opencode/skills/`:
 | `tui-testing/` | TUI testing guidance and visual regression patterns |
 | `eggsec-wave-implementation/` | Historical wave implementation reference |
 
-Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance.
+Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance. See also plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note at top) for TUI + MCP/agentic integration status.
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
@@ -368,7 +368,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition) |
+| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition). Post wireless-tui-mcp-agentic-handoff-plan: TUI tab + TabSpec complete; MCP/agent exposure intentionally absent (standalone defense-lab; see plan resolution + MCP/Agentic section). |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands
@@ -384,6 +384,12 @@ cargo test --lib -p eggsec
 cargo test --test negative_tests -p eggsec
 cargo test --test scanner_tests -p eggsec
 cargo clippy --lib -p eggsec
+
+# Wireless feature (parsing/analysis tests require no hardware; TUI tab under feature)
+cargo check -p eggsec --features wireless
+cargo check -p eggsec-tui --features wireless
+cargo test --lib -p eggsec --features wireless
+cargo clippy --lib -p eggsec --features wireless
 ```
 
 ## Planning Notes for Future Agents

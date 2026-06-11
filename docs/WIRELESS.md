@@ -204,7 +204,7 @@ sudo eggsec wireless wlan0 --detect-suspicious --repeat 3
 - Deep WPS enumeration beyond beacon flags
 - Bluetooth/BLE
 - Windows/macOS native scanning (iwlist Linux-only)
-- Full pipeline integration (wireless is a standalone-complete defense-lab command; can be called from agent/MCP under policy). Optional reporting bridge only.
+- Full pipeline integration (wireless is a standalone-complete defense-lab surface; MCP and agentic tool exposure is intentionally absent per design decision — wireless is not registered as a SecurityTool and does not appear in tools/list or agent dispatch). Optional reporting bridge only. See architecture/wireless.md (MCP / Agentic section) and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note).
 
 Future phases may add a `wireless-advanced` sub-feature for gated active/lab-only capabilities.
 
@@ -225,7 +225,7 @@ Future phases may add a `wireless-advanced` sub-feature for gated active/lab-onl
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`
+- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`; `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI + MCP/agentic integration; resolution note at top records post-completion status)
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.
 
@@ -251,3 +251,5 @@ An optional `to_scan_report_data()` bridge (in `wireless/mod.rs`) converts findi
 - Design decision (standalone completion 2026-06-11): wireless remains intentionally outside the main `ScanProfile` pipeline and has no dedicated wireless profiles/stages (aspirational only; see `architecture/defense_lab.md`, `architecture/cli_commands.md` Special Cases, and `architecture/wireless.md`).
 
 Use the native types (`WirelessScanResult` / direct `--json`) for lab-specific wireless workflows, repeated-scan temporal summaries, and `--known-good` UX. Use the bridge (or `report convert` on native `--json`) when you need unified reporting consumers (SARIF/JUnit/HTML/Markdown/CSV/trend/etc.). The integration is lightweight and opt-in. "standalone defense-lab" language is deliberate: wireless is a complete standalone CLI (with optional TUI tab) for passive lab/defense use; the bridge is only for optional unification of output formats.
+
+This is one of the consolidated "standalone defense-lab surfaces" (wireless + mobile + auth-test). Wireless and mobile provide local types directly + optional `to_scan_report_data` bridge (auto-bridged by `eggsec report convert` when the feature is present); auth-test is local-only (no bridge, no conversion). None participate in `ScanProfile` pipelines or dedicated profiles/stages in this round (aspirational only). See the short shared "Output Models" explanation in `docs/USAGE.md` (Report Management → Convert Reports), `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, AGENTS.md (standalone defense-lab surfaces note), and CAPABILITIES.md (Lab Defense table). MCP/agent tool exposure is intentionally absent for wireless (see architecture/wireless.md MCP/Agentic section and the handoff plan resolution).

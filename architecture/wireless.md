@@ -37,19 +37,19 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 
 Standalone completion achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture.
 
-## MCP / Agentic / Tool Integration Status (as of advanced-integration plan 2026-06-11)
+## MCP / Agentic / Tool Integration Status (post wireless-tui-mcp-agentic-handoff-plan 2026-06-11; see plan resolution note)
 
 Wireless is a **standalone defense-lab surface** (CLI primary + optional TUI tab under the `wireless` feature). It is **not registered** as a `SecurityTool` in the tool registry (`tool/mod.rs`, `tool/registry.rs`) and is therefore **not listed or callable** via the MCP `tools/list` / `tools/call` surface (or agentic dispatch).
 
 - Policy enforcement for the CLI command (`commands/handlers/wireless.rs`) uses the central `CommandContext::evaluate_and_enforce_operation` with `OperationRisk::SafeActive` + `required_features: ["wireless"]` (no `requires_explicit_scope` because the "target" is a local interface name, not a network host).
 - The TUI tab participates in the same enforcement model via `TabSpec` (risk_group SafeActive, feature="wireless", direct_launch=true, operation="wireless") + `App::build_current_operation_descriptor` (which now propagates `spec.feature` into `required_features` for parity with CLI descriptors) + retro gate on direct-launch + shared `EnforcementContext` / `PendingPolicyConfirmation` / preflight.
 - In strict profiles (`McpStrict`, `AgentStrict`, `CiStrict`) the feature gate + explicit LoadedScope provenance rules apply if ever invoked; currently the only supported invocation path is the CLI handler (or direct library use under the same `EnforcementContext`).
-- This mirrors the mobile (CLI-only under feature, optional bridge) and auth-test (explicitly CLI-only, CredentialTesting risk, local findings only) patterns. See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases), `architecture/output.md`, `docs/USAGE.md` (Output Models block), and AGENTS.md standalone defense-lab surfaces note.
-- If future work adds a `WirelessTool` impl + registry entry, it would also need updates in `tool/protocol/mcp/policy.rs` (classify_tool_risk, required_capabilities_for_tool_call, infer_tool_category, CodingAgent allowlist consideration) + special target handling for interface names, plus MCP handler tests. No such registration is planned in the current round (design decision: keep wireless as a focused passive defense-lab CLI/TUI capability).
+- This mirrors the consolidated "standalone defense-lab surfaces" pattern (wireless + mobile + auth-test). Wireless and mobile emit local types directly with an optional `to_scan_report_data` bridge (and CLI auto-bridge in `report convert`); auth-test is local-only with no bridge. None participate in `ScanProfile` pipelines or dedicated profiles/stages in this round. See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases), `architecture/output.md`, `docs/USAGE.md` (Output Models block), AGENTS.md (standalone defense-lab surfaces note), and the handoff plan resolution note.
+- If future work adds a `WirelessTool` impl + registry entry, it would also need updates in `tool/protocol/mcp/policy.rs` (classify_tool_risk, required_capabilities_for_tool_call, infer_tool_category, CodingAgent allowlist consideration) + special target handling for interface names, plus MCP handler tests. No such registration is planned in the current round (design decision: keep wireless as a focused passive defense-lab CLI/TUI capability; MCP/agent tool exposure intentionally absent).
 
 The optional `to_scan_report_data` bridge (and CLI `report convert` auto-bridge) works for any consumer that obtains a native JSON `WirelessScanResult` (or repeat-wrapped form), regardless of invocation surface.
 
-See docs/WIRELESS.md for usage/safety/examples/best-practices; plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md, historical plans/wireless-first-handoff-plan.md, plans/integration-work-plan.md.
+See docs/WIRELESS.md for usage/safety/examples/best-practices; plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md, historical plans/wireless-first-handoff-plan.md, plans/integration-work-plan.md, and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note at top).
 
 ## Integration with Reporting Pipeline
 
