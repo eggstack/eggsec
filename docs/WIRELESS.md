@@ -184,6 +184,6 @@ Future phases may add a `wireless-advanced` sub-feature for gated active/lab-onl
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-first-handoff-plan.md` (first handoff to usable standalone state)
+- Plan: `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff)
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.

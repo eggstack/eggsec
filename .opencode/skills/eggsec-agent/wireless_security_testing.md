@@ -1,6 +1,6 @@
 ---
 name: wireless_security_testing
-description: "Wireless network security testing - WiFi reconnaissance and WPA/WPA2/WPA3 analysis"
+description: "Wireless network security testing - passive WiFi reconnaissance and basic security analysis (no handshake capture, aspirational)"
 triggers:
   - wifi
   - wireless
@@ -23,7 +23,7 @@ metadata:
 
 ## Overview
 
-Eggsec provides wireless network security testing capabilities through the `wireless` module. This enables WiFi reconnaissance, security type detection, and identification of weak points in wireless infrastructure.
+Eggsec provides wireless network security testing capabilities through the `wireless` module. This enables passive WiFi reconnaissance, security type detection, and identification of weak points in wireless infrastructure (no handshake capture; aspirational only).
 
 **Note**: This module is feature-gated behind the `wireless` feature flag.
 

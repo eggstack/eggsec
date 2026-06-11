@@ -294,7 +294,7 @@ git-secrets = []
 # PDF report generation
 pdf = ["printpdf"]
 
-# Wireless security testing (WiFi scanning, authentication testing)
+# Wireless security testing (WiFi scanning (passive reconnaissance and basic security analysis))
 wireless = []
 
 # OpenAPI schema ingestion and fuzz target generation

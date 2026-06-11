@@ -100,7 +100,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `vuln-management` - Vulnerability triage and CVSS scoring
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
-- `wireless` - WiFi scanning and authentication testing
+- `wireless` - WiFi scanning (passive reconnaissance and basic security analysis)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
 - `full` - All features combined (16 sub-features, does not include `grpc-api`, `ws-api`, or `pdf`)
@@ -357,7 +357,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | WiFi scanning |
+| `architecture/wireless.md` | WiFi scanning (passive recon + security analysis) |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands

@@ -166,7 +166,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`utils/`](../crates/eggsec/src/utils/) | 23 submodules (HTTP client, rate limiting, circuit breaker, formatting) | [utils.md](utils.md) |
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
-| [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning, authentication testing | [wireless.md](wireless.md) |
+| [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive reconnaissance and basic security analysis) | [wireless.md](wireless.md) |
 
 ---
 
@@ -408,7 +408,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `external-integrations` | `integrations/` | Jira, GitHub, GitLab |
 | `finding-workflow` | `workflow/` | Finding lifecycle management |
 | `vuln-management` | `vuln/` | Vulnerability triage |
-| `wireless` | `wireless/` | WiFi scanning, auth testing |
+| `wireless` | `wireless/` | WiFi scanning (passive recon + security analysis + rogue heuristic) |
 | `pdf` | `output/pdf` | PDF report generation |
 | `full` | All | All features combined |
 

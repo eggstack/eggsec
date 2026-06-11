@@ -137,10 +137,10 @@ Eggsec is organized as a Cargo workspace with eight crates:
 
 ```bash
 # Ubuntu/Debian
-sudo apt-get install libpcap-dev libssl-dev libusb-1.0-0-dev
+sudo apt-get install libpcap-dev libssl-dev wireless-tools
 
 # Fedora/RHEL
-sudo dnf install libpcap-devel openssl-devel libusb1-devel
+sudo dnf install libpcap-devel openssl-devel wireless-tools
 ```
 
 ### Build and Run
@@ -291,7 +291,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `container` | Kubernetes/Docker security scanning | Stable |
 | `cloud` | AWS/GCP/Azure asset discovery | Stable |
 | `git-secrets` | Git secrets scanning | Stable |
-| `wireless` | WiFi scanning and authentication testing | Stable |
+| `wireless` | WiFi scanning (passive reconnaissance and basic security analysis) | Stable |
 | `pdf` | PDF report generation | Stable |
 | `advanced-hunting` | Advanced threat hunting | Stable |
 | `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |
@@ -324,7 +324,7 @@ cargo build --release -p eggsec-cli --features full
 | Feature | Required Packages | Install (Ubuntu/Debian) |
 |---------|-------------------|--------------------------|
 | `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` |
-| `wireless` | `libusb-1.0-0-dev` | `sudo apt-get install libusb-1.0-0-dev` |
+| `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) |
 | `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` |
 
 ## Output Formats

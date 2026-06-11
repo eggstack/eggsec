@@ -25,20 +25,8 @@ Passive WiFi network reconnaissance and basic security posture assessment (defen
 | `eggsec-tui/.../workers/security.rs` | run_wireless_task (TUI worker) |
 | `eggsec-output/.../convert.rs` | WirelessNetworkReportData + ScanReportData integration (HTML/MD/JSON) |
 
-## Implementation Status (Post First-Handoff)
+## Implementation Status
 
-Usable standalone state achieved per plans/wireless-first-handoff-plan.md:
+Standalone completion achieved (2026-06-11) per plans/wireless-standalone-completion-plan.md: CLI polish with --repeat diffs/summaries and improved formatting/warnings; strengthened rogue detection with security-downgrade severity boost + --known-good allowlist; robustness with --dry-run, better errors/partial-failure resilience in repeats, improved parse handling; doc fixes across README/AGENTS/architecture/skills/Cargo/lib; tests expanded. Still passive-only, Linux/iwlist, SafeActive policy, no active attacks or full pipeline integration.
 
-- Enhanced passive parsing: WPS, hidden SSIDs (normalized to "<hidden>"), WPA2/WPA3 transition/mixed mode.
-- Enhanced analysis: weak signal, duplicate-SSID basic rogue/Evil-Twin candidate (passive heuristic, labeled), WPS/transition/hidden findings + original legacy/open/unknown/enterprise.
-- Recommendations expanded; always-on "run repeated scans for rogue observation".
-- CLI polish: --repeat, upfront root/iwlist/perms warning (unless quiet), per-iteration progress, "Findings / Vulnerabilities:" section in human output, JSON fidelity.
-- Rogue/suspicious detection: integrated passive heuristic in analyze_networks (same SSID + differing BSSID/security).
-- Output: extended WirelessNetworkReportData (3 new fields, serde defaults); findings feed unified reports.
-- Docs: docs/WIRELESS.md (full), architecture/wireless.md, README/CAPABILITIES/SAFETY/AGENTS/skill updates.
-- Tests: 12 unit tests (parse + analysis + rogue/weak/etc.) under --features wireless; no hardware required.
-- Safety: Policy-enforced (SafeActive); explicit lab/authorized use messaging; passive only.
-
-Not implemented (deferred): active attacks (deauth etc.), handshake/PMKID/WPS PIN, deep WPS, BT/BLE, non-Linux, full pipeline integration (standalone defense-lab command for now; callable under policy from agent/MCP).
-
-See docs/WIRELESS.md for usage, safety, examples; plans/wireless-first-handoff-plan.md for phase goals.
+See docs/WIRELESS.md for usage, safety, examples; plans/wireless-standalone-completion-plan.md (and historical wireless-first-handoff-plan.md).

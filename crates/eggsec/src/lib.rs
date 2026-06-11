@@ -63,7 +63,7 @@
 //! - `vuln-management` - Vulnerability triage and prioritization
 //! - `cloud` - Cloud security scanning (AWS, GCP, Azure)
 //! - `git-secrets` - Git secrets scanning
-//! - `wireless` - Wireless security testing (WiFi scanning, authentication testing)
+//! - `wireless` - Wireless security testing (WiFi scanning (passive reconnaissance and basic security analysis))
 //! - `pdf` - PDF report generation
 //! - `full` - All features combined
 //!
