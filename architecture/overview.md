@@ -90,7 +90,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`fuzzer/`](../crates/eggsec/src/fuzzer/) | Security fuzzing engine with 30 payload types (SQLi, XSS, SSRF, Path Traversal, ReDoS, etc.) | [fuzzer.md](fuzzer.md) |
+| [`fuzzer/`](../crates/eggsec/src/fuzzer/) | Security fuzzing engine with 40 payload types (SQLi, XSS, SSRF, Path Traversal, ReDoS, etc.) | [fuzzer.md](fuzzer.md) |
 | [`waf/`](../crates/eggsec/src/waf/) | WAF detection (34 products), bypass techniques, evasion-resistance testing | [waf.md](waf.md) |
 | [`auth/`](../crates/eggsec/src/auth/) | Authentication testing (brute force, credential stuffing, MFA bypass, JWT analysis, OAuth/OIDC) | [auth.md](auth.md) |
 | [`hunt/`](../crates/eggsec/src/hunt/) | Advanced threat hunting (authorization bypass, race conditions, advanced injection) | [hunt.md](hunt.md) |
@@ -139,7 +139,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`ai/`](../crates/eggsec/src/ai/) | AI/LLM client (OpenAI, Anthropic, Azure), cache, planner, script generation, WAF bypass suggestions | [ai_agents.md](ai_agents.md) |
-| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 164 NSE libraries | [nse_integration.md](nse_integration.md) |
+| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 166 NSE libraries | [nse_integration.md](nse_integration.md) |
 | [`integrations/`](../crates/eggsec/src/integrations/) | Jira, GitHub, GitLab external connectors | [integrations.md](integrations.md) |
 | [`notify/`](../crates/eggsec/src/notify/) | Webhook, Slack, Discord, Teams notifications | [notify.md](notify.md) |
 
@@ -147,7 +147,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 39+ commands | [cli_commands.md](cli_commands.md) |
+| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 42 commands | [cli_commands.md](cli_commands.md) |
 | [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 29 tabs, event loop | [tui.md](tui.md) |
 
 ### Supporting Modules
@@ -174,7 +174,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 ### CLI (`cli/`)
 
-The command-line interface is built with `clap` and provides 39+ commands organized into functional groups:
+The command-line interface is built with `clap` and provides 42 commands organized into functional groups:
 
 ```
 eggsec scan      # Port scanning, service fingerprinting
@@ -242,7 +242,7 @@ High-performance port scanning with configurable timing:
 
 ### Fuzzer (`fuzzer/`)
 
-Mutation-based security fuzzing engine with 30 payload types:
+Mutation-based security fuzzing engine with 40 payload types:
 
 | Category | Payload Types |
 |----------|---------------|
@@ -375,7 +375,7 @@ Nmap Scripting Engine compatibility:
 | Component | Description |
 |-----------|-------------|
 | **Lua VM** | Lua 5.4 via mlua crate |
-| **Libraries** | 164 NSE-compatible library modules |
+| **Libraries** | 166 NSE-compatible library modules |
 | **CVE Integration** | NVD, OSV, CISA KEV feeds |
 | **Sandbox** | Restricted Lua operation execution |
 
@@ -605,7 +605,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: 3032+ (2718 #[test] + 314 #[tokio::test])
+- **Test count**: 3382 (3063 #[test] + 319 #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---
@@ -648,4 +648,4 @@ See [plans/plan.md](../plans/plan.md) for implementation history and completed w
 
 ---
 
-*Last updated: 2026-06-08*
+*Last updated: 2026-06-11*

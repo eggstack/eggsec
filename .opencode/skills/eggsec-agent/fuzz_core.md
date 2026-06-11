@@ -118,7 +118,7 @@ PayloadFilter::Regex(regex) => {
 
 Location: `crates/eggsec/src/fuzzer/payloads/mod.rs`
 
-The `PayloadType` enum defines 30 payload categories. When adding new payload types:
+The `PayloadType` enum defines 40 payload categories. When adding new payload types:
 
 1. Add variant to `PayloadType` enum
 2. Implement payload generation in the appropriate module

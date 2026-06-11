@@ -4,7 +4,7 @@
 
 Common utility functions and helpers used throughout the codebase for HTTP handling, URL parsing, scope checking, and output formatting.
 
-## Submodules (22 files)
+## Submodules (23 files, 21 declared in mod.rs)
 
 | Module | Purpose |
 |--------|---------|
@@ -23,7 +23,6 @@ Common utility functions and helpers used throughout the codebase for HTTP handl
 | `rate_limiter` | Rate limiting utilities |
 | `redaction` | Secret redaction helpers |
 | `scope` | `check_scope()` - target scope validation |
-| `serialization` | JSON serialization/deserialization helpers |
 | `service_detection` | Service detection utilities |
 | `stealth` | Stealth/scanning evasion utilities |
 | `target` | Target extraction and normalization |

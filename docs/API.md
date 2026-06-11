@@ -470,7 +470,7 @@ pub struct ReconResult {
 
 ### Scan Profiles
 
-Eggsec provides 11 pre-configured scan profiles:
+Eggsec provides 16 pre-configured scan profiles:
 
 ```rust
 pub enum ScanProfile {

@@ -26,7 +26,7 @@
 //! - **`commands`** - Command dispatch and handler implementations
 //! - **`config`** - Configuration loading (TOML/YAML), scope enforcement
 //! - **`scanner`** - Port scanning, endpoint discovery, service fingerprinting
-//! - **`fuzzer`** - Security fuzzing engine with 30 payload types
+//! - **`fuzzer`** - Security fuzzing engine with 40 payload types
 //! - **`waf`** - WAF detection (34 products) and bypass techniques
 //! - **`recon`** - Passive reconnaissance (DNS, WHOIS, SSL, tech detection, CVE mapping)
 //! - **`loadtest`** - HTTP load testing with metrics

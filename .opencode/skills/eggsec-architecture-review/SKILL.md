@@ -245,7 +245,7 @@ See `plans/stale_items.md` for full list
 | ai_agents.md | High | File path missing `agent/` prefix |
 | recon.md | Medium | Module count 18 vs 17 |
 | defense_lab.md | High | All profiles verified correct |
-| fuzzer.md | High | All 30 payloads verified |
+| fuzzer.md | High | All 40 payloads verified |
 | waf.md | High | All 34 products verified |
 | scanner.md | High | 261 endpoints verified |
 | nse_integration.md | Medium | Bug fix claims unverified |

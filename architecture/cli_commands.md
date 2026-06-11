@@ -6,7 +6,7 @@ The CLI and Commands layer is responsible for parsing user input, managing globa
 
 Eggsec uses `clap` for command-line argument parsing. The CLI is organized into several modules, each defining the arguments for a specific category of commands:
 
-- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (39 variants), and `CommonHttpArgs`.
+- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (42 variants), and `CommonHttpArgs`.
 - **`scan.rs`**: Arguments for the `scan` command (port scanning, endpoint discovery).
 - **`fuzz.rs`**: Arguments for the `fuzz` command (security fuzzing).
 - **`http.rs`**: Arguments for HTTP-specific operations (load, recon, graphql, oauth).

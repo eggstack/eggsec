@@ -168,13 +168,13 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 3224 (2910 #[test] + 314 #[tokio::test]) + ~20 enforcement scope/provenance tests |
+| Tests | 3382 (3063 #[test] + 319 #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
-| Source files | 783 (.rs files in crates/) |
+| Source files | 786 (.rs files in crates/) |
 | Payload types | 40 |
 | Tabs | 29 (Tab enum variants 0-28) |
 | WAF products | 34 |
-| NSE libraries | 164 public modules |
+| NSE libraries | 166 public modules |
 | Modules | 42 |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |

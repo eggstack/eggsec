@@ -8,7 +8,7 @@ Specialized guidance for the fuzzing engine module.
 - `FuzzResult` - Fuzzing result in `fuzzer/engine/types.rs`:
   - `response_body: Option<String>` - captured response body for regex matching
   - Used by `filters::FilterChain` for regex-based filtering
-- `PayloadType` - Enum of 30 payload categories
+- `PayloadType` - Enum of 40 payload categories
 
 ## Module Structure (Verified 2026-06-04)
 

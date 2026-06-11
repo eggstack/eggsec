@@ -89,7 +89,7 @@ eggsec scan endpoints --target https://example.com --wordlist paths.txt
 
 ### 4. Fuzzing
 
-Security payload testing across 30 payload types:
+Security payload testing across 40 payload types:
 
 ```bash
 # SQL injection fuzzing

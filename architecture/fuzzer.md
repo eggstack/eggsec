@@ -28,7 +28,7 @@ Eggsec comes with a vast library of payloads for different vulnerability types. 
 - **Infrastructure**: Host Header Injection, Cache Poisoning, Compression Bombs, Header Expansion, OAST.
 - **Additional**: SAML, HTML Injection, CSS Injection, SSI, DOM Clobbering, XSLT, ViewState, Dependency Confusion, XS-Leak, LaTeX.
 
-Six categories are treated as "advanced" (with dedicated fuzzer implementations and extra logic): GraphQL, OAuth, Jwt, Idor, Ssti, Grpc.
+Seven categories are treated as "advanced" (with dedicated fuzzer implementations and extra logic): GraphQL, OAuth, Jwt, Idor, Ssti, WebSocket, Grpc.
 
 Each payload type has its own module (e.g., `sqli.rs`, `xss.rs`). The `payload_vec!` macro in `macros.rs` builds payload vectors from inline data.
 

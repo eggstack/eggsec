@@ -43,7 +43,7 @@ Eggsec includes 21+ reconnaissance modules for comprehensive target intelligence
 
 ## Fuzzing Payload Types
 
-Eggsec supports 30 security fuzzing payload types:
+Eggsec supports 40 security fuzzing payload types:
 
 | Type | Alias | File | Tests For |
 |------|-------|------|-----------|
@@ -115,7 +115,7 @@ Advanced vulnerability detection capabilities:
 |----------|------|-------------|
 | **REST API** | `crates/eggsec/src/tool/protocol/rest.rs` | REST API server - exposes eggsec tools via HTTP (requires rest-api feature) |
 | **gRPC API** | `crates/eggsec/src/tool/protocol/grpc.rs` | gRPC API server - exposes eggsec tools via protocol buffers (requires grpc-api feature) |
-| **MCP Server** | `crates/eggsec/src/tool/protocol/mcp/` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (requires mcp-server feature) |
+| **MCP Server** | `crates/eggsec/src/tool/protocol/mcp/` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (built-in) |
 
 ---
 
@@ -157,7 +157,7 @@ Full security testing toolkit for AI agents. All tools are available.
 | Recon | Yes | All 21+ modules |
 | Port scanning | Yes | |
 | Fingerprinting | Yes | |
-| Fuzzing (all types) | Yes | 30 payload types |
+| Fuzzing (all types) | Yes | 40 payload types |
 | WAF detection/bypass | Yes | |
 | WAF stress testing | Yes | |
 | Load testing | Yes | |
