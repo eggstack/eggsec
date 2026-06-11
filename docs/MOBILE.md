@@ -82,19 +82,31 @@ Findings and metadata are also exposed via `to_scan_report_data()` for unified r
 ## Output & Integration
 
 - Human-readable text (default) includes target metadata, per-finding blocks (severity/title/category/description/recommendation/evidence), and Recommendations section + duration.
-- `--json` produces the full `MobileScanReport` (target, platform, app_id, version, findings array, recommendations, scan_type: "mobile-static", duration_ms, etc.).
+- `--json` produces the full `MobileScanReport` (target, platform, app_id, version, findings array, recommendations, scan_type: "mobile-static", duration_ms, etc.). This native shape is accepted directly by `eggsec report convert` (auto-bridged to `ScanReportData` when the `mobile` feature is enabled).
 - `-o` / `--output` supported for both modes (writes to file; still prints path to stderr unless quiet).
-- Structured findings feed into `ScanReportData` (via `to_scan_report_data()`) for SARIF, JUnit, HTML, Markdown, CSV, etc. pipelines.
-- Compatible with the existing report tooling:
+- Structured findings feed into `ScanReportData` (via `to_scan_report_data()`) for SARIF, JUnit, HTML, Markdown, CSV, etc. pipelines. The bridge is optional and opt-in: use it (or rely on the CLI auto-bridge for `report convert`) when you need unified report consumers; otherwise consume the native `MobileScanReport` directly for lab-specific workflows.
+- Compatible with the existing report tooling (native JSON works via auto-bridge; explicit bridge also available programmatically):
 
 ```bash
 eggsec mobile app.apk --json -o mobile.json
 eggsec report convert mobile.json -f sarif -o mobile.sarif
 eggsec report convert mobile.json -f html -o mobile.html
 eggsec report convert mobile.json -f markdown -o mobile.md
+eggsec report convert mobile.json -f junit -o mobile.xml
 ```
 
 See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` for unified report consumers.
+
+## Integration with Reporting Pipeline
+
+`eggsec mobile` is intentionally a **standalone defense-lab CLI** (not a `ScanProfile` pipeline stage). It emits local `MobileScanReport` / `MobileFinding` types directly for human and `--json` use. An optional `to_scan_report_data()` bridge (in `mobile/mod.rs`) converts to the canonical `ScanReportData` used by `eggsec-output` converters (SARIF, JUnit, HTML, Markdown, CSV, JSON roundtrip, trend, etc.).
+
+- Use the native types for lab-specific flows, regression on `Mobile*` shapes, or when you do not need unified consumers.
+- Use `--json` + `eggsec report convert` (or call `to_scan_report_data` in your own tooling) when you want SARIF/JUnit/etc. or to feed into `report trend` / other unified consumers.
+- No `ScanProfile` integration in Phase 1 (`mobile-static` / `mobile-regression` profiles are aspirational; see `architecture/defense_lab.md` Future and `architecture/mobile.md`).
+- Design decision (Phase 1 close 2026-06-11): keep the surface standalone and lightweight; the bridge provides reporting unification without forcing the module into the main chained pipeline.
+
+The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | report convert` flow work out of the box when built with `--features mobile`. Categories in bridged output are of the form `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`) to preserve signal while satisfying the platform prefix.
 
 ## Limitations (Phase 1)
 

@@ -220,7 +220,7 @@ pub fn to_scan_report_data(result: &MobileScanReport) -> crate::output::convert:
         .map(|f| FindingData {
             title: f.title.clone(),
             severity: f.severity.as_str().to_string(),
-            category: format!("mobile-{}", result.platform.as_str()),
+            category: format!("mobile-{}-{}", result.platform.as_str(), f.category),
             description: f.description.clone(),
             location: result.target.clone(),
             evidence: f.evidence.clone(),
@@ -281,9 +281,52 @@ mod tests {
         assert_eq!(data.scan_type, "mobile-static");
         assert_eq!(data.findings.len(), 1);
         assert_eq!(data.findings[0].severity, "high");
-        assert!(data.findings[0].category.contains("mobile-android"));
+        assert_eq!(data.findings[0].category, "mobile-android-manifest");
         assert_eq!(data.findings[0].remediation.as_deref(), Some("r"));
+        assert_eq!(data.findings[0].evidence.as_deref(), Some("e"));
         assert!(data.wireless_networks.is_empty());
         assert!(data.policy_summary.is_none());
+    }
+
+    #[test]
+    fn to_scan_report_data_ios_and_multiple_and_empty_and_roundtrip() {
+        // iOS platform category
+        let mut r = MobileScanReport::new("app.ipa", MobilePlatform::Ios);
+        r.findings.push(MobileFinding {
+            category: "transport".into(),
+            severity: Severity::Medium,
+            title: "weak transport".into(),
+            description: "desc".into(),
+            recommendation: "rec".into(),
+            evidence: None,
+        });
+        r.findings.push(MobileFinding {
+            category: "secret".into(),
+            severity: Severity::High,
+            title: "hardcoded".into(),
+            description: "d2".into(),
+            recommendation: "r2".into(),
+            evidence: Some("key=...".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.target, "app.ipa");
+        assert_eq!(data.scan_type, "mobile-static");
+        assert_eq!(data.findings.len(), 2);
+        assert_eq!(data.findings[0].category, "mobile-ios-transport");
+        assert_eq!(data.findings[1].category, "mobile-ios-secret");
+        assert_eq!(data.findings[1].evidence.as_deref(), Some("key=..."));
+        assert!(data.wireless_networks.is_empty());
+
+        // empty findings still produces valid bridge (0 findings)
+        let r2 = MobileScanReport::new("empty.apk", MobilePlatform::Android);
+        let d2 = to_scan_report_data(&r2);
+        assert_eq!(d2.findings.len(), 0);
+        assert_eq!(d2.target, "empty.apk");
+
+        // serde roundtrip of bridged data
+        let json = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.findings.len(), 2);
+        assert_eq!(back.findings[0].category, "mobile-ios-transport");
     }
 }

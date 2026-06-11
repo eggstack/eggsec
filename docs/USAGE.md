@@ -582,10 +582,10 @@ eggsec traceroute 192.168.1.1 --max-hops 30 --probes 5
 
 ### Convert Reports
 
-Convert scan results between formats:
+Convert scan results between formats. The converter accepts canonical `ScanReportData` JSON. It also accepts native JSON output from standalone defense-lab commands (`eggsec wireless` and `eggsec mobile`, when the corresponding feature is enabled) via an automatic bridge to `ScanReportData` — so you can directly pipe their `--json` outputs without manual conversion.
 
 ```bash
-# Convert JSON to HTML
+# Convert canonical or bridged JSON to HTML
 eggsec report convert input.json -f html -o report.html
 
 # Convert JSON to CSV
@@ -599,7 +599,19 @@ eggsec report convert scan.json -f junit -o results.xml
 
 # Convert to Markdown
 eggsec report convert scan.json -f markdown -o report.md
+
+# Wireless (native --json from defense-lab command; auto-bridged)
+eggsec wireless wlan0 --json -o wireless.json
+eggsec report convert wireless.json -f sarif -o wireless.sarif
+eggsec report convert wireless.json -f junit -o wireless.xml
+
+# Mobile (native --json; auto-bridged)
+eggsec mobile app.apk --json -o mobile.json
+eggsec report convert mobile.json -f html -o mobile.html
+eggsec report convert mobile.json -f markdown -o mobile.md
 ```
+
+See `docs/WIRELESS.md` (Integration with Reporting Pipeline) and `docs/MOBILE.md` (same) for when to use the native types vs. the optional bridge, and for notes on rogue-in-bridge and category naming.
 
 ### Trend Analysis
 

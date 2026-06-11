@@ -34,11 +34,23 @@ Standalone static security analysis of Android APKs and iOS IPAs for authorized 
 
 Phase 1 static-only (pure-Rust, SafeActive, standalone CLI + optional report bridge). No dynamic capabilities, no Frida, no TUI tab, no pipeline profile integration (`mobile-static` / `mobile-regression` are aspirational). Phase 1 closed as complete standalone capability on 2026-06-11 (see plans/mobile-final-closeout-plan.md for verification details, added tests, and doc consistency pass).
 
-See plans/mobile-first-handoff-plan.md and docs/MOBILE.md.
+See plans/mobile-first-handoff-plan.md, plans/integration-work-plan.md and docs/MOBILE.md.
+
+## Integration with Reporting Pipeline
+
+`eggsec mobile` is intentionally a **standalone defense-lab CLI** (not a `ScanProfile` pipeline stage). It emits local `MobileScanReport` / `MobileFinding` types directly for human and `--json` use.
+
+An optional `to_scan_report_data()` bridge (in `mobile/mod.rs`; mirrors wireless pattern) converts to `ScanReportData` for unified consumers (SARIF, JUnit, HTML, Markdown, CSV, JSON, trend, etc.).
+
+The `report convert` handler auto-bridges native `MobileScanReport` JSON when the `mobile` feature is enabled, so `eggsec mobile app.apk --json -o m.json ; eggsec report convert m.json -f ...` works directly.
+
+Categories in bridged output are `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`) to preserve the original finding category signal while satisfying the platform prefix requirement.
+
+**Design decision (Phase 1 close 2026-06-11)**: Standalone CLI-only (no TUI, no pipeline stages/profiles); optional bridge provides reporting unification without forcing `ScanProfile` integration (`mobile-static`/`mobile-regression` remain aspirational per `architecture/defense_lab.md` Future). Use native types for lab-specific flows; use bridge (or `report convert` on native JSON) for unified report consumers. Integration is lightweight and opt-in.
 
 Integration points:
 - Enforcement: `CommandContext::evaluate_and_enforce_operation` (OperationMode::StandardAssessment, OperationRisk::SafeActive, required_features: ["mobile"]).
-- Reporting: local types emitted directly; `to_scan_report_data` available for OutputFormat consumers (JSON/SARIF/etc.).
+- Reporting: local types emitted directly; `to_scan_report_data` available for OutputFormat consumers (JSON/SARIF/etc.); auto-bridge in report handler.
 - Feature gate + policy: `mobile` in Cargo.toml (depends on optional `zip`/`plist`); listed in `full`; policy decision in `config/policy_decision.rs`.
 - Handler dispatch: `commands/handlers/mod.rs` and `cli/mod.rs`.
 

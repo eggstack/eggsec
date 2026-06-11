@@ -97,9 +97,9 @@ The Wireless tab (if built with the feature) provides interactive interface entr
 ## Output & Integration
 
 - Human-readable text (default) includes networks table + Recommendations + Findings/Vulnerabilities sections.
-- `--json` produces the full `WirelessScanResult` (networks + recommendations + metadata).
+- `--json` produces the full `WirelessScanResult` (networks + recommendations + metadata). For repeated scans (`--repeat > 1`) this is wrapped as `{ "last_scan": <WirelessScanResult>, "repeat_count": N, "summary": "..." }`. The native shape (direct result or wrapped) is accepted directly by `eggsec report convert` (auto-bridged to `ScanReportData` when the `wireless` feature is enabled).
 - File output (`-o`) supported for both modes.
-- Structured findings feed into `ScanReportData` (via `to_scan_report_data`) for SARIF/JUnit/HTML/Markdown/etc. pipelines.
+- Structured findings feed into `ScanReportData` (via `to_scan_report_data`) for SARIF/JUnit/HTML/Markdown/etc. pipelines. The bridge is optional and opt-in.
 - New fields on `WirelessNetwork` / report data: `wps_enabled`, `is_hidden`, `transition_mode` (serde defaulted for forward compat on old reports).
 - Note: `to_scan_report_data()` (used for SARIF/JUnit/HTML/Markdown/etc.) always calls `analyze_networks(..., None)`; rogue/Evil-Twin candidates are therefore always present in structured report findings regardless of `--known-good`. `--known-good` suppression applies to CLI human-readable rogue findings plus repeat-scan diffs/summary, not to the raw report data.
 
@@ -165,9 +165,9 @@ Networks found: 3
 ## Recommended Workflows
 
 - **Lab / defense validation**: Repeated scans (`--repeat`) against known-good APs to baseline "normal" BSSIDs/channels/security; flag deviations.
-- **CI / regression**: JSON output + `to_scan_report_data` into SARIF/JUnit for wireless posture checks (e.g. "no open/WEP/WPA in this environment").
+- **CI / regression**: JSON output + `to_scan_report_data` (or rely on CLI auto-bridge) into SARIF/JUnit for wireless posture checks (e.g. "no open/WEP/WPA in this environment").
 - **Rogue hunting (passive)**: Use `--repeat` and review the summarized rogue count in default output, or add `--detect_suspicious` for the full findings list. Cross-check against asset inventory. This is a heuristic only — follow up with authorized physical/radio validation.
-- **Reporting**: Pipe JSON to `eggsec report` or consume `ScanReportData` directly.
+- **Reporting**: Pipe native `--json` to `eggsec report convert` (auto-bridged) or consume `ScanReportData` directly via the bridge.
 
 ## Best Practices (Lab / Defensive Use)
 
@@ -204,7 +204,7 @@ sudo eggsec wireless wlan0 --detect_suspicious --repeat 3
 - Deep WPS enumeration beyond beacon flags
 - Bluetooth/BLE
 - Windows/macOS native scanning (iwlist Linux-only)
-- Full pipeline integration (wireless is a standalone-complete defense-lab command; can be called from agent/MCP under policy)
+- Full pipeline integration (wireless is a standalone-complete defense-lab command; can be called from agent/MCP under policy). Optional reporting bridge only.
 
 Future phases may add a `wireless-advanced` sub-feature for gated active/lab-only capabilities.
 
@@ -225,6 +225,20 @@ Future phases may add a `wireless-advanced` sub-feature for gated active/lab-onl
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff)
+- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.
+
+## Integration with Reporting Pipeline
+
+`eggsec wireless` is a **standalone-complete** defense-lab surface (CLI + optional TUI tab under the `wireless` feature). It emits local `WirelessScanResult` (with embedded `WirelessNetwork` list and `recommendations`) directly for human-readable output and `--json`.
+
+An optional `to_scan_report_data()` bridge (in `wireless/mod.rs`) converts findings (from `analyze_networks`) + the full networks list into canonical `ScanReportData` (with `wireless_networks: Vec<WirelessNetworkReportData>` and `findings`). This enables SARIF, JUnit, HTML (with networks table), Markdown, CSV, JSON, trend, etc. via `eggsec-output`.
+
+- Native `--json` (or the `--repeat` wrapped form with `last_scan`) is accepted directly by `eggsec report convert` (auto-bridged in the report handler when `wireless` feature is present). This fulfills the documented "CI / regression" and "Reporting" flows.
+- Categories in the bridged findings are always `"wireless"`.
+- Evidence is not populated in the bridge (vulnerabilities carry description + recommendation); remediation is mapped from the vuln recommendation.
+- The bridge always runs rogue analysis (known-good suppression is for human/repeat UX only).
+- Design decision (standalone completion 2026-06-11): wireless remains intentionally outside the main `ScanProfile` pipeline and has no dedicated wireless profiles/stages (aspirational only; see `architecture/defense_lab.md`, `architecture/cli_commands.md` Special Cases, and `architecture/wireless.md`).
+
+Use the native types for lab-specific wireless workflows. Use the bridge (or `report convert` on native JSON) when you need unified reporting consumers. The integration is lightweight and opt-in.

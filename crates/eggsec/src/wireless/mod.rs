@@ -1182,4 +1182,65 @@ mod tests {
         assert!(set.contains("00:11:22:33:44:55"));
         assert!(set.contains("CorpNet,aa:bb:cc:dd:ee:ff"));
     }
+
+    #[test]
+    fn to_scan_report_data_produces_valid_bridge() {
+        // minimal result with 1 network that triggers a vuln + wireless_networks populated
+        let result = WirelessScanResult {
+            interface: "wlan0".into(),
+            networks: vec![WirelessNetwork {
+                ssid: "OpenNet".into(),
+                bssid: "00:11:22:33:44:55".into(),
+                channel: 6,
+                security_type: SecurityType::Open,
+                signal_strength: -60,
+                last_seen: "now".into(),
+                wps_enabled: false,
+                is_hidden: false,
+                transition_mode: false,
+            }],
+            scan_duration_secs: 5,
+            recommendations: vec!["rec1".into()],
+        };
+        let data = to_scan_report_data(&result);
+        assert_eq!(data.target, "wlan0");
+        assert_eq!(data.scan_type, "wireless");
+        assert!(!data.findings.is_empty());
+        let f = &data.findings[0];
+        assert_eq!(f.category, "wireless");
+        assert_eq!(f.severity, "medium");
+        assert!(f.title.contains("Open") || f.description.contains("no encryption"));
+        assert!(f.remediation.is_some());
+        assert!(f.evidence.is_none());
+        assert!(f.cwe_ids.is_empty());
+        assert_eq!(data.wireless_networks.len(), 1);
+        let wn = &data.wireless_networks[0];
+        assert_eq!(wn.ssid, "OpenNet");
+        assert_eq!(wn.security_type, "Open");
+        assert!(!wn.wps_enabled);
+        assert!(!wn.is_hidden);
+        assert!(!wn.transition_mode);
+        assert!(data.policy_summary.is_none());
+
+        // empty networks: 0 findings + 0 wireless_networks still valid
+        let empty = WirelessScanResult {
+            interface: "wlan1".into(),
+            networks: vec![],
+            scan_duration_secs: 1,
+            recommendations: vec![],
+        };
+        let d2 = to_scan_report_data(&empty);
+        assert_eq!(d2.findings.len(), 0);
+        assert!(d2.wireless_networks.is_empty());
+        assert_eq!(d2.target, "wlan1");
+
+        // serde roundtrip of bridged output + load via eggsec-output
+        let j = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.findings.len(), 1);
+        assert_eq!(back.wireless_networks.len(), 1);
+        // direct from_str simulates what load_scan_report does internally (used by report convert)
+        let loaded: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert_eq!(loaded.target, "wlan0");
+    }
 }

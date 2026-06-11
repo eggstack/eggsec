@@ -10,8 +10,44 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
 
     match &args.command {
         ReportCommand::Convert(convert_args) => {
-            let report =
-                convert::load_scan_report(&convert_args.input).map_err(|e| anyhow::anyhow!(e))?;
+            let content = tokio::fs::read_to_string(&convert_args.input).await?;
+            // Parse as canonical ScanReportData, or auto-bridge native JSON from
+            // standalone defense-lab commands (wireless/mobile) when their feature is enabled.
+            // This makes `eggsec <lab> --json -o out.json ; eggsec report convert out.json -f ...` work.
+            let report: convert::ScanReportData = if let Ok(r) = serde_json::from_str::<convert::ScanReportData>(&content) {
+                r
+            } else {
+                #[cfg(feature = "wireless")]
+                {
+                    if let Ok(w) = serde_json::from_str::<crate::wireless::WirelessScanResult>(&content) {
+                        crate::wireless::to_scan_report_data(&w)
+                    } else if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(ls) = v.get("last_scan") {
+                            if let Ok(w) = serde_json::from_value::<crate::wireless::WirelessScanResult>(ls.clone()) {
+                                crate::wireless::to_scan_report_data(&w)
+                            } else {
+                                return Err(anyhow::anyhow!("Input is not ScanReportData and last_scan is not a valid wireless result"));
+                            }
+                        } else {
+                            return Err(anyhow::anyhow!("Input is not ScanReportData and does not match wireless shapes (direct or wrapped last_scan)"));
+                        }
+                    } else {
+                        return Err(anyhow::anyhow!("Input is not ScanReportData and wireless feature present but could not parse as wireless"));
+                    }
+                }
+                #[cfg(all(not(feature = "wireless"), feature = "mobile"))]
+                {
+                    if let Ok(m) = serde_json::from_str::<crate::mobile::MobileScanReport>(&content) {
+                        crate::mobile::to_scan_report_data(&m)
+                    } else {
+                        return Err(anyhow::anyhow!("Input is not ScanReportData and does not match mobile shape"));
+                    }
+                }
+                #[cfg(all(not(feature = "wireless"), not(feature = "mobile")))]
+                {
+                    return Err(anyhow::anyhow!("Failed to parse as ScanReportData; no wireless or mobile feature to auto-bridge native defense-lab JSON (rebuild with --features wireless or mobile)"));
+                }
+            };
 
             let output = match convert_args.format {
                 ReportFormat::Json => serde_json::to_string_pretty(&report)?,
