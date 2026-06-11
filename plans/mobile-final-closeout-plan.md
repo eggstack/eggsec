@@ -80,3 +80,28 @@ Once these are done, mobile static analysis can be considered **complete** as a 
 ---
 
 **Recommendation**: Proceed with the minor remaining items and formally close out Phase 1. The mobile feature is in good shape and ready for broader use in its current form.
+
+---
+
+## 7. Phase 1 Close-Out Confirmation (2026-06-11)
+
+All recommended close-out actions completed:
+
+- CAPABILITIES.md: Mobile entry already present in "Lab Defense Commands" table and "Build Features" (verified; matches wireless pattern).
+- Policy enforcement: Confirmed in `commands/handlers/mobile.rs` — full `evaluate_and_enforce_operation` call with `OperationDescriptor { operation: "mobile-static", risk: SafeActive, required_features: ["mobile"], ... }`. No scope required (local file target). Handler dispatch, notify, and error paths correct.
+- Finding quality / recommendation actionability: Subagent review of `mobile/{mod,apk,ipa}.rs` confirmed high-signal, consistent severities (High/Medium/Low/Info, Critical only for strongest secret patterns), actionable titles/descriptions/recommendations, good evidence, always-emitted general recommendations (including "static only" + "provenance-controlled" safety lines), and strong edge handling (ZipSlip, size caps, missing manifest/plist, malformed/truncated, empty findings). No critical gaps for Phase 1 manifest/config scope.
+- Test coverage expanded: Added 2 new edge-case tests per review guidance:
+  - `mobile::apk::tests::rejects_empty_android_manifest` (apk.rs)
+  - `mobile::ipa::tests::test_analyze_ipa_rejects_oversized_entry` (ipa.rs; oversized Info.plist hitting per-entry read guard)
+- Hygiene: Removed unused test import (`zip::write::FileOptions` in ipa.rs test module) that was surfacing under `--features mobile` clippy.
+- Final verification (via subagents + direct):
+  - `cargo check -p eggsec --features mobile` → PASS (0 errors)
+  - `cargo test --lib -p eggsec --features mobile` → 1561 passed (17 under `mobile::`)
+  - `cargo clippy --lib -p eggsec --features mobile` → clean for mobile (pre-existing non-mobile warnings only)
+  - `cargo build --release -p eggsec-cli --features mobile` → PASS
+- Smoke: `eggsec mobile --help` and feature build succeed (synthetic test fixtures cover parser paths; no real APKs/IPAs required).
+- Docs reviewed/updated for consistency (this plan + architecture/mobile.md Status + AGENTS.md mobile notes + crates/eggsec/src/mobile/AGENTS.override.md). README.md, docs/MOBILE.md, docs/CAPABILITIES.md, docs/SAFETY.md, docs/FEATURES.md, architecture/{overview,cli_commands,defense_lab,feature_matrix}.md already accurately described Phase 1 standalone/static-only behavior, policy gate, `to_scan_report_data` bridge, and lab framing — no material changes needed.
+
+**Phase 1 (Static Mobile Analysis)** is now officially closed as a complete, standalone, policy-gated, pure-Rust defense-lab capability. Future work (Phase 2+ deeper analysis, library detection, pipeline profiles, gated dynamic) remains deferred.
+
+See also: `architecture/mobile.md`, `docs/MOBILE.md`, `crates/eggsec/src/mobile/AGENTS.override.md`, and the mobile section in `AGENTS.md`.

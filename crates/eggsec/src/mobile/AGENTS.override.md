@@ -34,4 +34,4 @@ cargo clippy --lib -p eggsec --features mobile
 
 See `architecture/defense_lab.md`, wireless module (similar standalone defense-lab + bridge pattern), `commands/handlers/mobile.rs`, `cli/mobile.rs`, and the mobile section in `AGENTS.md` (Key Types, Feature Flags, Security Notes).
 
-(Stub created 2026-06-11 per AGENTS.md update task; expand with real findings once Phase 1 hardens.)
+Phase 1 closed 2026-06-11 (final-closeout-plan executed: CAPABILITIES entry verified, policy enforcement confirmed in handler, finding quality review passed, 2 edge-case tests added, clippy hygiene fix, all tests/check/build green under --features mobile, docs consistency pass across README/AGENTS/architecture). Module is stable for Phase 1 scope.

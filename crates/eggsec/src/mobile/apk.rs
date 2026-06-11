@@ -1016,6 +1016,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rejects_empty_android_manifest() {
+        let mut archive = Vec::new();
+        {
+            let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
+            let opts = zip::write::FileOptions::<()>::default();
+            zw.start_file("AndroidManifest.xml", opts).unwrap();
+            zw.write_all(b"").unwrap();
+            zw.finish().unwrap();
+        }
+        let tmp = NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &archive).unwrap();
+
+        let err = analyze_apk(tmp.path()).await.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("empty AndroidManifest"));
+    }
+
+    #[tokio::test]
     async fn network_config_and_insecure_storage_findings() {
         let mut archive = Vec::new();
         {

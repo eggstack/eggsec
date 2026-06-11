@@ -477,7 +477,6 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
-    use zip::write::FileOptions;
     use zip::ZipWriter;
     use std::io::Write as IoWrite;
 
@@ -698,5 +697,24 @@ mod tests {
         assert!(res.is_err());
         let msg = res.err().unwrap().to_string();
         assert!(msg.contains("No valid Payload"));
+    }
+
+    #[tokio::test]
+    async fn test_analyze_ipa_rejects_oversized_entry() {
+        // Construct an IPA whose Info.plist entry itself exceeds the per-read guard (10 MiB).
+        // read_entry_safe (used for the Info.plist) will reject before any plist parsing.
+        let huge_plist = vec![b' '; 11 * 1024 * 1024]; // > MAX_FILE_READ (10 MiB)
+        let mut tmp = NamedTempFile::new().expect("tempfile");
+        {
+            let mut zw = ZipWriter::new(&mut tmp);
+            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            zw.start_file("Payload/TestApp.app/Info.plist", opts).expect("start oversized plist");
+            zw.write_all(&huge_plist).expect("write huge");
+            zw.finish().expect("finish");
+        }
+        let res = analyze_ipa(tmp.path()).await;
+        assert!(res.is_err());
+        let msg = res.err().unwrap().to_string();
+        assert!(msg.contains("too large") || msg.contains("Unsafe"));
     }
 }
