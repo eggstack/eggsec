@@ -37,6 +37,38 @@ Authentication security testing module providing brute force, credential stuffin
 | `multi_protocol/ftp.rs` | FTP-specific authentication testing |
 | `multi_protocol/smtp.rs` | SMTP-specific authentication testing |
 
+## CLI Surface
+
+Primary surface is the `eggsec auth-test <target>` CLI command (defense-lab / high-risk credential control validation).
+
+- CLI args: `crates/eggsec/src/cli/auth.rs`
+- Handler: `crates/eggsec/src/commands/handlers/auth_test.rs` (selective tester dispatch, wordlist loading, `AUTH_BANNER` print)
+- Uses `AuthEngine` for orchestration of selected `AuthTestType`s
+- Policy enforcement: `evaluate_and_enforce_operation(OperationDescriptor { risk: CredentialTesting, ... })` (via `CommandContext`)
+
+## Policy & Enforcement
+
+- `OperationRisk::CredentialTesting` (high-risk tier; default blocked)
+- `Capability::CredentialTesting`
+- `allow_credential_testing` flag in `ExecutionPolicy` (default `false`)
+- Routed through central `EnforcementContext::evaluate()` (post-2026-06-10 handler policy alignment)
+- Handler regression tests + `enforcement_tests.rs` cover credential_testing paths
+- No `credential-testing` Cargo feature (auth always compiled; gated at runtime by policy + scope)
+- Multi-protocol testers (SSH/FTP/SMTP) gated on `nse-ssh2` feature
+
+## Findings & Output
+
+- Local types only: `AuthTestReport`, `AuthFinding` (defined in `auth/mod.rs`)
+- No conversion to `StoredFinding`, `ScanReportData`, or `eggsec-output` canonical types
+- Standard output formats supported via handler (where applicable)
+
+## TUI Status
+
+- Full `AuthTab` implementation exists at `crates/eggsec-tui/src/tabs/auth.rs` (TabState + TabRender + TabInput)
+- Explicitly **not** part of the `Tab` enum (CLI-only surface; see `architecture/tui.md`)
+
 ## Implementation Status
 
-Fully implemented. All sub-modules contain working test logic with `AuthEngine` orchestrating execution. Includes safety mechanisms (`stop_on_lockout`, `max_attempts`, `stop_flag`) and protocol-specific testers.
+Core module fully implemented (testers, `AuthEngine`, safety controls, `AUTH_BANNER`, multi-protocol under `nse-ssh2`). CLI command + handler + policy integration complete and tested (17 wiremock `auth_tests` + enforcement/policy contract tests green).
+
+Gaps vs. original historical plan (see `plans/credential-access-implementation-plan.md` — superseded): no subcommand hierarchy (`auth test`/`validate`/`regression`), no dedicated pipeline profiles (`auth-validation`/`credential-regression`), no `AuthOperation` enum or sub-caps, no `credential-testing` feature flag, no `AuthFinding` → canonical findings conversion. `ScanProfile::Auth` exists but is pipeline-focused (PortScan+Fingerprint+EndpointScan+Fuzz for JWT/OAuth/IDOR); it does not invoke `auth/` module testers. Safety is via central `EnforcementContext` + `CredentialTesting` risk at the handler boundary. All tests pass; no code changes required under the adopted model.

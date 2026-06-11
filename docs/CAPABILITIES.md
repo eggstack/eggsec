@@ -135,7 +135,7 @@ Chained security assessment pipelines:
 | **stealth** | Web scan with evasion techniques (randomized delays, header rotation) |
 | **deep** | Web scan with mutation fuzzing enabled |
 | **vuln** | CVE-prioritized fuzzing based on detected technologies |
-| **auth** | JWT/OAuth/IDOR security testing |
+| **auth** | JWT/OAuth/IDOR security testing (pipeline: PortScan+Fingerprint+EndpointScan+Fuzz; distinct from `auth-test` CLI credential/brute/MFA control validation) |
 | **defense-lab** | comprehensive local defense validation (defense-lab mode) |
 | **synvoid-local** | Synvoid-specific WAF validation (defense-lab mode) |
 | **waf-regression** | WAF payload and evasion regression (defense-lab mode) |
@@ -273,6 +273,7 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 |---------|------|-------------|
 | `policy-explain` | - | Explain policy decisions |
 | `scope-explain` | - | Explain scope matching |
+| `eggsec auth-test <target>` | defense-lab (high-risk) | Credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `allow_credential_testing`) |
 
 ---
 

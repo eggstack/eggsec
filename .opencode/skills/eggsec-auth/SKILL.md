@@ -6,11 +6,12 @@ Authentication security testing module.
 `crates/eggsec/src/auth/`
 
 ## Tab
-Auth tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
+`AuthTab` (full TabState/TabRender/TabInput impl) exists at `crates/eggsec-tui/src/tabs/auth.rs` but is **explicitly excluded from the `Tab` enum** (CLI-only surface; see `architecture/tui.md`). Primary surface is CLI `auth-test`.
 
 ## Key Types
 
 - `AuthEngine` - Main authentication testing engine
+- `AuthTestReport`, `AuthFinding`, `AuthTestType` (8 variants: BruteForce, CredentialStuffing, Lockout, Mfa, RateLimit, PasswordPolicy, Session, Timing)
 - `BruteForceTester` - Credential brute force testing
 - `CredentialStuffer` - Breach credential testing
 - `LockoutDetector` - Account lockout detection
@@ -19,11 +20,18 @@ Auth tab is one of the 29 TUI tabs - see `eggsec-tui/SKILL.md` for TUI patterns.
 - `PasswordPolicyTester` - Password policy testing
 - `SessionTester` - Session management testing
 - `TimingTester` - Timing attack testing
-- `ProtocolAuthTester` - Multi-protocol authentication testing
+- `ProtocolAuthTester` (multi-protocol under `nse-ssh2`): SSH/FTP/SMTP testers in `multi_protocol/`
+
+## CLI Integration
+
+- Handler: `commands/handlers/auth_test.rs` (selective tester dispatch via `AuthTestType`, wordlist loading, `AUTH_BANNER`)
+- CLI args: `cli/auth.rs`
+- Policy: `evaluate_and_enforce_operation(OperationDescriptor { risk: CredentialTesting, ... })` (central `EnforcementContext`; post-2026-06-10)
+- No dedicated Cargo feature (runtime policy gate only)
 
 ## Patterns
 
-### Brute Force Testing
+### Brute Force Testing (via engine in handler)
 ```rust
 let mut engine = AuthEngine::new();
 let usernames = vec!["admin".to_string(), "root".to_string()];
@@ -40,12 +48,18 @@ let is_locked = detector.detect_lockout(&response).await?;
 ```
 
 ## Key Files
+- `mod.rs` - `AuthEngine`, `AuthTestReport`, `AuthFinding`, `AuthTestType`, `AUTH_BANNER`
 - `brute_force.rs` - Brute force testing
 - `credential_stuffing.rs` - Credential stuffing
 - `lockout.rs` - Lockout detection
 - `mfa.rs` - MFA bypass
 - `rate_limit.rs` - Rate limit testing
+- `password_policy.rs` - Password policy testing
+- `session.rs` - Session management testing
 - `timing.rs` - Timing attack testing
+- `multi_protocol.rs` + `multi_protocol/{ssh,ftp,smtp}.rs` (gated on `nse-ssh2`)
+- `commands/handlers/auth_test.rs` - CLI handler (selective dispatch, policy)
+- `cli/auth.rs` - CLI arg definitions
 
 ## Module Notes
-See `architecture/auth.md` for architecture documentation.
+See `architecture/auth.md` for architecture documentation. TUI `AuthTab` is standalone/CLI-primary (not in `Tab` enum). Policy enforcement uses central `EnforcementContext` + `CredentialTesting` risk tier (no feature flag). All 17 wiremock auth tests + enforcement/policy contract tests pass.

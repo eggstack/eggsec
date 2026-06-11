@@ -1,11 +1,16 @@
 # Credential Access Feature Set Implementation Plan
 
-**Status**: Draft / Ready for Implementation  
+**Status**: Historical / Superseded (implemented via modern policy model, not original proposed architecture)  
 **Target Branch**: `main`  
-**Related Issues**: (to be created)  
+**Related Issues**: (none; resolved in policy alignment work)  
 **Priority**: High (leverages existing `auth/` foundation)  
-**Owner**: (to be assigned)  
-**Estimated Effort**: 3–6 weeks for core integration + safety hardening (Phases 1–2)
+**Owner**: (historical)  
+**Estimated Effort**: (historical; core was ~60-70% present at drafting)  
+**Resolution Note (2026-06)**: The `auth/` module (testers, AuthEngine, AUTH_BANNER), `eggsec auth-test` CLI command + handler, `ScanProfile::Auth`, `OperationRisk::CredentialTesting` + `Capability::CredentialTesting`, `allow_credential_testing` policy flag, `evaluate_and_enforce_operation` enforcement in handler, unit + wiremock integration tests (17+ in auth_tests.rs), and policy contract tests were present and passing. No `credential-testing` Cargo feature was introduced (auth is always-on; control is via policy risk tier + explicit flag). Proposed `AuthOperation` enum, `AuthTesting` sub-capabilities, `auth test` / `auth validate-policy` / `auth regression` subcommand structure, `auth-validation` / `credential-regression` pipeline profiles, and `AuthFinding` → `StoredFinding` / `ScanReportData` conversion were **not** implemented. Safety is enforced at the `CommandContext` handler boundary using the central `EnforcementContext`. TUI `AuthTab` exists as standalone code but is excluded from the main `Tab` enum (CLI-only surface per architecture/tui.md). See `architecture/auth.md`, `cli_commands.md`, `SAFETY.md`, and `commands/handlers/auth_test.rs` for current state. This plan file is retained for historical reference only. All relevant tests (auth, enforcement credential_testing, policy contracts, lib) pass green. No code changes required to "complete" the plan under the adopted safety model.
+
+**Original Draft Status**: Draft / Ready for Implementation  
+**Original Target Branch**: `main`  
+**Original Estimated Effort**: 3–6 weeks for core integration + safety hardening (Phases 1–2)
 
 ---
 

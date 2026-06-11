@@ -126,9 +126,9 @@ Auth testing attempts credential stuffing, brute force, or session manipulation.
 
 ```bash
 # Auth testing with explicit limits
-eggsec auth test "$TARGET" \
+eggsec auth-test "$TARGET" \
   --wordlist test-credentials.txt \
-  --rate-limit 5 \
+  --max-attempts 50 \
   --concurrency 2 \
   --scope scopes/authorized.toml
 ```

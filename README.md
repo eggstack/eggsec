@@ -35,13 +35,14 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **WAF** | Detection of 34 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
 | **Load Testing** | High-concurrency HTTP testing with detailed metrics |
 | **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
+| **Auth Control Validation** | Brute-force, credential stuffing, lockout/MFA/rate-limit/timing testing via `eggsec auth-test` (defense-lab / high-risk, policy-gated; for validating auth controls, not credential attacks) |
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Repeatable Profiles** | 16 pipeline profiles, session resumption, multiple output formats |
 
 ## What Eggsec is not
 
-Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
+Eggsec is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. The `auth-test` command exists for defense validation of authentication controls (lockout policies, MFA enforcement, rate limiting, etc.) under strict scope/policy gating — it is not a credential attack platform. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
 
 ## Why Low-Level Features Exist
 
@@ -192,7 +193,7 @@ Eggsec includes 16 built-in profiles that chain multiple security tests together
 | **stealth** | Evasion mode with randomized delays and header rotation |
 | **deep** | Mutation fuzzing enabled for thorough testing |
 | **vuln** | CVE-prioritized based on detected technologies |
-| **auth** | JWT, OAuth, IDOR focused |
+| **auth** | JWT, OAuth, IDOR focused (pipeline: PortScan+Fingerprint+EndpointScan+Fuzz; distinct from `auth-test` credential/brute/MFA control validation) |
 | **defense-lab** | Local lab regression testing |
 | **synvoid-local** | Local SYN scan testing |
 | **waf-regression** | WAF regression testing |
@@ -263,6 +264,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec scan --profile waf-regression` | defense-lab | WAF payload regression |
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
 | `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
+| `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated) |
 
 ## Build Features
 

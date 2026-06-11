@@ -33,7 +33,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 | `stealth` | PortScan → Fingerprint → EndpointScan → Fuzz |
 | `deep` | PortScan → Fingerprint → EndpointScan → Fuzz |
 | `vuln` | PortScan → Fingerprint → Vuln → EndpointScan → Recon → Fuzz |
-| `auth` | PortScan → Fingerprint → EndpointScan → Fuzz |
+| `auth` | PortScan → Fingerprint → EndpointScan → Fuzz | (JWT/OAuth/IDOR-focused fuzzing via fuzzer payloads; distinct from CLI `auth-test` which uses `auth/` module for credential/brute/MFA control validation) |
 | `defense-lab` | PortScan → Fingerprint → EndpointScan → Waf → Fuzz |
 | `synvoid-local` | PortScan → Fingerprint → EndpointScan → Waf |
 | `waf-regression` | PortScan → Fingerprint → Waf |

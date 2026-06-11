@@ -92,7 +92,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 |--------|---------|------------------|
 | [`fuzzer/`](../crates/eggsec/src/fuzzer/) | Security fuzzing engine with 40 payload types (SQLi, XSS, SSRF, Path Traversal, ReDoS, etc.) | [fuzzer.md](fuzzer.md) |
 | [`waf/`](../crates/eggsec/src/waf/) | WAF detection (34 products), bypass techniques, evasion-resistance testing | [waf.md](waf.md) |
-| [`auth/`](../crates/eggsec/src/auth/) | Authentication testing (brute force, credential stuffing, MFA bypass, JWT analysis, OAuth/OIDC) | [auth.md](auth.md) |
+| [`auth/`](../crates/eggsec/src/auth/) | Authentication testing (brute force, credential stuffing, MFA bypass, lockout/rate-limit/timing; JWT/OAuth/IDOR handled in pipeline via fuzzer) | [auth.md](auth.md) |
 | [`hunt/`](../crates/eggsec/src/hunt/) | Advanced threat hunting (authorization bypass, race conditions, advanced injection) | [hunt.md](hunt.md) |
 | [`browser/`](../crates/eggsec/src/browser/) | Headless browser for DOM XSS detection, SPA crawling | [browser.md](browser.md) |
 | [`websocket/`](../crates/eggsec/src/websocket/) | WebSocket security testing | [websocket.md](websocket.md) |
