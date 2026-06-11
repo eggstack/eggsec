@@ -101,6 +101,7 @@ The Wireless tab (if built with the feature) provides interactive interface entr
 - File output (`-o`) supported for both modes.
 - Structured findings feed into `ScanReportData` (via `to_scan_report_data`) for SARIF/JUnit/HTML/Markdown/etc. pipelines.
 - New fields on `WirelessNetwork` / report data: `wps_enabled`, `is_hidden`, `transition_mode` (serde defaulted for forward compat on old reports).
+- Note: `to_scan_report_data()` (used for SARIF/JUnit/HTML/Markdown/etc.) always calls `analyze_networks(..., None)`; rogue/Evil-Twin candidates are therefore always present in structured report findings regardless of `--known-good`. `--known-good` suppression applies only to CLI human-readable text and `--json` output (via `kg_ref` in `run_cli`).
 
 ## Data Model (Key Types)
 
@@ -145,15 +146,14 @@ Networks found: 3
      Security: WPA2
      Signal:   -62 dBm
      Last seen: 2026-...
-     WPS: no  Hidden: no  Transition: no
 
   ...
 
-Findings / Vulnerabilities:
+  Findings / Vulnerabilities:
   - Open Network (Medium): ...
   - Possible Rogue AP / Evil Twin (passive heuristic) (Low): ...
 
-Recommendations:
+  Recommendations:
   - ...
   - Run repeated scans to observe changes over time for rogue detection.
 ```
@@ -173,7 +173,7 @@ Recommendations:
 - **Use `--known-good`** for your lab environment. Create a file with authorized SSID, BSSID, or "SSID,BSSID" entries (one per line; `#` comments supported). This suppresses false-positive rogue/Evil-Twin candidates for your known APs while still detecting new or changed ones.
 - **Use `--repeat`** (e.g. 3–10) with a short `--duration` (5–15s) for monitoring or change detection. Review per-scan "Changes since previous" diffs (new nets, sec changes, signal drift, new rogue candidates) and the final "Scan summary over time".
 - **Default rogue output is summarized**: Rogue/Evil-Twin candidates are always analyzed. Human output shows a count + hint by default. Add `--detect_suspicious` when you need the full details + recommendations for triage.
-- **JSON for automation**: `--json` (with or without `--repeat`) produces machine-readable `WirelessScanResult` (last successful scan). With `--repeat >1`, a `repeat_summary` envelope field is included for convenience (see Task 3 polish). Pipe to `eggsec report` or your own post-processing.
+- **JSON for automation**: `--json` (with or without `--repeat`) produces machine-readable `WirelessScanResult` (last successful scan). With `--repeat >1`, a `"summary"` envelope field is included (alongside `last_scan` and `repeat_count`). Pipe to `eggsec report` or your own post-processing.
 - **Baseline before hunting**: Run repeated scans in a clean lab state, save `--known-good` + JSON baselines. Re-run later to observe drift or new BSSIDs.
 - **Interpret findings conservatively**: Open/WEP/WPA are high-confidence issues. Rogue is a passive heuristic only — same SSID from multiple BSSIDs or security downgrade signals can be legitimate roaming or guest nets; always cross-check MAC inventory or perform physical survey.
 - **TUI**: The Wireless tab provides interactive entry + table view. Use for quick visual scans; exports and session features follow standard TUI patterns.
