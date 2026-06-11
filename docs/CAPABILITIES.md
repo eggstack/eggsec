@@ -274,6 +274,7 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `policy-explain` | - | Explain policy decisions |
 | `scope-explain` | - | Explain scope matching |
 | `eggsec auth-test <target>` | defense-lab (high-risk) | Credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `allow_credential_testing`). Standalone CLI under runtime policy; local `AuthTestReport`/`AuthFinding` only (no canonical `ScanReportData`/SARIF conversion); see architecture/auth.md. |
+| `eggsec wireless <iface>` | defense-lab (passive) | Passive WiFi scan + security analysis (Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition + weak/rogue heuristics). Requires --features wireless. See docs/WIRELESS.md. |
 
 ---
 
@@ -294,5 +295,5 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `sbom` | SBOM generation |
 | `advanced-hunting` | Advanced threat hunting |
 | `compliance` | Compliance scanning |
-| `wireless` | WiFi scanning |
+| `wireless` | WiFi scanning (passive recon, security posture, rogue heuristic) |
 | `full` | All features combined |

@@ -124,7 +124,7 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows bui
 | `sbom` | cyclonedx-bom, spdx, walkdir | SBOM generation |
 | `git-secrets` | *(marker)* | Git secrets scanning |
 | `pdf` | printpdf | PDF report generation |
-| `wireless` | *(marker)* | WiFi scanning |
+| `wireless` | *(marker)* | WiFi scanning (passive recon + basic security analysis + rogue heuristic) |
 | `api-schema` | *(marker)* | OpenAPI schema-based fuzzing |
 | `full` | 16 sub-features | All features combined (excludes grpc-api, ws-api, pdf) |
 

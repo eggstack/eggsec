@@ -18,6 +18,9 @@ pub struct WirelessNetwork {
     pub security_type: SecurityType,
     pub signal_strength: i32,
     pub last_seen: String,
+    pub wps_enabled: bool,
+    pub is_hidden: bool,
+    pub transition_mode: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -129,31 +132,49 @@ impl WirelessScanner {
     #[cfg(feature = "wireless")]
     fn parse_scan_output(&self, output: &str) -> Vec<WirelessNetwork> {
         let mut networks = Vec::new();
-        let mut current_ssid = None;
-        let mut current_bssid = None;
+        let mut current_ssid: Option<String> = None;
+        let mut current_bssid: Option<String> = None;
         let mut current_channel = 0u8;
         let mut current_security = SecurityType::Unknown;
         let mut current_signal = -100i32;
         let mut current_auth_suite: Option<String> = None;
+        let mut current_wps = false;
+        let mut current_is_hidden = false;
+        let mut current_transition = false;
+        let mut saw_wpa2 = false;
+        let mut saw_wpa3 = false;
 
         for line in output.lines() {
             let line = line.trim();
 
             if line.starts_with("Cell ") {
                 if let (Some(ssid), Some(bssid)) = (current_ssid.take(), current_bssid.take()) {
+                    let mut final_ssid = ssid.clone();
+                    if ssid.is_empty() || ssid == "<hidden>" || ssid == "\"\"" {
+                        final_ssid = "<hidden>".to_string();
+                        current_is_hidden = true;
+                    }
                     networks.push(WirelessNetwork {
-                        ssid,
+                        ssid: final_ssid,
                         bssid,
                         channel: current_channel,
                         security_type: current_security,
                         signal_strength: current_signal,
                         last_seen: String::new(),
+                        wps_enabled: current_wps,
+                        is_hidden: current_is_hidden,
+                        transition_mode: current_transition || (saw_wpa2 && saw_wpa3),
                     });
                 }
                 current_auth_suite = None;
                 current_channel = 0u8;
                 current_security = SecurityType::Unknown;
                 current_signal = -100i32;
+                current_wps = false;
+                current_is_hidden = false;
+                current_transition = false;
+                saw_wpa2 = false;
+                saw_wpa3 = false;
             }
 
             if line.contains("Address:") {
@@ -166,13 +187,15 @@ impl WirelessScanner {
             }
 
             if line.starts_with("ESSID:") {
-                current_ssid = Some(
-                    line.split("ESSID:\"")
-                        .nth(1)
-                        .unwrap_or("")
-                        .trim_matches('"')
-                        .to_string(),
-                );
+                let essid = line.split("ESSID:\"")
+                    .nth(1)
+                    .unwrap_or("")
+                    .trim_matches('"')
+                    .to_string();
+                current_ssid = Some(essid.clone());
+                if essid.is_empty() || essid == "<hidden>" || essid == "\"\"" {
+                    current_is_hidden = true;
+                }
             }
 
             if line.contains("Channel:") {
@@ -196,12 +219,23 @@ impl WirelessScanner {
                 current_signal = level_str.parse().unwrap_or(-100);
             }
 
+            let lower = line.to_lowercase();
+            if lower.contains("wps") || lower.contains("wi-fi protected setup") {
+                current_wps = true;
+            }
+
+            if lower.contains("wpa2/wpa3") || lower.contains("transition") {
+                current_transition = true;
+            }
+
             if line.contains("Encryption key:") && line.contains("off") {
                 current_security = SecurityType::Open;
             } else if line.contains("WPA3") {
                 current_security = SecurityType::WPA3;
+                saw_wpa3 = true;
             } else if line.contains("WPA2") {
                 current_security = SecurityType::WPA2;
+                saw_wpa2 = true;
             } else if line.contains("WPA") {
                 current_security = SecurityType::WPA;
             } else if line.contains("WEP") {
@@ -220,13 +254,21 @@ impl WirelessScanner {
         }
 
         if let (Some(ssid), Some(bssid)) = (current_ssid, current_bssid) {
+            let mut final_ssid = ssid.clone();
+            if ssid.is_empty() || ssid == "<hidden>" || ssid == "\"\"" {
+                final_ssid = "<hidden>".to_string();
+                current_is_hidden = true;
+            }
             networks.push(WirelessNetwork {
-                ssid,
+                ssid: final_ssid,
                 bssid,
                 channel: current_channel,
                 security_type: current_security,
                 signal_strength: current_signal,
                 last_seen: String::new(),
+                wps_enabled: current_wps,
+                is_hidden: current_is_hidden,
+                transition_mode: current_transition || (saw_wpa2 && saw_wpa3),
             });
         }
 
@@ -237,6 +279,50 @@ impl WirelessScanner {
         let mut vulnerabilities = Vec::new();
 
         for network in networks {
+            if network.signal_strength <= -80 {
+                vulnerabilities.push(WirelessVulnerability {
+                    ssid: network.ssid.clone(),
+                    bssid: network.bssid.clone(),
+                    vulnerability_type: "Weak Signal Strength".to_string(),
+                    severity: if network.signal_strength <= -90 { Severity::Low } else { Severity::Medium },
+                    description: format!("Network {} has weak signal ({} dBm)", network.ssid, network.signal_strength),
+                    recommendation: "Reposition AP or investigate interference".to_string(),
+                });
+            }
+
+            if network.wps_enabled {
+                vulnerabilities.push(WirelessVulnerability {
+                    ssid: network.ssid.clone(),
+                    bssid: network.bssid.clone(),
+                    vulnerability_type: "WPS Enabled".to_string(),
+                    severity: Severity::Medium,
+                    description: format!("Network {} has WPS enabled (PIN brute-force risk)", network.ssid),
+                    recommendation: "Disable WPS or use PIN-less mode with rate limiting".to_string(),
+                });
+            }
+
+            if network.is_hidden {
+                vulnerabilities.push(WirelessVulnerability {
+                    ssid: network.ssid.clone(),
+                    bssid: network.bssid.clone(),
+                    vulnerability_type: "Hidden SSID".to_string(),
+                    severity: Severity::Low,
+                    description: format!("Network {} uses hidden SSID (provides minimal security benefit)", network.ssid),
+                    recommendation: "Consider broadcasting SSID for better client compatibility".to_string(),
+                });
+            }
+
+            if network.transition_mode {
+                vulnerabilities.push(WirelessVulnerability {
+                    ssid: network.ssid.clone(),
+                    bssid: network.bssid.clone(),
+                    vulnerability_type: "WPA2/WPA3 Transition Mode".to_string(),
+                    severity: Severity::Low,
+                    description: format!("Network {} is in WPA2/WPA3 transition mode (downgrade risk)", network.ssid),
+                    recommendation: "Enforce WPA3-only when all clients support it".to_string(),
+                });
+            }
+
             match network.security_type {
                 SecurityType::Open => {
                     vulnerabilities.push(WirelessVulnerability {
@@ -292,15 +378,38 @@ impl WirelessScanner {
             }
         }
 
+        let mut ssid_groups: std::collections::HashMap<String, Vec<&WirelessNetwork>> = std::collections::HashMap::new();
+        for network in networks {
+            ssid_groups.entry(network.ssid.clone()).or_default().push(network);
+        }
+        for (ssid, nets) in &ssid_groups {
+            if nets.len() >= 2 {
+                let distinct_bssids: std::collections::HashSet<_> = nets.iter().map(|n| &n.bssid).collect();
+                let distinct_secs: std::collections::HashSet<_> = nets.iter().map(|n| n.security_type).collect();
+                if distinct_bssids.len() >= 2 || distinct_secs.len() >= 2 {
+                    let bssid_list: Vec<_> = nets.iter().map(|n| format!("{} (ch{}, {})", n.bssid, n.channel, n.security_type.as_str())).collect();
+                    vulnerabilities.push(WirelessVulnerability {
+                        ssid: ssid.clone(),
+                        bssid: nets[0].bssid.clone(),
+                        vulnerability_type: "Possible Rogue AP / Evil Twin (passive heuristic)".to_string(),
+                        severity: Severity::Low,
+                        description: format!("Multiple BSSIDs or security configs for SSID {}: {}", ssid, bssid_list.join("; ")),
+                        recommendation: "Verify authorized APs only; investigate in lab".to_string(),
+                    });
+                }
+            }
+        }
+
         vulnerabilities
     }
 
     fn generate_recommendations(networks: &[WirelessNetwork]) -> Vec<String> {
         let mut recommendations = Vec::new();
-        let mut seen = rustc_hash::FxHashSet::default();
+        let mut seen: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
 
         for network in networks {
-            if seen.insert(network.security_type) {
+            let sec_key = format!("sec:{}", network.security_type.as_str());
+            if seen.insert(sec_key) {
                 match network.security_type {
                     SecurityType::WEP => {
                         recommendations.push("Upgrade from WEP to WPA2 or WPA3 immediately — WEP is trivially cracked".to_string());
@@ -321,6 +430,18 @@ impl WirelessScanner {
                     _ => {}
                 }
             }
+            if network.wps_enabled && seen.insert(format!("wps:{}", network.bssid)) {
+                recommendations.push("Disable WPS on networks where it is enabled (PIN brute-force risk)".to_string());
+            }
+            if network.transition_mode && seen.insert(format!("transition:{}", network.bssid)) {
+                recommendations.push("Consider enforcing WPA3-only mode on transition networks to avoid downgrade attacks".to_string());
+            }
+            if network.is_hidden && seen.insert(format!("hidden:{}", network.bssid)) {
+                recommendations.push("Hidden SSIDs offer little security benefit; consider broadcasting for client compatibility".to_string());
+            }
+            if network.signal_strength <= -80 && seen.insert(format!("weak:{}", network.bssid)) {
+                recommendations.push("Investigate weak signal networks for interference or reposition APs".to_string());
+            }
         }
 
         if recommendations.is_empty() && !networks.is_empty() {
@@ -331,6 +452,8 @@ impl WirelessScanner {
         if networks.is_empty() {
             recommendations.push("No wireless networks were detected during the scan".to_string());
         }
+
+        recommendations.push("Run repeated scans to observe changes over time for rogue detection.".to_string());
 
         recommendations
     }
@@ -369,6 +492,9 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
             security_type: n.security_type.as_str().to_string(),
             signal_strength: n.signal_strength,
             last_seen: n.last_seen.clone(),
+            wps_enabled: n.wps_enabled,
+            is_hidden: n.is_hidden,
+            transition_mode: n.transition_mode,
         })
         .collect();
 
@@ -392,10 +518,26 @@ pub async fn run_cli(
     let scanner = WirelessScanner::new().with_interface(args.interface.clone());
 
     if !args.quiet {
-        eprintln!("Scanning wireless networks on {}...", args.interface);
+        eprintln!("WARNING: Requires root (or CAP_NET_ADMIN) and 'iwlist' (wireless-tools). Interface must be in managed mode and up. Use only on authorized networks in lab/defense-validation contexts. This is passive reconnaissance.");
+        if args.repeat == 1 {
+            eprintln!("Scanning on {} for ~{}s...", args.interface, args.duration);
+        } else {
+            eprintln!("Performing {} repeated scans on {} ({}s each, ~2s delay between)...", args.repeat, args.interface, args.duration);
+        }
     }
 
-    let result = scanner.scan(args.duration).await?;
+    let mut last_result = None;
+    for i in 1..=args.repeat {
+        if !args.quiet && args.repeat > 1 {
+            eprintln!("Scan {}/{} ...", i, args.repeat);
+        }
+        let result = scanner.scan(args.duration).await?;
+        last_result = Some(result);
+        if i < args.repeat {
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        }
+    }
+    let result = last_result.expect("at least one scan performed");
 
     let output = if args.json {
         serde_json::to_string_pretty(&result)?
@@ -412,11 +554,31 @@ pub async fn run_cli(
             buf.push_str(&format!("     BSSID:    {}\n", network.bssid));
             buf.push_str(&format!("     Channel:  {}\n", network.channel));
             buf.push_str(&format!(
-                "     Security: {}\n",
-                network.security_type.as_str()
+                "     Security: {}{}\n",
+                network.security_type.as_str(),
+                if network.wps_enabled { " (WPS)" } else { "" }
             ));
-            buf.push_str(&format!("     Signal:   {} dBm\n", network.signal_strength));
+            buf.push_str(&format!("     Signal:   {} dBm{}\n", network.signal_strength, if network.is_hidden { " [hidden]" } else { "" }));
             buf.push_str(&format!("     Last seen: {}\n", network.last_seen));
+            if network.transition_mode {
+                buf.push_str("     Note: WPA2/WPA3 transition mode\n");
+            }
+            buf.push('\n');
+        }
+
+        let vulns = WirelessScanner::analyze_networks(&result.networks);
+        if !vulns.is_empty() {
+            buf.push_str("Findings / Vulnerabilities:\n");
+            for v in &vulns {
+                buf.push_str(&format!(
+                    "  [{}] {} ({}): {}\n     Rec: {}\n",
+                    v.severity.as_str(),
+                    v.vulnerability_type,
+                    v.ssid,
+                    v.description,
+                    v.recommendation
+                ));
+            }
             buf.push('\n');
         }
 
@@ -467,6 +629,9 @@ mod tests {
                 security_type: SecurityType::Open,
                 signal_strength: -50,
                 last_seen: String::new(),
+                wps_enabled: false,
+                is_hidden: false,
+                transition_mode: false,
             },
             WirelessNetwork {
                 ssid: "SecureNetwork".to_string(),
@@ -475,6 +640,9 @@ mod tests {
                 security_type: SecurityType::WPA3,
                 signal_strength: -60,
                 last_seen: String::new(),
+                wps_enabled: false,
+                is_hidden: false,
+                transition_mode: false,
             },
         ];
 
@@ -517,5 +685,91 @@ mod tests {
         assert_eq!(networks.len(), 1);
         assert_eq!(networks[0].ssid, "EnterpriseNet");
         assert_eq!(networks[0].security_type, SecurityType::Enterprise);
+    }
+
+    #[test]
+    fn test_parse_scan_output_wps() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"WPSNet\"\nChannel:6\nSignal level=-55 dBi\nEncryption key:on\nWPA2\nWPS\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].ssid, "WPSNet");
+        assert!(networks[0].wps_enabled);
+    }
+
+    #[test]
+    fn test_parse_scan_output_hidden() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"\" \nChannel:1\nSignal level=-65 dBi\nEncryption key:on\nWPA2\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].ssid, "<hidden>");
+        assert!(networks[0].is_hidden);
+    }
+
+    #[test]
+    fn test_parse_scan_output_transition() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"TransitionNet\"\nChannel:36\nSignal level=-50 dBi\nEncryption key:on\nWPA2\nWPA3\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].ssid, "TransitionNet");
+        assert!(networks[0].transition_mode);
+    }
+
+    #[test]
+    fn test_analyze_weak_signal() {
+        let networks = vec![WirelessNetwork {
+            ssid: "WeakNet".to_string(),
+            bssid: "00:11:22:33:44:55".to_string(),
+            channel: 6,
+            security_type: SecurityType::WPA2,
+            signal_strength: -85,
+            last_seen: String::new(),
+            wps_enabled: false,
+            is_hidden: false,
+            transition_mode: false,
+        }];
+        let vulns = WirelessScanner::analyze_networks(&networks);
+        assert!(vulns.iter().any(|v| v.vulnerability_type == "Weak Signal Strength"));
+    }
+
+    #[test]
+    fn test_analyze_rogue_candidate() {
+        let networks = vec![
+            WirelessNetwork {
+                ssid: "CorpNet".to_string(),
+                bssid: "00:11:22:33:44:55".to_string(),
+                channel: 6,
+                security_type: SecurityType::WPA2,
+                signal_strength: -50,
+                last_seen: String::new(),
+                wps_enabled: false,
+                is_hidden: false,
+                transition_mode: false,
+            },
+            WirelessNetwork {
+                ssid: "CorpNet".to_string(),
+                bssid: "aa:bb:cc:dd:ee:ff".to_string(),
+                channel: 11,
+                security_type: SecurityType::Open,
+                signal_strength: -55,
+                last_seen: String::new(),
+                wps_enabled: false,
+                is_hidden: false,
+                transition_mode: false,
+            },
+        ];
+        let vulns = WirelessScanner::analyze_networks(&networks);
+        assert!(vulns.iter().any(|v| v.vulnerability_type.contains("Rogue AP / Evil Twin")));
+    }
+
+    #[test]
+    fn test_parse_scan_output_wpa2_wpa3_mixed() {
+        let scanner = WirelessScanner::new();
+        let iwlist_output = "Cell 01 - Address: 00:11:22:33:44:55\nESSID:\"MixedNet\"\nChannel:36\nSignal level=-45 dBi\nEncryption key:on\nWPA2\nWPA3\n";
+        let networks = scanner.parse_scan_output(iwlist_output);
+        assert_eq!(networks.len(), 1);
+        assert!(networks[0].transition_mode);
     }
 }

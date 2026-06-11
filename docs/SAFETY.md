@@ -23,6 +23,7 @@ Eggsec classifies operations by risk level:
 | RawPacket | Raw packet operations | Blocked |
 | CredentialTesting | Auth testing (auth-test CLI only; local `Auth*` types; see architecture/auth.md) | Blocked |
 | ExploitAdjacent | Exploit-adjacent testing (e.g. chained primitives) | Blocked |
+| (wireless passive) | Passive WiFi recon (iwlist scan, analysis only; no tx/injection) | Allowed under SafeActive (feature-gated; root + authorized use only) |
 | RemoteExecution | Remote command execution | Blocked |
 | AgentAutonomous | Agent-driven operations | Blocked |
 

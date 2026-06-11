@@ -59,6 +59,12 @@ pub struct WirelessNetworkReportData {
     pub security_type: String,
     pub signal_strength: i32,
     pub last_seen: String,
+    #[serde(default)]
+    pub wps_enabled: bool,
+    #[serde(default)]
+    pub is_hidden: bool,
+    #[serde(default)]
+    pub transition_mode: bool,
 }
 
 pub fn load_scan_report(path: &str) -> Result<ScanReportData, String> {
@@ -144,16 +150,19 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
         html.push_str("<section class=\"wireless-networks\">\n");
         html.push_str("<h2>Wireless Networks</h2>\n");
         html.push_str("<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\">\n");
-        html.push_str("<tr><th>SSID</th><th>BSSID</th><th>Channel</th><th>Security</th><th>Signal</th><th>Last Seen</th></tr>\n");
+        html.push_str("<tr><th>SSID</th><th>BSSID</th><th>Channel</th><th>Security</th><th>Signal</th><th>Last Seen</th><th>WPS</th><th>Hidden</th><th>Transition</th></tr>\n");
         for network in &report.wireless_networks {
             html.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{} dBm</td><td>{}</td></tr>\n",
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{} dBm</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
                 super::escape::escape_html(&network.ssid),
                 super::escape::escape_html(&network.bssid),
                 network.channel,
                 super::escape::escape_html(&network.security_type),
                 network.signal_strength,
-                super::escape::escape_html(&network.last_seen)
+                super::escape::escape_html(&network.last_seen),
+                if network.wps_enabled { "yes" } else { "no" },
+                if network.is_hidden { "yes" } else { "no" },
+                if network.transition_mode { "yes" } else { "no" }
             ));
         }
         html.push_str("</table>\n");
@@ -177,23 +186,26 @@ pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::
         writeln!(md, "## Wireless Networks\n")?;
         writeln!(
             md,
-            "| SSID | BSSID | Channel | Security | Signal | Last Seen |"
+            "| SSID | BSSID | Channel | Security | Signal | Last Seen | WPS | Hidden | Transition |"
         )?;
         writeln!(
             md,
-            "|------|-------|---------|----------|--------|-----------|"
+            "|------|-------|---------|----------|--------|-----------|-----|--------|------------|"
         )?;
         for network in &report.wireless_networks {
             let escape_pipe = |s: &str| s.replace('|', "\\|");
             writeln!(
                 md,
-                "| {} | {} | {} | {} | {} dBm | {} |",
+                "| {} | {} | {} | {} | {} dBm | {} | {} | {} | {} |",
                 escape_pipe(&network.ssid),
                 escape_pipe(&network.bssid),
                 network.channel,
                 escape_pipe(&network.security_type),
                 network.signal_strength,
-                escape_pipe(&network.last_seen)
+                escape_pipe(&network.last_seen),
+                if network.wps_enabled { "yes" } else { "no" },
+                if network.is_hidden { "yes" } else { "no" },
+                if network.transition_mode { "yes" } else { "no" }
             )?;
         }
         writeln!(md)?;

@@ -248,6 +248,9 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 # Reconnaissance
 ./eggsec recon example.com
 
+# Wireless (passive, lab-only; requires --features wireless + root)
+./eggsec wireless wlan0 --repeat 3
+
 # Resume a previous scan
 ./eggsec resume session.json
 ```
@@ -265,6 +268,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
 | `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
 | `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `CredentialTesting` risk + `allow_credential_testing`). Standalone CLI; local `Auth*` types only (no `ScanReportData` conversion). See `docs/AUTH_LAB.md` + architecture/auth.md. |
+| `eggsec wireless <iface>` | defense-lab (passive) | Passive WiFi reconnaissance (iwlist), security type detection (incl. WPS/hidden/transition), basic vuln analysis + rogue heuristic, recommendations. Requires --features wireless + root/iwlist. See docs/WIRELESS.md. |
 
 ## Build Features
 

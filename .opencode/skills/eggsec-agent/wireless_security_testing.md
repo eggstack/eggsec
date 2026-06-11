@@ -29,12 +29,15 @@ Eggsec provides wireless network security testing capabilities through the `wire
 
 ## Capabilities
 
-- **WiFi Reconnaissance**: Discover and enumerate wireless networks
+- **WiFi Reconnaissance**: Discover and enumerate wireless networks (passive, iwlist)
 - **Security Type Detection**: Identify Open, WEP, WPA, WPA2, WPA3, Enterprise
-- **Signal Strength Analysis**: Evaluate coverage and detect rogue access points
-- **Handshake Analysis**: (Requires external tools like aircrack-ng)
-- **Vulnerability Detection**: Identify weak configurations and security issues
+- **WPS / Hidden / Transition Detection**: Beacon-level indicators for WPS, hidden SSIDs, WPA2/WPA3 mixed mode
+- **Signal Strength Analysis**: Evaluate coverage; flag weak signals
+- **Basic Rogue / Suspicious Detection**: Passive heuristic for duplicate SSID with differing BSSID/security (labeled "Possible Rogue AP / Evil Twin (passive heuristic)")
+- **Vulnerability Detection**: Identify weak/legacy configs (Open/WEP/WPA), unknown, enterprise advisory, WPS, hidden, transition, weak signal
 - **Enterprise Security**: Support for WPA-Enterprise configurations
+- **Recommendations**: Actionable guidance + "run repeated scans for rogue observation"
+- **Handshake Analysis**: Not implemented (aspirational; external tools would be required)
 
 ## Key Types
 
@@ -84,14 +87,17 @@ pub struct WirelessVulnerability {
 ### CLI Usage
 
 ```bash
-# Scan for wireless networks on interface
-eggsec wireless scan wlan0
+# Passive scan for wireless networks on interface (requires --features wireless + root/iwlist)
+eggsec wireless wlan0
 
-# With specific interface
-eggsec wireless scan --interface wlan0mon
+# Repeated scans for change/rogue observation
+eggsec wireless wlan0 --repeat 5 --duration 10
 
-# Scan and output JSON
-eggsec wireless scan wlan0 --format json
+# JSON output (full WirelessScanResult with WPS/hidden/transition fields)
+eggsec wireless wlan0 --json -o results.json
+
+# Quiet + file
+eggsec wireless wlan0 -q -o out.json
 ```
 
 ### API Usage
@@ -99,12 +105,16 @@ eggsec wireless scan wlan0 --format json
 ```rust
 use eggsec::wireless::{WirelessScanner, SecurityType};
 
-let scanner = WirelessScanner::new()?.with_interface("wlan0".to_string());
-let result = scanner.scan().await?;
+let scanner = WirelessScanner::new().with_interface("wlan0".to_string());
+let result = scanner.scan(10).await?;  // duration_secs
 
 for network in &result.networks {
-    println!("{} ({:?}) - {} dBm", network.ssid, network.security_type, network.signal_strength);
+    println!("{} ({:?}) - {} dBm  WPS:{} hidden:{} trans:{}",
+        network.ssid, network.security_type, network.signal_strength,
+        network.wps_enabled, network.is_hidden, network.transition_mode);
 }
+
+let vulns = WirelessScanner::analyze_networks(&result.networks);
 ```
 
 ## Security Type Reference
@@ -117,16 +127,26 @@ for network in &result.networks {
 | WPA2 | Medium | AES-CCMP, widely used |
 | WPA3 | High | Latest standard, SAE key exchange |
 | Enterprise | Varies | 802.1X with RADIUS authentication |
+| Transition (WPA2/WPA3 mixed) | Medium | Backward-compat mode; advisory |
+| (WPS enabled) | Lower effective | Additional attack surface (passive flag only) |
 
-## Common Vulnerabilities
+## Common Vulnerabilities (Passive Detection)
 
 - **Open Networks**: No encryption, all traffic visible
 - **WEP Encryption**: Easily crackable with public tools
-- **Default Credentials**: APs with factory default passwords
-- **Hidden SSID**: Not actually hidden, just not beaconed
-- **Evil Twin**: Rogue access point mimicking legitimate network
-- **Weak WPA2**: Pre-shared key brute force vulnerability
+- **WPA (legacy)**: TKIP vulnerabilities
+- **Default Credentials**: APs with factory default passwords (not directly detected; physical/radio follow-up)
+- **Hidden SSID**: Not actually hidden, just not beaconed (advisory)
+- **Evil Twin / Rogue (heuristic)**: Same SSID appearing with different BSSID or security type across scan cells (passive only)
+- **Weak WPA2 / Transition**: Mixed mode or weak signal environments
+- **WPS Enabled**: Known attack surface (PIN brute-force in active scenarios)
 
 ## Triggers
 
-Keywords that activate this skill: `wifi`, `wireless`, `wpa`, `wpa2`, `wpa3`, `ssid`, `bssid`, `handshake`, `access point`, `enterprise`, `wireless reconnaissance`
+Keywords that activate this skill: `wifi`, `wireless`, `wpa`, `wpa2`, `wpa3`, `ssid`, `bssid`, `handshake`, `access point`, `enterprise`, `wireless reconnaissance`, `wps`, `rogue ap`, `evil twin`
+
+## Notes (First Handoff)
+
+- Passive-only (no injection, deauth, or handshake capture).
+- Requires --features wireless + Linux iwlist + appropriate privileges.
+- See docs/WIRELESS.md, architecture/wireless.md, plans/wireless-first-handoff-plan.md.
