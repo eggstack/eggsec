@@ -66,4 +66,4 @@ See `architecture/auth.md` for architecture documentation. TUI `AuthTab` is stan
 
 Local `AuthTestReport`/`AuthFinding` only (no conversion to `StoredFinding`/`ScanReportData`/`eggsec-output` canonical types per adopted model; handler produces JSON/text directly). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth` which is JWT/OAuth/IDOR fuzzer-focused via stages + fuzzer payloads).
 
-See `docs/AUTH_LAB.md` for defense-lab usage, requirements (`allow_credential_testing=true` + explicit scope + dedicated test accounts), and command examples.
+See `docs/AUTH_LAB.md` for defense-lab usage, requirements (`allow_credential_testing=true` + explicit scope + dedicated test accounts), and command examples. Final auth polish + overall new-modules cleanup in `plans/final-cleanup-new-modules-plan.md` (Task 1 + resolution note).

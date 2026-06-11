@@ -6,6 +6,34 @@
 
 ---
 
+## Resolution / Post-execution status (2026-06-11)
+
+**This plan has been executed and closed.**
+
+All items from the "Remaining" list were completed:
+- Main project documentation (`CAPABILITIES.md`, `README.md`, `SAFETY.md` + cross-module consistency) updated with accurate wireless description, Lab Defense table rows, feature notes, system deps, and "standalone defense-lab" language (TUI tab under feature; MCP/agent tool exposure intentionally absent).
+- Rogue UX polish: default human output summarizes candidates by count + hint ("use --detect-suspicious to show full details"); `--detect-suspicious` for full findings + recs; `--known-good` suppression documented for lab baselines (affects human/repeat UX + diffs only; bridge always includes rogue via `analyze_networks(..., None)`).
+- Consistency pass across `docs/WIRELESS.md` (incl. full "Integration with Reporting Pipeline" section), architecture/wireless.md, CAPABILITIES, README, AGENTS.md, skills, and plan cross-refs. No broken/outdated references remained.
+
+Wireless is now in a finished standalone state (CLI primary + optional TUI tab under `wireless` feature; passive-only; optional reporting bridge + CLI auto-bridge; MCP/agent exposure intentionally absent per design decision). See the broader close-out record in `plans/wireless-micro-closeout-checklist.md` and the TUI/MCP/agentic resolution in `plans/wireless-tui-mcp-agentic-handoff-plan.md` (top resolution block).
+
+**See also**:
+- `plans/new-modules-integration-and-closeout-plan.md` + `plans/final-cleanup-new-modules-plan.md`
+- `plans/integration-work-plan.md`
+- `architecture/wireless.md`, `architecture/defense_lab.md`, `architecture/cli_commands.md`, `docs/WIRELESS.md`, CAPABILITIES.md Lab Defense, AGENTS.md (standalone note)
+
+**Verification** (all passed at close):
+```bash
+cargo check -p eggsec --features wireless
+cargo test --lib -p eggsec --features wireless
+cargo check -p eggsec-tui --features wireless
+cargo clippy --lib -p eggsec --features wireless
+```
+
+This plan is retained for historical reference. No further changes required.
+
+---
+
 ## 1. Executive Summary
 
 Wireless has reached a strong standalone state. The core functionality, CLI experience, rogue detection with known-good support, repeated scan/change detection, and `docs/WIRELESS.md` are all in good shape.

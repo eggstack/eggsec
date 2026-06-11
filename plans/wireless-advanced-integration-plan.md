@@ -6,6 +6,34 @@
 
 ---
 
+## Resolution / Post-execution status (2026-06-11)
+
+**This plan has been executed and closed (with design decisions recorded).**
+
+- **CLI polish** (Task-equivalent): Complete. Help text, MODE prefix, practical examples, `--detect-suspicious` canonical form, warnings, and dry-run/known-good/repeat UX all landed in the standalone completion and micro-closeout work.
+- **TUI integration**: Complete via `WirelessTab` + `TabSpec` registration (risk_group SafeActive, feature="wireless", direct_launch) + full enforcement wiring (central `EnforcementContext`, preflight, policy confirm overlay). See `plans/wireless-tui-mcp-agentic-handoff-plan.md` (Task 1) + resolution note at top of that plan, `architecture/tui.md`, and `crates/eggsec-tui/src/tabs/wireless.rs`.
+- **MCP / agentic tool exposure**: **Intentionally not implemented** per final design decision (standalone defense-lab surface). Wireless is not registered as a `SecurityTool`, is invisible to `tools/list` / `tools/call`, and has no presence in `tool/protocol/mcp/policy.rs` (or agent dispatch). This mirrors the mobile + auth-test pattern and preserves the passive-only, local-interface, root/CAP_NET_ADMIN reality. See `architecture/wireless.md` (MCP / Agentic / Tool Integration Status section + resolution note header), `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases), AGENTS.md (standalone defense-lab surfaces), and `docs/USAGE.md` (Output Models block). The optional `to_scan_report_data` + CLI auto-bridge for `report convert` works independently of invocation surface.
+- **Agentic alignment**: Achieved via central `EnforcementContext::evaluate()` (CLI handler + TUI direct-launch path). Per-scan considerations for agent paths apply only if ever exposed (currently not).
+
+**See also** (for the consolidated pattern and final state):
+- `plans/wireless-tui-mcp-agentic-handoff-plan.md` (resolution note records TUI complete + MCP absent)
+- `plans/wireless-micro-closeout-checklist.md` + `plans/wireless-standalone-completion-plan.md`
+- `plans/new-modules-integration-and-closeout-plan.md` + `plans/final-cleanup-new-modules-plan.md`
+- `plans/integration-work-plan.md` (reporting bridges)
+- `architecture/wireless.md` (MCP/Agentic + Integration sections), `docs/WIRELESS.md` (Integration with Reporting Pipeline), CAPABILITIES.md / README Lab Defense tables.
+
+**Verification commands** (post-execution):
+```bash
+cargo check -p eggsec --features wireless
+cargo check -p eggsec-tui --features wireless
+cargo test --lib -p eggsec --features wireless
+cargo clippy --lib -p eggsec --features wireless
+```
+
+This plan is retained for historical reference. The passive / defense-lab identity of wireless is preserved. No code changes required for closure.
+
+---
+
 ## 1. Current State
 
 Wireless is currently a solid **standalone defense-lab command**:

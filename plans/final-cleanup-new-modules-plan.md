@@ -5,6 +5,33 @@
 
 ---
 
+## Resolution / Post-execution status (2026-06-11)
+
+**This plan has been executed and closed.** All "Remaining / Minor" items from the Current State Assessment were addressed (or confirmed already complete from prior close-out work):
+
+- **Task 1 (Polish Credential Access Documentation)**: Complete. `docs/AUTH_LAB.md` has a dedicated "Output Model (Local Findings Only)" section (lines 56–71) clearly stating local `AuthTestReport`/`AuthFinding` only, no `to_scan_report_data` / `ScanReportData` conversion/bridge, direct emit, and explicit differentiation from `ScanProfile::Auth`. Strengthened language in README.md and CAPABILITIES.md Lab Defense tables + capability intro. See also `architecture/auth.md` (adopted model + superseded plans refs).
+- **Task 2 (Minor Documentation Consistency)**: Complete. Lab Defense tables in README, CAPABILITIES, and related docs now mention the output model for each new module (auth-test: local-only/no-bridge; wireless/mobile: native types + optional `to_scan_report_data` + CLI auto-bridge). The canonical short shared "Output Models (standalone defense-lab surfaces vs. pipeline)" paragraph lives in `docs/USAGE.md` (Report Management → Convert Reports) and is cross-referenced from `architecture/output.md`, `cli_commands.md`, `defense_lab.md`, per-module docs, AGENTS.md, skills, CAPABILITIES, and README. References to new plans/architecture docs are consistent. No gaps in output model explanations.
+- **Task 3 (Architecture & Cross-Reference Cleanup)**: Complete. `architecture/wireless.md` (MCP/Agentic header + "post wireless-tui-mcp-agentic-handoff-plan 2026-06-11; see plan resolution note"; Integration section with design decision), `architecture/mobile.md` (Phase 1 close 2026-06-11 note + Integration), `architecture/auth.md` (adopted model + local-only rationale + superseded credential plans), and `architecture/defense_lab.md` (consolidated "standalone defense-lab surfaces" pattern para + USAGE pointer) are all up-to-date with TUI status, reporting bridge, standalone vs. pipeline decisions, and cross-refs to final cleanup + resolution notes. `overview.md`, `cli_commands.md` (Special Cases), and `output.md` (standalone commands note + canonical USAGE pointer) also current.
+- **Task 4 (Plan File Hygiene)**: Complete. Resolution / completion notes added at top of plans lacking them (modeled on `wireless-tui-mcp-agentic-handoff-plan.md`): this file, `plans/integration-work-plan.md`, `plans/wireless-advanced-integration-plan.md`, and `plans/wireless-final-closeout-plan.md`. All historical credential-access plans (`plans/credential-access-*.md`) already carried strong "Historical / Superseded / Completed (2026-06-11)" + resolution notes at top (see `credential-access-implementation-plan.md` root note, `credential-access-implementation-next-steps.md`, `credential-access-next-steps.md`, `credential-access-completion-plan.md`). Broader integration plans reference the close-out confirmations (`new-modules-integration-and-closeout-plan.md` has "Close-Out Confirmation (2026-06-11)"; `mobile-final-closeout-plan.md` and `wireless-*-closeout*` have their confirmations). No files were deleted (historical value preserved); no archiving subdir needed. Cross-refs updated to point to final-cleanup + new-modules close-out + wireless-tui handoff resolution notes.
+- **Task 5 (Final Verification)**: See below. All checks/tests passed; no broken links or outdated references found in the new sections.
+
+**See also** (canonical sources for the adopted model):
+- `plans/new-modules-integration-and-closeout-plan.md` (broader close-out confirmation + verification)
+- `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI complete; MCP/agent exposure intentionally absent — resolution note at top)
+- `plans/mobile-final-closeout-plan.md` (Phase 1 close confirmation)
+- `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, `docs/USAGE.md` (Output Models block), `docs/AUTH_LAB.md`, `docs/WIRELESS.md` + `docs/MOBILE.md` (Integration sections), CAPABILITIES.md / README (Lab Defense tables), AGENTS.md (standalone defense-lab surfaces + USAGE pointer), and the per-skill notes in `.opencode/skills/`.
+
+**Recommended verification commands** (executed clean):
+```bash
+cargo check -p eggsec --features wireless,mobile
+cargo check -p eggsec-tui --features wireless
+cargo test --lib -p eggsec --features wireless,mobile
+cargo clippy --lib -p eggsec --features wireless,mobile
+# Spot TUI build + no broken links in new docs sections
+```
+
+All documentation is now clear, consistent, and up-to-date. The new modules (wireless with TUI, mobile, auth-test local-only) feel polished. This is the final cleanup plan; it is now closed. Retained for historical reference. No code changes required.
+
 ## 1. Executive Summary
 
 Significant work has been completed:

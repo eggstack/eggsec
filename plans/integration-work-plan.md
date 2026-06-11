@@ -6,6 +6,33 @@
 
 ---
 
+## Resolution / Post-execution status (2026-06-11)
+
+**This plan has been executed and closed.** All Priority 1–2 items (reporting bridges + docs for wireless/mobile) were completed during the integration work and subsequent close-outs. Optional `to_scan_report_data()` bridges for wireless and mobile are solid (with tests), native `--json` auto-bridges via `eggsec report convert` when the feature is present, and dedicated "Integration with Reporting Pipeline" sections exist in `docs/WIRELESS.md` and `docs/MOBILE.md`. The short shared "Output Models (standalone defense-lab surfaces vs. pipeline)" explanation lives in `docs/USAGE.md` (Report Management → Convert Reports) and is the canonical cross-reference (also pointed to from `architecture/output.md`, `cli_commands.md`, `defense_lab.md`, per-module docs, AGENTS.md, CAPABILITIES.md, README, and skills).
+
+`auth-test` remains intentionally local-only (no bridge, no conversion, distinct from `ScanProfile::Auth`) per the adopted runtime-policy model; see `architecture/auth.md`, `docs/AUTH_LAB.md`, and the superseded credential-access plans (all annotated with resolution notes at top).
+
+No pipeline stages/profiles (`WirelessRecon`, `MobileStatic`, etc.) were added in this round (aspirational only; design note in `architecture/proposed-wireless-mobile-stages.md`).
+
+**See also**:
+- `plans/new-modules-integration-and-closeout-plan.md` (broader close-out confirmation with verification)
+- `plans/final-cleanup-new-modules-plan.md` (final polish + plan hygiene)
+- `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI complete; MCP/agent exposure intentionally absent — resolution note at top)
+- `plans/mobile-final-closeout-plan.md` (Phase 1 close confirmation)
+- `architecture/{wireless,mobile,auth,cli_commands,defense_lab,output}.md`, `docs/USAGE.md`, CAPABILITIES.md Lab Defense tables, AGENTS.md (standalone defense-lab surfaces note)
+
+**Recommended verification commands** (for future agents):
+```bash
+cargo check -p eggsec --features wireless,mobile
+cargo test --lib -p eggsec --features wireless,mobile
+cargo check -p eggsec-tui --features wireless
+cargo clippy --lib -p eggsec --features wireless,mobile
+```
+
+This plan is retained for historical reference. No further code changes required.
+
+---
+
 ## 1. Context & Guiding Principles
 
 - `auth-test` is **intentionally standalone** with local `AuthTestReport`/`AuthFinding` only. No `to_scan_report_data()` conversion or pipeline integration is planned or desired (per `architecture/auth.md`).
