@@ -54,8 +54,9 @@ pub use policy::{
     IntendedUse, OperationDescriptor, OperationMode, OperationRisk,
 };
 pub use policy_decision::{
-    classify_denial_reasons, evaluate_enforcement, evaluate_operation_policy,
-    may_downgrade_to_warning, EnforcementContext, EnforcementOutcome, PolicyDecision,
+    classify_denial_reasons, confirmation_classes_for, evaluate_enforcement,
+    evaluate_operation_policy, may_downgrade_to_warning, ConfirmationClass, EnforcementContext,
+    EnforcementOutcome, ManualOverride, PolicyDecision,
 };
 pub use presets::DefenseLabPreset;
 pub use scan::{

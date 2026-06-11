@@ -24,6 +24,10 @@ pub struct PolicyDecision {
     pub required_policy_flags: Vec<String>,
     pub denied_reasons: Vec<String>,
     pub warnings: Vec<String>,
+    // Manual override audit (populated only for ManualPermissive when override accepted)
+    pub manual_override_used: bool,
+    pub manual_override_reason: Option<String>,
+    pub manual_override_classes: Vec<String>,
 }
 
 impl PolicyDecision {
@@ -50,6 +54,9 @@ impl PolicyDecision {
             required_policy_flags: Vec::new(),
             denied_reasons: Vec::new(),
             warnings: Vec::new(),
+            manual_override_used: false,
+            manual_override_reason: None,
+            manual_override_classes: Vec::new(),
         }
     }
 
@@ -77,6 +84,9 @@ impl PolicyDecision {
             required_policy_flags: Vec::new(),
             denied_reasons: vec![reason.to_string()],
             warnings: Vec::new(),
+            manual_override_used: false,
+            manual_override_reason: None,
+            manual_override_classes: Vec::new(),
         }
     }
 
@@ -113,6 +123,17 @@ impl PolicyDecision {
 
     pub fn with_denied_reason(mut self, reason: &str) -> Self {
         self.denied_reasons.push(reason.to_string());
+        self
+    }
+
+    pub fn with_manual_override_record(
+        mut self,
+        reason: Option<String>,
+        classes: Vec<String>,
+    ) -> Self {
+        self.manual_override_used = true;
+        self.manual_override_reason = reason;
+        self.manual_override_classes = classes;
         self
     }
 
@@ -181,12 +202,16 @@ impl PolicyDecision {
 /// Wraps a [`PolicyDecision`] with profile-aware semantics:
 /// - `Allow`: operation may proceed.
 /// - `Warn`: operation may proceed but warnings should be surfaced.
+/// - `RequireConfirmation`: manual-only intermediate; CLI/TUI may proceed if explicit
+///   manual override flags match the required confirmation classes. Automated profiles
+///   (CI/MCP/Agent) and ManualGuarded must treat this as a denial.
 /// - `Deny`: operation must not proceed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EnforcementOutcome {
     Allow(PolicyDecision),
     Warn(PolicyDecision),
+    RequireConfirmation(PolicyDecision),
     Deny(PolicyDecision),
 }
 
@@ -194,7 +219,7 @@ impl EnforcementOutcome {
     /// Returns a reference to the inner `PolicyDecision`.
     pub fn decision(&self) -> &PolicyDecision {
         match self {
-            Self::Allow(d) | Self::Warn(d) | Self::Deny(d) => d,
+            Self::Allow(d) | Self::Warn(d) | Self::RequireConfirmation(d) | Self::Deny(d) => d,
         }
     }
 
@@ -206,6 +231,59 @@ impl EnforcementOutcome {
     /// Returns `true` if the outcome is a hard denial.
     pub fn is_denied(&self) -> bool {
         matches!(self, Self::Deny(_))
+    }
+
+    /// Returns `true` if the outcome requires manual confirmation (manual-only intermediate).
+    /// Automated profiles and ManualGuarded must treat this as denial.
+    pub fn requires_confirmation(&self) -> bool {
+        matches!(self, Self::RequireConfirmation(_))
+    }
+}
+
+/// Categories of conditions that trigger `RequireConfirmation` under `ManualPermissive`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfirmationClass {
+    OutOfScope,
+    ExplicitExclusion,
+    HighRisk,
+    NonBaselineCapability,
+    PrivateResolution,
+    CrossHostRedirect,
+    TargetExpansion,
+}
+
+/// Manual override flags honored only for `ExecutionProfile::ManualPermissive`.
+/// These are never part of MCP request types, agent config, or tool serialization.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ManualOverride {
+    pub assume_yes: bool,
+    pub allow_out_of_scope: bool,
+    pub allow_explicit_exclusion: bool,
+    pub allow_high_risk: bool,
+    pub allow_nonbaseline_capability: bool,
+    pub allow_private_resolution: bool,
+    pub allow_cross_host_redirect: bool,
+    pub reason: Option<String>,
+}
+
+impl ManualOverride {
+    /// Returns true if this override permits the given confirmation class.
+    /// `assume_yes` acts as a broad manual confirmation for classes that are otherwise
+    /// covered by a specific flag; specific flags are preferred for high-risk/excluded.
+    pub fn permits(&self, class: ConfirmationClass) -> bool {
+        if self.assume_yes {
+            return true;
+        }
+        match class {
+            ConfirmationClass::OutOfScope => self.allow_out_of_scope,
+            ConfirmationClass::ExplicitExclusion => self.allow_explicit_exclusion,
+            ConfirmationClass::HighRisk => self.allow_high_risk,
+            ConfirmationClass::NonBaselineCapability => self.allow_nonbaseline_capability,
+            ConfirmationClass::PrivateResolution => self.allow_private_resolution,
+            ConfirmationClass::CrossHostRedirect => self.allow_cross_host_redirect,
+            ConfirmationClass::TargetExpansion => self.allow_out_of_scope, // expansion treated like scope discretion
+        }
     }
 }
 
@@ -556,13 +634,17 @@ pub fn may_downgrade_to_warning(
 ///
 /// Calls [`evaluate_operation_policy`] internally, then transforms the
 /// resulting [`PolicyDecision`] into [`EnforcementOutcome::Allow`],
-/// [`EnforcementOutcome::Warn`], or [`EnforcementOutcome::Deny`] according
-/// to the given [`ExecutionProfile`].
+/// [`EnforcementOutcome::Warn`], [`EnforcementOutcome::RequireConfirmation`],
+/// or [`EnforcementOutcome::Deny`] according to the given [`ExecutionProfile`].
 ///
-/// For ManualPermissive, safe scope-selection denials (ScopeMissing / TargetOutOfScope
-/// for low-risk StandardAssessment ops with no explicit exclusions or other denials)
-/// are downgraded to Warn using DenialClass classification. Strict profiles and
-/// higher-risk/feature/risk/capability/exclusion denials are never downgraded.
+/// For ManualPermissive (default manual), safe scope-selection denials
+/// (ScopeMissing / TargetOutOfScope for low-risk ops with *no* positive scope rules
+/// and no exclusions) downgrade to Warn. Explicit allowlist misses (positive rules),
+/// explicit exclusions, high-risk operations, and non-baseline capabilities produce
+/// `RequireConfirmation` (operator can override with CLI flags). Missing features,
+/// invalid targets, denied capabilities, and compile-time unavailability are always
+/// hard `Deny`. ManualGuarded / CiStrict / McpStrict / AgentStrict treat
+/// `RequireConfirmation` cases as hard `Deny` (no override path).
 pub fn evaluate_enforcement(
     descriptor: &OperationDescriptor,
     policy: &ExecutionPolicy,
@@ -621,11 +703,27 @@ pub fn evaluate_enforcement(
                         .iter()
                         .any(|c| matches!(c, DenialClass::ExplicitExclusion));
                 if is_pure_out_of_scope_miss && has_positive_scope_rules {
-                    // Explicit rules declared; mismatch is denial, not a warnable miss.
-                    return EnforcementOutcome::Deny(decision);
+                    // Explicit rules declared; mismatch is not a warnable miss.
+                    // Per 2026-06-10 manual discretion plan:
+                    // Under ManualPermissive this is a confirmable operator-discretion case
+                    // (RequireConfirmation), not a silent warn and not an immediate hard denial.
+                    // Strict/guarded/automated profiles still hard-deny.
+                    if profile == ExecutionProfile::ManualPermissive {
+                        // Classify before any mutation so confirmation_classes_for can see "not in scope" etc.
+                        let conf_classes = confirmation_classes_for(descriptor, &decision, policy);
+                        let mut d = decision;
+                        for c in &conf_classes {
+                            d.warnings.push(format!("confirmation required: {:?}", c));
+                        }
+                        // Do not drain denied_reasons here; leave them for diagnostics and for
+                        // confirmation_classes_for callers that inspect the decision inside RequireConfirmation.
+                        return EnforcementOutcome::RequireConfirmation(d);
+                    } else {
+                        return EnforcementOutcome::Deny(decision);
+                    }
                 }
 
-                // Move denial reasons to warnings and allow-as-warn
+                // Move denial reasons to warnings and allow-as-warn (safe ambiguity cases)
                 let mut d = decision;
                 if !d.denied_reasons.is_empty() {
                     d.warnings.extend(
@@ -637,8 +735,32 @@ pub fn evaluate_enforcement(
                 d.allowed = true;
                 return EnforcementOutcome::Warn(d);
             }
+
+            // ManualPermissive: map discretion-denial cases to RequireConfirmation
+            // (explicit out-of-scope with positive rules, explicit exclusion, etc.)
+            let conf_classes = confirmation_classes_for(descriptor, &decision, policy);
+            if !conf_classes.is_empty() {
+                let mut d = decision;
+                for c in &conf_classes {
+                    d.warnings.push(format!("confirmation required: {:?}", c));
+                }
+                return EnforcementOutcome::RequireConfirmation(d);
+            }
         }
         return EnforcementOutcome::Deny(decision);
+    }
+
+    // ManualPermissive: even for base-allowed decisions, high-risk operations and
+    // non-baseline capabilities require explicit operator confirmation (discretion).
+    if profile == ExecutionProfile::ManualPermissive {
+        let conf_classes = confirmation_classes_for(descriptor, &decision, policy);
+        if !conf_classes.is_empty() {
+            let mut d = decision;
+            for c in &conf_classes {
+                d.warnings.push(format!("confirmation required: {:?}", c));
+            }
+            return EnforcementOutcome::RequireConfirmation(d);
+        }
     }
 
     // Check for warnings based on profile
@@ -704,6 +826,141 @@ pub fn evaluate_enforcement(
             }
         }
     }
+}
+
+/// Classify conditions in a denied (or would-be-denied) decision + descriptor that warrant
+/// `RequireConfirmation` under `ManualPermissive`. Returns the list of confirmation classes
+/// that apply. Used by `evaluate_enforcement` and by `CommandContext` to determine which
+/// manual override flags are required.
+///
+/// Only operator-discretion cases are returned here; missing features, invalid targets,
+/// denied-capabilities, risk-policy denials ("not allowed by current execution policy"),
+/// and compile-time unavailability are always hard denials and do not produce confirmation
+/// classes (they remain `Deny` even for ManualPermissive).
+pub fn confirmation_classes_for(
+    descriptor: &OperationDescriptor,
+    decision: &PolicyDecision,
+    _policy: &ExecutionPolicy,
+) -> Vec<ConfirmationClass> {
+    let mut classes = Vec::new();
+
+    // Hard denials must never become confirmation: feature missing, capability denied, risk policy denied, invalid target.
+    let has_hard_deny = !decision.missing_features.is_empty()
+        || decision.denied_reasons.iter().any(|r| {
+            r.contains("capability") && r.contains("denied")
+                || r.contains("requires explicit allow")
+                || r.contains("not allowed by current execution policy")
+                || r.contains("required feature")
+                || r.contains("invalid")
+                || r.contains("scope check error")
+        });
+    if has_hard_deny {
+        return classes; // empty => will stay Deny
+    }
+
+    // Explicit exclusion
+    if !decision.matched_exclusion_rules.is_empty()
+        || decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("explicitly excluded") || r.contains("excluded"))
+    {
+        classes.push(ConfirmationClass::ExplicitExclusion);
+    }
+
+    // TargetOutOfScope with positive (explicit) scope rules present -> OutOfScope
+    let has_positive_scope_rules = !decision.matched_scope_rules.is_empty()
+        || decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("not in scope"));
+    if has_positive_scope_rules
+        && decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("not in scope"))
+        && !classes.contains(&ConfirmationClass::ExplicitExclusion)
+    {
+        classes.push(ConfirmationClass::OutOfScope);
+    }
+
+    // High-risk operations: only when the *base policy would have allowed the risk*
+    // (i.e. the denial was not a risk-policy denial) and runtime/feature exists.
+    // For base-allowed paths we will also surface this below.
+    if matches!(
+        descriptor.risk,
+        OperationRisk::Intrusive
+            | OperationRisk::LoadTest
+            | OperationRisk::StressTest
+            | OperationRisk::RawPacket
+            | OperationRisk::CredentialTesting
+            | OperationRisk::ExploitAdjacent
+            | OperationRisk::RemoteExecution
+    ) {
+        // If we got here, there was no hard risk-policy denial string.
+        // For a denied decision that reached discretion (e.g. scope discretion + high risk),
+        // or for a base-allowed high-risk, surface confirmation.
+        if !classes.contains(&ConfirmationClass::HighRisk) {
+            classes.push(ConfirmationClass::HighRisk);
+        }
+    }
+
+    // Non-baseline capability required (and not already hard-denied)
+    for cap in &descriptor.required_capabilities {
+        if !super::baseline_allowed_capability(*cap) {
+            if !classes.contains(&ConfirmationClass::NonBaselineCapability) {
+                classes.push(ConfirmationClass::NonBaselineCapability);
+            }
+        }
+    }
+
+    // Resolver/redirect signals (best-effort; only if not hard-denied above).
+    // PrivateResolution is for signals that a public/nominal input resolved to private/loopback
+    // (e.g. DNS rebinding or misdirection). The generic "target is a private IP; scope recommended"
+    // advisory for explicit private targeting is informational only and does not trigger confirmation.
+    let has_private_resolution_signal = decision.warnings.iter().any(|w| {
+        let wl = w.to_lowercase();
+        (wl.contains("private") || wl.contains("loopback"))
+            && (wl.contains("resolv")
+                || wl.contains("public")
+                || wl.contains("rebind")
+                || wl.contains("misdirect"))
+    }) || decision.denied_reasons.iter().any(|r| {
+        let rl = r.to_lowercase();
+        (rl.contains("private") || rl.contains("loopback"))
+            && (rl.contains("resolv") || rl.contains("public") || rl.contains("rebind"))
+    });
+    if has_private_resolution_signal {
+        if !classes.contains(&ConfirmationClass::PrivateResolution) {
+            classes.push(ConfirmationClass::PrivateResolution);
+        }
+    }
+    if decision
+        .warnings
+        .iter()
+        .any(|w| w.contains("redirect") || w.contains("canonical"))
+        || decision
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("redirect") || r.contains("host"))
+    {
+        if !classes.contains(&ConfirmationClass::CrossHostRedirect) {
+            classes.push(ConfirmationClass::CrossHostRedirect);
+        }
+    }
+
+    // Target expansion discovered outside original input (placeholder)
+    if decision
+        .warnings
+        .iter()
+        .any(|w| w.contains("expansion") || w.contains("discovered"))
+    {
+        if !classes.contains(&ConfirmationClass::TargetExpansion) {
+            classes.push(ConfirmationClass::TargetExpansion);
+        }
+    }
+
+    classes
 }
 
 #[cfg(test)]
@@ -1253,11 +1510,20 @@ mod tests {
                 required_capabilities: Vec::new(),
             };
             let outcome = ctx.evaluate(&descriptor);
-            assert!(
-                outcome.is_denied(),
-                "Profile {:?} should deny excluded target",
-                profile
-            );
+            if *profile == ExecutionProfile::ManualPermissive {
+                // ManualPermissive: explicit exclusion is a confirmable operator-discretion case
+                assert!(
+                    outcome.requires_confirmation(),
+                    "Profile {:?} should require confirmation for excluded target",
+                    profile
+                );
+            } else {
+                assert!(
+                    outcome.is_denied(),
+                    "Profile {:?} should deny excluded target",
+                    profile
+                );
+            }
         }
     }
 
@@ -1453,8 +1719,8 @@ mod tests {
             required_capabilities: Vec::new(),
         };
         let outcome = ctx.evaluate(&descriptor);
-        assert!(outcome.is_denied());
-        // Exclusion should be classified as ExplicitExclusion and block downgrade
+        // ManualPermissive: explicit exclusion produces RequireConfirmation (operator discretion), not hard denial.
+        assert!(outcome.requires_confirmation());
         let classes = classify_denial_reasons(outcome.decision());
         assert!(classes.contains(&DenialClass::ExplicitExclusion));
     }

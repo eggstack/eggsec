@@ -124,6 +124,50 @@ pub struct Cli {
     )]
     pub strict_scope: bool,
 
+    // --- Manual discretion overrides (honored only for ManualPermissive / default CLI/TUI) ---
+    // These are ignored or rejected under --strict-scope, CI, MCP, and agent paths.
+    #[arg(
+        long,
+        global = true,
+        help = "Assume yes to confirmation prompts (manual-only; use specific --allow-* for high-risk/exclusions)"
+    )]
+    pub yes: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow operations on targets outside configured scope (manual-only)"
+    )]
+    pub allow_out_of_scope: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow operations on explicitly excluded targets (manual-only)"
+    )]
+    pub allow_excluded_target: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow high-risk operations (intrusive, stress, load, raw packet, credential, exploit-adjacent, remote) (manual-only)"
+    )]
+    pub allow_high_risk: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow non-baseline capabilities (manual-only)"
+    )]
+    pub allow_nonbaseline_capability: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Reason for manual override (recorded for audit)"
+    )]
+    pub manual_override_reason: Option<String>,
+
     #[arg(long, help = "Generate default configuration file to stdout")]
     pub generate_config: bool,
 

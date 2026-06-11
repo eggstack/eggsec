@@ -843,7 +843,9 @@ impl Agent {
                         "agent enforcement warning (non-strict profile)"
                     );
                 }
-                EnforcementOutcome::Deny(decision) => {
+                EnforcementOutcome::RequireConfirmation(decision)
+                | EnforcementOutcome::Deny(decision) => {
+                    // RequireConfirmation is always denial for agent (strict) profiles.
                     anyhow::bail!(
                         "agent enforcement denied {} on {}: {}",
                         scan_type,

@@ -441,15 +441,11 @@ impl KeyHandler {
                 app.needs_redraw = true;
             }
             // Help overlay scrolling
-            (KeyModifiers::NONE, KeyCode::Up | KeyCode::Char('k'))
-                if app.is_help_visible() =>
-            {
+            (KeyModifiers::NONE, KeyCode::Up | KeyCode::Char('k')) if app.is_help_visible() => {
                 app.overlay.help_scroll_offset = app.overlay.help_scroll_offset.saturating_sub(1);
                 app.needs_redraw = true;
             }
-            (KeyModifiers::NONE, KeyCode::Down | KeyCode::Char('j'))
-                if app.is_help_visible() =>
-            {
+            (KeyModifiers::NONE, KeyCode::Down | KeyCode::Char('j')) if app.is_help_visible() => {
                 app.overlay.help_scroll_offset = app.overlay.help_scroll_offset.saturating_add(1);
                 app.needs_redraw = true;
             }

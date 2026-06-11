@@ -77,10 +77,23 @@ pub enum ScopeSource {
 ### `ExecutionProfile` and `EnforcementOutcome` (`policy.rs`, `policy_decision.rs`)
 
 - `ExecutionProfile` - Caller trust boundary: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`
-- `EnforcementOutcome` - Profile-aware result: `Allow(PolicyDecision)`, `Warn(PolicyDecision)`, `Deny(PolicyDecision)`
+- `EnforcementOutcome` - Profile-aware result: `Allow(PolicyDecision)`, `Warn(PolicyDecision)`, `RequireConfirmation(PolicyDecision)`, `Deny(PolicyDecision)`
 - `evaluate_enforcement()` - Wraps `evaluate_operation_policy()` with profile-specific behavior
 - `Capability` - Operation capability declarations for tool metadata
 - `DiscoveredTargetStatus` - Discovery promotion model for agent/MCP modes
+- `ManualOverride` and `ConfirmationClass` (policy_decision.rs) - Manual discretion overrides (see below)
+
+### Manual discretion mode (plan 2026-06-10)
+
+Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `EnforcementOutcome::RequireConfirmation(PolicyDecision)` (instead of hard `Deny`) for operator-discretion cases: explicit allowlist miss with positive scope rules (`ConfirmationClass::OutOfScope`), explicit exclusion (`ExplicitExclusion`), high-risk operations (`HighRisk`), or non-baseline capability (`NonBaselineCapability`).
+
+`ManualGuarded`, `CiStrict`, `McpStrict`, and `AgentStrict` treat `RequireConfirmation` as `Deny` (no proceed path).
+
+`CommandContext::evaluate_and_enforce_operation` (in commands/handlers/mod.rs) matches on `RequireConfirmation` only for `ManualPermissive`: if the `CommandContext`'s `manual_override: ManualOverride` has flags permitting the required classes (e.g. `allow_out_of_scope`, `allow_explicit_exclusion`, `allow_high_risk`, `allow_nonbaseline_capability`, `assume_yes`), it proceeds and records the override (`manual_override_used`, `manual_override_reason`, `manual_override_classes` on the decision for audit). Without matching flags it bails with a message listing the required override flag(s). Automated profiles never reach a proceed path for `RequireConfirmation`.
+
+`ManualOverride` (with `permits(class: ConfirmationClass)`) and `ConfirmationClass` live in `policy_decision.rs`; they are not part of MCP/agent schemas or automated paths. Override flags are CLI-only (global, manual-only; ignored/rejected under `--strict-scope` or strict profiles).
+
+This preserves hard denials for missing features, invalid targets, and all automated enforcement. See `docs/plans/2026-06-10-manual-discretion-mode-plan.md`.
 
 ### `EnforcementContext` (`policy_decision.rs`)
 
@@ -99,7 +112,7 @@ pub enum ScopeSource {
 - CI mode: Uses `CiStrict` profile when detected
 
 **Key methods:**
-- `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally.
+- `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/RequireConfirmation/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally. (RequireConfirmation is produced only for ManualPermissive discretion cases per 2026-06-10 plan; automated profiles treat it as denial.)
 - `requires_explicit_manifest_for(descriptor)` / `require_explicit_scope_for_networked()` - Provenance helpers used by `evaluate`.
 - `profile()` - Returns the `ExecutionProfile`
 - `scope()` - Returns the `LoadedScope`

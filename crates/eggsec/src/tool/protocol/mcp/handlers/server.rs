@@ -463,7 +463,10 @@ impl McpServer {
                 &arguments,
             );
             let outcome = self.enforcement.evaluate(&descriptor);
-            if let crate::config::EnforcementOutcome::Deny(decision) = outcome {
+            if let crate::config::EnforcementOutcome::Deny(decision)
+            | crate::config::EnforcementOutcome::RequireConfirmation(decision) = outcome
+            {
+                // RequireConfirmation is treated as hard denial for MCP (no override path, no agent-visible fields).
                 return req.error_response(McpError {
                     code: -32025,
                     message: format!("Enforcement denied: {}", decision.denied_reasons.join("; ")),

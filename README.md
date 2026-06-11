@@ -82,29 +82,33 @@ description = "Admin panel - excluded"
 
 **Feature gating** ensures intrusive modules (stress testing, raw packet crafting, headless browser, NSE, database storage, container scanning, and more) require explicit build flags and cannot be invoked accidentally.
 
-**Execution profiles** separate manual CLI ergonomics from strict MCP/agent enforcement:
-- **Manual CLI/TUI** defaults to permissive scope assistance (warnings for safe scope ambiguity/missing scope under `ManualPermissive`); `--strict-scope` activates guarded mode
-- **MCP server** always uses `McpStrict` internally (via `EnforcementContext`), requires explicit scope manifest (`LoadedScope::is_explicit_manifest()`) for networked operations; warnings treated as denials
-- **Agent** requires explicit scope manifest, uses `AgentStrict`; per-scan enforcement is re-evaluated immediately before dispatch in addition to startup gating
-- **CI** uses `CiStrict`
+**Execution profiles** separate manual CLI/TUI operator-directed discretion from hard enforcement in strict and automated modes:
+- **Manual CLI/TUI (default)**: `ManualPermissive` — operator-directed: warnings for safe scope ambiguity/missing scope; `RequireConfirmation` (with confirm/override) for discretion cases (explicit allowlist miss with positive rules, exclusions, high-risk, non-baseline capabilities). Override flags (e.g. `--allow-high-risk`, `--manual-override-reason "..."`) are honored and audited only here.
+- **Manual strict**: `--strict-scope` uses `ManualGuarded` — hard enforcement (no discretion path).
+- **MCP server**: always `McpStrict` (via `EnforcementContext`); explicit scope manifest (`LoadedScope::is_explicit_manifest()`) required for networked operations; warnings and `RequireConfirmation` treated as denials. Manual override flags ignored.
+- **Agent**: `AgentStrict`; explicit scope manifest required; per-scan enforcement re-evaluated immediately before dispatch (in addition to startup gating); override flags ignored.
+- **CI**: `CiStrict` — hard enforcement; override flags ignored.
 
-`EnforcementContext::evaluate()` is the mandatory central boundary for all paths (CLI, TUI, MCP, agent, CI): performs LoadedScope provenance checks (strict profiles require explicit manifest for networked ops), applies DenialClass downgrade (ManualPermissive only for safe ScopeMissing/TargetOutOfScope when no positive rules), positive capability allow for strict, and full risk/feature/policy enforcement. `DenialClass` drives `ManualPermissive` downgrade logic for safe scope-selection misses only (never for explicit exclusions, feature/risk/capability/hazard denials, or when positive scope rules were declared). Strict profiles and higher-risk operations never downgrade. MCP production uses `McpServer::with_enforcement`; legacy `policy_decision_for_mcp_call` / direct `evaluate_operation_policy` deprecated for denial paths.
+`EnforcementContext::evaluate()` is the mandatory central boundary for all paths (CLI, TUI, MCP, agent, CI): performs LoadedScope provenance checks (strict/automated profiles require explicit manifest for networked ops), applies DenialClass downgrade (ManualPermissive only for safe ScopeMissing/TargetOutOfScope when no positive rules), positive capability allow for strict profiles, `RequireConfirmation` for manual discretion cases, and full risk/feature/policy enforcement. `DenialClass` drives `ManualPermissive` downgrade logic for safe scope-selection misses only (never for explicit exclusions, feature/risk/capability/hazard denials, or when positive scope rules were declared). Strict profiles, higher-risk operations, and automated paths never downgrade; `RequireConfirmation` is treated as hard `Deny` outside ManualPermissive. MCP production uses `McpServer::with_enforcement`; legacy `policy_decision_for_mcp_call` / direct `evaluate_operation_policy` deprecated for denial paths.
 
-> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution. Baseline strict-automated capabilities are `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`; non-baseline require explicit `allowed_capabilities`.
+> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution. Baseline strict-automated capabilities are `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`; non-baseline require explicit `allowed_capabilities`. Manual override flags have no effect for MCP, agent, CI, or strict manual profiles.
 
-MCP and autonomous agent paths are always strict and cannot be downgraded by model-supplied flags.
+MCP and autonomous agent paths are always strict and cannot be downgraded or overridden by model-supplied flags.
 
 ```bash
-# Manual permissive
+# Manual permissive (default: operator-directed; warn + confirm/override for discretion)
 eggsec scan example.com --profile quick
 
-# Manual guarded
+# Manual permissive with override (audited)
+eggsec waf-stress https://lab.example --allow-high-risk --manual-override-reason "authorized Synvoid regression"
+
+# Manual strict (hard enforcement)
 eggsec scan example.com --profile quick --scope scope.toml --strict-scope
 
-# MCP strict
+# MCP strict (hard enforcement; override flags ignored)
 eggsec codegg-mcp --stdio --scope scope.toml
 
-# Agent strict
+# Agent strict (hard enforcement; override flags ignored)
 eggsec agent run --scope scope.toml --portfolio portfolio.json
 ```
 

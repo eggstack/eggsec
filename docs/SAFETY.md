@@ -65,25 +65,30 @@ Eggsec distinguishes caller trust contexts through execution profiles. All paths
 
 | Profile | Behavior | Use Case |
 |---------|----------|----------|
-| **ManualPermissive** | Warnings (not denials) for safe scope ambiguity / ScopeMissing / TargetOutOfScope when no positive rules declared and no exclusions/feature/risk/capability/hazard denials; downgrades use `classify_denial_reasons` + `may_downgrade_to_warning`. Higher-risk, exclusions, or declared positive scope rules remain hard denials. | Default CLI/TUI |
-| **ManualGuarded** | Denies missing scope, out-of-scope targets, ambiguous scope for target-bearing ops | CLI with `--strict-scope` |
-| **CiStrict** | Non-interactive, deterministic, strict; explicit manifest required; positive capability allow enforced for non-baseline | CI/CD pipelines |
-| **McpStrict** | Always strict, scope manifest (`LoadedScope::is_explicit_manifest()`) required for networked ops; warnings treated as denials; capabilities populated via `required_capabilities_for_tool_call` + `operation_descriptor_for_mcp_call`; MCP profile layer (visibility/target/arg restrictions) overlays shared enforcement decision | MCP server |
-| **AgentStrict** | Always strict, cannot self-approve scope; explicit manifest required; per-scan `enforcement.evaluate` immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating in `handle_agent`) | Autonomous agent |
+| **ManualPermissive** | Warn for safe scope ambiguity (no positive rules); RequireConfirmation for operator-discretion cases (explicit positive-scope out-of-scope, exclusions, high-risk, non-baseline caps, etc). CLI overrides RequireConfirmation via --yes / --allow-out-of-scope / --allow-high-risk etc (manual-only, audited). | Default CLI/TUI |
+| **ManualGuarded** | Hard-deny (no overrides) for missing scope, out-of-scope targets, ambiguous scope, high-risk etc. for target-bearing ops | CLI with `--strict-scope` |
+| **CiStrict** | Hard-deny (no overrides); non-interactive, deterministic, strict; explicit manifest required; positive capability allow enforced for non-baseline | CI/CD pipelines |
+| **McpStrict** | Hard-deny (no overrides); always strict, scope manifest (`LoadedScope::is_explicit_manifest()`) required for networked ops; warnings treated as denials; capabilities populated via `required_capabilities_for_tool_call` + `operation_descriptor_for_mcp_call`; MCP profile layer (visibility/target/arg restrictions) overlays shared enforcement decision | MCP server |
+| **AgentStrict** | Hard-deny (no overrides); always strict, cannot self-approve scope; explicit manifest required; per-scan `enforcement.evaluate` immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating in `handle_agent`) | Autonomous agent |
 
 `LoadedScope` provenance (`ScopeSource`: DefaultEmpty vs. ConfigFile/CliScopeFile/GeneratedPreset) is the source of truth for strict automated manifest checks inside `EnforcementContext::evaluate`. `requires_explicit_manifest_for` + `is_explicit_manifest()` produce the canonical denial reason for automated networked operations.
 
 > For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 
-**Baseline capabilities for strict automated profiles** (`McpStrict`, `AgentStrict`, `CiStrict`): `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect` (positive capability allow not required). All other capabilities require explicit `allowed_capabilities` in `ExecutionPolicy` (plus matching risk/feature gates). **ManualPermissive** downgrades *only* safe scope-selection misses (`ScopeMissing`/`TargetOutOfScope` with no positive rules and no exclusions); explicit exclusions, feature gates, risk gates, capability denials, and hazards remain hard denials. Strict profiles never downgrade.
+**Baseline capabilities for strict automated profiles** (`McpStrict`, `AgentStrict`, `CiStrict`): `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect` (positive capability allow not required). All other capabilities require explicit `allowed_capabilities` in `ExecutionPolicy` (plus matching risk/feature gates). Strict profiles never downgrade or confirm; they treat RequireConfirmation as Deny with no overrides. **ManualPermissive** (default) uses Warn for safe scope ambiguity when no positive rules; RequireConfirmation for operator-discretion cases (explicit positive-scope out-of-scope, exclusions, high-risk, non-baseline caps, etc). Missing features and impossible cases are always hard Deny. CLI may satisfy RequireConfirmation via manual-only overrides.
 
 ### Usage Examples
 
 ```bash
-# Manual permissive (default)
+# Manual permissive (default) - safe scope ambiguity warns
 eggsec scan example.com --profile quick
 
-# Manual strict
+# Manual permissive with explicit override for RequireConfirmation cases
+eggsec scan example.com --scope scope.toml --allow-out-of-scope --manual-override-reason "authorized boundary test"
+eggsec scan example.com --scope scope.toml --allow-high-risk --yes
+eggsec waf-stress https://lab.example --allow-high-risk --manual-override-reason "authorized Synvoid WAF regression"
+
+# Manual strict (hard-deny, no overrides)
 eggsec scan example.com --profile quick --scope scope.toml --strict-scope
 
 # Strict MCP (enforcement wired at construction via with_enforcement / create_mcp_router / run_stdio)
@@ -93,7 +98,7 @@ eggsec codegg-mcp --scope scope.toml --stdio
 eggsec agent run --portfolio portfolio.json --scope scope.toml
 ```
 
-MCP and autonomous agent callers cannot use warn-only or downgrade flags. Enforcement is always in Rust code paths (`EnforcementContext::evaluate` central boundary), not prompt-level instructions. MCP enforcement uses `operation_descriptor_for_mcp_call` + `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`) to ensure required capabilities, provenance, and DenialClass/positive-capability logic are consistent. Preferred MCP production constructor: `McpServer::with_enforcement`.
+MCP, CI, agent, and ManualGuarded callers cannot use warn-only or downgrade/override flags. Enforcement is always in Rust code paths (`EnforcementContext::evaluate` central boundary), not prompt-level instructions. Strict profiles and `--strict-scope` treat RequireConfirmation as hard Deny with no overrides. MCP enforcement uses `operation_descriptor_for_mcp_call` + `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`) to ensure required capabilities, provenance, and DenialClass/positive-capability logic are consistent. Preferred MCP production constructor: `McpServer::with_enforcement`.
 
 ## Policy Decision Records
 

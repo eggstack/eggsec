@@ -65,10 +65,26 @@ async fn main() -> Result<()> {
         eggsec::config::ExecutionProfile::ManualPermissive
     };
 
-    let ctx = eggsec::commands::CommandContext::new(config, loaded_scope.scope.clone(), cli.json)
-        .with_config_path(cli.config.clone())
-        .with_execution_profile(execution_profile)
-        .with_loaded_scope(loaded_scope);
+    let mut ctx =
+        eggsec::commands::CommandContext::new(config, loaded_scope.scope.clone(), cli.json)
+            .with_config_path(cli.config.clone())
+            .with_execution_profile(execution_profile)
+            .with_loaded_scope(loaded_scope);
+
+    // Populate manual override from CLI flags (only effective for ManualPermissive).
+    // --strict-scope, CI, MCP, agent ignore these.
+    let manual_override = eggsec::config::ManualOverride {
+        assume_yes: cli.yes,
+        allow_out_of_scope: cli.allow_out_of_scope,
+        allow_explicit_exclusion: cli.allow_excluded_target,
+        allow_high_risk: cli.allow_high_risk,
+        allow_nonbaseline_capability: cli.allow_nonbaseline_capability,
+        allow_private_resolution: cli.allow_out_of_scope, // broad for now; specific future flags can refine
+        allow_cross_host_redirect: cli.allow_out_of_scope,
+        reason: cli.manual_override_reason.clone(),
+    };
+    ctx = ctx.with_manual_override(manual_override);
+
     eggsec::commands::handle_command(cli, &ctx).await?;
 
     Ok(())

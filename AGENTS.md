@@ -123,6 +123,9 @@ Use these sections as the canonical reference points when updating guidance or s
 - `ScopeSource` - Enum tracking where a scope manifest was loaded from in `config/scope.rs`
 - `EnforcementContext` - Bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` for shared enforcement in `config/policy_decision.rs`
 - `DenialClass` - Classification of denial reasons (`ScopeMissing`, `TargetOutOfScope`, `ExplicitExclusion`, etc.) in `config/policy.rs`
+- `EnforcementOutcome` - Profile-aware result from `EnforcementContext::evaluate()`: `Allow`/`Warn`/`RequireConfirmation`/`Deny` (wrapping `PolicyDecision`)
+- `ManualOverride` - CLI-only flags for satisfying `RequireConfirmation` (e.g. `allow_out_of_scope`, `assume_yes`); audited on `PolicyDecision`
+- `ConfirmationClass` - Categories triggering `RequireConfirmation` under ManualPermissive (OutOfScope, ExplicitExclusion, HighRisk, NonBaselineCapability, etc.) in `config/policy_decision.rs`
 - `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
 - `CodingAgentFindingReport` - Typed output schema for coding-agent findings in `tool/protocol/mcp/coding_agent_output.rs`
 - `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs` (`ProbeRisk::ExploitAdjacent` maps to `OperationRisk::ExploitAdjacent`)
@@ -152,7 +155,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Capability Mapping**: `required_capabilities_for_tool_call()` in `tool/protocol/mcp/policy.rs` maps tool IDs to required capabilities for enforcement (populated in descriptors for strict positive checks).
 - **CommandContext Policy Wrapper**: Use `CommandContext::evaluate_and_enforce_operation()` for command handlers — it wraps `self.enforcement.evaluate()` with profile-aware scope enforcement and structured denial output.
 - **Execution Profiles**: Use `ExecutionProfile` enum for caller trust boundary. `ManualPermissive` for CLI, `McpStrict` for MCP, `AgentStrict` for agents.
-- **Enforcement Outcomes**: `EnforcementContext::evaluate()` returns `EnforcementOutcome` (Allow/Warn/Deny) wrapping `PolicyDecision`; `evaluate_enforcement` is internal.
+- **Enforcement Outcomes**: `EnforcementContext::evaluate()` returns `EnforcementOutcome` (Allow/Warn/RequireConfirmation/Deny) wrapping `PolicyDecision`; `evaluate_enforcement` is internal. ManualPermissive produces `RequireConfirmation` for operator-discretion cases (explicit positive-scope out-of-scope, explicit exclusion, high-risk, non-baseline capability); automated profiles (McpStrict/AgentStrict/CiStrict) and ManualGuarded treat `RequireConfirmation` as Deny. Manual overrides are CLI-only and audited on `PolicyDecision`.
 - **Capability Declarations**: Tools declare `required_capabilities` in `OperationDescriptor`. Policies control via `allowed_capabilities` / `denied_capabilities`.
 - **Discovery Promotion**: `DiscoveredTargetStatus` controls whether discovered targets can be scanned. Only `ApprovedInScope` allows scanning.
 - **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile (overlays shared enforcement).
@@ -200,6 +203,7 @@ No remaining stub implementations.
 - **FindingStore Deduplication**: FIXED - now deduplicates by fingerprint before appending (2026-06-02)
 - **Remote Listener Policy**: `remote start` now uses `evaluate_and_enforce_operation` with `HazardousLab` mode and `RemoteExecution` risk (2026-06-10)
 - **Handler Policy Adoption Complete**: All 27 target-bearing CLI handlers now use `evaluate_and_enforce_operation` with `OperationDescriptor`-based policy checks. 18 regression tests cover all risk tiers. See `docs/internal/POLICY_HANDLER_AUDIT.md` and `docs/internal/POLICY_VALIDATION_RESULTS.md` (2026-06-10)
+- **Manual Discretion Semantics**: `ManualPermissive` (default CLI/TUI) produces `EnforcementOutcome::RequireConfirmation` for operator-discretion cases; `CommandContext::evaluate_and_enforce_operation` converts to proceed only with matching `ManualOverride` flags (audited on the decision). Strict/automated profiles + `ManualGuarded` treat `RequireConfirmation` as hard `Deny` (no proceed path, no overrides honored).
 - **MCP Strict Enforcement**: MCP server requires `EnforcementContext` for all construction. `McpServer` stores no raw `Scope` or separate `ExecutionPolicy` field. `EnforcementContext` is the sole policy/scope authority (2026-06-10). Production MCP startup uses `McpServer::with_enforcement`.
 - **Agent Strict Enforcement**: `handle_agent()` now requires explicit scope manifest and refuses to run without it. `EnforcementContext::agent_strict` is passed to `AgentConfig` (2026-06-10); per-scan re-eval in `execute_scan_with_depth`.
 - **Scope Provenance Tracking**: `LoadedScope` tracks whether scope came from CLI (`--scope`), config file, or default empty. Strict profiles require `is_explicit_manifest()` for networked operations (2026-06-10); central check inside `EnforcementContext::evaluate`.

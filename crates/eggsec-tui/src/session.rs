@@ -183,11 +183,7 @@ impl SessionManager {
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().ends_with(".json.tmp"))
             {
-                if let Some(modified) = entry
-                    .metadata()
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                {
+                if let Some(modified) = entry.metadata().ok().and_then(|m| m.modified().ok()) {
                     if modified.elapsed().unwrap_or_default() > Duration::from_secs(3600) {
                         let _ = fs::remove_file(&path);
                     }

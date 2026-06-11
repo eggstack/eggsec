@@ -749,7 +749,8 @@ impl SettingsTab {
                 let placeholder = format!("[{current_id}] (unavailable)");
                 self.theme_selector
                     .set_items_with_extra(crate::components::SelectorItem::new(
-                        &placeholder, &current_id,
+                        &placeholder,
+                        &current_id,
                     ));
                 self.theme_selector.select_by_value(&current_id);
             }

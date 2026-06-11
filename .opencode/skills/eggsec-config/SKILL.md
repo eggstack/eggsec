@@ -80,11 +80,12 @@ let outcome = enforcement.evaluate(&descriptor);
 match outcome {
     EnforcementOutcome::Allow(decision) => { /* proceed */ }
     EnforcementOutcome::Warn(decision) => { /* log warnings, proceed */ }
+    EnforcementOutcome::RequireConfirmation(decision) => { /* manual-only; convert to proceed only if matching ManualOverride present; else treat as Deny */ }
     EnforcementOutcome::Deny(decision) => { /* deny */ }
 }
 ```
 
-`EnforcementContext::evaluate(descriptor)` is the central boundary (provenance via LoadedScope, DenialClass downgrade for ManualPermissive only on safe scope misses, positive capability checks for strict, per-scan agent re-eval). Preferred MCP production constructor: `McpServer::with_enforcement`. Legacy direct `evaluate_enforcement` / `evaluate_operation_policy` deprecated for denial paths; prefer with-enforcement path. Profiles: `ManualPermissive` (default CLI), `ManualGuarded` (--strict-scope), `CiStrict` (CI), `McpStrict` (MCP), `AgentStrict` (agent).
+`EnforcementContext::evaluate(descriptor)` is the central boundary (provenance via LoadedScope, DenialClass downgrade for ManualPermissive only on safe scope misses, positive capability checks for strict, per-scan agent re-eval). `evaluate_and_enforce_operation` (CLI handlers) matches on `RequireConfirmation` only for `ManualPermissive` + matching `ManualOverride`; all other profiles treat it as `Deny`. Preferred MCP production constructor: `McpServer::with_enforcement`. Legacy direct `evaluate_enforcement` / `evaluate_operation_policy` deprecated for denial paths; prefer with-enforcement path. Profiles: `ManualPermissive` (default CLI), `ManualGuarded` (--strict-scope), `CiStrict` (CI), `McpStrict` (MCP), `AgentStrict` (agent).
 
 ### Capability Declarations
 ```rust

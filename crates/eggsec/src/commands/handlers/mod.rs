@@ -86,6 +86,9 @@ pub struct CommandContext {
     pub notify_manager: crate::notify::NotifyManager,
     pub execution_profile: ExecutionProfile,
     pub enforcement: crate::config::EnforcementContext,
+    /// Manual-only override flags. Honored exclusively for ManualPermissive.
+    /// Strict profiles, CI, MCP, and agent ignore or reject overrides.
+    pub manual_override: crate::config::ManualOverride,
 }
 
 impl CommandContext {
@@ -111,6 +114,7 @@ impl CommandContext {
             notify_manager,
             execution_profile: ExecutionProfile::ManualPermissive,
             enforcement,
+            manual_override: crate::config::ManualOverride::default(),
         }
     }
 
@@ -181,6 +185,12 @@ impl CommandContext {
         self
     }
 
+    /// Attach manual override flags. Only effective for ManualPermissive.
+    pub fn with_manual_override(mut self, manual_override: crate::config::ManualOverride) -> Self {
+        self.manual_override = manual_override;
+        self
+    }
+
     pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()> {
         crate::utils::check_scope_from_url(&self.scope, url)
     }
@@ -194,6 +204,10 @@ impl CommandContext {
     /// Wraps the shared [`evaluate_operation_policy`] evaluator with
     /// profile-aware enforcement via [`evaluate_enforcement`]. Returns the
     /// [`PolicyDecision`] on allow, or an error with denial details on deny.
+    ///
+    /// `RequireConfirmation` (produced only under ManualPermissive for operator-discretion
+    /// cases) is converted to proceed only if matching manual override flags are present.
+    /// Strict profiles, CI, MCP, and agent paths never proceed on `RequireConfirmation`.
     pub fn evaluate_and_enforce_operation(
         &self,
         descriptor: OperationDescriptor,
@@ -208,6 +222,118 @@ impl CommandContext {
                 }
                 Ok(decision.clone())
             }
+            crate::config::EnforcementOutcome::RequireConfirmation(decision) => {
+                if self.execution_profile != ExecutionProfile::ManualPermissive {
+                    // Automated / guarded profiles: treat confirmation as hard denial
+                    if self.json {
+                        let json = serde_json::to_string(decision)
+                            .unwrap_or_else(|_| "unable to serialize decision".to_string());
+                        anyhow::bail!("{}", json);
+                    } else {
+                        anyhow::bail!("{}", decision.to_human_readable());
+                    }
+                }
+                // Compute required confirmation classes from the decision
+                let required: Vec<crate::config::ConfirmationClass> =
+                    crate::config::confirmation_classes_for(
+                        &descriptor,
+                        decision,
+                        &self.config.execution_policy,
+                    );
+                let mut permitted = true;
+                for c in &required {
+                    if !self.manual_override.permits(*c) {
+                        permitted = false;
+                        break;
+                    }
+                }
+                if permitted || self.manual_override.assume_yes {
+                    // Audit the override
+                    let classes_str: Vec<String> =
+                        required.iter().map(|c| format!("{:?}", c)).collect();
+                    tracing::warn!(
+                        operation = %decision.operation,
+                        target = ?decision.target_original,
+                        classes = ?classes_str,
+                        reason = ?self.manual_override.reason,
+                        "manual enforcement override accepted"
+                    );
+                    let mut out = decision.clone();
+                    if !out.manual_override_used {
+                        out = out.with_manual_override_record(
+                            self.manual_override.reason.clone(),
+                            classes_str,
+                        );
+                    }
+                    Ok(out)
+                } else {
+                    // Explain exactly which flags are needed
+                    let needed: Vec<&str> = required
+                        .iter()
+                        .filter_map(|c| match c {
+                            crate::config::ConfirmationClass::OutOfScope => {
+                                if !self.manual_override.allow_out_of_scope {
+                                    Some("--allow-out-of-scope")
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::config::ConfirmationClass::ExplicitExclusion => {
+                                if !self.manual_override.allow_explicit_exclusion {
+                                    Some("--allow-excluded-target")
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::config::ConfirmationClass::HighRisk => {
+                                if !self.manual_override.allow_high_risk {
+                                    Some("--allow-high-risk")
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::config::ConfirmationClass::NonBaselineCapability => {
+                                if !self.manual_override.allow_nonbaseline_capability {
+                                    Some("--allow-nonbaseline-capability")
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::config::ConfirmationClass::PrivateResolution => {
+                                if !self.manual_override.allow_private_resolution {
+                                    Some("--allow-out-of-scope (or specific private-resolution override)")
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::config::ConfirmationClass::CrossHostRedirect => {
+                                if !self.manual_override.allow_cross_host_redirect {
+                                    Some("--allow-out-of-scope (or specific redirect override)")
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::config::ConfirmationClass::TargetExpansion => {
+                                if !self.manual_override.allow_out_of_scope {
+                                    Some("--allow-out-of-scope")
+                                } else {
+                                    None
+                                }
+                            }
+                        })
+                        .collect();
+                    let msg = if needed.is_empty() {
+                        "manual confirmation required; re-run with --yes or the appropriate --allow-* flag(s) and optionally --manual-override-reason".to_string()
+                    } else {
+                        format!(
+                            "manual confirmation required for: {}. Re-run with {} (and optionally --manual-override-reason)",
+                            classes_str(&required),
+                            needed.join(" ")
+                        )
+                    };
+                    anyhow::bail!("{}", msg);
+                }
+            }
             crate::config::EnforcementOutcome::Deny(decision) => {
                 if self.json {
                     let json = serde_json::to_string(decision)
@@ -219,6 +345,14 @@ impl CommandContext {
             }
         }
     }
+}
+
+fn classes_str(classes: &[crate::config::ConfirmationClass]) -> String {
+    classes
+        .iter()
+        .map(|c| format!("{:?}", c))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
@@ -371,7 +505,14 @@ mod tests {
             allow_intrusive_fuzzing: true,
             ..Default::default()
         };
-        let ctx = make_ctx(policy, localhost_scope(), false);
+        // Under ManualPermissive (default), high-risk with policy flag still requires operator confirmation.
+        // Provide matching override to proceed (per 2026-06-10 manual discretion model).
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
         let result =
             ctx.evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive));
         assert!(result.is_ok());
@@ -391,7 +532,13 @@ mod tests {
             allow_stress_testing: true,
             ..Default::default()
         };
-        let ctx = make_ctx(policy, localhost_scope(), false);
+        // High-risk under permissive requires confirmation.
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
         let result =
             ctx.evaluate_and_enforce_operation(descriptor("stress", OperationRisk::StressTest));
         assert!(result.is_ok());
@@ -411,7 +558,13 @@ mod tests {
             allow_raw_packets: true,
             ..Default::default()
         };
-        let ctx = make_ctx(policy, localhost_scope(), false);
+        // ManualPermissive high-risk requires confirmation; attach override.
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
         let result =
             ctx.evaluate_and_enforce_operation(descriptor("packet", OperationRisk::RawPacket));
         assert!(result.is_ok());
@@ -431,7 +584,13 @@ mod tests {
             allow_load_testing: true,
             ..Default::default()
         };
-        let ctx = make_ctx(policy, localhost_scope(), false);
+        // High-risk under permissive requires confirmation.
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
         let result =
             ctx.evaluate_and_enforce_operation(descriptor("load", OperationRisk::LoadTest));
         assert!(result.is_ok());
@@ -451,7 +610,13 @@ mod tests {
             allow_remote_execution: true,
             ..Default::default()
         };
-        let ctx = make_ctx(policy, localhost_scope(), false);
+        // High-risk under permissive requires confirmation.
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
         let result =
             ctx.evaluate_and_enforce_operation(descriptor("exec", OperationRisk::RemoteExecution));
         assert!(result.is_ok());
@@ -515,8 +680,15 @@ mod tests {
             requires_explicit_scope: false,
             required_capabilities: Vec::new(),
         };
-        let result = ctx.evaluate_and_enforce_operation(desc);
-        assert!(result.is_err());
+        // ManualPermissive: out-of-scope with positive rules now yields RequireConfirmation
+        // (not immediate hard error). The test asserts an error path for the default (no-override) case.
+        let err = ctx.evaluate_and_enforce_operation(desc).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("confirmation required")
+                || msg.contains("--allow-out-of-scope")
+                || msg.contains("DENIED")
+        );
     }
 
     #[test]
@@ -562,7 +734,13 @@ mod tests {
             allow_credential_testing: true,
             ..Default::default()
         };
-        let ctx = make_ctx(policy, localhost_scope(), false);
+        // High-risk (credential) under permissive requires confirmation.
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
         let result = ctx.evaluate_and_enforce_operation(descriptor(
             "auth-test",
             OperationRisk::CredentialTesting,
