@@ -71,8 +71,7 @@ See `docs/AUTH_LAB.md` (especially the new "Output Model (Local Findings Only)" 
 
 ## TUI Status
 
-- Full `AuthTab` implementation exists at `crates/eggsec-tui/src/tabs/auth.rs` (TabState + TabRender + TabInput)
-- Explicitly **not** part of the `Tab` enum (CLI-only surface; see `architecture/tui.md`)
+- `AuthTab` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system; session save/restore; copy-CLI equivalent). Local findings only — no `ScanReportData` bridge.
 
 ## Implementation Status
 

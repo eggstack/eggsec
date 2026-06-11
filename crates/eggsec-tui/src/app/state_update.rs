@@ -415,6 +415,9 @@ impl super::App {
                 self.tabs.wireless.set_results(r);
                 None
             }
+            TaskResult::Auth(_report) => {
+                None
+            }
             _ => Some(result),
         }
     }
@@ -481,6 +484,9 @@ impl TabProgressUpdate for super::tabs::Tab {
             #[cfg(feature = "wireless")]
             super::tabs::Tab::Wireless => {
                 app.tabs.wireless.update_progress(completed, total);
+            }
+            super::tabs::Tab::Auth => {
+                // Auth progress is handled via the task system
             }
             _ => {}
         }

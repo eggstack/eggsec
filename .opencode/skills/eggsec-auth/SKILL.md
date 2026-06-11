@@ -6,7 +6,7 @@ Authentication security testing module.
 `crates/eggsec/src/auth/`
 
 ## Tab
-`AuthTab` (full TabState/TabRender/TabInput impl) exists at `crates/eggsec-tui/src/tabs/auth.rs` but is **explicitly excluded from the `Tab` enum** (CLI-only surface; see `architecture/tui.md`). Primary surface is CLI `auth-test`.
+`AuthTab` is fully integrated as `Tab::Auth` in the TUI (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system; session save/restore; copy-CLI equivalent). Primary surface is CLI `auth-test`; local findings only (no `ScanReportData` bridge).
 
 ## Key Types
 
@@ -62,7 +62,7 @@ let is_locked = detector.detect_lockout(&response).await?;
 - `cli/auth.rs` - CLI arg definitions
 
 ## Module Notes
-See `architecture/auth.md` for architecture documentation. TUI `AuthTab` is standalone/CLI-primary (not in `Tab` enum). Policy enforcement uses central `EnforcementContext` + `CredentialTesting` risk tier (no feature flag). All 17 wiremock auth tests + enforcement/policy contract tests pass.
+See `architecture/auth.md` for architecture documentation. TUI `AuthTab` is fully integrated as `Tab::Auth` (TabSpec, task system, policy enforcement, session save/restore). Policy enforcement uses central `EnforcementContext` + `CredentialTesting` risk tier (no feature flag). All 17 wiremock auth tests + enforcement/policy contract tests pass.
 
 Local `AuthTestReport`/`AuthFinding` only (no conversion to `StoredFinding`/`ScanReportData`/`eggsec-output` canonical types per adopted model; handler produces JSON/text directly). `auth-test` is standalone defense-lab CLI (distinct from pipeline `ScanProfile::Auth` which is JWT/OAuth/IDOR fuzzer-focused via stages + fuzzer payloads).
 

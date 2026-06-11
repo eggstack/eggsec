@@ -65,7 +65,11 @@ impl AuthTab {
 
 impl TabState for AuthTab {
     fn state(&self) -> AppState {
-        self.state
+        self.state.clone()
+    }
+
+    fn progress(&self) -> f64 {
+        0.0
     }
 
     fn reset(&mut self) {
@@ -258,7 +262,7 @@ impl TabInput for AuthTab {
             return;
         }
 
-        if self.target().is_empty() {
+        if self.target().map_or(true, |t| t.is_empty()) {
             return;
         }
 
@@ -376,8 +380,37 @@ impl AuthTab {
     }
 
     fn sync_input_focus(&mut self) {
+        let idx = self.current_input_index();
         for (i, field) in self.inputs.fields.iter_mut().enumerate() {
-            field.focused = Some(i) == self.current_input_index();
+            field.focused = Some(i) == idx;
         }
+    }
+
+    pub fn target(&self) -> Option<&str> {
+        self.inputs.fields.first().map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+    }
+
+    pub fn username(&self) -> Option<&str> {
+        self.inputs.fields.get(1).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+    }
+
+    pub fn password_list(&self) -> Option<&str> {
+        self.inputs.fields.get(2).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+    }
+
+    pub fn primary_target(&self) -> Option<String> {
+        self.target().map(|s| s.to_string())
+    }
+
+    pub fn build_cli_equivalent(&self) -> Option<String> {
+        let target = self.target()?;
+        let mut cmd = format!("eggsec auth-test {}", target);
+        if let Some(username) = self.username() {
+            cmd.push_str(&format!(" --username {}", username));
+        }
+        if let Some(passwords) = self.password_list() {
+            cmd.push_str(&format!(" --wordlist {}", passwords));
+        }
+        Some(cmd)
     }
 }

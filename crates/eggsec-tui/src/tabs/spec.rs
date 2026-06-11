@@ -230,6 +230,19 @@ pub static TAB_SPECS: &[TabSpec] = &[
         direct_launch: true,
     },
     TabSpec {
+        tab: Tab::Auth,
+        stable_id: "auth",
+        title: "Auth Test",
+        cli_command: "eggsec auth-test",
+        description: "Authentication control validation (brute-force, lockout, MFA, rate-limit, timing, credential stuffing — defense-lab only)",
+        category: TabCategory::Assessment,
+        risk_group: TabRiskGroup::Intrusive,
+        feature: None,
+        breadcrumb_label: "Auth / Credential Validation",
+        operation: Some("auth-test"),
+        direct_launch: true,
+    },
+    TabSpec {
         tab: Tab::Cluster,
         stable_id: "cluster",
         title: "Cluster",
@@ -481,6 +494,7 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
         spec_for(Tab::Settings).unwrap(),
         spec_for(Tab::History).unwrap(),
         spec_for(Tab::Dashboard).unwrap(),
+        spec_for(Tab::Auth).unwrap(),
     ];
     #[cfg(feature = "advanced-hunting")]
     let specs = {

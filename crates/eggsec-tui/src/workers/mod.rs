@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod fuzzer;
 mod network;
 mod recon;

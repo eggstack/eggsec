@@ -380,3 +380,22 @@ impl TaskBuilder for super::tabs::WirelessTab {
         })
     }
 }
+
+impl TaskBuilder for super::tabs::AuthTab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        let target = self.target()?;
+        if target.is_empty() {
+            return None;
+        }
+
+        Some(workers::TaskConfig::Auth {
+            target: target.to_string(),
+            username: self.username().map(|s| s.to_string()),
+            password_list: self.password_list().map(|s| s.to_string()),
+            credential_file: None,
+            max_attempts: 100,
+            concurrency: 1,
+            timeout: 30,
+        })
+    }
+}

@@ -40,7 +40,7 @@ crates/eggsec/src/tui/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
 │   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
-│   ├── tab_store.rs     # TabStore - owns all 29 tab instances
+│   ├── tab_store.rs     # TabStore - owns all 30 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
 │   ├── state_update.rs  # Background task handling, result dispatch
@@ -660,7 +660,7 @@ When adding new error types, prefer adding to this list rather than creating new
 
 ## Tab Count
 
-The `Tab` enum in `tui/tabs/mod.rs` has exactly **28 variants**. Do not reference "29 tabs" or "31 payload types" — these are stale counts from earlier versions.
+The `Tab` enum in `tui/tabs/mod.rs` has exactly **30 variants**. Do not reference "29 tabs" or "31 payload types" — these are stale counts from earlier versions.
 
 ## Uniform Look & Feel (Completed)
 

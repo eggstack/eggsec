@@ -150,6 +150,9 @@ impl super::App {
             }
             super::tabs::Tab::GraphQl => "GraphQL Security - Test GraphQL endpoints.".to_string(),
             super::tabs::Tab::OAuth => "OAuth/OIDC Security - Test OAuth endpoints.".to_string(),
+            super::tabs::Tab::Auth => {
+                "Auth Test - Validate authentication controls (defense-lab only).".to_string()
+            }
             super::tabs::Tab::Cluster => {
                 "Cluster Management - Manage distributed scanning cluster.".to_string()
             }

@@ -43,6 +43,7 @@ impl super::App {
             super::tabs::Tab::Packet => "packet_results",
             super::tabs::Tab::GraphQl => "graphql_results",
             super::tabs::Tab::OAuth => "oauth_results",
+            super::tabs::Tab::Auth => "auth_results",
             super::tabs::Tab::Cluster => "cluster_status",
             super::tabs::Tab::Stress => "stress_results",
             super::tabs::Tab::Report => "report_results",
@@ -148,6 +149,11 @@ impl super::App {
             }
             super::tabs::Tab::OAuth => {
                 let msg = "OAuth tab: no exportable data available".to_string();
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Warning));
+            }
+            super::tabs::Tab::Auth => {
+                let msg = "Auth tab: no exportable data available (defense-lab only)".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }

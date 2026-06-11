@@ -20,6 +20,7 @@ pub struct TabStore {
     pub report: tabs::ReportTab,
     pub settings: tabs::SettingsTab,
     pub dashboard: tabs::DashboardTab,
+    pub auth: tabs::AuthTab,
     #[cfg(feature = "nse")]
     pub nse: tabs::NseTab,
     #[cfg(feature = "advanced-hunting")]
@@ -62,6 +63,7 @@ impl TabStore {
             report: tabs::ReportTab::new(),
             settings: tabs::SettingsTab::new(),
             dashboard: tabs::DashboardTab::new(),
+            auth: tabs::AuthTab::new(),
             #[cfg(feature = "nse")]
             nse: tabs::NseTab::new(),
             #[cfg(feature = "advanced-hunting")]

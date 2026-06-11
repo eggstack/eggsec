@@ -450,6 +450,7 @@ impl App {
             Tab::Packet => self.tabs.packet.primary_target(),
             Tab::GraphQl => self.tabs.graphql.primary_target(),
             Tab::OAuth => self.tabs.oauth.primary_target(),
+            Tab::Auth => self.tabs.auth.primary_target(),
             #[cfg(feature = "nse")]
             Tab::Nse => self.tabs.nse.primary_target(),
             #[cfg(feature = "advanced-hunting")]
@@ -521,6 +522,12 @@ impl App {
                     out.push_str(&format!(" --max-payloads {}", mp));
                 }
             }
+            Tab::Auth => {
+                let target = self.tabs.auth.target().unwrap_or_default();
+                if !target.is_empty() {
+                    out.push_str(&format!(" --target {}", shell_escape(target)));
+                }
+            }
             _ => {
                 // Other executable tabs fall back to target-only (per "target only + note" guidance).
             }
@@ -571,6 +578,7 @@ impl App {
             Tab::Packet => self.tabs.packet.build_task_config(),
             Tab::GraphQl => self.tabs.graphql.build_task_config(),
             Tab::OAuth => self.tabs.oauth.build_task_config(),
+            Tab::Auth => self.tabs.auth.build_task_config(),
             Tab::Cluster => self.tabs.cluster.build_task_config(),
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.tabs.hunt.build_task_config(),

@@ -171,6 +171,15 @@ pub enum TaskConfig {
     Wireless {
         interface: String,
     },
+    Auth {
+        target: String,
+        username: Option<String>,
+        password_list: Option<String>,
+        credential_file: Option<String>,
+        max_attempts: usize,
+        concurrency: usize,
+        timeout: u64,
+    },
 }
 
 #[derive(Debug)]
@@ -241,6 +250,7 @@ pub enum TaskResult {
     Vuln(eggsec::vuln::VulnAssessment),
     #[cfg(feature = "wireless")]
     Wireless(eggsec::wireless::WirelessScanResult),
+    Auth(eggsec::auth::AuthTestReport),
     Error(String),
 }
 
@@ -626,6 +636,28 @@ impl TaskRunner {
             #[cfg(feature = "wireless")]
             TaskConfig::Wireless { interface } => {
                 super::security::run_wireless_task(interface, progress_tx, result_tx).await
+            }
+            TaskConfig::Auth {
+                target,
+                username,
+                password_list,
+                credential_file,
+                max_attempts,
+                concurrency,
+                timeout,
+            } => {
+                super::auth::run_auth_task(
+                    target,
+                    username,
+                    password_list,
+                    credential_file,
+                    max_attempts,
+                    concurrency,
+                    timeout,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
         };
         result

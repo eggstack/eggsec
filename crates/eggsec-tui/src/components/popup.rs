@@ -295,6 +295,7 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
             crate::tabs::Tab::OAuth => {
                 "  Enter            - Start OAuth/OIDC security test".to_string()
             }
+            crate::tabs::Tab::Auth => "  Enter            - Start authentication testing (defense-lab only)".to_string(),
             crate::tabs::Tab::Cluster => "  Enter            - Start cluster operation".to_string(),
             crate::tabs::Tab::Stress => "  Enter            - Start stress test".to_string(),
             crate::tabs::Tab::Report => "  Enter            - Execute report action".to_string(),
