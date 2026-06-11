@@ -1,6 +1,6 @@
 ---
 name: wireless_security_testing
-description: "Wireless network security testing - passive WiFi reconnaissance and basic security analysis (no handshake capture, aspirational)"
+description: "Wireless network security testing - passive WiFi reconnaissance and basic security analysis (standalone-complete)"
 triggers:
   - wifi
   - wireless
@@ -23,7 +23,7 @@ metadata:
 
 ## Overview
 
-Eggsec provides wireless network security testing capabilities through the `wireless` module. This enables passive WiFi reconnaissance, security type detection, and identification of weak points in wireless infrastructure (no handshake capture; aspirational only).
+Eggsec provides wireless network security testing capabilities through the `wireless` module. This enables passive WiFi reconnaissance, security type detection, and identification of weak points in wireless infrastructure (no handshake capture; standalone-complete passive module).
 
 **Note**: This module is feature-gated behind the `wireless` feature flag.
 
@@ -33,11 +33,11 @@ Eggsec provides wireless network security testing capabilities through the `wire
 - **Security Type Detection**: Identify Open, WEP, WPA, WPA2, WPA3, Enterprise
 - **WPS / Hidden / Transition Detection**: Beacon-level indicators for WPS, hidden SSIDs, WPA2/WPA3 mixed mode
 - **Signal Strength Analysis**: Evaluate coverage; flag weak signals
-- **Basic Rogue / Suspicious Detection**: Passive heuristic for duplicate SSID with differing BSSID/security (labeled "Possible Rogue AP / Evil Twin (passive heuristic)")
+- **Basic Rogue / Suspicious Detection**: Passive heuristic for duplicate SSID with differing BSSID/security (summarized by default in human output; use `--detect_suspicious` for the full findings list; labeled "Possible Rogue AP / Evil Twin (passive heuristic)")
 - **Vulnerability Detection**: Identify weak/legacy configs (Open/WEP/WPA), unknown, enterprise advisory, WPS, hidden, transition, weak signal
 - **Enterprise Security**: Support for WPA-Enterprise configurations
 - **Recommendations**: Actionable guidance + "run repeated scans for rogue observation"
-- **Handshake Analysis**: Not implemented (aspirational; external tools would be required)
+- **Handshake Analysis**: Not implemented in Eggsec; external tools would be required for active capture/analysis
 
 ## Key Types
 
@@ -90,7 +90,7 @@ pub struct WirelessVulnerability {
 ### CLI Usage
 
 ```bash
-# Passive scan for wireless networks on interface (requires --features wireless + root/iwlist)
+# Passive scan for wireless networks on interface (requires --features wireless + root/CAP_NET_ADMIN + wireless-tools/iwlist)
 eggsec wireless wlan0
 
 # Repeated scans for change/rogue observation
@@ -102,7 +102,7 @@ eggsec wireless wlan0 --json -o results.json
 # Quiet + file
 eggsec wireless wlan0 -q -o out.json
 
-# Dry-run (plan/CI; no root/iwlist needed; valid JSON + notes)
+# Dry-run (plan/CI; no root/CAP_NET_ADMIN or iwlist needed; valid JSON + notes)
 eggsec wireless wlan0 --dry-run --json
 
 # Lab baseline with known-good (suppresses rogue heuristic for authorized APs)
@@ -126,7 +126,7 @@ for network in &result.networks {
         network.wps_enabled, network.is_hidden, network.transition_mode);
 }
 
-let vulns = WirelessScanner::analyze_networks(&result.networks);
+let vulns = WirelessScanner::analyze_networks(&result.networks, None);
 ```
 
 ## Security Type Reference
@@ -160,6 +160,7 @@ Keywords that activate this skill: `wifi`, `wireless`, `wpa`, `wpa2`, `wpa3`, `s
 ## Notes
 
 - Passive-only (no injection, deauth, handshake capture, or active attacks).
-- Requires --features wireless + Linux iwlist + root/CAP_NET_ADMIN for real scans (use --dry-run --json for unprivileged/CI planning).
+- Requires --features wireless + Linux `wireless-tools`/`iwlist` + root/CAP_NET_ADMIN + a managed/up wireless interface for real scans (use `--dry-run --json` for unprivileged/CI planning).
 - Supports --repeat (diffs + temporal summary), --known-good (rogue suppression for lab baselines), --detect_suspicious (full rogue details; summarized by default).
-- See docs/WIRELESS.md (incl. Best Practices), architecture/wireless.md, plans/wireless-remaining-work-plan.md (final polish), plans/wireless-standalone-completion-plan.md (completion). Historical: plans/wireless-first-handoff-plan.md.
+- Human-readable output summarizes rogue candidates by default; the detection analysis always runs, and `--detect_suspicious` expands the findings list when you need triage detail.
+- See docs/WIRELESS.md (incl. Best Practices), architecture/wireless.md, plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md (completion). Historical: plans/wireless-first-handoff-plan.md.

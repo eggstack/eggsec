@@ -2,7 +2,15 @@
 
 ## Purpose
 
-Passive WiFi network reconnaissance and basic security posture assessment (defense validation / lab use). iwlist-based scanning (Linux), security type parsing (Open/WEP/WPA/WPA2/WPA3/Enterprise/Unknown), WPS/hidden/transition detection, vulnerability analysis (weak/legacy/rogue heuristics), recommendations, and structured output. Feature-gated behind `wireless`. Standalone CLI (`eggsec wireless <iface>`) + TUI tab + report integration. No active attacks or handshake capture in first-handoff phase.
+Standalone-complete passive WiFi network reconnaissance and basic security posture assessment (defense validation / lab use). Linux `iwlist`-based scanning, security type parsing (Open/WEP/WPA/WPA2/WPA3/Enterprise/Unknown), WPS/hidden/transition detection, vulnerability analysis (weak/legacy/rogue heuristics), recommendations, and structured output. Feature-gated behind `wireless`. Exposed as the standalone CLI (`eggsec wireless <iface>`), TUI tab, and report integration. No active attacks or handshake capture.
+
+## CLI Behavior
+
+- Build with `--features wireless` (or `--features full`).
+- Real scans require Linux `iwlist` from `wireless-tools`, root or `CAP_NET_ADMIN`, and a wireless interface in managed mode and up.
+- Default human output summarizes rogue/suspicious candidates by count and hint; use `--detect_suspicious` to print the full findings list and recommendations.
+- `--known-good` suppresses rogue candidates that match the allowlist in human output and repeat-scan summaries.
+- `--repeat` adds per-scan diffs plus a temporal summary; `--dry-run` emits planning output without calling `iwlist`.
 
 ## Key Types
 
@@ -25,8 +33,8 @@ Passive WiFi network reconnaissance and basic security posture assessment (defen
 | `eggsec-tui/.../workers/security.rs` | run_wireless_task (TUI worker) |
 | `eggsec-output/.../convert.rs` | WirelessNetworkReportData + ScanReportData integration (HTML/MD/JSON) |
 
-## Implementation Status
+## Status
 
-Standalone completion achieved (2026-06-11) per plans/wireless-standalone-completion-plan.md. Final polish (per plans/wireless-remaining-work-plan.md 2026-06-11): comprehensive docs updates (WIRELESS.md Best Practices + expanded examples/rogue UX clarification; README/CAPABILITIES/SAFETY/AGENTS/architecture/skill updates); rogue UX refinement (summarized by default in human output with count/hint + short explanation; --detect_suspicious for full details; analysis always runs; known-good suppression); robustness (repeat error continuity already solid; added repeat metadata to JSON --repeat path for summary convenience; --help/docs verified complete). Still passive-only, Linux/iwlist, SafeActive + feature-gated, no active attacks or full pipeline integration.
+Standalone completion achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect_suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture.
 
-See docs/WIRELESS.md for usage/safety/examples/best-practices; plans/wireless-remaining-work-plan.md (final close-out), plans/wireless-standalone-completion-plan.md, historical plans/wireless-first-handoff-plan.md.
+See docs/WIRELESS.md for usage/safety/examples/best-practices; plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md, historical plans/wireless-first-handoff-plan.md.

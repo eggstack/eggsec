@@ -100,7 +100,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `vuln-management` - Vulnerability triage and CVSS scoring
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
-- `wireless` - WiFi scanning (passive reconnaissance and basic security analysis)
+- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect_suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
 - `full` - All features combined (16 sub-features, does not include `grpc-api`, `ws-api`, or `pdf`)
@@ -307,6 +307,8 @@ Skills are located in `.opencode/skills/`:
 | `tui-testing/` | TUI testing guidance and visual regression patterns |
 | `eggsec-wave-implementation/` | Historical wave implementation reference |
 
+Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the passive wireless workflow, CLI help, or lab-use guidance.
+
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
 ## Architecture Documentation
@@ -357,7 +359,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect_suspicious; WPS/hidden/transition) |
+| `architecture/wireless.md` | Standalone-complete passive WiFi scanning (summary-by-default rogue heuristic; `--detect_suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition) |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands

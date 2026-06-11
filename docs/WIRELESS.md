@@ -1,8 +1,8 @@
 # Wireless Security Testing
 
-Eggsec provides passive WiFi network reconnaissance and basic security posture assessment via the `wireless` feature. This enables defense validation, lab-based assessment of wireless infrastructure, and identification of obviously weak or misconfigured networks.
+Eggsec provides standalone-complete passive WiFi network reconnaissance and basic security posture assessment via the `wireless` feature. This enables defense validation, lab-based assessment of wireless infrastructure, and identification of obviously weak or misconfigured networks.
 
-**This is passive reconnaissance only.** No packet injection, deauthentication, handshake capture, or active attacks are implemented in this phase.
+**This is passive reconnaissance only.** No packet injection, deauthentication, handshake capture, or active attacks are implemented in this standalone module.
 
 ## Feature Gate
 
@@ -64,7 +64,7 @@ eggsec wireless wlan0 --detect_suspicious
 eggsec wireless --help
 ```
 
-**Important**: The command prints a clear root/iwlist/permissions warning (unless `--quiet`). Use only in lab/defense-validation contexts.
+**Important**: The command prints a clear root/CAP_NET_ADMIN/iwlist permissions warning (unless `--quiet`). Use only in lab/defense-validation contexts.
 
 **Rogue / Suspicious Detection UX**: Analysis for rogue/Evil-Twin candidates (same SSID + differing BSSID or security type) **always runs**. In default human output, only a compact summary line is shown ("Rogue/suspicious candidates: N (use --detect_suspicious to show full details)"). Use `--detect_suspicious` for the full Findings list (with descriptions/recommendations). Use `--known-good` to suppress known-authorized APs from triggering the heuristic (recommended for lab baselines). A short explanatory note is included in output when candidates are present. Severity is Low (BSSID diff) or Medium (security config differences, possible downgrade). Heuristic only — always verify physically or via inventory.
 
@@ -101,7 +101,7 @@ The Wireless tab (if built with the feature) provides interactive interface entr
 - File output (`-o`) supported for both modes.
 - Structured findings feed into `ScanReportData` (via `to_scan_report_data`) for SARIF/JUnit/HTML/Markdown/etc. pipelines.
 - New fields on `WirelessNetwork` / report data: `wps_enabled`, `is_hidden`, `transition_mode` (serde defaulted for forward compat on old reports).
-- Note: `to_scan_report_data()` (used for SARIF/JUnit/HTML/Markdown/etc.) always calls `analyze_networks(..., None)`; rogue/Evil-Twin candidates are therefore always present in structured report findings regardless of `--known-good`. `--known-good` suppression applies only to CLI human-readable text and `--json` output (via `kg_ref` in `run_cli`).
+- Note: `to_scan_report_data()` (used for SARIF/JUnit/HTML/Markdown/etc.) always calls `analyze_networks(..., None)`; rogue/Evil-Twin candidates are therefore always present in structured report findings regardless of `--known-good`. `--known-good` suppression applies to CLI human-readable rogue findings plus repeat-scan diffs/summary, not to the raw report data.
 
 ## Data Model (Key Types)
 
@@ -151,7 +151,9 @@ Networks found: 3
 
   Findings / Vulnerabilities:
   - Open Network (Medium): ...
-  - Possible Rogue AP / Evil Twin (passive heuristic) (Low): ...
+  - WPS Enabled (Medium): ...
+  Rogue/suspicious candidates: 1 (use --detect_suspicious to show full details)
+  Note: Rogue/Evil-Twin detection is a passive heuristic (multiple BSSIDs or security differences for same SSID). Use --known-good for lab baselines; verify with physical survey or asset inventory.
 
   Recommendations:
   - ...
@@ -164,7 +166,7 @@ Networks found: 3
 
 - **Lab / defense validation**: Repeated scans (`--repeat`) against known-good APs to baseline "normal" BSSIDs/channels/security; flag deviations.
 - **CI / regression**: JSON output + `to_scan_report_data` into SARIF/JUnit for wireless posture checks (e.g. "no open/WEP/WPA in this environment").
-- **Rogue hunting (passive)**: Use `--repeat` + review "Possible Rogue..." findings; cross-check against asset inventory. This is a heuristic only — follow up with authorized physical/radio validation.
+- **Rogue hunting (passive)**: Use `--repeat` and review the summarized rogue count in default output, or add `--detect_suspicious` for the full findings list. Cross-check against asset inventory. This is a heuristic only — follow up with authorized physical/radio validation.
 - **Reporting**: Pipe JSON to `eggsec report` or consume `ScanReportData` directly.
 
 ## Best Practices (Lab / Defensive Use)
@@ -202,7 +204,7 @@ sudo eggsec wireless wlan0 --detect_suspicious --repeat 3
 - Deep WPS enumeration beyond beacon flags
 - Bluetooth/BLE
 - Windows/macOS native scanning (iwlist Linux-only)
-- Full pipeline integration (wireless is currently a standalone defense-lab command; can be called from agent/MCP under policy)
+- Full pipeline integration (wireless is a standalone-complete defense-lab command; can be called from agent/MCP under policy)
 
 Future phases may add a `wireless-advanced` sub-feature for gated active/lab-only capabilities.
 
@@ -223,6 +225,6 @@ Future phases may add a `wireless-advanced` sub-feature for gated active/lab-onl
 - Output conversion: `crates/eggsec-output/src/convert.rs`
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
-- Plan: `plans/wireless-remaining-work-plan.md` (final polish/docs/UX); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff)
+- Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff)
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.
