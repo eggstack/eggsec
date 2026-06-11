@@ -2,6 +2,7 @@ use crate::tc;
 use crate::app::tab_error::TabError;
 use crate::components::{InputField, InputGroup};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
+use crate::workers::TaskConfig;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Paragraph},
@@ -89,7 +90,7 @@ impl TabRender for AuthTab {
             AuthFocusArea::Password => "Password",
             AuthFocusArea::Results => "Results",
         };
-        Some(vec!["Auth", focus])
+        Some(vec!["Auth", focus]);
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
@@ -133,7 +134,7 @@ impl TabRender for AuthTab {
         } else {
             Paragraph::new(self.results.as_str())
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(tc!(text)))
+                .style(Style::default().fg(tc!(text)));
         };
         f.render_widget(results, *results_area);
     }
@@ -263,6 +264,7 @@ impl TabInput for AuthTab {
         }
 
         if self.target().map_or(true, |t| t.is_empty()) {
+            self.set_error_state(TabError::Target("Target URL is required for authentication testing".to_string()));
             return;
         }
 
@@ -413,6 +415,25 @@ impl AuthTab {
         }
         Some(cmd)
     }
+
+    /// Produces a TaskConfig for the shared async task system.
+    /// Called by App::build_current_task() when the user presses Enter on the Auth tab.
+    pub fn build_task_config(&self) -> Option<TaskConfig> {
+        let target = self.target()?.to_string();
+        if target.is_empty() {
+            return None;
+        }
+
+        Some(TaskConfig::Auth {
+            target,
+            username: self.username().map(|s| s.to_string()),
+            password_list: self.password_list().map(|s| s.to_string()),
+            credential_file: None,
+            max_attempts: 50,
+            concurrency: 5,
+            timeout: 30,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -496,5 +517,22 @@ mod tests {
         tab.inputs.fields[2].value = "passwords.txt".to_string();
         let cmd = tab.build_cli_equivalent().unwrap();
         assert!(cmd.contains("--wordlist passwords.txt"));
+    }
+
+    #[test]
+    fn test_build_task_config_returns_none_without_target() {
+        let tab = AuthTab::new();
+        assert!(tab.build_task_config().is_none());
+    }
+
+    #[test]
+    fn test_build_task_config_returns_some_with_target() {
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value = "http://dvwa.local".to_string();
+        let config = tab.build_task_config().unwrap();
+        match config {
+            TaskConfig::Auth { target, .. } => assert_eq!(target, "http://dvwa.local"),
+            _ => panic!("Expected TaskConfig::Auth"),
+        }
     }
 }
