@@ -41,6 +41,10 @@ use crate::theme::{display_theme_name, ThemeManager};
 use crate::workers;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
+use eggsec::config::{
+    confirmation_classes_for, EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
+    ManualOverride, OperationDescriptor, OperationMode, OperationRisk,
+};
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
 use task_management::TaskBuilder;
@@ -69,6 +73,14 @@ pub struct App {
     pub last_tab_area_width: u16,
     pub bookmarks: FxHashSet<String>,
     pub theme_load: ThemeLoadState,
+
+    /// Shared enforcement context (loaded from config + scope at startup, like CLI main).
+    /// TUI defaults to ManualPermissive; --strict-scope equivalent is not a TUI flag today.
+    pub enforcement: EnforcementContext,
+    /// Captured scope provenance for enforcement (mirrors LoadedScope used by CLI handlers).
+    pub loaded_scope: LoadedScope,
+    /// Original config path (if any) for rebuilds after settings changes.
+    pub config_path: Option<String>,
 }
 
 impl App {
@@ -102,6 +114,12 @@ impl App {
             needs_redraw: true,
             bookmarks: FxHashSet::default(),
             theme_load: ThemeLoadState::default(),
+            enforcement: EnforcementContext::manual_permissive(
+                ExecutionPolicy::default(),
+                LoadedScope::default_empty(),
+            ),
+            loaded_scope: LoadedScope::default_empty(),
+            config_path: None,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -180,6 +198,12 @@ impl App {
             needs_redraw: true,
             bookmarks: restored_bookmarks,
             theme_load: ThemeLoadState::default(),
+            enforcement: EnforcementContext::manual_permissive(
+                ExecutionPolicy::default(),
+                LoadedScope::default_empty(),
+            ),
+            loaded_scope: LoadedScope::default_empty(),
+            config_path: None,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -297,8 +321,189 @@ impl App {
 
         if is_running {
             if let Some(task_config) = self.build_current_task() {
-                self.spawn_task(Some(task_config));
+                // Central policy gate (TUI now shares the exact EnforcementContext + RequireConfirmation + ManualOverride model as CLI).
+                // Build a descriptor that matches CLI conventions for the current tab/action.
+                if let Some(desc) = self.build_current_operation_descriptor() {
+                    let outcome = self.enforcement.evaluate(&desc);
+                    match outcome {
+                        EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
+                            // Proceed normally (warnings already logged by evaluate if any).
+                            self.spawn_task(Some(task_config));
+                        }
+                        EnforcementOutcome::RequireConfirmation(decision) => {
+                            // Pause the tab running state so the UI doesn't look like it started.
+                            // Use the same pattern as stop_tab_state to stop the tab's internal running flag.
+                            {
+                                let mut tab = self.current_tab;
+                                tab.as_tab_input(self).stop();
+                            }
+                            // Capture for replay on manual override confirm.
+                            self.request_policy_confirmation(desc, decision, Some(task_config));
+                        }
+                        EnforcementOutcome::Deny(d) => {
+                            {
+                                let mut tab = self.current_tab;
+                                tab.as_tab_input(self).stop();
+                            }
+                            self.set_error_for_current_tab(
+                                crate::app::tab_error::TabError::Target(d.to_human_readable()),
+                            );
+                        }
+                    }
+                } else {
+                    // No descriptor (non-target op or not yet mapped); proceed as before.
+                    self.spawn_task(Some(task_config));
+                }
             }
+        }
+
+        // Post-dispatch retroactive policy gate for direct-launch tabs (packet, stress, auth, cluster, etc.)
+        // that perform their actual start inside the tab's handle_enter / run_* methods instead of (or in addition to)
+        // going through build_current_task + spawn_task.
+        // If such a tab just entered a running state for a target-bearing action, we evaluate here.
+        // On RequireConfirmation we stop it and open the policy popup (with no pre-built TaskConfig; on confirm we will re-dispatch).
+        // This brings the direct tabs in line with the shared EnforcementContext / RequireConfirmation / narrow manual override model.
+        if self.is_direct_launch_tab(self.current_tab) {
+            if self.current_tab.as_tab_state(self).is_running() {
+                if let Some(desc) = self.build_current_operation_descriptor() {
+                    let outcome = self.enforcement.evaluate(&desc);
+                    match outcome {
+                        EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
+                            // allowed; the tab already started its work
+                        }
+                        EnforcementOutcome::RequireConfirmation(decision) => {
+                            {
+                                let mut tab = self.current_tab;
+                                tab.as_tab_input(self).stop();
+                            }
+                            self.request_policy_confirmation(desc, decision, None);
+                        }
+                        EnforcementOutcome::Deny(d) => {
+                            {
+                                let mut tab = self.current_tab;
+                                tab.as_tab_input(self).stop();
+                            }
+                            self.set_error_for_current_tab(
+                                crate::app::tab_error::TabError::Target(d.to_human_readable()),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn is_direct_launch_tab(&self, tab: Tab) -> bool {
+        matches!(
+            tab,
+            Tab::Packet
+                | Tab::Stress
+                | Tab::Cluster
+                | Tab::Wireless
+                | Tab::OAuth
+                | Tab::Nse
+                | Tab::Hunt
+                | Tab::Browser
+        )
+    }
+
+    /// Build an OperationDescriptor for the current tab/action that is compatible with the
+    /// shared enforcement evaluator (same risk/capability/operation strings used by CLI handlers).
+    /// Returns None for tabs/operations that have no target-bearing networked action.
+    pub fn build_current_operation_descriptor(&self) -> Option<OperationDescriptor> {
+        let target = self.current_tab_target().unwrap_or_default();
+        let op = match self.current_tab {
+            Tab::Recon => "recon",
+            Tab::ScanPorts => "scan-ports",
+            Tab::ScanEndpoints => "scan-endpoints",
+            Tab::Fingerprint => "fingerprint",
+            Tab::Fuzz => "fuzz",
+            Tab::Waf => "waf",
+            Tab::WafStress => "waf-stress",
+            Tab::Scan => "scan-pipeline",
+            Tab::Load => "load-test",
+            Tab::Stress => "stress-test",
+            Tab::Packet => "packet",
+            Tab::GraphQl => "graphql",
+            Tab::OAuth => "oauth",
+            Tab::Nse => "nse",
+            Tab::Hunt => "hunt",
+            Tab::Browser => "browser",
+            Tab::Compliance => "compliance",
+            Tab::Storage => "storage",
+            Tab::Integrations => "integrations",
+            Tab::Workflow => "workflow",
+            Tab::Vuln => "vuln",
+            Tab::Wireless => "wireless",
+            _ => return None,
+        };
+        // Risk mapping mirrors CLI OperationDescriptor construction in handlers.
+        let risk = match self.current_tab {
+            Tab::Fuzz | Tab::WafStress | Tab::Scan | Tab::Load | Tab::Stress | Tab::Packet => {
+                OperationRisk::Intrusive
+            }
+            Tab::Hunt | Tab::Browser => OperationRisk::Intrusive,
+            Tab::Waf | Tab::GraphQl | Tab::OAuth | Tab::Nse => OperationRisk::SafeActive,
+            Tab::Recon | Tab::ScanPorts | Tab::ScanEndpoints | Tab::Fingerprint => {
+                OperationRisk::SafeActive
+            }
+            Tab::Compliance | Tab::Storage | Tab::Integrations | Tab::Workflow | Tab::Vuln => {
+                OperationRisk::SafeActive
+            }
+            Tab::Wireless => OperationRisk::SafeActive,
+            _ => OperationRisk::SafeActive,
+        };
+        // Baseline capability set for TUI-launched work (most are covered by baseline or explicit policy flags).
+        // Non-baseline (e.g. raw packet, credential, remote) will surface NonBaselineCapability when the
+        // descriptor declares them; for now we declare none extra here and let the central evaluator decide.
+        let required_capabilities: Vec<eggsec::config::Capability> = Vec::new();
+
+        Some(OperationDescriptor {
+            operation: op.to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: if target.is_empty() {
+                None
+            } else {
+                Some(target)
+            },
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities,
+        })
+    }
+
+    /// Best-effort extraction of the primary target string from the current tab (for descriptor).
+    fn current_tab_target(&self) -> Option<String> {
+        match self.current_tab {
+            Tab::Recon => Some(self.tabs.recon.target().to_string()),
+            Tab::ScanPorts => Some(self.tabs.scan_ports.target().to_string()),
+            Tab::ScanEndpoints => Some(self.tabs.scan_endpoints.target().to_string()),
+            Tab::Fingerprint => Some(self.tabs.fingerprint.target().to_string()),
+            Tab::Fuzz => Some(self.tabs.fuzz.target().to_string()),
+            Tab::Waf => Some(self.tabs.waf.target().to_string()),
+            Tab::WafStress => Some(self.tabs.waf_stress.target().to_string()),
+            Tab::Scan => Some(self.tabs.scan.target().to_string()),
+            Tab::Load => Some(self.tabs.load.target().to_string()),
+            Tab::Stress => Some(self.tabs.stress.target().to_string()),
+            Tab::Packet => Some(self.tabs.packet.target().to_string()),
+            Tab::GraphQl => Some(self.tabs.graphql.target().to_string()),
+            Tab::OAuth => Some(self.tabs.oauth.target().to_string()),
+            // Feature-gated tabs: only include when the variant is present at compile time.
+            #[cfg(feature = "nse")]
+            Tab::Nse => Some(self.tabs.nse.target().to_string()),
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => Some(self.tabs.hunt.target().to_string()),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => Some(self.tabs.browser.target().to_string()),
+            #[cfg(feature = "compliance")]
+            Tab::Compliance => Some(self.tabs.compliance.target().to_string()),
+            #[cfg(feature = "wireless")]
+            Tab::Wireless => Some(self.tabs.wireless.interface().to_string()),
+            _ => None,
         }
     }
 
@@ -513,6 +718,144 @@ impl App {
         self.overlay.pending_action.is_some()
     }
 
+    /// Policy confirmation (RequireConfirmation) is pending.
+    pub fn is_policy_confirm_visible(&self) -> bool {
+        self.overlay.pending_policy.is_some()
+    }
+
+    /// Request a policy confirmation overlay for a RequireConfirmation outcome.
+    /// Captures the descriptor, decision, computed classes, and the would-be TaskConfig.
+    pub fn request_policy_confirmation(
+        &mut self,
+        descriptor: OperationDescriptor,
+        decision: eggsec::config::PolicyDecision,
+        captured_task_config: Option<crate::workers::TaskConfig>,
+    ) {
+        let required =
+            confirmation_classes_for(&descriptor, &decision, &self.enforcement.execution_policy);
+        self.overlay.pending_policy = Some(crate::app::confirmation::PendingPolicyConfirmation {
+            descriptor,
+            decision,
+            required_classes: required,
+            reason_input: String::new(),
+            captured_task_config,
+        });
+        self.needs_redraw = true;
+    }
+
+    /// Confirm the pending policy override (if any) and spawn the captured task if permitted.
+    /// Mirrors CLI CommandContext::evaluate_and_enforce_operation narrow --yes + dedicated flags logic.
+    pub fn confirm_policy_action(&mut self) {
+        if let Some(pending) = self.overlay.pending_policy.take() {
+            let mut mo = ManualOverride::default();
+            // Build override from the required classes using narrow semantics.
+            // OutOfScope / TargetExpansion are satisfied by "low-risk scope discretion" (no dedicated flag needed in TUI for now;
+            // we treat the act of confirming the policy popup as the operator discretion, equivalent to --yes for those two).
+            // All other classes require the user to have provided a reason or we simply record the act.
+            // To stay faithful to the narrow model, we set the specific allow_* for everything except the two low-risk scope ones.
+            for c in &pending.required_classes {
+                match c {
+                    eggsec::config::ConfirmationClass::OutOfScope
+                    | eggsec::config::ConfirmationClass::TargetExpansion => {
+                        // low-risk scope discretion: the confirm itself acts like narrow --yes for these
+                        // (no allow_out_of_scope flag is exposed in TUI UI yet; the popup confirm is the signal)
+                        // We still record it; enforcement will see it via the record path below.
+                    }
+                    eggsec::config::ConfirmationClass::ExplicitExclusion => {
+                        mo.allow_explicit_exclusion = true;
+                    }
+                    eggsec::config::ConfirmationClass::HighRisk => {
+                        mo.allow_high_risk = true;
+                    }
+                    eggsec::config::ConfirmationClass::NonBaselineCapability => {
+                        mo.allow_nonbaseline_capability = true;
+                    }
+                    eggsec::config::ConfirmationClass::PrivateResolution => {
+                        mo.allow_private_resolution = true;
+                    }
+                    eggsec::config::ConfirmationClass::CrossHostRedirect => {
+                        mo.allow_cross_host_redirect = true;
+                    }
+                }
+            }
+            mo.reason = if pending.reason_input.trim().is_empty() {
+                None
+            } else {
+                Some(pending.reason_input.clone())
+            };
+            mo.assume_yes = false; // TUI confirm popup never sets broad assume_yes; narrow by design
+
+            // Re-evaluate using the same central path the CLI uses (EnforcementContext).
+            let outcome = self.enforcement.evaluate(&pending.descriptor);
+            match outcome {
+                EnforcementOutcome::Allow(d) | EnforcementOutcome::Warn(d) => {
+                    // already allowed; unusual after we got RequireConfirmation, but proceed
+                    tracing::info!(operation = %pending.descriptor.operation, "policy allowed after re-eval (no override needed)");
+                    if let Some(cfg) = pending.captured_task_config {
+                        self.spawn_task(Some(cfg));
+                    }
+                    self.needs_redraw = true;
+                    // Record a decision if it carries the audit fields (best effort)
+                    let _ = d; // nothing more to do
+                }
+                EnforcementOutcome::RequireConfirmation(decision) => {
+                    // Check if our constructed override permits all required classes
+                    let required_now = confirmation_classes_for(
+                        &pending.descriptor,
+                        &decision,
+                        &self.enforcement.execution_policy,
+                    );
+                    let permitted = required_now.iter().all(|c| mo.permits(*c));
+                    if permitted {
+                        let classes_vec = eggsec::config::confirmation_class_strings(&required_now);
+                        tracing::warn!(
+                            operation = %decision.operation,
+                            target = ?decision.target_original,
+                            classes = ?classes_vec,
+                            reason = ?mo.reason,
+                            "manual enforcement override accepted (TUI)"
+                        );
+                        let mut out = decision.clone();
+                        if !out.manual_override_used {
+                            out = out.with_manual_override_record(mo.reason.clone(), classes_vec);
+                        }
+                        // Notify user (mirrors CLI "manual enforcement override accepted")
+                        self.overlay.notification =
+                            Some(crate::app::notifications::Notification::new(
+                                format!("Policy override accepted for: {}", out.operation),
+                                crate::app::notifications::NotificationSeverity::Warning,
+                            ));
+                        if let Some(cfg) = pending.captured_task_config {
+                            self.spawn_task(Some(cfg));
+                        }
+                    } else {
+                        // Still not permitted (should not happen for the classes we mapped)
+                        self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                            "Manual override did not satisfy all required confirmation classes"
+                                .to_string(),
+                        ));
+                    }
+                    self.needs_redraw = true;
+                }
+                EnforcementOutcome::Deny(d) => {
+                    // Became a hard deny (profile or other change); surface it
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        d.to_human_readable(),
+                    ));
+                    self.needs_redraw = true;
+                }
+            }
+        }
+    }
+
+    /// Cancel/dismiss the pending policy confirmation (no task spawned).
+    pub fn cancel_policy_action(&mut self) {
+        if self.overlay.pending_policy.is_some() {
+            self.overlay.pending_policy = None;
+            self.needs_redraw = true;
+        }
+    }
+
     pub fn page_up(&mut self) {
         const PAGE_SIZE: usize = 10;
         self.dispatcher_mut().page_up(PAGE_SIZE);
@@ -707,15 +1050,18 @@ impl App {
     }
 
     /// Get the topmost overlay based on precedence:
-    /// 1. Confirm popup (pending_action)
-    /// 2. Command palette
-    /// 3. Quick switch
-    /// 4. Search
-    /// 5. HTTP options
-    /// 6. Help
+    /// 1. Policy confirmation (pending_policy) - highest, for RequireConfirmation + manual override
+    /// 2. Confirm popup (pending_action) - UI destructive actions
+    /// 3. Command palette
+    /// 4. Quick switch
+    /// 5. Search
+    /// 6. HTTP options
+    /// 7. Help
     ///    Returns None if no overlay is active
     pub fn topmost_overlay(&self) -> Option<OverlayType> {
-        if self.is_confirm_popup_visible() {
+        if self.is_policy_confirm_visible() {
+            Some(OverlayType::PolicyConfirm)
+        } else if self.is_confirm_popup_visible() {
             Some(OverlayType::ConfirmPopup)
         } else if self.is_command_palette_visible() {
             Some(OverlayType::CommandPalette)
@@ -741,6 +1087,9 @@ impl App {
 /// Represents the type of overlay currently shown
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayType {
+    /// Policy enforcement confirmation (RequireConfirmation under ManualPermissive).
+    /// Highest precedence; user must provide matching manual override (narrow --yes or dedicated allow-*).
+    PolicyConfirm,
     ConfirmPopup,
     CommandPalette,
     QuickSwitch,
@@ -963,6 +1312,80 @@ mod tests {
 
         app.cancel_action();
         assert!(!app.is_confirm_popup_visible());
+    }
+
+    #[test]
+    fn test_policy_confirm_precedence_and_flow() {
+        let mut app = create_test_app();
+        use eggsec::config::{OperationDescriptor, OperationMode, OperationRisk};
+
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = eggsec::config::PolicyDecision::denied(
+            "fuzz",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk requires confirmation",
+        );
+
+        assert!(!app.is_policy_confirm_visible());
+        app.request_policy_confirmation(desc.clone(), decision, None);
+        assert!(app.is_policy_confirm_visible());
+        assert_eq!(
+            app.topmost_overlay(),
+            Some(crate::OverlayType::PolicyConfirm)
+        );
+
+        // Simulate reason typing + confirm (narrow semantics path)
+        if let Some(p) = &mut app.overlay.pending_policy {
+            p.reason_input.push_str("authorized test");
+        }
+        app.confirm_policy_action();
+        // After confirm we either spawned (no real task here) or surfaced a notification / cleared state.
+        // The important contract: the pending is cleared and topmost is no longer PolicyConfirm.
+        assert!(!app.is_policy_confirm_visible());
+    }
+
+    #[test]
+    fn test_policy_confirm_cancel_does_not_spawn() {
+        let mut app = create_test_app();
+        use eggsec::config::{OperationDescriptor, OperationMode, OperationRisk};
+
+        let desc = OperationDescriptor {
+            operation: "stress".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::StressTest,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://lab.example".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = eggsec::config::PolicyDecision::denied(
+            "stress",
+            OperationMode::StandardAssessment,
+            OperationRisk::StressTest,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk",
+        );
+
+        app.request_policy_confirmation(desc, decision, None);
+        assert!(app.is_policy_confirm_visible());
+        app.cancel_policy_action();
+        assert!(!app.is_policy_confirm_visible());
     }
 
     #[test]

@@ -43,16 +43,47 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 
     let history = state::create_shared_history();
     let mut app = App::new(history);
-    if let Ok(config) = eggsec::config::load_config(config_path.as_deref()) {
-        app.tabs.settings.load_config(&config);
+    let loaded_config = eggsec::config::load_config(config_path.as_deref()).ok();
+    if let Some(ref config) = loaded_config {
+        app.tabs.settings.load_config(config);
         app.session_manager.config = crate::session::SessionConfig::default()
             .with_auto_save_interval(config.auto_save_interval_secs);
     } else {
         tracing::debug!("No config file found for TUI settings; using defaults");
     }
-    if let Some(path) = config_path {
-        app.tabs.settings.set_config_path(path);
+    if let Some(path) = config_path.clone() {
+        app.tabs.settings.set_config_path(path.clone());
     }
+    // Initialize enforcement context + LoadedScope (exactly like CLI main.rs + CommandContext).
+    // TUI always starts in ManualPermissive for interactive discretion (no --strict-scope flag in TUI).
+    // Scope file path lives in the settings tab's scope_inputs (first field is typically the path/manifest).
+    let scope_path_opt: Option<String> =
+        app.tabs.settings.scope_inputs.fields.first().and_then(|f| {
+            if f.value.trim().is_empty() {
+                None
+            } else {
+                Some(f.value.clone())
+            }
+        });
+    let loaded_scope = if let Some(ref sp) = scope_path_opt {
+        eggsec::config::load_scope_with_source(Some(sp))
+            .map(|ls| ls)
+            .unwrap_or_else(|_| {
+                eggsec::config::load_scope_with_source(None)
+                    .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty().into())
+            })
+    } else {
+        eggsec::config::load_scope_with_source(None)
+            .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty().into())
+    };
+    let policy = loaded_config
+        .as_ref()
+        .map(|c| c.execution_policy.clone())
+        .unwrap_or_default();
+    app.enforcement =
+        eggsec::config::EnforcementContext::manual_permissive(policy, loaded_scope.clone());
+    app.loaded_scope = loaded_scope;
+    app.config_path = config_path.clone();
     let res = run_app(&mut terminal, &mut app);
 
     if let Err(e) = app.session_manager.save_quick(&app) {

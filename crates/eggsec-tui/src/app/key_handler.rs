@@ -202,6 +202,33 @@ impl KeyHandler {
         }
 
         match app.topmost_overlay() {
+            Some(OverlayType::PolicyConfirm) => {
+                // Policy confirmation (RequireConfirmation + manual override).
+                // Enter = confirm with current reason (narrow semantics, dedicated flags mapped inside).
+                // Esc = cancel (no spawn).
+                // Any other char/backspace edits the reason line on the pending struct.
+                match (key.modifiers, key.code) {
+                    (KeyModifiers::NONE, KeyCode::Enter) => app.confirm_policy_action(),
+                    (KeyModifiers::NONE, KeyCode::Esc) => app.cancel_policy_action(),
+                    (KeyModifiers::NONE, KeyCode::Char(c)) => {
+                        if let Some(p) = &mut app.overlay.pending_policy {
+                            p.reason_input.push(c);
+                        }
+                    }
+                    (KeyModifiers::NONE, KeyCode::Backspace) => {
+                        if let Some(p) = &mut app.overlay.pending_policy {
+                            p.reason_input.pop();
+                        }
+                    }
+                    (KeyModifiers::NONE, KeyCode::Delete) => {
+                        if let Some(p) = &mut app.overlay.pending_policy {
+                            p.reason_input.pop();
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
             Some(OverlayType::ConfirmPopup) => {
                 match (key.modifiers, key.code) {
                     (KeyModifiers::NONE, KeyCode::Enter) => app.confirm_action(),
@@ -256,6 +283,9 @@ impl KeyHandler {
     fn handle_escape(&self, app: &mut App) {
         app.pending_key = None;
         match app.topmost_overlay() {
+            Some(OverlayType::PolicyConfirm) => {
+                app.cancel_policy_action();
+            }
             Some(OverlayType::ConfirmPopup) => {
                 app.cancel_action();
             }
@@ -318,7 +348,9 @@ impl KeyHandler {
     }
 
     fn handle_enter(&self, app: &mut App) {
-        if app.is_confirm_popup_visible() {
+        if app.is_policy_confirm_visible() {
+            app.confirm_policy_action();
+        } else if app.is_confirm_popup_visible() {
             app.confirm_action();
         } else {
             app.handle_enter();

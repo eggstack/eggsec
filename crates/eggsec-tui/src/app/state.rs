@@ -1,4 +1,4 @@
-use crate::app::confirmation::PendingAction;
+use crate::app::confirmation::{PendingAction, PendingPolicyConfirmation};
 use crate::app::notifications::Notification;
 use crate::search::GlobalSearch;
 use crate::tabs::history::HistoryEntry;
@@ -8,13 +8,16 @@ use std::collections::VecDeque;
 use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 
-/// Overlay UI state (help, HTTP options, search, confirm popup, notifications)
+/// Overlay UI state (help, HTTP options, search, confirm popup, policy confirmation, notifications)
 pub struct OverlayState {
     pub show_help: bool,
     pub help_tab: Option<Tab>,
     pub show_http_options: bool,
     pub show_search: bool,
     pub pending_action: Option<PendingAction>,
+    /// Policy enforcement confirmation (RequireConfirmation from EnforcementContext).
+    /// Highest precedence overlay; mirrors CLI ManualOverride discretion.
+    pub pending_policy: Option<PendingPolicyConfirmation>,
     pub notification: Option<Notification>,
     pub help_scroll_offset: usize,
 }
@@ -27,6 +30,7 @@ impl Default for OverlayState {
             show_http_options: false,
             show_search: false,
             pending_action: None,
+            pending_policy: None,
             notification: None,
             help_scroll_offset: 0,
         }
@@ -135,7 +139,14 @@ mod tests {
         assert!(!state.show_http_options);
         assert!(!state.show_search);
         assert!(state.pending_action.is_none());
+        assert!(state.pending_policy.is_none());
         assert!(state.notification.is_none());
+    }
+
+    #[test]
+    fn overlay_state_pending_policy_default_none() {
+        let state = OverlayState::default();
+        assert!(state.pending_policy.is_none());
     }
 
     #[test]

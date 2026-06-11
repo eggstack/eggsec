@@ -99,4 +99,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         let popup = confirm_popup(&title, &message);
         popup.render(f, f.area());
     }
+
+    // Policy confirmation (highest precedence) — rich confirm for RequireConfirmation + manual override.
+    // Uses the same confirm_popup component; the message() already contains kebab classes, target, risk,
+    // reasons/warnings, reason input line, and [Enter] Proceed / [Esc] Cancel hints (narrow semantics).
+    if let Some(ref pending) = app.overlay.pending_policy {
+        let (title, message) = pending.message();
+        let popup = confirm_popup(&title, &message);
+        popup.render(f, f.area());
+    }
 }
