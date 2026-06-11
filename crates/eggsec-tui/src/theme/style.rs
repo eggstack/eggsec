@@ -2,6 +2,15 @@ use ratatui::style::{Modifier, Style};
 
 use super::palette::Theme;
 
+// NOTE: These helper methods are currently unused because the TUI still uses
+// the thread-local `tc!` macro or constructs styles inline. They are retained
+// for future adoption by refactoring tab renderers to pass `&Theme` explicitly,
+// which aligns with the architectural guidance in AGENTS.override.md.  When
+// adopting these methods, double-check that `style_for_mode` uses the correct
+// foreground/background fields—the existing code used `selected_text` for the
+// mode badge, whereas the status bar renders with `mode_normal`/`mode_insert`
+// backgrounds.
+#[allow(dead_code)]
 impl Theme {
     pub fn style_for_tab(&self, active: bool) -> Style {
         if active {

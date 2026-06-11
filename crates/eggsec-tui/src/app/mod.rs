@@ -230,7 +230,18 @@ impl App {
         }
     }
 
+    /// Returns true when a task is in progress **on any tab**.
+    ///
+    /// Previous implementation only checked the *current* tab's state, which
+    /// returned `false` when the user navigated away from the running tab.
+    /// This made the status bar display "Ready" while a scan was still
+    /// actively running in the background.
     pub fn is_running(&self) -> bool {
+        // A running task is also visible in the task_state regardless of which
+        // tab is focused.
+        if self.task_state.handle.is_some() || self.task_state.tab.is_some() {
+            return true;
+        }
         self.current_tab.as_tab_state(self).is_running()
     }
 
@@ -570,6 +581,13 @@ impl App {
     }
 
     pub fn auto_save_if_due(&mut self) {
+        // Don't auto-save while a task is running. The task state is
+        // transient and saving mid-scan can write a snapshot that doesn't
+        // match the disk reality. The save will fire on the next tick
+        // after the task completes.
+        if self.task_state.handle.is_some() || self.task_state.tab.is_some() {
+            return;
+        }
         let interval_secs = self.session_manager.auto_save_interval();
         if self.last_auto_save.elapsed().as_secs() >= interval_secs {
             if let Err(e) = self.session_manager.save_quick(self) {
@@ -584,6 +602,12 @@ impl App {
         self.theme_load.mark_user_changed();
         crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
         self.update_settings_theme_selector();
+        self.needs_redraw = true;
+        // Acknowledge the change so the user knows Ctrl+T worked.
+        self.overlay.notification = Some(Notification::new(
+            format!("Theme: {}", self.theme_manager.current().name),
+            NotificationSeverity::Info,
+        ));
     }
 
     pub fn update_settings_theme_selector(&mut self) {

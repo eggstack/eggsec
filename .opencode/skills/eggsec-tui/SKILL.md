@@ -48,6 +48,33 @@ crates/eggsec-tui/src/
 └── help.rs       # HelpManager
 ```
 
+## Session Fixes (2026-06-11)
+
+### Theme System Fixes
+- **Ctrl+T cycles ALL themes**: Iterates `list_theme_ids_owned()` alphabetically, wrapping at end (was limited to built-in trio)
+- **Theme::default() returns cyber-red**: Was `dark_theme`, which disagreed with `ThemeManager::default`
+- **set_theme() logs at debug level** when a theme is not found (was silent)
+- **Theme install failure notifications**: Surfaced via the notification system (no longer silent)
+- **set_items_with_extra on Selector**: Adds missing theme to dropdown without replacing with index 0
+- **Content_len cap in archive.rs**: Prevents pathological allocation (1 MiB cap)
+- **Style.rs methods**: Annotated `#[allow(dead_code)]` for future adoption
+
+### Session Management Hardening
+- **Corrupt session quarantine**: `.json.bad` files tried next in `load_latest_session`
+- **Orphan cleanup**: `.json.tmp` orphans cleaned on both save paths
+- **Auto-save skips active tasks**: `auto_save_if_due` defers during running tasks
+- **Fallback path fix**: `SessionConfig` fallback uses `$HOME/.eggsec/sessions` (was bare `~`)
+- **Interval clamp**: `auto_save_interval` clamped to min 1 second
+- **Snapshot filtering**: `quick_save.json` excluded from session snapshot candidates
+
+### Key Binding Changes
+- `Ctrl+T` cycles all themes (not just built-ins)
+- `Ctrl+B` shows "Bookmarked: <tab>" notification
+- `Shift+E` shows "Export format: <format>" notification
+- `1-9` / `0` jump to tab by index
+- `y` / `n` confirm/cancel in confirmation dialog
+- `pending_key` cleared on overlay open (fixes stale `gg` after opening quick switch)
+
 ## is_at_left_edge Checkbox Guard (Critical - 2026-05-26 Session)
 
 Always add `is_empty()` guard for checkbox arrays in `is_at_left_edge()` and `is_at_right_edge()`:

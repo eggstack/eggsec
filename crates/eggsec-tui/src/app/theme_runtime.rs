@@ -1,3 +1,4 @@
+use crate::app::notifications::NotificationSeverity;
 use crate::theme::install::ThemeInstallReport;
 
 impl super::App {
@@ -52,6 +53,29 @@ impl super::App {
                     "deferred theme still unavailable after theme load"
                 );
             }
+        }
+
+        // Surface installation failures to the user. Without this, a broken
+        // archive or permission error leaves the user staring at the 3 built-in
+        // themes with no idea why their favorite Halloy theme didn't appear.
+        if !report.errors.is_empty() {
+            let message = if report.installed == 0 && report.loaded == 0 {
+                format!(
+                    "Theme installation failed: {} error(s). Check logs.",
+                    report.errors.len()
+                )
+            } else {
+                format!(
+                    "Theme installation: {} installed, {} errors. Some themes may be missing.",
+                    report.installed,
+                    report.errors.len()
+                )
+            };
+            self.overlay.notification = Some(crate::app::notifications::Notification::new(
+                message,
+                NotificationSeverity::Warning,
+            ));
+            self.needs_redraw = true;
         }
 
         self.update_settings_theme_selector();

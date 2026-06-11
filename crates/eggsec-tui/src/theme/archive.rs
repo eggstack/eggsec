@@ -94,6 +94,17 @@ pub fn decode_packaged_archive(bytes: &[u8]) -> Result<Vec<PackagedThemeFile>, T
         std::io::Read::read_exact(&mut cursor, &mut content_len_buf)?;
         let content_len = u64::from_le_bytes(content_len_buf) as usize;
 
+        // Cap individual file size to a sane upper bound. The packaged theme
+        // archive is built in-tree, but a corrupted or adversarial archive
+        // could claim a content length of u64::MAX and force a huge allocation
+        // before `read_exact` fails. 1 MiB is far larger than any real theme.
+        const MAX_THEME_FILE_BYTES: usize = 1024 * 1024;
+        if content_len > MAX_THEME_FILE_BYTES {
+            return Err(ThemeArchiveError::LzmaError(format!(
+                "theme file {path_str} claims {content_len} bytes, exceeds {MAX_THEME_FILE_BYTES} cap"
+            )));
+        }
+
         let mut content = vec![0u8; content_len];
         std::io::Read::read_exact(&mut cursor, &mut content)?;
 

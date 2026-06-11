@@ -47,6 +47,7 @@ impl KeyHandler {
             (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.handle_ctrl_c(app),
             (KeyModifiers::CONTROL, KeyCode::Char('x')) => {
                 if !app.has_active_task() {
+                    app.pending_key = None;
                     app.toggle_quick_switch();
                 }
             }
@@ -61,11 +62,23 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Left) => app.handle_left(),
             (KeyModifiers::NONE, KeyCode::Right) => app.handle_right(),
             (KeyModifiers::NONE, KeyCode::Esc) => self.handle_escape(app),
-            (KeyModifiers::CONTROL, KeyCode::Char('/')) => app.toggle_help(),
-            (KeyModifiers::CONTROL, KeyCode::Char('p')) => app.toggle_command_palette(),
-            (KeyModifiers::CONTROL, KeyCode::Char('f')) => self.handle_ctrl_f(app),
+            (KeyModifiers::CONTROL, KeyCode::Char('/')) => {
+                app.pending_key = None;
+                app.toggle_help();
+            }
+            (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
+                app.pending_key = None;
+                app.toggle_command_palette();
+            }
+            (KeyModifiers::CONTROL, KeyCode::Char('f')) => {
+                app.pending_key = None;
+                self.handle_ctrl_f(app);
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('z')) => app.toggle_pause(),
-            (KeyModifiers::CONTROL, KeyCode::Char('t')) => app.toggle_theme(),
+            (KeyModifiers::CONTROL, KeyCode::Char('t')) => {
+                app.pending_key = None;
+                app.toggle_theme();
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('v')) => {
                 if !app.has_active_task() {
                     if let Some(text) = Clipboard::get() {
@@ -103,7 +116,10 @@ impl KeyHandler {
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Char('i')) => self.handle_enter_insert_mode(app),
             (KeyModifiers::NONE, KeyCode::Char('q')) => self.handle_quit(app),
-            (KeyModifiers::NONE, KeyCode::Char(' ')) => app.toggle_help(),
+            (KeyModifiers::NONE, KeyCode::Char(' ')) => {
+                app.pending_key = None;
+                app.toggle_help();
+            }
             (KeyModifiers::NONE, KeyCode::Char('y')) => {
                 if let Some(text) = app.dispatcher_mut().handle_copy() {
                     if !Clipboard::set(&text) {
@@ -111,7 +127,14 @@ impl KeyHandler {
                     }
                 }
             }
-            (KeyModifiers::CONTROL, KeyCode::Char('b')) => app.toggle_bookmark(app.current_tab),
+            (KeyModifiers::CONTROL, KeyCode::Char('b')) => {
+                app.toggle_bookmark(app.current_tab);
+                app.overlay.notification = Some(crate::app::notifications::Notification::new(
+                    format!("Bookmarked: {}", app.current_tab.title()),
+                    crate::app::notifications::NotificationSeverity::Info,
+                ));
+                app.needs_redraw = true;
+            }
             (KeyModifiers::NONE, KeyCode::Char('h')) => app.handle_left(),
             (KeyModifiers::NONE, KeyCode::Char('j')) => app.handle_down(),
             (KeyModifiers::NONE, KeyCode::Char('k')) => app.handle_up(),
@@ -126,12 +149,35 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char('p')) => app.prev_tab(),
             (KeyModifiers::SHIFT, KeyCode::Char('H')) => app.prev_tab(),
             (KeyModifiers::SHIFT, KeyCode::Char('L')) => app.next_tab(),
-            (KeyModifiers::SHIFT, KeyCode::Char('E')) => app.cycle_export_format(),
+            (KeyModifiers::SHIFT, KeyCode::Char('E')) => {
+                app.cycle_export_format();
+                app.overlay.notification = Some(crate::app::notifications::Notification::new(
+                    format!("Export format: {}", app.export_format),
+                    crate::app::notifications::NotificationSeverity::Info,
+                ));
+                app.needs_redraw = true;
+            }
             (KeyModifiers::NONE, KeyCode::Char('/')) => app.toggle_search(false),
             (KeyModifiers::NONE, KeyCode::Char('r')) => self.handle_reset(app),
             (KeyModifiers::NONE, KeyCode::Char('s')) => self.handle_save_settings(app),
             (KeyModifiers::NONE, KeyCode::Char('d')) => self.handle_delete_entry(app),
             (KeyModifiers::NONE, KeyCode::Char('e')) => app.export_results(),
+            // Tab jump: 1-9 jumps to tabs 1-9; 0 jumps to tab 10 (if available)
+            (KeyModifiers::NONE, KeyCode::Char(c @ '1'..='9')) => {
+                let idx = c.to_digit(10).unwrap() as usize;
+                app.pending_key = None;
+                if let Some(tab) = Tab::from_index(idx) {
+                    app.set_current_tab_if_available(tab);
+                    app.adjust_tab_scroll();
+                }
+            }
+            (KeyModifiers::NONE, KeyCode::Char('0')) => {
+                app.pending_key = None;
+                if let Some(tab) = Tab::from_index(9) {
+                    app.set_current_tab_if_available(tab);
+                    app.adjust_tab_scroll();
+                }
+            }
             _ => return false,
         }
         true
@@ -160,6 +206,8 @@ impl KeyHandler {
                 match (key.modifiers, key.code) {
                     (KeyModifiers::NONE, KeyCode::Enter) => app.confirm_action(),
                     (KeyModifiers::NONE, KeyCode::Esc) => app.cancel_action(),
+                    (KeyModifiers::NONE, KeyCode::Char('y')) => app.confirm_action(),
+                    (KeyModifiers::NONE, KeyCode::Char('n')) => app.cancel_action(),
                     _ => {}
                 }
                 true

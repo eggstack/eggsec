@@ -115,6 +115,12 @@ impl Selector {
         }
     }
 
+    /// Append a single item to the list (used to keep a "missing" current
+    /// theme visible after a refresh that omitted it).
+    pub fn set_items_with_extra(&mut self, item: SelectorItem) {
+        self.items.push(item);
+    }
+
     pub fn simple_items(mut self, items: Vec<&str>) -> Self {
         self.items = items.into_iter().map(SelectorItem::simple).collect();
         self

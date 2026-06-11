@@ -3,6 +3,7 @@ use crate::App;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Session state persistence.
 ///
@@ -53,7 +54,16 @@ impl SessionConfig {
     fn default_session_dir() -> PathBuf {
         directories::ProjectDirs::from("com", "eggsec", "eggsec")
             .map(|dirs| dirs.data_dir().join("sessions"))
-            .unwrap_or_else(|| PathBuf::from("~/.eggsec/sessions"))
+            .unwrap_or_else(|| {
+                // Expand ~ to a real home directory so this path works as a
+                // fallback, even on platforms where `~` is treated literally.
+                let home = std::env::var_os("HOME").map(PathBuf::from);
+                if let Some(home) = home {
+                    home.join(".eggsec").join("sessions")
+                } else {
+                    PathBuf::from("/tmp/eggsec-sessions")
+                }
+            })
     }
 
     pub fn with_auto_save_interval(mut self, interval_secs: u64) -> Self {
@@ -86,6 +96,7 @@ impl SessionManager {
         fs::write(&tmp_path, &json)?;
         fs::rename(&tmp_path, &path)?;
 
+        self.cleanup_orphaned_tmp_files();
         self.cleanup_old_sessions()?;
 
         Ok(path)
@@ -96,9 +107,12 @@ impl SessionManager {
         fs::create_dir_all(&self.config.session_dir)?;
         let state = self.capture_state(app);
         let json = serde_json::to_string_pretty(&state)?;
+        // .json.tmp is an unusual double-extension but is the conventional
+        // atomic-write temp pattern (write to `.tmp`, then rename over dest).
         let tmp_path = path.with_extension("json.tmp");
         fs::write(&tmp_path, &json)?;
         fs::rename(&tmp_path, &path)?;
+        self.cleanup_orphaned_tmp_files();
         Ok(path)
     }
 
@@ -123,16 +137,62 @@ impl SessionManager {
                 }
             })
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+            // Exclude quick_save.json from the snapshot rotation sort; it is
+            // an alias for the most-recent state, not a candidate snapshot.
+            .filter(|e| {
+                e.path()
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy() != "quick_save.json")
+            })
             .collect();
 
         sessions.sort_by_key(|e| e.path());
 
-        if let Some(latest) = sessions.last() {
-            let content = fs::read_to_string(latest.path())?;
-            let state: SessionState = serde_json::from_str(&content)?;
-            Ok(Some(state))
-        } else {
-            Ok(None)
+        // Try the newest snapshot first; on parse failure, quarantine the
+        // file and fall through to the next candidate so the user's
+        // bookmarks, theme, and last-tab are not lost entirely.
+        for entry in sessions.iter().rev() {
+            match fs::read_to_string(entry.path())
+                .and_then(|s| serde_json::from_str::<SessionState>(&s).map_err(|e| e.into()))
+            {
+                Ok(state) => return Ok(Some(state)),
+                Err(e) => {
+                    tracing::warn!(
+                        path = %entry.path().display(),
+                        error = %e,
+                        "session file is corrupt; quarantining and trying next"
+                    );
+                    let quarantine = entry.path().with_extension("json.bad");
+                    let _ = fs::rename(entry.path(), quarantine);
+                }
+            }
+        }
+
+        // If no snapshots were valid, fall back to quick_save.json.
+        self.load_quick()
+    }
+
+    fn cleanup_orphaned_tmp_files(&self) {
+        let entries = match fs::read_dir(&self.config.session_dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().ends_with(".json.tmp"))
+            {
+                if let Some(modified) = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                {
+                    if modified.elapsed().unwrap_or_default() > Duration::from_secs(3600) {
+                        let _ = fs::remove_file(&path);
+                    }
+                }
+            }
         }
     }
 
@@ -165,7 +225,7 @@ impl SessionManager {
             .filter(|e| {
                 e.path()
                     .file_name()
-                    .is_some_and(|name| name != "quick_save.json")
+                    .is_some_and(|name| name.to_string_lossy() != "quick_save.json")
             })
             .collect();
 
@@ -189,7 +249,7 @@ impl SessionManager {
     }
 
     pub fn auto_save_interval(&self) -> u64 {
-        self.config.auto_save_interval_secs
+        self.config.auto_save_interval_secs.max(1)
     }
 
     pub fn config(&self) -> &SessionConfig {

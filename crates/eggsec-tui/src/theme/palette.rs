@@ -47,6 +47,10 @@ pub struct ThemeColors {
 
 impl Default for Theme {
     fn default() -> Self {
-        super::builtin::dark_theme()
+        // `cyber-red` is the always-available fallback. Returning `dark_theme`
+        // here made `Theme::default()` and `ThemeManager::default()` disagree,
+        // which is surprising for any code that constructs a theme by
+        // `..Default::default()`.
+        super::builtin::cyber_red_theme()
     }
 }

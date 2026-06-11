@@ -251,7 +251,7 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`); the receiver, join handle, and deferred restore request live in `ThemeLoadState`, `App::update()` polls the channel, and the lifecycle helpers in `app/theme_runtime.rs` clean up the thread once the final report arrives or the loader disconnects. Failures are logged as warnings and do not block the UI.
 
-**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles the built-in trio only (`cyber-red -> dark -> light -> cyber-red`). Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
+**Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles all themes alphabetically (`list_theme_ids_owned()`), wrapping at the end. Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
 
 `ThemeManager` holds registered themes with 28 color fields. `Theme.name` is the canonical stable ID for the theme, which keeps file-loaded themes and session restore aliases consistent.
 
@@ -326,10 +326,14 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `Ctrl+P` | Command palette |
 | `Ctrl+X` | Quick switch (tab search) |
 | `Ctrl+F` | Global search |
-| `Ctrl+T` | Cycle built-in themes |
+| `Ctrl+T` | Cycle all themes alphabetically (wraps at end) |
+| `Ctrl+B` | Bookmark current tab (shows "Bookmarked: <tab>" notification) |
 | `Ctrl+Z` | Pause/resume active task updates |
 | `Ctrl+Y` | Resume when paused, otherwise copy |
+| `Shift+E` | Export with format selection (shows "Export format: <format>" notification) |
 | `Space` | Toggle help |
+| `1-9` / `0` | Jump to tab by index (`1`=Recon, `2`=Load, ..., `0`=tab 10) |
+| `y` / `n` | Confirm/cancel in confirmation dialog (alongside Enter/Esc) |
 | `hjkl` / Arrows | Navigation |
 | `i` | Enter insert mode |
 | `Esc` | Return to normal mode / close overlay |
@@ -1249,6 +1253,34 @@ Key patterns fixed:
 | `auth.rs` | 50-56 | reset() missing focus_area | Added `focus_area` reset |
 | `history.rs` | 167-187 | to_lowercase() in loops | Pre-compute before filter |
 
+
+## Session Fixes (2026-06-11)
+
+### Theme System Fixes
+- **Ctrl+T cycles ALL themes**: Iterates `list_theme_ids_owned()` alphabetically, wrapping at end (was limited to built-in trio)
+- **Theme::default() returns cyber-red**: Was `dark_theme`, which disagreed with `ThemeManager::default`
+- **set_theme() logs at debug level** when a theme is not found (was silent)
+- **ThemeInstallReport::Clone**: Documents that `loaded_themes` is dropped because `ThemeLoadError` is not Clone
+- **set_items_with_extra on Selector**: Adds a missing theme to the dropdown without silently replacing with index 0
+- **Theme install failure notifications**: Surfaced via the notification system (no longer silent)
+- **Style.rs methods**: Annotated `#[allow(dead_code)]` with comment explaining they are for future adoption
+- **Content_len cap in archive.rs**: Prevents pathological allocation (1 MiB cap)
+
+### Key Binding Changes
+- `Ctrl+T` now cycles ALL themes (not just built-ins)
+- `Ctrl+B` shows "Bookmarked: <tab>" notification
+- `Shift+E` shows "Export format: <format>" notification
+- `1-9` / `0` jump to tab by index (new)
+- `y` / `n` confirm/cancel in confirmation dialog (new shortcuts alongside Enter/Esc)
+- `pending_key` is now cleared on overlay open (fixes stale `gg` after opening quick switch)
+
+### Session Management Hardening
+- `.json.tmp` orphans cleaned up on both save paths
+- `load_latest_session` quarantines corrupt files (`.json.bad`) and tries next
+- `auto_save_if_due` skips during active tasks
+- `SessionConfig` fallback uses `$HOME/.eggsec/sessions` (was bare `~/.eggsec/sessions`)
+- `auto_save_interval` clamped to min 1 second
+- `load_latest_session` filters out `quick_save.json` from snapshot candidates
 
 ## Session Fixes (2026-06-09)
 

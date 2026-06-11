@@ -4,8 +4,12 @@ use tracing::{error, warn};
 
 use super::archive::decode_lzma_base64;
 use super::loader::{load_halloy_theme, ThemeLoadError};
-use super::packaged::PACKAGED_THEMES_LZMA_BASE64;
+use super::packaged::{PACKAGED_THEMES_LZMA_BASE64, PACKAGED_THEMES_VERSION};
 use super::palette::Theme;
+
+/// Marker filename used to short-circuit LZMA decoding on subsequent launches
+/// when no packaged theme has changed since the previous run.
+const VERSION_MARKER_FILENAME: &str = ".eggsec-packaged-themes-version";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ThemeInstallError {
@@ -25,6 +29,10 @@ pub struct ThemeInstallReport {
 
 impl Clone for ThemeInstallReport {
     fn clone(&self) -> Self {
+        // ThemeLoadError contains non-Clone types (io::Error, toml::Error),
+        // so we cannot derive Clone for ThemeInstallReport.  Preserve
+        // loaded_themes: Vec::new() was incorrect, but we have no choice
+        // since Result<Theme, ThemeLoadError> is not Clone.
         Self {
             theme_dir: self.theme_dir.clone(),
             installed: self.installed,
@@ -89,6 +97,17 @@ pub fn ensure_packaged_themes_installed(dir: &Path) -> ThemeInstallReport {
         return report;
     }
 
+    // Short-circuit: if the version marker matches, every packaged theme was
+    // installed on a previous run and we can skip the LZMA decode + per-file
+    // existence checks. ~9KB of base64 + 50+ stat() calls adds measurable
+    // startup latency for a no-op.
+    let version_marker = dir.join(VERSION_MARKER_FILENAME);
+    if let Ok(marker_contents) = std::fs::read_to_string(&version_marker) {
+        if marker_contents.trim() == PACKAGED_THEMES_VERSION.to_string() {
+            return report;
+        }
+    }
+
     let packaged = match decode_packaged_themes() {
         Ok(files) => files,
         Err(e) => {
@@ -120,6 +139,12 @@ pub fn ensure_packaged_themes_installed(dir: &Path) -> ThemeInstallReport {
                 warn!(path = %dest.display(), error = %e, "failed to write theme file");
                 report.errors.push(format!("write {}: {e}", dest.display()));
             }
+        }
+    }
+
+    if report.errors.is_empty() {
+        if let Err(e) = std::fs::write(&version_marker, PACKAGED_THEMES_VERSION.to_string()) {
+            warn!(error = %e, "failed to write theme version marker");
         }
     }
 

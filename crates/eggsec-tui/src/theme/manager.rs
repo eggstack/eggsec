@@ -43,17 +43,28 @@ impl ThemeManager {
             self.current = theme.clone();
             true
         } else {
+            tracing::debug!(name = %canonical, "theme not found in manager");
             false
         }
     }
 
+    /// Cycle to the next registered theme in alphabetical order.
+    ///
+    /// Wraps around at the end so users can reach any theme (including custom
+    /// packaged themes) without needing to re-open the Settings selector. The
+    /// previous implementation only rotated the three built-in themes, which
+    /// trapped users on a custom theme who hit Ctrl+T by accident.
     pub fn toggle(&mut self) {
-        let next = match self.current.name.as_str() {
-            "cyber-red" => "dark",
-            "dark" => "light",
-            _ => "cyber-red",
+        let themes = self.list_theme_ids_owned();
+        if themes.is_empty() {
+            return;
+        }
+        let current_name = self.current.name.clone();
+        let next = match themes.iter().position(|t| t == &current_name) {
+            Some(idx) => themes[(idx + 1) % themes.len()].clone(),
+            None => themes[0].clone(),
         };
-        let _ = self.set_theme(next);
+        let _ = self.set_theme(&next);
     }
 
     pub(crate) fn set_current_for_legacy_sync(&mut self, theme: &Theme) {
@@ -62,6 +73,14 @@ impl ThemeManager {
 
     pub fn list_themes(&self) -> Vec<&str> {
         let mut themes: Vec<&str> = self.themes.keys().map(|s| s.as_str()).collect();
+        themes.sort();
+        themes
+    }
+
+    /// Return owned theme IDs (used where the caller needs to retain
+    /// ownership across mutable borrows of `self`).
+    pub fn list_theme_ids_owned(&self) -> Vec<String> {
+        let mut themes: Vec<String> = self.themes.keys().cloned().collect();
         themes.sort();
         themes
     }
@@ -76,6 +95,7 @@ impl ThemeManager {
         self.themes.insert(name, theme);
     }
 
+    #[deprecated(note = "Use `register_theme` instead; this is unused outside tests")]
     pub fn register_theme_if_absent(&mut self, theme: Theme) -> bool {
         let name = canonical_theme_id(&theme.name);
         if self.themes.contains_key(&name) {
@@ -143,15 +163,17 @@ mod tests {
         let mut manager = ThemeManager::new();
         assert_eq!(manager.current().name, "cyber-red");
         manager.toggle();
-        assert_eq!(manager.current().name, "dark");
+        let first = manager.current().name.clone();
         manager.toggle();
-        assert_eq!(manager.current().name, "light");
+        let second = manager.current().name.clone();
+        assert_ne!(first, second);
         manager.toggle();
+        // 3 themes - one full cycle returns to start
         assert_eq!(manager.current().name, "cyber-red");
     }
 
     #[test]
-    fn theme_manager_toggle_returns_to_cyber_red_from_custom_theme() {
+    fn theme_manager_toggle_cycles_through_custom_themes() {
         let mut manager = ThemeManager::new();
         let custom = crate::theme::palette::Theme {
             mode: crate::theme::ThemeMode::Dark,
@@ -161,7 +183,20 @@ mod tests {
         manager.register_theme(custom);
         assert!(manager.set_theme("custom"));
         manager.toggle();
-        assert_eq!(manager.current().name, "cyber-red");
+        // Custom themes must be reachable via Ctrl+T, not lost.
+        let after = manager.current().name.clone();
+        assert_ne!(after, "custom", "toggle should advance to next theme");
+    }
+
+    #[test]
+    fn theme_manager_toggle_wraps_around_full_set() {
+        let mut manager = ThemeManager::new();
+        let total = manager.list_themes().len();
+        let first = manager.current().name.clone();
+        for _ in 0..total {
+            manager.toggle();
+        }
+        assert_eq!(manager.current().name, first);
     }
 
     #[test]

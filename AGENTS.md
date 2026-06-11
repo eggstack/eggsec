@@ -240,6 +240,21 @@ No remaining stub implementations.
 - **Theme install**: Packaged themes are installed idempotently to the user's config dir (`~/.config/eggsec/themes` on Linux). Existing files are never overwritten.
 - **Theme background loading**: Theme loading runs in a background thread (`std::thread::spawn`) with results sent via `std::sync::mpsc`. The receiver, join handle, and deferred restore live in `ThemeLoadState`. `App::update()` polls the channel and joins the loader handle once the final report arrives. `App::spawn_theme_loader()` starts the thread. `new_for_testing()` skips the loader.
 
+### Session Fixes (2026-06-11)
+
+- **Theme cycling**: `Ctrl+T` now cycles ALL themes alphabetically via `list_theme_ids_owned()` (not just built-in trio)
+- **Theme default**: `Theme::default()` returns `cyber-red` (was `dark_theme`, disagreed with `ThemeManager::default`)
+- **Theme logging**: `set_theme()` logs at debug level when a theme is not found
+- **Theme notifications**: Theme install failures surfaced via notification system (no longer silent)
+- **Theme fallback**: `set_items_with_extra` on Selector adds missing theme to dropdown without replacing with index 0
+- **Content_len cap**: `archive.rs` caps content_len at 1 MiB to prevent pathological allocation
+- **Session cleanup**: `.json.tmp` orphans cleaned up on both save paths
+- **Session corruption**: `load_latest_session` quarantines corrupt files (`.json.bad`) and tries next
+- **Session auto-save**: `auto_save_if_due` skips during active tasks
+- **Session fallback path**: `SessionConfig` fallback uses `$HOME/.eggsec/sessions` (was bare `~/.eggsec/sessions`)
+- **Session interval**: `auto_save_interval` clamped to min 1 second
+- **Session snapshots**: `load_latest_session` filters out `quick_save.json` from snapshot candidates
+
 ## Skills Directory
 
 Skills are located in `.opencode/skills/`:
