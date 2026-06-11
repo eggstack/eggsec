@@ -369,7 +369,16 @@ impl TabRender for ScanTab {
                 StageStatus::Pending => "pending".to_string(),
                 StageStatus::Running => "running".to_string(),
                 StageStatus::Completed => format!("{}s", stage_info.duration_ms / 1000),
-                StageStatus::Failed(e) => make_friendly_error(&anyhow::anyhow!("{}", e)),
+                StageStatus::Failed(e) => {
+                    let msg = make_friendly_error(&anyhow::anyhow!("{}", e));
+                    // Truncate long error messages to keep the status column readable.
+                    // The full error is available in the result_summary column.
+                    if msg.len() > 10 {
+                        format!("{}…", &msg[..9])
+                    } else {
+                        msg
+                    }
+                }
             };
 
             stage_lines.push(Line::from(vec![

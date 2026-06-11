@@ -120,6 +120,15 @@ impl ClusterTab {
             .filter(|v| !v.is_empty())
     }
 
+    pub fn start(&mut self) {
+        self.state = AppState::Running;
+        self.results_view.clear();
+    }
+
+    pub fn stop(&mut self) {
+        self.state = AppState::Idle;
+    }
+
     pub fn set_status_results(&mut self, results: ClusterStatusResults) {
         self.state = AppState::Completed;
         self.results_view.clear();
@@ -535,6 +544,7 @@ impl TabInput for ClusterTab {
 
     fn handle_enter(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         match self.focus_area {
@@ -562,6 +572,12 @@ impl TabInput for ClusterTab {
                 current_inputs.blur();
             }
             ClusterFocusArea::Results => {}
+        }
+
+        if self.is_running() {
+            self.stop();
+        } else {
+            self.start();
         }
     }
 

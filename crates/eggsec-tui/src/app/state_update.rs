@@ -15,6 +15,14 @@ impl super::App {
     pub(super) fn update(&mut self) {
         let mut dirty = false;
 
+        // Auto-expire stale notifications so they don't linger until the
+        // next notification replaces them.
+        if let Some(ref notif) = self.overlay.notification {
+            if notif.is_expired() {
+                self.overlay.notification = None;
+            }
+        }
+
         // Poll background theme loading.
         if let Some(rx) = self.theme_load.rx.take() {
             match rx.try_recv() {
@@ -31,6 +39,17 @@ impl super::App {
                     self.join_theme_loader_handle();
                 }
             }
+        }
+
+        // When paused, skip draining progress and result channels so the
+        // UI state freezes (progress bar stops, results don't appear).
+        // The background task continues to run; only the UI consumption
+        // of its output is suspended.
+        if self.task_state.paused {
+            if dirty {
+                self.needs_redraw = true;
+            }
+            return;
         }
 
         if let Some(ref mut rx) = self.task_state.progress_rx {

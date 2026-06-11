@@ -47,7 +47,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     draw_status_bar(f, app, &theme, status_area);
 
     if app.overlay.show_help {
-        let help = help_popup_for_tab(app.current_tab);
+        let mut help = help_popup_for_tab(app.current_tab);
+        help.scroll_offset = app.overlay.help_scroll_offset;
         help.render(f, f.area());
 
         let context_help = app.get_current_help();

@@ -38,6 +38,7 @@ impl super::App {
         self.overlay.show_help = !self.overlay.show_help;
         if self.overlay.show_help {
             self.overlay.help_tab = Some(self.current_tab);
+            self.overlay.help_scroll_offset = 0;
         } else {
             self.overlay.help_tab = None;
         }

@@ -221,6 +221,52 @@ impl TaskBuilder for super::tabs::PacketTab {
     }
 }
 
+impl TaskBuilder for super::tabs::GraphQlTab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        let target = self.target();
+        if target.is_empty() {
+            return None;
+        }
+
+        Some(workers::TaskConfig::GraphQl {
+            url: target.to_string(),
+            introspection: self.introspection_checkbox.checked,
+            inject: self.inject_checkbox.checked,
+            depth_bypass: self.depth_bypass_checkbox.checked,
+            alias_overload: self.alias_overload_checkbox.checked,
+            concurrency: self.concurrency(),
+            timeout: self.timeout(),
+        })
+    }
+}
+
+impl TaskBuilder for super::tabs::OAuthTab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        let target = self.target();
+        if target.is_empty() {
+            return None;
+        }
+
+        Some(workers::TaskConfig::OAuth {
+            url: target.to_string(),
+            client_id: self.client_id().map(|s| s.to_string()),
+            redirect_uri: self.redirect_uri().map(|s| s.to_string()),
+            redirect_test: self.redirect_test_checkbox.checked,
+            scope_test: self.scope_test_checkbox.checked,
+            state_test: self.state_test_checkbox.checked,
+            grant_test: self.grant_test_checkbox.checked,
+            concurrency: self.concurrency(),
+            timeout: self.timeout(),
+        })
+    }
+}
+
+impl TaskBuilder for super::tabs::ClusterTab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        None
+    }
+}
+
 #[cfg(feature = "advanced-hunting")]
 impl TaskBuilder for super::tabs::HuntTab {
     fn build_task_config(&self) -> Option<workers::TaskConfig> {

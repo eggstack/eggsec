@@ -440,6 +440,37 @@ impl KeyHandler {
                 app.overlay.show_http_options = false;
                 app.needs_redraw = true;
             }
+            // Help overlay scrolling
+            (KeyModifiers::NONE, KeyCode::Up | KeyCode::Char('k'))
+                if app.is_help_visible() =>
+            {
+                app.overlay.help_scroll_offset = app.overlay.help_scroll_offset.saturating_sub(1);
+                app.needs_redraw = true;
+            }
+            (KeyModifiers::NONE, KeyCode::Down | KeyCode::Char('j'))
+                if app.is_help_visible() =>
+            {
+                app.overlay.help_scroll_offset = app.overlay.help_scroll_offset.saturating_add(1);
+                app.needs_redraw = true;
+            }
+            (KeyModifiers::NONE, KeyCode::Char('g')) if app.is_help_visible() => {
+                app.overlay.help_scroll_offset = 0;
+                app.needs_redraw = true;
+            }
+            (KeyModifiers::NONE, KeyCode::Char('G')) if app.is_help_visible() => {
+                // Scroll to bottom is set to a large value; the render
+                // method clamps it.
+                app.overlay.help_scroll_offset = usize::MAX;
+                app.needs_redraw = true;
+            }
+            (KeyModifiers::NONE, KeyCode::PageUp) if app.is_help_visible() => {
+                app.overlay.help_scroll_offset = app.overlay.help_scroll_offset.saturating_sub(10);
+                app.needs_redraw = true;
+            }
+            (KeyModifiers::NONE, KeyCode::PageDown) if app.is_help_visible() => {
+                app.overlay.help_scroll_offset = app.overlay.help_scroll_offset.saturating_add(10);
+                app.needs_redraw = true;
+            }
             _ => {}
         }
     }

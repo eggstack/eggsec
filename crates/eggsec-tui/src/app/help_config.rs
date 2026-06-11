@@ -622,6 +622,12 @@ pub fn get_static_help_data() -> StaticHelpData {
             shortcut: None,
         },
         CommandPaletteResult {
+            command: "theme".to_string(),
+            description: "Cycle theme (next)".to_string(),
+            category: "Appearance".to_string(),
+            shortcut: Some("Ctrl+T".to_string()),
+        },
+        CommandPaletteResult {
             command: "recon".to_string(),
             description: "Go to Reconnaissance".to_string(),
             category: "Tabs".to_string(),

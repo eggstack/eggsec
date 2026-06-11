@@ -16,6 +16,7 @@ pub struct OverlayState {
     pub show_search: bool,
     pub pending_action: Option<PendingAction>,
     pub notification: Option<Notification>,
+    pub help_scroll_offset: usize,
 }
 
 impl Default for OverlayState {
@@ -27,6 +28,7 @@ impl Default for OverlayState {
             show_search: false,
             pending_action: None,
             notification: None,
+            help_scroll_offset: 0,
         }
     }
 }

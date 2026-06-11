@@ -26,6 +26,7 @@ pub struct Popup {
     pub height: u16,
     pub active_button: usize,
     pub buttons: Vec<String>,
+    pub scroll_offset: usize,
 }
 
 #[allow(dead_code)]
@@ -39,6 +40,7 @@ impl Popup {
             height: 10,
             active_button: 0,
             buttons: Vec::new(),
+            scroll_offset: 0,
         }
     }
 
@@ -89,6 +91,23 @@ impl Popup {
         self.buttons.get(self.active_button).map(|s| s.as_str())
     }
 
+    pub fn scroll_up(&mut self, amount: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(amount);
+    }
+
+    pub fn scroll_down(&mut self, amount: usize) {
+        let max_scroll = self.content.len().saturating_sub(1);
+        self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
+    }
+
+    pub fn scroll_to_top(&mut self) {
+        self.scroll_offset = 0;
+    }
+
+    pub fn scroll_to_bottom(&mut self) {
+        self.scroll_offset = self.content.len().saturating_sub(1);
+    }
+
     pub fn render(&self, f: &mut Frame, area: Rect) {
         let popup_area = centered_rect(self.width, self.height, area);
 
@@ -129,7 +148,8 @@ impl Popup {
         if let Some(content_chunk) = chunks.first() {
             let paragraph = Paragraph::new(content_lines)
                 .style(Style::default().fg(tc!(text)))
-                .wrap(Wrap { trim: true });
+                .wrap(Wrap { trim: true })
+                .scroll((self.scroll_offset as u16, 0));
             f.render_widget(paragraph, *content_chunk);
         }
 

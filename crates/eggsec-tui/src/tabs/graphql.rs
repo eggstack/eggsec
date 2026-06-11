@@ -90,6 +90,19 @@ impl GraphQlTab {
             .unwrap_or(15)
     }
 
+    pub fn start(&mut self) {
+        if !self.target().is_empty() {
+            self.state = AppState::Running;
+            self.progress.current = 0;
+            self.progress.total = 100;
+            self.results_view.clear();
+        }
+    }
+
+    pub fn stop(&mut self) {
+        self.state = AppState::Idle;
+    }
+
     pub fn set_results(&mut self, results: GraphQlResults) {
         self.state = AppState::Completed;
         self.results_view.clear();
@@ -438,6 +451,7 @@ impl TabInput for GraphQlTab {
 
     fn handle_enter(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         match self.focus_area {
@@ -455,6 +469,12 @@ impl TabInput for GraphQlTab {
                 checkboxes[idx].toggle();
             }
             GraphQlFocusArea::Results => {}
+        }
+
+        if self.is_running() {
+            self.stop();
+        } else {
+            self.start();
         }
     }
 

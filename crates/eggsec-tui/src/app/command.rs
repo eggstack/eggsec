@@ -154,6 +154,9 @@ impl super::App {
             "http-options" | "http" => {
                 self.overlay.show_http_options = !self.overlay.show_http_options;
             }
+            "theme" => {
+                self.toggle_theme();
+            }
             _ => {}
         }
     }

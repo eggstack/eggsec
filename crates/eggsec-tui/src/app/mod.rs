@@ -314,6 +314,9 @@ impl App {
             Tab::WafStress => self.tabs.waf_stress.build_task_config(),
             Tab::Scan => self.tabs.scan.build_task_config(),
             Tab::Packet => self.tabs.packet.build_task_config(),
+            Tab::GraphQl => self.tabs.graphql.build_task_config(),
+            Tab::OAuth => self.tabs.oauth.build_task_config(),
+            Tab::Cluster => self.tabs.cluster.build_task_config(),
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.tabs.hunt.build_task_config(),
             #[cfg(feature = "headless-browser")]
@@ -409,8 +412,11 @@ impl App {
         if self.overlay.show_help {
             return;
         }
-        self.dispatcher_mut().handle_focus_next();
-        let input_focused = self.dispatcher_mut().is_input_focused();
+        let input_focused = {
+            let mut dispatcher = self.dispatcher_mut();
+            dispatcher.handle_focus_next();
+            dispatcher.is_input_focused()
+        };
         if input_focused {
             self.mode = InputMode::Insert;
         } else {
@@ -422,8 +428,11 @@ impl App {
         if self.overlay.show_help {
             return;
         }
-        self.dispatcher_mut().handle_focus_prev();
-        let input_focused = self.dispatcher_mut().is_input_focused();
+        let input_focused = {
+            let mut dispatcher = self.dispatcher_mut();
+            dispatcher.handle_focus_prev();
+            dispatcher.is_input_focused()
+        };
         if input_focused {
             self.mode = InputMode::Insert;
         } else {

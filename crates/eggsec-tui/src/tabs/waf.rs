@@ -563,7 +563,10 @@ impl TabInput for WafTab {
 
         if self.focus_area == WafFocusArea::ModeRadio {
             if let Some(sel) = self.mode_radio.selected {
-                self.mode_radio.select((sel + 1) % 2);
+                let len = self.mode_radio.options.len();
+                if len > 0 {
+                    self.mode_radio.select((sel + 1) % len);
+                }
             }
             return;
         }
