@@ -246,3 +246,44 @@ This document is the execution blueprint for Phase 1. Implement tasks in the rec
 - All parent planning artifacts aligned with established loadout patterns (db-pentest, mobile-dynamic, wireless)
 
 Phase 0 complete. Ready for Phase 1 execution on the feature branch.
+
+## Phase 1 Closeout Note (Completed 2026-06-12)
+
+**Phase 1 Deliverables Completed**:
+- Feature flag `web-proxy` added to eggsec, eggsec-cli, eggsec-tui Cargo.toml files + included in `full`
+- `OperationRisk::TrafficInterception` added to policy system with `ExecutionPolicy::allow_traffic_interception` enforcement
+- `Capability::TrafficInterception` added (not baseline-allowed)
+- `ConfirmationClass::TrafficInterception` + `ManualOverride::allow_web_proxy` + global `--allow-web-proxy` CLI flag
+- Core types: `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `RedactionPattern` (`proxy/intercept/types.rs`)
+- Bridge: `to_scan_report_data_proxy()` with `proxy-intercept-*` / `web-traffic-*` categories (`proxy/intercept/bridge.rs`)
+- Auto-bridge wired in `commands/handlers/report.rs` via `try_bridge_defense_lab()` helper
+- CLI: `eggsec proxy-intercept` command with full argument set (`cli/web_proxy.rs`)
+- Handler: `handle_proxy_intercept` with policy evaluation + dry-run path (`commands/handlers/web_proxy.rs`)
+- Dry-run produces complete `WebProxySessionReport` with synthetic flows, budget tracking, zero network activity
+- Documentation: `docs/WEB_PROXY.md`, `architecture/web_proxy.md`, updated `architecture/proxy.md`, `architecture/defense_lab.md`, `README.md`, `AGENTS.md`, `proxy/AGENTS.override.md`
+
+**Verification**:
+- `cargo test --lib -p eggsec --features web-proxy` — 1553 tests pass
+- `cargo test --test enforcement_tests -p eggsec --features web-proxy` — 48 enforcement tests pass
+- `cargo clippy --lib -p eggsec --features web-proxy` — no new warnings (5 pre-existing)
+- Dry-run smoke test: `eggsec proxy-intercept --listen 127.0.0.1:8080 --dry-run --json` produces valid JSON
+- Report convert bridge: `eggsec report convert <dry.json> --format json` produces correct `proxy-intercept-flow` and `web-traffic-summary` findings
+
+**Checklist Status**:
+- [x] All numbered tasks in Section 3 completed (dry-run path exercises 100% of report, policy, bridge)
+- [x] `cargo test --features web-proxy` green
+- [x] Dry-run produces consistent, high-quality `WebProxySessionReport` output
+- [x] Safety gates validated (feature flag, policy decision, --allow-web-proxy, dry-run bypass)
+- [x] Reporting bridge works end-to-end (`report convert` produces correct categories)
+- [x] Documentation updated and reviewed
+- [x] No regressions on main branch features
+- [ ] Real MITM interception (deferred to Phase 2)
+- [ ] Phase 2 handoff plan (to be created)
+
+**Key Decisions During Implementation**:
+- Created separate `cli/web_proxy.rs` module rather than modifying stress-testing-gated `ProxyCommand`
+- Added `Commands::ProxyIntercept` as top-level command (not subcommand of existing `Proxy`)
+- Refactored `report.rs` auto-bridge to use `try_bridge_defense_lab()` helper to avoid cfg nesting issues
+- Dry-run handler generates synthetic flows inline (no separate dry_run.rs module needed for Phase 1)
+
+Phase 1 complete. Ready for Phase 2 (real MITM interception + interactive TUI).
