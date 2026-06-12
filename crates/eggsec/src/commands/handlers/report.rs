@@ -64,9 +64,22 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                         return Err(anyhow::anyhow!("Input is not ScanReportData and does not match mobile or mobile-dynamic shape"));
                     }
                 }
-                #[cfg(all(not(feature = "wireless"), not(feature = "mobile")))]
+                #[cfg(all(not(feature = "wireless"), not(feature = "mobile"), feature = "db-pentest"))]
                 {
-                    return Err(anyhow::anyhow!("Failed to parse as ScanReportData; no wireless or mobile feature to auto-bridge native defense-lab JSON (rebuild with --features wireless or mobile)"));
+                    if let Ok(d) = serde_json::from_str::<crate::db_pentest::DbPentestReport>(&content) {
+                        crate::db_pentest::to_scan_report_data_db(&d)
+                    } else {
+                        return Err(anyhow::anyhow!("Input is not ScanReportData and does not match db-pentest shape"));
+                    }
+                }
+                #[cfg(all(not(feature = "wireless"), not(feature = "mobile"), not(feature = "db-pentest")))]
+                {
+                    return Err(anyhow::anyhow!("Failed to parse as ScanReportData; no wireless/mobile/db-pentest feature to auto-bridge native defense-lab JSON (rebuild with --features wireless or mobile or db-pentest)"));
+                }
+                #[cfg(any(feature = "wireless", feature = "mobile"))]
+                {
+                    // wireless or mobile branches above already handled or returned; this arm exists only for cfg consistency when both are absent but db-pentest is the only lab feature
+                    return Err(anyhow::anyhow!("Input is not ScanReportData and no matching defense-lab shape found for the enabled lab features"));
                 }
             };
 

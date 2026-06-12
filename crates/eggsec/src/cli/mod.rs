@@ -24,6 +24,8 @@ pub mod vuln;
 pub mod wireless;
 #[cfg(feature = "mobile")]
 pub mod mobile;
+#[cfg(feature = "db-pentest")]
+pub mod db_pentest;
 
 pub use ci::*;
 pub use cluster::*;
@@ -50,6 +52,9 @@ pub use browser::*;
 
 #[cfg(feature = "mobile")]
 pub use mobile::*;
+
+#[cfg(feature = "db-pentest")]
+pub use db_pentest::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -156,9 +161,16 @@ pub struct Cli {
     #[arg(
         long,
         global = true,
-        help = "Allow high-risk operations (intrusive, stress, load, raw packet, credential, exploit-adjacent, remote) (manual-only)"
+        help = "Allow high-risk operations (intrusive, stress, load, raw packet, credential, exploit-adjacent, remote, db-pentest) (manual-only)"
     )]
     pub allow_high_risk: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Allow direct database pentesting (lab/defense use only). Required for non-dry-run db pentest operations. (manual-only)"
+    )]
+    pub allow_db_pentest: bool,
 
     #[arg(
         long,
@@ -341,6 +353,11 @@ pub enum Commands {
     #[cfg(feature = "mobile")]
     #[command(about = "Static security analysis of Android APKs and iOS IPAs (lab/defense use only)", long_about = MOBILE_ABOUT)]
     Mobile(MobileArgs),
+
+    // --- Database pentesting operations (standalone defense-lab) ---
+    #[cfg(feature = "db-pentest")]
+    #[command(subcommand, about = "Database pentesting (direct checks for authorized lab/defense instances only)", long_about = DB_PENTEST_ABOUT)]
+    Db(DbCommand),
 
     // --- gRPC server ---
     #[cfg(feature = "grpc-api")]

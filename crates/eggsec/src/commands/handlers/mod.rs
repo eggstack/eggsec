@@ -25,6 +25,8 @@ pub mod vuln;
 pub mod wireless;
 #[cfg(feature = "mobile")]
 pub mod mobile;
+#[cfg(feature = "db-pentest")]
+pub mod db_pentest;
 pub use config::*;
 pub use doctor::*;
 pub use explain::*;
@@ -65,6 +67,8 @@ pub use vuln::*;
 pub use wireless::*;
 #[cfg(feature = "mobile")]
 pub use mobile::*;
+#[cfg(feature = "db-pentest")]
+pub use db_pentest::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -442,6 +446,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Wireless(args)) => handle_wireless(ctx, args).await,
         #[cfg(feature = "mobile")]
         Some(Commands::Mobile(args)) => handle_mobile(ctx, args).await,
+        #[cfg(feature = "db-pentest")]
+        Some(Commands::Db(args)) => handle_db_pentest(ctx, args).await,
         #[cfg(feature = "headless-browser")]
         Some(Commands::Browser(args)) => handle_browser(ctx, args).await,
         #[cfg(feature = "grpc-api")]

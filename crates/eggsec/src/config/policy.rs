@@ -14,6 +14,7 @@ pub enum OperationRisk {
     StressTest,
     RawPacket,
     CredentialTesting,
+    DbPentest,
     ExploitAdjacent,
     RemoteExecution,
     AgentAutonomous,
@@ -43,6 +44,11 @@ pub struct ExecutionPolicy {
 
     #[serde(default)]
     pub allow_credential_testing: bool,
+
+    /// Allow direct database pentesting operations (Postgres/MySQL lab checks).
+    /// Standalone defense-lab only; requires explicit --allow-db-pentest for non-dry runs.
+    #[serde(default)]
+    pub allow_db_pentesting: bool,
 
     #[serde(default)]
     pub allow_remote_execution: bool,
@@ -82,6 +88,7 @@ impl Default for ExecutionPolicy {
             allow_stress_testing: false,
             allow_raw_packets: false,
             allow_credential_testing: false,
+            allow_db_pentesting: false,
             allow_exploit_adjacent: false,
             allow_remote_execution: false,
             allow_agent_autonomous: false,
@@ -102,6 +109,7 @@ impl OperationRisk {
             Self::StressTest => policy.allow_stress_testing,
             Self::RawPacket => policy.allow_raw_packets,
             Self::CredentialTesting => policy.allow_credential_testing,
+            Self::DbPentest => policy.allow_db_pentesting,
             Self::ExploitAdjacent => policy.allow_exploit_adjacent,
             Self::RemoteExecution => policy.allow_remote_execution,
             Self::AgentAutonomous => policy.allow_agent_autonomous,
@@ -119,6 +127,7 @@ impl std::fmt::Display for OperationRisk {
             Self::StressTest => write!(f, "stress testing"),
             Self::RawPacket => write!(f, "raw packet"),
             Self::CredentialTesting => write!(f, "credential testing"),
+            Self::DbPentest => write!(f, "db pentest"),
             Self::ExploitAdjacent => write!(f, "exploit adjacent"),
             Self::RemoteExecution => write!(f, "remote execution"),
             Self::AgentAutonomous => write!(f, "agent autonomous"),

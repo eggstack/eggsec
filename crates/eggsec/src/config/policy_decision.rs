@@ -277,6 +277,7 @@ pub struct ManualOverride {
     pub allow_out_of_scope: bool,
     pub allow_explicit_exclusion: bool,
     pub allow_high_risk: bool,
+    pub allow_db_pentest: bool,
     pub allow_nonbaseline_capability: bool,
     pub allow_private_resolution: bool,
     pub allow_cross_host_redirect: bool,
@@ -297,7 +298,7 @@ impl ManualOverride {
             ConfirmationClass::PrivateResolution => self.allow_private_resolution,
             ConfirmationClass::CrossHostRedirect => self.allow_cross_host_redirect,
             ConfirmationClass::ExplicitExclusion => self.allow_explicit_exclusion,
-            ConfirmationClass::HighRisk => self.allow_high_risk,
+            ConfirmationClass::HighRisk => self.allow_high_risk || self.allow_db_pentest,
             ConfirmationClass::NonBaselineCapability => self.allow_nonbaseline_capability,
         }
     }
@@ -911,6 +912,7 @@ pub fn confirmation_classes_for(
             | OperationRisk::StressTest
             | OperationRisk::RawPacket
             | OperationRisk::CredentialTesting
+            | OperationRisk::DbPentest
             | OperationRisk::ExploitAdjacent
             | OperationRisk::RemoteExecution
     ) {

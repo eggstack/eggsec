@@ -180,6 +180,9 @@ mod mobile {
     // is only compiled when the `mobile` feature is enabled.
 }
 
+#[cfg(feature = "db-pentest")]
+pub mod db_pentest;
+
 pub use config::{load_config, load_scope, EggsecConfig, Scope};
 pub use error::{EggsecError, Result};
 pub use types::Severity;

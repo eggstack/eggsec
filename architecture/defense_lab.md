@@ -56,6 +56,17 @@ Defense-lab profiles target these categories:
 | **Rate-limit/tarpit behavior** | Rate detection, slowloris patterns, connection exhaustion |
 | **Load-bearing validation** | Concurrency scaling, connection pool behavior, timeout thresholds |
 
+### Dedicated Lab Loadouts (Standalone Defense-Lab Surfaces)
+
+In addition to the core probe categories above, Eggsec provides several dedicated standalone defense-lab surfaces that follow the same policy + dry-run + optional reporting bridge pattern (all under `DefenseLab` mode, MCP/agent exposure intentionally absent in the current phase, no `ScanProfile` pipeline participation):
+
+- **db-pentest** (`eggsec db pentest ...`, feature `db-pentest`): Direct Postgres/MySQL (Phase 1) lab checks (connection/auth, bounded enum, misconfigs, version/CVE). Risk tier `DbPentest` (real) / `SafeActive` (dry-run). Requires `--allow-db-pentest` for non-dry runs. Native `DbPentestReport` + `to_scan_report_data_db` bridge (auto in `report convert`). See `architecture/database_pentest.md` and `plans/database-pentesting-phase1-foundation-handoff-plan.md`.
+- **wireless-active** (`eggsec wireless <iface> deauth ...`, feature `wireless-advanced`): Active deauth/disassoc frame injection (lab-only). Risk `Intrusive` (live) / `SafeActive` (dry-run via `-d`). Native results + `to_active_scan_report_data` bridge (auto in `report convert`). See `architecture/wireless.md`.
+- **mobile-dynamic** (`eggsec mobile dynamic ...`, feature `mobile-dynamic`): Android runtime testing (ADB + logs + Phase 2 proxy/permissions/correlation + Phase 3 Frida). Risk `SafeActive` (dry) / `Intrusive` (real + `--allow-frida`). Native `DynamicMobileReport` + `to_scan_report_data_dynamic` bridge (auto in `report convert`). See `architecture/mobile.md`.
+- **auth-test** (`eggsec auth-test ...`): Credential control validation (brute, lockout, MFA, timing). Local `Auth*` types only (no bridge, distinct from pipeline `ScanProfile::Auth`). Risk `CredentialTesting`. See `architecture/auth.md`.
+
+These are intentionally lightweight, opt-in, standalone CLI surfaces (with optional TUI for some) designed for repeatable lab/regression use on assets you control. All use central `EnforcementContext::evaluate()` + explicit allow flags + dry-run safety. Reporting unification is via optional bridges only (not full pipeline integration). See AGENTS.md (standalone defense-lab surfaces note), `architecture/cli_commands.md` (Special Cases), `docs/USAGE.md` (Output Models), and the per-module architecture docs.
+
 ## Safety Model
 
 Defense-lab mode enforces strict safety boundaries:

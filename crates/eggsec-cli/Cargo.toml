@@ -51,10 +51,13 @@ git-secrets = ["eggsec/git-secrets"]
 pdf = ["eggsec/pdf"]
 api-schema = ["eggsec/api-schema"]
 insecure-tls = ["eggsec/insecure-tls"]
-full = [
+  full = [
     "eggsec/full",
     "eggsec-tui/full",
     "mobile",
     "mobile-dynamic",
     "wireless-advanced",
-]
+    "db-pentest",
+  ]
+
+  db-pentest = ["eggsec/db-pentest"]

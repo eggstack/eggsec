@@ -181,7 +181,7 @@ optional = true
 [dependencies.sqlx]
 version = "0.8"
 optional = true
-features = ["runtime-tokio", "postgres", "macros", "chrono"]
+features = ["runtime-tokio", "postgres", "mysql", "macros", "chrono"]
 
 [dependencies.kube]
 version = "0.92"
@@ -274,7 +274,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic"]
+  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
@@ -287,6 +287,11 @@ headless-browser = ["headless_chrome"]
 
 # Database storage for findings and scan history
 database = ["sqlx"]
+
+# Database pentesting loadout (direct Postgres/MySQL checks for authorized lab/defense use only).
+# Standalone defense-lab surface (no TUI/pipeline/MCP/agent in Phase 1); heavily gated by policy + --allow-db-pentest + dry-run support.
+# Phase 1: foundations, Postgres primary + MySQL secondary, manifest, safety, CLI, bridge.
+db-pentest = ["sqlx"]
 
 # Kubernetes container security scanning
 container = ["kube", "k8s-openapi"]
