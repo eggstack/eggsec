@@ -197,7 +197,19 @@ features = ["v1_30"]
 version = "0.7"
 optional = true
 
-
+# tiberius (pure-Rust TDS for MSSQL) is prepared behind the marker feature `db-pentest-mssql-tiberius`.
+# The marker is declared in [features] (no-op until enabled). When both `db-pentest` and the marker
+# are enabled, the real client code in db_pentest/mssql.rs is compiled. Until then, mssql targets
+# always use the rich synthetic dry-run population (full report/bridge parity, no dep pull).
+# To activate the real driver (in an env where the dep resolves):
+#   cargo ... --features db-pentest,db-pentest-mssql-tiberius
+# Then uncomment the block below.
+#
+# [dependencies.tiberius]
+# version = "0.12"
+# optional = true
+# default-features = false
+# features = ["tokio", "rustls"]
 
 [dependencies.cyclonedx-bom]
 version = "0.8"
@@ -288,10 +300,15 @@ headless-browser = ["headless_chrome"]
 # Database storage for findings and scan history
 database = ["sqlx"]
 
-# Database pentesting loadout (direct Postgres/MySQL checks for authorized lab/defense use only).
-# Standalone defense-lab surface (no TUI/pipeline/MCP/agent in Phase 1); heavily gated by policy + --allow-db-pentest + dry-run support.
+# Database pentesting loadout (direct Postgres/MySQL/MSSQL checks for authorized lab/defense use only).
+# Standalone defense-lab surface (no TUI/pipeline/MCP/agent in Phase 1/2); heavily gated by policy + --allow-db-pentest + dry-run support.
 # Phase 1: foundations, Postgres primary + MySQL secondary, manifest, safety, CLI, bridge.
+# Phase 2: MSSQL support prepared (tiberius real driver behind marker `db-pentest-mssql-tiberius`); richer cross-DB checks + polish.
+# The marker is a no-op feature declaration. Enabling it + `db-pentest` activates the tiberius path in mssql.rs.
+# Dry-run + categories + bridge for mssql are always exercised (synthetic) regardless of the marker, so tests/CI
+# stay green without forcing heavy transitive deps in every environment.
 db-pentest = ["sqlx"]
+db-pentest-mssql-tiberius = []
 
 # Kubernetes container security scanning
 container = ["kube", "k8s-openapi"]
