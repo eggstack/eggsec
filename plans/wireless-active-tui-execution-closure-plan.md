@@ -86,10 +86,9 @@ pub fn start_active_attack(&mut self) {
 
         // NEW: Build and submit task
         if let Some(task_config) = self.build_task_config() {
-            // Submit via existing TaskBuilder / task management system
-            // Example pattern (adjust to actual API):
-            // let task = TaskBuilder::new(task_config).build();
-            // submit_task(task);
+            // (Stale plan assumption — TaskBuilder pattern never implemented;
+            //  real path was existing runner match + security worker + state_update routing.
+            //  See full resolution note at top of this file and the final-wiring plan.)
         }
     }
 }

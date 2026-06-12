@@ -369,14 +369,11 @@ impl WirelessTab {
             self.active_results = None;
             self.results_view.clear();
             self.error = None;
-
-            // Submit WirelessActive task for execution via the task management system.
-            // This connects the TUI to the worker that will call run_deauth().
-            if let Some(task_config) = self.build_task_config() {
-                let _task = crate::app::task_management::TaskBuilder::new(task_config).build();
-                // The task system routes WirelessActive tasks to the appropriate handler,
-                // which executes the deauth and reports results back via set_active_results().
-            }
+            // NOTE: UI state only. For direct_launch tabs, App::handle_enter()
+            // detects the running state, calls build_current_task() (which uses
+            // the TaskBuilder trait impl to produce WirelessActive), evaluates
+            // policy via EnforcementContext, and spawns the TaskRunner if allowed.
+            // Results are delivered centrally via state_update.rs -> set_active_results().
         }
     }
 
@@ -463,10 +460,19 @@ impl TabRender for WirelessTab {
 
         let input_block = Block::default()
             .borders(Borders::ALL)
-            .title(if cfg!(feature = "wireless-advanced") && self.active_mode {
-                " Wireless Scan + Active Attack Configuration "
-            } else {
-                " Wireless Scan Configuration "
+            .title({
+                #[cfg(feature = "wireless-advanced")]
+                {
+                    if self.active_mode {
+                        " Wireless Scan + Active Attack Configuration "
+                    } else {
+                        " Wireless Scan Configuration "
+                    }
+                }
+                #[cfg(not(feature = "wireless-advanced"))]
+                {
+                    " Wireless Scan Configuration "
+                }
             })
             .border_style(
                 Style::default().fg(if self.focus_area == WirelessFocusArea::Inputs {
@@ -990,7 +996,7 @@ mod tests {
                 assert_eq!(rate_limit, 10);
                 assert!(dry_run);
             }
-            _ => panic!("expected WirelessActive task config");
+            _ => panic!("expected WirelessActive task config"),
         }
     }
 
@@ -1087,5 +1093,67 @@ mod tests {
         tab.handle_enter();
         assert_eq!(tab.state, AppState::Idle);
         assert!(!tab.active_inputs.is_focused());
+    }
+
+    #[test]
+    fn test_e2e_active_flow_handle_enter_build_task_set_results() {
+        use crate::app::task_management::TaskBuilder;
+        use eggsec::wireless::active::ActiveWirelessAttackResult;
+
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "wlan0".to_string();
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        tab.dry_run = true;
+        tab.focus_area = WirelessFocusArea::ActiveConfig;
+        tab.active_inputs.blur();
+
+        tab.handle_enter();
+        assert_eq!(tab.state, AppState::Running);
+        assert!(tab.active_results.is_none());
+        assert!(tab.results_view.is_empty());
+
+        let task = tab.build_task_config().expect("task config present");
+        match task {
+            crate::workers::TaskConfig::WirelessActive {
+                interface,
+                attack_type,
+                bssid,
+                client,
+                frame_count,
+                rate_limit,
+                dry_run,
+            } => {
+                assert_eq!(interface, "wlan0");
+                assert_eq!(attack_type, "deauth");
+                assert_eq!(bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
+                assert!(client.is_none());
+                assert_eq!(frame_count, 100);
+                assert_eq!(rate_limit, 10);
+                assert!(dry_run);
+            }
+            _ => panic!("expected WirelessActive"),
+        }
+
+        let result = ActiveWirelessAttackResult {
+            interface: "wlan0".to_string(),
+            attack_type: "deauth".to_string(),
+            target_bssid: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            target_client: None,
+            frames_sent: 100,
+            duration_secs: 5,
+            dry_run: true,
+            findings: vec![],
+            raw_output: None,
+            recommendations: vec!["Enable 802.11w".to_string()],
+        };
+        tab.set_active_results(result);
+
+        assert_eq!(tab.state, AppState::Completed);
+        assert!(tab.active_results.is_some());
+        let content = tab.results_view.get_content();
+        assert!(content.contains("Active Attack: deauth"));
+        assert!(content.contains("Dry Run: true"));
+        assert!(content.contains("Frames Sent: 100"));
     }
 }

@@ -90,7 +90,7 @@ Execution flow (mirrors Auth/Stress/Packet):
 4. The worker `run_wireless_active_task` (`workers/security.rs:865-927`) parses MACs, builds an `ActiveAttackConfig` with hard budgets (`max_frames ≤ 1000`, `frames_per_second ≤ 100`), and dispatches `run_deauth` (default) or `run_disassoc`.
 5. Result returns via `TaskResult::WirelessActive(result)` → `WirelessTab::set_active_results()` (`app/state_update.rs:418-422`), which transitions the tab to `AppState::Completed` and renders the findings, evidence, and recommendations.
 
-TabSpec (`tabs/spec.rs:427-439`) declares `direct_launch: true` and `risk_group: TabRiskGroup::SafeActive` (overridden at descriptor construction time to `Intrusive` for live attacks). 12 unit tests under `tabs/wireless::tests` (under `wireless-advanced`) cover mode toggling, dry-run flipping, config validation, task-config construction, `set_active_results`, and `handle_enter` flows.
+TabSpec (`tabs/spec.rs:427-439`) declares `direct_launch: true` and `risk_group: TabRiskGroup::SafeActive` (overridden at descriptor construction time to `Intrusive` for live attacks). 12 unit tests under `tabs/wireless::tests` (under `wireless-advanced`) cover mode toggling, dry-run flipping, config validation, task-config construction, `set_active_results`, and `handle_enter` flows. (See also resolution of `plans/wireless-active-tui-final-wiring-and-polish-plan.md` (2026-06-12) for E2E test addition and removed-artifact cleanup.)
 
 ### TabInput Interface (27 methods)
 
