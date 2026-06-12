@@ -138,7 +138,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`mobile/`](../crates/eggsec/src/mobile/) | Static analysis of Android APKs and iOS IPAs (Phase 1: pure-Rust manifest/config findings; SafeActive; standalone CLI + optional report bridge) | [mobile.md](mobile.md) |
+| [`mobile/`](../crates/eggsec/src/mobile/) | Static analysis of Android APKs and iOS IPAs (Phase 1: pure-Rust manifest/config findings; SafeActive; standalone CLI + optional report bridge). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. | [mobile.md](mobile.md) |
 
 ### Integration & External Services
 
@@ -173,7 +173,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`auth_context/`](../crates/eggsec/src/auth_context/) | Auth context YAML parsing with env var interpolation | [auth_context.md](auth_context.md) |
 | [`generated/`](../crates/eggsec/src/generated/) | Auto-generated protobuf code | [generated.md](generated.md) |
 | [`wireless/`](../crates/eggsec/src/wireless/) | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition) + active deauth/disassoc (Phase 1 complete 2026-06-12, under `wireless-advanced`; lab-only, requires `--allow-active-wireless`) | [wireless.md](wireless.md) |
-| `mobile/` | Static analysis of Android APKs / iOS IPAs (Phase 1: pure-Rust manifest/config; SafeActive; standalone CLI + report bridge) | [mobile.md](mobile.md) |
+| `mobile/` | Static analysis of Android APKs / iOS IPAs (Phase 1: pure-Rust manifest/config; SafeActive; standalone CLI + report bridge). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. | [mobile.md](mobile.md) |
 
 ---
 
@@ -417,9 +417,9 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `vuln-management` | `vuln/` | Vulnerability triage |
 | `wireless` | `wireless/` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat/--known-good/--dry-run/--detect-suspicious; WPS/hidden/transition). **Passive = Phase 0 (2026-06-11)**; active gated by `wireless-advanced` (see `plans/wireless-active-attacks-loadout-design-plan.md`). |
 | `wireless-advanced` | `wireless/active/` | Active WiFi attacks (deauth/disassoc frame crafting + injection). Lab-only (`--allow-active-wireless`); Phase 1 complete 2026-06-12. |
-| `mobile` | `mobile/` | Static analysis of Android APKs and iOS IPAs (marker-only; zip/plist optional; pure-Rust Phase 1) |
+| `mobile` | `mobile/` | Static analysis of Android APKs and iOS IPAs (marker-only; zip/plist optional; pure-Rust Phase 1). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
 | `pdf` | `output/pdf` | PDF report generation |
-| `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only) |
+| `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
 | `full` | All | All features combined |
 
 See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.

@@ -32,6 +32,6 @@ cargo clippy --lib -p eggsec --features mobile
 
 ## Related
 
-See `architecture/defense_lab.md`, wireless module (similar standalone defense-lab + bridge pattern), `commands/handlers/mobile.rs`, `cli/mobile.rs`, and the mobile section in `AGENTS.md` (Key Types, Feature Flags, Security Notes).
+See `architecture/defense_lab.md`, wireless module (similar standalone defense-lab + bridge pattern), `commands/handlers/mobile.rs`, `cli/mobile.rs`, and the mobile section in `AGENTS.md` (Key Types, Feature Flags, Security Notes). Dynamic loadout design in root `plans/dynamic-mobile-testing-loadout-design-plan.md` (mirrors wireless active; Phase 0 2026-06-12).
 
-Phase 1 closed 2026-06-11 (final-closeout-plan executed: CAPABILITIES entry verified, policy enforcement confirmed in handler, finding quality review passed, 2 edge-case tests added, clippy hygiene fix, all tests/check/build green under --features mobile, docs consistency pass across README/AGENTS/architecture). Module is stable for Phase 1 scope.
+Phase 1 closed 2026-06-11 (final-closeout-plan executed: CAPABILITIES entry verified, policy enforcement confirmed in handler, finding quality review passed, 2 edge-case tests added, clippy hygiene fix, all tests/check/build green under --features mobile, docs consistency pass across README/AGENTS/architecture). Module is stable for Phase 1 scope. Dynamic future per the design plan.

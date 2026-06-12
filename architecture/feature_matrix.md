@@ -41,7 +41,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
 | `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition/rogue heuristic). **Passive Phase 0 (2026-06-11)**; active phases gated by `wireless-advanced` per `plans/wireless-active-attacks-loadout-design-plan.md`. |
 | `wireless-advanced` | yes | yes (`wireless`) | - | `wireless/active/` | Stable | `cargo check -p eggsec --features wireless-advanced` (active deauth/disassoc under `wireless <iface> deauth`; lab-only, requires `--allow-active-wireless`, monitor-mode interface, root/CAP_NET_ADMIN; dry-run default; policy gate `Intrusive` + `wireless-advanced` feature; TUI active mode with the same task/confirmation flow). **Phase 1 complete 2026-06-12**; Phase 2+ (handshake capture, etc.) per `plans/wireless-active-attacks-loadout-design-plan.md`. Not included in `full`. |
-| `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` |
+| `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` **Static Phase 1 complete 2026-06-11**; dynamic loadout design per `plans/dynamic-mobile-testing-loadout-design-plan.md` (gated `mobile-dynamic`; like wireless active). |
 | `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |
 | `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p eggsec --features api-schema` |
 | `full` | yes | yes | - | (all) | Deprecated | `cargo check -p eggsec --features full` |
@@ -80,7 +80,7 @@ full WebSocket pub/sub support.
 ### Marker-only features
 
 Features like `advanced-hunting`, `compliance`, `external-integrations`,
-`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, and `mobile`
+`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, and `mobile` (dynamic per `plans/dynamic-mobile-testing-loadout-design-plan.md`)
 have no extra runtime dependencies beyond optional crates (`zip`/`plist` for `mobile`).
 They gate module compilation via `#[cfg(feature = "...")]` in `lib.rs`.
 

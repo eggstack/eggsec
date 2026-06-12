@@ -118,9 +118,13 @@ The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | 
 - iOS analysis is IPA-bundle only (no .app bundles or xcarchives directly).
 - No TUI tab in this phase (CLI primary).
 
+## Dynamic Testing Phases
+
+Dynamic loadout design (gated `mobile-dynamic` feature for ADB/logcat/proxy/Frida etc. under strict lab policy) is in `plans/dynamic-mobile-testing-loadout-design-plan.md` (Phase 0 complete 2026-06-12; standalone defense-lab surface; MCP/agent tool exposure intentionally absent; mirrors `plans/wireless-active-attacks-loadout-design-plan.md` pattern). Implementation pending.
+
 ## Recommendations
 
-- **Lab workflow**: Build your own debug/test variants with known provenance (e.g. from CI with signing disabled only in isolated jobs). Run `eggsec mobile` as an early static gate before any dynamic work.
+- **Lab workflow**: Build your own debug/test variants with known provenance (e.g. from CI with signing disabled only in isolated jobs). Run `eggsec mobile` as an early static gate before any dynamic work (see `plans/dynamic-mobile-testing-loadout-design-plan.md`).
 - Combine with:
   - SAST / dependency scanners (e.g. for full SDK enumeration)
   - Manual code review of high-risk flows
@@ -144,7 +148,7 @@ The feature must be present at compile time. `EnforcementContext` (CLI `ManualPe
 ## Future
 
 - **Phase 2**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
-- **Phase 3**: Optional pipeline integration (`mobile-static` / `mobile-regression` profiles), combined web+mobile backend testing, and gated dynamic capabilities (Frida-based instrumentation behind additional safety + capability flags and explicit lab authorization).
+- **Dynamic phases (future)**: Gated dynamic capabilities (Frida-based instrumentation etc.) per `plans/dynamic-mobile-testing-loadout-design-plan.md` (heavily policy-gated; `mobile-dynamic` feature; explicit lab authorization + budgets; optional extended `to_scan_report_data` bridge with `mobile-dynamic-*` categories). Phase 1 static complete 2026-06-11.
 - Architecture document: `architecture/mobile.md`.
 - TUI tab and broader `ScanProfile` support in later phases.
 
@@ -178,6 +182,7 @@ pub fn to_scan_report_data(result: &MobileScanReport) -> ScanReportData { ... }
 ```
 
 See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` for full definitions and analyzers. Historical plan: `plans/mobile-first-handoff-plan.md`.
+- Dynamic design plan: `plans/dynamic-mobile-testing-loadout-design-plan.md` (2026-06-12).
 
 ## Example Output (Human, abbreviated)
 

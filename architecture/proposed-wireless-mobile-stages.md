@@ -1,6 +1,6 @@
 # Proposed: Thin Optional Pipeline Stages for Wireless and Mobile
 
-**Note**: Superseded for wireless by passive standalone completion (2026-06-11) and `plans/wireless-active-attacks-loadout-design-plan.md` (active phases; standalone defense-lab preserved; no pipeline stages in current round).
+**Note**: Superseded for wireless by passive standalone completion (2026-06-11) and `plans/wireless-active-attacks-loadout-design-plan.md` (active phases; standalone defense-lab preserved; no pipeline stages in current round); mobile dynamic design in `plans/dynamic-mobile-testing-loadout-design-plan.md`.
 
 **Context**: During the 2026-06-11 integration work (see `plans/integration-work-plan.md`), we strengthened the optional `to_scan_report_data` reporting bridges for the two standalone defense-lab modules (`wireless` and `mobile`) and documented the "standalone + optional bridge" design. Priority 3 of that plan asked for a short design note evaluating whether to add thin, optional `ScanProfile` stages (`WirelessAnalysis`, `MobileStatic`) before committing to (or rejecting) full pipeline integration.
 

@@ -32,7 +32,7 @@ Standalone static security analysis of Android APKs and iOS IPAs for authorized 
 
 ## Status
 
-Phase 1 static-only (pure-Rust, SafeActive, standalone CLI + optional report bridge). No dynamic capabilities, no Frida, no TUI tab, no pipeline profile integration (`mobile-static` / `mobile-regression` are aspirational). Phase 1 closed as complete standalone capability on 2026-06-11.
+Phase 1 static-only (pure-Rust, SafeActive, standalone CLI + optional report bridge). No dynamic capabilities, no Frida, no TUI tab, no pipeline profile integration (`mobile-static` / `mobile-regression` are aspirational). Phase 1 closed as complete standalone capability on 2026-06-11. Dynamic testing loadout design in `plans/dynamic-mobile-testing-loadout-design-plan.md` (gated by `mobile-dynamic`; same standalone defense-lab + MCP-absent pattern as wireless-active; Phase 0 complete 2026-06-12).
 
 See `docs/MOBILE.md`.
 
@@ -46,7 +46,7 @@ The `report convert` handler auto-bridges native `MobileScanReport` JSON when th
 
 Categories in bridged output are `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`, `mobile-android-permission`, `mobile-ios-secret`) to preserve the original finding category signal while satisfying the platform prefix requirement. Evidence carries through (e.g. permission name like "READ_SMS", manifest key like "debuggable=true", secret pattern like "assets/config.json: ...api_key=..."); empty findings are valid (0 findings in bridge).
 
-**Design decision (Phase 1 close 2026-06-11)**: Standalone CLI-only (no TUI, no pipeline stages/profiles); optional bridge provides reporting unification without forcing `ScanProfile` integration (`mobile-static`/`mobile-regression` remain aspirational per `architecture/defense_lab.md` Future). Use native types for lab-specific flows; use bridge (or `report convert` on native JSON) for unified report consumers. Integration is lightweight and opt-in.
+**Design decision (Phase 1 close 2026-06-11)**: Standalone CLI-only (no TUI, no pipeline stages/profiles); optional bridge provides reporting unification without forcing `ScanProfile` integration (`mobile-static`/`mobile-regression` remain aspirational per `architecture/defense_lab.md` Future). Use native types for lab-specific flows; use bridge (or `report convert` on native JSON) for unified report consumers. Integration is lightweight and opt-in. Dynamic per `plans/dynamic-mobile-testing-loadout-design-plan.md`.
 
 Integration points:
 - Enforcement: `CommandContext::evaluate_and_enforce_operation` (OperationMode::StandardAssessment, OperationRisk::SafeActive, required_features: ["mobile"]).
@@ -57,3 +57,7 @@ Integration points:
 Safety model: Lab/defense use only. Requires user-provided test builds (no internet fetch). Explicit provenance note. Bounded, offline, no side effects. All operations under central `EnforcementContext`.
 
 See `crates/eggsec/src/mobile/`, `crates/eggsec/src/commands/handlers/mobile.rs`, and `crates/eggsec/Cargo.toml:310`.
+
+## Future
+
+See `plans/dynamic-mobile-testing-loadout-design-plan.md` for dynamic phases.
