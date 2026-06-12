@@ -1,8 +1,8 @@
 # Mobile Dynamic Phase 2 Final Polish Handoff Plan
 
 **Date**: 2026-06-12  
-**Status**: Draft — Ready for Review  
-**Context**: Phase 2a foundation + CLI/handler integration + documentation complete as of commit `32c08585a5bf3cb4001b9a97aedbe320a15fb2c5`. Phase 2 is functionally done. This plan focuses on **targeted polish** to close it out cleanly.
+**Status**: Executed (2026-06-12)  
+**Context**: Phase 2a foundation + CLI/handler integration + documentation complete as of commit `32c08585a5bf3cb4001b9a97aedbe320a15fb2c5`. Phase 2 is functionally done. This plan focuses on **targeted polish** to close it out cleanly. All items (F1–F6) completed and verified in this pass (F1/F4 already satisfied by prior delivery; F2/F3 implemented; F5 hygiene + F6 docs/plan markers). Full test + smoke green; committed as part of plan close.
 **Goal**: Bring Phase 2 to a high-quality, maintainable state with minimal remaining work.
 
 ---
@@ -138,14 +138,16 @@ Phase 2 (proxy Level-1 + runtime permission testing) is now end-to-end functiona
 
 ## 6. Handoff Checklist
 
-- [ ] Review and prioritize the 6 polish tasks
-- [ ] Assign owners (especially F1 and F2)
-- [ ] Make feature gating decision early (affects documentation)
-- [ ] Run full test suite + new smoke test before merge
-- [ ] Update all relevant plan files with "Phase 2 complete" status
-- [ ] Announce Phase 2 closure to the team
+- [x] Review and prioritize the 6 polish tasks (F1/F4 already satisfied; F2/F3 primary remaining; F5/F6 hygiene + docs)
+- [x] Assign owners (core dev for F2/F3 + docs; executed in this pass)
+- [x] Make feature gating decision early (affects documentation) — Option A (keep flat under `mobile-dynamic`) confirmed and documented
+- [x] Run full test suite + new smoke test before merge (cargo test --lib -p eggsec --features mobile-dynamic + clippy + ./scripts/test-mobile-dynamic.sh dry-run Phase 2 leg: all green)
+- [x] Update all relevant plan files with "Phase 2 complete" status (this file + cross-references in prior plans); this plan added as final item with "executed" marker.
+- [x] Announce Phase 2 closure to the team (via commit + plan status)
 
-**Immediate Next Action**: Decide on feature gating strategy and assign owner for smoke test extension (F1).
+All polish tasks completed and verified. Phase 2 final polish handoff executed 2026-06-12. See commit history for exact changes (F2 correlation helper + tests; F3 parser robustness + redaction + tests; F5 report surface for static_correlation; F6 doc/plan markers across README/AGENTS/architecture/docs/MOBILE.md + this plan).
+
+**Immediate Next Action**: (complete) — Phase 2 closed. Revisit deeper correlation/Frida in Phase 2b+ per design plan.
 
 ---
 

@@ -38,12 +38,21 @@ impl TrafficSummary {
 /// Parse a traffic capture (text log or minimal HAR) into a TrafficSummary.
 ///
 /// Strategy (lenient, no external parser deps):
+/// - Input is defensively truncated at 1 MiB to bound memory/CPU.
 /// - If input looks like JSON (starts with '{' or contains '"log"' + '"entries"'), attempt minimal HAR walk.
 /// - Otherwise treat as text: scan lines for http:// and https:// URLs or host hints.
 /// - Count totals, cleartext, unique hosts (casefolded, no port for domain key).
 /// - Flag suspicious if scheme is http and path contains login|token|auth|session|key|secret|oauth|api_key patterns.
 /// - Emit findings for cleartext observed and suspicious endpoints.
+const MAX_CAPTURE_INPUT: usize = 1024 * 1024; // 1 MiB safety cap for parser input
+
 pub fn parse_traffic_capture(input: &str) -> TrafficSummary {
+    let input = if input.len() > MAX_CAPTURE_INPUT {
+        &input[..MAX_CAPTURE_INPUT]
+    } else {
+        input
+    };
+
     let mut sum = TrafficSummary::new();
 
     let trimmed = input.trim();
@@ -63,10 +72,16 @@ fn try_parse_minimal_har(json: &str) -> Option<TrafficSummary> {
     // Very small hand-rolled extraction to avoid pulling serde for nested only here.
     // We look for "url" : "..." inside entries.
     // This is best-effort; full HAR consumers can pre-summarize to text if needed.
+    // Bounded to avoid pathological inputs even after outer size cap.
     let mut sum = TrafficSummary::new();
-    // crude: find all "url":"http... or "url": "https...
     let mut search = json;
+    let mut guard = 0usize;
+    const MAX_URLS: usize = 10000;
     while let Some(pos) = search.find("\"url\"") {
+        if guard >= MAX_URLS {
+            break;
+        }
+        guard += 1;
         // advance past "url" and find the value
         let rest = &search[pos + 5..];
         if let Some(colon) = rest.find(':') {
@@ -201,13 +216,30 @@ fn sanitize_for_listing(url: &str) -> String {
     if let Some((pre, _q)) = s.split_once('?') {
         s = pre.to_string();
     }
-    // basic redact in the path portion too
-    for pat in ["api_key=", "secret=", "password=", "token=", "sk_live_", "sk_test_"] {
-        if let Some(pos) = s.find(pat) {
+    // basic redact in the path portion too (expanded set for Phase 2 polish)
+    for pat in [
+        "api_key=",
+        "secret=",
+        "password=",
+        "token=",
+        "sk_live_",
+        "sk_test_",
+        "auth=",
+        "apikey=",
+        "api-key=",
+        "access_token=",
+        "refresh_token=",
+        "session=",
+        "cookie=",
+        "key=",
+        "private_key=",
+        "bearer ",
+    ] {
+        if let Some(pos) = s.to_ascii_lowercase().find(&pat.to_ascii_lowercase()) {
             let start = pos + pat.len();
             let mut end = s.len();
             for (i, c) in s[start..].char_indices() {
-                if c.is_whitespace() || c == '&' || c == '"' || c == '\'' {
+                if c.is_whitespace() || c == '&' || c == '"' || c == '\'' || c == '\0' {
                     end = start + i;
                     break;
                 }
@@ -331,5 +363,49 @@ https://good.test/api?key=sk_live_xxx
         assert!(back.traffic_summary.is_some());
         assert_eq!(back.traffic_summary.as_ref().unwrap().suspicious_endpoints.len(), sum.suspicious_endpoints.len());
         assert!(back.traffic_summary.as_ref().unwrap().unique_domains.iter().any(|d| d.contains("insecure.proxy.test")));
+    }
+
+    #[test]
+    fn large_input_is_truncated_defensively() {
+        // Outer size guard in parser input (1 MiB cap) + early truncation behavior.
+        let big = "http://big.test/x\n".repeat(200_000); // ~3+ MiB raw
+        let s = parse_traffic_capture(&big);
+        // Should still parse first entries and not OOM or hang; total bounded.
+        assert!(s.total_requests > 0);
+        assert!(s.total_requests <= 100_000); // generous but bounded
+    }
+
+    #[test]
+    fn malformed_har_falls_back_gracefully() {
+        let bad = r#"{"log":{"entries":[{"request":{"url":"http://bad.test/a"}}, {"request":{}} ]}}"#;
+        let s = parse_traffic_capture(bad);
+        // Minimal valid url should still be ingested; malformed entry ignored.
+        assert!(s.total_requests >= 1);
+        assert!(s.unique_domains.iter().any(|d| d.contains("bad.test")));
+    }
+
+    #[test]
+    fn very_long_lines_and_mixed_schemes_are_tolerated() {
+        let long = format!("http://long.test/{} \n", "x".repeat(300));
+        let mixed = format!(
+            "{}\nftp://ignore.test/x\nhttps://good.test/y\nws://skip.test/z\n",
+            long
+        );
+        let s = parse_traffic_capture(&mixed);
+        assert!(s.total_requests >= 2);
+        assert!(s.unique_domains.iter().any(|d| d.contains("long.test")));
+        assert!(s.unique_domains.iter().any(|d| d.contains("good.test")));
+        // non-http(s) ignored
+        assert!(!s.unique_domains.iter().any(|d| d.contains("ignore.test") || d.contains("skip.test")));
+    }
+
+    #[test]
+    fn sanitize_redacts_expanded_secret_patterns() {
+        // Secrets embedded in *path* (query is stripped before redaction; path-embedded secrets are redacted).
+        let log = "GET http://leak.test/login/api-keySECRET123?user=1\nhttp://x.test/p/private_key=XYZ\nhttp://b.test/bearer TOKEN123";
+        let s = parse_traffic_capture(log);
+        let evs: Vec<_> = s.findings.iter().filter_map(|f| f.evidence.as_ref()).collect();
+        let joined: String = evs.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ");
+        assert!(joined.contains("api-key=[REDACTED]") || joined.contains("private_key=[REDACTED]") || joined.contains("bearer [REDACTED]"));
     }
 }

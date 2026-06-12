@@ -262,9 +262,9 @@ See `config/policy_decision.rs`, `commands/handlers/mobile.rs`, and the dynamic 
 ## Future
 
 - **Phase 2 (static)**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
-- **Phase 2a (2026-06-12)**: Proxy foundation (device global `http_proxy` via `--proxy`; user-managed mitmproxy/CA; `--reset-proxy`; `--traffic-capture` for summary/findings) + runtime permission testing (`--grant-permission`/`--revoke-permission`/`--list-permissions`). `traffic_summary` + `permission_state` in report; bridge categories `mobile-dynamic-android-traffic-summary` etc. Level 1 pragmatic proxy integration. Phase 2a complete per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed). Still standalone defense-lab (MCP/agent absent; same pattern as wireless-active + static-mobile + auth-test). No TUI/pipeline/MCP.
-- **Phase 2b+ (future)**: Deeper correlation, Frida (gated `mobile-frida` + rooted + heavy policy), etc. per parent design plan.
-- Phase 1 dynamic (Android ADB + logcat) complete 2026-06-12. Phase 2a (proxy + permissions) complete 2026-06-12. See `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed), `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed), and `plans/dynamic-mobile-testing-loadout-design-plan.md`.
+- **Phase 2a (2026-06-12)**: Proxy foundation (device global `http_proxy` via `--proxy`; user-managed mitmproxy/CA; `--reset-proxy`; `--traffic-capture` for summary/findings) + runtime permission testing (`--grant-permission`/`--revoke-permission`/`--list-permissions`). `traffic_summary` + `permission_state` in report; bridge categories `mobile-dynamic-android-traffic-summary` etc. Level 1 pragmatic proxy integration. Phase 2a complete per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed; final polish per same plan executed 2026-06-12). Includes `correlate_findings` helper (populates `DynamicMobileFinding.static_correlation` for high-value overlaps: cleartext traffic ↔ static usesCleartextTraffic/network-config; runtime-perm ↔ static declared dangerous perms). Still standalone defense-lab (MCP/agent absent; same pattern as wireless-active + static-mobile + auth-test). No TUI/pipeline/MCP.
+- **Phase 2b+ (future)**: Deeper correlation (initial `correlate_findings` + `static_correlation` delivered in Phase 2 final polish), Frida (gated `mobile-frida` + rooted + heavy policy), etc. per parent design plan.
+- Phase 1 dynamic (Android ADB + logcat) complete 2026-06-12. Phase 2a (proxy + permissions) complete 2026-06-12 (final polish executed 2026-06-12 per `plans/mobile-dynamic-phase2-final-polish-handoff-plan.md`). See `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed), `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed), `plans/mobile-dynamic-phase2-final-polish-handoff-plan.md` (executed), and `plans/dynamic-mobile-testing-loadout-design-plan.md`.
 - Architecture document: `architecture/mobile.md`.
 - TUI tab and `ScanProfile` pipeline profiles (`mobile-static` / `mobile-regression` / dynamic variants) remain aspirational.
 - MCP/agent opt-in after security audit only (intentionally absent for standalone defense-lab surfaces).
@@ -297,6 +297,7 @@ pub struct DynamicMobileFinding {
     pub description: String,
     pub recommendation: String,
     pub evidence: Option<String>,
+    /// Populated by `correlate_findings` (Phase 2 final polish) for high-value static ↔ dynamic overlaps.
     pub static_correlation: Option<String>,
 }
 

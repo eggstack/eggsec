@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Instant;
 
-use super::MobilePlatform;
+use super::{MobileFinding, MobilePlatform};
 
 /// CLI args struct for the dynamic entry point (P1 skeleton; real CLI struct
 /// will live in cli/ and be mapped by handler in later integration).
@@ -92,8 +92,21 @@ pub struct DynamicMobileFinding {
     pub description: String,
     pub recommendation: String,
     pub evidence: Option<String>,
-    /// Optional link back to a static finding (future correlation).
+    /// Optional link back to a static finding (populated by correlate_findings for high-value overlaps
+    /// such as traffic-cleartext ↔ static usesCleartextTraffic/network-config, or runtime-permission
+    /// ↔ static declared dangerous permissions). Phase 2 polish.
     pub static_correlation: Option<String>,
+}
+
+/// Lightweight structured note from static ↔ dynamic correlation (Phase 2 polish).
+/// Returned by correlate_findings; the primary side-effect is populating
+/// DynamicMobileFinding.static_correlation for matched entries so they serialize
+/// into native reports and bridges.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CorrelatedFinding {
+    pub dynamic_category: String,
+    pub static_category: String,
+    pub note: String,
 }
 
 /// Full report from a dynamic mobile run (install/launch/observe/uninstall cycle).
@@ -581,6 +594,9 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
             if let Some(ref ev) = f.evidence {
                 buf.push_str(&format!("     Evidence: {}\n", ev));
             }
+            if let Some(ref corr) = f.static_correlation {
+                buf.push_str(&format!("     Static correlation: {}\n", corr));
+            }
             buf.push('\n');
         }
     }
@@ -619,31 +635,44 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
 
     // Phase 2: if report carries traffic_summary or permission_state, surface lightweight synthetic findings
     // so that bridged ScanReportData consumers see that extended data was collected (native report has the full structs).
+    // If any dynamic findings carry static_correlation (populated by correlate_findings), include a short note.
     let mut extra_findings: Vec<FindingData> = Vec::new();
+    let has_correlation = result
+        .findings
+        .iter()
+        .any(|f| f.static_correlation.is_some());
     if let Some(ref ts) = result.traffic_summary {
+        let mut desc = format!(
+            "requests={}, cleartext={}, domains={}, suspicious_endpoints={}",
+            ts.total_requests, ts.cleartext_requests, ts.unique_domains.len(), ts.suspicious_endpoints.len()
+        );
+        if has_correlation {
+            desc.push_str(" (static correlation present for some traffic findings)");
+        }
         extra_findings.push(FindingData {
             title: "Traffic summary captured during dynamic run".to_string(),
             severity: "info".to_string(),
             category: "mobile-dynamic-android-traffic-summary".to_string(),
-            description: format!(
-                "requests={}, cleartext={}, domains={}, suspicious_endpoints={}",
-                ts.total_requests, ts.cleartext_requests, ts.unique_domains.len(), ts.suspicious_endpoints.len()
-            ),
+            description: desc,
             location: result.target.clone(),
             evidence: None,
-            remediation: Some("Review traffic findings (cleartext, suspicious endpoints) in native JSON or human report for details.".to_string()),
+            remediation: Some("Review traffic findings (cleartext, suspicious endpoints) in native JSON or human report for details. Use correlate_findings for static ↔ dynamic linkage.".to_string()),
             cwe_ids: Vec::new(),
         });
     }
     if result.permission_state.is_some() {
+        let mut desc = "Permission snapshot (grants/revokes/list) recorded during dynamic run.".to_string();
+        if has_correlation {
+            desc.push_str(" (static correlation present for some permission findings)");
+        }
         extra_findings.push(FindingData {
             title: "Runtime permission state captured".to_string(),
             severity: "info".to_string(),
             category: "mobile-dynamic-android-permission-state".to_string(),
-            description: "Permission snapshot (grants/revokes/list) recorded during dynamic run.".to_string(),
+            description: desc,
             location: result.target.clone(),
             evidence: None,
-            remediation: Some("See native DynamicMobileReport.permission_state or actions for before/after.".to_string()),
+            remediation: Some("See native DynamicMobileReport.permission_state or actions for before/after. Use correlate_findings for static ↔ dynamic linkage.".to_string()),
             cwe_ids: Vec::new(),
         });
     }
@@ -661,6 +690,101 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
         wireless_networks: Vec::new(),
         policy_summary: None,
     }
+}
+
+/// Correlate a static baseline (`MobileScanReport` findings) with dynamic observations.
+/// High-value rules (Phase 2 polish):
+/// - traffic-cleartext / cleartext-observed (dynamic) ↔ static "manifest" usesCleartextTraffic
+///   or "network-config" cleartext/user-CA findings.
+/// - runtime-permission (dynamic) ↔ static "permission" (dangerous/overprivileged) by evidence/name match.
+///
+/// Side effect: populates `f.static_correlation` on matching dynamic findings (visible in native
+/// JSON/human reports and the `to_scan_report_data_dynamic` bridge info findings).
+/// Returns lightweight notes (for recommendations, extra info, or external tooling).
+pub fn correlate_findings(
+    static_findings: &[MobileFinding],
+    dynamic_findings: &mut [DynamicMobileFinding],
+) -> Vec<CorrelatedFinding> {
+    let mut notes: Vec<CorrelatedFinding> = Vec::new();
+
+    // Static signals we can match
+    let static_cleartext: bool = static_findings.iter().any(|f| {
+        (f.category == "manifest" || f.category == "network-config")
+            && (f.title.to_ascii_lowercase().contains("cleartext")
+                || f.evidence.as_ref().is_some_and(|e| {
+                    let le = e.to_ascii_lowercase();
+                    le.contains("cleartext") || le.contains("usescleartexttraffic")
+                }))
+    });
+
+    let static_user_ca: bool = static_findings.iter().any(|f| {
+        f.category == "network-config"
+            && (f.title.to_ascii_lowercase().contains("user")
+                || f.evidence
+                    .as_ref()
+                    .is_some_and(|e| e.to_ascii_lowercase().contains("user")))
+    });
+
+    // Dangerous/overprivileged permission names surfaced by static (evidence preferred; title fallback)
+    let static_dangerous_perms: std::collections::HashSet<String> = static_findings
+        .iter()
+        .filter(|f| f.category == "permission")
+        .filter_map(|f| {
+            f.evidence
+                .as_ref()
+                .map(|e| e.trim().to_ascii_lowercase())
+                .or_else(|| {
+                    f.title
+                        .rsplit_once(':')
+                        .map(|(_, t)| t.trim().to_ascii_lowercase())
+                })
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    for df in dynamic_findings.iter_mut() {
+        let dcat = df.category.as_str();
+        if dcat == "traffic-cleartext" || dcat == "cleartext-observed" {
+            if static_cleartext {
+                let note = "matches static manifest/network-config cleartext (usesCleartextTraffic or cleartextTrafficPermitted)".to_string();
+                df.static_correlation = Some(note.clone());
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "manifest|network-config".to_string(),
+                    note,
+                });
+            } else if static_user_ca {
+                let note = "observed cleartext; static allows user CAs (MITM risk surface)".to_string();
+                df.static_correlation = Some(note.clone());
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "network-config".to_string(),
+                    note,
+                });
+            }
+        }
+
+        if dcat == "runtime-permission" {
+            if let Some(ev) = df.evidence.as_ref() {
+                let key = ev.trim().to_ascii_lowercase();
+                if static_dangerous_perms.contains(&key)
+                    || static_dangerous_perms
+                        .iter()
+                        .any(|p| key.contains(p) || p.contains(&key))
+                {
+                    let note = format!("matches static declared dangerous permission '{}'", ev);
+                    df.static_correlation = Some(note.clone());
+                    notes.push(CorrelatedFinding {
+                        dynamic_category: dcat.to_string(),
+                        static_category: "permission".to_string(),
+                        note,
+                    });
+                }
+            }
+        }
+    }
+
+    notes
 }
 
 #[cfg(test)]
@@ -953,6 +1077,104 @@ W/PackageManager: permission denied: READ_SMS
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
         assert!(back.findings.iter().any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
         assert!(back.findings.iter().any(|f| f.category == "mobile-dynamic-android-permission-state"));
+    }
+
+    #[test]
+    fn correlate_findings_populates_static_correlation_for_cleartext_and_permissions() {
+        // Static baseline signals (as emitted by apk.rs)
+        let statics = vec![
+            MobileFinding {
+                category: "manifest".into(),
+                severity: Severity::High,
+                title: "Cleartext HTTP permitted".into(),
+                description: "...".into(),
+                recommendation: "...".into(),
+                evidence: Some("usesCleartextTraffic=true".into()),
+            },
+            MobileFinding {
+                category: "network-config".into(),
+                severity: Severity::High,
+                title: "Cleartext HTTP permitted via network_security_config".into(),
+                description: "...".into(),
+                recommendation: "...".into(),
+                evidence: Some("cleartextTrafficPermitted=true".into()),
+            },
+            MobileFinding {
+                category: "permission".into(),
+                severity: Severity::Medium,
+                title: "Dangerous permission requested: android.permission.READ_SMS".into(),
+                description: "...".into(),
+                recommendation: "...".into(),
+                evidence: Some("android.permission.READ_SMS".into()),
+            },
+        ];
+
+        // Dynamic findings (as emitted by runtime/traffic)
+        let mut dyns = vec![
+            DynamicMobileFinding {
+                category: "traffic-cleartext".into(),
+                severity: Severity::Low,
+                title: "Cleartext HTTP traffic observed".into(),
+                description: "...".into(),
+                recommendation: "...".into(),
+                evidence: Some("http://insecure.test/login".into()),
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "runtime-permission".into(),
+                severity: Severity::Low,
+                title: "Runtime permission grant".into(),
+                description: "...".into(),
+                recommendation: "...".into(),
+                evidence: Some("android.permission.READ_SMS".into()),
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "crash-log".into(),
+                severity: Severity::High,
+                title: "Crash".into(),
+                description: "...".into(),
+                recommendation: "...".into(),
+                evidence: None,
+                static_correlation: None,
+            },
+        ];
+
+        let notes = correlate_findings(&statics, &mut dyns);
+        // Cleartext match
+        assert!(dyns[0].static_correlation.as_ref().unwrap().contains("cleartext"));
+        // Permission match
+        assert!(dyns[1].static_correlation.as_ref().unwrap().contains("READ_SMS"));
+        // Crash has no correlation
+        assert!(dyns[2].static_correlation.is_none());
+        // Notes returned for the two matches
+        assert_eq!(notes.len(), 2);
+        assert!(notes.iter().any(|n| n.static_category.contains("manifest")));
+        assert!(notes.iter().any(|n| n.static_category == "permission"));
+    }
+
+    #[test]
+    fn correlate_findings_user_ca_and_non_match() {
+        let statics = vec![MobileFinding {
+            category: "network-config".into(),
+            severity: Severity::Medium,
+            title: "User-added CA trust anchors permitted".into(),
+            description: "...".into(),
+            recommendation: "...".into(),
+            evidence: Some("trust-anchors: user".into()),
+        }];
+        let mut dyns = vec![DynamicMobileFinding {
+            category: "traffic-cleartext".into(),
+            severity: Severity::Medium,
+            title: "Cleartext".into(),
+            description: "...".into(),
+            recommendation: "...".into(),
+            evidence: Some("http://x.test/a".into()),
+            static_correlation: None,
+        }];
+        let notes = correlate_findings(&statics, &mut dyns);
+        assert!(dyns[0].static_correlation.as_ref().unwrap().contains("user CAs"));
+        assert_eq!(notes.len(), 1);
     }
 
     #[test]

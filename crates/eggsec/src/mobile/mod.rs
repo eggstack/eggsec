@@ -39,7 +39,7 @@ pub mod traffic;
 #[cfg(feature = "mobile-dynamic")]
 pub use dynamic::{
     run_dynamic_cli, DynamicMobileArgs, DynamicMobileReport, DynamicMobileFinding, LabManifest,
-    format_dynamic_report, to_scan_report_data_dynamic,
+    format_dynamic_report, to_scan_report_data_dynamic, correlate_findings, CorrelatedFinding,
 };
 #[cfg(feature = "mobile-dynamic")]
 pub use traffic::{TrafficSummary, parse_traffic_capture};
