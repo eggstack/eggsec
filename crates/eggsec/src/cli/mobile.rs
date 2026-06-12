@@ -19,11 +19,13 @@ Examples:
   eggsec mobile dynamic /tmp/vuln.apk --device emulator-5554 --install --launch .Main --capture-logs --duration 30 --uninstall-after --allow-dynamic-mobile
   eggsec mobile dynamic --list-devices
   eggsec mobile dynamic --list-devices --device emulator-5554
-  # Phase 3b Frida (dry-run always safe; real requires --allow-frida)
+  # Phase 3b/3c Frida (dry-run always safe; real requires --allow-frida)
   eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script /tmp/trace.js --json
-  # Phase 3b builtins via convention (no extra clap arg)
-  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "builtin:crypto-keystore" --json
+  # Phase 3b builtins + Phase 3c library components (repeatable for multi-script sessions)
+  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "builtin:crypto-keystore" --frida-script "library:common-hooks" --json
   eggsec mobile dynamic /tmp/vuln.apk --device emulator-5554 --allow-dynamic-mobile --allow-frida --frida-script trace.js --package com.example.vuln
+  # Phase 3c regression + bundle
+  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "library:common-hooks" --baseline /tmp/baseline.json --evidence-bundle /tmp/evidence.json.gz --json
 "#;
 
 /// Top-level args for `eggsec mobile ...`.
@@ -102,10 +104,12 @@ Examples:
     --allow-dynamic-mobile \
     --lab-manifest examples/lab-mobile.toml
   eggsec mobile dynamic --list-devices
-  # Phase 3b Frida (dry-run safe)
+  # Phase 3b/3c Frida (dry-run safe)
   eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script /tmp/trace.js --json
-  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "builtin:crypto-keystore" --json
+  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "builtin:crypto-keystore" --frida-script "library:common-hooks" --json
   eggsec mobile dynamic test.apk --device emulator-5554 --allow-dynamic-mobile --allow-frida --frida-script trace.js --package com.example.vuln
+  # Phase 3c regression + bundle
+  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "library:common-hooks" --baseline /tmp/baseline.json --evidence-bundle /tmp/evidence.json.gz --json
 "#;
 
 /// Dynamic mobile args (Phase 1 ADB core + log capture; Phase 2a proxy +
@@ -168,9 +172,17 @@ pub struct DynamicMobileArgs {
     #[arg(long, value_name = "FILE", help = "Path to traffic capture (mitmproxy text log or minimal HAR JSON) to parse for traffic_summary + findings. Complements --proxy.")]
     pub traffic_capture: Option<String>,
 
-    // Phase 3b Frida (under mobile-dynamic; runtime gated by --allow-frida + policy)
-    #[arg(long, value_name = "FILE", help = "Path to Frida JS script to execute (Phase 3b). Use \"builtin:NAME\" for crypto-keystore|bypass-validation|api-trace|basic-method-trace. Requires --allow-frida for real runs (Intrusive). Dry-run safe.")]
-    pub frida_script: Option<String>,
+    // Phase 3b/3c Frida (under mobile-dynamic; runtime gated by --allow-frida + policy)
+    // Repeatable: --frida-script a.js --frida-script "builtin:crypto-keystore" --frida-script "library:common-hooks"
+    // Supports user .js files, "builtin:NAME", "library:NAME" (Phase 3c reusable components).
+    #[arg(long, value_name = "SPEC", action = clap::ArgAction::Append, help = "Frida script spec (repeatable for multi-script Phase 3c). File path, or \"builtin:NAME\" (crypto-keystore|bypass-validation|api-trace|basic-method-trace), or \"library:NAME\" (common-hooks etc.). Real requires --allow-frida (Intrusive). Dry-run safe.")]
+    pub frida_script: Vec<String>,
     #[arg(long, help = "Explicit confirmation for Frida instrumentation (required for any non-dry-run Frida operations; recorded for audit). Real Frida also needs frida CLI + frida-server on device.")]
     pub allow_frida: bool,
+
+    // Phase 3c behavioral regression + evidence bundle
+    #[arg(long, value_name = "FILE", help = "Path to prior baseline JSON (MobileBaseline) for regression diff vs current run (Phase 3c). Dry-run safe.")]
+    pub baseline: Option<String>,
+    #[arg(long, value_name = "FILE", help = "Path to write gzipped evidence bundle (report + traffic + frida + actions) after run (Phase 3c, optional). Uses flate2.")]
+    pub evidence_bundle: Option<String>,
 }

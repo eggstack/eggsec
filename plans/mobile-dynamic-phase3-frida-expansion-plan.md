@@ -1,7 +1,7 @@
 # Mobile Dynamic Phase 3: Frida Expansion Plan (Merged under mobile-dynamic)
 
 **Date**: 2026-06-12  
-**Status**: Executed (Phase 3a Foundation + First Capability delivered 2026-06-12)  
+**Status**: Executed (Phase 3a + 3b + 3c delivered 2026-06-12) 
 **Key Decision**: All Frida capabilities will be developed **under the existing `mobile-dynamic` feature** (no separate `mobile-frida` sub-feature). Safety will be enforced via runtime flags and policy.
 **Context**: Phase 2 is functionally complete. The initial Frida scaffolding (`frida.rs`) has been added as a clean starting point. This plan defines a structured expansion across three phases.
 

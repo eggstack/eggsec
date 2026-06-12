@@ -29,7 +29,7 @@ pub async fn handle_mobile(
         #[cfg(feature = "mobile-dynamic")]
         {
             let is_real_frida = if let Some(crate::cli::MobileSubcommand::Dynamic(d)) = &args.command {
-                d.frida_script.is_some() && !d.dry_run
+                !d.frida_script.is_empty() && !d.dry_run
             } else { false };
             ctx.evaluate_and_enforce_operation(OperationDescriptor {
                 operation: "mobile-dynamic".to_string(),
@@ -52,7 +52,7 @@ pub async fn handle_mobile(
                          Use --dry-run for planning without touching devices."
                     );
                 }
-                if dargs.frida_script.is_some() && !dargs.dry_run && !dargs.allow_frida {
+                if !dargs.frida_script.is_empty() && !dargs.dry_run && !dargs.allow_frida {
                     anyhow::bail!(
                         "Frida instrumentation requires --allow-frida flag (Intrusive tier). \
                           Use --dry-run for safe simulation of script execution and findings."
@@ -95,9 +95,12 @@ pub async fn handle_mobile(
                 revoke_permissions: dyn_args_cli.revoke_permissions,
                 list_permissions: dyn_args_cli.list_permissions,
                 traffic_capture: dyn_args_cli.traffic_capture,
-                // Phase 3a Frida
-                frida_script: dyn_args_cli.frida_script,
+                // Phase 3a/3c Frida (multi-script support)
+                frida_script: dyn_args_cli.frida_script.first().cloned(),
+                frida_scripts: dyn_args_cli.frida_script.clone(),
                 allow_frida: dyn_args_cli.allow_frida,
+                baseline: dyn_args_cli.baseline,
+                evidence_bundle: dyn_args_cli.evidence_bundle,
             };
             match crate::mobile::run_dynamic_cli(dyn_args, &ctx.config).await {
                 Ok(()) => {

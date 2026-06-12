@@ -1,12 +1,15 @@
 //! Frida-based runtime instrumentation for mobile dynamic analysis (Phase 3a foundation + basic_method_trace).
 //! Phase 3b: additional builtins (crypto-keystore, bypass-validation, api-trace) + structured JSON output + redaction + run_builtin dispatch + correlation support + richer FridaInstrumentation.
+//! Phase 3c: user script library (embedded reusable components via library: prefix) + multi-script sessions + advanced static↔dynamic↔Frida correlation + behavioral baselining/regression + optional evidence bundle export.
 //!
 //! All under single `mobile-dynamic` feature (per phase3-frida-expansion-plan.md Key Decision; no mobile-frida sub-feature).
 //! Safety: explicit --allow-frida runtime flag + EnforcementContext Intrusive tier for real ops. Dry-run always safe and produces valid reports.
-//! Standalone defense-lab only (no MCP/agent). CLI shell fallback to `frida` (no heavy frida crate dep in 3a).
-//! Builtins: basic_method_trace, crypto-keystore, bypass-validation, api-trace. Emits frida-* categories. Correlation in dynamic layer.
+//! Standalone defense-lab only (no MCP/agent). CLI shell fallback to `frida` (no heavy frida crate dep).
+//! Builtins: basic_method_trace, crypto-keystore, bypass-validation, api-trace (via builtin: prefix).
+//! Library: common-hooks etc. (via library: prefix; embedded, no FS required at runtime for library components).
+//! Emits frida-* categories. Correlation + regression + bundles in dynamic layer.
 //! Real execution requires frida CLI in PATH + frida-server on rooted/emulator device. Best-effort + audited.
-//! See dynamic.rs (run_dynamic_cli, FridaInstrumentation, to_scan_report_data_dynamic, correlate_findings), mobile/mod.rs, handler policy, docs/MOBILE.md.
+//! See dynamic.rs (run_dynamic_cli, FridaInstrumentation, to_scan_report_data_dynamic, correlate_findings, capture_baseline, export_evidence_bundle), mobile/mod.rs, handler policy, docs/MOBILE.md.
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -34,6 +37,8 @@ pub struct FridaScriptResult {
 
 /// Frida instrumentation summary on `DynamicMobileReport` (under mobile-dynamic).
 /// Populated by run_dynamic_cli when Frida ops requested (dry or real).
+/// Phase 3c: supports multi-script (script_results + structured_results accumulate),
+/// library: components, regression_notes (behavioral baseline diffs surfaced here too).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FridaInstrumentation {
     pub note: String,
@@ -43,6 +48,8 @@ pub struct FridaInstrumentation {
     pub start_time: Option<String>,
     pub structured_results: Vec<serde_json::Value>,
     pub correlation_notes: Vec<String>,
+    #[serde(default)]
+    pub regression_notes: Vec<String>,
 }
 
 /// Connect to the Frida server on the target device/emulator.
@@ -98,6 +105,151 @@ pub(crate) fn redact_frida_evidence(s: &str) -> String {
         }
     }
     out
+}
+
+/// Phase 3c: Embedded user script library components (reusable, safe, structured JSON emitting).
+/// Users reference via --frida-script "library:common-hooks" (resolved without reading FS).
+/// Content is best-effort observation only; redaction of secrets/params occurs in the report layer.
+pub const FRIDA_LIB_COMMON_HOOKS: &str = r#"// common-hooks.js — Phase 3c reusable Frida components (safe, redacted, structured JSON output)
+// Include via "library:common-hooks" convention or copy the relevant blocks into your script.
+// All hooks are best-effort; wrapped in try/catch. Timestamps + pkg included.
+// Redaction of secrets/params happens in the Rust layer on evidence.
+
+Java.perform(function() {
+  var pkg = (Java.available ? Java.androidVersion : "unknown") ? "com.target.app" : "com.target.app"; // placeholder; callers inject pkg
+
+  // Crypto / keystore observation (extends Phase 3b)
+  try {
+    var Cipher = Java.use("javax.crypto.Cipher");
+    Cipher.doFinal.overload("[B").implementation = function(b) {
+      var ts = Date.now();
+      console.log(JSON.stringify({type:"frida-crypto-observation", method:"Cipher.doFinal", pkg:pkg, args_redacted:"[REDACTED]", ret_redacted:"[REDACTED]", ts:ts}));
+      return this.doFinal(b);
+    };
+  } catch (e) {}
+
+  try {
+    var KS = Java.use("android.security.keystore.KeyStore");
+    KS.getEntry.overload("java.lang.String", "java.security.KeyStore$ProtectionParameter").implementation = function(alias, prot) {
+      var ts = Date.now();
+      console.log(JSON.stringify({type:"frida-crypto-observation", method:"KeyStore.getEntry", pkg:pkg, alias:"[REDACTED]", ts:ts}));
+      return this.getEntry(alias, prot);
+    };
+  } catch (e) {}
+
+  // Network / API surface (redacted)
+  try {
+    var HUC = Java.use("java.net.HttpURLConnection");
+    HUC.getInputStream.implementation = function() {
+      var ts = Date.now();
+      var url = this.getURL ? this.getURL().toString() : "";
+      console.log(JSON.stringify({type:"frida-api-trace", method:"HttpURLConnection.getInputStream", pkg:pkg, params_inspected:{url:url, headers:"redacted"}, ts:ts}));
+      return this.getInputStream();
+    };
+  } catch (e) {}
+
+  try {
+    var OkHttp = Java.use("okhttp3.Request$Builder");
+    OkHttp.build.implementation = function () {
+      var ts = Date.now();
+      var url = this.url_ ? this.url_.toString() : "";
+      console.log(JSON.stringify({type:"frida-api-trace", method:"OkHttp.Request", pkg:pkg, params_inspected:{url:url, headers:"redacted"}, ts:ts}));
+      return this.build();
+    };
+  } catch (e) {}
+
+  // Bypass / detection surfaces (lab validation)
+  try {
+    var System = Java.use("java.lang.System");
+    System.getProperty.overload("java.lang.String").implementation = function(k) {
+      var ts = Date.now();
+      if (k && (k.indexOf("ro.debuggable") !== -1 || k.indexOf("ro.secure") !== -1)) {
+        console.log(JSON.stringify({type:"frida-bypass-validation", method:"System.getProperty", pkg:pkg, key:k, ts:ts}));
+      }
+      return this.getProperty(k);
+    };
+  } catch (e) {}
+
+  try {
+    var Runtime = Java.use("java.lang.Runtime");
+    Runtime.exec.overload("java.lang.String").implementation = function(cmd) {
+      var ts = Date.now();
+      console.log(JSON.stringify({type:"frida-bypass-validation", method:"Runtime.exec", pkg:pkg, cmd:"[REDACTED]", ts:ts}));
+      return this.exec(cmd);
+    };
+  } catch (e) {}
+
+  // Secret extraction patterns (best-effort; redacted in report layer)
+  try {
+    var SecretKeySpec = Java.use("javax.crypto.spec.SecretKeySpec");
+    SecretKeySpec.$init.overload("[B", "java.lang.String").implementation = function(key, algo) {
+      var ts = Date.now();
+      console.log(JSON.stringify({type:"frida-secret-extract", method:"SecretKeySpec.<init>", pkg:pkg, algo:algo, key_len:"[REDACTED]", ts:ts}));
+      return this.$init(key, algo);
+    };
+  } catch (e) {}
+});
+"#;
+
+/// Resolve a frida script spec to concrete JS source.
+/// Supports:
+/// - "builtin:NAME" → delegates to the Phase 3b/3a generators (crypto-keystore, bypass-validation, api-trace, basic-method-trace)
+/// - "library:NAME" → returns embedded library component (FRIDA_LIB_COMMON_HOOKS etc.), with package placeholder substitution
+/// - raw content (inline JS) → returned as-is (file reads for user paths happen at call sites in dynamic.rs)
+pub fn resolve_frida_script_spec(spec: &str, package: &str) -> crate::error::Result<String> {
+    let pkg = if package.trim().is_empty() { "com.example.target" } else { package };
+    if let Some(name) = spec.strip_prefix("builtin:") {
+        let script = match name {
+            "crypto-keystore" => generate_crypto_keystore_script(pkg),
+            "bypass-validation" => generate_bypass_validation_script(pkg),
+            "api-trace" => generate_api_trace_script(pkg),
+            "basic-method-trace" | "basic_method_trace" => generate_basic_method_trace_script(pkg, &["javax.crypto.Cipher", "android.security.keystore.KeyStore"]),
+            _ => return Err(crate::error::EggsecError::Validation(format!(
+                "unknown frida builtin '{}'; available: basic-method-trace, crypto-keystore, bypass-validation, api-trace",
+                name
+            ))),
+        };
+        return Ok(script);
+    }
+    if let Some(name) = spec.strip_prefix("library:") {
+        let src = match name {
+            "common-hooks" | "common_hooks" => FRIDA_LIB_COMMON_HOOKS.to_string(),
+            _ => return Err(crate::error::EggsecError::Validation(format!(
+                "unknown frida library component '{}'; available: common-hooks",
+                name
+            ))),
+        };
+        // Substitute a realistic package for the placeholder used in the embedded source
+        let script = src.replace("com.target.app", pkg);
+        return Ok(script);
+    }
+    // Raw inline script content (or caller-read file content)
+    Ok(spec.to_string())
+}
+
+/// Execute a resolved spec (builtin:/library:/raw). Thin wrapper that resolves then executes.
+/// For library/builtin this ensures synthetic structured population on dry paths (mirrors prior run_builtin behavior).
+pub fn run_frida_spec(session: &FridaSession, spec: &str, package: &str) -> crate::error::Result<FridaScriptResult> {
+    let script = resolve_frida_script_spec(spec, package)?;
+    let mut res = execute_script(session, &script)?;
+    if res.structured_output.is_none() {
+        if spec.contains("crypto") || spec.contains("crypto-keystore") {
+            res.structured_output = Some(serde_json::json!({"type":"frida-crypto-observation","method":"spec","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}));
+        } else if spec.contains("bypass") {
+            res.structured_output = Some(serde_json::json!({"type":"frida-bypass-validation","method":"spec","args":"","ret":"","ts":0}));
+        } else if spec.contains("api") {
+            res.structured_output = Some(serde_json::json!({"type":"frida-api-trace","method":"spec","params_inspected":{},"ts":0}));
+        } else if spec.contains("secret-extract") {
+            res.structured_output = Some(serde_json::json!({"type":"frida-secret-extract","method":"spec","ts":0}));
+        }
+    }
+    Ok(res)
+}
+
+/// Phase 3c backward-compatible thin wrapper around the builtin path (still used by some call sites).
+/// Now implemented via the unified resolver for consistency.
+pub fn run_builtin(builtin: &str, session: &FridaSession, package: &str) -> crate::error::Result<FridaScriptResult> {
+    run_frida_spec(session, &format!("builtin:{}", builtin), package)
 }
 
 /// Generate a safe high-value Frida JS snippet for basic method tracing.
@@ -289,32 +441,6 @@ pub fn generate_api_trace_script(package: &str) -> String {
     }};
   }} catch (e) {{}}
 }}); "#, pkg = pkg)
-}
-
-/// Phase 3b dispatch for built-in scripts. "basic-method-trace" is alias for backward compat.
-pub fn run_builtin(builtin: &str, session: &FridaSession, package: &str) -> crate::error::Result<FridaScriptResult> {
-    let pkg = if package.trim().is_empty() { "com.example.target" } else { package };
-    let script = match builtin {
-        "crypto-keystore" => generate_crypto_keystore_script(pkg),
-        "bypass-validation" => generate_bypass_validation_script(pkg),
-        "api-trace" => generate_api_trace_script(pkg),
-        "basic-method-trace" | "basic_method_trace" => generate_basic_method_trace_script(pkg, &["javax.crypto.Cipher", "android.security.keystore.KeyStore"]),
-        _ => return Err(crate::error::EggsecError::Validation(format!(
-            "unknown frida builtin '{}'; available: basic-method-trace, crypto-keystore, bypass-validation, api-trace",
-            builtin
-        ))),
-    };
-    let mut res = execute_script(session, &script)?;
-    if res.structured_output.is_none() {
-        if builtin.contains("crypto") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-crypto-observation","method":"sim","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}));
-        } else if builtin.contains("bypass") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-bypass-validation","method":"sim","args":"","ret":"","ts":0}));
-        } else if builtin.contains("api") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-api-trace","method":"sim","params_inspected":{}, "ts":0}));
-        }
-    }
-    Ok(res)
 }
 
 /// Thin backward wrapper.

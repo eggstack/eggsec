@@ -53,6 +53,7 @@ pub mod frida;
 pub use dynamic::{
     run_dynamic_cli, DynamicMobileArgs, DynamicMobileReport, DynamicMobileFinding, LabManifest,
     format_dynamic_report, to_scan_report_data_dynamic, correlate_findings, CorrelatedFinding,
+    MobileBaseline, capture_baseline, compare_to_baseline, export_evidence_bundle,
 };
 #[cfg(feature = "mobile-dynamic")]
 pub use traffic::{TrafficSummary, parse_traffic_capture};
@@ -60,7 +61,7 @@ pub use traffic::{TrafficSummary, parse_traffic_capture};
 #[cfg(feature = "mobile-dynamic")]
 pub use frida::{
     FridaSession, FridaScriptResult, FridaInstrumentation, connect, execute_script,
-    basic_method_trace,
+    basic_method_trace, resolve_frida_script_spec, run_frida_spec, FRIDA_LIB_COMMON_HOOKS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

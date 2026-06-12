@@ -2,8 +2,8 @@
 #
 # scripts/test-mobile-dynamic.sh
 #
-# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2 + Phase 3b Frida expansion;
-# Phase 1+2 closed 2026-06-12; Phase 3a foundation + Phase 3b (builtins + correlation + evidence) delivered under single mobile-dynamic per phase3-frida-expansion-plan Key Decision).
+# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2 + Phase 3b/3c Frida expansion;
+# Phase 1+2 closed 2026-06-12; Phase 3a foundation + Phase 3b (builtins + correlation + evidence) + Phase 3c (library, multi-script, advanced correlation, behavioral regression, evidence bundles) delivered under single mobile-dynamic per phase3-frida-expansion-plan Key Decision).
 # Per: plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md (P1.2);
 #      plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a);
 #      plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish);
@@ -282,7 +282,82 @@ fi
 
 echo "Phase 3b Frida dry-run validation: PASS (additional builtins exercised; richer instrumentation + structured_results + correlation_notes; new frida-* cats; redaction; bridge exercised)."
 
-# If not real mode, we're done (CI green path).
+# Phase 3c advanced dry-run leg (hardware-free):
+# - Multi-script via repeatable --frida-script (library:common-hooks + builtin:crypto-keystore)
+# - --baseline from a prior capture run
+# - --evidence-bundle (gz via flate2)
+# - Asserts: multiple script_results/enabled, regression_notes key present, bundle file non-empty, frida findings, bridge exercised.
+echo
+echo ">>> Step: Phase 3c advanced (multi-script + library: + baseline/regression + evidence bundle)"
+P3C_BASE_JSON="$(mktemp)"
+P3C_CUR_JSON="$(mktemp)"
+P3C_BUNDLE="$(mktemp).json.gz"
+
+# Baseline capture (simple prior run)
+run_eggsec \
+  "${APK}" \
+  --device emulator-5554 \
+  --frida-script "builtin:basic-method-trace" \
+  --dry-run --json --quiet \
+  > "${P3C_BASE_JSON}"
+
+# Current: multi-spec (library + builtin), feed baseline, request bundle
+run_eggsec \
+  "${APK}" \
+  --device emulator-5554 \
+  --frida-script "library:common-hooks" \
+  --frida-script "builtin:crypto-keystore" \
+  --baseline "${P3C_BASE_JSON}" \
+  --evidence-bundle "${P3C_BUNDLE}" \
+  --dry-run --json --quiet \
+  > "${P3C_CUR_JSON}"
+
+if command -v jq >/dev/null 2>&1; then
+  P3C_SCAN=$(jq -r '.scan_type' < "${P3C_CUR_JSON}")
+  P3C_DRY=$(jq -r '.dry_run' < "${P3C_CUR_JSON}")
+  P3C_SCRIPTS=$(jq '.frida_instrumentation.script_results | length' < "${P3C_CUR_JSON}")
+  P3C_ENABLED=$(jq '.frida_instrumentation.enabled_builtins | length' < "${P3C_CUR_JSON}")
+  P3C_HAS_REG=$(jq -r '.frida_instrumentation | has("regression_notes")' < "${P3C_CUR_JSON}")
+  P3C_BUNDLE_EXISTS=$(test -s "${P3C_BUNDLE}" && echo true || echo false)
+  P3C_HAS_FRIDA_F=$(jq '.findings | map(select(.category | startswith("frida-"))) | length > 0' < "${P3C_CUR_JSON}")
+  echo "  Phase3c: scan=${P3C_SCAN} dry=${P3C_DRY} scripts=${P3C_SCRIPTS} enabled=${P3C_ENABLED} has_regression_notes=${P3C_HAS_REG} bundle_exists=${P3C_BUNDLE_EXISTS} has_frida_findings=${P3C_HAS_FRIDA_F}"
+  if [[ "${P3C_SCAN}" != "mobile-dynamic" || "${P3C_DRY}" != "true" || "${P3C_SCRIPTS}" -lt 2 || "${P3C_ENABLED}" -lt 2 || "${P3C_HAS_REG}" != "true" || "${P3C_BUNDLE_EXISTS}" != "true" ]]; then
+    echo "FAIL: Phase 3c dry-run missing multi-script/library, regression_notes, or evidence bundle" >&2
+    exit 1
+  fi
+else
+  python3 - <<'PY' "${P3C_CUR_JSON}" "${P3C_BUNDLE}"
+import json, sys, os
+d = json.load(open(sys.argv[1]))
+assert d.get("scan_type") == "mobile-dynamic", "scan_type"
+assert d.get("dry_run") is True, "dry_run"
+fi = d.get("frida_instrumentation") or {}
+assert len(fi.get("script_results", [])) >= 2, "multi-script script_results"
+assert len(fi.get("enabled_builtins", [])) >= 2, "multi enabled_builtins"
+assert "regression_notes" in fi, "regression_notes key"
+assert os.path.getsize(sys.argv[2]) > 10, "bundle file size"
+print("  (python) Phase3c: multi-script + library + regression + bundle present")
+PY
+fi
+
+# Exercise report convert bridge for 3c (new regression cat or frida-instrumentation info + mobile-dynamic-android-frida-*)
+if command -v cargo >/dev/null 2>&1; then
+  BRIDGE3C="$(mktemp)"
+  (cd "${REPO_ROOT}" && cargo run -p eggsec-cli --features "${FEATURES}" --quiet -- report convert "${P3C_CUR_JSON}" --format json --output "${BRIDGE3C}" >/dev/null 2>&1 || true)
+  if [[ -s "${BRIDGE3C}" ]] && command -v jq >/dev/null 2>&1; then
+    B3C_F=$(jq '.findings[]?.category // empty' < "${BRIDGE3C}" | grep -c 'mobile-dynamic-android-frida-' || true)
+    B3C_REG=$(jq '.findings[]?.category // empty' < "${BRIDGE3C}" | grep -c 'behavioral-regression' || true)
+    echo "  Phase3c bridge: frida-*=${B3C_F} regression=${B3C_REG}"
+  fi
+  rm -f "${BRIDGE3C}"
+fi
+
+echo "Phase 3c advanced dry-run validation: PASS (multi-script + library:common-hooks + baseline/regression + evidence bundle; bridge exercised)."
+
+# cleanup 3c temps
+rm -f "${P3C_BASE_JSON}" "${P3C_CUR_JSON}" "${P3C_BUNDLE}"
+
+  # If not real mode, we're done (CI green path).
 if ! $REAL_MODE; then
   echo
   echo "=== Smoke test complete (dry-run only; --real not requested) ==="
