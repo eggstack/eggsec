@@ -13,6 +13,8 @@ pub enum Stage {
     Waf,
     Recon,
     Vuln,
+    #[cfg(feature = "db-pentest")]
+    DbPentest,
 }
 
 impl std::fmt::Display for Stage {
@@ -26,6 +28,8 @@ impl std::fmt::Display for Stage {
             Stage::Waf => write!(f, "WAF Test"),
             Stage::Recon => write!(f, "Recon"),
             Stage::Vuln => write!(f, "Vulnerability Assessment"),
+            #[cfg(feature = "db-pentest")]
+            Stage::DbPentest => write!(f, "DB Pentest"),
         }
     }
 }
@@ -110,7 +114,9 @@ impl Stage {
             ScanProfile::ProtocolEdge => vec![Stage::PortScan, Stage::Fingerprint],
             ScanProfile::NseSafe => vec![Stage::PortScan, Stage::Fingerprint, Stage::EndpointScan],
             // DbRegression is additive defense-lab / regression family.
-            // Initial mapping reuses defense-lab stages; future: native Stage::DbPentest (cfg) for direct db execution inside pipeline.
+            #[cfg(feature = "db-pentest")]
+            ScanProfile::DbRegression => vec![Stage::DbPentest],
+            #[cfg(not(feature = "db-pentest"))]
             ScanProfile::DbRegression => vec![
                 Stage::PortScan,
                 Stage::Fingerprint,
@@ -134,6 +140,12 @@ impl Stage {
             "waf" => Some(Stage::Waf),
             "recon" => Some(Stage::Recon),
             "vuln" | "vulnerability" | "vuln-assess" => Some(Stage::Vuln),
+            "db" | "dbpentest" | "db-pentest" => {
+                #[cfg(feature = "db-pentest")]
+                { Some(Stage::DbPentest) }
+                #[cfg(not(feature = "db-pentest"))]
+                { None }
+            }
             _ => None,
         }
     }
@@ -149,6 +161,8 @@ impl Stage {
             Stage::Waf => ProbeIntent::WafEvaluation,
             Stage::Recon => ProbeIntent::Discovery,
             Stage::Vuln => ProbeIntent::ServiceValidation,
+            #[cfg(feature = "db-pentest")]
+            Stage::DbPentest => ProbeIntent::ServiceValidation,
         }
     }
 
@@ -167,6 +181,8 @@ impl Stage {
             Stage::Waf => ProbeRisk::Intrusive,
             Stage::Recon => ProbeRisk::Passive,
             Stage::Vuln => ProbeRisk::SafeActive,
+            #[cfg(feature = "db-pentest")]
+            Stage::DbPentest => ProbeRisk::Intrusive,
         }
     }
 }
@@ -346,7 +362,15 @@ mod tests {
     #[test]
     fn test_db_regression_profile() {
         let stages = Stage::from_profile(ScanProfile::DbRegression);
-        assert!(!stages.is_empty());
+        #[cfg(feature = "db-pentest")]
+        {
+            assert_eq!(stages.len(), 1);
+            assert_eq!(stages[0], Stage::DbPentest);
+        }
+        #[cfg(not(feature = "db-pentest"))]
+        {
+            assert!(!stages.is_empty());
+        }
     }
 
     #[test]
@@ -383,5 +407,13 @@ mod tests {
         assert_eq!(Stage::Waf.to_probe_risk(), ProbeRisk::Intrusive);
         assert_eq!(Stage::Recon.to_probe_risk(), ProbeRisk::Passive);
         assert_eq!(Stage::Vuln.to_probe_risk(), ProbeRisk::SafeActive);
+    }
+
+    #[cfg(feature = "db-pentest")]
+    #[test]
+    fn test_stage_from_string_db_pentest() {
+        assert_eq!(Stage::from_string("db"), Some(Stage::DbPentest));
+        assert_eq!(Stage::from_string("db-pentest"), Some(Stage::DbPentest));
+        assert_eq!(Stage::from_string("dbpentest"), Some(Stage::DbPentest));
     }
 }

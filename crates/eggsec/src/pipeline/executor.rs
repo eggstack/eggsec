@@ -198,6 +198,8 @@ impl Pipeline {
             (Stage::Waf, 3),
             (Stage::LoadTest, 3),
             (Stage::Vuln, 3),
+            #[cfg(feature = "db-pentest")]
+            (Stage::DbPentest, 3),
         ]
         .into_iter()
         .collect();
@@ -539,6 +541,53 @@ impl Pipeline {
             Stage::Waf => self.run_waf().await,
             Stage::Recon => self.run_recon().await,
             Stage::Vuln => self.run_vuln().await,
+            #[cfg(feature = "db-pentest")]
+            Stage::DbPentest => self.run_db_pentest_stage().await,
+        }
+    }
+
+    #[cfg(feature = "db-pentest")]
+    async fn run_db_pentest_stage(&self) -> Result<()> {
+        use crate::db_pentest::{DbPentestRunArgs, run_db_pentest_cli};
+
+        let args = DbPentestRunArgs {
+            target: Some(self.target.clone()),
+            db_type: None,
+            checks: "all".to_string(),
+            max_queries: 200,
+            max_duration: 120,
+            lab_manifest: None,
+            dry_run: true,
+            json: false,
+            output: None,
+            allow_db_pentest: true,
+            allow_db_pentest_advanced: false,
+            manual_override_reason: None,
+            quiet: self.tui_mode,
+            evidence_bundle: None,
+            host: None,
+            port: None,
+            user: None,
+            password: None,
+            database: None,
+        };
+
+        let config = self.config.clone().unwrap_or_default();
+        match run_db_pentest_cli(args, &config).await {
+            Ok(report) => {
+                let context = self.context.lock().await;
+                tracing::info!(
+                    findings = report.findings.len(),
+                    queries = report.queries_executed,
+                    "DB Pentest stage completed"
+                );
+                drop(context);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "DB Pentest stage failed");
+                Err(e.into())
+            }
         }
     }
 
