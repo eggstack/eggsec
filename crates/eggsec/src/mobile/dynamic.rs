@@ -1082,6 +1082,17 @@ fn build_dynamic_recommendations(report: &DynamicMobileReport) -> Vec<String> {
     if report.frida_instrumentation.is_some() && (report.traffic_summary.is_some() || !report.findings.is_empty()) {
         recs.push("Frida instrumentation present; review correlation_notes and static_correlation for Frida ↔ traffic/static overlaps.".to_string());
     }
+    if let Some(ref fi) = report.frida_instrumentation {
+        if !fi.regression_notes.is_empty() {
+            recs.push(format!(
+                "{} regression note(s) from baseline comparison; review for behavioral changes (see --baseline / compare_to_baseline).",
+                fi.regression_notes.len()
+            ));
+            for rn in &fi.regression_notes {
+                recs.push(format!("  regression: {}", rn));
+            }
+        }
+    }
     recs
 }
 
@@ -1110,17 +1121,32 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
         }
         if let Some(ref fi) = report.frida_instrumentation {
             buf.push_str(&format!(
-                "  frida: note=\"{}\", sessions={}, scripts={}, builtins={}, start_time={}, structured={}, corr_notes={}\n",
+                "  frida: note=\"{}\", sessions={}, scripts={}, builtins={}, start_time={}, structured={}, corr_notes={}, regression_notes={}\n",
                 fi.note,
                 fi.sessions.len(),
                 fi.script_results.len(),
                 fi.enabled_builtins.len(),
                 fi.start_time.as_deref().unwrap_or(""),
                 fi.structured_results.len(),
-                fi.correlation_notes.len()
+                fi.correlation_notes.len(),
+                fi.regression_notes.len()
             ));
         }
         buf.push('\n');
+    }
+    // Phase 4b reporting polish: surface regression / correlation hints in human output (library surface for full CorrelationResult remains correlate_reports / CorrelationEngine)
+    if let Some(ref fi) = report.frida_instrumentation {
+        if !fi.regression_notes.is_empty() || report.findings.iter().any(|f| f.static_correlation.is_some()) {
+            buf.push_str("Correlation / Regression:\n");
+            if !fi.regression_notes.is_empty() {
+                buf.push_str(&format!("  {} regression note(s) from baseline (see --baseline / compare_to_baseline / frida_instrumentation.regression_notes in JSON).\n", fi.regression_notes.len()));
+            }
+            let corr_count = report.findings.iter().filter(|f| f.static_correlation.is_some()).count();
+            if corr_count > 0 {
+                buf.push_str(&format!("  {} finding(s) carry static_correlation (from correlate_findings / correlate_reports).\n", corr_count));
+            }
+            buf.push_str("  For full timeline + scores + CorrelationResult use correlate_reports(&static, &dynamic) or CorrelationEngine.\n\n");
+        }
     }
 
     if !report.actions_performed.is_empty() {
@@ -2269,5 +2295,41 @@ W/PackageManager: permission denied: READ_SMS
         // inputs are not mutated by the high-level path (low-level clone is internal)
         assert_eq!(dyn_r.findings.len(), before_dyn_len);
         assert_eq!(static_r.findings.len(), before_static_len);
+    }
+
+    // Phase 4b reporting polish test: regression_notes + static_correlation hints now visible in human output
+    #[test]
+    fn format_dynamic_report_surfaces_phase4b_regression_and_correlation_hints() {
+        let mut r = DynamicMobileReport::new("phase4b.apk");
+        r.dry_run = true;
+        let mut fi = crate::mobile::FridaInstrumentation::default();
+        fi.note = "phase4b".to_string();
+        fi.regression_notes.push("behavior changed: new crypto call".into());
+        fi.regression_notes.push("baseline findings delta".into());
+        r.frida_instrumentation = Some(fi);
+        r.findings.push(DynamicMobileFinding {
+            category: "frida-crypto-observation".into(),
+            severity: Severity::Low,
+            title: "c".into(),
+            description: "c".into(),
+            recommendation: "r".into(),
+            evidence: None,
+            static_correlation: Some("frida+static secret".into()),
+        });
+
+        // populate recommendations via the builder (Phase 4b polish appends regression bullets here)
+        r.recommendations = build_dynamic_recommendations(&r);
+
+        let s = format_dynamic_report(&r);
+        // frida line now includes regression_notes count (Phase 4b polish)
+        assert!(s.contains("regression_notes=2"));
+        // new Correlation / Regression section
+        assert!(s.contains("Correlation / Regression:"));
+        assert!(s.contains("2 regression note(s) from baseline"));
+        assert!(s.contains("1 finding(s) carry static_correlation"));
+        assert!(s.contains("use correlate_reports"));
+        // recommendations get the regression bullets (from build_dynamic_recommendations)
+        assert!(s.contains("2 regression note(s) from baseline comparison"));
+        assert!(s.contains("regression: behavior changed: new crypto call"));
     }
 }

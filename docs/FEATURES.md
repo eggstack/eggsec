@@ -16,7 +16,7 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows use
 | `packet-inspection` | Live packet capture, advanced packet tools | pnet, pnet_packet, libc |
 | `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, eggsec-nse |
 | `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, eggsec-nse/sandbox |
-| `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only). Dynamic mobile (Android ADB + logcat + Phase 2a proxy + traffic-capture + runtime-permission operations + correlation) shipped under `mobile-dynamic`; future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md` (+ Phase 4a core correlation engine). | zip, plist (optional under feature) |
+| `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only). Dynamic mobile (Android ADB + logcat + Phase 2a proxy + traffic-capture + runtime-permission operations + correlation) shipped under `mobile-dynamic`; future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md` (+ Phase 4a core correlation engine; Phase 4b TUI deferred; reporting polish (human output) 2026-06-12). | zip, plist (optional under feature) |
 | `full` | All features combined (excludes `grpc-api`, `ws-api`, `pdf`) | stress-testing, packet-inspection, rest-api, nse, ai-integration, websocket, headless-browser, database, container, sbom, advanced-hunting, compliance, external-integrations, finding-workflow, vuln-management, wireless, mobile |
 
 ## Available Builds
@@ -90,7 +90,7 @@ cargo build --release --features mobile
 Adds:
 - `eggsec mobile <path.{apk,ipa}>` - Static security analysis of Android APKs and iOS IPAs (authorized lab/defense use only).
 - Coverage: manifest attributes, permissions (normal/dangerous/signature), transport security (cleartext/ATS), secrets in assets, debug/backup/exported flags, signing/provisioning notes, custom URL schemes.
-- Phase 1: static-only (no execution, no device interaction). Pure-Rust ZIP/plist + bounded AXML extraction. Requires `--features mobile` (or `--features full`, which includes it). See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` and `docs/CAPABILITIES.md` (Mobile App Security section). Dynamic mobile (Phase 1 + Phase 2a + final polish + close-out polish, complete 2026-06-12) is shipped under `--features mobile-dynamic`; future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md` (+ Phase 4a CorrelationEngine).
+- Phase 1: static-only (no execution, no device interaction). Pure-Rust ZIP/plist + bounded AXML extraction. Requires `--features mobile` (or `--features full`, which includes it). See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` and `docs/CAPABILITIES.md` (Mobile App Security section). Dynamic mobile (Phase 1 + Phase 2a + final polish + close-out polish, complete 2026-06-12) is shipped under `--features mobile-dynamic`; future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md` (+ Phase 4a CorrelationEngine; Phase 4b TUI deferred; reporting polish (human output) 2026-06-12).
 
 ## Feature Hierarchy
 
