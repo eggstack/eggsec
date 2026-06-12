@@ -58,6 +58,8 @@ insecure-tls = ["eggsec/insecure-tls"]
     "mobile-dynamic",
     "wireless-advanced",
     "db-pentest",
+    "web-proxy",
   ]
 
   db-pentest = ["eggsec/db-pentest"]
+  web-proxy = ["eggsec/web-proxy"]

@@ -80,6 +80,7 @@ advanced-hunting = ["eggsec/advanced-hunting"]
 tool-api = ["eggsec/tool-api"]
 rest-api = ["eggsec/rest-api"]
 db-pentest = ["eggsec/db-pentest"]
+web-proxy = ["eggsec/web-proxy"]
 full = [
     "nse",
     "headless-browser",
@@ -97,4 +98,5 @@ full = [
     "tool-api",
     "rest-api",
     "db-pentest",
+    "web-proxy",
 ]

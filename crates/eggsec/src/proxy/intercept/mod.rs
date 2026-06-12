@@ -6,10 +6,13 @@
 //! - Monitor mode for passive traffic logging
 //! - Configurable interception rules
 
+mod bridge;
 mod cert;
 mod interceptor;
 mod rules;
+pub mod types;
 
+pub use bridge::to_scan_report_data_proxy;
 pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
 pub use rules::{InterceptRule, RuleAction, RuleSet};

@@ -44,6 +44,20 @@ An HTTP/HTTPS intercepting proxy for security testing. Key components:
 - **`InterceptProxy`** (`intercept/interceptor.rs`): Higher-level proxy with `InterceptMode` (Monitor, Intercept, Allow) and channel-based request/response modification.
 - **`RuleSet`** (`intercept/rules.rs`): Evaluates host/path patterns against rules with `RuleAction` variants: `Allow`, `Block`, `Intercept`, `Monitor`, `Modify`.
 
+### Web Proxy / Traffic Interception (`web-proxy` feature)
+
+An interactive MITM proxy for capturing and inspecting HTTP/HTTPS traffic in authorized lab environments. Phase 1 delivers dry-run mode with complete report generation; real interception is Phase 2.
+
+**Key types** (`proxy/intercept/types.rs`): `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`
+
+**Feature gate**: `web-proxy` (independent of `stress-testing`)
+
+**Policy**: `OperationRisk::TrafficInterception`, `Capability::TrafficInterception`, `--allow-web-proxy` override
+
+**Reporting**: `to_scan_report_data_proxy()` bridge auto-wired in `report convert`
+
+See `architecture/web_proxy.md` and `docs/WEB_PROXY.md` for full details.
+
 ## Key Methods on `ProxyManager`
 
 | Method | Location | Description |

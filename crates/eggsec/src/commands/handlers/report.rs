@@ -14,73 +14,13 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
             // Parse as canonical ScanReportData, or auto-bridge native JSON from
             // standalone defense-lab commands (wireless/mobile) when their feature is enabled.
             // This makes `eggsec <lab> --json -o out.json ; eggsec report convert out.json -f ...` work.
+            // Try native ScanReportData first, then cascade through feature-gated defense-lab bridges.
             let report: convert::ScanReportData = if let Ok(r) = serde_json::from_str::<convert::ScanReportData>(&content) {
                 r
+            } else if let Some(r) = try_bridge_defense_lab(&content) {
+                r
             } else {
-                #[cfg(feature = "wireless")]
-                {
-                    if let Ok(w) = serde_json::from_str::<crate::wireless::WirelessScanResult>(&content) {
-                        crate::wireless::to_scan_report_data(&w)
-                    } else if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(ls) = v.get("last_scan") {
-                            if let Ok(w) = serde_json::from_value::<crate::wireless::WirelessScanResult>(ls.clone()) {
-                                crate::wireless::to_scan_report_data(&w)
-                            } else {
-                                return Err(anyhow::anyhow!("Input is not ScanReportData and last_scan is not a valid wireless result"));
-                            }
-                        } else {
-                            return Err(anyhow::anyhow!("Input is not ScanReportData and does not match wireless shapes (direct or wrapped last_scan)"));
-                        }
-                    } else {
-                        #[cfg(feature = "wireless-advanced")]
-                        {
-                            if let Ok(a) = serde_json::from_str::<crate::wireless::active::ActiveWirelessAttackResult>(&content) {
-                                crate::wireless::active::to_active_scan_report_data(&a)
-                            } else {
-                                return Err(anyhow::anyhow!("Input is not ScanReportData and does not match wireless shapes (direct, wrapped, or active attack result)"));
-                            }
-                        }
-                        #[cfg(not(feature = "wireless-advanced"))]
-                        {
-                            return Err(anyhow::anyhow!("Input is not ScanReportData and wireless feature present but could not parse as wireless"));
-                        }
-                    }
-                }
-                #[cfg(all(not(feature = "wireless"), feature = "mobile", not(feature = "mobile-dynamic")))]
-                {
-                    if let Ok(m) = serde_json::from_str::<crate::mobile::MobileScanReport>(&content) {
-                        crate::mobile::to_scan_report_data(&m)
-                    } else {
-                        return Err(anyhow::anyhow!("Input is not ScanReportData and does not match mobile shape"));
-                    }
-                }
-                #[cfg(all(not(feature = "wireless"), feature = "mobile-dynamic"))]
-                {
-                    if let Ok(m) = serde_json::from_str::<crate::mobile::MobileScanReport>(&content) {
-                        crate::mobile::to_scan_report_data(&m)
-                    } else if let Ok(d) = serde_json::from_str::<crate::mobile::DynamicMobileReport>(&content) {
-                        crate::mobile::to_scan_report_data_dynamic(&d)
-                    } else {
-                        return Err(anyhow::anyhow!("Input is not ScanReportData and does not match mobile or mobile-dynamic shape"));
-                    }
-                }
-                #[cfg(all(not(feature = "wireless"), not(feature = "mobile"), feature = "db-pentest"))]
-                {
-                    if let Ok(d) = serde_json::from_str::<crate::db_pentest::DbPentestReport>(&content) {
-                        crate::db_pentest::to_scan_report_data_db(&d)
-                    } else {
-                        return Err(anyhow::anyhow!("Input is not ScanReportData and does not match db-pentest shape"));
-                    }
-                }
-                #[cfg(all(not(feature = "wireless"), not(feature = "mobile"), not(feature = "db-pentest")))]
-                {
-                    return Err(anyhow::anyhow!("Failed to parse as ScanReportData; no wireless/mobile/db-pentest feature to auto-bridge native defense-lab JSON (rebuild with --features wireless or mobile or db-pentest)"));
-                }
-                #[cfg(any(feature = "wireless", feature = "mobile"))]
-                {
-                    // wireless or mobile branches above already handled or returned; this arm exists only for cfg consistency when both are absent but db-pentest is the only lab feature
-                    return Err(anyhow::anyhow!("Input is not ScanReportData and no matching defense-lab shape found for the enabled lab features"));
-                }
+                return Err(anyhow::anyhow!("Failed to parse input as ScanReportData or any supported defense-lab format"));
             };
 
             let output = match convert_args.format {
@@ -267,4 +207,53 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
     }
 
     Ok(())
+}
+
+/// Try to parse native defense-lab JSON into ScanReportData via feature-gated bridges.
+/// Returns None if no bridge matches (caller should produce its own error).
+fn try_bridge_defense_lab(content: &str) -> Option<crate::output::convert::ScanReportData> {
+    #[cfg(feature = "web-proxy")]
+    {
+        if let Ok(p) = serde_json::from_str::<crate::proxy::intercept::types::WebProxySessionReport>(content) {
+            return Some(crate::proxy::intercept::to_scan_report_data_proxy(&p));
+        }
+    }
+    #[cfg(feature = "wireless")]
+    {
+        if let Ok(w) = serde_json::from_str::<crate::wireless::WirelessScanResult>(content) {
+            return Some(crate::wireless::to_scan_report_data(&w));
+        }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(content) {
+            if let Some(ls) = v.get("last_scan") {
+                if let Ok(w) = serde_json::from_value::<crate::wireless::WirelessScanResult>(ls.clone()) {
+                    return Some(crate::wireless::to_scan_report_data(&w));
+                }
+            }
+        }
+        #[cfg(feature = "wireless-advanced")]
+        {
+            if let Ok(a) = serde_json::from_str::<crate::wireless::active::ActiveWirelessAttackResult>(content) {
+                return Some(crate::wireless::active::to_active_scan_report_data(&a));
+            }
+        }
+    }
+    #[cfg(feature = "mobile")]
+    {
+        if let Ok(m) = serde_json::from_str::<crate::mobile::MobileScanReport>(content) {
+            return Some(crate::mobile::to_scan_report_data(&m));
+        }
+    }
+    #[cfg(feature = "mobile-dynamic")]
+    {
+        if let Ok(d) = serde_json::from_str::<crate::mobile::DynamicMobileReport>(content) {
+            return Some(crate::mobile::to_scan_report_data_dynamic(&d));
+        }
+    }
+    #[cfg(feature = "db-pentest")]
+    {
+        if let Ok(d) = serde_json::from_str::<crate::db_pentest::DbPentestReport>(content) {
+            return Some(crate::db_pentest::to_scan_report_data_db(&d));
+        }
+    }
+    None
 }

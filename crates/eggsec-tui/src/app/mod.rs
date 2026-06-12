@@ -930,6 +930,9 @@ impl App {
                     eggsec::config::ConfirmationClass::CrossHostRedirect => {
                         mo.allow_cross_host_redirect = true;
                     }
+                    eggsec::config::ConfirmationClass::TrafficInterception => {
+                        mo.allow_web_proxy = true;
+                    }
                 }
             }
             mo.reason = if pending.reason_input.trim().is_empty() {
