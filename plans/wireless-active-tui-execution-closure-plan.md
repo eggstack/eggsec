@@ -1,8 +1,39 @@
 # Wireless Active Attacks: Surgical TUI Execution Closure Plan
 
-**Date**: 2026-06-12  
-**Status**: Draft — Ready for Handoff  
+**Date**: 2026-06-12
+**Status**: ✅ Resolved — All items complete (closed 2026-06-12)
 **Goal**: Complete the remaining execution wiring so active deauth works from the TUI.
+
+> **Resolution note (2026-06-12)**: This plan was drafted against a stale view
+> of the codebase. All five "remaining gaps" called out below were already
+> implemented in `main` at the time of resolution (committed 2026-06-12 in
+> `8b45cdd2` / `3e2b4291` / `87b23b9c` / `39943bea`). The TUI active attack
+> execution path is fully wired end-to-end:
+>
+> | Gap (this plan) | Resolution (where it lives) |
+> |-----------------|-----------------------------|
+> | `start_active_attack()` only sets UI state | Intentional — wireless tab is `direct_launch: true` (`crates/eggsec-tui/src/tabs/spec.rs:438`); the App's retro-gate at `crates/eggsec-tui/src/app/mod.rs:371-398` handles task submission, and `start_active_attack()` only flips the local `AppState`. The same pattern is used by Auth / Stress / Packet / Hunt / Browser tabs. |
+> | No worker for `TaskConfig::WirelessActive` | `crates/eggsec-tui/src/workers/security.rs:865-927` (`run_wireless_active_task`) — dispatches to `run_deauth` / `run_disassoc` with 60s timeout and hard budgets (`max_frames ≤ 1000`, `frames_per_second ≤ 100`). |
+> | `run_deauth()` never called from the TUI | Dispatched inside the worker above; `attack_type` selects `run_deauth` (default) vs. `run_disassoc`. |
+> | No policy confirmation for non-dry-run attacks | `crates/eggsec-tui/src/app/mod.rs:436-471` special-cases the wireless descriptor to `OperationRisk::Intrusive` under `OperationMode::DefenseLab` for live attacks; the central `EnforcementContext::evaluate()` + `PendingPolicyConfirmation` flow applies. Dry-run is `OperationRisk::SafeActive` and proceeds without the confirmation overlay. |
+> | No result feedback from worker back to `WirelessTab` | `crates/eggsec-tui/src/app/state_update.rs:418-422` routes `TaskResult::WirelessActive(result)` → `WirelessTab::set_active_results(result)`, which transitions the tab to `AppState::Completed` and renders findings / evidence / recommendations. |
+>
+> See `architecture/wireless.md`, `docs/WIRELESS.md`, `architecture/tui.md`
+> ("Wireless tab Active Mode"), `.opencode/skills/eggsec-agent/wireless_security_testing.md`,
+> and `crates/eggsec/src/wireless/AGENTS.override.md` for the shipped design.
+> This plan is retained as a historical artifact documenting the design
+> intent; the actual implementation followed a tighter parallel path
+> (see `wireless-active-tui-execution-completion-plan.md` and
+> `wireless-active-tui-execution-final-polish-plan.md`, both already closed).
+>
+> Test status at resolution:
+> - `eggsec` lib (`wireless-advanced`): 1579 passed, 0 failed
+> - `eggsec-tui` lib: 305 passed, 0 failed
+> - `eggsec-tui` lib (`wireless-advanced`): 322 passed, 0 failed
+> - All `cargo check` targets (`eggsec`, `eggsec-tui`, `eggsec-cli`, `eggsec-nse`,
+>   `eggsec-output`, with and without `wireless-advanced`): green
+> - Pre-existing clippy warnings: unchanged (8 in `eggsec` lib, 55 in
+>   `eggsec-tui` lib with `wireless-advanced`; no new warnings introduced)
 
 ---
 
