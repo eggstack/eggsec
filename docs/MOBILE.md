@@ -108,6 +108,32 @@ See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` fo
 
 The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | report convert` flow work out of the box when built with `--features mobile`. Categories in bridged output are of the form `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`, `mobile-android-permission`, `mobile-ios-secret`, `mobile-ios-transport`) to preserve signal while satisfying the platform prefix. Evidence in bridged findings carries through useful details (e.g. permission name like "READ_SMS", manifest key, secret pattern like "api_key=..."); empty findings produce a valid bridge with 0 findings (tested).
 
+## Current Status (all phases delivered or closed; Phase 4a Correlation Engine complete)
+
+**Phase 4a (Core Correlation Engine + Evidence Foundation)** delivered 2026-06-12 under single `mobile-dynamic` (executed per `plans/mobile-dynamic-phase4-actionable-intelligence-plan.md` and this polish handoff plan). Adds `CorrelationEngine` + `correlate_reports` (high-level) + enriched `CorrelatedFinding` (optional `score: Option<u8>` conservative 0-100, `correlation_type: Option<CorrelationType>` (Direct/Indirect/Behavioral/CrossLayer), `enrichment`) + `CorrelationResult` (correlations + timeline + `CorrelationSummary`) + scoring inside `correlate_findings` + `build_timeline`. Builds on Phase 3c `MobileBaseline`/`--baseline`/`--evidence-bundle` + regression notes. 6+ new unit tests; all ~85+ mobile-dynamic tests green; dry-run safe; hermetic; no new deps; serde roundtrips; standalone defense-lab (MCP/agent/TUI/pipeline absent). Phase 4b TUI deferred per policy; reporting polish (human output in `format_dynamic_report` + `build_dynamic_recommendations`) delivered. See "Future" for 4b/4c notes and cross-refs.
+
+**Phase 4a CLI / API example** (post-run correlation; hardware-free with dry-run reports):
+```bash
+# Produce a static baseline (or use a prior mobile static JSON)
+eggsec mobile static baseline.apk --json -o static.json
+
+# Dynamic run with Frida + baseline + bundle (dry-run always safe)
+eggsec mobile dynamic test.apk --device emulator-5554 \
+  --frida-script "builtin:basic-method-trace" \
+  --frida-script "library:common-hooks" \
+  --baseline static.json \
+  --evidence-bundle /tmp/evidence.json.gz \
+  --dry-run --json -o dynamic.json
+
+# Programmatic correlation (or call the engine directly)
+# In Rust: use eggsec::mobile::{correlate_reports, CorrelationEngine, ...};
+# let result = correlate_reports(&static_report, &dynamic_report);
+# result.correlations, result.timeline, result.summary
+eggsec report convert dynamic.json -f html -o dyn.html   # auto-bridges including behavioral-regression + frida-*
+```
+
+See "Recommendations", "Future", "Data Model", and `plans/mobile-dynamic-phase4-actionable-intelligence-plan.md` (annotated executed) + `dynamic.rs` for details.
+
 ## Limitations (Phase 1 static + Phase 1 dynamic + Phase 2 closed 2026-06-12)
 
 **Static**:

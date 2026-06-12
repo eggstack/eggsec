@@ -64,7 +64,7 @@ Categories in bridged output are `mobile-{android,ios}-<native-category>` (stati
 
 Integration points:
 - Enforcement: static uses StandardAssessment/SafeActive + "mobile"; dynamic uses DefenseLab/SafeActive + "mobile-dynamic" + explicit `--allow-dynamic-mobile` gate (audited) + feature check (see handler).
-- Reporting: local types emitted directly; `to_scan_report_data` / `to_scan_report_data_dynamic` available for OutputFormat consumers; auto-bridge in `report convert` (extended for `mobile-dynamic` native JSON; categories `mobile-dynamic-android-*`; Phase 2a: extra info findings for traffic_summary/permission_state under mobile-dynamic-android-*).
+- Reporting: local types emitted directly; `to_scan_report_data` / `to_scan_report_data_dynamic` available for OutputFormat consumers; auto-bridge in `report convert` (extended for `mobile-dynamic` native JSON; categories `mobile-dynamic-android-*`; Phase 2 closed: extra info findings for traffic_summary/permission_state under mobile-dynamic-android-*).
 - Feature gate + policy: `mobile` / `mobile-dynamic=["mobile"]` in Cargo.toml; listed in `full`; policy in `config/policy_decision.rs` + handler descriptor.
 - Handler dispatch: `commands/handlers/mod.rs` and `cli/mod.rs`.
 

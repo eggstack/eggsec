@@ -15,7 +15,7 @@
 //! is available under the additional `mobile-dynamic` feature flag. See:
 //!
 //! - plans/mobile-dynamic-phase1-implementation-handoff-plan.md (Phase 1 — executed)
-//! - plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a — executed 2026-06-12)
+//! - plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2 closed 2026-06-12 per closeout-and-phase3-kickoff-plan.md — executed)
 //! - plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish — executed)
 //! - plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md (combined close-out — executed 2026-06-12)
 //! - plans/dynamic-mobile-testing-loadout-design-plan.md (parent design)

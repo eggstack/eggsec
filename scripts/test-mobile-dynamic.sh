@@ -364,7 +364,7 @@ if ! $REAL_MODE; then
   echo "To exercise live path: start an AVD (API 34+), supply a controlled test APK, then:"
   echo "  ./scripts/test-mobile-dynamic.sh /path/to/your-test.apk --real"
   echo "Or set ANDROID_SERIAL and pass --real."
-  echo "See docs/MOBILE.md 'Phase 1 Lab Setup' + 'Phase 2a/3a CLI examples' and the plans for full command + safety notes."
+  echo "See docs/MOBILE.md 'Phase 1 Lab Setup' + 'Phase 2 (closed)/3a CLI examples' and the plans for full command + safety notes."
   echo "Real Frida requires --allow-frida + frida CLI + frida-server (Intrusive policy)."
   exit 0
 fi

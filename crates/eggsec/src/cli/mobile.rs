@@ -112,8 +112,8 @@ Examples:
   eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "library:common-hooks" --baseline /tmp/baseline.json --evidence-bundle /tmp/evidence.json.gz --json
 "#;
 
-/// Dynamic mobile args (Phase 1 ADB core + log capture; Phase 2a proxy +
-/// traffic-capture + runtime-permission operations).
+/// Dynamic mobile args (Phase 1 ADB core + log capture; Phase 2 (proxy/permissions/correlation) +
+/// Frida + CorrelationEngine under single mobile-dynamic).
 #[derive(clap::Args, Clone)]
 pub struct DynamicMobileArgs {
     #[arg(help = "Path to .apk (Android test build only) for dynamic run")]

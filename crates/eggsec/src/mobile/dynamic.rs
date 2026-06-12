@@ -5,7 +5,7 @@
 //! runtime log analysis for lab/defense validation.
 //!
 //! Phase 2 (proxy foundation + runtime permissions + correlation + final/close-out polish) closed 2026-06-12:
-//! per plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a executed 2026-06-12),
+//! per plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2 closed 2026-06-12 per closeout plan),
 //! plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (executed), and
 //! plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md (combined close-out executed 2026-06-12).
 //! All dynamic (P1+P2) kept under the single `mobile-dynamic` feature (M1 decision; no `mobile-dynamic-advanced` sub-split).
@@ -1499,33 +1499,33 @@ pub fn correlate_findings(
                 });
             }
         }
-        if dcat == "frida-bypass-validation" {
-            if static_findings.iter().any(|f| f.category == "permission" && f.evidence.as_ref().map_or(false, |e| e.contains("debug") || e.contains("READ_LOGS"))) {
-                let note = "bypass observed + debug/permission surface present".to_string();
-                df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding {
-                    dynamic_category: dcat.to_string(),
-                    static_category: "permission".to_string(),
-                    note,
-                    score: Some(60),
-                    correlation_type: Some(CorrelationType::Indirect),
-                    enrichment: Some("bypass + debug/read-logs surface".into()),
-                });
-            }
+        if dcat == "frida-bypass-validation"
+            && static_findings.iter().any(|f| f.category == "permission" && f.evidence.as_ref().is_some_and(|e| e.contains("debug") || e.contains("READ_LOGS")))
+        {
+            let note = "bypass observed + debug/permission surface present".to_string();
+            df.static_correlation = Some(note.clone());
+            notes.push(CorrelatedFinding {
+                dynamic_category: dcat.to_string(),
+                static_category: "permission".to_string(),
+                note,
+                score: Some(60),
+                correlation_type: Some(CorrelationType::Indirect),
+                enrichment: Some("bypass + debug/read-logs surface".into()),
+            });
         }
-        if dcat == "frida-secret-extract" {
-            if static_findings.iter().any(|f| f.category == "secret") {
-                let note = "frida secret extract correlates with static secret finding".to_string();
-                df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding {
-                    dynamic_category: dcat.to_string(),
-                    static_category: "secret".to_string(),
-                    note,
-                    score: Some(65),
-                    correlation_type: Some(CorrelationType::Direct),
-                    enrichment: Some("frida secret + static secret".into()),
-                });
-            }
+        if dcat == "frida-secret-extract"
+            && static_findings.iter().any(|f| f.category == "secret")
+        {
+            let note = "frida secret extract correlates with static secret finding".to_string();
+            df.static_correlation = Some(note.clone());
+            notes.push(CorrelatedFinding {
+                dynamic_category: dcat.to_string(),
+                static_category: "secret".to_string(),
+                note,
+                score: Some(65),
+                correlation_type: Some(CorrelationType::Direct),
+                enrichment: Some("frida secret + static secret".into()),
+            });
         }
         // Phase 4c (partial): supply-chain / native load observation correlation (best-effort)
         if dcat == "frida-native-load" {
