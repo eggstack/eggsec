@@ -98,9 +98,30 @@ eggsec wireless --help
 
 Findings and networks are also exposed via `to_scan_report_data()` for unified reporting (JSON, HTML, Markdown, etc.).
 
-## TUI
+## TUI Integration
 
-The Wireless tab (if built with the feature) provides interactive interface entry + results view with the same data model. Navigation, export, and task management follow standard TUI tab patterns (see architecture/tui.md for tab architecture).
+The Wireless tab in the TUI provides both passive scanning and active attack capabilities.
+
+**Passive Scanning (wireless feature):**
+- Enter your wireless interface name and press Enter
+- Results display detected networks with SSID, BSSID, channel, security, and signal strength
+- Rogue and suspicious network heuristics are applied automatically
+
+**Active Attacks (wireless-advanced feature):**
+- Press `a` to toggle between passive and active attack mode
+- Active mode shows input fields for: BSSID, Client MAC, Frame Count, Rate Limit
+- Press `d` to toggle Dry Run mode (on by default for safety)
+- Press Enter to execute — the policy confirmation overlay will appear for active attacks
+- Active attacks require `OperationRisk::Intrusive` clearance and explicit operator confirmation
+- Results display findings, evidence, and recommendations
+
+**Key Bindings:**
+- `a` — Toggle active/passive mode
+- `d` — Toggle dry-run
+- `Enter` — Start scan or attack
+- `Escape` — Stop running operation
+
+Navigation, export, and task management follow standard TUI tab patterns (see architecture/tui.md for tab architecture).
 
 ## Output & Integration
 
@@ -288,7 +309,7 @@ See `docs/SAFETY.md` and `plans/wireless-active-attacks-loadout-design-plan.md`.
 
 ### Reporting Bridge
 
-Active attack results can be converted to unified reports (SARIF, JUnit, HTML, Markdown, CSV) via the reporting bridge:
+Active attack results can be converted to unified reports (SARIF, JUnit, HTML, Markdown, CSV) via the reporting bridge. The auto-bridge works for both CLI and TUI output:
 
 ```bash
 # Dry-run deauth → JSON → SARIF report
@@ -300,7 +321,7 @@ sudo eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --count 10 --allow-a
 eggsec report convert deauth.json -f html
 ```
 
-The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth`) for findings. Native `--json` output from `eggsec wireless <iface> deauth` is auto-bridged by `eggsec report convert` when the `wireless-advanced` feature is enabled.
+The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth`) for findings. Native `--json` output from `eggsec wireless <iface> deauth` is auto-bridged by `eggsec report convert` when the `wireless-advanced` feature is enabled. TUI-generated results follow the same bridge path when exported to JSON.
 
 ## Troubleshooting
 

@@ -371,13 +371,30 @@ impl TaskBuilder for super::tabs::VulnTab {
 #[cfg(feature = "wireless")]
 impl TaskBuilder for super::tabs::WirelessTab {
     fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        #[cfg(feature = "wireless-advanced")]
+        {
+            if self.active_mode {
+                let (interface, attack_type, bssid, client, frame_count, rate_limit, dry_run) =
+                    self.active_attack_config()?;
+                return Some(workers::TaskConfig::WirelessActive {
+                    interface,
+                    attack_type,
+                    bssid,
+                    client,
+                    frame_count,
+                    rate_limit,
+                    dry_run,
+                });
+            }
+        }
         let interface = self.interface();
         if interface.is_empty() {
-            return None;
+            None
+        } else {
+            Some(workers::TaskConfig::Wireless {
+                interface: interface.to_string(),
+            })
         }
-        Some(workers::TaskConfig::Wireless {
-            interface: interface.to_string(),
-        })
     }
 }
 

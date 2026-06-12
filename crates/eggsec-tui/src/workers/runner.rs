@@ -171,6 +171,16 @@ pub enum TaskConfig {
     Wireless {
         interface: String,
     },
+    #[cfg(feature = "wireless-advanced")]
+    WirelessActive {
+        interface: String,
+        attack_type: String,
+        bssid: Option<String>,
+        client: Option<String>,
+        frame_count: u64,
+        rate_limit: u64,
+        dry_run: bool,
+    },
     Auth {
         target: String,
         username: Option<String>,
@@ -250,6 +260,8 @@ pub enum TaskResult {
     Vuln(eggsec::vuln::VulnAssessment),
     #[cfg(feature = "wireless")]
     Wireless(eggsec::wireless::WirelessScanResult),
+    #[cfg(feature = "wireless-advanced")]
+    WirelessActive(eggsec::wireless::active::ActiveWirelessAttackResult),
     Auth(eggsec::auth::AuthTestReport),
     Error(String),
 }
@@ -636,6 +648,13 @@ impl TaskRunner {
             #[cfg(feature = "wireless")]
             TaskConfig::Wireless { interface } => {
                 super::security::run_wireless_task(interface, progress_tx, result_tx).await
+            }
+            #[cfg(feature = "wireless-advanced")]
+            TaskConfig::WirelessActive { interface, attack_type, bssid, client, frame_count, rate_limit, dry_run } => {
+                super::security::run_wireless_active_task(
+                    interface, attack_type, bssid, client, frame_count, rate_limit, dry_run,
+                    progress_tx, result_tx,
+                ).await
             }
             TaskConfig::Auth {
                 target,

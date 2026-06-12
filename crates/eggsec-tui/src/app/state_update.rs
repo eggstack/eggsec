@@ -415,6 +415,11 @@ impl super::App {
                 self.tabs.wireless.set_results(r);
                 None
             }
+            #[cfg(all(feature = "wireless", feature = "wireless-advanced"))]
+            TaskResult::WirelessActive(r) => {
+                self.tabs.wireless.set_active_results(r);
+                None
+            }
             TaskResult::Auth(report) => {
                 let mut display = String::new();
                 display.push_str(&format!("Target: {}\n", report.target));

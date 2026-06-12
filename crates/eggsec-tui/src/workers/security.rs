@@ -860,3 +860,68 @@ pub async fn run_wireless_task(
     }
     Ok(())
 }
+
+#[cfg(feature = "wireless-advanced")]
+pub async fn run_wireless_active_task(
+    interface: String,
+    attack_type: String,
+    bssid: Option<String>,
+    client: Option<String>,
+    frame_count: u64,
+    rate_limit: u64,
+    dry_run: bool,
+    progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+    result_tx: tokio::sync::mpsc::Sender<super::runner::TaskResult>,
+) -> anyhow::Result<()> {
+    use eggsec::wireless::active::ActiveAttackConfig;
+    use eggsec::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
+
+    let _ = progress_tx.send((0, 2)).await;
+
+    let parsed_bssid = bssid.as_deref().and_then(ActiveAttackConfig::parse_mac);
+    let parsed_client = client.as_deref().and_then(ActiveAttackConfig::parse_mac);
+
+    let config = ActiveAttackConfig {
+        interface: interface.clone(),
+        bssid: parsed_bssid,
+        client: parsed_client,
+        reason_code: 7,
+        max_frames: frame_count.min(1000),
+        frames_per_second: rate_limit.min(100),
+        dry_run,
+    };
+
+    let result = match attack_type.as_str() {
+        "disassoc" => {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                run_disassoc(&config, config.client.is_none()),
+            ).await
+        }
+        _ => {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                run_deauth(&config, config.client.is_none()),
+            ).await
+        }
+    };
+
+    let _ = progress_tx.send((2, 2)).await;
+
+    match result {
+        Ok(Ok(attack_result)) => {
+            let _ = result_tx.send(super::runner::TaskResult::WirelessActive(attack_result)).await;
+        }
+        Ok(Err(e)) => {
+            let _ = result_tx.send(super::runner::TaskResult::Error(
+                format!("Active wireless attack failed: {e}")
+            )).await;
+        }
+        Err(_) => {
+            let _ = result_tx.send(super::runner::TaskResult::Error(
+                "Active wireless attack timed out after 60s".to_string()
+            )).await;
+        }
+    }
+    Ok(())
+}

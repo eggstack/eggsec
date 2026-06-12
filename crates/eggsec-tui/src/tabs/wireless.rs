@@ -5,6 +5,8 @@ use crate::components::{
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use eggsec::wireless::WirelessScanResult;
+#[cfg(feature = "wireless-advanced")]
+use eggsec::wireless::active::ActiveWirelessAttackResult;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -16,6 +18,8 @@ use ratatui::{
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WirelessFocusArea {
     Inputs,
+    #[cfg(feature = "wireless-advanced")]
+    ActiveConfig,
     Results,
 }
 
@@ -27,6 +31,14 @@ pub struct WirelessTab {
     pub results_view: ScrollableText,
     pub focus_area: WirelessFocusArea,
     pub error: Option<TabError>,
+    #[cfg(feature = "wireless-advanced")]
+    pub active_mode: bool,
+    #[cfg(feature = "wireless-advanced")]
+    pub active_inputs: InputGroup,
+    #[cfg(feature = "wireless-advanced")]
+    pub dry_run: bool,
+    #[cfg(feature = "wireless-advanced")]
+    pub active_results: Option<ActiveWirelessAttackResult>,
 }
 
 impl WirelessTab {
@@ -41,11 +53,207 @@ impl WirelessTab {
             results_view: ScrollableText::new("Results"),
             focus_area: WirelessFocusArea::Inputs,
             error: None,
+            #[cfg(feature = "wireless-advanced")]
+            active_mode: false,
+            #[cfg(feature = "wireless-advanced")]
+            active_inputs: {
+                let mut group = InputGroup::new();
+                group = group
+                    .add(InputField::new("BSSID (optional)").with_value(""))
+                    .add(InputField::new("Client MAC (optional)").with_value(""))
+                    .add(InputField::new("Frame Count").with_value("100"))
+                    .add(InputField::new("Rate Limit (fps)").with_value("10"));
+                group
+            },
+            #[cfg(feature = "wireless-advanced")]
+            dry_run: true,
+            #[cfg(feature = "wireless-advanced")]
+            active_results: None,
         }
     }
 
     pub fn get_results(&self) -> Option<&WirelessScanResult> {
         self.results.as_ref()
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    pub fn toggle_active_mode(&mut self) {
+        self.active_mode = !self.active_mode;
+        if !self.active_mode {
+            for field in &mut self.active_inputs.fields {
+                field.clear();
+            }
+            self.active_inputs.blur();
+        }
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    pub fn toggle_dry_run(&mut self) {
+        self.dry_run = !self.dry_run;
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    pub fn active_attack_config(
+        &self,
+    ) -> Option<(String, String, Option<String>, Option<String>, u64, u64, bool)> {
+        if !self.active_mode {
+            return None;
+        }
+        let interface = self.inputs.fields.first()?.value.clone();
+        if interface.is_empty() {
+            return None;
+        }
+        let bssid = self
+            .active_inputs
+            .fields
+            .get(0)?
+            .value
+            .trim()
+            .to_string();
+        let client = self
+            .active_inputs
+            .fields
+            .get(1)?
+            .value
+            .trim()
+            .to_string();
+        let frame_count: u64 = self
+            .active_inputs
+            .fields
+            .get(2)?
+            .value
+            .trim()
+            .parse()
+            .unwrap_or(100);
+        let rate_limit: u64 = self
+            .active_inputs
+            .fields
+            .get(3)?
+            .value
+            .trim()
+            .parse()
+            .unwrap_or(10);
+        let attack_type = "deauth".to_string();
+        Some((
+            interface,
+            attack_type,
+            if bssid.is_empty() {
+                None
+            } else {
+                Some(bssid)
+            },
+            if client.is_empty() {
+                None
+            } else {
+                Some(client)
+            },
+            frame_count,
+            rate_limit,
+            self.dry_run,
+        ))
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    pub fn set_active_results(&mut self, results: ActiveWirelessAttackResult) {
+        self.update_active_results_view(&results);
+        self.active_results = Some(results);
+        self.state = AppState::Completed;
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    fn update_active_results_view(&mut self, result: &ActiveWirelessAttackResult) {
+        use ratatui::style::{Color, Modifier};
+
+        self.results_view.clear();
+
+        self.results_view.add_line(Line::from(vec![Span::styled(
+            format!("Active Attack: {}", result.attack_type),
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        )]));
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(vec![
+            Span::styled("Interface: ", Style::default().fg(Color::Gray)),
+            Span::raw(result.interface.clone()),
+        ]));
+        if let Some(ref bssid) = result.target_bssid {
+            self.results_view.add_line(Line::from(vec![
+                Span::styled("Target BSSID: ", Style::default().fg(Color::Gray)),
+                Span::raw(bssid.clone()),
+            ]));
+        }
+        if let Some(ref client) = result.target_client {
+            self.results_view.add_line(Line::from(vec![
+                Span::styled("Target Client: ", Style::default().fg(Color::Gray)),
+                Span::raw(client.clone()),
+            ]));
+        }
+        self.results_view.add_line(Line::from(vec![
+            Span::styled("Frames Sent: ", Style::default().fg(Color::Gray)),
+            Span::raw(result.frames_sent.to_string()),
+        ]));
+        self.results_view.add_line(Line::from(vec![
+            Span::styled("Duration: ", Style::default().fg(Color::Gray)),
+            Span::raw(format!("{}s", result.duration_secs)),
+        ]));
+        self.results_view.add_line(Line::from(vec![
+            Span::styled("Dry Run: ", Style::default().fg(Color::Gray)),
+            Span::raw(result.dry_run.to_string()),
+        ]));
+        self.results_view.add_line(Line::from(""));
+
+        if !result.findings.is_empty() {
+            self.results_view.add_line(Line::from(vec![Span::styled(
+                "Findings:",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]));
+            for finding in &result.findings {
+                self.results_view.add_line(Line::from(vec![
+                    Span::styled(
+                        format!("  [{}] ", finding.severity),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                    Span::raw(finding.description.clone()),
+                ]));
+                if !finding.evidence.is_empty() {
+                    self.results_view.add_line(Line::from(vec![
+                        Span::styled(
+                            "    Evidence: ",
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::raw(finding.evidence.clone()),
+                    ]));
+                }
+                if !finding.remediation.is_empty() {
+                    self.results_view.add_line(Line::from(vec![
+                        Span::styled(
+                            "    Remediation: ",
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::raw(finding.remediation.clone()),
+                    ]));
+                }
+            }
+            self.results_view.add_line(Line::from(""));
+        }
+
+        if !result.recommendations.is_empty() {
+            self.results_view.add_line(Line::from(vec![Span::styled(
+                "Recommendations:",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]));
+            for rec in &result.recommendations {
+                self.results_view.add_line(Line::from(vec![
+                    Span::styled("  • ", Style::default().fg(Color::Cyan)),
+                    Span::raw(rec.clone()),
+                ]));
+            }
+        }
     }
 
     pub fn interface(&self) -> &str {
@@ -208,6 +416,16 @@ impl TabState for WirelessTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        #[cfg(feature = "wireless-advanced")]
+        {
+            self.active_mode = false;
+            for field in &mut self.active_inputs.fields {
+                field.clear();
+            }
+            self.active_inputs.blur();
+            self.dry_run = true;
+            self.active_results = None;
+        }
         self.focus_area = WirelessFocusArea::Inputs;
     }
 
@@ -220,9 +438,20 @@ impl TabState for WirelessTab {
 
 impl TabRender for WirelessTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        #[cfg(feature = "wireless-advanced")]
+        let active_height: u16 = if self.active_mode { 8 } else { 0 };
+
+        #[cfg(not(feature = "wireless-advanced"))]
+        let input_height: u16 = 5;
+        #[cfg(feature = "wireless-advanced")]
+        let input_height: u16 = 5 + active_height;
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(5), Constraint::Min(0)])
+            .constraints([
+                Constraint::Length(input_height),
+                Constraint::Min(0),
+            ])
             .split(area);
 
         let input_area = chunks[0];
@@ -230,7 +459,11 @@ impl TabRender for WirelessTab {
 
         let input_block = Block::default()
             .borders(Borders::ALL)
-            .title(" Wireless Scan Configuration ")
+            .title(if cfg!(feature = "wireless-advanced") && self.active_mode {
+                " Wireless Scan + Active Attack Configuration "
+            } else {
+                " Wireless Scan Configuration "
+            })
             .border_style(
                 Style::default().fg(if self.focus_area == WirelessFocusArea::Inputs {
                     tc!(border_focused)
@@ -248,6 +481,48 @@ impl TabRender for WirelessTab {
 
         if let (Some(chunk), Some(field)) = (input_chunks.first(), self.inputs.fields.first()) {
             field.render(f, *chunk, insert_mode);
+        }
+
+        #[cfg(feature = "wireless-advanced")]
+        if self.active_mode {
+            let active_block = Block::default()
+                .borders(Borders::ALL)
+                .title(format!(
+                    " Active Attack Configuration (dry_run: {}) [a] toggle ",
+                    self.dry_run
+                ))
+                .border_style(
+                    Style::default()
+                        .fg(if self.focus_area == WirelessFocusArea::ActiveConfig {
+                            tc!(border_focused)
+                        } else {
+                            tc!(border)
+                        }),
+                );
+            let active_area = Rect {
+                x: input_inner.x,
+                y: input_inner.y + 3,
+                width: input_inner.width,
+                height: 7,
+            };
+            let active_inner = active_block.inner(active_area);
+            f.render_widget(active_block, active_area);
+
+            let active_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                ])
+                .split(active_inner);
+
+            for (i, chunk) in active_chunks.iter().enumerate() {
+                if let Some(field) = self.active_inputs.fields.get(i) {
+                    field.render(f, *chunk, insert_mode);
+                }
+            }
         }
 
         let results_block = Block::default()
@@ -292,6 +567,19 @@ impl TabInput for WirelessTab {
         match self.focus_area {
             WirelessFocusArea::Inputs => {
                 self.inputs.blur();
+                #[cfg(feature = "wireless-advanced")]
+                if self.active_mode {
+                    self.focus_area = WirelessFocusArea::ActiveConfig;
+                    if !self.active_inputs.fields.is_empty() {
+                        self.active_inputs.focus(0);
+                    }
+                    return;
+                }
+                self.focus_area = WirelessFocusArea::Results;
+            }
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => {
+                self.active_inputs.blur();
                 self.focus_area = WirelessFocusArea::Results;
             }
             WirelessFocusArea::Results => {
@@ -312,7 +600,23 @@ impl TabInput for WirelessTab {
                 self.inputs.blur();
                 self.focus_area = WirelessFocusArea::Results;
             }
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => {
+                self.active_inputs.blur();
+                self.focus_area = WirelessFocusArea::Inputs;
+                if !self.inputs.fields.is_empty() {
+                    self.inputs.focus(0);
+                }
+            }
             WirelessFocusArea::Results => {
+                #[cfg(feature = "wireless-advanced")]
+                if self.active_mode {
+                    self.focus_area = WirelessFocusArea::ActiveConfig;
+                    if !self.active_inputs.fields.is_empty() {
+                        self.active_inputs.focus(0);
+                    }
+                    return;
+                }
                 self.focus_area = WirelessFocusArea::Inputs;
                 if !self.inputs.fields.is_empty() {
                     self.inputs.focus(0);
@@ -325,8 +629,24 @@ impl TabInput for WirelessTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.insert(c);
+        match self.focus_area {
+            WirelessFocusArea::Inputs => {
+                #[cfg(feature = "wireless-advanced")]
+                if c == 'a' && !self.inputs.is_focused() {
+                    self.toggle_active_mode();
+                    return;
+                }
+                self.inputs.insert(c);
+            }
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => {
+                if c == 'd' && !self.active_inputs.is_focused() {
+                    self.toggle_dry_run();
+                    return;
+                }
+                self.active_inputs.insert(c);
+            }
+            WirelessFocusArea::Results => {}
         }
     }
 
@@ -334,14 +654,23 @@ impl TabInput for WirelessTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.backspace();
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.backspace(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.backspace(),
+            WirelessFocusArea::Results => {}
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.paste(text);
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.paste(text),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.paste(text),
+            WirelessFocusArea::Results => {}
         }
     }
 
@@ -351,6 +680,11 @@ impl TabInput for WirelessTab {
         }
         if self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.blur();
+            return;
+        }
+        #[cfg(feature = "wireless-advanced")]
+        if self.focus_area == WirelessFocusArea::ActiveConfig && self.active_inputs.is_focused() {
+            self.active_inputs.blur();
             return;
         }
         self.start();
@@ -363,6 +697,8 @@ impl TabInput for WirelessTab {
         }
         self.focus_area = WirelessFocusArea::Inputs;
         self.inputs.blur();
+        #[cfg(feature = "wireless-advanced")]
+        self.active_inputs.blur();
     }
 
     fn handle_up(&mut self) {
@@ -384,31 +720,42 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_left(&mut self) -> bool {
-        if !self.is_running()
-            && self.focus_area == WirelessFocusArea::Inputs
-            && self.inputs.is_focused()
-        {
-            return self.inputs.move_left();
+        if self.is_running() {
+            return false;
         }
-        false
+        match self.focus_area {
+            WirelessFocusArea::Inputs if self.inputs.is_focused() => self.inputs.move_left(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig if self.active_inputs.is_focused() => {
+                self.active_inputs.move_left()
+            }
+            _ => false,
+        }
     }
 
     fn handle_right(&mut self) -> bool {
-        if !self.is_running()
-            && self.focus_area == WirelessFocusArea::Inputs
-            && self.inputs.is_focused()
-        {
-            return self.inputs.move_right();
+        if self.is_running() {
+            return false;
         }
-        false
+        match self.focus_area {
+            WirelessFocusArea::Inputs if self.inputs.is_focused() => self.inputs.move_right(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig if self.active_inputs.is_focused() => {
+                self.active_inputs.move_right()
+            }
+            _ => false,
+        }
     }
 
     fn handle_word_forward(&mut self) {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.move_word_forward(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.move_word_forward(),
+            _ => {}
         }
     }
 
@@ -416,8 +763,11 @@ impl TabInput for WirelessTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.move_word_backward(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.move_word_backward(),
+            _ => {}
         }
     }
 
@@ -425,10 +775,11 @@ impl TabInput for WirelessTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == WirelessFocusArea::Results {
-            self.results_view.scroll_to_top();
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.move_home(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.move_home(),
+            WirelessFocusArea::Results => self.results_view.scroll_to_top(),
         }
     }
 
@@ -436,10 +787,11 @@ impl TabInput for WirelessTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WirelessFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == WirelessFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.move_end(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.move_end(),
+            WirelessFocusArea::Results => self.results_view.scroll_to_bottom(),
         }
     }
 
@@ -451,6 +803,12 @@ impl TabInput for WirelessTab {
             WirelessFocusArea::Inputs => {
                 if !self.inputs.fields.is_empty() {
                     self.inputs.focus(0);
+                }
+            }
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => {
+                if !self.active_inputs.fields.is_empty() {
+                    self.active_inputs.focus(0);
                 }
             }
             WirelessFocusArea::Results => {
@@ -466,6 +824,16 @@ impl TabInput for WirelessTab {
         match self.focus_area {
             WirelessFocusArea::Inputs => {
                 self.inputs.blur();
+                #[cfg(feature = "wireless-advanced")]
+                if self.active_mode {
+                    self.focus_area = WirelessFocusArea::ActiveConfig;
+                    return;
+                }
+                self.focus_area = WirelessFocusArea::Results;
+            }
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => {
+                self.active_inputs.blur();
                 self.focus_area = WirelessFocusArea::Results;
             }
             WirelessFocusArea::Results => {
@@ -486,7 +854,12 @@ impl TabInput for WirelessTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused()
+        match self.focus_area {
+            WirelessFocusArea::Inputs => self.inputs.is_focused(),
+            #[cfg(feature = "wireless-advanced")]
+            WirelessFocusArea::ActiveConfig => self.active_inputs.is_focused(),
+            WirelessFocusArea::Results => false,
+        }
     }
 
     fn page_up(&mut self, page_size: usize) {

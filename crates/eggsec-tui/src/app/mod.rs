@@ -48,7 +48,7 @@ use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use eggsec::config::{
     confirmation_classes_for, EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
-    ManualOverride, OperationDescriptor, OperationMode,
+    ManualOverride, OperationDescriptor, OperationMode, OperationRisk,
 };
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
@@ -416,7 +416,7 @@ impl App {
             .feature
             .map(|f| vec![f.to_string()])
             .unwrap_or_default();
-        Some(OperationDescriptor {
+        let descriptor = OperationDescriptor {
             operation: op,
             mode: OperationMode::StandardAssessment,
             risk,
@@ -431,7 +431,35 @@ impl App {
             requires_private_or_local_target: false,
             requires_explicit_scope: false,
             required_capabilities,
-        })
+        };
+
+        // Override descriptor for wireless active attacks (deauth/disassoc).
+        // Active attacks are Intrusive risk under DefenseLab mode, requiring
+        // policy confirmation under ManualPermissive.
+        #[cfg(feature = "wireless-advanced")]
+        {
+            if self.current_tab == Tab::Wireless
+                && self.tabs.wireless.active_mode
+            {
+                if let Some((_, ref attack_type, ..)) = self.tabs.wireless.active_attack_config()
+                {
+                    return Some(OperationDescriptor {
+                        operation: format!("wireless-{attack_type}"),
+                        mode: OperationMode::DefenseLab,
+                        risk: OperationRisk::Intrusive,
+                        intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+                        required_features: vec!["wireless-advanced".to_string()],
+                        target: descriptor.target,
+                        required_policy_flags: Vec::new(),
+                        requires_private_or_local_target: false,
+                        requires_explicit_scope: false,
+                        required_capabilities: Vec::new(),
+                    });
+                }
+            }
+        }
+
+        Some(descriptor)
     }
 
     /// Best-effort extraction of the primary target string from the current tab (for descriptor).
