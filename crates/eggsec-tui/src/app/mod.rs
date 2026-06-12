@@ -470,6 +470,36 @@ impl App {
             }
         }
 
+        // Override descriptor for Db Pentest tab (defense-lab, Intrusive when advanced).
+        #[cfg(feature = "db-pentest")]
+        {
+            if self.current_tab == Tab::DbPentest {
+                let is_advanced = self.tabs.db_pentest.advanced;
+                let dry = self.tabs.db_pentest.dry_run;
+                let risk = if is_advanced && !dry {
+                    OperationRisk::Intrusive
+                } else {
+                    OperationRisk::SafeActive
+                };
+                let req_features = vec!["db-pentest".to_string()];
+                if is_advanced {
+                    // Advanced behavior is runtime gated; still declare the base feature.
+                }
+                return Some(OperationDescriptor {
+                    operation: "db-pentest".to_string(),
+                    mode: OperationMode::DefenseLab,
+                    risk,
+                    intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+                    required_features: req_features,
+                    target: descriptor.target,
+                    required_policy_flags: Vec::new(),
+                    requires_private_or_local_target: false,
+                    requires_explicit_scope: false,
+                    required_capabilities: Vec::new(),
+                });
+            }
+        }
+
         Some(descriptor)
     }
 
@@ -500,6 +530,8 @@ impl App {
             Tab::Compliance => self.tabs.compliance.primary_target(),
             #[cfg(feature = "wireless")]
             Tab::Wireless => self.tabs.wireless.primary_target(),
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => self.tabs.db_pentest.primary_target(),
             _ => None,
         }
     }

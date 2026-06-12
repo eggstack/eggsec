@@ -299,9 +299,11 @@ headless-browser = ["headless_chrome"]
 database = ["sqlx"]
 
 # Database pentesting loadout (direct Postgres/MySQL/MSSQL checks for authorized lab/defense use only).
-# Standalone defense-lab surface (no TUI/pipeline/MCP/agent in Phase 1/2); heavily gated by policy + --allow-db-pentest + dry-run support.
+# Standalone defense-lab surface (TUI + pipeline profile opt-in under feature in Phase 3; MCP absent by default).
+# Heavily gated by policy + --allow-db-pentest + --allow-db-pentest-advanced (narrow) + dry-run support.
 # Phase 1: foundations, Postgres primary + MySQL secondary, manifest, safety, CLI, bridge.
-# Phase 2: MSSQL support prepared (tiberius real driver behind marker `db-pentest-mssql-tiberius`); richer cross-DB checks + polish.
+# Phase 2: real MSSQL (tiberius behind marker `db-pentest-mssql-tiberius`), docker lab, --real smoke, combined web+db example, qcount cleanup, full parity.
+# Phase 3: TUI tab (Tab::DbPentest), ScanProfile::DbRegression, gated advanced checks (reversible test vectors), correlation notes, evidence bundle stub.
 # The marker is a no-op feature declaration. Enabling it + `db-pentest` activates the tiberius path in mssql.rs.
 # Dry-run + categories + bridge for mssql are always exercised (synthetic) regardless of the marker, so tests/CI
 # stay green without forcing heavy transitive deps in every environment.

@@ -26,6 +26,13 @@ fn test_stage_from_profile() {
 
     let deep = Stage::from_profile(ScanProfile::Deep);
     assert_eq!(deep.len(), 4);
+    assert!(deep.contains(&Stage::PortScan));
+    assert!(deep.contains(&Stage::Fingerprint));
+    assert!(deep.contains(&Stage::EndpointScan));
+    assert!(deep.contains(&Stage::Fuzz));
+
+    let dbreg = Stage::from_profile(ScanProfile::DbRegression);
+    assert!(!dbreg.is_empty());
 }
 
 #[test]

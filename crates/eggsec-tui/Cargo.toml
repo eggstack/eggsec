@@ -79,6 +79,7 @@ packet-inspection = ["dep:pnet", "dep:pnet_packet", "eggsec/packet-inspection"]
 advanced-hunting = ["eggsec/advanced-hunting"]
 tool-api = ["eggsec/tool-api"]
 rest-api = ["eggsec/rest-api"]
+db-pentest = ["eggsec/db-pentest"]
 full = [
     "nse",
     "headless-browser",
@@ -95,4 +96,5 @@ full = [
     "advanced-hunting",
     "tool-api",
     "rest-api",
+    "db-pentest",
 ]

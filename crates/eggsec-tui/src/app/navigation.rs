@@ -153,6 +153,14 @@ impl super::App {
             super::tabs::Tab::Auth => {
                 "Auth Test - Validate authentication controls (defense-lab only).".to_string()
             }
+            #[cfg(feature = "db-pentest")]
+            super::tabs::Tab::DbPentest => {
+                "Db Pentest - Direct database pentesting (defense-lab only).".to_string()
+            }
+            #[cfg(not(feature = "db-pentest"))]
+            super::tabs::Tab::DbPentest => {
+                "Db Pentest - Direct database pentesting (feature not enabled).".to_string()
+            }
             super::tabs::Tab::Cluster => {
                 "Cluster Management - Manage distributed scanning cluster.".to_string()
             }

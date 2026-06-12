@@ -109,6 +109,15 @@ impl Stage {
             ScanProfile::WafRegression => vec![Stage::PortScan, Stage::Fingerprint, Stage::Waf],
             ScanProfile::ProtocolEdge => vec![Stage::PortScan, Stage::Fingerprint],
             ScanProfile::NseSafe => vec![Stage::PortScan, Stage::Fingerprint, Stage::EndpointScan],
+            // DbRegression is additive defense-lab / regression family.
+            // Initial mapping reuses defense-lab stages; future: native Stage::DbPentest (cfg) for direct db execution inside pipeline.
+            ScanProfile::DbRegression => vec![
+                Stage::PortScan,
+                Stage::Fingerprint,
+                Stage::EndpointScan,
+                Stage::Waf,
+                Stage::Fuzz,
+            ],
         }
     }
 
@@ -190,6 +199,7 @@ pub fn profile_from_str(s: &str) -> Option<crate::cli::ScanProfile> {
         "waf-regression" => Some(crate::cli::ScanProfile::WafRegression),
         "protocol-edge" => Some(crate::cli::ScanProfile::ProtocolEdge),
         "nse-safe" => Some(crate::cli::ScanProfile::NseSafe),
+        "db-regression" | "db_regression" | "dbregression" => Some(crate::cli::ScanProfile::DbRegression),
         _ => None,
     }
 }
@@ -312,6 +322,7 @@ mod tests {
             Some(ScanProfile::ProtocolEdge)
         );
         assert_eq!(profile_from_str("nse-safe"), Some(ScanProfile::NseSafe));
+        assert_eq!(profile_from_str("db-regression"), Some(ScanProfile::DbRegression));
     }
 
     #[test]
@@ -330,6 +341,12 @@ mod tests {
     fn test_profile_from_str_invalid() {
         assert_eq!(profile_from_str("nonexistent"), None);
         assert_eq!(profile_from_str(""), None);
+    }
+
+    #[test]
+    fn test_db_regression_profile() {
+        let stages = Stage::from_profile(ScanProfile::DbRegression);
+        assert!(!stages.is_empty());
     }
 
     #[test]

@@ -322,6 +322,10 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
             crate::tabs::Tab::Wireless => "  Enter            - Scan / launch active attack (in active mode)".to_string(),
             #[cfg(not(feature = "wireless-advanced"))]
             crate::tabs::Tab::Wireless => "  Enter            - Scan wireless networks".to_string(),
+            #[cfg(feature = "db-pentest")]
+            crate::tabs::Tab::DbPentest => "  Enter            - Run db pentest (defense-lab; d=dry-run toggle, a=advanced)".to_string(),
+            #[cfg(not(feature = "db-pentest"))]
+            crate::tabs::Tab::DbPentest => "  Enter            - Db pentest (feature not enabled)".to_string(),
         },
         "".to_string(),
         "=== INPUT MODES ===".to_string(),

@@ -44,6 +44,10 @@ impl super::App {
             super::tabs::Tab::GraphQl => "graphql_results",
             super::tabs::Tab::OAuth => "oauth_results",
             super::tabs::Tab::Auth => "auth_results",
+            #[cfg(feature = "db-pentest")]
+            super::tabs::Tab::DbPentest => "db_pentest_results",
+            #[cfg(not(feature = "db-pentest"))]
+            super::tabs::Tab::DbPentest => "db_pentest_results",
             super::tabs::Tab::Cluster => "cluster_status",
             super::tabs::Tab::Stress => "stress_results",
             super::tabs::Tab::Report => "report_results",
@@ -250,6 +254,28 @@ impl super::App {
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }
+            #[cfg(feature = "db-pentest")]
+            super::tabs::Tab::DbPentest => {
+                if let Some(ref r) = self.tabs.db_pentest.results {
+                    match serde_json::to_string_pretty(r) {
+                        Ok(json) => self.save_export("db_pentest_results.json", json),
+                        Err(e) => {
+                            tracing::error!("Failed to serialize Db Pentest results: {}", e);
+                            self.overlay.notification = Some(Notification::new(
+                                format!("Export failed: {}", e),
+                                NotificationSeverity::Error,
+                            ));
+                            return;
+                        }
+                    }
+                } else {
+                    let msg = "Db Pentest tab: no exportable data available".to_string();
+                    self.overlay.notification =
+                        Some(Notification::new(msg, NotificationSeverity::Warning));
+                }
+            }
+            #[cfg(not(feature = "db-pentest"))]
+            super::tabs::Tab::DbPentest => {}
         }
     }
 

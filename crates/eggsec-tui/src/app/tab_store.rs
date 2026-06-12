@@ -39,6 +39,8 @@ pub struct TabStore {
     pub vuln: tabs::VulnTab,
     #[cfg(feature = "wireless")]
     pub wireless: tabs::WirelessTab,
+    #[cfg(feature = "db-pentest")]
+    pub db_pentest: tabs::DbPentestTab,
 }
 
 impl TabStore {
@@ -82,6 +84,8 @@ impl TabStore {
             vuln: tabs::VulnTab::new(),
             #[cfg(feature = "wireless")]
             wireless: tabs::WirelessTab::new(),
+            #[cfg(feature = "db-pentest")]
+            db_pentest: tabs::DbPentestTab::new(),
         }
     }
 }

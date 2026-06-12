@@ -245,7 +245,7 @@ mod tests {
         let dest = dir.join("ExistingTheme.toml");
         fs::write(&dest, content).unwrap();
 
-        let report = ensure_packaged_themes_installed(&dir);
+        let _report = ensure_packaged_themes_installed(&dir);
         // File should be unchanged regardless of packaged data decode result
         assert_eq!(fs::read_to_string(&dest).unwrap(), content);
 
@@ -257,7 +257,7 @@ mod tests {
         let dir = temp_theme_dir("create_dir");
         assert!(!dir.exists());
 
-        let report = ensure_packaged_themes_installed(&dir);
+        let _report = ensure_packaged_themes_installed(&dir);
         assert!(dir.exists());
         // Should not panic; errors are collected, not fatal
 

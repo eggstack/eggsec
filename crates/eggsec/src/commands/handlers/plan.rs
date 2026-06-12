@@ -182,6 +182,33 @@ fn profile_stages(profile: ScanProfile) -> Vec<PlannedStage> {
                 required_features: vec!["nse".to_string()],
             },
         ],
+        ScanProfile::DbRegression => vec![
+            PlannedStage {
+                name: "recon".to_string(),
+                risk: OperationRisk::Passive,
+                required_features: vec![],
+            },
+            PlannedStage {
+                name: "ports".to_string(),
+                risk: OperationRisk::SafeActive,
+                required_features: vec![],
+            },
+            PlannedStage {
+                name: "fingerprint".to_string(),
+                risk: OperationRisk::SafeActive,
+                required_features: vec![],
+            },
+            PlannedStage {
+                name: "waf-detect".to_string(),
+                risk: OperationRisk::Intrusive,
+                required_features: vec![],
+            },
+            PlannedStage {
+                name: "fuzz".to_string(),
+                risk: OperationRisk::Intrusive,
+                required_features: vec![],
+            },
+        ],
     }
 }
 
@@ -204,6 +231,7 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             "waf-regression",
             "protocol-edge",
             "nse-safe",
+            "db-regression",
         ];
         anyhow::anyhow!(
             "Unknown profile '{}'. Valid profiles: {}",

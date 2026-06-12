@@ -190,6 +190,17 @@ pub enum TaskConfig {
         concurrency: usize,
         timeout: u64,
     },
+    #[cfg(feature = "db-pentest")]
+    DbPentest {
+        manifest: Option<String>,
+        target: Option<String>,
+        db_type: Option<String>,
+        checks: String,
+        dry_run: bool,
+        allow_advanced: bool,
+        max_queries: u64,
+        max_duration: u64,
+    },
 }
 
 #[derive(Debug)]
@@ -263,6 +274,8 @@ pub enum TaskResult {
     #[cfg(feature = "wireless-advanced")]
     WirelessActive(eggsec::wireless::active::ActiveWirelessAttackResult),
     Auth(eggsec::auth::AuthTestReport),
+    #[cfg(feature = "db-pentest")]
+    DbPentest(eggsec::db_pentest::DbPentestReport),
     Error(String),
 }
 
@@ -677,6 +690,21 @@ impl TaskRunner {
                     result_tx,
                 )
                 .await
+            }
+            #[cfg(feature = "db-pentest")]
+            TaskConfig::DbPentest { manifest, target, db_type, checks, dry_run, allow_advanced, max_queries, max_duration } => {
+                super::db_pentest::run_db_pentest_task(
+                    manifest,
+                    target,
+                    db_type,
+                    checks,
+                    dry_run,
+                    allow_advanced,
+                    max_queries,
+                    max_duration,
+                    progress_tx,
+                    result_tx,
+                ).await
             }
         };
         result

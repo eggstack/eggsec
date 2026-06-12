@@ -34,6 +34,9 @@ mod waf_stress;
 #[cfg(feature = "wireless")]
 pub mod wireless;
 
+#[cfg(feature = "db-pentest")]
+pub mod db_pentest;
+
 #[cfg(feature = "headless-browser")]
 pub mod browser;
 #[cfg(feature = "finding-workflow")]
@@ -41,8 +44,11 @@ pub mod workflow;
 
 mod spec;
 pub(crate) use spec::{
-    risk_from_group, spec_for, tab_specs, visible_tab_specs, TabCategory, TabRiskGroup, TabSpec,
+    risk_from_group, spec_for, tab_specs, TabRiskGroup,
 };
+
+#[cfg(test)]
+pub(crate) use spec::{all_specs, visible_tab_specs};
 
 pub use auth::AuthTab;
 #[cfg(feature = "headless-browser")]
@@ -81,6 +87,8 @@ pub use waf::WafTab;
 pub use waf_stress::WafStressTab;
 #[cfg(feature = "wireless")]
 pub use wireless::WirelessTab;
+#[cfg(feature = "db-pentest")]
+pub use db_pentest::DbPentestTab;
 #[cfg(feature = "finding-workflow")]
 pub use workflow::WorkflowTab;
 
@@ -120,6 +128,7 @@ pub enum Tab {
     Vuln = 27,
     Wireless = 28,
     Auth = 29,
+    DbPentest = 30,
 }
 
 impl Tab {
@@ -215,6 +224,12 @@ impl Tab {
                 t.push(Tab::Wireless);
                 t
             };
+            #[cfg(feature = "db-pentest")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::DbPentest);
+                t
+            };
             tabs
         });
         &TABS
@@ -264,6 +279,7 @@ impl Tab {
             27 => Some(Tab::Vuln),
             28 => Some(Tab::Wireless),
             29 => Some(Tab::Auth),
+            30 => Some(Tab::DbPentest),
             _ => None,
         }
     }
@@ -488,6 +504,10 @@ impl Tab {
             #[cfg(not(feature = "wireless"))]
             Tab::Wireless => &app.tabs.dashboard,
             Tab::Auth => &app.tabs.auth,
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => &app.tabs.db_pentest,
+            #[cfg(not(feature = "db-pentest"))]
+            Tab::DbPentest => &app.tabs.dashboard,
         }
     }
 
@@ -557,6 +577,10 @@ impl Tab {
             #[cfg(not(feature = "wireless"))]
             Tab::Wireless => &mut app.tabs.dashboard,
             Tab::Auth => &mut app.tabs.auth,
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => &mut app.tabs.db_pentest,
+            #[cfg(not(feature = "db-pentest"))]
+            Tab::DbPentest => &mut app.tabs.dashboard,
         }
     }
 
@@ -619,6 +643,10 @@ impl Tab {
             #[cfg(not(feature = "wireless"))]
             Tab::Wireless => &app.tabs.dashboard,
             Tab::Auth => &app.tabs.auth,
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => &app.tabs.db_pentest,
+            #[cfg(not(feature = "db-pentest"))]
+            Tab::DbPentest => &app.tabs.dashboard,
         }
     }
 
@@ -681,6 +709,10 @@ impl Tab {
             #[cfg(not(feature = "wireless"))]
             Tab::Wireless => &mut app.tabs.dashboard,
             Tab::Auth => &mut app.tabs.auth,
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => &mut app.tabs.db_pentest,
+            #[cfg(not(feature = "db-pentest"))]
+            Tab::DbPentest => &mut app.tabs.dashboard,
         }
     }
 }

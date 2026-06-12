@@ -437,6 +437,11 @@ impl super::App {
                 self.tabs.auth.state = super::tabs::AppState::Completed;
                 None
             }
+            #[cfg(feature = "db-pentest")]
+            TaskResult::DbPentest(report) => {
+                self.tabs.db_pentest.set_results(report);
+                None
+            }
             _ => Some(result),
         }
     }

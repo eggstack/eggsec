@@ -437,6 +437,19 @@ pub static TAB_SPECS: &[TabSpec] = &[
         operation: Some("wireless"),
         direct_launch: true,
     },
+    TabSpec {
+        tab: Tab::DbPentest,
+        stable_id: "db_pentest",
+        title: "Db Pentest",
+        cli_command: "eggsec db pentest",
+        description: "Direct database pentesting (Postgres/MySQL/MSSQL) — defense-lab only",
+        category: TabCategory::Assessment,
+        risk_group: TabRiskGroup::Intrusive,
+        feature: Some("db-pentest"),
+        breadcrumb_label: "Db Pentest",
+        operation: Some("db-pentest"),
+        direct_launch: true,
+    },
 ];
 
 pub fn tab_specs() -> &'static [TabSpec] {
@@ -548,6 +561,12 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
     let specs = {
         let mut t = specs;
         t.push(spec_for(Tab::Wireless).unwrap());
+        t
+    };
+    #[cfg(feature = "db-pentest")]
+    let specs = {
+        let mut t = specs;
+        t.push(spec_for(Tab::DbPentest).unwrap());
         t
     };
     specs
