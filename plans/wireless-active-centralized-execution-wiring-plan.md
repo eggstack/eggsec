@@ -1,8 +1,36 @@
 # Wireless Active Attacks: Critical Missing Pieces – Centralized Execution & Feedback Wiring Plan
 
 **Date**: 2026-06-12  
-**Status**: Draft — Ready for Handoff  
+**Status**: ✅ Resolved — All items complete (closed 2026-06-12)  
 **Focus**: Completing the centralized task execution model and closing the feedback loop
+
+> **Resolution note (2026-06-12)**: This plan was a historical draft describing gaps
+> immediately after the centralized `App::handle_enter()` + `EnforcementContext` refactor
+> (post `35a2170a`). At the time of resolution (and in `main`), the "critical missing pieces"
+> were already satisfied by the shipped implementation (same paths used by Auth/Stress/Packet
+> direct_launch tabs):
+>
+> | Gap (this plan) | Resolution (where it lives) |
+> |-----------------|-----------------------------|
+> | `TaskBuilder` / `build_current_task()` for `WirelessActive` | `crates/eggsec-tui/src/app/task_management.rs:371` (under `#[cfg(feature = "wireless")]`): `impl TaskBuilder for WirelessTab` returns `TaskConfig::WirelessActive` when `active_mode` + valid `active_attack_config()`. |
+> | `TaskRunner` match arm calling the worker | `crates/eggsec-tui/src/workers/runner.rs:652` (under `wireless-advanced`): `TaskConfig::WirelessActive { ... } => super::security::run_wireless_active_task(...)`. |
+> | `EnforcementContext` policy check for active wireless | `crates/eggsec-tui/src/app/mod.rs:371` (retro gate for `is_direct_launch_tab`) + `build_current_operation_descriptor:436` (wireless-active override: `OperationMode::DefenseLab`, risk `SafeActive` for dry-run or `Intrusive` for live, `required_features: ["wireless-advanced"]`) + central `self.enforcement.evaluate(&desc)`. Dry-run proceeds; live triggers `RequireConfirmation` overlay. |
+> | Result delivery from worker to `WirelessTab` | `crates/eggsec-tui/src/app/state_update.rs:418` (under `wireless && wireless-advanced`): `TaskResult::WirelessActive(r) => self.tabs.wireless.set_active_results(r)`. `set_active_results` renders + transitions to `Completed`. |
+> | Wiring `start_active_attack()` into `App::handle_enter()` | `WirelessTab::handle_enter()` (active config focus) calls `start_active_attack()` (UI-only: sets `Running`, clears prior results). `App::handle_enter()` then sees `is_direct_launch_tab + running` and drives the descriptor/enforcement/spawn path. `start_active_attack` comment in wireless.rs:372 documents the design. |
+>
+> Additional artifacts:
+> - Worker implementation: `crates/eggsec-tui/src/workers/security.rs:865` (`run_wireless_active_task`; 60s timeout, hard budgets on frames/rate, dispatches deauth/disassoc).
+> - TabSpec: `crates/eggsec-tui/src/tabs/spec.rs:438` declares `direct_launch: true` for Wireless (risk overridden at descriptor time).
+> - Unit/E2E-style tests: 12+ tests in `tabs/wireless.rs` (under `wireless-advanced`) + 2 descriptor tests in `app/mod.rs` + the `test_e2e_active_flow_handle_enter_build_task_set_results` flow test.
+> - Compile/test status at closure: `cargo check -p eggsec-tui --features wireless,wireless-advanced` clean (pre-existing unrelated warnings only); `cargo test --lib -p eggsec-tui --features wireless,wireless-advanced` → 323 passed.
+>
+> Sibling plans (`wireless-active-tui-execution-completion-plan.md`, `wireless-active-tui-execution-closure-plan.md`, `wireless-active-tui-final-wiring-and-polish-plan.md`) document the same wiring from slightly different angles and were closed with similar notes on 2026-06-12. Vestigial handler files referenced in early drafts were never mod-declared and are absent.
+>
+> See `architecture/wireless.md`, `architecture/tui.md` ("Wireless tab Active Mode"), `docs/WIRELESS.md`, AGENTS.md (TUI Wireless Active Execution Completion + standalone defense-lab), `.opencode/skills/eggsec-agent/wireless_security_testing.md`, and `crates/eggsec/src/wireless/AGENTS.override.md` + `crates/eggsec-tui/src/AGENTS.override.md` for the final design. Wireless remains a standalone defense-lab surface (no MCP/agent exposure).
+>
+> This plan is retained as a historical artifact. All checklist items are satisfied by the implementation present in `main`. No code changes were required for resolution; verification + doc alignment only.
+
+---
 
 ---
 
