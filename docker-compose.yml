@@ -248,6 +248,78 @@ services:
       - testing
       - full
 
+  # ============================================
+  # Lab DBs for db-pentest real smoke (Phase 2+)
+  # Profile: db-lab
+  # These are intentionally misconfigured for defense-lab regression validation.
+  # Only bring up with: docker compose --profile db-lab up -d
+  # Use with: ./scripts/test-db-pentest.sh --real
+  # ============================================
+
+  postgres-lab:
+    image: postgres:16-alpine
+    container_name: db-pentest-postgres-lab
+    hostname: postgres-lab.local
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: labpass
+      POSTGRES_DB: labdb
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lab -d labdb || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - scan-network
+    profiles:
+      - db-lab
+    # Deliberate misconfig applied after start by the smoke script (dangerous extension + grant)
+
+  mysql-lab:
+    image: mysql:8.0
+    container_name: db-pentest-mysql-lab
+    hostname: mysql-lab.local
+    environment:
+      MYSQL_ROOT_PASSWORD: labpass
+      MYSQL_DATABASE: labdb
+      MYSQL_USER: lab
+      MYSQL_PASSWORD: labpass
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "lab", "-plabpass"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - scan-network
+    profiles:
+      - db-lab
+    command: --local-infile=1   # deliberate misconfig for the FILE/local_infile checks
+
+  mssql-lab:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: db-pentest-mssql-lab
+    hostname: mssql-lab.local
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "LabPassw0rd!Strong"
+    ports:
+      - "1434:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'LabPassw0rd!Strong' -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks:
+      - scan-network
+    profiles:
+      - db-lab
+    # xp_cmdshell and other misconfigs are applied by the smoke script after startup
+
 networks:
   scan-network:
     driver: bridge

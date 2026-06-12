@@ -198,18 +198,16 @@ version = "0.7"
 optional = true
 
 # tiberius (pure-Rust TDS for MSSQL) is prepared behind the marker feature `db-pentest-mssql-tiberius`.
-# The marker is declared in [features] (no-op until enabled). When both `db-pentest` and the marker
-# are enabled, the real client code in db_pentest/mssql.rs is compiled. Until then, mssql targets
-# always use the rich synthetic dry-run population (full report/bridge parity, no dep pull).
-# To activate the real driver (in an env where the dep resolves):
+# The marker is declared in [features]. When both `db-pentest` and the marker are enabled,
+# the real client code in db_pentest/mssql.rs is compiled (this block is activated).
+# Until the marker is used, mssql targets fall back to rich synthetic dry-run population.
+# Activate real driver with:
 #   cargo ... --features db-pentest,db-pentest-mssql-tiberius
-# Then uncomment the block below.
-#
-# [dependencies.tiberius]
-# version = "0.12"
-# optional = true
-# default-features = false
-# features = ["tokio", "rustls"]
+[dependencies.tiberius]
+version = "0.12"
+optional = true
+default-features = false
+features = ["tokio", "rustls"]
 
 [dependencies.cyclonedx-bom]
 version = "0.8"
@@ -308,7 +306,9 @@ database = ["sqlx"]
 # Dry-run + categories + bridge for mssql are always exercised (synthetic) regardless of the marker, so tests/CI
 # stay green without forcing heavy transitive deps in every environment.
 db-pentest = ["sqlx"]
-db-pentest-mssql-tiberius = []
+# Enabling this marker (together with db-pentest) pulls tiberius and activates the real MSSQL client path.
+# Use: cargo ... --features db-pentest,db-pentest-mssql-tiberius
+db-pentest-mssql-tiberius = ["dep:tiberius"]
 
 # Kubernetes container security scanning
 container = ["kube", "k8s-openapi"]

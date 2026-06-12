@@ -4,7 +4,7 @@
 # It is advisory in ManualPermissive (default CLI) and produces warnings if the target does not match.
 # Strict profiles / CI may enforce more strictly via policy.
 
-description = "Authorized lab Postgres and MySQL instances for defense regression and hardening validation"
+description = "Authorized lab Postgres, MySQL, and MSSQL instances for defense regression and hardening validation"
 
 # Allowed hosts (exact match or simple suffix match)
 allowed_hosts = [
@@ -15,7 +15,7 @@ allowed_hosts = [
   "10.0.0.0/8",   # Phase 1 parser treats this as a literal pattern (simple contains); use exact lab IPs in practice
 ]
 
-allowed_ports = [5432, 3306]
+allowed_ports = [5432, 3306, 1433]
 
 # Allowed database name patterns (substring or exact)
 allowed_databases = [

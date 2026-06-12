@@ -35,7 +35,7 @@ cargo test --test negative_tests -p eggsec
 cargo test --test scanner_tests -p eggsec
 cargo clippy --lib -p eggsec
 cargo build --release -p eggsec-cli
-# db-pentest feature (Phase 1: postgres/mysql + manifest + bridge; Phase 2 prep: mssql skeleton + parity behind marker `db-pentest-mssql-tiberius`)
+# db-pentest feature (Phase 1: postgres/mysql + manifest + bridge; Phase 2 executed on main: real MSSQL tiberius behind marker `db-pentest-mssql-tiberius`, docker lab + --real smoke, combined web+db example, qcount cleanup, full parity)
 cargo check -p eggsec --features db-pentest
 cargo test --lib -p eggsec --features db-pentest
 cargo clippy --lib -p eggsec --features db-pentest
@@ -69,7 +69,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `pipeline/` | `crates/eggsec/src/pipeline/AGENTS.override.md` |
 | `nse/` | `crates/eggsec-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
 | `container/` | `crates/eggsec/src/container/AGENTS.override.md` |
-| `db_pentest/` | `crates/eggsec/src/db_pentest/AGENTS.override.md` (Phase 1 foundation + postgres/mysql + manifest + bridge; Phase 2 prep: mssql.rs skeleton + tiberius gating + dry-run parity) |
+| `db_pentest/` | `crates/eggsec/src/db_pentest/AGENTS.override.md` (Phase 1 foundation + postgres/mysql + manifest + bridge; Phase 2 executed on main: real tiberius behind marker, docker lab + --real smoke, combined web+db example artifact with db-* + sqli-*, qcount cleanup, full parity + docs) |
 | `wireless/` | `crates/eggsec/src/wireless/AGENTS.override.md` |
 
 ### Architecture Index
