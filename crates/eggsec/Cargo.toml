@@ -209,6 +209,26 @@ optional = true
 default-features = false
 features = ["tokio", "rustls"]
 
+# MongoDB async driver for db-pentest Phase 5 (marker feature `db-pentest-mongodb`).
+# When enabled together with db-pentest, the real MongoDB client path is compiled in mongodb.rs.
+# Dry-run + categories + bridge are always exercised (synthetic) regardless of the marker.
+[dependencies.mongodb]
+version = "2.8"
+optional = true
+default-features = false
+features = ["tokio-runtime"]
+
+[dependencies.bson]
+version = "2.9"
+optional = true
+
+# Redis async client for db-pentest Phase 5 (marker feature `db-pentest-redis`).
+# When enabled together with db-pentest, the real Redis client path is compiled in redis.rs.
+[dependencies.redis]
+version = "0.25"
+optional = true
+features = ["tokio-comp", "connection-manager"]
+
 [dependencies.cyclonedx-bom]
 version = "0.8"
 optional = true
@@ -311,6 +331,16 @@ db-pentest = ["sqlx"]
 # Enabling this marker (together with db-pentest) pulls tiberius and activates the real MSSQL client path.
 # Use: cargo ... --features db-pentest,db-pentest-mssql-tiberius
 db-pentest-mssql-tiberius = ["dep:tiberius"]
+# Enabling this marker (together with db-pentest) pulls the mongodb crate and activates the real MongoDB client path.
+# Use: cargo ... --features db-pentest,db-pentest-mongodb
+db-pentest-mongodb = ["dep:mongodb", "dep:bson"]
+# Enabling this marker (together with db-pentest) pulls the redis crate and activates the real Redis client path.
+# Use: cargo ... --features db-pentest,db-pentest-redis
+db-pentest-redis = ["dep:redis"]
+# Optional MCP/agent exposure for db-pentest. When enabled, registers db-pentest as an MCP tool.
+# Default behavior (without this marker) keeps db-pentest as standalone defense-lab surface only.
+# Real runs via MCP require EnforcementContext + policy confirmation.
+db-pentest-mcp = ["db-pentest"]
 
 # Kubernetes container security scanning
 container = ["kube", "k8s-openapi"]

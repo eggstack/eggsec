@@ -66,7 +66,7 @@ Manages the overall application state, event loop, and rendering.
 | History | `history.rs` | Scan history browser |
 | Dashboard | `dashboard.rs` | Security assessment dashboard |
 | Settings | `settings/main.rs` | Application configuration |
-| Db Pentest | `db_pentest.rs` | Direct database security assessment (Phase 3) |
+| Db Pentest | `db_pentest.rs` | Direct database security assessment (Phase 3-5: Postgres/MySQL/MSSQL/MongoDB/Redis, correlation engine, compliance mapping, evidence bundles) |
 
 **Tab Traits** (`tabs/mod.rs`):
 - `TabState` - State: `state()`, `progress()`, `reset()`, `set_error()`

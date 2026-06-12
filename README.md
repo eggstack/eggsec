@@ -40,7 +40,7 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Repeatable Profiles** | 16 pipeline profiles, session resumption, multiple output formats |
 | **Mobile Static Analysis** | APK/IPA manifest/config checks for lab use (requires `--features mobile`; static-only; no execution or device interaction; dynamic under `mobile-dynamic` feature, Phase 1 complete 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed); Phase 1 polish (smoke test script `scripts/test-mobile-dynamic.sh`, `--list-devices` convenience, troubleshooting, docs) complete 2026-06-12 per `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (executed); Phase 2 (proxy + permissions + correlation) closed 2026-06-12 per `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md` (executed; all under single mobile-dynamic, no sub-feature split); Phase 3a (Frida foundation + basic_method_trace) delivered 2026-06-12 under single mobile-dynamic per `plans/mobile-dynamic-phase3-frida-expansion-plan.md` (executed; Key Decision: no separate mobile-frida sub-feature; runtime --allow-frida + Intrusive policy; dry-run safe; frida.rs real + CLI/handler/report/bridge/smoke); see `plans/dynamic-mobile-testing-loadout-design-plan.md` for design + future phases (3b/3c). |
-| **Database Pentesting (lab)** | Direct Postgres/MySQL/MSSQL checks for authorized lab use (requires `--features db-pentest`; standalone defense-lab; dry-run always safe; real runs require `--allow-db-pentest`; advanced gated checks require `--allow-db-pentest-advanced`; local `DbPentestReport`/`DbFinding` + optional `to_scan_report_data_db` bridge via report convert; Phase 1 foundation + Phase 2 MSSQL tiberius + Phase 3 TUI tab + pipeline `ScanProfile::DbRegression` + advanced gated checks + correlation stubs (per `plans/database-pentesting-phase3-advanced-and-integration-handoff-plan.md`); Phase 4 complete 2026-06-12 per `plans/database-pentesting-phase4-advanced-checks-and-correlation-handoff-plan.md` (executed): real advanced execution (temp UDF, linked server probe, file access), correlation engine with scoring (14 rules, 0-100), native `Stage::DbPentest` pipeline stage, evidence bundle v2; see docs/DATABASE_PENTEST.md) |
+| **Database Pentesting (lab)** | Direct Postgres/MySQL/MSSQL/MongoDB/Redis checks for authorized lab use (requires `--features db-pentest`; standalone defense-lab; dry-run always safe; real runs require `--allow-db-pentest`; advanced gated checks require `--allow-db-pentest-advanced`; local `DbPentestReport`/`DbFinding` + optional `to_scan_report_data_db` bridge via report convert; Phase 1–4: postgres/mysql/mssql + TUI tab + pipeline + advanced checks + correlation engine; Phase 5 (complete 2026-06-12): MongoDB + Redis engines (marker features `db-pentest-mongodb`, `db-pentest-redis`), compliance mapping (OWASP/PCI/HIPAA/SOC2), MCP opt-in (`db-pentest-mcp`); see docs/DATABASE_PENTEST.md) |
 
 ## What Eggsec is not
 
@@ -266,9 +266,11 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --json
 ./eggsec mobile dynamic test.apk --device emulator-5554 --proxy 127.0.0.1:8080 --traffic-capture /tmp/mitm.log --grant-permission android.permission.CAMERA --allow-dynamic-mobile --json
 
-# Database pentesting (lab; requires --features db-pentest; Phase 4 complete 2026-06-12)
+# Database pentesting (lab; requires --features db-pentest; Phase 5 complete 2026-06-12)
 ./eggsec db pentest --host 127.0.0.1 --port 5432 --user lab --db postgres --checks all --dry-run --json
 ./eggsec db pentest --host 127.0.0.1 --port 3306 --user lab --db mysql --checks all --allow-db-pentest --json
+./eggsec db pentest mongodb://admin:pass@127.0.0.1:27017/labdb --dry-run --json  # requires db-pentest-mongodb
+./eggsec db pentest redis://127.0.0.1:6379 --dry-run --json  # requires db-pentest-redis
 ./eggsec db pentest --host 127.0.0.1 --port 5432 --user lab --db postgres --checks all --allow-db-pentest --allow-db-pentest-advanced --evidence-bundle --json
 
 # Resume a previous scan

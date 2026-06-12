@@ -139,6 +139,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`mobile/`](../crates/eggsec/src/mobile/) | Static analysis of Android APKs and iOS IPAs (Phase 1: pure-Rust manifest/config findings; SafeActive; standalone CLI + optional report bridge). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. | [mobile.md](mobile.md) |
+| [`db_pentest/`](../crates/eggsec/src/db_pentest/) | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP). Defense-lab only. TUI tab, native pipeline stage, evidence bundles. | [database_pentest.md](database_pentest.md) |
 
 ### Integration & External Services
 
@@ -325,6 +326,7 @@ Chained security assessment profiles:
 | **deep** | Mutation fuzzing enabled |
 | **vuln** | CVE-prioritized based on detected tech |
 | **auth** | JWT, OAuth, IDOR focused |
+| **db-regression** | Database pentest regression (native `Stage::DbPentest` when `db-pentest` feature enabled) |
 
 - **Documentation**: [pipeline.md](pipeline.md)
 
@@ -420,6 +422,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `mobile` | `mobile/` | Static analysis of Android APKs and iOS IPAs (marker-only; zip/plist optional; pure-Rust Phase 1). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
 | `pdf` | `output/pdf` | PDF report generation |
 | `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
+| `db-pentest` | `db_pentest/` | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP via `db-pentest-mcp` marker). Defense-lab only. TUI tab + native pipeline stage. |
 | `full` | All | All features combined |
 
 See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
@@ -631,6 +634,7 @@ Eggsec supports local, repeatable profiles against defensive systems for regress
 | `WafRegression` | WAF detection regression testing |
 | `ProtocolEdge` | Protocol edge case testing |
 | `NseSafe` | Safe NSE script execution |
+| `DbRegression` | Database pentest regression (native `Stage::DbPentest` when `db-pentest` feature enabled; falls back to defense-lab stages) |
 
 See [defense_lab.md](defense_lab.md) for detailed documentation.
 
