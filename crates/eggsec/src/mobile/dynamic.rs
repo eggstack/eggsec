@@ -4,13 +4,12 @@
 //! plans/dynamic-mobile-testing-loadout-design-plan.md): Android ADB core + high-signal
 //! runtime log analysis for lab/defense validation.
 //!
-//! Phase 2a per plans/mobile-dynamic-phase2-implementation-handoff-plan.md (executed 2026-06-12):
-//! proxy foundation (`--proxy`/`--reset-proxy`/`--traffic-capture`) + runtime permission
-//! operations (`--grant-permission`/`--revoke-permission`/`--list-permissions`).
-//! Phase 2 final polish (F2 correlation + F3 parser robustness + F5 report surface + F6 docs)
-//! per plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (executed 2026-06-12).
-//! Phase 2 close-out polish (hygiene + final docs) per
-//! plans/mobile-dynamic-phase2-close-out-polish-plan.md (executed 2026-06-12).
+//! Phase 2 (proxy foundation + runtime permissions + correlation + final/close-out polish) closed 2026-06-12:
+//! per plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a executed 2026-06-12),
+//! plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (executed), and
+//! plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md (combined close-out executed 2026-06-12).
+//! All dynamic (P1+P2) kept under the single `mobile-dynamic` feature (M1 decision; no `mobile-dynamic-advanced` sub-split).
+//! Phase 3 (Frida) kickoff begins with design+scaffolding under new gated `mobile-frida` (implies mobile-dynamic).
 //!
 //! This file provides the public API surface, report types (DynamicMobileReport / Finding,
 //! LabManifest), the run_dynamic_cli dispatcher, human/JSON formatting, and the
@@ -38,8 +37,9 @@ use super::{MobileFinding, MobilePlatform};
 
 /// Internal CLI args consumed by `run_dynamic_cli` (handler maps from
 /// `crate::cli::DynamicMobileArgs` in `cli/mobile.rs` to keep clap concerns out
-/// of the lib surface). Phase 1 ADB core + log capture; Phase 2a proxy + traffic
-/// capture + runtime permission operations. All under the `mobile-dynamic` feature.
+/// of the lib surface). Phase 1 ADB core + log capture; Phase 2 (proxy + traffic
+/// capture + runtime permission operations + correlation) closed 2026-06-12 under `mobile-dynamic`.
+/// (All P1+P2 dynamic kept flat under mobile-dynamic per M1; Phase 3 Frida under mobile-frida.)
 #[derive(Debug, Clone, Default)]
 pub struct DynamicMobileArgs {
     pub target: String,
@@ -144,6 +144,13 @@ pub struct DynamicMobileReport {
     /// Optional snapshot of permission state (from --list-permissions or grant/revoke ops).
     /// Stores abbreviated dumpsys or before/after for audit + correlation.
     pub permission_state: Option<String>,
+
+    // Phase 3 (Frida) extension point: present only under the mobile-frida feature gate.
+    // Zero-impact for mobile-dynamic-only builds and tests.
+    // Future: populated with instrumentation sessions, script results, and mapped findings.
+    // See crates/eggsec/src/mobile/frida.rs for the stub types and vision.
+    #[cfg(feature = "mobile-frida")]
+    pub frida_instrumentation: Option<crate::mobile::FridaInstrumentation>,
 }
 
 impl DynamicMobileReport {
@@ -163,6 +170,8 @@ impl DynamicMobileReport {
             dry_run: false,
             traffic_summary: None,
             permission_state: None,
+            #[cfg(feature = "mobile-frida")]
+            frida_instrumentation: None,
         }
     }
 }
@@ -324,7 +333,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
         }
 
-        // Connect / validate reachability (adb module handles pure-Rust TCP for emulator-XXXX or host:port).
+        // Connect / validate reachability (adb module handles pure-Rust TCP for emulator-XXXX or host:port). (Phase 2 closed)
         // We do not retain the connection here; later steps re-connect per operation for simplicity.
         // This produces the audit "connected" entry and fails fast if device is unreachable.
         let _conn = crate::mobile::adb::AdbClient::connect(device)
@@ -512,6 +521,8 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         dry_run: args.dry_run,
         traffic_summary: traffic_sum_for_report,
         permission_state: perm_state_for_report,
+        #[cfg(feature = "mobile-frida")]
+        frida_instrumentation: None,
     };
     report.recommendations = build_dynamic_recommendations(&report);
 

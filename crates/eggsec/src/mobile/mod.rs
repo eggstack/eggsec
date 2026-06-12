@@ -8,21 +8,23 @@
 //! Safety: pure-Rust ZIP + plist + bounded AXML extraction. No shelling out.
 //! All operations are offline on user-supplied lab binaries. Explicit lab-only framing.
 //!
-//! Dynamic mobile (Android ADB core + runtime logcat analysis + Phase 2a proxy
-//! foundation + runtime permission operations + Phase 2 final polish correlation)
+//! Dynamic mobile (Android ADB core + runtime logcat analysis + Phase 2 proxy
+//! foundation + runtime permission operations + final/close-out polish + correlation)
+//! Phase 2 closed 2026-06-12 (all under single `mobile-dynamic` feature per M1 decision in
+//! combined closeout+kickoff plan; no sub-feature split).
 //! is available under the additional `mobile-dynamic` feature flag. See:
 //!
 //! - plans/mobile-dynamic-phase1-implementation-handoff-plan.md (Phase 1 — executed)
-//! - plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a — executed)
+//! - plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a — executed 2026-06-12)
 //! - plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish — executed)
-//! - plans/mobile-dynamic-phase2-close-out-polish-plan.md (close-out — executed)
+//! - plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md (combined close-out — executed 2026-06-12)
 //! - plans/dynamic-mobile-testing-loadout-design-plan.md (parent design)
 //!
 //! Modules (all under cfg(feature = "mobile-dynamic")):
 //!   - dynamic.rs: public API + run_dynamic_cli + report types + bridge + correlate_findings
 //!   - adb.rs: pure-Rust TCP primary + external adb convenience
 //!   - runtime.rs: high-signal logcat parser
-//!   - traffic.rs: traffic-capture summary parser (Phase 2a)
+//!   - traffic.rs: traffic-capture summary parser (Phase 2 closed)
 //!
 //! Standalone defense-lab surface. Re-exports and types added under cfg(feature = "mobile-dynamic").
 
@@ -43,6 +45,9 @@ pub mod runtime;
 #[cfg(feature = "mobile-dynamic")]
 pub mod traffic;
 
+#[cfg(feature = "mobile-frida")]
+pub mod frida;
+
 // Re-export key dynamic types at crate::mobile level for handler/report bridge ergonomics (cfg-gated).
 #[cfg(feature = "mobile-dynamic")]
 pub use dynamic::{
@@ -51,6 +56,12 @@ pub use dynamic::{
 };
 #[cfg(feature = "mobile-dynamic")]
 pub use traffic::{TrafficSummary, parse_traffic_capture};
+
+#[cfg(feature = "mobile-frida")]
+pub use frida::{
+    FridaSession, FridaScriptResult, FridaInstrumentation, connect, execute_script,
+    basic_method_trace,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MobilePlatform {

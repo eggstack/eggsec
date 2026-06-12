@@ -107,7 +107,7 @@ fn resolve_device_addr(spec: &str) -> Result<SocketAddr> {
         .context("invalid port for adb")
 }
 
-/// Small public API surface for dynamic mobile (Phase 1 ADB core + Phase 2a
+/// Small public API surface for dynamic mobile (Phase 1 ADB core + Phase 2 (proxy/permissions) closed 2026-06-12
 /// proxy + runtime-permission helpers). Emulator-focused; tested with duplex
 /// mocks (no live adb required).
 pub struct AdbClient;
@@ -122,7 +122,7 @@ impl AdbClient {
     /// Otherwise falls back to probing the common Android emulator TCP ports
     /// (5554, 5556, ..., 5584). Any port that accepts a TCP connection and
     /// completes (or tolerates) a minimal CNXN/AUTH handshake is reported as
-    /// "emulator-XXXX". This path is pure Rust (tokio::net + framing) and
+    /// "emulator-XXXX". This path is pure Rust (tokio::net + framing) and (Phase 2 closed 2026-06-12; all dynamic under mobile-dynamic per M1)
     /// requires no external binary.
     ///
     /// Returns serials in the classic adb form so callers can pass the same

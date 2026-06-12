@@ -140,3 +140,5 @@ The docs audit (covering `README.md`, `docs/CAPABILITIES.md`, `docs/USAGE.md`, `
 ---
 
 **End of Phase 2 Close-Out Polish Plan (Executed 2026-06-12; Phase 2 closed.)**
+
+Phase 2 closed 2026-06-12 via combined closeout+kickoff plan.

@@ -205,3 +205,5 @@ Frida / hooking remains deferred to a gated Phase 3 (`mobile-frida` sub-feature)
 **End of Plan**
 
 This document is intended to keep momentum after the successful Phase 1 delivery while providing clear, prioritized next steps.
+
+Phase 2 closed 2026-06-12 via combined closeout+kickoff plan.
