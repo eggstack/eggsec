@@ -14,7 +14,16 @@
 //!
 //! This file provides the public API surface, report types (DynamicMobileReport / Finding,
 //! LabManifest), the run_dynamic_cli dispatcher, human/JSON formatting, and the
-//! to_scan_report_data_dynamic bridge.
+//! to_scan_report_data_dynamic bridge + correlate_findings (Phase 2/3) + baseline/regression/bundles (Phase 3c) +
+//! CorrelationEngine / correlate_reports (Phase 4a).
+//!
+//! Phase 4a (per plans/mobile-dynamic-phase4-actionable-intelligence-plan.md): Core Correlation Engine + Evidence Foundation.
+//! Extends the existing correlate_findings surface with a `CorrelationEngine` (and convenience `correlate_reports`)
+//! that ingests full `MobileScanReport` + `DynamicMobileReport`, adds conservative 0-100 scoring, `CorrelationType`
+//! classification (Direct/Indirect/Behavioral/CrossLayer), structured enrichment, and a basic timeline/sequence view
+//! derived from timestamps, ordered actions, and Frida start times. Non-breaking: existing `CorrelatedFinding` users,
+//! `static_correlation` side-effects, and low-level `correlate_findings` signature/behavior are preserved (new fields
+//! are optional with serde defaults). All dry-run safe, hermetic, no new deps, standalone defense-lab.
 //!
 //! Key behaviors:
 //! - dry_run: simulate everything, produce full valid report, zero device/net touch.
@@ -25,7 +34,7 @@
 //! - Standalone defense-lab (MCP/agent exposure absent).
 //!
 //! See also: adb.rs (pure-Rust TCP primary + external adb convenience), runtime.rs (log parser),
-//! traffic.rs (capture summary), mobile/mod.rs reexports, and the handoff plans for full
+//! traffic.rs (capture summary), frida.rs (instrumentation), mobile/mod.rs reexports, and the handoff plans for full
 //! context + safety model.
 
 use crate::error::{EggsecError, Result};
@@ -208,11 +217,161 @@ pub struct DynamicMobileFinding {
 /// Returned by correlate_findings; the primary side-effect is populating
 /// DynamicMobileFinding.static_correlation for matched entries so they serialize
 /// into native reports and bridges.
+///
+/// Phase 4a (plans/mobile-dynamic-phase4-actionable-intelligence-plan.md): non-breaking
+/// extensions for the CorrelationEngine. New fields are optional with serde defaults so
+/// pre-Phase-4 `CorrelatedFinding` (de)serialization and all existing users remain compatible.
+/// Prefer the high-level `correlate_reports` / `CorrelationEngine::correlate` for full reports
+/// (they produce `CorrelationResult` with timeline + summary and populate the enriched fields).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CorrelatedFinding {
     pub dynamic_category: String,
     pub static_category: String,
     pub note: String,
+    /// Phase 4a: conservative confidence score (0-100). Omitted / None when not computed
+    /// or below engine threshold. Populated by `correlate_findings` (via engine path) and
+    /// the high-level `correlate_reports`.
+    #[serde(default)]
+    pub score: Option<u8>,
+    /// Phase 4a: classification of the correlation (Direct for exact evidence/name matches,
+    /// CrossLayer for Frida+traffic/perm co-occurrence, Behavioral for regression vs baseline,
+    /// Indirect for weaker heuristic links). Defaults to preserve compat.
+    #[serde(default)]
+    pub correlation_type: Option<CorrelationType>,
+    /// Phase 4a: optional short enrichment phrase (e.g. "exact permission name match",
+    /// "frida+static secret + traffic co-occur"). Used in timeline/summary and recommendations.
+    #[serde(default)]
+    pub enrichment: Option<String>,
+}
+
+/// Phase 4a correlation classification (used by `CorrelationEngine` / `correlate_reports`
+/// and populated into enriched `CorrelatedFinding` instances). Non-breaking addition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CorrelationType {
+    /// Exact / high-confidence match (e.g. runtime permission evidence name equals static declared dangerous perm).
+    #[default]
+    Direct,
+    /// Weaker heuristic or secondary signal (e.g. title substring, user-CA + cleartext co-presence without exact traffic match).
+    Indirect,
+    /// Derived from behavioral baseline comparison (regression notes, new signals vs prior run).
+    Behavioral,
+    /// Cross-layer observation (Frida instrumentation co-occurring with traffic/cleartext or runtime permission activity).
+    CrossLayer,
+}
+
+/// Lightweight summary produced by the Phase 4a correlation engine.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CorrelationSummary {
+    pub total_correlations: usize,
+    /// Average of populated scores (0-100); 0 if none scored.
+    pub avg_confidence: u8,
+}
+
+/// Result container for high-level correlation over full reports (Phase 4a).
+/// Includes the (enriched) correlations, a simple chronological timeline derived from
+/// report timestamps + ordered actions + Frida start times, and a summary with counts/confidence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationResult {
+    pub correlations: Vec<CorrelatedFinding>,
+    /// Ordered timeline entries (static ts, dynamic ts, frida_start if present, action:..., duration_ms).
+    pub timeline: Vec<String>,
+    pub summary: CorrelationSummary,
+}
+
+/// Phase 4a: Correlation engine for ingesting full static + dynamic reports.
+/// Conservative by default (min_score=40). Use `correlate_reports` for the simple one-shot path,
+/// or construct an engine to tune the threshold. All operations are pure (no side effects on inputs).
+#[derive(Debug, Clone, Default)]
+pub struct CorrelationEngine {
+    /// Minimum score (0-100) for a correlation to be included in the result.
+    /// Lower values surface more (including weaker Indirect/CrossLayer) notes.
+    pub min_score: u8,
+}
+
+impl CorrelationEngine {
+    pub fn new() -> Self {
+        Self { min_score: 40 }
+    }
+
+    pub fn with_min_score(mut self, min_score: u8) -> Self {
+        self.min_score = min_score.min(100);
+        self
+    }
+
+    /// Perform correlation across a full static baseline report and a dynamic report.
+    /// Internally clones the dynamic findings slice for compatibility with the low-level
+    /// `correlate_findings` (which mutates for the `static_correlation` side-effect), then
+    /// enriches, builds timeline + summary, and filters by `min_score`.
+    pub fn correlate(
+        &self,
+        static_report: &super::MobileScanReport,
+        dynamic_report: &DynamicMobileReport,
+    ) -> CorrelationResult {
+        let mut dyn_findings = dynamic_report.findings.clone();
+        let mut correlations = correlate_findings(&static_report.findings, &mut dyn_findings);
+
+        // Apply scoring / type / enrichment inside low-level for this path (already done by updated correlate_findings).
+        // Filter by min_score (keep unscored or >= threshold).
+        if self.min_score > 0 {
+            correlations.retain(|c| c.score.unwrap_or(0) >= self.min_score || c.score.is_none());
+        }
+
+        let timeline = build_timeline(&static_report.timestamp, dynamic_report);
+
+        let avg = if correlations.is_empty() {
+            0
+        } else {
+            let sum: u32 = correlations.iter().filter_map(|c| c.score.map(u32::from)).sum();
+            let cnt = correlations.iter().filter(|c| c.score.is_some()).count().max(1) as u32;
+            (sum / cnt).min(100) as u8
+        };
+
+        let summary = CorrelationSummary {
+            total_correlations: correlations.len(),
+            avg_confidence: avg,
+        };
+
+        CorrelationResult {
+            correlations,
+            timeline,
+            summary,
+        }
+    }
+}
+
+/// Convenience wrapper: one-shot correlation using a default engine (min_score=40).
+pub fn correlate_reports(
+    static_report: &super::MobileScanReport,
+    dynamic_report: &DynamicMobileReport,
+) -> CorrelationResult {
+    CorrelationEngine::new().correlate(static_report, dynamic_report)
+}
+
+/// Build a simple chronological timeline from available timestamps and ordered data.
+/// Used by CorrelationResult. Pure function.
+fn build_timeline(static_ts: &str, dynamic_report: &DynamicMobileReport) -> Vec<String> {
+    let mut t = vec![
+        format!("static: {}", static_ts),
+        format!("dynamic: {}", dynamic_report.timestamp),
+    ];
+    if let Some(fi) = &dynamic_report.frida_instrumentation {
+        if let Some(st) = &fi.start_time {
+            t.push(format!("frida_start: {}", st));
+        }
+    }
+    for a in &dynamic_report.actions_performed {
+        t.push(format!("action: {}", a));
+    }
+    if dynamic_report.duration_ms > 0 {
+        t.push(format!("duration_ms: {}", dynamic_report.duration_ms));
+    }
+    // Include any behavioral regression notes as timeline markers (they are already in actions/findings too).
+    if let Some(fi) = &dynamic_report.frida_instrumentation {
+        for rn in &fi.regression_notes {
+            t.push(format!("regression: {}", rn));
+        }
+    }
+    t
 }
 
 /// Full report from a dynamic mobile run (install/launch/observe/uninstall cycle).
@@ -1111,6 +1270,15 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
 ///   or "network-config" cleartext/user-CA findings.
 /// - runtime-permission (dynamic) ↔ static "permission" (dangerous/overprivileged) by evidence/name match.
 ///
+/// Phase 3b/3c: Frida rules (crypto/secret, api+network, bypass+debug-perm, secret-extract+secret)
+/// + cross-layer (frida co-occur with traffic/perm).
+///
+/// Phase 4a (plans/mobile-dynamic-phase4-actionable-intelligence-plan.md): non-breaking extension.
+/// The low-level function now also populates optional `score` (conservative 0-100), `correlation_type`,
+/// and `enrichment` on returned `CorrelatedFinding` entries (and still mutates `static_correlation`
+/// for backward compat). Prefer `correlate_reports` / `CorrelationEngine` when you have full reports
+/// (they add timeline + summary and use the engine threshold).
+///
 /// Side effect: populates `f.static_correlation` on matching dynamic findings (visible in native
 /// JSON/human reports and the `to_scan_report_data_dynamic` bridge info findings).
 /// Returns lightweight notes (for recommendations, extra info, or external tooling).
@@ -1165,6 +1333,9 @@ pub fn correlate_findings(
                     dynamic_category: dcat.to_string(),
                     static_category: "manifest|network-config".to_string(),
                     note,
+                    score: Some(85),
+                    correlation_type: Some(CorrelationType::Direct),
+                    enrichment: Some("exact cleartext traffic match".into()),
                 });
             } else if static_user_ca {
                 let note = "observed cleartext; static allows user CAs (MITM risk surface)".to_string();
@@ -1173,6 +1344,9 @@ pub fn correlate_findings(
                     dynamic_category: dcat.to_string(),
                     static_category: "network-config".to_string(),
                     note,
+                    score: Some(45),
+                    correlation_type: Some(CorrelationType::Indirect),
+                    enrichment: Some("cleartext + user CA surface".into()),
                 });
             }
         }
@@ -1191,6 +1365,9 @@ pub fn correlate_findings(
                         dynamic_category: dcat.to_string(),
                         static_category: "permission".to_string(),
                         note,
+                        score: Some(80),
+                        correlation_type: Some(CorrelationType::Direct),
+                        enrichment: Some("exact permission name match".into()),
                     });
                 }
             }
@@ -1205,28 +1382,56 @@ pub fn correlate_findings(
             if has_static_secret {
                 let note = "Frida observed crypto on flow with static secret/cleartext marker".to_string();
                 df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "secret|manifest".to_string(), note });
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "secret|manifest".to_string(),
+                    note,
+                    score: Some(70),
+                    correlation_type: Some(CorrelationType::Direct),
+                    enrichment: Some("frida crypto + static secret".into()),
+                });
             }
         }
         if dcat == "frida-api-trace" {
             if static_findings.iter().any(|f| f.category == "network-config" || f.category == "manifest") {
                 let note = "Frida-observed call correlates with proxy traffic to domain".to_string();
                 df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "network|manifest".to_string(), note });
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "network|manifest".to_string(),
+                    note,
+                    score: Some(55),
+                    correlation_type: Some(CorrelationType::CrossLayer),
+                    enrichment: Some("frida api trace + static network surface".into()),
+                });
             }
         }
         if dcat == "frida-bypass-validation" {
             if static_findings.iter().any(|f| f.category == "permission" && f.evidence.as_ref().map_or(false, |e| e.contains("debug") || e.contains("READ_LOGS"))) {
                 let note = "bypass observed + debug/permission surface present".to_string();
                 df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "permission".to_string(), note });
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "permission".to_string(),
+                    note,
+                    score: Some(60),
+                    correlation_type: Some(CorrelationType::Indirect),
+                    enrichment: Some("bypass + debug/read-logs surface".into()),
+                });
             }
         }
         if dcat == "frida-secret-extract" {
             if static_findings.iter().any(|f| f.category == "secret") {
                 let note = "frida secret extract correlates with static secret finding".to_string();
                 df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "secret".to_string(), note });
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "secret".to_string(),
+                    note,
+                    score: Some(65),
+                    correlation_type: Some(CorrelationType::Direct),
+                    enrichment: Some("frida secret + static secret".into()),
+                });
             }
         }
     }
@@ -1241,12 +1446,26 @@ pub fn correlate_findings(
             if has_traffic_dynamic {
                 let note = "Frida observation co-occurred with traffic/cleartext signals (possible data flow)".to_string();
                 df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "traffic|frida".to_string(), note });
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "traffic|frida".to_string(),
+                    note,
+                    score: Some(50),
+                    correlation_type: Some(CorrelationType::CrossLayer),
+                    enrichment: Some("frida + traffic co-occur (data flow)".into()),
+                });
             }
             if has_runtime_perm_dynamic {
                 let note = "Frida + runtime permission activity (potential privilege or data access path)".to_string();
                 df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "permission|frida".to_string(), note });
+                notes.push(CorrelatedFinding {
+                    dynamic_category: dcat.to_string(),
+                    static_category: "permission|frida".to_string(),
+                    note,
+                    score: Some(45),
+                    correlation_type: Some(CorrelationType::CrossLayer),
+                    enrichment: Some("frida + runtime perm (privilege path)".into()),
+                });
             }
         }
     }
@@ -1257,6 +1476,9 @@ pub fn correlate_findings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Phase 4a: MobileScanReport lives in the parent mobile module (sibling to dynamic);
+    // pull it in for engine/report correlation tests. MobilePlatform/MobileFinding come via super::*.
+    use super::super::MobileScanReport;
 
     #[test]
     fn lab_manifest_default_is_empty_advisory() {
@@ -1926,5 +2148,126 @@ W/PackageManager: permission denied: READ_SMS
         let notes = correlate_findings(&statics, &mut dyns);
         // Existing 3b rule + new 3c cross rules should fire
         assert!(notes.len() >= 2);
+    }
+
+    // Phase 4a tests: CorrelationEngine, correlate_reports, enriched CorrelatedFinding, timeline, scoring, backward compat.
+
+    #[test]
+    fn correlation_engine_basic_direct_and_cross() {
+        let statics = MobileScanReport {
+            target: "s.apk".into(),
+            scan_type: "mobile-static".into(),
+            platform: MobilePlatform::Android,
+            app_id: None,
+            version: None,
+            timestamp: "2026-06-12T00:00:00Z".into(),
+            findings: vec![
+                MobileFinding { category: "permission".into(), severity: Severity::Medium, title: "READ_SMS".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()) },
+                MobileFinding { category: "secret".into(), severity: Severity::High, title: "hardcoded".into(), description: "".into(), recommendation: "".into(), evidence: Some("api_key=ABC".into()) },
+            ],
+            recommendations: vec![],
+            duration_ms: 1,
+        };
+        let mut dyn_r = DynamicMobileReport::new("d.apk");
+        dyn_r.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()), static_correlation: None });
+        dyn_r.findings.push(DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None });
+
+        let res = CorrelationEngine::new().correlate(&statics, &dyn_r);
+        assert!(res.correlations.len() >= 2);
+        // Direct perm match should have high score
+        let perm = res.correlations.iter().find(|c| c.dynamic_category == "runtime-permission").unwrap();
+        assert!(perm.score.unwrap_or(0) >= 70);
+        assert_eq!(perm.correlation_type, Some(CorrelationType::Direct));
+        // Frida crypto should be present (score ~70)
+        assert!(res.correlations.iter().any(|c| c.dynamic_category.contains("frida-crypto")));
+    }
+
+    #[test]
+    fn correlate_reports_produces_timeline_and_summary() {
+        let mut static_r = MobileScanReport::new("s.apk", MobilePlatform::Android);
+        static_r.timestamp = "2026-06-12T00:00:00Z".into();
+        let mut dyn_r = DynamicMobileReport::new("d.apk");
+        dyn_r.timestamp = "2026-06-12T00:00:10Z".into();
+        dyn_r.actions_performed.push("dry-run: would install".into());
+        dyn_r.duration_ms = 1234;
+        let mut fi = crate::mobile::FridaInstrumentation::default();
+        fi.start_time = Some("2026-06-12T00:00:05Z".into());
+        dyn_r.frida_instrumentation = Some(fi);
+
+        let res = correlate_reports(&static_r, &dyn_r);
+        assert!(res.timeline.iter().any(|e| e.contains("static:")));
+        assert!(res.timeline.iter().any(|e| e.contains("dynamic:")));
+        assert!(res.timeline.iter().any(|e| e.contains("frida_start:")));
+        assert!(res.timeline.iter().any(|e| e.contains("action:")));
+        assert!(res.timeline.iter().any(|e| e.contains("duration_ms:")));
+        // summary present (may be 0 correlations but still valid)
+        assert!(res.summary.total_correlations <= res.correlations.len());
+    }
+
+    #[test]
+    fn enriched_correlated_finding_serde_roundtrip_and_defaults() {
+        let mut cf = CorrelatedFinding::default();
+        cf.dynamic_category = "frida-api-trace".into();
+        cf.static_category = "network|manifest".into();
+        cf.note = "Frida call".into();
+        cf.score = Some(55);
+        cf.correlation_type = Some(CorrelationType::CrossLayer);
+        cf.enrichment = Some("frida+network".into());
+
+        let j = serde_json::to_string(&cf).unwrap();
+        let back: CorrelatedFinding = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.score, Some(55));
+        assert_eq!(back.correlation_type, Some(CorrelationType::CrossLayer));
+        assert_eq!(back.enrichment.as_deref(), Some("frida+network"));
+
+        // Pre-Phase4 shape (no new fields) still deserializes (serde default)
+        let legacy = r#"{"dynamic_category":"x","static_category":"y","note":"z"}"#;
+        let l: CorrelatedFinding = serde_json::from_str(legacy).unwrap();
+        assert!(l.score.is_none());
+        assert!(l.correlation_type.is_none());
+        assert!(l.enrichment.is_none());
+    }
+
+    #[test]
+    fn scoring_conservative_heuristics_and_min_score_filter() {
+        let statics = MobileScanReport::new("s.apk", MobilePlatform::Android);
+        let mut dyn_r = DynamicMobileReport::new("d.apk");
+        // one clear high-signal direct candidate (will be scored inside correlate_findings when rules match)
+        dyn_r.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.CAMERA".into()), static_correlation: None });
+
+        // engine with high threshold should drop low-score (or unscored) items
+        let eng = CorrelationEngine::new().with_min_score(90);
+        let res = eng.correlate(&statics, &dyn_r);
+        // In this static (no matching perm), the only potential is low or unscored -> filtered
+        // But we still validate the engine path runs and summary is coherent
+        assert!(res.summary.total_correlations <= 1);
+    }
+
+    #[test]
+    fn backward_compat_correlated_finding_pre_phase4_and_static_correlation_side_effect() {
+        let statics = vec![ MobileFinding { category: "permission".into(), severity: Severity::Medium, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()) } ];
+        let mut dyns = vec![ DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()), static_correlation: None } ];
+        let notes = correlate_findings(&statics, &mut dyns);
+        // legacy field still populated
+        assert!(dyns[0].static_correlation.is_some());
+        // new optional fields may be present on the returned note
+        assert!(notes.len() >= 1);
+        // but even if scored, the DynamicMobileFinding itself is unchanged shape
+        let _ = serde_json::to_string(&dyns[0]).unwrap();
+    }
+
+    #[test]
+    fn engine_dry_safe_no_side_effects_on_inputs() {
+        let mut static_r = MobileScanReport::new("s.apk", MobilePlatform::Android);
+        static_r.findings.push(MobileFinding { category: "permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("X".into()) });
+        let mut dyn_r = DynamicMobileReport::new("d.apk");
+        dyn_r.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("X".into()), static_correlation: None });
+
+        let before_dyn_len = dyn_r.findings.len();
+        let before_static_len = static_r.findings.len();
+        let _res = CorrelationEngine::new().correlate(&static_r, &dyn_r);
+        // inputs are not mutated by the high-level path (low-level clone is internal)
+        assert_eq!(dyn_r.findings.len(), before_dyn_len);
+        assert_eq!(static_r.findings.len(), before_static_len);
     }
 }

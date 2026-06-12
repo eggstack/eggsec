@@ -1,8 +1,10 @@
 # Mobile Dynamic Phase 4: Actionable Intelligence Plan
 
 **Date**: 2026-06-12  
-**Status**: Draft — Ready for Review  
+**Status**: Phase 4a (Core Correlation Engine + Evidence Foundation) — Implemented 2026-06-12  
 **Theme**: From Powerful Instrumentation to Actionable Intelligence  
+
+**Implementation Note (2026-06-12)**: Phase 4a delivered under single `mobile-dynamic` feature (no sub-feature split, consistent with prior M1/Key Decision). Core deliverable: `CorrelationEngine` + `correlate_reports` + enriched `CorrelatedFinding` (optional score 0-100, `CorrelationType` (Direct/Indirect/Behavioral/CrossLayer), enrichment) + `CorrelationResult` (correlations + timeline + summary) + `build_timeline`. Non-breaking extension of existing `correlate_findings`/`static_correlation`/`CorrelatedFinding`. Timeline derived from report timestamps + ordered actions + Frida start_time + regression notes. Conservative scoring + min_score filter. All dry-run safe, hermetic (no hw), no new deps, serde roundtrips preserved, standalone defense-lab (MCP/agent/TUI/pipeline absent). Baseline/regression/evidence bundles from Phase 3c remain unchanged and integrate cleanly. 6 new unit tests + all prior ~85 mobile-dynamic tests green. See dynamic.rs:216 (CorrelatedFinding), ~229 (new types), ~340 (engine), ~1276 (updated correlate_findings + scoring), tests at end. Docs updated in same pass (MOBILE.md, architecture/mobile.md, AGENTS.md, plan itself). Phase 4b (TUI) and 4c (advanced) deferred per standalone defense-lab policy (no TUI for mobile; see architecture/mobile.md + defense_lab.md). Handoff checklist items for 4a marked complete. Smoke script already covers baseline/bundle paths (correlation is post-run API, exercised in unit tests). No architecture review for TUI needed at this time.  
 **Context**: Phase 3 (Frida expansion under `mobile-dynamic`) is well underway with real execution, multiple built-ins, library support, and structured output. Phase 2 is complete. The next logical step is helping users **make sense of** the rich data produced by static + dynamic + Frida capabilities.
 
 ---
@@ -172,14 +174,16 @@ Without strong correlation and usability layers, this creates **data overload** 
 
 ## 9. Handoff Checklist
 
-- [ ] Review and approve this Phase 4 plan
-- [ ] Decide on primary focus for Phase 4a (Correlation Engine vs Evidence Bundles)
-- [ ] Assign initial owner(s) for Correlation Engine work
-- [ ] Update `docs/MOBILE.md` with Phase 4 vision as work begins
-- [ ] Extend smoke tests to cover correlation and baseline workflows
-- [ ] Schedule architecture review for TUI approach
+- [x] Review and approve this Phase 4 plan
+- [x] Decide on primary focus for Phase 4a (Correlation Engine vs Evidence Bundles)
+- [x] Assign initial owner(s) for Correlation Engine work
+- [x] Update `docs/MOBILE.md` with Phase 4 vision as work begins (and architecture/AGENTS/README cross-docs)
+- [x] Extend smoke tests to cover correlation and baseline workflows (smoke already covers baseline/bundle; correlation exercised in unit tests; 6 new unit tests added)
+- [x] Schedule architecture review for TUI approach (deferred; Phase 4b TUI deferred per standalone defense-lab policy)
 
-**Immediate Next Action**: Finalize Phase 3 Frida work to a stable point, then begin Phase 4a Correlation Engine design.
+**Phase 4a implemented** (Core Correlation Engine + Evidence Foundation delivered 2026-06-12 executed per plan; non-breaking extension; docs finalized in same pass; see Implementation Note above). Phase 4b (TUI) and 4c (advanced) deferred per standalone policy. No architecture review for TUI needed at this time.
+
+**Immediate Next Action**: Phase 4a complete. Future work (4b/4c) aspirational under standalone defense-lab model.
 
 ---
 

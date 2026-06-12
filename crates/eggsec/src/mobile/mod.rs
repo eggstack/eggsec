@@ -53,6 +53,7 @@ pub mod frida;
 pub use dynamic::{
     run_dynamic_cli, DynamicMobileArgs, DynamicMobileReport, DynamicMobileFinding, LabManifest,
     format_dynamic_report, to_scan_report_data_dynamic, correlate_findings, CorrelatedFinding,
+    correlate_reports, CorrelationEngine, CorrelationResult, CorrelationSummary, CorrelationType,
     MobileBaseline, capture_baseline, compare_to_baseline, export_evidence_bundle,
 };
 #[cfg(feature = "mobile-dynamic")]

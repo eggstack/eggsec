@@ -115,7 +115,7 @@ Static analysis of Android APKs and iOS IPAs for authorized lab/defense use only
 **Feature gate**: Requires `--features mobile` (or `--features full`, which includes it). Dependencies: `zip` (always under feature); `plist` (iOS path only, optional under feature).
 
 **Safety**: Pure-Rust ZIP + plist + bounded AXML extraction. No shelling out. Explicit `mobile` command; lab-only framing. See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs`, `crates/eggsec/src/cli/mobile.rs`, `crates/eggsec/src/commands/handlers/mobile.rs`, and policy integration in `config/policy_decision.rs`.
-Dynamic mobile (Android ADB + logcat + Phase 2a proxy + traffic-capture + runtime-permission operations + static ↔ dynamic correlation) implemented under `mobile-dynamic` (Phase 1 + Phase 2a + final polish + close-out polish complete 2026-06-12). Design and Frida/etc. future phases in `plans/dynamic-mobile-testing-loadout-design-plan.md`. Same standalone defense-lab pattern: gated `mobile-dynamic` feature, MCP-absent, `to_scan_report_data_dynamic` bridge with `mobile-dynamic-android-*` categories.
+Dynamic mobile (Android ADB + logcat + Phase 2a proxy + traffic-capture + runtime-permission operations + static ↔ dynamic correlation) implemented under `mobile-dynamic` (Phase 1 + Phase 2a + final polish + close-out polish complete 2026-06-12). Design and Frida/etc. future phases in `plans/dynamic-mobile-testing-loadout-design-plan.md` (+ Phase 4a core correlation engine delivered 2026-06-12). Same standalone defense-lab pattern: gated `mobile-dynamic` feature, MCP-absent, `to_scan_report_data_dynamic` bridge with `mobile-dynamic-android-*` categories.
 
 ---
 
@@ -328,5 +328,5 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 | `compliance` | Compliance scanning |
 | `wireless` | WiFi scanning (standalone-complete passive recon + security posture; summary-by-default rogue heuristic; WPS/hidden/transition; `--repeat`/`--known-good`/`--dry-run`/`--detect-suspicious`). TUI tab under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab surface). **Passive Phase 0 complete**; active phases gated by `wireless-advanced`. |
 | `wireless-advanced` | Active WiFi attacks (deauth/disassoc frame injection) for authorized lab testing. Subcommand: `eggsec wireless <iface> deauth`. Policy: `OperationRisk::Intrusive` + `wireless-advanced` feature + `--allow-active-wireless` flag. Requires `wireless` feature. **Phase 1 (deauth/disassoc) complete**. |
-| `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only). Dynamic mobile (Phase 1 + Phase 2a + final polish + close-out) shipped under `mobile-dynamic`; future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
+| `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only). Dynamic mobile (Phase 1 + Phase 2a + final polish + close-out) shipped under `mobile-dynamic`; future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md` (+ Phase 4a CorrelationEngine 2026-06-12). |
 | `full` | All features combined |
