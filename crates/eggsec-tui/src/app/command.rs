@@ -873,4 +873,75 @@ mod tests {
             n.message
         );
     }
+
+    #[cfg(feature = "wireless-advanced")]
+    #[test]
+    fn test_copy_cli_wireless_active_mode_produces_deauth_command() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Wireless;
+        if let Some(f) = app.tabs.wireless.inputs.fields.first_mut() {
+            f.value = "wlan0".to_string();
+        }
+        app.tabs.wireless.active_mode = true;
+        if let Some(f) = app.tabs.wireless.active_inputs.fields.first_mut() {
+            f.value = "AA:BB:CC:DD:EE:FF".to_string();
+        }
+        if let Some(f) = app.tabs.wireless.active_inputs.fields.get_mut(1) {
+            f.value = "11:22:33:44:55:66".to_string();
+        }
+        // Non-default values
+        if let Some(f) = app.tabs.wireless.active_inputs.fields.get_mut(2) {
+            f.value = "250".to_string();
+        }
+        if let Some(f) = app.tabs.wireless.active_inputs.fields.get_mut(3) {
+            f.value = "20".to_string();
+        }
+        app.tabs.wireless.dry_run = false;
+        let cli = app.copy_cli_equivalent().unwrap();
+        assert!(cli.contains("eggsec wireless wlan0 deauth"));
+        assert!(cli.contains("--bssid"));
+        assert!(cli.contains("AA:BB:CC:DD:EE:FF"));
+        assert!(cli.contains("--client 11:22:33:44:55:66"));
+        assert!(cli.contains("--count 250"));
+        assert!(cli.contains("--fps 20"));
+        // No broad bypass flags.
+        assert!(!cli.contains("--allow-"));
+        assert!(!cli.contains("--yes"));
+        // No --dry-run when live.
+        assert!(!cli.contains("--dry-run"));
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    #[test]
+    fn test_copy_cli_wireless_active_mode_dry_run_includes_flag() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Wireless;
+        if let Some(f) = app.tabs.wireless.inputs.fields.first_mut() {
+            f.value = "wlan0".to_string();
+        }
+        app.tabs.wireless.active_mode = true;
+        if let Some(f) = app.tabs.wireless.active_inputs.fields.first_mut() {
+            f.value = "AA:BB:CC:DD:EE:FF".to_string();
+        }
+        app.tabs.wireless.dry_run = true;
+        let cli = app.copy_cli_equivalent().unwrap();
+        assert!(cli.contains("eggsec wireless wlan0 deauth"));
+        assert!(cli.contains("--bssid AA:BB:CC:DD:EE:FF"));
+        assert!(cli.contains("--dry-run"));
+        assert!(!cli.contains("--allow-"));
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    #[test]
+    fn test_copy_cli_wireless_passive_mode_omits_deauth() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Wireless;
+        if let Some(f) = app.tabs.wireless.inputs.fields.first_mut() {
+            f.value = "wlan0".to_string();
+        }
+        // active_mode stays false (default)
+        let cli = app.copy_cli_equivalent().unwrap();
+        assert!(cli.contains("eggsec wireless wlan0"));
+        assert!(!cli.contains("deauth"));
+    }
 }

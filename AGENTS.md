@@ -293,6 +293,15 @@ No remaining stub implementations.
 - **TUI active integration**: Wireless tab now supports active attacks (deauth/disassoc) with `wireless-advanced` feature; active mode via `a` key, dry-run via `d`, policy confirmation overlay for `Intrusive` operations.
 - **Tests added**: Unit tests for `to_active_scan_report_data()` bridge covering BSSID and non-BSSID cases.
 
+### TUI Wireless Active Execution Completion (2026-06-12)
+
+- **Execution path wired**: `WirelessTab::handle_enter()` now launches the active attack when in `ActiveConfig` focus and `active_attack_config()` is valid (previously only blurred inputs and returned). New `start_active_attack()` helper transitions the tab to `AppState::Running`, clearing `active_results` and `results_view`/`error`.
+- **Tab Spec integration**: The wireless TabSpec is `direct_launch: true`, so `App::handle_enter()` retroactively evaluates the policy descriptor (which is promoted to `OperationRisk::Intrusive` + `OperationMode::DefenseLab` when `active_mode` is on) and routes through `EnforcementContext::evaluate()` + `request_policy_confirmation()` exactly like Auth/Stress/Packet.
+- **Task system**: `TaskConfig::WirelessActive` + `TaskResult::WirelessActive` (worker `run_wireless_active_task`) were already in place; results flow back through `state_update.rs` to `set_active_results()`. Dry-run is the default and is exempted from the policy confirmation overlay via the existing `enforcement.evaluate` outcome (Allow for dry-run; RequireConfirmation for live).
+- **UX polish**: Passive results view no longer states "Active attacks are available via CLI only" — replaced with a TUI-side tip describing the `a`/`d` keys and Enter behavior. Help popup (popup.rs) reflects active mode in its Enter binding description.
+- **Tests added**: 11 new unit tests under `tabs/wireless::tests` (under `wireless-advanced` feature): `active_attack_config` (inactive / no interface / values / omitted optional MACs), `set_active_results` rendering and state transition, `toggle_active_mode` clears inputs, `toggle_dry_run` flips, `start_active_attack` (valid -> Running, invalid -> Idle), `handle_enter` (valid active config -> Running, invalid -> blur).
+- **Plan completed**: `plans/wireless-active-tui-execution-completion-plan.md` (focused plan for TUI execution path) is now closed.
+
 ## Skills Directory
 
 Skills are located in `.opencode/skills/`:

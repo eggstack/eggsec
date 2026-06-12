@@ -558,6 +558,29 @@ impl App {
                     out.push_str(&format!(" --wordlist {}", shell_escape(passwords)));
                 }
             }
+            #[cfg(feature = "wireless-advanced")]
+            Tab::Wireless if self.tabs.wireless.active_mode => {
+                if let Some((_, _, bssid, client, frame_count, rate_limit, dry_run)) =
+                    self.tabs.wireless.active_attack_config()
+                {
+                    out.push_str(" deauth");
+                    if let Some(bssid) = bssid {
+                        out.push_str(&format!(" --bssid {}", shell_escape(&bssid)));
+                    }
+                    if let Some(client) = client {
+                        out.push_str(&format!(" --client {}", shell_escape(&client)));
+                    }
+                    if frame_count != 100 {
+                        out.push_str(&format!(" --count {}", frame_count));
+                    }
+                    if rate_limit != 10 {
+                        out.push_str(&format!(" --fps {}", rate_limit));
+                    }
+                    if dry_run {
+                        out.push_str(" --dry-run");
+                    }
+                }
+            }
             _ => {
                 // Other executable tabs fall back to target-only (per "target only + note" guidance).
             }

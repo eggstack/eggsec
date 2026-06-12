@@ -253,6 +253,8 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --count 10 --allow-active-wireless
 ./eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --client FF:EE:DD:CC:BB:AA --broadcast --dry-run
 # (Passive wireless under --features wireless; Phase 1 deauth under --features wireless-advanced; see docs/WIRELESS.md.)
+# TUI: launch eggsec-tui (also --features wireless-advanced); navigate to the Wireless tab; press 'a' to enter
+# Active mode, fill in BSSID / Client / Frame Count / Rate Limit, then press Enter (dry-run default, 'd' to toggle).
 
 # Mobile static analysis (APK/IPA; requires --features mobile; lab binaries only)
 ./eggsec mobile app.apk

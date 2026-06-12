@@ -318,6 +318,9 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
                 "  Enter            - Execute workflow action".to_string()
             }
             crate::tabs::Tab::Vuln => "  Enter            - Run vulnerability analysis".to_string(),
+            #[cfg(feature = "wireless-advanced")]
+            crate::tabs::Tab::Wireless => "  Enter            - Scan / launch active attack (in active mode)".to_string(),
+            #[cfg(not(feature = "wireless-advanced"))]
             crate::tabs::Tab::Wireless => "  Enter            - Scan wireless networks".to_string(),
         },
         "".to_string(),

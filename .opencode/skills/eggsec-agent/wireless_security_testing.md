@@ -133,6 +133,16 @@ sudo eggsec wireless wlan0 deauth --bssid 00:11:22:33:44:55 --client aa:bb:cc:dd
 sudo eggsec wireless wlan0 deauth --bssid 00:11:22:33:44:55 --broadcast --count 100 --allow-active-wireless
 ```
 
+### TUI Active Attack Flow (wireless-advanced)
+
+The Wireless TUI tab also launches active attacks end-to-end (same `TaskConfig::WirelessActive` worker as the CLI):
+
+1. Type the wireless interface name in the top input field
+2. Press `a` to enter Active mode (additional input fields appear for BSSID, Client MAC, Frame Count, Rate Limit)
+3. Press `d` to toggle Dry Run (on by default)
+4. Press Enter — dry-run launches immediately; live (non-dry-run) attacks trigger the policy confirmation overlay (`OperationRisk::Intrusive` + `OperationMode::DefenseLab`) before the worker is spawned
+5. Results render in the same Results view via `set_active_results()` (findings, evidence, recommendations)
+
 ### API Usage
 
 ```rust

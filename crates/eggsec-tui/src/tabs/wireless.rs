@@ -353,12 +353,16 @@ impl WirelessTab {
         {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(vec![Span::styled(
-                "Note: Active attacks (deauth, disassoc) are available via CLI only.",
-                Style::default().fg(tc!(warning)),
+                "Tip: Active attacks (deauth, disassoc) are also available from this tab.",
+                Style::default().fg(tc!(info)),
             )]));
             self.results_view.add_line(Line::from(vec![Span::styled(
-                "  Use: eggsec wireless <iface> deauth --bssid MAC [--allow-active-wireless]",
-                Style::default().fg(tc!(info)),
+                "  Press 'a' to enter Active mode, fill in BSSID / Client / Frame Count / Rate Limit,",
+                Style::default().fg(tc!(muted)),
+            )]));
+            self.results_view.add_line(Line::from(vec![Span::styled(
+                "  then press Enter to launch (dry-run is on by default; press 'd' to toggle).",
+                Style::default().fg(tc!(muted)),
             )]));
         }
     }
@@ -368,6 +372,17 @@ impl WirelessTab {
             self.state = AppState::Running;
             self.progress.current = 0;
             self.results = None;
+            self.results_view.clear();
+            self.error = None;
+        }
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    pub fn start_active_attack(&mut self) {
+        if self.active_attack_config().is_some() {
+            self.state = AppState::Running;
+            self.progress.current = 0;
+            self.active_results = None;
             self.results_view.clear();
             self.error = None;
         }
@@ -683,6 +698,18 @@ impl TabInput for WirelessTab {
             return;
         }
         #[cfg(feature = "wireless-advanced")]
+        if self.focus_area == WirelessFocusArea::ActiveConfig
+            && self.active_inputs.is_focused()
+            && self.active_mode
+        {
+            if self.active_attack_config().is_some() {
+                self.start_active_attack();
+            } else {
+                self.active_inputs.blur();
+            }
+            return;
+        }
+        #[cfg(feature = "wireless-advanced")]
         if self.focus_area == WirelessFocusArea::ActiveConfig && self.active_inputs.is_focused() {
             self.active_inputs.blur();
             return;
@@ -886,5 +913,153 @@ impl TabInput for WirelessTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.interface().to_string())
+    }
+}
+
+#[cfg(all(test, feature = "wireless-advanced"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_active_attack_config_none_when_inactive() {
+        let tab = WirelessTab::new();
+        assert!(tab.active_attack_config().is_none());
+    }
+
+    #[test]
+    fn test_active_attack_config_none_without_interface() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        assert!(tab.active_attack_config().is_none());
+    }
+
+    #[test]
+    fn test_active_attack_config_returns_values() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "wlan0".to_string();
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        tab.active_inputs.fields[1].value = "11:22:33:44:55:66".to_string();
+        tab.active_inputs.fields[2].value = "250".to_string();
+        tab.active_inputs.fields[3].value = "20".to_string();
+        tab.dry_run = false;
+
+        let cfg = tab.active_attack_config().expect("config should be present");
+        assert_eq!(cfg.0, "wlan0");
+        assert_eq!(cfg.1, "deauth");
+        assert_eq!(cfg.2.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
+        assert_eq!(cfg.3.as_deref(), Some("11:22:33:44:55:66"));
+        assert_eq!(cfg.4, 250);
+        assert_eq!(cfg.5, 20);
+        assert!(!cfg.6);
+    }
+
+    #[test]
+    fn test_active_attack_config_omits_empty_optional_macs() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "wlan0".to_string();
+        tab.active_inputs.fields[0].value = "".to_string();
+        tab.active_inputs.fields[1].value = "".to_string();
+
+        let cfg = tab.active_attack_config().expect("config should be present");
+        assert!(cfg.2.is_none());
+        assert!(cfg.3.is_none());
+    }
+
+    #[test]
+    fn test_set_active_results_renders_and_completes() {
+        use eggsec::wireless::active::ActiveWirelessAttackResult;
+
+        let mut tab = WirelessTab::new();
+        let result = ActiveWirelessAttackResult {
+            interface: "wlan0".to_string(),
+            attack_type: "deauth".to_string(),
+            target_bssid: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            target_client: None,
+            frames_sent: 100,
+            duration_secs: 10,
+            dry_run: true,
+            findings: Vec::new(),
+            raw_output: None,
+            recommendations: vec!["Enable 802.11w (PMF) if supported.".to_string()],
+        };
+
+        tab.set_active_results(result);
+        assert_eq!(tab.state, AppState::Completed);
+        assert!(tab.active_results.is_some());
+    }
+
+    #[test]
+    fn test_toggle_active_mode_clears_inputs_when_off() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        tab.active_inputs.fields[1].value = "11:22:33:44:55:66".to_string();
+
+        tab.toggle_active_mode();
+        assert!(!tab.active_mode);
+        assert_eq!(tab.active_inputs.fields[0].value, "");
+        assert_eq!(tab.active_inputs.fields[1].value, "");
+    }
+
+    #[test]
+    fn test_toggle_dry_run_flips_state() {
+        let mut tab = WirelessTab::new();
+        assert!(tab.dry_run);
+        tab.toggle_dry_run();
+        assert!(!tab.dry_run);
+        tab.toggle_dry_run();
+        assert!(tab.dry_run);
+    }
+
+    #[test]
+    fn test_start_active_attack_transitions_to_running() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "wlan0".to_string();
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        tab.focus_area = WirelessFocusArea::ActiveConfig;
+        tab.active_inputs.blur();
+
+        tab.start_active_attack();
+        assert_eq!(tab.state, AppState::Running);
+    }
+
+    #[test]
+    fn test_start_active_attack_noop_when_invalid() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "".to_string();
+
+        tab.start_active_attack();
+        assert_eq!(tab.state, AppState::Idle);
+    }
+
+    #[test]
+    fn test_handle_enter_in_active_config_starts_attack() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "wlan0".to_string();
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        tab.focus_area = WirelessFocusArea::ActiveConfig;
+        tab.active_inputs.blur();
+
+        tab.handle_enter();
+        assert_eq!(tab.state, AppState::Running);
+    }
+
+    #[test]
+    fn test_handle_enter_in_active_config_invalid_blurs_inputs() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "".to_string();
+        tab.focus_area = WirelessFocusArea::ActiveConfig;
+        tab.active_inputs.focus(0);
+
+        tab.handle_enter();
+        assert_eq!(tab.state, AppState::Idle);
+        assert!(!tab.active_inputs.is_focused());
     }
 }

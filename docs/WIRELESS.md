@@ -111,9 +111,10 @@ The Wireless tab in the TUI provides both passive scanning and active attack cap
 - Press `a` to toggle between passive and active attack mode
 - Active mode shows input fields for: BSSID, Client MAC, Frame Count, Rate Limit
 - Press `d` to toggle Dry Run mode (on by default for safety)
-- Press Enter to execute — the policy confirmation overlay will appear for active attacks
-- Active attacks require `OperationRisk::Intrusive` clearance and explicit operator confirmation
+- Press Enter to execute — the policy confirmation overlay will appear for live (non-dry-run) attacks; dry-run attacks (default) launch without a prompt
+- Active attacks require `OperationRisk::Intrusive` clearance and explicit operator confirmation when live
 - Results display findings, evidence, and recommendations
+- The active attack runs through the same `TaskConfig::WirelessActive` worker as the CLI path; result updates `set_active_results()` and renders in the same Results view
 
 **Key Bindings:**
 - `a` — Toggle active/passive mode

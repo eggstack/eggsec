@@ -1,7 +1,7 @@
 # Wireless Active Attacks: TUI Execution Completion Plan
 
 **Date**: 2026-06-11  
-**Status**: Draft — Ready for Handoff  
+**Status**: ✅ Complete (2026-06-12)  
 **Focus**: Completing the execution path for active attacks from the TUI
 
 ---
@@ -125,14 +125,18 @@ Before executing a non-dry-run attack:
 
 ## Handoff Checklist
 
-- [ ] Implement `handle_enter()` logic for ActiveConfig mode
-- [ ] Create `start_active_attack()` method
-- [ ] Wire background execution (worker or async task)
-- [ ] Integrate policy confirmation for non-dry-run attacks
-- [ ] Handle success / error states properly
-- [ ] Update passive results view note (remove "CLI only" message)
-- [ ] Test dry-run and real execution paths from TUI
-- [ ] Add basic TUI test coverage if time permits
+- [x] Implement `handle_enter()` logic for ActiveConfig mode
+- [x] Create `start_active_attack()` method
+- [x] Wire background execution (worker or async task)
+- [x] Integrate policy confirmation for non-dry-run attacks
+- [x] Handle success / error states properly
+- [x] Update passive results view note (remove "CLI only" message)
+- [x] Test dry-run and real execution paths from TUI
+- [x] Add basic TUI test coverage if time permits
+
+## Completion Notes (2026-06-12)
+
+All plan items shipped. See commit log and AGENTS.md "TUI Wireless Active Execution Completion (2026-06-12)" for the implementation summary.
 
 ---
 
