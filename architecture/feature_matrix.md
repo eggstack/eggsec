@@ -40,6 +40,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `vuln-management` | yes | no | yes | `vuln/` | Stable | `cargo check -p eggsec --features vuln-management` |
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
 | `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition/rogue heuristic). **Passive Phase 0 (2026-06-11)**; active phases gated by `wireless-advanced` per `plans/wireless-active-attacks-loadout-design-plan.md`. |
+| `wireless-advanced` | yes | yes (`wireless`) | - | `wireless/active/` | Stable | `cargo check -p eggsec --features wireless-advanced` (active deauth/disassoc under `wireless <iface> deauth`; lab-only, requires `--allow-active-wireless`, monitor-mode interface, root/CAP_NET_ADMIN; dry-run default; policy gate `Intrusive` + `wireless-advanced` feature; TUI active mode with the same task/confirmation flow). **Phase 1 complete 2026-06-12**; Phase 2+ (handshake capture, etc.) per `plans/wireless-active-attacks-loadout-design-plan.md`. Not included in `full`. |
 | `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` |
 | `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |
 | `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p eggsec --features api-schema` |
@@ -82,6 +83,12 @@ Features like `advanced-hunting`, `compliance`, `external-integrations`,
 `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, and `mobile`
 have no extra runtime dependencies beyond optional crates (`zip`/`plist` for `mobile`).
 They gate module compilation via `#[cfg(feature = "...")]` in `lib.rs`.
+
+`wireless-advanced` is a dependent feature on `wireless` and pulls in the
+`wireless/active/` module (deauth/disassoc frame crafting and injection). It is
+intentionally **not** in `full` because active attacks are lab-only and require
+`--allow-active-wireless` plus a monitor-mode interface, so it is opted into
+explicitly at build time.
 
 ### Module gating pattern
 

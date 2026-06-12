@@ -1,8 +1,28 @@
 # Wireless Active Attacks: TUI Worker Execution & Remaining Gaps Closure Plan
 
-**Date**: 2026-06-12  
-**Status**: Draft — Ready for Handoff  
+**Date**: 2026-06-12
+**Status**: ✅ Resolved — All items complete (closed 2026-06-12)
 **Focus**: Completing the worker/task execution layer and closing the TUI loop
+
+> **Resolution note (2026-06-12)**: This plan was superseded by the parallel
+> `wireless-active-tui-execution-completion-plan.md` (status: ✅ Complete) and
+> `wireless-active-tui-execution-final-polish-plan.md` (status: Completed). At
+> the time of resolution, all four "remaining gaps" called out below were
+> already implemented in `main`:
+>
+> | Gap (this plan) | Resolution (where it lives) |
+> |-----------------|-----------------------------|
+> | No worker for `TaskConfig::WirelessActive` | `crates/eggsec-tui/src/workers/security.rs:865-927` (`run_wireless_active_task`) |
+> | `run_deauth()` never called from the TUI | Dispatched via the worker above; the `attack_type` field selects `run_deauth` vs. `run_disassoc` |
+> | No result callback to `WirelessTab` | `crates/eggsec-tui/src/app/state_update.rs:418-422` routes `TaskResult::WirelessActive` → `WirelessTab::set_active_results` |
+> | Missing policy confirmation | `crates/eggsec-tui/src/app/mod.rs:436-471` special-cases the wireless descriptor to `Intrusive` under `DefenseLab` for live attacks; the central `EnforcementContext::evaluate()` + `PendingPolicyConfirmation` flow applies |
+>
+> See `architecture/wireless.md`, `docs/WIRELESS.md`, `architecture/tui.md`
+> ("Wireless tab Active Mode"), `.opencode/skills/eggsec-agent/wireless_security_testing.md`,
+> and `crates/eggsec/src/wireless/AGENTS.override.md` for the shipped design.
+> This plan is retained as a historical artifact documenting the design
+> intent; the actual implementation followed a tighter parallel path
+> (see the two execution-completion plans cited above).
 
 ---
 

@@ -40,6 +40,7 @@ the shared policy evaluation path (`evaluate_and_enforce_operation` /
 | `handlers/hunt.rs` | `handle_hunt` | yes | `evaluate_and_enforce_operation` | Intrusive | migrated | requires `advanced-hunting` feature |
 | `handlers/auth_test.rs` | `handle_auth_test` | yes | `evaluate_and_enforce_operation` | CredentialTesting | migrated | |
 | `handlers/wireless.rs` | `handle_wireless` | yes | `evaluate_and_enforce_operation` | SafeActive | migrated | requires `wireless` feature |
+| `handlers/wireless.rs` | `handle_deauth` | yes | `evaluate_and_enforce_operation` | Intrusive | migrated | requires `wireless-advanced` feature; `DefenseLab` mode; `wireless-deauth` operation; non-dry-run additionally requires `--allow-active-wireless` (hard bail in handler) |
 | `handlers/browser.rs` | `handle_browser` | yes | `evaluate_and_enforce_operation` | SafeActive | migrated | requires `headless-browser` feature |
 | `handlers/grpc.rs` | `handle_grpc_server` | yes | `evaluate_and_enforce_operation` | SafeActive | migrated | requires `grpc-api` feature |
 

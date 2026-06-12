@@ -60,6 +60,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `pipeline/` | `crates/eggsec/src/pipeline/AGENTS.override.md` |
 | `nse/` | `crates/eggsec-nse/AGENTS.override.md` (Lua VM, NSE libraries, sandbox, CVE integration) |
 | `container/` | `crates/eggsec/src/container/AGENTS.override.md` |
+| `wireless/` | `crates/eggsec/src/wireless/AGENTS.override.md` |
 
 ### Architecture Index
 

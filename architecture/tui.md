@@ -74,6 +74,24 @@ Manages the overall application state, event loop, and rendering.
 
 **Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
 
+**Wireless tab Active Mode** (`tabs/wireless.rs`, under `wireless-advanced`): the wireless tab supports both passive scanning (default) and an opt-in **Active Mode** for deauth/disassoc. Keymap:
+
+- `a` — toggle Active Mode (re-renders to show BSSID, Client MAC, Frame Count, Rate Limit input fields plus the dry-run toggle).
+- `d` — toggle Dry Run (on by default; live mode requires explicit opt-out).
+- `Enter` in the ActiveConfig focus area — launch the configured attack.
+
+Execution flow (mirrors Auth/Stress/Packet):
+
+1. `WirelessTab::build_task_config()` returns `TaskConfig::WirelessActive { interface, attack_type, bssid, client, frame_count, rate_limit, dry_run }` (gated on `active_mode == true` and valid `active_attack_config()`).
+2. `App::build_current_operation_descriptor()` (`app/mod.rs:436-471`) special-cases wireless active attacks: the operation is `wireless-deauth` or `wireless-disassoc`, the mode is `OperationMode::DefenseLab`, the risk is `SafeActive` (dry-run) or `Intrusive` (live), and `required_features: ["wireless-advanced"]` is set.
+3. Central `EnforcementContext::evaluate()`:
+   - Dry-run → `Allow` / `Warn` → `spawn_task(...)` immediately.
+   - Live → `RequireConfirmation` under `ManualPermissive` → `request_policy_confirmation()` captures the `TaskConfig` and opens the policy overlay; on confirm, `confirm_policy_action()` replays the captured task.
+4. The worker `run_wireless_active_task` (`workers/security.rs:865-927`) parses MACs, builds an `ActiveAttackConfig` with hard budgets (`max_frames ≤ 1000`, `frames_per_second ≤ 100`), and dispatches `run_deauth` (default) or `run_disassoc`.
+5. Result returns via `TaskResult::WirelessActive(result)` → `WirelessTab::set_active_results()` (`app/state_update.rs:418-422`), which transitions the tab to `AppState::Completed` and renders the findings, evidence, and recommendations.
+
+TabSpec (`tabs/spec.rs:427-439`) declares `direct_launch: true` and `risk_group: TabRiskGroup::SafeActive` (overridden at descriptor construction time to `Intrusive` for live attacks). 12 unit tests under `tabs/wireless::tests` (under `wireless-advanced`) cover mode toggling, dry-run flipping, config validation, task-config construction, `set_active_results`, and `handle_enter` flows.
+
 ### TabInput Interface (27 methods)
 
 All tabs implement the `TabInput` trait (`tabs/mod.rs:849-887`):

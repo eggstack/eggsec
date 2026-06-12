@@ -554,7 +554,8 @@ mod tests {
 
     #[test]
     fn test_target_returns_none_when_empty() {
-        let tab = AuthTab::new();
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value.clear();
         assert!(tab.target().is_none());
     }
 
@@ -567,7 +568,8 @@ mod tests {
 
     #[test]
     fn test_build_task_config_returns_none_without_target() {
-        let tab = AuthTab::new();
+        let mut tab = AuthTab::new();
+        tab.inputs.fields[0].value.clear();
         assert!(tab.build_task_config().is_none());
     }
 
