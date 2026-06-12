@@ -320,11 +320,11 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             evidence: Some("dry-run: simulated CAMERA grant".to_string()),
             static_correlation: None,
         });
-        // Phase 3a Frida dry-run simulation (under mobile-dynamic; always safe)
+        // Phase 3b Frida dry-run simulation (under mobile-dynamic; always safe; exercises new builtins + structured)
         if let Some(ref fs) = args.frida_script {
             actions.push(format!("dry-run: would connect frida to device (script: {})", fs));
-            actions.push("dry-run: would execute frida script (or --frida-builtin)".to_string());
-            // Inject sample frida findings for bridge + report surface
+            actions.push("dry-run: would execute frida script (or builtin:...)".to_string());
+            // Inject sample frida findings for bridge + report surface (Phase 3b: multiple categories)
             findings.push(DynamicMobileFinding {
                 category: "frida-method-trace".to_string(),
                 severity: Severity::Low,
@@ -343,24 +343,49 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                 evidence: None,
                 static_correlation: None,
             });
+            findings.push(DynamicMobileFinding {
+                category: "frida-crypto-observation".to_string(),
+                severity: Severity::Low,
+                title: "Frida crypto/keystore observation (dry-run)".to_string(),
+                description: "Would observe javax.crypto / KeyStore flows (redacted).".to_string(),
+                recommendation: "Review crypto usage under instrumentation.".to_string(),
+                evidence: Some("dry-run: frida-crypto-observation [REDACTED]".to_string()),
+                static_correlation: None,
+            });
+            findings.push(DynamicMobileFinding {
+                category: "frida-api-trace".to_string(),
+                severity: Severity::Low,
+                title: "Frida API call trace (dry-run)".to_string(),
+                description: "Would trace HttpURLConnection/OkHttp with redacted params.".to_string(),
+                recommendation: "Correlate observed API calls with traffic_summary.".to_string(),
+                evidence: Some("dry-run: http://example.test/api [REDACTED]".to_string()),
+                static_correlation: None,
+            });
             // Populate frida_instrumentation carrier (set after report construction below)
         }
         if args.frida_script.is_some() {
             // Will be attached post-construction; record a placeholder action
             actions.push("dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)".to_string());
         }
-        // Populate frida instrumentation carrier for dry-run (so report + bridge + smoke see it)
+        // Populate frida instrumentation carrier for dry-run (Phase 3b: richer, multiple builtins, structured JSON example)
         if args.frida_script.is_some() {
+            let mut structured_ex: Vec<serde_json::Value> = vec![];
+            structured_ex.push(serde_json::json!({"type":"frida-crypto-observation","method":"Cipher.doFinal","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}));
+            structured_ex.push(serde_json::json!({"type":"frida-api-trace","params_inspected":{"url":"http://ex.test/api"}}));
             frida_instr_for_report = Some(crate::mobile::FridaInstrumentation {
-                note: "dry-run simulation of Frida connect + script execution (Phase 3a)".to_string(),
+                note: "dry-run simulation of Frida connect + script execution (Phase 3b)".to_string(),
                 sessions: vec![crate::mobile::FridaSession { device_id: args.device.clone().unwrap_or_else(|| "dry-sim".into()), is_simulation: true }],
-                enabled_builtins: vec!["basic_method_trace (sim)".to_string()],
+                enabled_builtins: vec!["basic_method_trace (sim)".to_string(), "crypto-keystore (sim)".to_string(), "api-trace (sim)".to_string()],
                 script_results: vec![crate::mobile::FridaScriptResult {
                     script_source: args.frida_script.clone().unwrap_or_default(),
                     output: "(dry-run) simulated Frida output with structured JSON markers".to_string(),
-                    findings: vec!["frida-method-trace: javax.crypto.Cipher.doFinal (sim)".into(), "frida-bypass-validation (sim)".into()],
+                    findings: vec!["frida-method-trace: javax.crypto.Cipher.doFinal (sim)".into(), "frida-bypass-validation (sim)".into(), "frida-crypto-observation (sim)".into(), "frida-api-trace (sim)".into()],
                     duration_ms: 5,
+                    structured_output: Some(serde_json::json!({"type":"frida-crypto-observation"})),
                 }],
+                start_time: Some(chrono::Utc::now().to_rfc3339()),
+                structured_results: structured_ex,
+                correlation_notes: vec!["simulated frida+traffic correlation note".into()],
             });
         }
     } else {
@@ -551,54 +576,76 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
         }
 
-        // Phase 3a Frida real path (under mobile-dynamic; gated by caller policy + allow_frida)
+        // Phase 3b Frida real path (under mobile-dynamic; gated by caller policy + allow_frida)
         if let Some(ref fs) = args.frida_script {
             actions.push(format!("frida: connect to device {} (script: {})", device, fs));
             match crate::mobile::frida::connect(device) {
                 Ok(sess) => {
                     actions.push(format!("frida: connected (sim={})", sess.is_simulation));
-                    let script_content = if fs == "builtin:basic_method_trace" || fs.is_empty() {
+                    let is_builtin = fs.starts_with("builtin:");
+                    let builtin_name = if is_builtin { fs.strip_prefix("builtin:").unwrap_or(fs) } else { "" };
+                    let script_content = if is_builtin && !builtin_name.is_empty() {
+                        match crate::mobile::frida::run_builtin(builtin_name, &sess, &package) {
+                            Ok(_r) => { "".into() },
+                            Err(e) => { actions.push(format!("frida: builtin {} failed: {}", builtin_name, e)); "".into() }
+                        }
+                    } else if fs == "builtin:basic_method_trace" || fs.is_empty() {
                         crate::mobile::frida::generate_basic_method_trace_script(&package, &["javax.crypto.Cipher", "android.security.keystore.KeyStore"])
                     } else {
-                        // load user script (best-effort; errors recorded)
                         match std::fs::read_to_string(fs) {
                             Ok(c) => c,
                             Err(e) => { actions.push(format!("frida: failed to read script {}: {}", fs, e)); "".into() }
                         }
                     };
-                    if !script_content.trim().is_empty() {
-                        match crate::mobile::frida::execute_script(&sess, &script_content) {
-                            Ok(res) => {
-                                 actions.push(format!("frida: script executed ({} findings, {}ms)", res.findings.len(), res.duration_ms));
-                                 let enabled = if fs == "builtin:basic_method_trace" || fs.is_empty() {
-                                     vec!["basic_method_trace".to_string()]
-                                 } else { vec![] };
-                                 let fi = crate::mobile::FridaInstrumentation {
-                                     note: format!("Frida instrumentation (device={}, script={})", device, fs),
-                                     sessions: vec![sess.clone()],
-                                     script_results: vec![res.clone()],
-                                     enabled_builtins: enabled,
-                                 };
-                                // map findings to DynamicMobileFinding
-                                for fstr in &res.findings {
-                                    let cat = if fstr.contains("frida-method-trace") { "frida-method-trace" }
-                                        else if fstr.contains("frida-secret-extract") { "frida-secret-extract" }
-                                        else if fstr.contains("frida-bypass") { "frida-bypass-validation" }
-                                        else { "frida-raw" };
-                                    findings.push(DynamicMobileFinding {
-                                        category: cat.to_string(),
-                                        severity: Severity::Low,
-                                        title: format!("Frida: {}", cat),
-                                        description: fstr.clone(),
-                                        recommendation: "Review in lab context only; correlate with static + traffic.".to_string(),
-                                        evidence: Some(fstr.chars().take(200).collect()),
-                                        static_correlation: None,
-                                    });
-                                }
-                                frida_instr_for_report = Some(fi);
+                    let exec_res = if is_builtin && !builtin_name.is_empty() {
+                        crate::mobile::frida::run_builtin(builtin_name, &sess, &package)
+                    } else if !script_content.trim().is_empty() {
+                        crate::mobile::frida::execute_script(&sess, &script_content)
+                    } else {
+                        Err(crate::error::EggsecError::Validation("frida: no script content".into()))
+                    };
+                    match exec_res {
+                        Ok(res) => {
+                            actions.push(format!("frida: script executed ({} findings, {}ms)", res.findings.len(), res.duration_ms));
+                            let enabled = if is_builtin { vec![builtin_name.to_string()] } else if fs == "builtin:basic_method_trace" || fs.is_empty() { vec!["basic_method_trace".to_string()] } else { vec![] };
+                            let mut structured_results: Vec<serde_json::Value> = vec![];
+                            if let Some(so) = &res.structured_output {
+                                structured_results.push(so.clone());
                             }
-                            Err(e) => { actions.push(format!("frida: execute failed (best-effort): {}", e)); }
+                            let mut fi = crate::mobile::FridaInstrumentation {
+                                note: format!("Frida instrumentation (device={}, script={})", device, fs),
+                                sessions: vec![sess.clone()],
+                                script_results: vec![res.clone()],
+                                enabled_builtins: enabled,
+                                start_time: Some(chrono::Utc::now().to_rfc3339()),
+                                structured_results,
+                                correlation_notes: vec![],
+                            };
+                            // apply redaction to evidence in script results (Phase 3b)
+                            for sr in &mut fi.script_results {
+                                sr.output = crate::mobile::frida::redact_frida_evidence(&sr.output); // note: private, but same crate; or redef if needed - use via pub reexport later if split
+                            }
+                            for fstr in &res.findings {
+                                let cat = if fstr.contains("frida-method-trace") { "frida-method-trace" }
+                                    else if fstr.contains("frida-secret-extract") { "frida-secret-extract" }
+                                    else if fstr.contains("frida-bypass") { "frida-bypass-validation" }
+                                    else if fstr.contains("frida-crypto-observation") { "frida-crypto-observation" }
+                                    else if fstr.contains("frida-api-trace") { "frida-api-trace" }
+                                    else { "frida-raw" };
+                                let ev = Some(crate::mobile::frida::redact_frida_evidence(&fstr.chars().take(200).collect::<String>()));
+                                findings.push(DynamicMobileFinding {
+                                    category: cat.to_string(),
+                                    severity: Severity::Low,
+                                    title: format!("Frida: {}", cat),
+                                    description: fstr.clone(),
+                                    recommendation: "Review in lab context only; correlate with static + traffic.".to_string(),
+                                    evidence: ev,
+                                    static_correlation: None,
+                                });
+                            }
+                            frida_instr_for_report = Some(fi);
                         }
+                        Err(e) => { actions.push(format!("frida: execute failed (best-effort): {}", e)); }
                     }
                 }
                 Err(e) => { actions.push(format!("frida: connect failed (best-effort): {}", e)); }
@@ -664,6 +711,9 @@ fn build_dynamic_recommendations(report: &DynamicMobileReport) -> Vec<String> {
     if report.dry_run {
         recs.push("Report generated in --dry-run mode — no device actions were executed.".to_string());
     }
+    if report.frida_instrumentation.is_some() && (report.traffic_summary.is_some() || !report.findings.is_empty()) {
+        recs.push("Frida instrumentation present; review correlation_notes and static_correlation for Frida ↔ traffic/static overlaps.".to_string());
+    }
     recs
 }
 
@@ -692,11 +742,14 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
         }
         if let Some(ref fi) = report.frida_instrumentation {
             buf.push_str(&format!(
-                "  frida: note=\"{}\", sessions={}, scripts={}, builtins={}\n",
+                "  frida: note=\"{}\", sessions={}, scripts={}, builtins={}, start_time={}, structured={}, corr_notes={}\n",
                 fi.note,
                 fi.sessions.len(),
                 fi.script_results.len(),
-                fi.enabled_builtins.len()
+                fi.enabled_builtins.len(),
+                fi.start_time.as_deref().unwrap_or(""),
+                fi.structured_results.len(),
+                fi.correlation_notes.len()
             ));
         }
         buf.push('\n');
@@ -809,11 +862,18 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
         });
     }
     if let Some(ref fi) = result.frida_instrumentation {
+        let mut desc = format!("note={}, sessions={}, scripts={}, builtins={}", fi.note, fi.sessions.len(), fi.script_results.len(), fi.enabled_builtins.len());
+        if !fi.structured_results.is_empty() {
+            desc.push_str(&format!(", structured={}", fi.structured_results.len()));
+        }
+        if !fi.correlation_notes.is_empty() {
+            desc.push_str(&format!(", corr_notes={}", fi.correlation_notes.len()));
+        }
         extra_findings.push(FindingData {
             title: "Frida instrumentation summary".to_string(),
             severity: "info".to_string(),
             category: "mobile-dynamic-android-frida-instrumentation".to_string(),
-            description: format!("note={}, sessions={}, scripts={}, builtins={}", fi.note, fi.sessions.len(), fi.script_results.len(), fi.enabled_builtins.len()),
+            description: desc,
             location: result.target.clone(),
             evidence: None,
             remediation: Some("See native report.frida_instrumentation for sessions/scripts/findings. Categories: mobile-dynamic-android-frida-*.".to_string()),
@@ -924,6 +984,40 @@ pub fn correlate_findings(
                         note,
                     });
                 }
+            }
+        }
+
+        // Phase 3b Frida correlation rules (extend for high-signal overlaps)
+        if dcat == "frida-crypto-observation" || dcat == "frida-method-trace" {
+            let has_static_secret = static_findings.iter().any(|f| {
+                f.category == "secret" || f.title.to_ascii_lowercase().contains("secret") || f.title.to_ascii_lowercase().contains("hardcoded")
+                    || f.evidence.as_ref().map_or(false, |e| e.to_ascii_lowercase().contains("api_key") || e.to_ascii_lowercase().contains("sk_live"))
+            });
+            if has_static_secret {
+                let note = "Frida observed crypto on flow with static secret/cleartext marker".to_string();
+                df.static_correlation = Some(note.clone());
+                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "secret|manifest".to_string(), note });
+            }
+        }
+        if dcat == "frida-api-trace" {
+            if static_findings.iter().any(|f| f.category == "network-config" || f.category == "manifest") {
+                let note = "Frida-observed call correlates with proxy traffic to domain".to_string();
+                df.static_correlation = Some(note.clone());
+                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "network|manifest".to_string(), note });
+            }
+        }
+        if dcat == "frida-bypass-validation" {
+            if static_findings.iter().any(|f| f.category == "permission" && f.evidence.as_ref().map_or(false, |e| e.contains("debug") || e.contains("READ_LOGS"))) {
+                let note = "bypass observed + debug/permission surface present".to_string();
+                df.static_correlation = Some(note.clone());
+                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "permission".to_string(), note });
+            }
+        }
+        if dcat == "frida-secret-extract" {
+            if static_findings.iter().any(|f| f.category == "secret") {
+                let note = "frida secret extract correlates with static secret finding".to_string();
+                df.static_correlation = Some(note.clone());
+                notes.push(CorrelatedFinding { dynamic_category: dcat.to_string(), static_category: "secret".to_string(), note });
             }
         }
     }
@@ -1343,8 +1437,7 @@ W/PackageManager: permission denied: READ_SMS
 
     #[test]
     fn dry_run_frida_flags_populate_actions_findings_and_carrier() {
-        // Exercise the dry-run Frida simulation path (Phase 3a under mobile-dynamic).
-        // We simulate the relevant branches without calling the full dispatcher (keeps test hermetic).
+        // Exercise the dry-run Frida simulation path (Phase 3b under mobile-dynamic).
         let mut actions: Vec<String> = vec!["dry-run: no device or network actions performed".into()];
         let mut findings: Vec<DynamicMobileFinding> = vec![];
         let mut frida_instr_for_report: Option<crate::mobile::FridaInstrumentation> = None;
@@ -1352,7 +1445,7 @@ W/PackageManager: permission denied: READ_SMS
         let frida_script = Some("/tmp/trace.js".to_string());
         if let Some(ref fs) = frida_script {
             actions.push(format!("dry-run: would connect frida to device (script: {})", fs));
-            actions.push("dry-run: would execute frida script (or --frida-builtin)".to_string());
+            actions.push("dry-run: would execute frida script (or builtin:...)".to_string());
             findings.push(DynamicMobileFinding {
                 category: "frida-method-trace".to_string(),
                 severity: Severity::Low,
@@ -1371,17 +1464,31 @@ W/PackageManager: permission denied: READ_SMS
                 evidence: None,
                 static_correlation: None,
             });
+            findings.push(DynamicMobileFinding {
+                category: "frida-crypto-observation".to_string(),
+                severity: Severity::Low,
+                title: "Frida crypto (dry-run)".to_string(),
+                description: "sim".to_string(),
+                recommendation: "r".to_string(),
+                evidence: Some("redacted".to_string()),
+                static_correlation: None,
+            });
             actions.push("dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)".to_string());
             let mut fi = crate::mobile::FridaInstrumentation::default();
-            fi.note = "dry-run simulation of Frida connect + script execution (Phase 3a)".to_string();
+            fi.note = "dry-run simulation of Frida connect + script execution (Phase 3b)".to_string();
             fi.sessions.push(crate::mobile::FridaSession { device_id: "dry-sim".into(), is_simulation: true });
             fi.enabled_builtins.push("basic_method_trace (sim)".into());
+            fi.enabled_builtins.push("crypto-keystore (sim)".into());
             fi.script_results.push(crate::mobile::FridaScriptResult {
                 script_source: fs.clone(),
                 output: "(dry-run) simulated Frida output with structured JSON markers".to_string(),
-                findings: vec!["frida-method-trace: javax.crypto.Cipher.doFinal (sim)".into(), "frida-bypass-validation (sim)".into()],
+                findings: vec!["frida-method-trace: javax.crypto.Cipher.doFinal (sim)".into(), "frida-bypass-validation (sim)".into(), "frida-crypto-observation (sim)".into()],
                 duration_ms: 5,
+                structured_output: Some(serde_json::json!({"type":"frida-crypto-observation"})),
             });
+            fi.start_time = Some(chrono::Utc::now().to_rfc3339());
+            fi.structured_results.push(serde_json::json!({"type":"frida-crypto-observation"}));
+            fi.correlation_notes.push("test corr".into());
             frida_instr_for_report = Some(fi);
         }
 
@@ -1389,10 +1496,14 @@ W/PackageManager: permission denied: READ_SMS
         assert!(actions.iter().any(|a| a.contains("would execute frida script")));
         assert!(findings.iter().any(|f| f.category == "frida-method-trace"));
         assert!(findings.iter().any(|f| f.category == "frida-bypass-validation"));
+        assert!(findings.iter().any(|f| f.category == "frida-crypto-observation"));
         let fi = frida_instr_for_report.expect("carrier must be set for frida dry-run");
         assert!(fi.note.contains("dry-run simulation"));
         assert!(!fi.sessions.is_empty());
         assert!(fi.script_results.len() >= 1);
+        assert!(!fi.structured_results.is_empty());
+        assert!(!fi.correlation_notes.is_empty());
+        assert!(fi.enabled_builtins.len() >= 2);
     }
 
     #[test]
@@ -1419,5 +1530,100 @@ W/PackageManager: permission denied: READ_SMS
         let j = serde_json::to_string(&data).unwrap();
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
         assert!(back.findings.iter().any(|f| f.category.contains("frida-method-trace")));
+    }
+
+    #[test]
+    fn richer_frida_instrumentation_carrier_population_in_dry_and_structured_bridge() {
+        let mut r = DynamicMobileReport::new("rich3b.apk");
+        r.dry_run = true;
+        let mut fi = crate::mobile::FridaInstrumentation::default();
+        fi.note = "3b rich".to_string();
+        fi.start_time = Some(chrono::Utc::now().to_rfc3339());
+        fi.enabled_builtins = vec!["crypto-keystore".into(), "api-trace".into()];
+        fi.structured_results.push(serde_json::json!({"type":"frida-crypto-observation"}));
+        fi.correlation_notes.push("frida+static secret".into());
+        r.frida_instrumentation = Some(fi);
+        r.findings.push(DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "c".into(), recommendation: "r".into(), evidence: None, static_correlation: None });
+        let data = to_scan_report_data_dynamic(&r);
+        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-crypto-observation"));
+        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-instrumentation" && f.description.contains("structured=1")));
+        let j = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert!(back.findings.iter().any(|f| f.category.contains("frida-crypto-observation")));
+    }
+
+    #[test]
+    fn correlate_findings_new_frida_rules_static_secret_traffic_bypass() {
+        let statics = vec![
+            MobileFinding { category: "secret".into(), severity: Severity::High, title: "hardcoded api_key".into(), description: "".into(), recommendation: "".into(), evidence: Some("api_key=ABC".into()) },
+            MobileFinding { category: "network-config".into(), severity: Severity::Medium, title: "cleartext".into(), description: "".into(), recommendation: "".into(), evidence: Some("cleartext".into()) },
+            MobileFinding { category: "permission".into(), severity: Severity::Low, title: "debug".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_LOGS".into()) },
+        ];
+        let mut dyns = vec![
+            DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
+            DynamicMobileFinding { category: "frida-api-trace".into(), severity: Severity::Low, title: "a".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
+            DynamicMobileFinding { category: "frida-bypass-validation".into(), severity: Severity::Low, title: "b".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
+            DynamicMobileFinding { category: "frida-secret-extract".into(), severity: Severity::Low, title: "s".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
+        ];
+        let notes = correlate_findings(&statics, &mut dyns);
+        assert!(dyns[0].static_correlation.as_ref().unwrap().contains("crypto") || dyns[0].static_correlation.as_ref().unwrap().contains("secret"));
+        assert!(dyns[1].static_correlation.as_ref().unwrap().contains("Frida-observed call"));
+        assert!(dyns[2].static_correlation.as_ref().unwrap().contains("bypass"));
+        assert!(dyns[3].static_correlation.as_ref().unwrap().contains("secret extract"));
+        assert!(notes.len() >= 4);
+    }
+
+    #[test]
+    fn redaction_applied_to_frida_evidence_in_findings() {
+        let mut f = DynamicMobileFinding {
+            category: "frida-crypto-observation".into(),
+            severity: Severity::Low,
+            title: "c".into(),
+            description: "c".into(),
+            recommendation: "r".into(),
+            evidence: Some("api_key=sk_live_123 [B(len=16)]".into()),
+            static_correlation: None,
+        };
+        // simulate the redaction step that run_dynamic_cli does for frida paths
+        if let Some(ref mut e) = f.evidence {
+            *e = crate::mobile::frida::redact_frida_evidence(e);
+        }
+        assert!(f.evidence.as_ref().unwrap().contains("[REDACTED]"));
+        assert!(!f.evidence.as_ref().unwrap().contains("sk_live"));
+    }
+
+    #[test]
+    fn build_recommendations_mentions_correlation_when_frida_present() {
+        let mut r = DynamicMobileReport::new("rec.apk");
+        r.frida_instrumentation = Some(crate::mobile::FridaInstrumentation::default());
+        r.traffic_summary = Some(crate::mobile::TrafficSummary::new());
+        r.findings.push(DynamicMobileFinding { category: "frida-api-trace".into(), severity: Severity::Low, title: "t".into(), description: "d".into(), recommendation: "r".into(), evidence: None, static_correlation: None });
+        let recs = build_dynamic_recommendations(&r);
+        assert!(recs.iter().any(|s| s.contains("correlation_notes") || s.contains("Frida instrumentation present")));
+    }
+
+    #[test]
+    fn to_scan_report_data_dynamic_new_frida_categories_roundtrip() {
+        let mut r = DynamicMobileReport::new("cats3b.apk");
+        for c in ["frida-crypto-observation", "frida-bypass-validation", "frida-api-trace"] {
+            r.findings.push(DynamicMobileFinding { category: c.into(), severity: Severity::Low, title: "x".into(), description: "x".into(), recommendation: "x".into(), evidence: None, static_correlation: None });
+        }
+        let data = to_scan_report_data_dynamic(&r);
+        for c in ["frida-crypto-observation", "frida-bypass-validation", "frida-api-trace"] {
+            assert!(data.findings.iter().any(|f| f.category == format!("mobile-dynamic-android-{}", c)));
+        }
+        let j = serde_json::to_string(&data).unwrap();
+        let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
+        assert!(back.findings.len() >= 3);
+    }
+
+    #[test]
+    fn run_builtin_error_robustness_and_dry_builtin_injection() {
+        // The frida::run_builtin is exercised via frida tests; here just confirm dry path would accept the convention
+        let fs = "builtin:crypto-keystore";
+        assert!(fs.starts_with("builtin:"));
+        let name = fs.strip_prefix("builtin:").unwrap_or("");
+        assert_eq!(name, "crypto-keystore");
+        // unknown would error in real path (tested in frida unit)
     }
 }

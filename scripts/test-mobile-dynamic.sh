@@ -2,8 +2,8 @@
 #
 # scripts/test-mobile-dynamic.sh
 #
-# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2 + Phase 3a Frida foundation;
-# Phase 1+2 closed 2026-06-12; Phase 3a delivered under single mobile-dynamic per phase3-frida-expansion-plan Key Decision).
+# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2 + Phase 3b Frida expansion;
+# Phase 1+2 closed 2026-06-12; Phase 3a foundation + Phase 3b (builtins + correlation + evidence) delivered under single mobile-dynamic per phase3-frida-expansion-plan Key Decision).
 # Per: plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md (P1.2);
 #      plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a);
 #      plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish);
@@ -215,15 +215,17 @@ fi
 
 echo "Phase 2a dry-run extension validation: PASS (report carries traffic_summary + permission_state; actions include proxy/permission simulation)."
 
-# Phase 3a Frida dry-run leg (always safe; exercises --frida-script, frida_instrumentation, frida-* findings, bridge categories).
+# Phase 3b Frida dry-run leg (always safe; exercises --frida-script "builtin:xxx" for additional builtins + combined traffic for correlation + richer instrumentation + redaction + bridge).
 # Hardware-free: no frida CLI or device required (dry-run path in run_dynamic_cli + frida.rs simulation).
 echo
-echo ">>> Step: Phase 3a Frida dry-run (--frida-script; validates actions, frida_instrumentation carrier, frida- findings, bridge categories)"
+echo ">>> Step: Phase 3b Frida dry-run (additional builtins + correlation + evidence quality)"
 P3_DRY_JSON="$(mktemp)"
 run_eggsec \
   "${APK}" \
   --device emulator-5554 \
-  --frida-script /tmp/phase3-trace.js \
+  --frida-script "builtin:crypto-keystore" \
+  --traffic-capture /tmp/phase3b-mitm.log \
+  --list-permissions \
   --dry-run \
   --json \
   --quiet \
@@ -236,15 +238,21 @@ if command -v jq >/dev/null 2>&1; then
   P3_FI_NOTE=$(jq -r '.frida_instrumentation.note // ""' < "${P3_DRY_JSON}")
   P3_ACTIONS=$(jq '.actions_performed | length' < "${P3_DRY_JSON}")
   P3_HAS_FRIDA_FINDING=$(jq '.findings | map(select(.category | startswith("frida-"))) | length > 0' < "${P3_DRY_JSON}")
-  echo "  Phase3a: scan_type=${P3_SCAN} dry_run=${P3_DRY} has_frida_instrumentation=${P3_HAS_FI} fi_note_present=${P3_FI_NOTE:+yes} actions=${P3_ACTIONS} has_frida_finding=${P3_HAS_FRIDA_FINDING}"
-  if [[ "${P3_SCAN}" != "mobile-dynamic" || "${P3_DRY}" != "true" || "${P3_HAS_FI}" != "true" ]]; then
-    echo "FAIL: Phase 3a dry-run report missing frida_instrumentation or markers" >&2
+  P3_RICH=$(jq -r '.frida_instrumentation | has("structured_results") and (.structured_results | length > 0) and (.enabled_builtins | length > 1)' < "${P3_DRY_JSON}")
+  P3_HAS_CORR_NOTE=$(jq -r '.frida_instrumentation.correlation_notes | length > 0' < "${P3_DRY_JSON}")
+  P3_HAS_NEW_CATS=$(jq '.findings | map(select(.category | IN("frida-crypto-observation","frida-api-trace","frida-bypass-validation"))) | length > 0' < "${P3_DRY_JSON}")
+  echo "  Phase3b: scan_type=${P3_SCAN} dry_run=${P3_DRY} has_frida_instrumentation=${P3_HAS_FI} fi_note_present=${P3_FI_NOTE:+yes} actions=${P3_ACTIONS} has_frida_finding=${P3_HAS_FRIDA_FINDING} rich_structured=${P3_RICH} has_corr_notes=${P3_HAS_CORR_NOTE} has_new_cats=${P3_HAS_NEW_CATS}"
+  if [[ "${P3_SCAN}" != "mobile-dynamic" || "${P3_DRY}" != "true" || "${P3_HAS_FI}" != "true" || "${P3_RICH}" != "true" || "${P3_HAS_NEW_CATS}" != "true" ]]; then
+    echo "FAIL: Phase 3b dry-run report missing richer frida_instrumentation, new categories or markers" >&2
     exit 1
   fi
+  # redaction smoke (if secrets appear in evidence)
+  P3_REDACT=$(jq -r '.findings[]?.evidence // empty' < "${P3_DRY_JSON}" | grep -c 'REDACTED' || true)
+  echo "  Phase3b redaction hits in evidence: ${P3_REDACT}"
   # Bridge check via report convert (if available) or direct jq on native for frida categories
   if command -v jq >/dev/null 2>&1; then
     P3_FRIDA_CAT=$(jq -r '.findings[]?.category // empty' < "${P3_DRY_JSON}" | grep -c 'frida-' || true)
-    echo "  Phase3a native frida- findings count: ${P3_FRIDA_CAT}"
+    echo "  Phase3b native frida- findings count: ${P3_FRIDA_CAT}"
   fi
 else
   python3 - <<'PY' "${P3_DRY_JSON}"
@@ -253,23 +261,26 @@ d = json.load(open(sys.argv[1]))
 assert d.get("scan_type") == "mobile-dynamic", "scan_type"
 assert d.get("dry_run") is True, "dry_run"
 assert "frida_instrumentation" in d and d["frida_instrumentation"] is not None, "frida_instrumentation"
-print("  (python) Phase3a: has frida_instrumentation + actions + frida- findings (native)")
+fi = d["frida_instrumentation"]
+assert len(fi.get("enabled_builtins",[])) > 1, "multiple builtins"
+assert len(fi.get("structured_results",[])) > 0, "structured_results"
+print("  (python) Phase3b: has frida_instrumentation + structured + multiple builtins + new cats")
 PY
 fi
 
 # Optional: exercise the report convert bridge for frida categories (uses to_scan_report_data_dynamic).
 if command -v cargo >/dev/null 2>&1; then
   BRIDGE_JSON="$(mktemp)"
-  # Use the native P3 json as input to 'report convert' (auto-bridges mobile-dynamic under feature).
   (cd "${REPO_ROOT}" && cargo run -p eggsec-cli --features "${FEATURES}" --quiet -- report convert "${P3_DRY_JSON}" --format json --output "${BRIDGE_JSON}" >/dev/null 2>&1 || true)
   if [[ -s "${BRIDGE_JSON}" ]] && command -v jq >/dev/null 2>&1; then
     BRIDGE_HAS_F=$(jq '.findings[]?.category // empty' < "${BRIDGE_JSON}" | grep -c 'mobile-dynamic-android-frida-' || true)
-    echo "  Phase3a bridge: mobile-dynamic-android-frida-* count=${BRIDGE_HAS_F}"
+    BRIDGE_HAS_CRYPTO=$(jq '.findings[]?.category // empty' < "${BRIDGE_JSON}" | grep -c 'frida-crypto-observation' || true)
+    echo "  Phase3b bridge: mobile-dynamic-android-frida-* count=${BRIDGE_HAS_F} crypto-cat=${BRIDGE_HAS_CRYPTO}"
   fi
   rm -f "${BRIDGE_JSON}"
 fi
 
-echo "Phase 3a Frida dry-run validation: PASS (frida_instrumentation present; frida- findings; actions recorded; bridge exercised where available)."
+echo "Phase 3b Frida dry-run validation: PASS (additional builtins exercised; richer instrumentation + structured_results + correlation_notes; new frida-* cats; redaction; bridge exercised)."
 
 # If not real mode, we're done (CI green path).
 if ! $REAL_MODE; then

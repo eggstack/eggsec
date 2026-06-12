@@ -1,4 +1,4 @@
-pub(crate) const MOBILE_ABOUT: &str = "Static security analysis of Android APKs and iOS IPAs + gated dynamic runtime testing (lab/defense use only).
+pub(crate) const MOBILE_ABOUT: &str = r#"Static security analysis of Android APKs and iOS IPAs + gated dynamic runtime testing (lab/defense use only).
 
 SUBCOMMANDS:
   static            Pure-Rust static analysis of .apk/.ipa (default / legacy direct path form also supported).
@@ -7,9 +7,9 @@ SUBCOMMANDS:
 Use 'eggsec mobile static --help' or 'eggsec mobile dynamic --help' for details.
 
 Static: offline manifest/config checks only. No execution or device interaction.
-Dynamic (mobile-dynamic feature, Phase 1 + Phase 2 + Phase 3a Frida): controlled ADB + logcat + proxy + traffic-capture + runtime-permission operations + optional Frida instrumentation (basic_method_trace + --frida-script) on lab devices/emulators you own/authorize. All actions audited. Dry-run supported. Real Frida requires --allow-frida (Intrusive policy tier) + frida CLI + frida-server on device.
+Dynamic (mobile-dynamic feature, Phase 1 + Phase 2 + Phase 3b Frida): controlled ADB + logcat + proxy + traffic-capture + runtime-permission operations + optional Frida instrumentation (basic_method_trace + crypto-keystore + bypass-validation + api-trace via --frida-script with builtin: prefix) on lab devices/emulators you own/authorize. All actions audited. Dry-run supported. Real Frida requires --allow-frida (Intrusive policy tier) + frida CLI + frida-server on device.
 
-Build with --features mobile (static) or --features mobile-dynamic (dynamic + static + Frida Phase 3a).
+Build with --features mobile (static) or --features mobile-dynamic (dynamic + static + Frida Phase 3b).
 
 Examples:
   eggsec mobile app.apk                          # legacy direct static
@@ -19,10 +19,12 @@ Examples:
   eggsec mobile dynamic /tmp/vuln.apk --device emulator-5554 --install --launch .Main --capture-logs --duration 30 --uninstall-after --allow-dynamic-mobile
   eggsec mobile dynamic --list-devices
   eggsec mobile dynamic --list-devices --device emulator-5554
-  # Phase 3a Frida (dry-run always safe; real requires --allow-frida)
+  # Phase 3b Frida (dry-run always safe; real requires --allow-frida)
   eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script /tmp/trace.js --json
-  eggsec mobile dynamic /tmp/vuln.apk --device emulator-5554 --allow-dynamic-mobile --allow-frida --frida-builtin basic_method_trace --package com.example.vuln
- ";
+  # Phase 3b builtins via convention (no extra clap arg)
+  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "builtin:crypto-keystore" --json
+  eggsec mobile dynamic /tmp/vuln.apk --device emulator-5554 --allow-dynamic-mobile --allow-frida --frida-script trace.js --package com.example.vuln
+"#;
 
 /// Top-level args for `eggsec mobile ...`.
 /// Supports legacy direct `eggsec mobile <path.{apk,ipa}>` (treated as static) and subcommands.
@@ -70,13 +72,13 @@ pub struct MobileStaticArgs {
     pub quiet: bool,
 }
 
-pub(crate) const MOBILE_DYNAMIC_ABOUT: &str = "MODE: Defense Lab | Lab-only; authorized use only.
+pub(crate) const MOBILE_DYNAMIC_ABOUT: &str = r#"MODE: Defense Lab | Lab-only; authorized use only.
 
-Dynamic Android runtime testing (ADB + logcat analysis + Phase 3a Frida instrumentation) for defense validation and regression.
+Dynamic Android runtime testing (ADB + logcat analysis + Phase 3b Frida instrumentation) for defense validation and regression.
 
 Controlled install/launch/observe/uninstall cycle on lab device/emulator.
 Captures runtime logs, extracts high-signal findings (permissions, crashes, cleartext, secrets in logs).
-Optional Frida: --frida-script (user JS) or built-in basic_method_trace (sensitive methods like Cipher.doFinal).
+Optional Frida: --frida-script (user JS or "builtin:NAME" for crypto-keystore / bypass-validation / api-trace / basic-method-trace).
 
 Use 'eggsec mobile dynamic --help' for details.
 
@@ -100,10 +102,11 @@ Examples:
     --allow-dynamic-mobile \
     --lab-manifest examples/lab-mobile.toml
   eggsec mobile dynamic --list-devices
-  # Phase 3a Frida (dry-run safe)
+  # Phase 3b Frida (dry-run safe)
   eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script /tmp/trace.js --json
+  eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --frida-script "builtin:crypto-keystore" --json
   eggsec mobile dynamic test.apk --device emulator-5554 --allow-dynamic-mobile --allow-frida --frida-script trace.js --package com.example.vuln
- ";
+"#;
 
 /// Dynamic mobile args (Phase 1 ADB core + log capture; Phase 2a proxy +
 /// traffic-capture + runtime-permission operations).
@@ -165,8 +168,8 @@ pub struct DynamicMobileArgs {
     #[arg(long, value_name = "FILE", help = "Path to traffic capture (mitmproxy text log or minimal HAR JSON) to parse for traffic_summary + findings. Complements --proxy.")]
     pub traffic_capture: Option<String>,
 
-    // Phase 3a Frida (under mobile-dynamic; runtime gated by --allow-frida + policy)
-    #[arg(long, value_name = "FILE", help = "Path to Frida JS script to execute (Phase 3a). Requires --allow-frida for real runs (Intrusive). Dry-run safe. Use with --package for context.")]
+    // Phase 3b Frida (under mobile-dynamic; runtime gated by --allow-frida + policy)
+    #[arg(long, value_name = "FILE", help = "Path to Frida JS script to execute (Phase 3b). Use \"builtin:NAME\" for crypto-keystore|bypass-validation|api-trace|basic-method-trace. Requires --allow-frida for real runs (Intrusive). Dry-run safe.")]
     pub frida_script: Option<String>,
     #[arg(long, help = "Explicit confirmation for Frida instrumentation (required for any non-dry-run Frida operations; recorded for audit). Real Frida also needs frida CLI + frida-server on device.")]
     pub allow_frida: bool,

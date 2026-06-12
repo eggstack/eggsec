@@ -55,7 +55,7 @@ pub async fn handle_mobile(
                 if dargs.frida_script.is_some() && !dargs.dry_run && !dargs.allow_frida {
                     anyhow::bail!(
                         "Frida instrumentation requires --allow-frida flag (Intrusive tier). \
-                         Use --dry-run for safe simulation of script execution and findings."
+                          Use --dry-run for safe simulation of script execution and findings."
                     );
                 }
             }
