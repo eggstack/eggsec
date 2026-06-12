@@ -156,8 +156,14 @@ See "Phase 1 Lab Setup" below, `docs/MOBILE.md` examples, and the handoff plan f
 3. `eggsec mobile static vuln.apk` first (baseline).
 4. Dry-run validation (always safe): `./scripts/test-mobile-dynamic.sh` (or with your APK).
 5. Full documented command: `eggsec mobile dynamic vuln.apk --device emulator-5554 --dry-run --json`.
-      6. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
-      7. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+       6. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
+       7. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+
+**Phase 2a Lab Workflow (quick)**:
+- Static baseline first (`eggsec mobile static ...` or the documented Phase 1 static gate).
+- Dynamic run with `--proxy`/`--traffic-capture` + permission ops (see Phase 2a CLI examples below); always start with `--dry-run`.
+- `eggsec report convert <json> ...` (auto-bridges `traffic_summary`/`permission_state` as extra info findings under `mobile-dynamic-android-*`).
+- Regression via `report diff`/`trend` (or your tooling) against static baseline + prior dynamic runs.
 
 **Phase 2a CLI examples** (heavy lab-only caveats; dry-run always safe; real requires `--allow-dynamic-mobile` + device ownership + explicit consent):
 ```bash
@@ -193,6 +199,13 @@ allowed_packages = ["com.example.vuln.test"]
 - Dry-run produces schema-valid full `DynamicMobileReport` (actions + findings + bridge).
 - Real emulator happy-path (install/launch/log/uninstall) with policy confirmation + audit trail.
 - No regressions in static `mobile` functionality or existing tests.
+
+## Phase 2a Success Criteria (achieved; Phase 2a complete 2026-06-12)
+- `cargo build --features mobile-dynamic` / check / test / clippy clean.
+- `eggsec mobile dynamic --help` shows Phase 2 flags (`--proxy`, `--reset-proxy`, `--traffic-capture`, `--grant-permission`, `--revoke-permission`, `--list-permissions`); legacy paths continue to work.
+- Dry-run produces schema-valid `DynamicMobileReport` with `traffic_summary`/`permission_state` extensions + bridge (extra info findings under `mobile-dynamic-android-*` categories).
+- Real paths (proxy/permission actions) covered in units + smoke; policy + audit trail present.
+- No regressions in static `mobile`, Phase 1 dynamic, or existing tests.
 
 ## Recommendations
 

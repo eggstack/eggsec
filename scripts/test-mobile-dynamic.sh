@@ -2,7 +2,7 @@
 #
 # scripts/test-mobile-dynamic.sh
 #
-# Documented emulator smoke test for mobile-dynamic (Phase 1 polish).
+# Documented emulator smoke test for mobile-dynamic (Phase 1 polish + Phase 2a).
 # Per: plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md (P1.2)
 # Parent: plans/mobile-dynamic-phase1-implementation-handoff-plan.md (executed)
 #         plans/dynamic-mobile-testing-loadout-design-plan.md
@@ -145,6 +145,50 @@ fi
 
 echo "Dry-run validation: PASS (complete schema-valid report + audit trail produced)."
 
+# Phase 2a dry-run extension (always safe; exercises proxy/traffic/permission flags + report extensions).
+# Complements the P1 happy-path above; validates traffic_summary / permission_state presence (synthetic in dry-run).
+echo
+echo ">>> Step: Phase 2a dry-run extensions (--proxy + --traffic-capture + permission grant/revoke/list; validates report extensions)"
+P2_DRY_JSON="$(mktemp)"
+# Use a placeholder capture file name (dry-run special-cases; does not require the file to exist or be readable).
+run_eggsec \
+  "${APK}" \
+  --device emulator-5554 \
+  --proxy 127.0.0.1:8080 \
+  --traffic-capture /tmp/phase2-mitm.log \
+  --list-permissions \
+  --grant-permission android.permission.CAMERA \
+  --revoke-permission android.permission.READ_CONTACTS \
+  --dry-run \
+  --json \
+  --quiet \
+  > "${P2_DRY_JSON}"
+
+if command -v jq >/dev/null 2>&1; then
+  P2_SCAN=$(jq -r '.scan_type' < "${P2_DRY_JSON}")
+  P2_DRY=$(jq -r '.dry_run' < "${P2_DRY_JSON}")
+  P2_HAS_TS=$(jq -r 'has("traffic_summary")' < "${P2_DRY_JSON}")
+  P2_HAS_PS=$(jq -r 'has("permission_state")' < "${P2_DRY_JSON}")
+  P2_ACTIONS=$(jq '.actions_performed | length' < "${P2_DRY_JSON}")
+  echo "  Phase2: scan_type=${P2_SCAN} dry_run=${P2_DRY} has_traffic_summary=${P2_HAS_TS} has_permission_state=${P2_HAS_PS} actions=${P2_ACTIONS}"
+  if [[ "${P2_SCAN}" != "mobile-dynamic" || "${P2_DRY}" != "true" || "${P2_HAS_TS}" != "true" || "${P2_HAS_PS}" != "true" ]]; then
+    echo "FAIL: Phase 2a dry-run report missing expected extensions (traffic_summary, permission_state) or markers" >&2
+    exit 1
+  fi
+else
+  python3 - <<'PY' "${P2_DRY_JSON}"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d.get("scan_type") == "mobile-dynamic", "scan_type"
+assert d.get("dry_run") is True, "dry_run"
+assert "traffic_summary" in d, "traffic_summary key"
+assert "permission_state" in d, "permission_state key"
+print("  (python) Phase2: has traffic_summary + permission_state")
+PY
+fi
+
+echo "Phase 2a dry-run extension validation: PASS (report carries traffic_summary + permission_state; actions include proxy/permission simulation)."
+
 # If not real mode, we're done (CI green path).
 if ! $REAL_MODE; then
   echo
@@ -152,7 +196,7 @@ if ! $REAL_MODE; then
   echo "To exercise live path: start an AVD (API 34+), supply a controlled test APK, then:"
   echo "  ./scripts/test-mobile-dynamic.sh /path/to/your-test.apk --real"
   echo "Or set ANDROID_SERIAL and pass --real."
-  echo "See docs/MOBILE.md 'Phase 1 Lab Setup' and the polish plan for full command + safety notes."
+  echo "See docs/MOBILE.md 'Phase 1 Lab Setup' + 'Phase 2a CLI examples' and the polish plan for full command + safety notes."
   exit 0
 fi
 
@@ -236,5 +280,5 @@ echo
 echo "=== Mobile Dynamic Smoke Test COMPLETE ==="
 echo "See report JSON for full findings + actions_performed (install/launch/log/uninstall + any runtime observations)."
 echo "Next: eggsec report convert <json> -f html (or sarif/junit/markdown) to exercise the bridge."
-echo "Update docs/MOBILE.md 'Phase 1 Success Criteria' after successful local AVD run."
+echo "Update docs/MOBILE.md 'Phase 1/Phase 2a Success Criteria' after successful local AVD run."
 exit 0
