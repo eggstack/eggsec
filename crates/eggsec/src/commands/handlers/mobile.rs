@@ -9,14 +9,15 @@ pub async fn handle_mobile(
     // Normalize legacy direct path vs subcommand form for dispatch and policy target.
     // Legacy `eggsec mobile <path>` or `mobile static <path>` -> static path.
     // `mobile dynamic ...` -> dynamic path (feature gated in CLI parser + here).
+    #[allow(unused_variables)]
     let (is_dynamic, static_path, dynamic_target) = match &args.command {
-        Some(crate::cli::MobileSubcommand::Static(s)) => (false, Some(s.path.clone()), None),
+        Some(crate::cli::MobileSubcommand::Static(s)) => (false, Some(s.path.clone()), None::<String>),
         #[cfg(feature = "mobile-dynamic")]
         Some(crate::cli::MobileSubcommand::Dynamic(d)) => (true, None, Some(d.target.clone())),
         None => {
             // Legacy direct path form (path required in this case)
             if let Some(ref p) = args.path {
-                (false, Some(p.clone()), None)
+                (false, Some(p.clone()), None::<String>)
             } else {
                 return Err(anyhow::anyhow!("mobile: provide a path for legacy static or use a subcommand (static|dynamic)"));
             }
@@ -77,6 +78,7 @@ pub async fn handle_mobile(
                 quiet: dyn_args_cli.quiet,
                 allow_dynamic_mobile: dyn_args_cli.allow_dynamic_mobile,
                 lab_manifest: dyn_args_cli.lab_manifest,
+                list_devices: dyn_args_cli.list_devices,
             };
             match crate::mobile::run_dynamic_cli(dyn_args, &ctx.config).await {
                 Ok(()) => {

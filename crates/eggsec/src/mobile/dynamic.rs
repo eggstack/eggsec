@@ -44,6 +44,8 @@ pub struct DynamicMobileArgs {
     pub quiet: bool,
     pub allow_dynamic_mobile: bool,
     pub lab_manifest: Option<String>,
+    /// Convenience: list reachable devices (pure-Rust probe + external adb if present) and exit.
+    pub list_devices: bool,
 }
 
 /// Lab device/app allowlist manifest (loaded from --lab-manifest TOML if provided).
@@ -126,6 +128,23 @@ impl DynamicMobileReport {
 /// - --allow-dynamic-mobile is accepted (policy/enforcement checked in caller/handler).
 pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::EggsecConfig) -> Result<()> {
     let start = Instant::now();
+
+    // Convenience: list devices (pure-Rust probe + external adb if present).
+    // Target may be omitted or a placeholder; always safe (no install/launch).
+    if args.list_devices {
+        let devs = crate::mobile::adb::AdbClient::list_devices().await?;
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&devs)?);
+        } else if devs.is_empty() {
+            println!("No devices/emulators detected (pure-Rust probe of common emulator ports + 'adb devices' convenience if binary present).");
+        } else {
+            println!("Detected devices/emulators:");
+            for d in &devs {
+                println!("  {}", d);
+            }
+        }
+        return Ok(());
+    }
 
     let target = if args.target.trim().is_empty() {
         if args.dry_run {

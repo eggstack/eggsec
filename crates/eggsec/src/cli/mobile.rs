@@ -17,7 +17,9 @@ Examples:
   eggsec mobile static /path/to/app.ipa -o out.json
   eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --json
   eggsec mobile dynamic /tmp/vuln.apk --device emulator-5554 --install --launch .Main --capture-logs --duration 30 --uninstall-after --allow-dynamic-mobile
-";
+  eggsec mobile dynamic --list-devices
+  eggsec mobile dynamic --list-devices --device emulator-5554
+ ";
 
 /// Top-level args for `eggsec mobile ...`.
 /// Supports legacy direct `eggsec mobile <path.{apk,ipa}>` (treated as static) and subcommands.
@@ -92,7 +94,8 @@ Examples:
     --uninstall-after \
     --allow-dynamic-mobile \
     --lab-manifest examples/lab-mobile.toml
-";
+  eggsec mobile dynamic --list-devices
+ ";
 
 /// Dynamic mobile args (Phase 1: Android ADB core + log capture).
 #[derive(clap::Args, Clone)]
@@ -135,4 +138,7 @@ pub struct DynamicMobileArgs {
 
     #[arg(long, value_name = "FILE", help = "Path to optional lab manifest TOML (allowed_device_serials + allowed_packages; advisory in Phase 1)")]
     pub lab_manifest: Option<String>,
+
+    #[arg(long, help = "List reachable devices/emulators via pure-Rust probe (+ external adb convenience if in PATH) and exit. Target APK may be omitted or a placeholder.")]
+    pub list_devices: bool,
 }

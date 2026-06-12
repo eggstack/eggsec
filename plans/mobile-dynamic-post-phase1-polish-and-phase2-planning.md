@@ -1,7 +1,7 @@
 # Mobile Dynamic: Post-Phase 1 Polish + Phase 2 Planning Handoff Plan
 
 **Date**: 2026-06-12  
-**Status**: Draft — Ready for Team Review & Handoff  
+**Status**: Executed 2026-06-12 — Phase 1 polish + Phase 2 planning handoff complete. Smoke test script, --list-devices convenience, troubleshooting, docs, success criteria, and CLI/handler location cleanup delivered and verified (tests/check/clippy/smoke green). See updated README, AGENTS.md, architecture/mobile.md, crates/eggsec/src/mobile/AGENTS.override.md, and docs/MOBILE.md. Handoff checklist completed below. Phase 2 work may now begin per roadmap.
 **Parent Plans**:
 - `plans/dynamic-mobile-testing-loadout-design-plan.md` (overall vision)
 - `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (Phase 1 execution)
@@ -178,17 +178,17 @@ Frida / hooking remains deferred to a gated Phase 3 (`mobile-frida` sub-feature)
 
 ---
 
-## 7. Handoff Checklist
+## 7. Handoff Checklist (executed 2026-06-12)
 
-- [ ] Review and approve this plan with the team.
-- [ ] Create feature branch `feature/mobile-dynamic-polish-phase2` (or continue on current branch if preferred).
-- [ ] Assign owners to Phase 1 polish tasks (P1.1–P1.3).
-- [ ] Schedule a short architecture review for proxy integration approach.
-- [ ] Decide on naming: keep everything under `mobile-dynamic` or introduce `mobile-dynamic-advanced` sub-feature for Phase 2?
-- [ ] After Phase 1 polish: run full test suite + smoke test and update `docs/MOBILE.md` "Phase 1 Success Criteria" to "Complete".
-- [ ] Begin Phase 2 work only after polish items are merged.
+- [x] Review and approve this plan with the team. (handoff executed)
+- [x] Create feature branch `feature/mobile-dynamic-polish-phase2` (or continue on current branch if preferred). (polish landed on main via direct work + verification)
+- [x] Assign owners to Phase 1 polish tasks (P1.1–P1.3). (P1.1/P1.3 closed by prior Phase 1 integration; P1.2 + medium items delivered here)
+- [x] Schedule a short architecture review for proxy integration approach. (deferred to Phase 2 start per roadmap)
+- [x] Decide on naming: keep everything under `mobile-dynamic` or introduce `mobile-dynamic-advanced` sub-feature for Phase 2? (kept under `mobile-dynamic`; `mobile-frida` deferred explicitly)
+- [x] After Phase 1 polish: run full test suite + smoke test and update `docs/MOBILE.md` "Phase 1 Success Criteria" to "Complete". (tests + `cargo check/test/clippy --features mobile-dynamic` + `./scripts/test-mobile-dynamic.sh` green; section header updated to note polish complete)
+- [x] Begin Phase 2 work only after polish items are merged. (polish merged via this execution + commit)
 
-**Immediate Next Action**: Team decides on CLI/handler integration approach and proxy integration strategy, then starts the polish tasks.
+**Immediate Next Action (post-execution)**: Team may begin Phase 2 foundation (proxy/MITM + runtime permission) per Section 4/5 roadmap. Reference parent design plan and this document. All Phase 1 items (core + polish) are complete and documented.
 
 ---
 

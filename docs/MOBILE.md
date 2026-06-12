@@ -151,9 +151,12 @@ See "Phase 1 Lab Setup" below, `docs/MOBILE.md` examples, and the handoff plan f
 1. Android Studio AVD (API 34+ recommended) or physical dev device with USB debugging + `adb`.
 2. Build a debug/test APK you control (signing disabled only in isolated CI job; provenance note required).
 3. `eggsec mobile static vuln.apk` first (baseline).
-4. `eggsec mobile dynamic vuln.apk --device emulator-5554 --dry-run --json` (plan).
-5. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
-6. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+4. Dry-run validation (always safe): `./scripts/test-mobile-dynamic.sh` (or with your APK).
+5. Full documented command: `eggsec mobile dynamic vuln.apk --device emulator-5554 --dry-run --json`.
+6. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
+7. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+
+The `scripts/test-mobile-dynamic.sh` script (added during Phase 1 polish) automates the dry-run happy path and provides an optional `--real` leg for local AVD runs. It is self-documenting and intended for both developer workstations and CI (dry-run leg is hardware-free). See the script header and `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (P1.2).
 
 Example manifest (examples/lab-mobile.toml):
 ```toml
@@ -161,7 +164,7 @@ allowed_device_serials = ["emulator-5554", "ABCD1234"]
 allowed_packages = ["com.example.vuln.test"]
 ```
 
-## Phase 1 Success Criteria (achieved)
+## Phase 1 Success Criteria (achieved; Phase 1 polish complete 2026-06-12)
 - `cargo build --features mobile-dynamic` / check / test / clippy clean.
 - `eggsec mobile dynamic --help` shows flags; legacy `eggsec mobile <apk>` and `mobile static` continue to work.
 - Dry-run produces schema-valid full `DynamicMobileReport` (actions + findings + bridge).
@@ -180,6 +183,24 @@ allowed_packages = ["com.example.vuln.test"]
 - Always review findings against the app's actual data classification and threat model. Many "Medium" items are acceptable in internal tools but unacceptable for customer-facing or regulated apps.
 - After lab use: securely destroy or archive test builds; do not leave debuggable or development-signed artifacts in shared locations.
 - For regression: capture `--json` outputs and diff with `eggsec report diff` or your own tooling.
+
+## Troubleshooting Dynamic Runs
+
+Common issues and resolutions (Phase 1 polish):
+
+- **"Dynamic mobile execution requires --allow-dynamic-mobile"**: Real (non-dry-run) paths are intentionally gated. Use `--dry-run` for planning/safe validation, or pass `--allow-dynamic-mobile` (and confirm any policy prompt) for live lab runs. The flag is audited on the policy decision (see `commands/handlers/mobile.rs` and wireless deauth precedent).
+- **Emulator/device not found or "offline"**: Ensure the AVD is fully booted (API 34+ recommended). For TCP emulators use `emulator-5554` or `127.0.0.1:5555`. For USB/physical: enable USB debugging, `adb devices` should list it as "device". Cold-boot the AVD or restart adb server (`adb kill-server && adb start-server`). The pure-Rust path probes common emulator ports; external `adb` is used only for `list_devices` convenience when present.
+- **"--device" missing or unclear error for real runs**: The dispatcher requires `--device <serial|host:port>` for any action that touches a device. Dry-run does not. See the error at `dynamic.rs:199` (or nearby) and the script `scripts/test-mobile-dynamic.sh`.
+- **Lab manifest "ignored" or load warning**: `--lab-manifest` is advisory in Phase 1 (loaded and recorded in `actions_performed`; no hard enforcement). TOML must contain `allowed_device_serials` / `allowed_packages` arrays. Failures are logged as warnings and treated as advisory (see `dynamic.rs:146`).
+- **Cleanup / uninstall failures**: Best-effort uninstall is always attempted (even on error paths). If the package name cannot be inferred or the device is disconnected mid-run, manual cleanup may be needed: `adb -s <device> uninstall <package>`. Check `actions_performed` in the report for the exact sequence attempted.
+- **No (or few) runtime findings**: The parser is intentionally high-signal only (permission events, crashes with frames, cleartext http://, obvious secrets like api_key/sk_live_/AIza). Normal app logs are filtered. Use a test APK with deliberate behaviors during the capture window. Long lines are truncated in evidence (~300 chars) with basic redaction applied to secret patterns.
+- **Feature not enabled**: Rebuild with `--features mobile-dynamic` (or `--features full`). Legacy `eggsec mobile <apk>` and `mobile static` remain available under just `--features mobile`.
+- **Policy confirmation or strict profile denial**: Under `ManualPermissive` (default CLI/TUI) you may see a confirmation prompt for `RequireConfirmation` (SafeActive + DefenseLab). Strict/MCP/agent profiles treat dynamic as Deny (standalone defense-lab surface; no MCP/agent exposure by design). Use `--yes` or the specific allow flag as appropriate for your profile.
+- **AVD / API level notes**: Phase 1 targets modern emulators (API 34+). Older images may emit different log tags or lack runtime permission prompts. Granting dangerous permissions at install time vs runtime can change observed log events.
+- **"adb: command not found" (convenience only)**: The external `adb` binary is optional (used only for `list_devices` pretty-printing). Pure-Rust TCP connect still works for emulators on known ports. Install platform-tools if you want the convenience listing.
+- **Report bridge / convert issues**: Native `--json` DynamicMobileReport is auto-bridged by `eggsec report convert` when the feature is present (categories become `mobile-dynamic-android-*`). If mixing static + dynamic reports, the bridge preserves both `mobile-*` and `mobile-dynamic-*` categories.
+
+See also: `scripts/test-mobile-dynamic.sh` (dry-run + optional real leg), `dynamic.rs` (dispatcher + manifest + audit), `adb.rs` (connect/list), `runtime.rs` (parser + redaction), `commands/handlers/mobile.rs` (policy + allow gate), and the polish plan for the exact happy-path command.
 
 ## Policy Note
 

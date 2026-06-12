@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Standalone static security analysis of Android APKs and iOS IPAs (Phase 1 static complete) + dynamic Android runtime testing via ADB + logcat (Phase 1 dynamic complete 2026-06-12) for authorized lab / defense-validation use. Pure-Rust static (ZIP + bounded AXML / plist). Dynamic: pure-Rust ADB TCP (emulator primary) + high-signal log parser; no Frida/instrumentation in P1. Produces local `MobileScanReport` / `MobileFinding` (static) and `DynamicMobileReport` / `DynamicMobileFinding` (dynamic), both with optional bridges to `ScanReportData`. Standalone defense-lab surface (MCP/agent absent). See plans for Phase 2+.
+Standalone static security analysis of Android APKs and iOS IPAs (Phase 1 static complete) + dynamic Android runtime testing via ADB + logcat (Phase 1 dynamic complete 2026-06-12) for authorized lab / defense-validation use. Pure-Rust static (ZIP + bounded AXML / plist). Dynamic: pure-Rust ADB TCP (emulator primary) + high-signal log parser; no Frida/instrumentation in P1. Produces local `MobileScanReport` / `MobileFinding` (static) and `DynamicMobileReport` / `DynamicMobileFinding` (dynamic), both with optional bridges to `ScanReportData`. Standalone defense-lab surface (MCP/agent absent). Phase 1 polish (smoke test script `scripts/test-mobile-dynamic.sh`, `--list-devices` convenience, troubleshooting, docs) complete 2026-06-12 per `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (executed). See plans for Phase 2+.
 
 ## CLI Behavior
 
@@ -24,7 +24,7 @@ Standalone static security analysis of Android APKs and iOS IPAs (Phase 1 static
 | `DynamicMobileReport` | `mobile/dynamic.rs` | Full dynamic report (target, scan_type="mobile-dynamic", platform=Android, device_serial, app_id, findings, actions_performed, dry_run, duration) |
 | `DynamicMobileFinding` | `mobile/dynamic.rs` | Runtime finding (category e.g. runtime-permission/crash-log/cleartext-observed/log-secret-leak, severity, title, description, recommendation, evidence, static_correlation) |
 | `LabManifest` | `mobile/dynamic.rs` | Optional advisory TOML allowlist (allowed_device_serials, allowed_packages); advisory in P1 |
-| `DynamicMobileArgs` | `mobile/dynamic.rs` (internal) | Dispatcher args (target, device, install/launch/capture_logs/duration/uninstall_after/dry_run, json/output/quiet, allow_dynamic_mobile, lab_manifest) |
+| `DynamicMobileArgs` | `cli/mobile.rs` (primary CLI definition for subcommand); internal skeleton in `mobile/dynamic.rs` | Dispatcher args (target, device, install/launch/capture_logs/duration/uninstall_after/dry_run, json/output/quiet, allow_dynamic_mobile, lab_manifest). Location cleanup per Phase 1 polish. |
 | `run_dynamic_cli` | `mobile/dynamic.rs` | Async dispatcher for dynamic path (mirrors static `run_cli`) |
 | `MobileStaticArgs` / `DynamicMobileArgs` (CLI) | `cli/mobile.rs` | Subcommand arg structs under `MobileSubcommand` |
 
@@ -35,7 +35,7 @@ Standalone static security analysis of Android APKs and iOS IPAs (Phase 1 static
 | `mobile/mod.rs` | Core types, `run_cli`, `format_mobile_report`, `build_general_recommendations`, `to_scan_report_data` bridge; cfg-gated reexports for dynamic |
 | `mobile/apk.rs` | APK analysis (zip open, manifest parsing (text + binary AXML), permissions, components, network-security-config, secret scanning, cert checks) |
 | `mobile/ipa.rs` | IPA analysis (zip open, Info.plist, embedded.mobileprovision, code signature markers, transport/entitlements) |
-| `mobile/dynamic.rs` | Dynamic types (`DynamicMobileReport`/`Finding`, `LabManifest`, `DynamicMobileArgs`), `run_dynamic_cli`, format/bridge (`to_scan_report_data_dynamic`) |
+| `mobile/dynamic.rs` | Dynamic types (`DynamicMobileReport`/`Finding`, `LabManifest`, `DynamicMobileArgs` internal skeleton), `run_dynamic_cli`, format/bridge (`to_scan_report_data_dynamic`) |
 | `mobile/adb.rs` | Pure-Rust ADB TCP framing + `AdbClient`/`AdbConnection` (list_devices, connect, shell, install, launch, uninstall, capture_logcat); external `adb` only for discovery convenience |
 | `mobile/runtime.rs` | High-signal logcat parser (`parse_logcat_findings`): runtime-permission, crash-log, cleartext-observed, log-secret-leak (basic redaction) |
 | `cli/mobile.rs` | `MobileArgs` + `MOBILE_ABOUT`; `MobileSubcommand` (Static/Dynamic), `MobileStaticArgs`, `DynamicMobileArgs` (CLI) |
@@ -43,7 +43,7 @@ Standalone static security analysis of Android APKs and iOS IPAs (Phase 1 static
 
 ## Status
 
-Phase 1 static complete (pure-Rust, SafeActive, standalone CLI + optional report bridge; closed 2026-06-11). Phase 1 dynamic (Android ADB core + high-signal runtime logcat analysis) complete 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed) + parent `plans/dynamic-mobile-testing-loadout-design-plan.md`. 
+Phase 1 static complete (pure-Rust, SafeActive, standalone CLI + optional report bridge; closed 2026-06-11). Phase 1 dynamic (Android ADB core + high-signal runtime logcat analysis) complete 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed) + parent `plans/dynamic-mobile-testing-loadout-design-plan.md`. Phase 1 polish (smoke test script, `--list-devices` convenience, troubleshooting section, updated success criteria) complete 2026-06-12 per `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (executed).
 
 Standalone defense-lab surface (MCP/agent absent, same pattern as wireless active). Local native types + optional bridge; auto-bridge in `report convert`. No TUI tab or pipeline profile integration in this round (`mobile-static`/`mobile-dynamic`/`mobile-regression` aspirational).
 

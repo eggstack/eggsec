@@ -34,6 +34,7 @@ vuln-management = ["eggsec/vuln-management", "eggsec-tui/vuln-management"]
 wireless = ["eggsec/wireless", "eggsec-tui/wireless"]
 wireless-advanced = ["eggsec/wireless-advanced", "eggsec-tui/wireless-advanced"]
 mobile = ["eggsec/mobile"]
+mobile-dynamic = ["eggsec/mobile-dynamic", "mobile"]
 stress-testing = ["eggsec/stress-testing", "eggsec-tui/stress-testing"]
 packet-inspection = ["eggsec/packet-inspection", "eggsec-tui/packet-inspection"]
 advanced-hunting = ["eggsec/advanced-hunting", "eggsec-tui/advanced-hunting"]
@@ -54,5 +55,6 @@ full = [
     "eggsec/full",
     "eggsec-tui/full",
     "mobile",
+    "mobile-dynamic",
     "wireless-advanced",
 ]
