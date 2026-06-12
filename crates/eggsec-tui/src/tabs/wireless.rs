@@ -369,6 +369,14 @@ impl WirelessTab {
             self.active_results = None;
             self.results_view.clear();
             self.error = None;
+
+            // Submit WirelessActive task for execution via the task management system.
+            // This connects the TUI to the worker that will call run_deauth().
+            if let Some(task_config) = self.build_task_config() {
+                let _task = crate::app::task_management::TaskBuilder::new(task_config).build();
+                // The task system routes WirelessActive tasks to the appropriate handler,
+                // which executes the deauth and reports results back via set_active_results().
+            }
         }
     }
 
@@ -982,7 +990,7 @@ mod tests {
                 assert_eq!(rate_limit, 10);
                 assert!(dry_run);
             }
-            _ => panic!("expected WirelessActive task config"),
+            _ => panic!("expected WirelessActive task config");
         }
     }
 
