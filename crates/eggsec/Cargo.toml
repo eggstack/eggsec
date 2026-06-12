@@ -274,7 +274,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "mobile"]
+full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
@@ -305,6 +305,9 @@ pdf = ["printpdf"]
 
 # Wireless security testing (WiFi scanning (passive reconnaissance and basic security analysis))
 wireless = []
+
+# Active wireless attack primitives (deauth, handshake capture, etc.) for lab-only defense validation
+wireless-advanced = ["wireless"]
 
 # Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
 mobile = ["zip", "plist"]

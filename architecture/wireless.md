@@ -29,13 +29,16 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 | `mod.rs` | Core: scanner, models, parse_scan_output (iwlist), analyze_networks (incl. rogue heuristic), generate_recommendations, run_cli, to_scan_report_data |
 | `cli/wireless.rs` | WirelessArgs + WIRELESS_ABOUT (repeat, detect-suspicious, warnings) |
 | `commands/handlers/wireless.rs` | handle_wireless with EnforcementContext (SafeActive + wireless feature) |
+| `active/mod.rs` | ActiveWirelessAttackResult, ActiveWirelessFinding, ActiveAttackConfig, re-exports attacks |
+| `active/attacks/mod.rs` | attacks submodule |
+| `active/attacks/deauth.rs` | Deauth/disassoc frame builders (build_deauth_frame, build_disassoc_frame), inject_frames, run_deauth, run_disassoc |
 | `eggsec-tui/.../tabs/wireless.rs` | WirelessTab (inputs, results view, task integration) |
 | `eggsec-tui/.../workers/security.rs` | run_wireless_task (TUI worker) |
 | `eggsec-output/.../convert.rs` | WirelessNetworkReportData + ScanReportData integration (HTML/MD/JSON) |
 
 ## Status
 
-Standalone completion (passive, Phase 0) achieved (2026-06-11). This doc reflects the current passive-only state: summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines, and no active attacks or handshake capture. Active expansion (Phase 1+) is designed in `plans/wireless-active-attacks-loadout-design-plan.md` (new `wireless-advanced` feature, `ActiveWireless` risk, standalone surface preserved, MCP exposure absent).
+**Phase 0 (passive) complete (2026-06-11)**. **Phase 1 (active attacks, wireless-advanced) implemented**. This doc reflects passive + Phase 1 active state: passive uses summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines; active adds `eggsec wireless <iface> deauth` for deauth/disassoc frame injection (lab-only, requires `--allow-active-wireless`). Active attacks under `wireless-advanced` feature follow the same standalone defense-lab rule: MCP/agent tool exposure intentionally absent (per plan recommendation). See `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1 loadout).
 
 ## MCP / Agentic / Tool Integration Status (post wireless-tui-mcp-agentic-handoff-plan 2026-06-11; see plan resolution note)
 

@@ -104,7 +104,8 @@ Use these sections as the canonical reference points when updating guidance or s
 - `vuln-management` - Vulnerability triage and CVSS scoring
 - `cloud` - AWS/GCP/Azure asset discovery
 - `git-secrets` - Git secrets scanning
-- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN). TUI tab present under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab surface). **Phase 0 complete (passive, 2026-06-11)**; active (Phase 1+) gated behind `wireless-advanced` per `plans/wireless-active-attacks-loadout-design-plan.md`. MCP/agent exposure absent for entire surface.
+- `wireless` - Standalone-complete passive WiFi scanning and security analysis (summary-by-default rogue candidates; use `--detect-suspicious` for full details; real scans require Linux `iwlist` + root/CAP_NET_ADMIN). TUI tab present under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab surface). **Phase 0 complete (passive, 2026-06-11).** Deauth (Phase 1) available under `wireless-advanced`.
+- `wireless-advanced` - Wireless active attack primitives (deauth, disassoc) for lab-only defense validation. Phase 1: targeted/broadcast deauth frame crafting and injection. Pure-Rust 802.11 + radiotap + Linux AF_PACKET/SOCK_RAW. Policy gated (`OperationRisk::Intrusive` + `wireless-advanced` feature). Same standalone pattern (no MCP/agent exposure). Requires `wireless` feature.
 - `mobile` - Mobile app static analysis (APK/IPA; Phase 1 static only, lab/defense framing)
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
@@ -390,9 +391,10 @@ cargo check -p eggsec-tui --features wireless
 cargo test --lib -p eggsec --features wireless
 cargo clippy --lib -p eggsec --features wireless
 
-# Wireless-advanced (future active loadout; not yet implemented; gated)
-# cargo check -p eggsec --features wireless-advanced
-# cargo test --lib -p eggsec --features wireless-advanced
+# Wireless-advanced (Phase 1 deauth; requires wireless feature)
+cargo check -p eggsec --features wireless-advanced
+cargo test --lib -p eggsec --features wireless-advanced
+cargo clippy --lib -p eggsec --features wireless-advanced
 ```
 
 ## Planning Notes for Future Agents

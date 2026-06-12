@@ -8,10 +8,16 @@ Eggsec provides standalone-complete passive WiFi network reconnaissance and basi
 
 ## Feature Gate
 
-Build with `--features wireless` (or `--features full`).
+Build with `--features wireless` (or `--features full`) for passive scanning.
+
+Build with `--features wireless-advanced` (or `--features full`) to also enable active attacks (Phase 1 deauth):
 
 ```bash
+# Passive only
 cargo build --release -p eggsec-cli --features wireless
+
+# With active attacks (Phase 1 deauth)
+cargo build --release -p eggsec-cli --features wireless-advanced
 ```
 
 Runtime requirements (Linux):
@@ -201,12 +207,84 @@ sudo eggsec wireless wlan0 --detect-suspicious --repeat 3
 
 ## Not In Scope (This Phase)
 
-- Active attacks (deauth, disassociation, Evil Twin AP creation, handshake capture, etc.) — see `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1+ gated behind new `wireless-advanced` feature flag = ["wireless"]; heavily policy-gated with `--allow-active-wireless`, packet budgets, lab manifests, and explicit `ActiveWireless` risk tier; **MCP/agent tool exposure remains intentionally absent** for the entire wireless surface, including advanced — standalone defense-lab design decision, not registered as `SecurityTool`).
+- Active attacks (deauth, disassociation, Evil Twin AP creation, handshake capture, etc.) — Phase 1 deauth/disassoc is now implemented (see "Active Attacks (Phase 1)" below); Phase 2+ handshake capture and Phase 3+ flood/rogue-sim remain future work. See `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1 deauth gated behind `wireless-advanced` feature flag = ["wireless"]; heavily policy-gated with `--allow-active-wireless`, packet budgets, and `Intrusive` risk tier; **MCP/agent tool exposure remains intentionally absent** for the entire wireless surface, including advanced — standalone defense-lab design decision, not registered as `SecurityTool`).
 - Handshake capture / PMKID / WPS PIN attacks / KRACK-style testing
 - Deep WPS enumeration beyond beacon flags
 - Bluetooth/BLE
 - Windows/macOS native scanning (iwlist Linux-only)
 - Full pipeline integration (wireless is a standalone-complete defense-lab surface; MCP and agentic tool exposure is intentionally absent per design decision — wireless is not registered as a SecurityTool and does not appear in tools/list or agent dispatch). Optional reporting bridge only. See architecture/wireless.md (MCP / Agentic section) and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note).
+
+## Active Attacks (Phase 1)
+
+**Build with `--features wireless-advanced`** (or `--features full`).
+
+Phase 1 implements targeted and broadcast deauthentication/disassociation frame injection for defense validation, WIPS/WIDS testing, and AP/client resilience regression.
+
+### Prerequisites
+
+- Root or `CAP_NET_ADMIN` privileges
+- Monitor-mode capable wireless interface (e.g., `wlan0mon` created via `airmon-ng start wlan0`)
+- Explicit `--allow-active-wireless` flag for non-dry-run execution
+- **Only on networks you own or have explicit written authorization to test**
+
+### CLI Usage
+
+```bash
+# Dry-run deauth (no frames sent; valid JSON output; no privileges required)
+sudo eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --dry-run --json
+
+# Targeted client deauth (lab only)
+sudo eggsec wireless wlan0 deauth \
+  --bssid 00:11:22:33:44:55 \
+  --client aa:bb:cc:dd:ee:ff \
+  --count 30 \
+  --reason-code 7 \
+  --allow-active-wireless \
+  --manual-override-reason "Authorized WIPS regression test on lab AP"
+
+# Broadcast deauth (all clients on AP - higher impact)
+sudo eggsec wireless wlan0 deauth --bssid 00:11:22:33:44:55 --broadcast --count 100
+
+# Output to file
+eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --dry-run -o deauth-plan.json
+```
+
+### Deauth Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `--bssid` | Target AP BSSID (required, e.g., `AA:BB:CC:DD:EE:FF`) |
+| `--client` | Target client MAC (omit for broadcast deauth to all clients) |
+| `--broadcast` | Send to broadcast address (all clients on AP) |
+| `--count` | Number of frames to send (default: 50) |
+| `--reason-code` | 802.11 reason code (default: 7 = class 3 from nonassociated STA) |
+| `--max-frames` | Hard budget cap (default: 100, max enforced) |
+| `--fps` | Frame injection rate in frames/sec (default: 10, max enforced) |
+| `--dry-run` | Plan mode: show what would be sent without transmitting |
+| `--allow-active-wireless` | Required for non-dry-run execution |
+| `--json` | JSON output |
+| `--output FILE` | Write output to file |
+| `--monitor-iface IFACE` | Specify monitor-mode interface |
+
+### What It Does
+
+The deauth subcommand crafts 802.11 deauthentication frames (with radiotap headers) and optionally injects them via a raw socket on a monitor-mode interface. Each frame targets a specific (BSSID, client) pair or broadcasts to all clients of an AP.
+
+### Findings
+
+Produces `wireless-active-deauth` findings with severity High, evidence (frames sent, target, reason code), and remediation (enable 802.11w/PMF, check WIPS detection latency, verify client reconnection).
+
+### Safety & Policy
+
+- **Lab-only**: Active frame injection can disrupt legitimate wireless clients
+- **Defense validation**: Intended for WIPS/WIDS regression testing and AP resilience validation
+- **Feature gated**: Requires `wireless-advanced` feature (not included in default build)
+- **Policy gated**: `OperationRisk::Intrusive` + `required_features: ["wireless-advanced"]`
+- **Manual confirmation**: `--allow-active-wireless` required for non-dry-run (audited)
+- **Budget enforcement**: Hard caps on max frames (1000) and rate (100 fps)
+- **Dry-run safe**: `--dry-run` produces valid JSON without any transmission
+
+See `docs/SAFETY.md` and `plans/wireless-active-attacks-loadout-design-plan.md`.
 
 ## Troubleshooting
 
@@ -227,9 +305,14 @@ sudo eggsec wireless wlan0 --detect-suspicious --repeat 3
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
 - Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`; `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI + MCP/agentic integration; resolution note at top records post-completion status); `plans/wireless-active-attacks-loadout-design-plan.md` (active attacks loadout design; Phase 0 = passive standalone completion; Phase 1+ gated `wireless-advanced`)
 
-## Active Attacks (Future, Gated)
+## Active Attacks (Future, Phase 2+)
 
-See `plans/wireless-active-attacks-loadout-design-plan.md` for the full design (deauth P0/Phase 1, handshake P1/Phase 2, flood/rogue-sim P2+/Phase 3, etc.). All active paths will require `--features wireless-advanced`, runtime confirmations/overrides (`--allow-active-wireless` + reason), packet budgets, optional lab manifests, and lab-only framing. Reporting bridge will extend with `wireless-active-*` categories. Passive (current) remains Phase 0 complete. MCP/agent tool exposure remains intentionally absent for the entire wireless surface.
+Phase 1 deauth/disassoc is now implemented (see "Active Attacks (Phase 1)" above). See `plans/wireless-active-attacks-loadout-design-plan.md` for the full roadmap:
+
+- **Phase 2**: Handshake capture (PMKID, WPA handshake), WPS PIN enumeration
+- **Phase 3+**: Flood attacks, rogue AP simulation, KRACK-style testing
+
+All active paths require `--features wireless-advanced`, runtime confirmations/overrides (`--allow-active-wireless` + reason), packet budgets, and lab-only framing. Reporting bridge extends with `wireless-active-*` categories. MCP/agent tool exposure remains intentionally absent for the entire wireless surface.
 
 Always ensure explicit authorization. Prefer lab environments for development and regression.
 

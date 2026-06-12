@@ -6,6 +6,9 @@
 //!
 //! This module is feature-gated behind the `wireless` feature flag.
 
+#[cfg(feature = "wireless-advanced")]
+pub mod active;
+
 use crate::error::{EggsecError, Result};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
@@ -594,35 +597,41 @@ pub async fn run_cli(
     args: crate::cli::WirelessArgs,
     _config: &crate::config::EggsecConfig,
 ) -> Result<()> {
+    // Extract scan args from subcommand (this function only handles the scan path)
+    let scan_args = match args.command {
+        Some(crate::cli::WirelessSubcommand::Scan(sa)) => sa,
+        _ => crate::cli::WirelessScanArgs::default(),
+    };
+
     let scanner = WirelessScanner::new().with_interface(args.interface.clone());
 
-    let known_good_set: std::collections::HashSet<String> = if let Some(ref p) = args.known_good {
+    let known_good_set: std::collections::HashSet<String> = if let Some(ref p) = scan_args.known_good {
         load_known_good(p)
     } else {
         std::collections::HashSet::new()
     };
     let kg_ref: Option<&std::collections::HashSet<String>> = if known_good_set.is_empty() { None } else { Some(&known_good_set) };
 
-    if !args.quiet {
+    if !scan_args.quiet {
         eprintln!("NOTE: Requires root (or CAP_NET_ADMIN) + 'iwlist' from wireless-tools. Interface in managed mode. For authorized lab/defensive validation use only. Passive recon only.");
-        if args.dry_run {
+        if scan_args.dry_run {
             eprintln!("DRY-RUN: planning mode (no iwlist calls, no privileges required).");
-        } else if args.repeat == 1 {
-            eprintln!("Scanning on {} for ~{}s...", args.interface, args.duration);
+        } else if scan_args.repeat == 1 {
+            eprintln!("Scanning on {} for ~{}s...", args.interface, scan_args.duration);
         } else {
-            eprintln!("Performing {} repeated scans on {} ({}s each, ~2s delay between)...", args.repeat, args.interface, args.duration);
+            eprintln!("Performing {} repeated scans on {} ({}s each, ~2s delay between)...", scan_args.repeat, args.interface, scan_args.duration);
         }
     }
 
     let mut results: Vec<WirelessScanResult> = Vec::new();
     let mut last_err: Option<EggsecError> = None;
 
-    for i in 1..=args.repeat {
-        if !args.quiet && args.repeat > 1 {
-            eprintln!("Scan {}/{} ...", i, args.repeat);
+    for i in 1..=scan_args.repeat {
+        if !scan_args.quiet && scan_args.repeat > 1 {
+            eprintln!("Scan {}/{} ...", i, scan_args.repeat);
         }
 
-        let this_result = if args.dry_run {
+        let this_result = if scan_args.dry_run {
             let mut recs = vec!["dry-run: no actual scan performed".to_string()];
             if i > 1 {
                 recs.push("dry-run repeat: same stub result for planning".to_string());
@@ -634,11 +643,11 @@ pub async fn run_cli(
                 recommendations: recs,
             })
         } else {
-            match scanner.scan(args.duration).await {
+            match scanner.scan(scan_args.duration).await {
                 Ok(r) => Some(r),
                 Err(e) => {
-                    if !args.quiet {
-                        eprintln!("Scan {}/{} failed: {}; continuing for remaining repeats...", i, args.repeat, e);
+                    if !scan_args.quiet {
+                        eprintln!("Scan {}/{} failed: {}; continuing for remaining repeats...", i, scan_args.repeat, e);
                     }
                     last_err = Some(e);
                     None
@@ -647,7 +656,7 @@ pub async fn run_cli(
         };
 
         if let Some(ref r) = this_result {
-            if args.repeat > 1 && !args.json && !args.quiet && !results.is_empty() {
+            if scan_args.repeat > 1 && !scan_args.json && !scan_args.quiet && !results.is_empty() {
                 let prev = results.last().unwrap();
                 let diffs = compute_changes_since(prev, r, kg_ref);
                 if !diffs.is_empty() {
@@ -660,7 +669,7 @@ pub async fn run_cli(
             results.push(r.clone());
         }
 
-        if i < args.repeat {
+        if i < scan_args.repeat {
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
     }
@@ -674,12 +683,12 @@ pub async fn run_cli(
         return Err(EggsecError::Network("No successful wireless scan results".to_string()));
     };
 
-    let output = if args.json {
-        if args.repeat > 1 {
+    let output = if scan_args.json {
+        if scan_args.repeat > 1 {
             let summary_text = build_temporal_summary(&results, kg_ref);
             let wrapped = serde_json::json!({
                 "last_scan": result,
-                "repeat_count": args.repeat,
+                "repeat_count": scan_args.repeat,
                 "summary": summary_text.trim_end(),
             });
             serde_json::to_string_pretty(&wrapped)?
@@ -688,7 +697,7 @@ pub async fn run_cli(
         }
     } else {
         let mut buf = String::new();
-        if args.dry_run {
+        if scan_args.dry_run {
             buf.push_str("DRY-RUN: no actual scan performed\n\n");
         }
         buf.push_str(&format!(
@@ -716,7 +725,7 @@ pub async fn run_cli(
 
         let mut vulns = WirelessScanner::analyze_networks(&result.networks, kg_ref);
         if !vulns.is_empty() {
-            if args.detect_suspicious {
+            if scan_args.detect_suspicious {
                 buf.push_str("Findings / Vulnerabilities: [DETECT_SUSPICIOUS]\n");
                 for v in &vulns {
                     buf.push_str(&format!(
@@ -759,7 +768,7 @@ pub async fn run_cli(
             }
         }
 
-        if args.repeat > 1 {
+        if scan_args.repeat > 1 {
             buf.push_str("\n---\n");
             buf.push_str(&build_temporal_summary(&results, kg_ref));
         }
@@ -767,9 +776,9 @@ pub async fn run_cli(
         buf
     };
 
-    if let Some(ref output_file) = args.output {
+    if let Some(ref output_file) = scan_args.output {
         tokio::fs::write(output_file, &output).await?;
-        if !args.quiet {
+        if !scan_args.quiet {
             eprintln!("Results written to {}", output_file);
         }
     } else {

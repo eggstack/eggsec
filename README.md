@@ -249,15 +249,10 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 # Reconnaissance
 ./eggsec recon example.com
 
-# Wireless (standalone-complete passive, lab-only; requires --features wireless + root/CAP_NET_ADMIN + wireless-tools/iwlist)
-./eggsec wireless wlan0 --repeat 3
-
-# Wireless with known-good baseline (suppress rogue heuristic for lab APs), dry-run, or full details; human output summarizes rogue candidates by default
-# Add --detect-suspicious for the full findings list
-./eggsec wireless wlan0 --repeat 5 --known-good ./lab-aps.txt
-./eggsec wireless wlan0 --dry-run --json
-./eggsec wireless wlan0 --detect-suspicious --repeat 3
-# (Passive only in current release — Phase 0. Active attacks planned under `wireless-advanced`; see `plans/wireless-active-attacks-loadout-design-plan.md` and docs/WIRELESS.md.)
+# Wireless with deauth (Phase 1 active attacks; requires --features wireless-advanced + root/CAP_NET_ADMIN)
+./eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --count 10 --allow-active-wireless
+./eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --client FF:EE:DD:CC:BB:AA --broadcast --dry-run
+# (Passive wireless under --features wireless; Phase 1 deauth under --features wireless-advanced; see docs/WIRELESS.md.)
 
 # Mobile static analysis (APK/IPA; requires --features mobile; lab binaries only)
 ./eggsec mobile app.apk
@@ -282,7 +277,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |
 | `eggsec scan --profile protocol-edge` | defense-lab | Malformed protocol edge testing |
 | `eggsec auth-test <target>` | defense-lab | High-risk credential control validation (brute-force, stuffing, lockout, MFA, rate-limit, timing; policy-gated via `CredentialTesting` risk + `allow_credential_testing`). Standalone defense-lab CLI (intentionally separate from pipeline); local `AuthTestReport`/`AuthFinding` only (direct emit; no `ScanReportData`, no SARIF/JUnit/etc conversion or bridge). Distinct from `ScanProfile::Auth` (JWT/OAuth/IDOR fuzzing via pipeline stages). See `docs/AUTH_LAB.md` + architecture/auth.md. |
-| `eggsec wireless <iface>` | defense-lab (passive) | Standalone-complete passive WiFi recon (iwlist): Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition/weak-signal detection, vuln findings, rogue/Evil-Twin heuristic (passive; security-diff elevates to Medium). Supports `--repeat` (diffs + temporal summary), `--known-good` allowlist (suppresses rogue for lab baselines), `--dry-run` (plan/CI, valid JSON), `--detect-suspicious` (full rogue details; summarized by default in human output). Requires `--features wireless` + root/CAP_NET_ADMIN + wireless-tools/iwlist. Native `--json` auto-bridges to `ScanReportData` for `eggsec report convert` (SARIF/JUnit/etc). Optional explicit `to_scan_report_data` bridge. Bridged findings use `wireless-*` categories (e.g. wireless-rogue, wireless-security). MCP/agent tool exposure intentionally absent (standalone defense-lab design decision; not a SecurityTool). **Phase 0 (passive) complete 2026-06-11**; active phases per `plans/wireless-active-attacks-loadout-design-plan.md` (gated, same standalone pattern). See docs/WIRELESS.md (incl. Integration section), architecture/wireless.md (MCP/Agentic section), and plans/wireless-tui-mcp-agentic-handoff-plan.md (resolution note). |
+| `eggsec wireless <iface>` | defense-lab (passive) | Standalone-complete passive WiFi recon (iwlist): Open/WEP/WPA/WPA2/WPA3/Enterprise + WPS/hidden/transition/weak-signal detection, vuln findings, rogue/Evil-Twin heuristic (passive; security-diff elevates to Medium). Supports `--repeat` (diffs + temporal summary), `--known-good` allowlist (suppresses rogue for lab baselines), `--dry-run` (plan/CI, valid JSON), `--detect-suspicious` (full rogue details; summarized by default in human output). Requires `--features wireless` + root/CAP_NET_ADMIN + wireless-tools/iwlist. Native `--json` auto-bridges to `ScanReportData` for `eggsec report convert` (SARIF/JUnit/etc). Optional explicit `to_scan_report_data` bridge. Bridged findings use `wireless-*` categories (e.g. wireless-rogue, wireless-security). MCP/agent tool exposure intentionally absent (standalone defense-lab design decision; not a SecurityTool). **Passive = Phase 0 (complete 2026-06-11).** Deauth subcommand (Phase 1): `eggsec wireless <iface> deauth --bssid MAC [--client MAC] [--broadcast] [--count N] [--allow-active-wireless]`. Pure-Rust 802.11 frame crafting + radiotap + Linux raw socket injection (AF_PACKET/SOCK_RAW). Policy gated: `OperationRisk::Intrusive` + `wireless-advanced` feature. Lab-only authorized use; `--dry-run` supported. Same standalone pattern (no MCP/agent exposure). See docs/WIRELESS.md (incl. Integration section), architecture/wireless.md (MCP/Agentic section), and plans/wireless-active-attacks-loadout-design-plan.md (Phase 1 design). |
 | `eggsec mobile <path.{apk,ipa}>` | defense-lab (static) | Standalone static analysis of Android APKs and iOS IPAs (manifest, permissions, transport config, secrets, debug/backup/exported components, signing/provisioning). Pure-Rust offline on user-supplied lab binaries only. Feature-gated `mobile`. Policy via SafeActive + required_features:["mobile"]; local MobileScanReport/MobileFinding + optional to_scan_report_data bridge. Native `--json` auto-bridges for `eggsec report convert`. See docs/MOBILE.md (Integration section) and architecture/mobile.md. |
 
 ## Build Features
@@ -307,7 +302,8 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only Phase 1) | Stable |
 | `cloud` | AWS/GCP/Azure asset discovery | Stable |
 | `git-secrets` | Git secrets scanning | Stable |
-| `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious). TUI tab under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab). **Passive = Phase 0 (2026-06-11)**; active gated by `wireless-advanced` (see active loadout plan). | Stable |
+| `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious). TUI tab under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab). **Passive = Phase 0 (complete 2026-06-11).** |
+| `wireless-advanced` | Wireless active attack primitives (deauth, disassoc) for lab-only defense validation. Phase 1: targeted/broadcast deauth frame crafting and injection via `eggsec wireless <iface> deauth --bssid MAC [--client MAC] [--broadcast] [--count N]`. Pure-Rust 802.11 + radiotap + Linux AF_PACKET/SOCK_RAW. Policy gated (`OperationRisk::Intrusive` + `wireless-advanced` feature). Same standalone defense-lab pattern (no MCP/agent exposure). Requires `wireless` feature. | Stable |
 | `pdf` | PDF report generation | Stable |
 | `advanced-hunting` | Advanced threat hunting | Stable |
 | `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |
@@ -334,8 +330,11 @@ cargo build --release -p eggsec-cli --features nse
 # With mobile static analysis (APK/IPA manifest/config checks for authorized lab/defense use only; static-only)
 cargo build --release -p eggsec-cli --features mobile
 
-# With wireless (standalone-complete passive WiFi recon; TUI tab; requires wireless-tools at runtime for real scans)
+# With wireless passive recon (TUI tab; requires wireless-tools at runtime for real scans)
 cargo build --release -p eggsec-cli --features wireless
+
+# With wireless active attacks (Phase 1 deauth; requires wireless feature)
+cargo build --release -p eggsec-cli --features wireless-advanced
 
 # Full build - all features (includes mobile, wireless, container, etc.)
 cargo build --release -p eggsec-cli --features full
