@@ -4,9 +4,9 @@ use crate::components::{
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
-use eggsec::wireless::WirelessScanResult;
 #[cfg(feature = "wireless-advanced")]
 use eggsec::wireless::active::ActiveWirelessAttackResult;
+use eggsec::wireless::WirelessScanResult;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -95,7 +95,15 @@ impl WirelessTab {
     #[cfg(feature = "wireless-advanced")]
     pub fn active_attack_config(
         &self,
-    ) -> Option<(String, String, Option<String>, Option<String>, u64, u64, bool)> {
+    ) -> Option<(
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        u64,
+        u64,
+        bool,
+    )> {
         if !self.active_mode {
             return None;
         }
@@ -103,20 +111,8 @@ impl WirelessTab {
         if interface.is_empty() {
             return None;
         }
-        let bssid = self
-            .active_inputs
-            .fields
-            .get(0)?
-            .value
-            .trim()
-            .to_string();
-        let client = self
-            .active_inputs
-            .fields
-            .get(1)?
-            .value
-            .trim()
-            .to_string();
+        let bssid = self.active_inputs.fields.get(0)?.value.trim().to_string();
+        let client = self.active_inputs.fields.get(1)?.value.trim().to_string();
         let frame_count: u64 = self
             .active_inputs
             .fields
@@ -137,11 +133,7 @@ impl WirelessTab {
         Some((
             interface,
             attack_type,
-            if bssid.is_empty() {
-                None
-            } else {
-                Some(bssid)
-            },
+            if bssid.is_empty() { None } else { Some(bssid) },
             if client.is_empty() {
                 None
             } else {
@@ -168,9 +160,7 @@ impl WirelessTab {
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             format!("Active Attack: {}", result.attack_type),
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )]));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
@@ -220,19 +210,13 @@ impl WirelessTab {
                 ]));
                 if !finding.evidence.is_empty() {
                     self.results_view.add_line(Line::from(vec![
-                        Span::styled(
-                            "    Evidence: ",
-                            Style::default().fg(Color::DarkGray),
-                        ),
+                        Span::styled("    Evidence: ", Style::default().fg(Color::DarkGray)),
                         Span::raw(finding.evidence.clone()),
                     ]));
                 }
                 if !finding.remediation.is_empty() {
                     self.results_view.add_line(Line::from(vec![
-                        Span::styled(
-                            "    Remediation: ",
-                            Style::default().fg(Color::DarkGray),
-                        ),
+                        Span::styled("    Remediation: ", Style::default().fg(Color::DarkGray)),
                         Span::raw(finding.remediation.clone()),
                     ]));
                 }
@@ -463,10 +447,7 @@ impl TabRender for WirelessTab {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(input_height),
-                Constraint::Min(0),
-            ])
+            .constraints([Constraint::Length(input_height), Constraint::Min(0)])
             .split(area);
 
         let input_area = chunks[0];
@@ -506,14 +487,13 @@ impl TabRender for WirelessTab {
                     " Active Attack Configuration (dry_run: {}) [a] toggle ",
                     self.dry_run
                 ))
-                .border_style(
-                    Style::default()
-                        .fg(if self.focus_area == WirelessFocusArea::ActiveConfig {
-                            tc!(border_focused)
-                        } else {
-                            tc!(border)
-                        }),
-                );
+                .border_style(Style::default().fg(
+                    if self.focus_area == WirelessFocusArea::ActiveConfig {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    },
+                ));
             let active_area = Rect {
                 x: input_inner.x,
                 y: input_inner.y + 3,
@@ -919,6 +899,7 @@ impl TabInput for WirelessTab {
 #[cfg(all(test, feature = "wireless-advanced"))]
 mod tests {
     use super::*;
+    use crate::app::task_management::TaskBuilder;
 
     #[test]
     fn test_active_attack_config_none_when_inactive() {
@@ -945,7 +926,9 @@ mod tests {
         tab.active_inputs.fields[3].value = "20".to_string();
         tab.dry_run = false;
 
-        let cfg = tab.active_attack_config().expect("config should be present");
+        let cfg = tab
+            .active_attack_config()
+            .expect("config should be present");
         assert_eq!(cfg.0, "wlan0");
         assert_eq!(cfg.1, "deauth");
         assert_eq!(cfg.2.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
@@ -963,9 +946,44 @@ mod tests {
         tab.active_inputs.fields[0].value = "".to_string();
         tab.active_inputs.fields[1].value = "".to_string();
 
-        let cfg = tab.active_attack_config().expect("config should be present");
+        let cfg = tab
+            .active_attack_config()
+            .expect("config should be present");
         assert!(cfg.2.is_none());
         assert!(cfg.3.is_none());
+    }
+
+    #[test]
+    fn test_build_task_config_returns_wireless_active_variant() {
+        let mut tab = WirelessTab::new();
+        tab.active_mode = true;
+        tab.inputs.fields[0].value = "wlan0".to_string();
+        tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
+        tab.dry_run = true;
+
+        match tab
+            .build_task_config()
+            .expect("task config should be present")
+        {
+            crate::workers::TaskConfig::WirelessActive {
+                interface,
+                attack_type,
+                bssid,
+                client,
+                frame_count,
+                rate_limit,
+                dry_run,
+            } => {
+                assert_eq!(interface, "wlan0");
+                assert_eq!(attack_type, "deauth");
+                assert_eq!(bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
+                assert!(client.is_none());
+                assert_eq!(frame_count, 100);
+                assert_eq!(rate_limit, 10);
+                assert!(dry_run);
+            }
+            _ => panic!("expected WirelessActive task config"),
+        }
     }
 
     #[test]

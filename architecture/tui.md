@@ -55,6 +55,7 @@ Manages the overall application state, event loop, and rendering.
 | NSE | `nse.rs` | Nmap NSE script execution |
 | Hunt | `hunt.rs` | Intelligent vulnerability hunting |
 | Browser | `browser.rs` | Headless browser security testing |
+| Wireless | `wireless.rs` | WiFi scanning plus active deauth/disassoc (`wireless` passive; `wireless-advanced` active mode with dry-run default and live confirmation) |
 | Compliance | `compliance.rs` | Compliance report generation (OWASP, PCI, HIPAA, SOC2) |
 | Storage | `storage.rs` | Database storage and query management |
 | Integrations | `integrations.rs` | Issue tracker integration (Jira, GitHub, GitLab) |

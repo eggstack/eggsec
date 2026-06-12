@@ -438,15 +438,26 @@ impl App {
         // policy confirmation under ManualPermissive.
         #[cfg(feature = "wireless-advanced")]
         {
-            if self.current_tab == Tab::Wireless
-                && self.tabs.wireless.active_mode
-            {
-                if let Some((_, ref attack_type, ..)) = self.tabs.wireless.active_attack_config()
+            if self.current_tab == Tab::Wireless && self.tabs.wireless.active_mode {
+                if let Some((
+                    _interface,
+                    attack_type,
+                    _bssid,
+                    _client,
+                    _frame_count,
+                    _rate_limit,
+                    dry_run,
+                )) = self.tabs.wireless.active_attack_config()
                 {
+                    let risk = if dry_run {
+                        OperationRisk::SafeActive
+                    } else {
+                        OperationRisk::Intrusive
+                    };
                     return Some(OperationDescriptor {
                         operation: format!("wireless-{attack_type}"),
                         mode: OperationMode::DefenseLab,
-                        risk: OperationRisk::Intrusive,
+                        risk,
                         intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
                         required_features: vec!["wireless-advanced".to_string()],
                         target: descriptor.target,
@@ -2059,6 +2070,44 @@ mod tests {
         assert!(app.is_policy_confirm_visible());
         app.cancel_policy_action();
         assert!(!app.is_policy_confirm_visible());
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    #[test]
+    fn test_wireless_active_descriptor_uses_safeactive_for_dry_run() {
+        use eggsec::config::{OperationMode, OperationRisk};
+
+        let mut app = create_test_app();
+        app.current_tab = crate::tabs::Tab::Wireless;
+        app.tabs.wireless.active_mode = true;
+        app.tabs.wireless.inputs.fields[0].value = "wlan0".to_string();
+        app.tabs.wireless.dry_run = true;
+
+        let descriptor = app
+            .build_current_operation_descriptor()
+            .expect("descriptor should be present");
+        assert_eq!(descriptor.operation, "wireless-deauth");
+        assert_eq!(descriptor.mode, OperationMode::DefenseLab);
+        assert_eq!(descriptor.risk, OperationRisk::SafeActive);
+    }
+
+    #[cfg(feature = "wireless-advanced")]
+    #[test]
+    fn test_wireless_active_descriptor_uses_intrusive_for_live_attack() {
+        use eggsec::config::{OperationMode, OperationRisk};
+
+        let mut app = create_test_app();
+        app.current_tab = crate::tabs::Tab::Wireless;
+        app.tabs.wireless.active_mode = true;
+        app.tabs.wireless.inputs.fields[0].value = "wlan0".to_string();
+        app.tabs.wireless.dry_run = false;
+
+        let descriptor = app
+            .build_current_operation_descriptor()
+            .expect("descriptor should be present");
+        assert_eq!(descriptor.operation, "wireless-deauth");
+        assert_eq!(descriptor.mode, OperationMode::DefenseLab);
+        assert_eq!(descriptor.risk, OperationRisk::Intrusive);
     }
 
     #[test]

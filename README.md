@@ -254,7 +254,8 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --client FF:EE:DD:CC:BB:AA --broadcast --dry-run
 # (Passive wireless under --features wireless; Phase 1 deauth under --features wireless-advanced; see docs/WIRELESS.md.)
 # TUI: launch eggsec-tui (also --features wireless-advanced); navigate to the Wireless tab; press 'a' to enter
-# Active mode, fill in BSSID / Client / Frame Count / Rate Limit, then press Enter (dry-run default, 'd' to toggle).
+# Active mode, fill in BSSID / Client / Frame Count / Rate Limit, then press Enter to launch the dry-run attack immediately.
+# Press 'd' to switch to live mode, which keeps the existing confirmation prompt.
 
 # Mobile static analysis (APK/IPA; requires --features mobile; lab binaries only)
 ./eggsec mobile app.apk
@@ -305,7 +306,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `cloud` | AWS/GCP/Azure asset discovery | Stable |
 | `git-secrets` | Git secrets scanning | Stable |
 | `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious). TUI tab under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab). **Passive = Phase 0 (complete 2026-06-11).** |
-| `wireless-advanced` | Wireless active attack primitives (deauth, disassoc) for lab-only defense validation. Phase 1: targeted/broadcast deauth frame crafting and injection via `eggsec wireless <iface> deauth --bssid MAC [--client MAC] [--broadcast] [--count N]`. Pure-Rust 802.11 + radiotap + Linux AF_PACKET/SOCK_RAW. Policy gated (`OperationRisk::Intrusive` + `wireless-advanced` feature). Same standalone defense-lab pattern (no MCP/agent exposure). Requires `wireless` feature. | Stable |
+| `wireless-advanced` | Wireless active attack primitives (deauth, disassoc) for lab-only defense validation. Phase 1: targeted/broadcast deauth frame crafting and injection via `eggsec wireless <iface> deauth --bssid MAC [--client MAC] [--broadcast] [--count N]`. Pure-Rust 802.11 + radiotap + Linux AF_PACKET/SOCK_RAW. Policy gated (`OperationRisk::Intrusive` + `wireless-advanced` feature). Same standalone defense-lab pattern (no MCP/agent exposure). Requires `wireless` feature. Also powers the TUI Wireless tab active mode (dry-run default; live attacks prompt for policy confirmation). | Stable |
 | `pdf` | PDF report generation | Stable |
 | `advanced-hunting` | Advanced threat hunting | Stable |
 | `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |
