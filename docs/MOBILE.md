@@ -134,6 +134,8 @@ Phase 1 (Android ADB core + runtime log analysis) complete 2026-06-12 per `plans
 
 **Phase 2 (proxy + permissions + correlation + hygiene) closed 2026-06-12** per `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md` (combined close-out + kickoff; executed). All under single `mobile-dynamic` feature (no sub-feature split per M1 decision). Level 1 proxy foundation + runtime permissions + `correlate_findings` + `static_correlation` + parser/report hygiene delivered. Adds `traffic_summary` + `permission_state` (optional) to `DynamicMobileReport`; bridge emits extra info findings under `mobile-dynamic-android-*` categories (still standalone defense-lab, MCP/agent absent, same pattern as wireless-active + static-mobile + auth-test). See CLI examples and "Future" below; heavy lab caveats apply.
 
+**Phase 3a (Frida foundation + first capability) delivered 2026-06-12** per `plans/mobile-dynamic-phase3-frida-expansion-plan.md` (executed; Key Decision: all under single `mobile-dynamic`, no mobile-frida sub-feature). Runtime gated by explicit `--allow-frida` (Intrusive policy tier for real ops; dry-run always safe, hardware-free, produces valid reports). Adds `--frida-script <FILE>` (user JS) and builtin support (basic_method_trace for common sensitive methods e.g. javax.crypto.Cipher.doFinal, keystore, login/token, root/Frida detection hooks). Emits structured JSON markers from safe Frida JS; parses to "frida-method-trace", "frida-secret-extract", "frida-bypass-validation" findings + `frida_instrumentation` on report (sessions/scripts/builtins). CLI fallback to `frida` binary (best-effort; real requires frida CLI in PATH + frida-server on rooted/emulator). Handler policy + allow gate (audited); actions in audit trail; bridge emits `mobile-dynamic-android-frida-*` categories + extra info for instrumentation summary. Standalone defense-lab only (no MCP/agent). Prefer dry-run for most work. See CLI examples below and the phase3 plan for details.
+
 - Gated behind `mobile-dynamic` feature (implies `mobile`).
 - CLI: `eggsec mobile dynamic <target.apk> --device <serial|host:port> [options]`.
   - `--dry-run` (always safe, produces complete valid JSON/pretty report with simulated actions + sample findings).
@@ -145,7 +147,7 @@ Phase 1 (Android ADB core + runtime log analysis) complete 2026-06-12 per `plans
 - Pure-Rust minimal ADB-over-TCP (emulator primary: e.g. emulator-5554 or 127.0.0.1:5555). `adb devices` convenience for discovery if binary in PATH; otherwise probes common emulator ports. No new heavy deps.
 - `DynamicMobileReport` / `DynamicMobileFinding` + `to_scan_report_data_dynamic()` bridge (mirrors static + active wireless). Native `--json` auto-bridged by `eggsec report convert` when feature enabled.
 - Policy: `EnforcementContext` with `OperationMode::DefenseLab`, `OperationRisk::SafeActive`, `required_features: ["mobile-dynamic"]`. Standalone defense-lab surface (no MCP/agent registration; same pattern as wireless active and static mobile). Prominent lab warnings.
-- No Frida, no proxy/MITM automation, no permission grant/revoke testing, no TUI, no iOS dynamic, no pipeline `ScanProfile` in this phase (aspirational later).
+- No Frida in Phase 1/2 (Phase 3a delivered under single mobile-dynamic; see below). No proxy/MITM automation (Level-1 device config only), no TUI, no iOS dynamic, no pipeline `ScanProfile` in this phase (aspirational later).
 - Emulator smoke test path documented; unit tests cover ADB framing/mocks, log parser on fixtures, serde, dry-run, bridge roundtrips.
 
 See "Phase 1 Lab Setup" below, `docs/MOBILE.md` examples, and the handoff plan for full details + safety model.
@@ -183,7 +185,7 @@ eggsec mobile dynamic test.apk --device emulator-5554 --list-permissions --grant
 eggsec mobile dynamic test.apk --device emulator-5554 --proxy 10.0.2.2:8080 --traffic-capture capture.log --list-permissions --allow-dynamic-mobile --json -o dyn.json
 eggsec report convert dyn.json -f html -o dyn.html
 ```
-See "Policy Note" (unchanged in spirit) and `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md` (Phase 2 closed).
+See "Policy Note" (Intrusive for real Frida) and `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md` (Phase 2 closed) + `plans/mobile-dynamic-phase3-frida-expansion-plan.md` (Phase 3a executed).
 
 The `scripts/test-mobile-dynamic.sh` script (added during Phase 1 polish) automates the dry-run happy path and provides an optional `--real` leg for local AVD runs. It is self-documenting and intended for both developer workstations and CI (dry-run leg is hardware-free). See the script header and `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (P1.2).
 
@@ -207,6 +209,15 @@ allowed_packages = ["com.example.vuln.test"]
 - Real paths (proxy/permission actions) covered in units + smoke; policy + audit trail present.
 - No regressions in static `mobile`, Phase 1 dynamic, or existing tests.
 
+## Phase 3a Success Criteria (achieved; Phase 3a foundation delivered 2026-06-12 under single mobile-dynamic)
+- `cargo build --features mobile-dynamic` / check / test / clippy clean (no mobile-frida feature).
+- `eggsec mobile dynamic --help` documents `--frida-script`, `--allow-frida`; dry-run Frida legs safe.
+- Dry-run with `--frida-script` produces valid `DynamicMobileReport` with `frida_instrumentation` (note/sessions/scripts/builtins), frida-* findings (method-trace, bypass-validation, etc.), actions, and bridge categories (`mobile-dynamic-android-frida-*` + extra info for instrumentation).
+- Unit tests cover dry connect/execute/trace, script generation (JSON markers for target methods), result parsing, error paths when frida CLI absent, carrier population, bridge roundtrips.
+- Smoke `./scripts/test-mobile-dynamic.sh` (dry + Frida leg) passes (hardware-free; validates JSON has frida_instrumentation + findings + bridge).
+- Real Frida path (when frida CLI + device present): best-effort, gated by --allow-frida + policy (Intrusive), audited; falls back cleanly.
+- No regressions in prior mobile functionality; all Frida under mobile-dynamic (Key Decision followed).
+
 ## Recommendations
 
 - **Lab workflow**: Build your own debug/test variants with known provenance (e.g. from CI with signing disabled only in isolated jobs). Run `eggsec mobile` as an early static gate before any dynamic work (see `plans/dynamic-mobile-testing-loadout-design-plan.md`).
@@ -226,6 +237,7 @@ allowed_packages = ["com.example.vuln.test"]
 Common issues and resolutions (Phase 1 polish):
 
 - **"Dynamic mobile execution requires --allow-dynamic-mobile"**: Real (non-dry-run) paths are intentionally gated. Use `--dry-run` for planning/safe validation, or pass `--allow-dynamic-mobile` (and confirm any policy prompt) for live lab runs. The flag is audited on the policy decision (see `commands/handlers/mobile.rs` and wireless deauth precedent).
+- **"Frida instrumentation requires --allow-frida"**: Real (non-dry) Frida ops are Intrusive tier. Use `--dry-run --frida-script ...` for safe simulation (always works, no frida CLI/device needed). Real requires `--allow-frida` + frida CLI in PATH + frida-server on rooted/emulator device. Audited; best-effort.
 - **Emulator/device not found or "offline"**: Ensure the AVD is fully booted (API 34+ recommended). For TCP emulators use `emulator-5554` or `127.0.0.1:5555`. For USB/physical: enable USB debugging, `adb devices` should list it as "device". Cold-boot the AVD or restart adb server (`adb kill-server && adb start-server`). The pure-Rust path probes common emulator ports; external `adb` is used only for `list_devices` convenience when present.
 - **"--device" missing or unclear error for real runs**: The dispatcher requires `--device <serial|host:port>` for any action that touches a device. Dry-run does not. See the error at `dynamic.rs:199` (or nearby) and the script `scripts/test-mobile-dynamic.sh`.
 - **Lab manifest "ignored" or load warning**: `--lab-manifest` is advisory in Phase 1 (loaded and recorded in `actions_performed`; no hard enforcement). TOML must contain `allowed_device_serials` / `allowed_packages` arrays. Failures are logged as warnings and treated as advisory (see `dynamic.rs:146`).
@@ -236,11 +248,12 @@ Common issues and resolutions (Phase 1 polish):
 - **Traffic capture file issues**: `--traffic-capture <file>` must point to a readable file (mitmproxy log, HAR-like, or text summary). Parser is summary-only (domains, counts, cleartext hints, high-signal findings); unreadable or empty files produce no `traffic_summary` (warning in actions). Large files are handled conservatively.
 - **Permission ops require package + state**: `--grant`/`--revoke`/`--list-permissions` require the package to be installed on the target device and appropriate runtime state (e.g. for runtime permissions). Results surfaced as findings + optional `permission_state` in report; mismatches with static manifest are high-signal.
 - **Policy confirmation or strict profile denial**: Under `ManualPermissive` (default CLI/TUI) you may see a confirmation prompt for `RequireConfirmation` (SafeActive + DefenseLab). Strict/MCP/agent profiles treat dynamic as Deny (standalone defense-lab surface; no MCP/agent exposure by design). Use `--yes` or the specific allow flag as appropriate for your profile.
-- **AVD / API level notes**: Phase 1 targets modern emulators (API 34+). Older images may emit different log tags or lack runtime permission prompts. Granting dangerous permissions at install time vs runtime can change observed log events.
+- **AVD / API level notes**: Phase 1 targets modern emulators (API 34+). Older images may emit different log tags or lack runtime permission prompts. Granting dangerous permissions at install time vs runtime can change observed log events. For Frida (Phase 3a): requires rooted image or Frida-injected emulator with frida-server; frida CLI on host.
 - **"adb: command not found" (convenience only)**: The external `adb` binary is optional (used only for `list_devices` pretty-printing). Pure-Rust TCP connect still works for emulators on known ports. Install platform-tools if you want the convenience listing.
-- **Report bridge / convert issues**: Native `--json` DynamicMobileReport is auto-bridged by `eggsec report convert` when the feature is present (categories become `mobile-dynamic-android-*`). If mixing static + dynamic reports, the bridge preserves both `mobile-*` and `mobile-dynamic-*` categories.
+- **"frida: ..." errors on real path**: frida CLI must be discoverable (which/frida --version or direct). Use --dry-run for simulation (no CLI needed). Real errors (missing CLI, unreachable device, timeout, script load) are best-effort, logged to actions, and do not fail the overall mobile-dynamic run.
+- **Report bridge / convert issues**: Native `--json` DynamicMobileReport is auto-bridged by `eggsec report convert` when the feature is present (categories become `mobile-dynamic-android-*`). If mixing static + dynamic reports, the bridge preserves both `mobile-*` and `mobile-dynamic-*` categories. Phase 3a: frida findings -> mobile-dynamic-android-frida-<subcat>; extra info for frida_instrumentation summary.
 
-See also: `scripts/test-mobile-dynamic.sh` (dry-run + optional real leg), `dynamic.rs` (dispatcher + manifest + audit), `adb.rs` (connect/list), `runtime.rs` (parser + redaction), `commands/handlers/mobile.rs` (policy + allow gate), and the polish plan for the exact happy-path command.
+See also: `scripts/test-mobile-dynamic.sh` (dry-run + optional real leg; now includes Phase 3a Frida dry leg), `dynamic.rs` (dispatcher + manifest + audit + Frida), `adb.rs` (connect/list), `runtime.rs` (parser + redaction), `frida.rs` (Phase 3a connect/execute/basic_method_trace + helpers), `commands/handlers/mobile.rs` (policy + allow gates for dynamic + Frida), and the phase plans for the exact happy-path command.
 
 ## Policy Note
 
@@ -249,14 +262,15 @@ See also: `scripts/test-mobile-dynamic.sh` (dry-run + optional real leg), `dynam
 - `operation: "mobile-static"`, `risk: OperationRisk::SafeActive`, `required_features: ["mobile"]`.
 - Feature must be present at compile time. `EnforcementContext` denies if missing. Strict profiles treat as mandatory.
 
-**Dynamic** (`mobile-dynamic`, Phase 1 + Phase 2 closed 2026-06-12):
-- `operation: "mobile-dynamic"`, `mode: DefenseLab`, `risk: OperationRisk::SafeActive`, `required_features: ["mobile-dynamic"]`.
+**Dynamic** (`mobile-dynamic`, Phase 1 + Phase 2 closed 2026-06-12 + Phase 3a Frida delivered):
+- `operation: "mobile-dynamic"`, `mode: DefenseLab`, `risk: OperationRisk::SafeActive` (Intrusive for real/non-dry Frida ops), `required_features: ["mobile-dynamic"]`.
 - Non-dry-run requires explicit `--allow-dynamic-mobile` (audited; same pattern as `wireless deauth --allow-active-wireless`).
-- Additional runtime confirmation prompt under ManualPermissive for operator discretion.
+- Real Frida requires explicit `--allow-frida` (Intrusive tier; audited; same pattern).
+- Additional runtime confirmation prompt under ManualPermissive for operator discretion (high-risk/Frida cases).
 - Lab manifest (if provided) is loaded and recorded; enforcement is primarily policy + provenance + device/app allowlist + user responsibility.
 - MCP/agent exposure intentionally absent (standalone defense-lab; reporting bridge remains usable).
 - Always produces policy decision + actions audit even in dry-run.
-- Phase 2 (proxy/permissions/correlation) uses same gate + DefenseLab/SafeActive; proxy/permission actions + correlation recorded in audit/trail. Policy note unchanged in spirit from Phase 1.
+- Phase 2 (proxy/permissions/correlation) + Phase 3a (Frida) use same gate; Frida actions/findings/instrumentation recorded in audit/trail + report. Policy note updated for Frida tier.
 
 See `config/policy_decision.rs`, `commands/handlers/mobile.rs`, and the dynamic handoff plan for exact descriptors + ConfirmationClass handling.
 
@@ -265,7 +279,7 @@ See `config/policy_decision.rs`, `commands/handlers/mobile.rs`, and the dynamic 
 - **Phase 1 static** (closed 2026-06-11): high-signal APK/IPA manifest/config analysis.
 - **Phase 1 dynamic** (closed 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md`): Android ADB core + runtime logcat analysis.
 - **Phase 2 (proxy + permissions + correlation + close-out)** (closed 2026-06-12 per `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md` (combined)): proxy foundation (device global `http_proxy` via `--proxy`; user-managed mitmproxy/CA; `--reset-proxy`; `--traffic-capture` for summary/findings) + runtime permission testing (`--grant-permission`/`--revoke-permission`/`--list-permissions`) + `correlate_findings`/`static_correlation` + final hygiene. `traffic_summary` + `permission_state` in report; bridge categories `mobile-dynamic-android-*` (e.g. traffic-summary, permission-state). All kept under single `mobile-dynamic` feature (M1 decision: no sub-feature split). Phase 2 officially closed.
-- **Phase 3 vision (kickoff)**: Frida-based runtime instrumentation (first-pass design + primitives; gated behind new `mobile-frida` feature that implies `mobile-dynamic`). Android-first; basic hooking + method tracing; safety via `EnforcementContext` + explicit allow flag + rooted/emulator constraints; reporting bridge updates; standalone defense-lab (MCP/agent absent). Design/scaffolding begins per parent `plans/dynamic-mobile-testing-loadout-design-plan.md`; no implementation yet.
+- **Phase 3a (Frida foundation + basic_method_trace) delivered 2026-06-12** (under single `mobile-dynamic` per phase3-frida-expansion-plan.md Key Decision; no separate mobile-frida sub-feature). Real connect/execute_script + first builtin (sensitive method tracing for Cipher/keystore/auth/detection); CLI --frida-script/--allow-frida; handler policy (Intrusive for real Frida); report frida_instrumentation + frida-* findings + bridge (mobile-dynamic-android-frida-*); dry-run always safe/hardware-free; smoke + tests updated. Standalone defense-lab (MCP/agent absent). See plan (executed for 3a) + CLI examples above. Phase 3b/3c (more builtins, correlation, etc.) future.
 - **Static Phase 2 (deeper analysis, future)**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
 - TUI tab and `ScanProfile` pipeline profiles (`mobile-static` / `mobile-dynamic` / `mobile-regression`) remain aspirational.
 - MCP/agent opt-in after security audit only (intentionally absent for standalone defense-lab surfaces).

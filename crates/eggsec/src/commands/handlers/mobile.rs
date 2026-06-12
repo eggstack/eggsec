@@ -25,13 +25,16 @@ pub async fn handle_mobile(
     };
 
     if is_dynamic {
-        // Dynamic path: DefenseLab + SafeActive + mobile-dynamic feature + explicit allow flag (like wireless deauth allow)
+        // Dynamic path: DefenseLab + SafeActive (Intrusive only for real/non-dry Frida) + mobile-dynamic feature + explicit allow flag(s)
         #[cfg(feature = "mobile-dynamic")]
         {
+            let is_real_frida = if let Some(crate::cli::MobileSubcommand::Dynamic(d)) = &args.command {
+                d.frida_script.is_some() && !d.dry_run
+            } else { false };
             ctx.evaluate_and_enforce_operation(OperationDescriptor {
                 operation: "mobile-dynamic".to_string(),
                 mode: crate::config::OperationMode::DefenseLab,
-                risk: crate::config::OperationRisk::SafeActive,
+                risk: if is_real_frida { crate::config::OperationRisk::Intrusive } else { crate::config::OperationRisk::SafeActive },
                 intended_uses: vec![crate::config::IntendedUse::WebAssessment],
                 target: dynamic_target.clone(),
                 required_features: vec!["mobile-dynamic".to_string()],
@@ -47,6 +50,12 @@ pub async fn handle_mobile(
                     anyhow::bail!(
                         "Dynamic mobile execution requires --allow-dynamic-mobile flag. \
                          Use --dry-run for planning without touching devices."
+                    );
+                }
+                if dargs.frida_script.is_some() && !dargs.dry_run && !dargs.allow_frida {
+                    anyhow::bail!(
+                        "Frida instrumentation requires --allow-frida flag (Intrusive tier). \
+                         Use --dry-run for safe simulation of script execution and findings."
                     );
                 }
             }
@@ -86,6 +95,9 @@ pub async fn handle_mobile(
                 revoke_permissions: dyn_args_cli.revoke_permissions,
                 list_permissions: dyn_args_cli.list_permissions,
                 traffic_capture: dyn_args_cli.traffic_capture,
+                // Phase 3a Frida
+                frida_script: dyn_args_cli.frida_script,
+                allow_frida: dyn_args_cli.allow_frida,
             };
             match crate::mobile::run_dynamic_cli(dyn_args, &ctx.config).await {
                 Ok(()) => {

@@ -1,9 +1,11 @@
 # Mobile Dynamic Phase 3: Frida Expansion Plan (Merged under mobile-dynamic)
 
 **Date**: 2026-06-12  
-**Status**: Draft — Ready for Review  
+**Status**: Executed (Phase 3a Foundation + First Capability delivered 2026-06-12)  
 **Key Decision**: All Frida capabilities will be developed **under the existing `mobile-dynamic` feature** (no separate `mobile-frida` sub-feature). Safety will be enforced via runtime flags and policy.
 **Context**: Phase 2 is functionally complete. The initial Frida scaffolding (`frida.rs`) has been added as a clean starting point. This plan defines a structured expansion across three phases.
+
+**Executed note (Phase 3a)**: Per explicit Key Decision and detailed work items 1-8, feature model reconciled (Cargo.toml: removed mobile-frida, full cleaned, comments rewritten to state Frida under mobile-dynamic governed by --allow-frida + policy). All `#[cfg(feature = "mobile-frida")]` replaced/removed. CLI surface (--frida-script, --allow-frida) + MOBILE_*_ABOUT updated. Handler policy: Intrusive for real Frida, runtime --allow-frida gate (dry safe), mapped to DynamicMobileArgs. frida.rs: real connect (CLI check + probe or sim), execute_script (temp+frida CLI or sim), basic_method_trace (generate + execute; safe JS with JSON markers for Cipher/keystore/auth/detection), is_frida_cli_available, generate_basic_method_trace_script, expanded unit tests (dry paths, error on missing CLI, script gen, parsing). DynamicMobileReport/Args + run_dynamic_cli + format_dynamic_report + to_scan_report_data_dynamic + build_recs extended (dry: sim actions/findings/carrier; real: connect/execute/builtin or user script, map to frida-* findings + instrumentation; extra info + bridge categories mobile-dynamic-android-frida-*). Smoke script updated (Phase 3a Frida dry leg; self-doc; hardware-free). Docs updated last (AGENTS.override.md, architecture/mobile.md, docs/MOBILE.md, README.md, root AGENTS.md, plan annotated). All under single mobile-dynamic. cargo check/test/clippy --features mobile-dynamic green; ./scripts/test-mobile-dynamic.sh (dry + Frida leg) passes. Standalone defense-lab, no MCP/agent. Dry-run always valid. Phase 3a complete; 3b/3c future. (2026-06-12)
 
 ---
 

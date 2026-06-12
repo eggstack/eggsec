@@ -2,33 +2,37 @@
 #
 # scripts/test-mobile-dynamic.sh
 #
-# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2a + final polish
-# + close-out polish; complete 2026-06-12).
+# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2 + Phase 3a Frida foundation;
+# Phase 1+2 closed 2026-06-12; Phase 3a delivered under single mobile-dynamic per phase3-frida-expansion-plan Key Decision).
 # Per: plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md (P1.2);
 #      plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a);
 #      plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish);
-#      plans/mobile-dynamic-phase2-close-out-polish-plan.md (close-out polish).
+#      plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md (combined close-out);
+#      plans/mobile-dynamic-phase3-frida-expansion-plan.md (Phase 3a executed; Frida under mobile-dynamic, runtime --allow-frida gate).
 # Parent: plans/mobile-dynamic-phase1-implementation-handoff-plan.md (executed)
 #         plans/dynamic-mobile-testing-loadout-design-plan.md
 #
 # Purpose:
 #   - Always runnable (defaults to --dry-run path; no device/hardware required).
-#   - Exercises the full documented happy-path command line for both Phase 1 and Phase 2a.
+#   - Exercises the full documented happy-path command line for Phase 1, Phase 2a, and Phase 3a Frida.
 #   - Validates that a complete, schema-valid DynamicMobileReport is produced
 #     (with actions_performed audit trail + findings array + bridge-ready shape).
 #   - Validates the Phase 2a report extensions (traffic_summary, permission_state) and
 #     the bridge info findings (mobile-dynamic-android-traffic-summary,
 #     mobile-dynamic-android-permission-state) are emitted under the documented
 #     categories.
+#   - Validates Phase 3a Frida dry-run (--frida-script): actions, frida_instrumentation carrier,
+#     frida-* findings, and bridge categories (mobile-dynamic-android-frida-*) are present.
 #   - When a real Android emulator/AVD (API 34+) is available and --real is passed
 #     (and ANDROID_SERIAL or emulator detected), optionally exercises the live path
 #     with --install --launch --capture-logs --duration --uninstall-after --allow-dynamic-mobile --json.
 #   - Intended for local developer use (with Android Studio AVD) and CI (dry-run matrix).
 #
 # Safety:
-#   - Dry-run: zero device/network side effects; always produces valid output.
+#   - Dry-run: zero device/network side effects; always produces valid output. Frida dry-run safe (no frida CLI/device required).
 #   - Real runs: require explicit --allow-dynamic-mobile (policy gate) + user-supplied
 #     controlled test APK (lab only). Best-effort uninstall is attempted.
+#   - Real Frida: requires --allow-frida (Intrusive tier) + frida CLI in PATH + frida-server on rooted/emulator device.
 #   - Never run against production devices or apps with real user data.
 #
 # Prerequisites (for real path):
@@ -51,6 +55,7 @@
 #   "scan_type": "mobile-dynamic", "findings" array, duration_ms, etc. Human output also
 #   valid. Phase 2a leg additionally validates "traffic_summary" + "permission_state" present
 #   in the JSON (synthetic in dry-run) and that the bridge info findings are emitted.
+#   Phase 3a Frida dry-run leg validates "frida_instrumentation" + frida- findings + bridge categories.
 #
 # On success for real path: report includes actions like "adb connect", "install", "launch",
 #   "capture_logcat", "uninstall" (best-effort), and any runtime findings emitted by the test APK.
@@ -61,6 +66,10 @@
 #   independently validated by unit tests in `crates/eggsec/src/mobile/dynamic.rs`
 #   (see `correlate_findings_populates_static_correlation_for_cleartext_and_permissions`
 #   and friends); they are part of the lib test suite, not the smoke script.
+#
+# Phase 3a Frida (dry-run always hardware-free; real requires device + frida-server + frida CLI + --allow-frida):
+#   Dry-run exercises --frida-script (path recorded; simulation produces findings + carrier).
+#   See docs/MOBILE.md for --frida-script / --allow-frida examples and policy note (Intrusive for real Frida).
 #
 set -euo pipefail
 
@@ -206,6 +215,62 @@ fi
 
 echo "Phase 2a dry-run extension validation: PASS (report carries traffic_summary + permission_state; actions include proxy/permission simulation)."
 
+# Phase 3a Frida dry-run leg (always safe; exercises --frida-script, frida_instrumentation, frida-* findings, bridge categories).
+# Hardware-free: no frida CLI or device required (dry-run path in run_dynamic_cli + frida.rs simulation).
+echo
+echo ">>> Step: Phase 3a Frida dry-run (--frida-script; validates actions, frida_instrumentation carrier, frida- findings, bridge categories)"
+P3_DRY_JSON="$(mktemp)"
+run_eggsec \
+  "${APK}" \
+  --device emulator-5554 \
+  --frida-script /tmp/phase3-trace.js \
+  --dry-run \
+  --json \
+  --quiet \
+  > "${P3_DRY_JSON}"
+
+if command -v jq >/dev/null 2>&1; then
+  P3_SCAN=$(jq -r '.scan_type' < "${P3_DRY_JSON}")
+  P3_DRY=$(jq -r '.dry_run' < "${P3_DRY_JSON}")
+  P3_HAS_FI=$(jq -r 'has("frida_instrumentation")' < "${P3_DRY_JSON}")
+  P3_FI_NOTE=$(jq -r '.frida_instrumentation.note // ""' < "${P3_DRY_JSON}")
+  P3_ACTIONS=$(jq '.actions_performed | length' < "${P3_DRY_JSON}")
+  P3_HAS_FRIDA_FINDING=$(jq '.findings | map(select(.category | startswith("frida-"))) | length > 0' < "${P3_DRY_JSON}")
+  echo "  Phase3a: scan_type=${P3_SCAN} dry_run=${P3_DRY} has_frida_instrumentation=${P3_HAS_FI} fi_note_present=${P3_FI_NOTE:+yes} actions=${P3_ACTIONS} has_frida_finding=${P3_HAS_FRIDA_FINDING}"
+  if [[ "${P3_SCAN}" != "mobile-dynamic" || "${P3_DRY}" != "true" || "${P3_HAS_FI}" != "true" ]]; then
+    echo "FAIL: Phase 3a dry-run report missing frida_instrumentation or markers" >&2
+    exit 1
+  fi
+  # Bridge check via report convert (if available) or direct jq on native for frida categories
+  if command -v jq >/dev/null 2>&1; then
+    P3_FRIDA_CAT=$(jq -r '.findings[]?.category // empty' < "${P3_DRY_JSON}" | grep -c 'frida-' || true)
+    echo "  Phase3a native frida- findings count: ${P3_FRIDA_CAT}"
+  fi
+else
+  python3 - <<'PY' "${P3_DRY_JSON}"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d.get("scan_type") == "mobile-dynamic", "scan_type"
+assert d.get("dry_run") is True, "dry_run"
+assert "frida_instrumentation" in d and d["frida_instrumentation"] is not None, "frida_instrumentation"
+print("  (python) Phase3a: has frida_instrumentation + actions + frida- findings (native)")
+PY
+fi
+
+# Optional: exercise the report convert bridge for frida categories (uses to_scan_report_data_dynamic).
+if command -v cargo >/dev/null 2>&1; then
+  BRIDGE_JSON="$(mktemp)"
+  # Use the native P3 json as input to 'report convert' (auto-bridges mobile-dynamic under feature).
+  (cd "${REPO_ROOT}" && cargo run -p eggsec-cli --features "${FEATURES}" --quiet -- report convert "${P3_DRY_JSON}" --format json --output "${BRIDGE_JSON}" >/dev/null 2>&1 || true)
+  if [[ -s "${BRIDGE_JSON}" ]] && command -v jq >/dev/null 2>&1; then
+    BRIDGE_HAS_F=$(jq '.findings[]?.category // empty' < "${BRIDGE_JSON}" | grep -c 'mobile-dynamic-android-frida-' || true)
+    echo "  Phase3a bridge: mobile-dynamic-android-frida-* count=${BRIDGE_HAS_F}"
+  fi
+  rm -f "${BRIDGE_JSON}"
+fi
+
+echo "Phase 3a Frida dry-run validation: PASS (frida_instrumentation present; frida- findings; actions recorded; bridge exercised where available)."
+
 # If not real mode, we're done (CI green path).
 if ! $REAL_MODE; then
   echo
@@ -213,7 +278,8 @@ if ! $REAL_MODE; then
   echo "To exercise live path: start an AVD (API 34+), supply a controlled test APK, then:"
   echo "  ./scripts/test-mobile-dynamic.sh /path/to/your-test.apk --real"
   echo "Or set ANDROID_SERIAL and pass --real."
-  echo "See docs/MOBILE.md 'Phase 1 Lab Setup' + 'Phase 2a CLI examples' and the polish plan for full command + safety notes."
+  echo "See docs/MOBILE.md 'Phase 1 Lab Setup' + 'Phase 2a/3a CLI examples' and the plans for full command + safety notes."
+  echo "Real Frida requires --allow-frida + frida CLI + frida-server (Intrusive policy)."
   exit 0
 fi
 

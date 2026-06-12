@@ -45,7 +45,7 @@ pub mod runtime;
 #[cfg(feature = "mobile-dynamic")]
 pub mod traffic;
 
-#[cfg(feature = "mobile-frida")]
+#[cfg(feature = "mobile-dynamic")]
 pub mod frida;
 
 // Re-export key dynamic types at crate::mobile level for handler/report bridge ergonomics (cfg-gated).
@@ -57,7 +57,7 @@ pub use dynamic::{
 #[cfg(feature = "mobile-dynamic")]
 pub use traffic::{TrafficSummary, parse_traffic_capture};
 
-#[cfg(feature = "mobile-frida")]
+#[cfg(feature = "mobile-dynamic")]
 pub use frida::{
     FridaSession, FridaScriptResult, FridaInstrumentation, connect, execute_script,
     basic_method_trace,

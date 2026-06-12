@@ -274,7 +274,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "mobile-frida"]
+  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
@@ -309,27 +309,20 @@ wireless = []
 # Active wireless attack primitives (deauth, handshake capture, etc.) for lab-only defense validation
 wireless-advanced = ["wireless"]
 
-# Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
-mobile = ["zip", "plist"]
+  # Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
+  mobile = ["zip", "plist"]
 
-# Mobile dynamic/runtime testing (Android ADB + logcat analysis for lab/defense use only).
-# Depends on base mobile static. Standalone defense-lab surface; heavily gated.
-# Phase 1: device discovery, controlled install/launch/uninstall, runtime log capture + high-signal findings.
-# Phase 2 (closed 2026-06-12): proxy Level-1 + traffic summary + runtime permission testing + correlation.
-# All Phase 1 and Phase 2 dynamic mobile functionality is intentionally kept under this single
-# mobile-dynamic feature (no mobile-dynamic-advanced sub-feature split, per 2026-06-12 decision
-# in closeout plan). Phase 3 (Frida/runtime instrumentation) will use a new gated mobile-frida
-# feature that implies mobile-dynamic.
-mobile-dynamic = ["mobile"]
-
-# Mobile Frida / runtime instrumentation (Phase 3 kickoff scaffolding pass).
-# Gated sub-feature that implies mobile-dynamic. Android-first; iOS deferred.
-# This is design + core primitives only (stub module with documented surface; no real frida crate dep,
-# no execution, no CLI wiring in this pass per plan Section 3.2/3.3).
-# Standalone defense-lab model: future real runs will require explicit allow flag + EnforcementContext
-# policy confirmation (handler integration deferred). No MCP/agent surface.
-# See crates/eggsec/src/mobile/frida.rs for vision, safety notes, and stub API.
-mobile-frida = ["mobile-dynamic"]
+  # Mobile dynamic/runtime testing (Android ADB + logcat analysis + Frida instrumentation for lab/defense use only).
+  # Depends on base mobile static. Standalone defense-lab surface; heavily gated.
+  # Phase 1: device discovery, controlled install/launch/uninstall, runtime log capture + high-signal findings.
+  # Phase 2 (closed 2026-06-12): proxy Level-1 + traffic summary + runtime permission testing + correlation.
+  # All Phase 1 and Phase 2 dynamic mobile functionality is kept under this single mobile-dynamic feature
+  # (no mobile-dynamic-advanced sub-feature split, per 2026-06-12 closeout decision).
+  # Phase 3 (Frida/runtime instrumentation) is included under mobile-dynamic (per phase3-frida-expansion-plan.md
+  # Key Decision: no separate mobile-frida sub-feature). Governed by runtime --allow-frida flag + EnforcementContext
+  # policy gates (Intrusive tier for real ops). Dry-run always safe. Standalone defense-lab only; no MCP/agent exposure.
+  # Prefer frida CLI fallback for Phase 3a (no heavy crate dep in this pass).
+  mobile-dynamic = ["mobile"]
 
 # OpenAPI schema ingestion and fuzz target generation
 api-schema = []
