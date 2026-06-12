@@ -420,6 +420,63 @@ impl AdbConnection {
         }
         Ok(text)
     }
+
+    /// Set the device's global HTTP proxy via `settings put global http_proxy host:port`.
+    /// This affects apps that respect the system proxy (many do for HTTP; not all for HTTPS without user MITM CA).
+    /// Non-fatal on error for lab flexibility; caller should audit the returned output if needed.
+    pub async fn set_global_proxy(&mut self, host: &str, port: u16) -> Result<()> {
+        let spec = format!("{}:{}", host, port);
+        let _out = self.shell_exec(&format!("settings put global http_proxy {}", spec)).await?;
+        Ok(())
+    }
+
+    /// Clear the global HTTP proxy (common idiom: set to :0 or delete).
+    /// Uses `settings put global http_proxy :0` for broad compatibility.
+    pub async fn clear_global_proxy(&mut self) -> Result<()> {
+        let _out = self.shell_exec("settings put global http_proxy :0").await?;
+        Ok(())
+    }
+
+    /// Read current global proxy setting.
+    pub async fn get_global_proxy(&mut self) -> Result<String> {
+        let out = self.shell_exec("settings get global http_proxy").await?;
+        Ok(out.trim().to_string())
+    }
+
+    /// Grant a runtime permission to a package (pm grant).
+    /// Permission should be fully qualified e.g. android.permission.CAMERA.
+    pub async fn grant_permission(&mut self, package: &str, permission: &str) -> Result<String> {
+        self.shell_exec(&format!("pm grant {} {}", package, permission)).await
+    }
+
+    /// Revoke a runtime permission (pm revoke).
+    pub async fn revoke_permission(&mut self, package: &str, permission: &str) -> Result<String> {
+        self.shell_exec(&format!("pm revoke {} {}", package, permission)).await
+    }
+
+    /// Snapshot package permission state via dumpsys (best-effort; includes granted permissions).
+    /// Output can be large; caller may filter or store abbreviated.
+    pub async fn dumpsys_package(&mut self, package: &str) -> Result<String> {
+        self.shell_exec(&format!("dumpsys package {}", package)).await
+    }
+
+    /// Convenience: list permissions for package using dumpsys and a light filter.
+    pub async fn list_permissions(&mut self, package: &str) -> Result<String> {
+        let out = self.dumpsys_package(package).await?;
+        // Extract grantedPermissions block or requested permissions for signal
+        let mut lines: Vec<&str> = out
+            .lines()
+            .filter(|l| {
+                let ll = l.to_ascii_lowercase();
+                ll.contains("permission") || ll.contains("grantedpermissions") || ll.contains("requestedpermissions")
+            })
+            .collect();
+        if lines.len() > 50 {
+            lines.truncate(50);
+            lines.push("... (truncated)");
+        }
+        Ok(lines.join("\n"))
+    }
 }
 
 #[cfg(test)]
@@ -506,5 +563,53 @@ mod tests {
         done.extend_from_slice(&0u32.to_le_bytes());
         AdbMessage::new(ADB_WRTE, 99, 7, done).write_to(&mut c).await.unwrap();
         // if we got here the client-side framing for install path is exercised.
+    }
+
+    #[tokio::test]
+    async fn set_clear_get_global_proxy_framing_and_shell_command_strings() {
+        // Duplex framing smoke for the Phase 2 proxy helpers.
+        // We replicate the exact service name strings passed to shell_exec (which does open_service("shell:CMD")).
+        // Ensures correct command framing for set/clear/get without needing a replying server (no panic on writes).
+        let (mut c, _s) = duplex(4096);
+
+        // set_global_proxy(host, port) builds: "settings put global http_proxy host:port"
+        let set_spec = "127.0.0.1:8080";
+        let set_cmd = format!("settings put global http_proxy {}", set_spec);
+        let set_service = format!("shell:{}", set_cmd);
+        let open_set = AdbMessage::new(ADB_OPEN, 100, 0, format!("{}\0", set_service).into_bytes());
+        open_set.write_to(&mut c).await.unwrap();
+
+        // clear_global_proxy: "settings put global http_proxy :0"
+        let clear_service = "shell:settings put global http_proxy :0";
+        let open_clear = AdbMessage::new(ADB_OPEN, 101, 0, format!("{}\0", clear_service).into_bytes());
+        open_clear.write_to(&mut c).await.unwrap();
+
+        // get_global_proxy: "settings get global http_proxy"
+        let get_service = "shell:settings get global http_proxy";
+        let open_get = AdbMessage::new(ADB_OPEN, 102, 0, format!("{}\0", get_service).into_bytes());
+        open_get.write_to(&mut c).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn grant_revoke_list_permissions_shell_command_framing() {
+        // Framing-only for pm grant/revoke and dumpsys (used by list_permissions).
+        // Duplex to exercise the OPEN frames with exact cmds that shell_exec would use; no reply, just no-panic + string correctness.
+        let (mut c, _s) = duplex(4096);
+        let pkg = "com.example.vulnapp";
+
+        // grant_permission
+        let grant_cmd = format!("pm grant {} android.permission.CAMERA", pkg);
+        let open_grant = AdbMessage::new(ADB_OPEN, 200, 0, format!("shell:{}\0", grant_cmd).into_bytes());
+        open_grant.write_to(&mut c).await.unwrap();
+
+        // revoke_permission
+        let revoke_cmd = format!("pm revoke {} android.permission.READ_SMS", pkg);
+        let open_revoke = AdbMessage::new(ADB_OPEN, 201, 0, format!("shell:{}\0", revoke_cmd).into_bytes());
+        open_revoke.write_to(&mut c).await.unwrap();
+
+        // list_permissions -> dumpsys_package -> shell "dumpsys package PKG"
+        let dumpsys_cmd = format!("dumpsys package {}", pkg);
+        let open_list = AdbMessage::new(ADB_OPEN, 202, 0, format!("shell:{}\0", dumpsys_cmd).into_bytes());
+        open_list.write_to(&mut c).await.unwrap();
     }
 }

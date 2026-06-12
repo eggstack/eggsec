@@ -108,7 +108,7 @@ See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` fo
 
 The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | report convert` flow work out of the box when built with `--features mobile`. Categories in bridged output are of the form `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`, `mobile-android-permission`, `mobile-ios-secret`, `mobile-ios-transport`) to preserve signal while satisfying the platform prefix. Evidence in bridged findings carries through useful details (e.g. permission name like "READ_SMS", manifest key, secret pattern like "api_key=..."); empty findings produce a valid bridge with 0 findings (tested).
 
-## Limitations (Phase 1 static + Phase 1 dynamic)
+## Limitations (Phase 1 static + Phase 1 dynamic + Phase 2a)
 
 **Static**:
 - Manifest/config surface only. No runtime behavior, no Frida, no dynamic hooking, no emulator/device interaction.
@@ -119,17 +119,20 @@ The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | 
 - iOS analysis is IPA-bundle only (no .app bundles or xcarchives directly).
 - No TUI tab (CLI primary).
 
-**Dynamic (Phase 1)**:
+**Dynamic (Phase 1 + Phase 2a)**:
 - Android-only (emulator TCP primary; USB/physical via external adb convenience).
-- No Frida / hooking, no proxy/MITM automation, no runtime permission grant/revoke testing, no traffic correlation.
-- Log findings are high-signal only (permission events, crashes with frames, cleartext hints, obvious secrets); basic redaction; no full log redaction engine.
+- Phase 1: No Frida / hooking; log findings high-signal only (permission events, crashes, cleartext, secrets); basic redaction.
+- Phase 2a: Proxy Level-1 (device global `http_proxy` config + user-provided `--traffic-capture` summary parser; no full body capture, no automatic mitmproxy management). Runtime permissions via `pm grant/revoke/list` (grant/revoke/list only; results surfaced as findings + optional `permission_state`).
 - No TUI; standalone CLI only.
 - Lab manifest is advisory (TOML allowlist); real safety comes from policy + explicit `--allow-dynamic-mobile` + user-controlled test builds + best-effort cleanup.
 - iOS dynamic deferred (Phase 3+ or note as heavily constrained).
+- Proxy config failures are non-fatal (lab use; warnings recorded in actions). Traffic capture file must be readable (mitmproxy log/HAR-like; parser is best-effort summary only). Permission ops require package installed + appropriate device state.
 
 ## Dynamic Testing Phases
 
 Phase 1 (Android ADB core + runtime log analysis) complete 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (parent design: `plans/dynamic-mobile-testing-loadout-design-plan.md`).
+
+**Phase 2a (proxy + permissions) complete 2026-06-12** per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed). Level 1 proxy foundation: device global `http_proxy` config via `--proxy <host:port>` (user-managed mitmproxy/CA recommended); `--reset-proxy`; `--traffic-capture <file>` for summary/findings. Runtime permissions: `--grant-permission`, `--revoke-permission`, `--list-permissions`. Adds `traffic_summary` + `permission_state` (optional) to `DynamicMobileReport`; bridge emits extra info findings under `mobile-dynamic-android-traffic-summary` / `mobile-dynamic-android-permission-state` etc. (still standalone defense-lab, MCP/agent absent, same pattern as wireless-active + static-mobile + auth-test). No new sub-feature; all under `mobile-dynamic`. See CLI examples and "Future" below; heavy lab caveats apply.
 
 - Gated behind `mobile-dynamic` feature (implies `mobile`).
 - CLI: `eggsec mobile dynamic <target.apk> --device <serial|host:port> [options]`.
@@ -153,8 +156,28 @@ See "Phase 1 Lab Setup" below, `docs/MOBILE.md` examples, and the handoff plan f
 3. `eggsec mobile static vuln.apk` first (baseline).
 4. Dry-run validation (always safe): `./scripts/test-mobile-dynamic.sh` (or with your APK).
 5. Full documented command: `eggsec mobile dynamic vuln.apk --device emulator-5554 --dry-run --json`.
-6. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
-7. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+      6. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
+      7. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+
+**Phase 2a CLI examples** (heavy lab-only caveats; dry-run always safe; real requires `--allow-dynamic-mobile` + device ownership + explicit consent):
+```bash
+# Dry-run (safe, no device touch)
+eggsec mobile dynamic test.apk --device emulator-5554 --dry-run --json
+
+# Proxy config (Level 1; user runs mitmproxy separately; CA on device required for HTTPS inspection)
+eggsec mobile dynamic test.apk --device emulator-5554 --proxy 127.0.0.1:8080 --traffic-capture /tmp/mitm.log --install --launch '.MainActivity' --capture-logs --duration 30 --uninstall-after --allow-dynamic-mobile
+
+# Reset proxy post-run (or on error paths)
+eggsec mobile dynamic test.apk --device emulator-5554 --reset-proxy --allow-dynamic-mobile
+
+# Runtime permissions (before/after; list current state)
+eggsec mobile dynamic test.apk --device emulator-5554 --list-permissions --grant-permission android.permission.CAMERA --revoke-permission android.permission.READ_CONTACTS --allow-dynamic-mobile
+
+# Traffic summary + permission state appear in --json report (and bridged findings via report convert)
+eggsec mobile dynamic test.apk --device emulator-5554 --proxy 10.0.2.2:8080 --traffic-capture capture.log --list-permissions --allow-dynamic-mobile --json -o dyn.json
+eggsec report convert dyn.json -f html -o dyn.html
+```
+See "Policy Note" (unchanged in spirit) and `plans/mobile-dynamic-phase2-implementation-handoff-plan.md`.
 
 The `scripts/test-mobile-dynamic.sh` script (added during Phase 1 polish) automates the dry-run happy path and provides an optional `--real` leg for local AVD runs. It is self-documenting and intended for both developer workstations and CI (dry-run leg is hardware-free). See the script header and `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (P1.2).
 
@@ -195,6 +218,9 @@ Common issues and resolutions (Phase 1 polish):
 - **Cleanup / uninstall failures**: Best-effort uninstall is always attempted (even on error paths). If the package name cannot be inferred or the device is disconnected mid-run, manual cleanup may be needed: `adb -s <device> uninstall <package>`. Check `actions_performed` in the report for the exact sequence attempted.
 - **No (or few) runtime findings**: The parser is intentionally high-signal only (permission events, crashes with frames, cleartext http://, obvious secrets like api_key/sk_live_/AIza). Normal app logs are filtered. Use a test APK with deliberate behaviors during the capture window. Long lines are truncated in evidence (~300 chars) with basic redaction applied to secret patterns.
 - **Feature not enabled**: Rebuild with `--features mobile-dynamic` (or `--features full`). Legacy `eggsec mobile <apk>` and `mobile static` remain available under just `--features mobile`.
+- **Proxy config failures non-fatal**: Proxy setup (`settings put global http_proxy`) is best-effort in lab; failures/warnings recorded in `actions_performed` (no hard abort). Ensure device/emulator supports global proxy and that CA is installed for HTTPS if using mitmproxy. `--reset-proxy` is always safe to attempt.
+- **Traffic capture file issues**: `--traffic-capture <file>` must point to a readable file (mitmproxy log, HAR-like, or text summary). Parser is summary-only (domains, counts, cleartext hints, high-signal findings); unreadable or empty files produce no `traffic_summary` (warning in actions). Large files are handled conservatively.
+- **Permission ops require package + state**: `--grant`/`--revoke`/`--list-permissions` require the package to be installed on the target device and appropriate runtime state (e.g. for runtime permissions). Results surfaced as findings + optional `permission_state` in report; mismatches with static manifest are high-signal.
 - **Policy confirmation or strict profile denial**: Under `ManualPermissive` (default CLI/TUI) you may see a confirmation prompt for `RequireConfirmation` (SafeActive + DefenseLab). Strict/MCP/agent profiles treat dynamic as Deny (standalone defense-lab surface; no MCP/agent exposure by design). Use `--yes` or the specific allow flag as appropriate for your profile.
 - **AVD / API level notes**: Phase 1 targets modern emulators (API 34+). Older images may emit different log tags or lack runtime permission prompts. Granting dangerous permissions at install time vs runtime can change observed log events.
 - **"adb: command not found" (convenience only)**: The external `adb` binary is optional (used only for `list_devices` pretty-printing). Pure-Rust TCP connect still works for emulators on known ports. Install platform-tools if you want the convenience listing.
@@ -209,21 +235,23 @@ See also: `scripts/test-mobile-dynamic.sh` (dry-run + optional real leg), `dynam
 - `operation: "mobile-static"`, `risk: OperationRisk::SafeActive`, `required_features: ["mobile"]`.
 - Feature must be present at compile time. `EnforcementContext` denies if missing. Strict profiles treat as mandatory.
 
-**Dynamic** (`mobile-dynamic`, Phase 1):
+**Dynamic** (`mobile-dynamic`, Phase 1 + Phase 2a):
 - `operation: "mobile-dynamic"`, `mode: DefenseLab`, `risk: OperationRisk::SafeActive`, `required_features: ["mobile-dynamic"]`.
 - Non-dry-run requires explicit `--allow-dynamic-mobile` (audited; same pattern as `wireless deauth --allow-active-wireless`).
 - Additional runtime confirmation prompt under ManualPermissive for operator discretion.
 - Lab manifest (if provided) is loaded and recorded; enforcement is primarily policy + provenance + device/app allowlist + user responsibility.
 - MCP/agent exposure intentionally absent (standalone defense-lab; reporting bridge remains usable).
 - Always produces policy decision + actions audit even in dry-run.
+- Phase 2a (proxy/permissions) uses same gate + DefenseLab/SafeActive; proxy/permission actions recorded in audit trail. Policy note unchanged in spirit from Phase 1.
 
 See `config/policy_decision.rs`, `commands/handlers/mobile.rs`, and the dynamic handoff plan for exact descriptors + ConfirmationClass handling.
 
 ## Future
 
 - **Phase 2 (static)**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
-- **Dynamic Phase 2+**: Proxy/MITM automation, runtime permission/behavior validation, Frida (gated behind extra `mobile-frida` sub-feature + rooted device + heavy policy), traffic-driven targeted tests. See parent design plan.
-- Phase 1 dynamic (Android ADB + logcat) complete 2026-06-12. See `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed) and `plans/dynamic-mobile-testing-loadout-design-plan.md`.
+- **Phase 2a (2026-06-12)**: Proxy foundation (device global `http_proxy` via `--proxy`; user-managed mitmproxy/CA; `--reset-proxy`; `--traffic-capture` for summary/findings) + runtime permission testing (`--grant-permission`/`--revoke-permission`/`--list-permissions`). `traffic_summary` + `permission_state` in report; bridge categories `mobile-dynamic-android-traffic-summary` etc. Level 1 pragmatic proxy integration. Phase 2a complete per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed). Still standalone defense-lab (MCP/agent absent; same pattern as wireless-active + static-mobile + auth-test). No TUI/pipeline/MCP.
+- **Phase 2b+ (future)**: Deeper correlation, Frida (gated `mobile-frida` + rooted + heavy policy), etc. per parent design plan.
+- Phase 1 dynamic (Android ADB + logcat) complete 2026-06-12. Phase 2a (proxy + permissions) complete 2026-06-12. See `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed), `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed), and `plans/dynamic-mobile-testing-loadout-design-plan.md`.
 - Architecture document: `architecture/mobile.md`.
 - TUI tab and `ScanProfile` pipeline profiles (`mobile-static` / `mobile-regression` / dynamic variants) remain aspirational.
 - MCP/agent opt-in after security audit only (intentionally absent for standalone defense-lab surfaces).
@@ -245,12 +273,12 @@ pub struct MobileScanReport {
 pub fn to_scan_report_data(result: &MobileScanReport) -> ScanReportData { ... }
 ```
 
-**Dynamic (under `mobile-dynamic` feature, Phase 1 Android-only)**:
+**Dynamic (under `mobile-dynamic` feature, Phase 1 Android-only + Phase 2a proxy/permissions)**:
 ```rust
 pub struct LabManifest { pub allowed_device_serials: Vec<String>, pub allowed_packages: Vec<String> }
 
 pub struct DynamicMobileFinding {
-    pub category: String,   // "runtime-permission", "crash-log", "cleartext-observed", "log-secret-leak", ...
+    pub category: String,   // "runtime-permission", "crash-log", "cleartext-observed", "log-secret-leak", "traffic-summary", "permission-state", ...
     pub severity: Severity,
     pub title: String,
     pub description: String,
@@ -272,12 +300,14 @@ pub struct DynamicMobileReport {
     pub duration_ms: u64,
     pub actions_performed: Vec<String>,  // full audit trail
     pub dry_run: bool,
+    pub traffic_summary: Option<TrafficSummary>,  // Phase 2a (via --traffic-capture)
+    pub permission_state: Option<PermissionState>, // Phase 2a (via --list-permissions etc.)
 }
 
 pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> ScanReportData { ... }
 ```
 
-See `crates/eggsec/src/mobile/{mod,apk,ipa,dynamic,adb,runtime}.rs`. Historical: `plans/mobile-first-handoff-plan.md`. Dynamic: `plans/dynamic-mobile-testing-loadout-design-plan.md` + handoff plan (Phase 1 complete 2026-06-12).
+See `crates/eggsec/src/mobile/{mod,apk,ipa,dynamic,adb,runtime,traffic}.rs`. Historical: `plans/mobile-first-handoff-plan.md`. Dynamic: `plans/dynamic-mobile-testing-loadout-design-plan.md` + Phase 1 handoff (complete 2026-06-12) + Phase 2a handoff (proxy + permissions complete 2026-06-12).
 
 ## Example Output (Human, abbreviated)
 

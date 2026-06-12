@@ -32,6 +32,8 @@ pub mod dynamic;
 pub mod adb;
 #[cfg(feature = "mobile-dynamic")]
 pub mod runtime;
+#[cfg(feature = "mobile-dynamic")]
+pub mod traffic;
 
 // Re-export key dynamic types at crate::mobile level for handler/report bridge ergonomics (cfg-gated).
 #[cfg(feature = "mobile-dynamic")]
@@ -39,6 +41,8 @@ pub use dynamic::{
     run_dynamic_cli, DynamicMobileArgs, DynamicMobileReport, DynamicMobileFinding, LabManifest,
     format_dynamic_report, to_scan_report_data_dynamic,
 };
+#[cfg(feature = "mobile-dynamic")]
+pub use traffic::{TrafficSummary, parse_traffic_capture};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MobilePlatform {

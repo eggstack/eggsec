@@ -141,4 +141,18 @@ pub struct DynamicMobileArgs {
 
     #[arg(long, help = "List reachable devices/emulators via pure-Rust probe (+ external adb convenience if in PATH) and exit. Target APK may be omitted or a placeholder.")]
     pub list_devices: bool,
+
+    // Phase 2 (still under mobile-dynamic feature)
+    #[arg(long, value_name = "HOST:PORT", help = "Configure device global HTTP proxy for the run (e.g. 127.0.0.1:8080). Requires user-managed MITM CA on device for HTTPS inspection. Device setting only (no auto mitmproxy start).")]
+    pub proxy: Option<String>,
+    #[arg(long, help = "After run, reset/clear the global HTTP proxy on device (best-effort).")]
+    pub reset_proxy: bool,
+    #[arg(long = "grant-permission", value_name = "PERM", action = clap::ArgAction::Append, help = "Grant runtime permission(s) to package (pm grant). Repeatable. e.g. android.permission.CAMERA")]
+    pub grant_permissions: Vec<String>,
+    #[arg(long = "revoke-permission", value_name = "PERM", action = clap::ArgAction::Append, help = "Revoke runtime permission(s) (pm revoke). Repeatable.")]
+    pub revoke_permissions: Vec<String>,
+    #[arg(long, help = "Snapshot current permission state for the target package (via dumpsys) and include in report.")]
+    pub list_permissions: bool,
+    #[arg(long, value_name = "FILE", help = "Path to traffic capture (mitmproxy text log or minimal HAR JSON) to parse for traffic_summary + findings. Complements --proxy.")]
+    pub traffic_capture: Option<String>,
 }

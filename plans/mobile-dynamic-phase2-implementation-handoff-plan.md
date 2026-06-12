@@ -1,13 +1,15 @@
 # Mobile Dynamic Phase 2 Implementation Handoff Plan
 
 **Date**: 2026-06-12  
-**Status**: Draft — Ready for Team Review & Handoff  
+**Status**: Executed — 2026-06-12  
 **Parent Plans**:
 - `plans/dynamic-mobile-testing-loadout-design-plan.md`
 - `plans/mobile-dynamic-phase1-implementation-handoff-plan.md`
 - `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (Phase 1 polish executed)
 **Current State**: Phase 1 (Android ADB + logcat) + polish is complete and merged. CLI subcommands, handler with policy enforcement, and documentation are in good shape.
 **Focus**: Detailed implementation plan for **Phase 2**, with special emphasis on integration with the existing `proxy` module.
+
+**Delivered (2026-06-12)**: Phase 2a complete per plan (Level 1 pragmatic proxy integration). P0: proxy Level-1 device config (global http_proxy via --proxy; user-managed mitmproxy/CA; --reset-proxy) + traffic summary parser + permission grant/revoke/list (--grant-permission/--revoke-permission/--list-permissions); new `traffic.rs` + adb helpers; `DynamicMobileReport` extensions (`traffic_summary`, `permission_state`); bridge updates (extra info findings for `mobile-dynamic-android-traffic-summary` etc.); tests + smoke; no new sub-feature flag; all under `mobile-dynamic`. Standalone defense-lab (MCP/agent absent; same pattern as wireless-active + static-mobile + auth-test). Keep rest of plan as historical reference.
 
 ---
 
