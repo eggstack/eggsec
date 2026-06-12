@@ -108,19 +108,65 @@ See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` fo
 
 The auto-bridge in `commands/handlers/report.rs` makes the documented `--json | report convert` flow work out of the box when built with `--features mobile`. Categories in bridged output are of the form `mobile-{android,ios}-<native-category>` (e.g. `mobile-android-manifest`, `mobile-android-permission`, `mobile-ios-secret`, `mobile-ios-transport`) to preserve signal while satisfying the platform prefix. Evidence in bridged findings carries through useful details (e.g. permission name like "READ_SMS", manifest key, secret pattern like "api_key=..."); empty findings produce a valid bridge with 0 findings (tested).
 
-## Limitations (Phase 1)
+## Limitations (Phase 1 static + Phase 1 dynamic)
 
-- Static analysis surface only. No runtime behavior, no Frida, no dynamic hooking, no emulator/device interaction.
+**Static**:
+- Manifest/config surface only. No runtime behavior, no Frida, no dynamic hooking, no emulator/device interaction.
 - No deep DEX decompilation, full bytecode analysis, or control-flow graphs.
 - No complete third-party dependency / supply-chain graph (only basic indicators and secret patterns).
 - Limited to manifest, plist, network config, signing markers, and bounded small-text asset scans. Large resources and native libraries are size-capped or skipped.
 - No automatic app installation, permission granting, or traffic capture.
 - iOS analysis is IPA-bundle only (no .app bundles or xcarchives directly).
-- No TUI tab in this phase (CLI primary).
+- No TUI tab (CLI primary).
+
+**Dynamic (Phase 1)**:
+- Android-only (emulator TCP primary; USB/physical via external adb convenience).
+- No Frida / hooking, no proxy/MITM automation, no runtime permission grant/revoke testing, no traffic correlation.
+- Log findings are high-signal only (permission events, crashes with frames, cleartext hints, obvious secrets); basic redaction; no full log redaction engine.
+- No TUI; standalone CLI only.
+- Lab manifest is advisory (TOML allowlist); real safety comes from policy + explicit `--allow-dynamic-mobile` + user-controlled test builds + best-effort cleanup.
+- iOS dynamic deferred (Phase 3+ or note as heavily constrained).
 
 ## Dynamic Testing Phases
 
-Dynamic loadout design (gated `mobile-dynamic` feature for ADB/logcat/proxy/Frida etc. under strict lab policy) is in `plans/dynamic-mobile-testing-loadout-design-plan.md` (Phase 0 complete 2026-06-12; standalone defense-lab surface; MCP/agent tool exposure intentionally absent; mirrors `plans/wireless-active-attacks-loadout-design-plan.md` pattern). Implementation pending.
+Phase 1 (Android ADB core + runtime log analysis) complete 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (parent design: `plans/dynamic-mobile-testing-loadout-design-plan.md`).
+
+- Gated behind `mobile-dynamic` feature (implies `mobile`).
+- CLI: `eggsec mobile dynamic <target.apk> --device <serial|host:port> [options]`.
+  - `--dry-run` (always safe, produces complete valid JSON/pretty report with simulated actions + sample findings).
+  - Real actions: `--install`, `--launch <activity>`, `--capture-logs --duration <secs>`, `--uninstall-after`.
+  - Explicit `--allow-dynamic-mobile` required for any non-dry-run (audited on policy decision).
+  - Optional `--lab-manifest path.toml` (allowed_device_serials + allowed_packages; advisory in P1).
+- All actions recorded in `actions_performed` audit trail; best-effort uninstall always attempted (even on error).
+- High-signal runtime findings from logcat: `runtime-permission` (grant/deny), `crash-log` (with stack hints), `cleartext-observed`, `log-secret-leak` (basic redaction). Categories become `mobile-dynamic-android-*` in bridged reports.
+- Pure-Rust minimal ADB-over-TCP (emulator primary: e.g. emulator-5554 or 127.0.0.1:5555). `adb devices` convenience for discovery if binary in PATH; otherwise probes common emulator ports. No new heavy deps.
+- `DynamicMobileReport` / `DynamicMobileFinding` + `to_scan_report_data_dynamic()` bridge (mirrors static + active wireless). Native `--json` auto-bridged by `eggsec report convert` when feature enabled.
+- Policy: `EnforcementContext` with `OperationMode::DefenseLab`, `OperationRisk::SafeActive`, `required_features: ["mobile-dynamic"]`. Standalone defense-lab surface (no MCP/agent registration; same pattern as wireless active and static mobile). Prominent lab warnings.
+- No Frida, no proxy/MITM automation, no permission grant/revoke testing, no TUI, no iOS dynamic, no pipeline `ScanProfile` in this phase (aspirational later).
+- Emulator smoke test path documented; unit tests cover ADB framing/mocks, log parser on fixtures, serde, dry-run, bridge roundtrips.
+
+See "Phase 1 Lab Setup" below, `docs/MOBILE.md` examples, and the handoff plan for full details + safety model.
+
+**Phase 1 Lab Setup (quick)**:
+1. Android Studio AVD (API 34+ recommended) or physical dev device with USB debugging + `adb`.
+2. Build a debug/test APK you control (signing disabled only in isolated CI job; provenance note required).
+3. `eggsec mobile static vuln.apk` first (baseline).
+4. `eggsec mobile dynamic vuln.apk --device emulator-5554 --dry-run --json` (plan).
+5. Real: `... --install --launch '.MainActivity' --capture-logs --duration 60 --uninstall-after --allow-dynamic-mobile`.
+6. `eggsec report convert dynamic.json -f html -o dynamic.html` (or trend/diff with static baseline).
+
+Example manifest (examples/lab-mobile.toml):
+```toml
+allowed_device_serials = ["emulator-5554", "ABCD1234"]
+allowed_packages = ["com.example.vuln.test"]
+```
+
+## Phase 1 Success Criteria (achieved)
+- `cargo build --features mobile-dynamic` / check / test / clippy clean.
+- `eggsec mobile dynamic --help` shows flags; legacy `eggsec mobile <apk>` and `mobile static` continue to work.
+- Dry-run produces schema-valid full `DynamicMobileReport` (actions + findings + bridge).
+- Real emulator happy-path (install/launch/log/uninstall) with policy confirmation + audit trail.
+- No regressions in static `mobile` functionality or existing tests.
 
 ## Recommendations
 
@@ -137,52 +183,80 @@ Dynamic loadout design (gated `mobile-dynamic` feature for ADB/logcat/proxy/Frid
 
 ## Policy Note
 
-The `mobile` command is gated through the central `CommandContext::evaluate_and_enforce_operation()` (see `config/policy_decision.rs` and `commands/handlers/mobile.rs`). It declares:
+**Static** (`mobile-static`):
+- Gated via `CommandContext::evaluate_and_enforce_operation()` (`commands/handlers/mobile.rs`).
+- `operation: "mobile-static"`, `risk: OperationRisk::SafeActive`, `required_features: ["mobile"]`.
+- Feature must be present at compile time. `EnforcementContext` denies if missing. Strict profiles treat as mandatory.
 
-- `operation: "mobile-static"`
-- `risk: OperationRisk::SafeActive`
-- `required_features: ["mobile"]`
+**Dynamic** (`mobile-dynamic`, Phase 1):
+- `operation: "mobile-dynamic"`, `mode: DefenseLab`, `risk: OperationRisk::SafeActive`, `required_features: ["mobile-dynamic"]`.
+- Non-dry-run requires explicit `--allow-dynamic-mobile` (audited; same pattern as `wireless deauth --allow-active-wireless`).
+- Additional runtime confirmation prompt under ManualPermissive for operator discretion.
+- Lab manifest (if provided) is loaded and recorded; enforcement is primarily policy + provenance + device/app allowlist + user responsibility.
+- MCP/agent exposure intentionally absent (standalone defense-lab; reporting bridge remains usable).
+- Always produces policy decision + actions audit even in dry-run.
 
-The feature must be present at compile time. `EnforcementContext` (CLI `ManualPermissive`/`ManualGuarded` etc.) will deny if the feature is missing or if broader policy rules prohibit the operation. Strict profiles (MCP, agent, CI) treat the feature requirement as mandatory. No special overrides bypass the feature gate.
+See `config/policy_decision.rs`, `commands/handlers/mobile.rs`, and the dynamic handoff plan for exact descriptors + ConfirmationClass handling.
 
 ## Future
 
-- **Phase 2**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
-- **Dynamic phases (future)**: Gated dynamic capabilities (Frida-based instrumentation etc.) per `plans/dynamic-mobile-testing-loadout-design-plan.md` (heavily policy-gated; `mobile-dynamic` feature; explicit lab authorization + budgets; optional extended `to_scan_report_data` bridge with `mobile-dynamic-*` categories). Phase 1 static complete 2026-06-11.
+- **Phase 2 (static)**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
+- **Dynamic Phase 2+**: Proxy/MITM automation, runtime permission/behavior validation, Frida (gated behind extra `mobile-frida` sub-feature + rooted device + heavy policy), traffic-driven targeted tests. See parent design plan.
+- Phase 1 dynamic (Android ADB + logcat) complete 2026-06-12. See `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed) and `plans/dynamic-mobile-testing-loadout-design-plan.md`.
 - Architecture document: `architecture/mobile.md`.
-- TUI tab and broader `ScanProfile` support in later phases.
+- TUI tab and `ScanProfile` pipeline profiles (`mobile-static` / `mobile-regression` / dynamic variants) remain aspirational.
+- MCP/agent opt-in after security audit only (intentionally absent for standalone defense-lab surfaces).
 
 ## Data Model (Key Types)
 
+**Static (always under `mobile`)**:
 ```rust
 pub enum MobilePlatform { Android, Ios }
 
-pub struct MobileFinding {
-    pub category: String,
+pub struct MobileFinding { ... }  // category, severity, title, description, recommendation, evidence
+pub struct MobileScanReport {
+    pub target: String,
+    pub scan_type: String, // "mobile-static"
+    ...
+    pub findings: Vec<MobileFinding>,
+    ...
+}
+pub fn to_scan_report_data(result: &MobileScanReport) -> ScanReportData { ... }
+```
+
+**Dynamic (under `mobile-dynamic` feature, Phase 1 Android-only)**:
+```rust
+pub struct LabManifest { pub allowed_device_serials: Vec<String>, pub allowed_packages: Vec<String> }
+
+pub struct DynamicMobileFinding {
+    pub category: String,   // "runtime-permission", "crash-log", "cleartext-observed", "log-secret-leak", ...
     pub severity: Severity,
     pub title: String,
     pub description: String,
     pub recommendation: String,
     pub evidence: Option<String>,
+    pub static_correlation: Option<String>,
 }
 
-pub struct MobileScanReport {
+pub struct DynamicMobileReport {
     pub target: String,
-    pub scan_type: String, // "mobile-static"
-    pub platform: MobilePlatform,
+    pub scan_type: String,  // "mobile-dynamic"
+    pub platform: MobilePlatform, // Android only in P1
+    pub device_serial: Option<String>,
     pub app_id: Option<String>,
     pub version: Option<String>,
     pub timestamp: String,
-    pub findings: Vec<MobileFinding>,
+    pub findings: Vec<DynamicMobileFinding>,
     pub recommendations: Vec<String>,
     pub duration_ms: u64,
+    pub actions_performed: Vec<String>,  // full audit trail
+    pub dry_run: bool,
 }
 
-pub fn to_scan_report_data(result: &MobileScanReport) -> ScanReportData { ... }
+pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> ScanReportData { ... }
 ```
 
-See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` for full definitions and analyzers. Historical plan: `plans/mobile-first-handoff-plan.md`.
-- Dynamic design plan: `plans/dynamic-mobile-testing-loadout-design-plan.md` (2026-06-12).
+See `crates/eggsec/src/mobile/{mod,apk,ipa,dynamic,adb,runtime}.rs`. Historical: `plans/mobile-first-handoff-plan.md`. Dynamic: `plans/dynamic-mobile-testing-loadout-design-plan.md` + handoff plan (Phase 1 complete 2026-06-12).
 
 ## Example Output (Human, abbreviated)
 

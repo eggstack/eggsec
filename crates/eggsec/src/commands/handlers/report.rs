@@ -50,6 +50,12 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                 {
                     if let Ok(m) = serde_json::from_str::<crate::mobile::MobileScanReport>(&content) {
                         crate::mobile::to_scan_report_data(&m)
+                    } else if cfg!(feature = "mobile-dynamic") {
+                        if let Ok(d) = serde_json::from_str::<crate::mobile::DynamicMobileReport>(&content) {
+                            crate::mobile::to_scan_report_data_dynamic(&d)
+                        } else {
+                            return Err(anyhow::anyhow!("Input is not ScanReportData and does not match mobile or mobile-dynamic shape"));
+                        }
                     } else {
                         return Err(anyhow::anyhow!("Input is not ScanReportData and does not match mobile shape"));
                     }
