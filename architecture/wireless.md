@@ -32,13 +32,14 @@ Standalone-complete passive WiFi network reconnaissance and basic security postu
 | `active/mod.rs` | ActiveWirelessAttackResult, ActiveWirelessFinding, ActiveAttackConfig, re-exports attacks |
 | `active/attacks/mod.rs` | attacks submodule |
 | `active/attacks/deauth.rs` | Deauth/disassoc frame builders (build_deauth_frame, build_disassoc_frame), inject_frames, run_deauth, run_disassoc |
+| `active/mod.rs` (+bridge) | `to_active_scan_report_data` bridge: converts `ActiveWirelessAttackResult` → `ScanReportData` for SARIF/JUnit/HTML/Markdown/etc. |
 | `eggsec-tui/.../tabs/wireless.rs` | WirelessTab (inputs, results view, task integration) |
 | `eggsec-tui/.../workers/security.rs` | run_wireless_task (TUI worker) |
 | `eggsec-output/.../convert.rs` | WirelessNetworkReportData + ScanReportData integration (HTML/MD/JSON) |
 
 ## Status
 
-**Phase 0 (passive) complete (2026-06-11)**. **Phase 1 (active attacks, wireless-advanced) implemented**. This doc reflects passive + Phase 1 active state: passive uses summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines; active adds `eggsec wireless <iface> deauth` for deauth/disassoc frame injection (lab-only, requires `--allow-active-wireless`). Active attacks under `wireless-advanced` feature follow the same standalone defense-lab rule: MCP/agent tool exposure intentionally absent (per plan recommendation). See `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1 loadout).
+**Phase 0 (passive) complete (2026-06-11)**. **Phase 1 (active attacks, wireless-advanced) implemented; active reporting bridge complete (CLI integration plan items addressed)**. This doc reflects passive + Phase 1 active state: passive uses summarized rogue output by default, `--detect-suspicious` for full details, `--known-good` for lab baselines; active adds `eggsec wireless <iface> deauth` for deauth/disassoc frame injection (lab-only, requires `--allow-active-wireless`). Active results are auto-bridged for SARIF/JUnit/HTML/Markdown reporting via `report convert`. Active attacks under `wireless-advanced` feature follow the same standalone defense-lab rule: MCP/agent tool exposure intentionally absent (per plan recommendation). See `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1 loadout).
 
 ## MCP / Agentic / Tool Integration Status (post wireless-tui-mcp-agentic-handoff-plan 2026-06-11; see plan resolution note)
 
@@ -60,6 +61,8 @@ See `docs/WIRELESS.md` for usage/safety/examples/best-practices.
 Produces local `WirelessScanResult` + findings directly (human/JSON via CLI + TUI). Optional `to_scan_report_data()` bridge (`wireless/mod.rs`, wired via `eggsec-output/convert.rs` for `WirelessNetworkReportData` + `ScanReportData`) converts to canonical `ScanReportData` (findings + full `wireless_networks` list) for SARIF/JUnit/HTML/etc. consumers.
 
 The CLI `report convert` handler includes an auto-bridge: native `--json` output (direct `WirelessScanResult` or `--repeat` wrapped `{last_scan, ...}`) is accepted directly and converted on the fly when the `wireless` feature is enabled. This makes documented flows like `eggsec wireless wlan0 --json -o w.json ; eggsec report convert w.json -f sarif` work without manual pre-processing.
+
+Active attack results (`ActiveWirelessAttackResult` from `eggsec wireless <iface> deauth --json`) are also auto-bridged by `eggsec report convert` when the `wireless-advanced` feature is enabled. The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth`) for findings, enabling SARIF/JUnit/HTML/Markdown/CSV reporting for active results.
 
 Bridged findings use `wireless-*` categories (e.g. `wireless-rogue`, `wireless-security`, `wireless-wps`, `wireless-hidden`, `wireless-signal`, `wireless-transition`, `wireless-other`); evidence is populated as `network=<ssid> bssid=<bssid> ch=... sig=...dBm sec=...` (richer than bare id while keeping prefix for compatibility); remediation from recs. Bridge is per-result (on last_scan for repeat-wrapped native JSON). Always analyzes with None for known_good (suppression is native UX only). Timestamp in bridged `ScanReportData` is report generation time; per-net `last_seen` carries scan time.
 

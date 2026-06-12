@@ -286,6 +286,22 @@ Produces `wireless-active-deauth` findings with severity High, evidence (frames 
 
 See `docs/SAFETY.md` and `plans/wireless-active-attacks-loadout-design-plan.md`.
 
+### Reporting Bridge
+
+Active attack results can be converted to unified reports (SARIF, JUnit, HTML, Markdown, CSV) via the reporting bridge:
+
+```bash
+# Dry-run deauth → JSON → SARIF report
+sudo eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --dry-run --json -o deauth.json
+eggsec report convert deauth.json -f sarif
+
+# Real deauth → HTML report
+sudo eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --count 10 --allow-active-wireless --json -o deauth.json
+eggsec report convert deauth.json -f html
+```
+
+The bridge produces `wireless-active-*` categories (e.g. `wireless-active-deauth`) for findings. Native `--json` output from `eggsec wireless <iface> deauth` is auto-bridged by `eggsec report convert` when the `wireless-advanced` feature is enabled.
+
 ## Troubleshooting
 
 - "iwlist: command not found" or permission denied: install wireless-tools; run as root or grant CAP_NET_ADMIN; ensure interface exists and is up (`ip link show`).
@@ -304,6 +320,7 @@ See `docs/SAFETY.md` and `plans/wireless-active-attacks-loadout-design-plan.md`.
 - Architecture: `architecture/wireless.md`
 - Agent skill: `.opencode/skills/eggsec-agent/wireless_security_testing.md`
 - Plan: `plans/wireless-micro-closeout-checklist.md` (closeout record); `plans/wireless-standalone-completion-plan.md` (standalone completion); historical: `plans/wireless-first-handoff-plan.md` (first handoff); `plans/integration-work-plan.md`; `plans/wireless-tui-mcp-agentic-handoff-plan.md` (TUI + MCP/agentic integration; resolution note at top records post-completion status); `plans/wireless-active-attacks-loadout-design-plan.md` (active attacks loadout design; Phase 0 = passive standalone completion; Phase 1+ gated `wireless-advanced`)
+- Plan (CLI integration): `plans/wireless-active-loadout-cli-integration-plan.md`
 
 ## Active Attacks (Future, Phase 2+)
 

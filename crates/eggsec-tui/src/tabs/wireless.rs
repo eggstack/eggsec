@@ -139,6 +139,20 @@ impl WirelessTab {
                 ]));
             }
         }
+
+        // Active attacks notice
+        #[cfg(feature = "wireless-advanced")]
+        {
+            self.results_view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(vec![Span::styled(
+                "Note: Active attacks (deauth, disassoc) are available via CLI only.",
+                Style::default().fg(tc!(warning)),
+            )]));
+            self.results_view.add_line(Line::from(vec![Span::styled(
+                "  Use: eggsec wireless <iface> deauth --bssid MAC [--allow-active-wireless]",
+                Style::default().fg(tc!(info)),
+            )]));
+        }
     }
 
     pub fn start(&mut self) {

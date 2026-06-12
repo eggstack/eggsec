@@ -106,6 +106,65 @@ impl ActiveAttackConfig {
     }
 }
 
+/// Convert an active wireless attack result into a unified `ScanReportData` for reporting.
+///
+/// Maps each `ActiveWirelessFinding` into a `FindingData` with `wireless-active-*` categories
+/// and populates `wireless_networks` from the attack metadata. The bridge enables SARIF/JUnit/HTML/Markdown
+/// reporting for active wireless results via the standard reporting pipeline.
+pub fn to_active_scan_report_data(
+    result: &ActiveWirelessAttackResult,
+) -> crate::output::convert::ScanReportData {
+    use crate::output::convert::{FindingData, WirelessNetworkReportData};
+
+    let findings: Vec<FindingData> = result
+        .findings
+        .iter()
+        .map(|f| {
+            let category = format!("wireless-active-{}", f.attack_type);
+            FindingData {
+                title: f.description.clone(),
+                severity: f.severity.as_str().to_string(),
+                category,
+                description: f.description.clone(),
+                location: result.interface.clone(),
+                evidence: Some(f.evidence.clone()),
+                remediation: Some(f.remediation.clone()),
+                cwe_ids: Vec::new(),
+            }
+        })
+        .collect();
+
+    let wireless_networks = result
+        .target_bssid
+        .as_ref()
+        .map(|bssid| {
+            vec![WirelessNetworkReportData {
+                ssid: String::new(),
+                bssid: bssid.clone(),
+                channel: 0,
+                security_type: "Unknown".to_string(),
+                signal_strength: 0,
+                last_seen: chrono::Utc::now().to_rfc3339(),
+                wps_enabled: false,
+                is_hidden: false,
+                transition_mode: false,
+            }]
+        })
+        .unwrap_or_default();
+
+    crate::output::convert::ScanReportData {
+        target: result.interface.clone(),
+        scan_type: format!("wireless-active-{}", result.attack_type),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        findings,
+        open_ports: Vec::new(),
+        services: Vec::new(),
+        duration_ms: result.duration_secs * 1000,
+        wireless_networks,
+        policy_summary: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,5 +234,65 @@ mod tests {
         let json = serde_json::to_string(&finding).unwrap();
         let deserialized: ActiveWirelessFinding = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.severity, Severity::High);
+    }
+
+    #[test]
+    fn test_to_active_scan_report_data_bridge() {
+        let result = ActiveWirelessAttackResult {
+            interface: "wlan0mon".to_string(),
+            attack_type: "deauth".to_string(),
+            target_bssid: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            target_client: Some("11:22:33:44:55:66".to_string()),
+            frames_sent: 50,
+            duration_secs: 5,
+            dry_run: true,
+            findings: vec![ActiveWirelessFinding {
+                attack_type: "deauth".to_string(),
+                severity: Severity::High,
+                description: "Deauth frames sent to target".to_string(),
+                evidence: "Sent 50 deauth frames to BSSID AA:BB:CC:DD:EE:FF".to_string(),
+                remediation: "Enable 802.11w PMF on AP".to_string(),
+            }],
+            raw_output: None,
+            recommendations: vec!["Check WIPS logs".to_string()],
+        };
+
+        let data = to_active_scan_report_data(&result);
+        assert_eq!(data.target, "wlan0mon");
+        assert_eq!(data.scan_type, "wireless-active-deauth");
+        assert_eq!(data.findings.len(), 1);
+        assert_eq!(data.findings[0].category, "wireless-active-deauth");
+        assert_eq!(data.findings[0].severity, "high");
+        assert!(data.findings[0].evidence.is_some());
+        assert!(data.findings[0].remediation.is_some());
+        assert_eq!(data.wireless_networks.len(), 1);
+        assert_eq!(data.wireless_networks[0].bssid, "AA:BB:CC:DD:EE:FF");
+        assert_eq!(data.duration_ms, 5000);
+
+        // Verify serde roundtrip
+        let json = serde_json::to_string(&data).unwrap();
+        let deserialized: crate::output::convert::ScanReportData =
+            serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.findings.len(), 1);
+    }
+
+    #[test]
+    fn test_to_active_scan_report_data_no_bssid() {
+        let result = ActiveWirelessAttackResult {
+            interface: "wlan0mon".to_string(),
+            attack_type: "deauth".to_string(),
+            target_bssid: None,
+            target_client: None,
+            frames_sent: 0,
+            duration_secs: 0,
+            dry_run: true,
+            findings: vec![],
+            raw_output: None,
+            recommendations: vec![],
+        };
+
+        let data = to_active_scan_report_data(&result);
+        assert_eq!(data.wireless_networks.len(), 0);
+        assert_eq!(data.findings.len(), 0);
     }
 }

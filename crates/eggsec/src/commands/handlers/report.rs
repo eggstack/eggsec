@@ -32,7 +32,18 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                             return Err(anyhow::anyhow!("Input is not ScanReportData and does not match wireless shapes (direct or wrapped last_scan)"));
                         }
                     } else {
-                        return Err(anyhow::anyhow!("Input is not ScanReportData and wireless feature present but could not parse as wireless"));
+                        #[cfg(feature = "wireless-advanced")]
+                        {
+                            if let Ok(a) = serde_json::from_str::<crate::wireless::active::ActiveWirelessAttackResult>(&content) {
+                                crate::wireless::active::to_active_scan_report_data(&a)
+                            } else {
+                                return Err(anyhow::anyhow!("Input is not ScanReportData and does not match wireless shapes (direct, wrapped, or active attack result)"));
+                            }
+                        }
+                        #[cfg(not(feature = "wireless-advanced"))]
+                        {
+                            return Err(anyhow::anyhow!("Input is not ScanReportData and wireless feature present but could not parse as wireless"));
+                        }
                     }
                 }
                 #[cfg(all(not(feature = "wireless"), feature = "mobile"))]

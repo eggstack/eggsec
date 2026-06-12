@@ -1,6 +1,6 @@
 ---
 name: wireless_security_testing
-description: "Wireless network security testing - passive WiFi reconnaissance and basic security analysis (standalone-complete)"
+description: "Wireless network security testing - passive WiFi recon and active attack primitives (deauth/disassoc) for defense validation"
 triggers:
   - wifi
   - wireless
@@ -10,6 +10,9 @@ triggers:
   - ssid
   - bssid
   - handshake
+  - deauth
+  - disassociation
+  - deauthentication
   - access point
   - access point
   - wireless reconnaissance
@@ -23,9 +26,11 @@ metadata:
 
 ## Overview
 
-Eggsec provides wireless network security testing capabilities through the `wireless` module. This enables passive WiFi reconnaissance, security type detection, and identification of weak points in wireless infrastructure (no handshake capture; standalone-complete passive module).
+Eggsec provides wireless network security testing capabilities through the `wireless` module. This includes passive WiFi reconnaissance (security type detection, weak point identification) and active attack primitives (deauthentication, disassociation) for defense validation. Built with `--features wireless` for passive, `--features wireless-advanced` for active.
 
 **Note**: This module is feature-gated behind the `wireless` feature flag.
+
+**Active attacks** (deauth/disassoc) require `--features wireless-advanced`, root/CAP_NET_ADMIN, monitor-mode interface, and `--allow-active-wireless` flag. Lab-only defense validation.
 
 ## Capabilities
 
@@ -38,6 +43,9 @@ Eggsec provides wireless network security testing capabilities through the `wire
 - **Enterprise Security**: Support for WPA-Enterprise configurations
 - **Recommendations**: Actionable guidance + "run repeated scans for rogue observation"
 - **Handshake Analysis**: Not implemented in Eggsec; external tools would be required for active capture/analysis
+- **Active Deauthentication**: Send 802.11 deauth frames (targeted or broadcast) for WIPS/WIDS testing (Phase 1; `wireless-advanced`)
+- **Active Disassociation**: Send 802.11 disassoc frames (bypasses client-side deauth protections) (Phase 1; `wireless-advanced`)
+- **Active Reporting Bridge**: Deauth/disassoc results bridge to `ScanReportData` via `to_active_scan_report_data` for SARIF/JUnit/HTML/etc.
 
 ## Key Types
 
@@ -112,6 +120,19 @@ eggsec wireless wlan0 --repeat 3 --known-good ./lab-aps.txt
 eggsec wireless wlan0 --detect-suspicious
 ```
 
+### Active Attacks (wireless-advanced)
+
+```bash
+# Dry-run deauth (no frames sent; valid JSON; no privileges required)
+sudo eggsec wireless wlan0 deauth --bssid AA:BB:CC:DD:EE:FF --dry-run --json
+
+# Targeted client deauth (lab only)
+sudo eggsec wireless wlan0 deauth --bssid 00:11:22:33:44:55 --client aa:bb:cc:dd:ee:ff --count 30 --allow-active-wireless
+
+# Broadcast deauth (all clients)
+sudo eggsec wireless wlan0 deauth --bssid 00:11:22:33:44:55 --broadcast --count 100 --allow-active-wireless
+```
+
 ### API Usage
 
 ```rust
@@ -159,8 +180,8 @@ Keywords that activate this skill: `wifi`, `wireless`, `wpa`, `wpa2`, `wpa3`, `s
 
 ## Notes
 
-- Passive-only (no injection, deauth, handshake capture, or active attacks).
+- Passive recon is standalone-complete; active attacks (deauth/disassoc) available under `wireless-advanced`.
 - Requires --features wireless + Linux `wireless-tools`/`iwlist` + root/CAP_NET_ADMIN + a managed/up wireless interface for real scans (use `--dry-run --json` for unprivileged/CI planning).
 - Supports --repeat (diffs + temporal summary), --known-good (rogue suppression for lab baselines), --detect-suspicious (full rogue details; summarized by default).
 - Human-readable output summarizes rogue candidates by default; the detection analysis always runs, and `--detect-suspicious` expands the findings list when you need triage detail.
-- See docs/WIRELESS.md (incl. Best Practices + "Integration with Reporting Pipeline" for the optional `to_scan_report_data` bridge + auto-bridge for `eggsec report convert` on native --json; bridged evidence now includes channel/signal/security), architecture/wireless.md (incl. Integration section), plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md (completion), plans/integration-work-plan.md + integration-next-steps-handoff-plan.md. Historical: plans/wireless-first-handoff-plan.md. Active loadout (deauth etc.) designed in `plans/wireless-active-attacks-loadout-design-plan.md` (Phase 1+; `wireless-advanced`; MCP absent). Update this skill post-implementation.
+- See docs/WIRELESS.md (incl. Best Practices + "Integration with Reporting Pipeline" for the optional `to_scan_report_data` bridge + auto-bridge for `eggsec report convert` on native --json; bridged evidence now includes channel/signal/security), architecture/wireless.md (incl. Integration section), plans/wireless-micro-closeout-checklist.md (closeout record), plans/wireless-standalone-completion-plan.md (completion), plans/integration-work-plan.md + integration-next-steps-handoff-plan.md. Historical: plans/wireless-first-handoff-plan.md. Active loadout (deauth/disassoc) implemented in Phase 1; `wireless-advanced` feature; `to_active_scan_report_data` bridge complete; MCP/agent exposure absent (standalone defense-lab).
