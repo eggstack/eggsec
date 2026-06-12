@@ -274,7 +274,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile"]
+full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
@@ -311,6 +311,11 @@ wireless-advanced = ["wireless"]
 
 # Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
 mobile = ["zip", "plist"]
+
+# Mobile dynamic/runtime testing (Android ADB + logcat analysis for lab/defense use only).
+# Depends on base mobile static. Standalone defense-lab surface; heavily gated.
+# Phase 1: device discovery, controlled install/launch/uninstall, runtime log capture + high-signal findings.
+mobile-dynamic = ["mobile"]
 
 # OpenAPI schema ingestion and fuzz target generation
 api-schema = []

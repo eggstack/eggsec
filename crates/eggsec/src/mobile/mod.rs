@@ -7,6 +7,16 @@
 //!
 //! Safety: pure-Rust ZIP + plist + bounded AXML extraction. No shelling out.
 //! All operations are offline on user-supplied lab binaries. Explicit lab-only framing.
+//!
+//! Phase 1 dynamic (Android ADB core + high-signal runtime logcat analysis) is
+//! available under the additional `mobile-dynamic` feature flag. See:
+//!
+//! - plans/mobile-dynamic-phase1-implementation-handoff-plan.md (deliverables 2,4,8,9)
+//! - plans/dynamic-mobile-testing-loadout-design-plan.md (parent design)
+//!
+//! New modules: dynamic.rs (public API + run_dynamic_cli + report types + bridge),
+//!   adb.rs (pure-Rust TCP primary + external adb convenience), runtime.rs (log parser).
+//! Standalone defense-lab surface. Re-exports and types added under cfg(feature = "mobile-dynamic").
 
 use crate::error::{EggsecError, Result};
 use crate::types::Severity;
@@ -15,6 +25,20 @@ use std::path::Path;
 
 pub mod apk;
 pub mod ipa;
+
+#[cfg(feature = "mobile-dynamic")]
+pub mod dynamic;
+#[cfg(feature = "mobile-dynamic")]
+pub mod adb;
+#[cfg(feature = "mobile-dynamic")]
+pub mod runtime;
+
+// Re-export key dynamic types at crate::mobile level for handler/report bridge ergonomics (cfg-gated).
+#[cfg(feature = "mobile-dynamic")]
+pub use dynamic::{
+    run_dynamic_cli, DynamicMobileArgs, DynamicMobileReport, DynamicMobileFinding, LabManifest,
+    format_dynamic_report, to_scan_report_data_dynamic,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MobilePlatform {
@@ -73,15 +97,32 @@ impl MobileScanReport {
 
 /// High-level entry for CLI handlers. Validates path, dispatches to APK or IPA
 /// parser, runs analysis, formats output (json/human), writes -o if provided.
+///
+/// Supports legacy direct path form (MobileArgs { path: Some(..), command: None, ... })
+/// and new subcommand form (command: Some(MobileSubcommand::Static(MobileStaticArgs { path, .. })))
+/// with common flags merged (subcommand flags take precedence for static).
 pub async fn run_cli(args: crate::cli::MobileArgs, _config: &crate::config::EggsecConfig) -> Result<()> {
     let start = std::time::Instant::now();
 
-    let path = Path::new(&args.path);
+    // Resolve effective static path + flags from legacy direct or 'static' subcommand.
+    let (eff_path, eff_json, eff_output, eff_quiet) = match &args.command {
+        Some(crate::cli::MobileSubcommand::Static(s)) => {
+            (s.path.clone(), s.json, s.output.clone(), s.quiet)
+        }
+        _ => {
+            let p = args.path.clone().ok_or_else(|| {
+                EggsecError::Validation("mobile static: path required (legacy or via 'static' subcommand)".to_string())
+            })?;
+            (p, args.json, args.output.clone(), args.quiet)
+        }
+    };
+
+    let path = Path::new(&eff_path);
     if !path.exists() {
-        return Err(EggsecError::Validation(format!("Path does not exist: {}", args.path)));
+        return Err(EggsecError::Validation(format!("Path does not exist: {}", eff_path)));
     }
     if !path.is_file() {
-        return Err(EggsecError::Validation(format!("Path is not a file: {}", args.path)));
+        return Err(EggsecError::Validation(format!("Path is not a file: {}", eff_path)));
     }
 
     let ext = path
@@ -108,7 +149,7 @@ pub async fn run_cli(args: crate::cli::MobileArgs, _config: &crate::config::Eggs
         }
     }
 
-    if !args.quiet {
+    if !eff_quiet {
         eprintln!(
             "NOTE: Mobile static analysis is for authorized lab/defensive validation use only. \
              Provide your own test builds. No dynamic analysis or instrumentation is performed."
@@ -132,15 +173,15 @@ pub async fn run_cli(args: crate::cli::MobileArgs, _config: &crate::config::Eggs
     // Always compute general recommendations (high-signal, lab-focused)
     report.recommendations = build_general_recommendations(&report);
 
-    let output = if args.json {
+    let output = if eff_json {
         serde_json::to_string_pretty(&report)?
     } else {
         format_mobile_report(&report)
     };
 
-    if let Some(ref out_path) = args.output {
+    if let Some(ref out_path) = eff_output {
         tokio::fs::write(out_path, &output).await?;
-        if !args.quiet {
+        if !eff_quiet {
             eprintln!("Results written to {}", out_path);
         }
     } else {
