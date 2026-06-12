@@ -130,6 +130,7 @@ pub fn capture_baseline(report: &DynamicMobileReport) -> MobileBaseline {
 
 /// Compare current report to a baseline; return human-readable regression notes.
 /// Simple structural diff (counts + presence of prior frida signals). No ML.
+/// Phase 4c (partial): also computes "new categories" delta (frida-* + dynamic finding categories) for slightly richer behavioral signal (pure, no deps).
 pub fn compare_to_baseline(current: &DynamicMobileReport, baseline: &MobileBaseline) -> Vec<String> {
     let mut notes = vec![];
     if current.findings.len() as isize - baseline.findings_count as isize > 2 {
@@ -147,6 +148,15 @@ pub fn compare_to_baseline(current: &DynamicMobileReport, baseline: &MobileBasel
             }
         }
     }
+    // Phase 4c partial: lightweight category-set delta (new dynamic/frida categories vs baseline sample)
+    let current_cats: std::collections::HashSet<&str> = current.findings.iter().map(|f| f.category.as_str())
+        .chain(current.frida_instrumentation.iter().flat_map(|fi| fi.script_results.iter().flat_map(|sr| sr.findings.iter().map(|s| s.as_str()))))
+        .collect();
+    let base_cats: std::collections::HashSet<&str> = baseline.frida_findings.iter().map(|s| s.as_str()).collect();
+    let new_cats: Vec<_> = current_cats.difference(&base_cats).copied().collect();
+    if !new_cats.is_empty() {
+        notes.push(format!("regression: {} new categories observed vs baseline (e.g. {})", new_cats.len(), new_cats.iter().take(3).cloned().collect::<Vec<_>>().join(", ")));
+    }
     if notes.is_empty() {
         notes.push("regression: no significant deviation from baseline".to_string());
     }
@@ -155,6 +165,7 @@ pub fn compare_to_baseline(current: &DynamicMobileReport, baseline: &MobileBasel
 
 /// Phase 3c: optional evidence bundle export (gzipped JSON aggregate of report + carriers).
 /// Uses workspace flate2 (no new deps). Best-effort; returns written path or error.
+/// Phase 4c (partial): adds top-level "bundle_manifest" with version/contents counts for better report integration.
 pub fn export_evidence_bundle(
     report: &DynamicMobileReport,
     traffic: Option<&crate::mobile::TrafficSummary>,
@@ -169,6 +180,24 @@ pub fn export_evidence_bundle(
     if let Some(fi) = &report.frida_instrumentation {
         payload["frida_structured"] = serde_json::to_value(&fi.structured_results).unwrap_or(serde_json::json!([]));
     }
+    // Phase 4c: bundle manifest for report integration / consumers (additive, non-breaking)
+    let frida_structured_count = report.frida_instrumentation.as_ref().map(|fi| fi.structured_results.len()).unwrap_or(0);
+    let regression_notes_count = report.frida_instrumentation.as_ref().map(|fi| fi.regression_notes.len()).unwrap_or(0);
+    let has_traffic = traffic.is_some();
+    let has_perm = report.permission_state.is_some();
+    let mut contents: Vec<String> = vec!["report".into()];
+    if has_traffic { contents.push("traffic_summary".into()); }
+    if has_perm { contents.push("permission_state".into()); }
+    if frida_structured_count > 0 { contents.push("frida_structured".into()); }
+    if regression_notes_count > 0 { contents.push("regression_notes".into()); }
+    payload["bundle_manifest"] = serde_json::json!({
+        "version": "1",
+        "contents": contents,
+        "frida_structured_count": frida_structured_count,
+        "regression_notes_count": regression_notes_count,
+        "findings_count": report.findings.len(),
+        "actions_count": report.actions_performed.len(),
+    });
     let bytes = serde_json::to_vec_pretty(&payload)?;
     let file = std::fs::File::create(bundle_path)
         .map_err(|e| crate::error::EggsecError::Validation(format!("bundle create {}: {}", bundle_path, e)))?;
@@ -178,6 +207,40 @@ pub fn export_evidence_bundle(
     enc.finish()
         .map_err(|e| crate::error::EggsecError::Validation(format!("bundle finish: {}", e)))?;
     Ok(bundle_path.to_string())
+}
+
+/// Phase 4c (partial, additive): thin pure convenience for baseline → compare → optional correlate.
+/// Dry-run safe, no side effects, no device/network. Reads a prior MobileBaseline JSON,
+/// runs compare_to_baseline (now with category delta), and if a static baseline report is supplied
+/// also runs correlate_reports to produce a CorrelationResult (timeline + scores).
+/// Returns (regression_notes_vec, optional CorrelationResult).
+/// Exposed for scriptable workflows (users can also call the primitives directly).
+pub fn run_baseline_compare_workflow(
+    baseline_path: &str,
+    current: &DynamicMobileReport,
+    static_baseline: Option<&super::MobileScanReport>,
+) -> (Vec<String>, Option<CorrelationResult>) {
+    let mut notes: Vec<String> = Vec::new();
+    let mut corr: Option<CorrelationResult> = None;
+    match std::fs::read_to_string(baseline_path) {
+        Ok(content) => {
+            if let Ok(bl) = serde_json::from_str::<MobileBaseline>(&content) {
+                notes = compare_to_baseline(current, &bl);
+                if let Some(static_r) = static_baseline {
+                    // Use the high-level engine entrypoint for full result (timeline + summary)
+                    let engine = CorrelationEngine::new();
+                    let res = engine.correlate(static_r, current);
+                    corr = Some(res);
+                }
+            } else {
+                notes.push(format!("workflow: baseline {} had unexpected schema (ignored)", baseline_path));
+            }
+        }
+        Err(e) => {
+            notes.push(format!("workflow: failed to read baseline {}: {}", baseline_path, e));
+        }
+    }
+    (notes, corr)
 }
 
 /// Lab device/app allowlist manifest (loaded from --lab-manifest TOML if provided).
@@ -646,6 +709,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                         else if spec.contains("bypass") { "frida-bypass-validation" }
                         else if spec.contains("api") { "frida-api-trace" }
                         else if spec.contains("secret") { "frida-secret-extract" }
+                        else if spec.contains("native-load") || spec.contains("native_load") { "frida-native-load" }
                         else { "frida-method-trace" };
                     findings.push(DynamicMobileFinding {
                         category: cat.to_string(),
@@ -679,6 +743,8 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                         structured_results.push(serde_json::json!({"type":"frida-api-trace","params_inspected":{"url":"http://ex.test/api"}}));
                     } else if spec.contains("bypass") {
                         structured_results.push(serde_json::json!({"type":"frida-bypass-validation","method":"spec","ts":0}));
+                    } else if spec.contains("native-load") || spec.contains("native_load") {
+                        structured_results.push(serde_json::json!({"type":"frida-native-load","method":"spec","lib":"[sim]","ts":0}));
                     }
                 }
                 frida_instr_for_report = Some(crate::mobile::FridaInstrumentation {
@@ -905,12 +971,13 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                                     structured_results.push(so.clone());
                                 }
                                 for fstr in &res.findings {
-                                    let cat = if fstr.contains("frida-method-trace") { "frida-method-trace" }
-                                        else if fstr.contains("frida-secret-extract") { "frida-secret-extract" }
-                                        else if fstr.contains("frida-bypass") { "frida-bypass-validation" }
-                                        else if fstr.contains("frida-crypto-observation") { "frida-crypto-observation" }
-                                        else if fstr.contains("frida-api-trace") { "frida-api-trace" }
-                                        else { "frida-raw" };
+                                     let cat = if fstr.contains("frida-method-trace") { "frida-method-trace" }
+                                         else if fstr.contains("frida-secret-extract") { "frida-secret-extract" }
+                                         else if fstr.contains("frida-bypass") { "frida-bypass-validation" }
+                                         else if fstr.contains("frida-crypto-observation") { "frida-crypto-observation" }
+                                         else if fstr.contains("frida-api-trace") { "frida-api-trace" }
+                                         else if fstr.contains("frida-native-load") { "frida-native-load" }
+                                         else { "frida-raw" };
                                     let ev = Some(crate::mobile::frida::redact_frida_evidence(&fstr.chars().take(200).collect::<String>()));
                                     findings.push(DynamicMobileFinding {
                                         category: cat.to_string(),
@@ -1459,6 +1526,19 @@ pub fn correlate_findings(
                     enrichment: Some("frida secret + static secret".into()),
                 });
             }
+        }
+        // Phase 4c (partial): supply-chain / native load observation correlation (best-effort)
+        if dcat == "frida-native-load" {
+            let note = "native library load observed at runtime (supply-chain / dynamic code surface)".to_string();
+            df.static_correlation = Some(note.clone());
+            notes.push(CorrelatedFinding {
+                dynamic_category: dcat.to_string(),
+                static_category: "native|manifest".to_string(),
+                note,
+                score: Some(40),
+                correlation_type: Some(CorrelationType::CrossLayer),
+                enrichment: Some("frida native-load + static surface".into()),
+            });
         }
     }
 
@@ -2331,5 +2411,56 @@ W/PackageManager: permission denied: READ_SMS
         // recommendations get the regression bullets (from build_dynamic_recommendations)
         assert!(s.contains("2 regression note(s) from baseline comparison"));
         assert!(s.contains("regression: behavior changed: new crypto call"));
+    }
+
+    // Phase 4c partial delivery tests: native-load builtin surface, workflow helper, bundle manifest, richer regression categories
+    #[test]
+    fn phase4c_native_load_builtin_and_workflow_and_bundle_manifest_and_regression_categories() {
+        // 1. native-load builtin dry path category selection
+        let mut args = DynamicMobileArgs::default();
+        args.dry_run = true;
+        args.frida_scripts = vec!["builtin:native-load".into()];
+        for spec in &args.frida_scripts {
+            let cat = if spec.contains("native-load") || spec.contains("native_load") { "frida-native-load" } else { "frida-raw" };
+            assert_eq!(cat, "frida-native-load");
+        }
+
+        // 2. run_baseline_compare_workflow (pure, dry, no device)
+        let mut cur = DynamicMobileReport::new("wf.apk");
+        cur.findings.push(DynamicMobileFinding { category: "frida-native-load".into(), severity: Severity::Low, title: "n".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None });
+        let mut fi = crate::mobile::FridaInstrumentation::default();
+        fi.script_results.push(crate::mobile::FridaScriptResult { script_source: "builtin:native-load".into(), output: "".into(), findings: vec!["frida-native-load: libfoo".into()], duration_ms: 1, structured_output: None });
+        cur.frida_instrumentation = Some(fi);
+        let bl = MobileBaseline { target: "wf.apk".into(), timestamp: "2026-06-12T00:00:00Z".into(), findings_count: 0, frida_script_count: 0, frida_findings: vec![], actions_sample: vec![] };
+        let bp = std::env::temp_dir().join(format!("eggsec_4c_bl_{}.json", std::process::id()));
+        std::fs::write(&bp, serde_json::to_string(&bl).unwrap()).unwrap();
+        let (notes, corr) = run_baseline_compare_workflow(&bp.to_string_lossy(), &cur, None);
+        assert!(notes.iter().any(|n| n.contains("new categories") || n.contains("no significant")));
+        assert!(corr.is_none()); // no static baseline supplied
+        let _ = std::fs::remove_file(&bp);
+
+        // 3. export_evidence_bundle now includes bundle_manifest (Phase 4c)
+        let mut r = DynamicMobileReport::new("bm.apk");
+        r.frida_instrumentation = Some(crate::mobile::FridaInstrumentation {
+            note: "x".into(),
+            structured_results: vec![serde_json::json!({})],
+            regression_notes: vec!["r".into()],
+            ..Default::default()
+        });
+        let ts = crate::mobile::TrafficSummary::new();
+        let tmp = std::env::temp_dir().join(format!("eggsec_4c_bm_{}.json.gz", std::process::id()));
+        let p = tmp.to_string_lossy().to_string();
+        let out = export_evidence_bundle(&r, Some(&ts), &p).expect("bundle");
+        assert!(std::path::Path::new(&out).exists());
+        let _ = std::fs::remove_file(&p);
+
+        // 4. compare_to_baseline surfaces the Phase 4c "new categories" note
+        let base = MobileBaseline { target: "b".into(), timestamp: "2026-06-12T00:00:00Z".into(), findings_count: 0, frida_script_count: 0, frida_findings: vec!["old".into()], actions_sample: vec![] };
+        let mut cur2 = DynamicMobileReport::new("c".into());
+        let mut fi2 = crate::mobile::FridaInstrumentation::default();
+        fi2.script_results.push(crate::mobile::FridaScriptResult { script_source: "s".into(), output: "".into(), findings: vec!["frida-native-load: new".into()], duration_ms: 1, structured_output: None });
+        cur2.frida_instrumentation = Some(fi2);
+        let ns = compare_to_baseline(&cur2, &base);
+        assert!(ns.iter().any(|n| n.contains("new categories observed vs baseline")));
     }
 }

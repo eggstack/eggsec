@@ -55,6 +55,7 @@ pub use dynamic::{
     format_dynamic_report, to_scan_report_data_dynamic, correlate_findings, CorrelatedFinding,
     correlate_reports, CorrelationEngine, CorrelationResult, CorrelationSummary, CorrelationType,
     MobileBaseline, capture_baseline, compare_to_baseline, export_evidence_bundle,
+    run_baseline_compare_workflow,
 };
 #[cfg(feature = "mobile-dynamic")]
 pub use traffic::{TrafficSummary, parse_traffic_capture};

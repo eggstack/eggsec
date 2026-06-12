@@ -101,6 +101,8 @@ A defense-lab run produces structured output suitable for regression analysis. T
 
 The manifest wraps run-level provenance so that two manifests can be meaningfully compared. A baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline and populate `diff_summary`. The `DiffSummary` type in `crates/eggsec-output/src/diff.rs` and `BaselineComparison` in `crates/eggsec-output/src/baseline.rs` provide the comparison logic.
 
+Mobile dynamic (under `mobile-dynamic` feature) is a standalone defense-lab surface (CLI + local reports + optional `to_scan_report_data_dynamic` bridge; MCP/agent/TUI/pipeline absent). Phase 4c (2026-06-12) added partial supply-chain observation (native-load builtin + correlation), regression enrichment, bundle manifest, and a pure workflow helper; all dry-run safe. See architecture/mobile.md + docs/MOBILE.md.
+
 ## Shared Probe Vocabulary
 
 Defense-lab profiles use the shared `ProbeIntent` and `ProbeRisk` enums defined in `crates/eggsec/src/probe.rs`. These enums are also used by scanner, NSE, WAF, and loadtest modules to tag probes with consistent intent and risk metadata. This enables guardrails and budget enforcement across all assessment modes.

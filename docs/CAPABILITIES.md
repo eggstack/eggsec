@@ -7,7 +7,7 @@ Comprehensive reference of all security testing capabilities available in Eggsec
 - [Reconnaissance Modules](#reconnaissance-modules)
 - [Fuzzing Payload Types](#fuzzing-payload-types)
 - [Detection Modules](#detection-modules)
-- [Mobile App Security (Static Analysis)](#mobile-app-security-static-analysis)
+- [Mobile App Security (Static Analysis)](#mobile-app-security-static-analysis) (dynamic under `mobile-dynamic`; Phase 4c 2026-06-12 partial: supply-chain native-load observation + correlation, regression enrichment, bundle manifest, workflow helper; TUI/MCP/pipeline absent; see docs/MOBILE.md)
 - [Stress Testing Types](#stress-testing-types)
 - [Protocol Implementations](#protocol-implementations)
 - [Scan Profiles](#scan-profiles)
