@@ -79,7 +79,7 @@ pub async fn handle_mobile(
                 allow_dynamic_mobile: dyn_args_cli.allow_dynamic_mobile,
                 lab_manifest: dyn_args_cli.lab_manifest,
                 list_devices: dyn_args_cli.list_devices,
-                // Phase 2 fields
+                // mobile-dynamic extension fields
                 proxy: dyn_args_cli.proxy,
                 reset_proxy: dyn_args_cli.reset_proxy,
                 grant_permissions: dyn_args_cli.grant_permissions,

@@ -7,7 +7,7 @@ SUBCOMMANDS:
 Use 'eggsec mobile static --help' or 'eggsec mobile dynamic --help' for details.
 
 Static: offline manifest/config checks only. No execution or device interaction.
-Dynamic (Phase 1): controlled ADB + logcat analysis on lab devices/emulators you own/authorize. All actions audited. Dry-run supported.
+Dynamic (mobile-dynamic feature, Phase 1 + Phase 2a): controlled ADB + logcat + proxy + traffic-capture + runtime-permission operations on lab devices/emulators you own/authorize. All actions audited. Dry-run supported.
 
 Build with --features mobile (static) or --features mobile-dynamic (dynamic + static).
 
@@ -97,7 +97,8 @@ Examples:
   eggsec mobile dynamic --list-devices
  ";
 
-/// Dynamic mobile args (Phase 1: Android ADB core + log capture).
+/// Dynamic mobile args (Phase 1 ADB core + log capture; Phase 2a proxy +
+/// traffic-capture + runtime-permission operations).
 #[derive(clap::Args, Clone)]
 pub struct DynamicMobileArgs {
     #[arg(help = "Path to .apk (Android test build only) for dynamic run")]
@@ -142,7 +143,7 @@ pub struct DynamicMobileArgs {
     #[arg(long, help = "List reachable devices/emulators via pure-Rust probe (+ external adb convenience if in PATH) and exit. Target APK may be omitted or a placeholder.")]
     pub list_devices: bool,
 
-    // Phase 2 (still under mobile-dynamic feature)
+    // mobile-dynamic extensions: proxy + traffic-capture + runtime-permission operations
     #[arg(long, value_name = "HOST:PORT", help = "Configure device global HTTP proxy for the run (e.g. 127.0.0.1:8080). Requires user-managed MITM CA on device for HTTPS inspection. Device setting only (no auto mitmproxy start).")]
     pub proxy: Option<String>,
     #[arg(long, help = "After run, reset/clear the global HTTP proxy on device (best-effort).")]

@@ -25,12 +25,12 @@ Eggsec classifies operations by risk level:
 | ExploitAdjacent | Exploit-adjacent testing (e.g. chained primitives) | Blocked |
 | (wireless passive) | Passive WiFi recon (iwlist scan, analysis only; no tx/injection/deauth/handshake). Detects security types (incl. WPS/hidden/transition), weak configs, and passive rogue/Evil-Twin heuristic. | Allowed under SafeActive (feature-gated `wireless`; requires root/CAP_NET_ADMIN + wireless-tools/iwlist; authorized lab/defense use only). Use --dry-run for unprivileged planning/CI. --known-good suppresses heuristic for baselines. See docs/WIRELESS.md. |
 | (wireless active, Phase 1) | Active WiFi attacks (deauth, disassoc). Phase 1 implemented: pure-Rust 802.11 frame crafting, Linux raw socket injection, targeted/broadcast deauth, dry-run, packet budgets, policy gate (`Intrusive` risk + `wireless-advanced` feature). See `docs/WIRELESS.md`, `plans/wireless-active-attacks-loadout-design-plan.md`. | Blocked by default; requires `wireless-advanced` feature + `--allow-active-wireless` + lab context |
-| (mobile dynamic) | Dynamic/runtime mobile app testing (controlled ADB/logcat/proxy/Frida etc. under `mobile-dynamic`). Design + gating in `plans/dynamic-mobile-testing-loadout-design-plan.md`. | Blocked by default; requires `mobile-dynamic` feature + lab context + overrides (like wireless-advanced) |
+| (mobile dynamic) | Dynamic/runtime mobile app testing (controlled ADB/logcat/proxy/perms under `mobile-dynamic`). Phase 1 (Android ADB core + logcat) and Phase 2a (proxy Level-1 + runtime permissions + traffic summary + correlation) complete 2026-06-12; design + gating in `plans/dynamic-mobile-testing-loadout-design-plan.md` and handoff plans. | Blocked by default; requires `mobile-dynamic` feature + lab context + overrides (like wireless-advanced) |
 | (mobile static) | Static analysis of user-supplied .apk/.ipa in lab (manifest, permissions, transport config, secrets, debug/backup flags, exported components). No execution, no device interaction. | Allowed under SafeActive (feature-gated `mobile`; dynamic phases per `plans/dynamic-mobile-testing-loadout-design-plan.md`) |
 | RemoteExecution | Remote command execution | Blocked |
 | AgentAutonomous | Agent-driven operations | Blocked |
 
-High-risk operations (e.g. intrusive fuzzing, stress testing, raw packets, credential testing) must be explicitly enabled in your config file. Mobile static (Phase 1) analysis is gated behind the `mobile` feature but classified under SafeActive (no execution, lab binaries only); dynamic design in `plans/dynamic-mobile-testing-loadout-design-plan.md`.
+High-risk operations (e.g. intrusive fuzzing, stress testing, raw packets, credential testing) must be explicitly enabled in your config file. Mobile static analysis is gated behind the `mobile` feature but classified under SafeActive (no execution, lab binaries only); dynamic (Phase 1 + Phase 2a, complete 2026-06-12) is gated behind `mobile-dynamic` and the additional `--allow-dynamic-mobile` runtime confirmation; design in `plans/dynamic-mobile-testing-loadout-design-plan.md`.
 
 ## Authorization Requirements
 
@@ -51,7 +51,7 @@ allow_intrusive_fuzzing = false
 allow_stress_testing = false
 ```
 
-The `mobile` feature (static-only APK/IPA analysis for lab binaries) must be enabled at build time (`--features mobile` or `--features full`). Mobile static (Phase 1) is intended for authorized lab/defense use on user-supplied .apk/.ipa files only; no execution or device interaction occurs; dynamic design in `plans/dynamic-mobile-testing-loadout-design-plan.md`. See `architecture/feature_matrix.md` for feature flags and `docs/CAPABILITIES.md` (Mobile App Security section) for coverage.
+The `mobile` feature (static-only APK/IPA analysis for lab binaries) must be enabled at build time (`--features mobile` or `--features full`). Mobile static is intended for authorized lab/defense use on user-supplied .apk/.ipa files only; no execution or device interaction occurs. The `mobile-dynamic` feature (Android ADB + logcat + Phase 2a proxy + traffic-capture + runtime-permission operations, complete 2026-06-12) must be enabled at build time for `eggsec mobile dynamic ...`; design in `plans/dynamic-mobile-testing-loadout-design-plan.md`. See `architecture/feature_matrix.md` for feature flags and `docs/CAPABILITIES.md` (Mobile App Security section) for coverage.
 
 See `architecture/feature_matrix.md` for feature flags.
 

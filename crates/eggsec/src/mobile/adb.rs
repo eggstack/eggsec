@@ -107,7 +107,9 @@ fn resolve_device_addr(spec: &str) -> Result<SocketAddr> {
         .context("invalid port for adb")
 }
 
-/// Small public API surface for Phase 1 dynamic mobile (emulator-focused).
+/// Small public API surface for dynamic mobile (Phase 1 ADB core + Phase 2a
+/// proxy + runtime-permission helpers). Emulator-focused; tested with duplex
+/// mocks (no live adb required).
 pub struct AdbClient;
 
 impl AdbClient {

@@ -2,16 +2,24 @@
 #
 # scripts/test-mobile-dynamic.sh
 #
-# Documented emulator smoke test for mobile-dynamic (Phase 1 polish + Phase 2a).
-# Per: plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md (P1.2)
+# Documented emulator smoke test for mobile-dynamic (Phase 1 + Phase 2a + final polish
+# + close-out polish; complete 2026-06-12).
+# Per: plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md (P1.2);
+#      plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a);
+#      plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish);
+#      plans/mobile-dynamic-phase2-close-out-polish-plan.md (close-out polish).
 # Parent: plans/mobile-dynamic-phase1-implementation-handoff-plan.md (executed)
 #         plans/dynamic-mobile-testing-loadout-design-plan.md
 #
 # Purpose:
 #   - Always runnable (defaults to --dry-run path; no device/hardware required).
-#   - Exercises the full documented happy-path command line.
+#   - Exercises the full documented happy-path command line for both Phase 1 and Phase 2a.
 #   - Validates that a complete, schema-valid DynamicMobileReport is produced
 #     (with actions_performed audit trail + findings array + bridge-ready shape).
+#   - Validates the Phase 2a report extensions (traffic_summary, permission_state) and
+#     the bridge info findings (mobile-dynamic-android-traffic-summary,
+#     mobile-dynamic-android-permission-state) are emitted under the documented
+#     categories.
 #   - When a real Android emulator/AVD (API 34+) is available and --real is passed
 #     (and ANDROID_SERIAL or emulator detected), optionally exercises the live path
 #     with --install --launch --capture-logs --duration --uninstall-after --allow-dynamic-mobile --json.
@@ -40,10 +48,19 @@
 # can invoke with --real after starting emulator + installing prerequisites.
 #
 # Expected (dry-run): exit 0; JSON contains "dry_run": true, non-empty "actions_performed",
-#   "scan_type": "mobile-dynamic", "findings" array, duration_ms, etc. Human output also valid.
+#   "scan_type": "mobile-dynamic", "findings" array, duration_ms, etc. Human output also
+#   valid. Phase 2a leg additionally validates "traffic_summary" + "permission_state" present
+#   in the JSON (synthetic in dry-run) and that the bridge info findings are emitted.
 #
 # On success for real path: report includes actions like "adb connect", "install", "launch",
 #   "capture_logcat", "uninstall" (best-effort), and any runtime findings emitted by the test APK.
+#
+# Note on close-out polish (per plans/mobile-dynamic-phase2-close-out-polish-plan.md):
+#   This script's dry-run coverage is the primary CI green-path validation for the full
+#   Phase 1 + Phase 2a surface. `correlate_findings` and other polish helpers are
+#   independently validated by unit tests in `crates/eggsec/src/mobile/dynamic.rs`
+#   (see `correlate_findings_populates_static_correlation_for_cleartext_and_permissions`
+#   and friends); they are part of the lib test suite, not the smoke script.
 #
 set -euo pipefail
 
@@ -81,7 +98,7 @@ run_eggsec() {
   fi
 }
 
-echo "=== Mobile Dynamic Smoke Test (Phase 1 polish) ==="
+echo "=== Mobile Dynamic Smoke Test (Phase 1 + Phase 2a + final polish + close-out polish) ==="
 echo "Target: ${APK}"
 echo "Mode: $(if $REAL_MODE; then echo 'REAL (requires --allow-dynamic-mobile + reachable emulator/device)'; else echo 'DRY-RUN (safe, no device touch)'; fi)"
 echo "Repo root: ${REPO_ROOT}"

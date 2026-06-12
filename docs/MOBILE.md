@@ -261,13 +261,16 @@ See `config/policy_decision.rs`, `commands/handlers/mobile.rs`, and the dynamic 
 
 ## Future
 
-- **Phase 2 (static)**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
-- **Phase 2a (2026-06-12)**: Proxy foundation (device global `http_proxy` via `--proxy`; user-managed mitmproxy/CA; `--reset-proxy`; `--traffic-capture` for summary/findings) + runtime permission testing (`--grant-permission`/`--revoke-permission`/`--list-permissions`). `traffic_summary` + `permission_state` in report; bridge categories `mobile-dynamic-android-traffic-summary` etc. Level 1 pragmatic proxy integration. Phase 2a complete per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed; final polish per same plan executed 2026-06-12). Includes `correlate_findings` helper (populates `DynamicMobileFinding.static_correlation` for high-value overlaps: cleartext traffic ↔ static usesCleartextTraffic/network-config; runtime-perm ↔ static declared dangerous perms). Still standalone defense-lab (MCP/agent absent; same pattern as wireless-active + static-mobile + auth-test). No TUI/pipeline/MCP.
-- **Phase 2b+ (future)**: Deeper correlation (initial `correlate_findings` + `static_correlation` delivered in Phase 2 final polish), Frida (gated `mobile-frida` + rooted + heavy policy), etc. per parent design plan.
-- Phase 1 dynamic (Android ADB + logcat) complete 2026-06-12. Phase 2a (proxy + permissions) complete 2026-06-12 (final polish executed 2026-06-12 per `plans/mobile-dynamic-phase2-final-polish-handoff-plan.md`). See `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed), `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed), `plans/mobile-dynamic-phase2-final-polish-handoff-plan.md` (executed), and `plans/dynamic-mobile-testing-loadout-design-plan.md`.
-- Architecture document: `architecture/mobile.md`.
-- TUI tab and `ScanProfile` pipeline profiles (`mobile-static` / `mobile-regression` / dynamic variants) remain aspirational.
+- **Phase 1 static** (closed 2026-06-11): high-signal APK/IPA manifest/config analysis.
+- **Phase 1 dynamic** (closed 2026-06-12 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md`): Android ADB core + runtime logcat analysis.
+- **Phase 2a** (closed 2026-06-12 per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md`): proxy foundation (device global `http_proxy` via `--proxy`; user-managed mitmproxy/CA; `--reset-proxy`; `--traffic-capture` for summary/findings) + runtime permission testing (`--grant-permission`/`--revoke-permission`/`--list-permissions`). `traffic_summary` + `permission_state` in report; bridge categories `mobile-dynamic-android-traffic-summary` etc. Level 1 pragmatic proxy integration.
+- **Phase 2 final polish** (closed 2026-06-12 per `plans/mobile-dynamic-phase2-final-polish-handoff-plan.md`): `correlate_findings` helper (populates `DynamicMobileFinding.static_correlation` for high-value overlaps: cleartext traffic ↔ static `usesCleartextTraffic`/network-config; runtime-perm ↔ static declared dangerous perms), traffic parser robustness + redaction, report surface, doc markers.
+- **Phase 2 close-out polish** (closed 2026-06-12 per `plans/mobile-dynamic-phase2-close-out-polish-plan.md`): final code hygiene (`format_dynamic_report` header renamed to "Runtime extensions"; outdated "Phase 2"/"P1" comments replaced with accurate labels; "stub" framing removed from doc comments; CLI about-string + struct docs updated for Phase 2a; "Phase 2 extensions present" assertions refreshed), smoke-test script header refreshed, decision documented to keep all dynamic functionality under the existing `mobile-dynamic` feature (no `mobile-dynamic-advanced` sub-feature).
+- **Phase 2b+ (future)**: Deeper correlation (initial `correlate_findings` + `static_correlation` already delivered), Frida (gated `mobile-frida` + rooted + heavy policy), iOS dynamic, etc. per parent design plan.
+- **Static Phase 2 (deeper analysis, future)**: Deeper manifest/config analysis, basic library/SDK detection, improved iOS coverage, richer recommendations, and exportable evidence bundles.
+- TUI tab and `ScanProfile` pipeline profiles (`mobile-static` / `mobile-dynamic` / `mobile-regression`) remain aspirational.
 - MCP/agent opt-in after security audit only (intentionally absent for standalone defense-lab surfaces).
+- Recommended lab workflow (now that Phase 2a + polish are closed): static baseline first → dynamic with `--proxy`/`--traffic-capture` for traffic observation → grant/revoke/list for permission exploration → `report convert` for unified SARIF/JUnit/HTML/Markdown/etc. → `report diff`/`trend` against static + prior dynamic reports. All under `--features mobile-dynamic`; lab context + `--allow-dynamic-mobile` + provenance-controlled test builds + `--lab-manifest` (advisory) for real runs.
 
 ## Data Model (Key Types)
 
@@ -297,7 +300,7 @@ pub struct DynamicMobileFinding {
     pub description: String,
     pub recommendation: String,
     pub evidence: Option<String>,
-    /// Populated by `correlate_findings` (Phase 2 final polish) for high-value static ↔ dynamic overlaps.
+    /// Populated by `correlate_findings` for high-value static ↔ dynamic overlaps.
     pub static_correlation: Option<String>,
 }
 
@@ -314,8 +317,8 @@ pub struct DynamicMobileReport {
     pub duration_ms: u64,
     pub actions_performed: Vec<String>,  // full audit trail
     pub dry_run: bool,
-    pub traffic_summary: Option<TrafficSummary>,  // Phase 2a (via --traffic-capture)
-    pub permission_state: Option<PermissionState>, // Phase 2a (via --list-permissions etc.)
+    pub traffic_summary: Option<TrafficSummary>,  // populated when --traffic-capture is provided
+    pub permission_state: Option<PermissionState>, // populated when --list-permissions is provided
 }
 
 pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> ScanReportData { ... }

@@ -8,14 +8,22 @@
 //! Safety: pure-Rust ZIP + plist + bounded AXML extraction. No shelling out.
 //! All operations are offline on user-supplied lab binaries. Explicit lab-only framing.
 //!
-//! Phase 1 dynamic (Android ADB core + high-signal runtime logcat analysis) is
-//! available under the additional `mobile-dynamic` feature flag. See:
+//! Dynamic mobile (Android ADB core + runtime logcat analysis + Phase 2a proxy
+//! foundation + runtime permission operations + Phase 2 final polish correlation)
+//! is available under the additional `mobile-dynamic` feature flag. See:
 //!
-//! - plans/mobile-dynamic-phase1-implementation-handoff-plan.md (deliverables 2,4,8,9)
+//! - plans/mobile-dynamic-phase1-implementation-handoff-plan.md (Phase 1 — executed)
+//! - plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2a — executed)
+//! - plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish — executed)
+//! - plans/mobile-dynamic-phase2-close-out-polish-plan.md (close-out — executed)
 //! - plans/dynamic-mobile-testing-loadout-design-plan.md (parent design)
 //!
-//! New modules: dynamic.rs (public API + run_dynamic_cli + report types + bridge),
-//!   adb.rs (pure-Rust TCP primary + external adb convenience), runtime.rs (log parser).
+//! Modules (all under cfg(feature = "mobile-dynamic")):
+//!   - dynamic.rs: public API + run_dynamic_cli + report types + bridge + correlate_findings
+//!   - adb.rs: pure-Rust TCP primary + external adb convenience
+//!   - runtime.rs: high-signal logcat parser
+//!   - traffic.rs: traffic-capture summary parser (Phase 2a)
+//!
 //! Standalone defense-lab surface. Re-exports and types added under cfg(feature = "mobile-dynamic").
 
 use crate::error::{EggsecError, Result};

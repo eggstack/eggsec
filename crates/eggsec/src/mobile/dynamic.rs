@@ -4,20 +4,29 @@
 //! plans/dynamic-mobile-testing-loadout-design-plan.md): Android ADB core + high-signal
 //! runtime log analysis for lab/defense validation.
 //!
+//! Phase 2a per plans/mobile-dynamic-phase2-implementation-handoff-plan.md (executed 2026-06-12):
+//! proxy foundation (`--proxy`/`--reset-proxy`/`--traffic-capture`) + runtime permission
+//! operations (`--grant-permission`/`--revoke-permission`/`--list-permissions`).
+//! Phase 2 final polish (F2 correlation + F3 parser robustness + F5 report surface + F6 docs)
+//! per plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (executed 2026-06-12).
+//! Phase 2 close-out polish (hygiene + final docs) per
+//! plans/mobile-dynamic-phase2-close-out-polish-plan.md (executed 2026-06-12).
+//!
 //! This file provides the public API surface, report types (DynamicMobileReport / Finding,
 //! LabManifest), the run_dynamic_cli dispatcher, human/JSON formatting, and the
-//! to_scan_report_data_dynamic bridge stub.
+//! to_scan_report_data_dynamic bridge.
 //!
-//! Key behaviors (P1):
+//! Key behaviors:
 //! - dry_run: simulate everything, produce full valid report, zero device/net touch.
 //! - real: load optional --lab-manifest (TOML, advisory), connect via adb, conditional
-//!   install/launch/capture-logs/uninstall, always best-effort cleanup, parse via runtime,
-//!   audit all actions.
-//! - Platform limited to Android in Phase 1.
+//!   install/launch/capture-logs/uninstall + proxy/permission/traffic ops, always
+//!   best-effort cleanup, parse via runtime, audit all actions.
+//! - Platform limited to Android in current scope.
 //! - Standalone defense-lab (MCP/agent exposure absent).
 //!
 //! See also: adb.rs (pure-Rust TCP primary + external adb convenience), runtime.rs (log parser),
-//! mobile/mod.rs reexports, and the handoff plan for full context + safety model.
+//! traffic.rs (capture summary), mobile/mod.rs reexports, and the handoff plans for full
+//! context + safety model.
 
 use crate::error::{EggsecError, Result};
 use crate::types::Severity;
@@ -27,8 +36,10 @@ use std::time::Instant;
 
 use super::{MobileFinding, MobilePlatform};
 
-/// CLI args struct for the dynamic entry point (P1 skeleton; real CLI struct
-/// will live in cli/ and be mapped by handler in later integration).
+/// Internal CLI args consumed by `run_dynamic_cli` (handler maps from
+/// `crate::cli::DynamicMobileArgs` in `cli/mobile.rs` to keep clap concerns out
+/// of the lib surface). Phase 1 ADB core + log capture; Phase 2a proxy + traffic
+/// capture + runtime permission operations. All under the `mobile-dynamic` feature.
 #[derive(Debug, Clone, Default)]
 pub struct DynamicMobileArgs {
     pub target: String,
@@ -47,7 +58,7 @@ pub struct DynamicMobileArgs {
     /// Convenience: list reachable devices (pure-Rust probe + external adb if present) and exit.
     pub list_devices: bool,
 
-    // Phase 2 additions (still under mobile-dynamic; no separate sub-feature for 2a)
+    // mobile-dynamic extensions: proxy + traffic-capture + runtime-permission operations
     /// Optional proxy to configure on device for the run: "host:port" (e.g. 127.0.0.1:8080).
     /// Device will be told to use this as global HTTP proxy (settings put global http_proxy).
     /// Full MITM requires the corresponding CA to be trusted on the device (user-managed for lab).
@@ -66,7 +77,7 @@ pub struct DynamicMobileArgs {
 }
 
 /// Lab device/app allowlist manifest (loaded from --lab-manifest TOML if provided).
-/// Default = empty (advisory only in Phase 1; no hard block).
+/// Default = empty (advisory only; no hard block).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LabManifest {
     pub allowed_device_serials: Vec<String>,
@@ -74,7 +85,7 @@ pub struct LabManifest {
 }
 
 impl LabManifest {
-    /// Load from TOML file (advisory semantics in P1).
+    /// Load from TOML file (advisory semantics).
     pub fn load(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| EggsecError::Validation(format!("failed to read lab manifest {}: {}", path.display(), e)))?;
@@ -94,11 +105,11 @@ pub struct DynamicMobileFinding {
     pub evidence: Option<String>,
     /// Optional link back to a static finding (populated by correlate_findings for high-value overlaps
     /// such as traffic-cleartext ↔ static usesCleartextTraffic/network-config, or runtime-permission
-    /// ↔ static declared dangerous permissions). Phase 2 polish.
+    /// ↔ static declared dangerous permissions).
     pub static_correlation: Option<String>,
 }
 
-/// Lightweight structured note from static ↔ dynamic correlation (Phase 2 polish).
+/// Lightweight structured note from static ↔ dynamic correlation.
 /// Returned by correlate_findings; the primary side-effect is populating
 /// DynamicMobileFinding.static_correlation for matched entries so they serialize
 /// into native reports and bridges.
@@ -114,7 +125,7 @@ pub struct CorrelatedFinding {
 pub struct DynamicMobileReport {
     pub target: String,                 // APK path or package name
     pub scan_type: String,              // "mobile-dynamic"
-    pub platform: MobilePlatform,       // Android only in P1
+    pub platform: MobilePlatform,       // Android only in current scope
     pub device_serial: Option<String>,
     pub app_id: Option<String>,
     pub version: Option<String>,
@@ -126,9 +137,9 @@ pub struct DynamicMobileReport {
     pub actions_performed: Vec<String>,
     pub dry_run: bool,
 
-    // Phase 2 fields (still gated under mobile-dynamic; no separate sub-feature for Phase 2a)
+    // Dynamic extensions: traffic summary + permission snapshot (under mobile-dynamic; no separate sub-feature).
     /// Optional traffic summary (from --proxy usage or --traffic-capture file).
-    /// Summary only (counts, domains, suspicious endpoints); no full bodies in Phase 2a.
+    /// Summary only (counts, domains, suspicious endpoints); no full bodies (summary-only by design).
     pub traffic_summary: Option<crate::mobile::TrafficSummary>,
     /// Optional snapshot of permission state (from --list-permissions or grant/revoke ops).
     /// Stores abbreviated dumpsys or before/after for audit + correlation.
@@ -159,7 +170,7 @@ impl DynamicMobileReport {
 /// High-level dispatcher for `eggsec mobile dynamic ...` (and future TUI/automation).
 /// Mirrors the structure and UX of static `run_cli` in parent mod.
 ///
-/// - Loads lab manifest (if --lab-manifest) — advisory in P1.
+/// - Loads lab manifest (if --lab-manifest) — advisory.
 /// - Dry-run: never touches devices/network; always produces complete, serializable report
 ///   (with simulated actions + optional sample findings).
 /// - Real path: requires --device, uses adb crate, performs requested ops, always attempts
@@ -201,7 +212,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
     let mut actions: Vec<String> = Vec::new();
     let mut findings: Vec<DynamicMobileFinding> = Vec::new();
 
-    // Phase 2 carriers for report fields populated in dry or real paths below
+    // Carriers for traffic_summary + permission_state populated in dry or real paths below
     let mut traffic_sum_for_report: Option<crate::mobile::TrafficSummary> = None;
     let mut perm_state_for_report: Option<String> = None;
 
@@ -210,7 +221,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         match LabManifest::load(Path::new(manifest_path)) {
             Ok(m) => {
                 actions.push(format!(
-                    "loaded lab-manifest ({} allowed devices, {} allowed packages; advisory in P1)",
+                    "loaded lab-manifest ({} allowed devices, {} allowed packages; advisory)",
                     m.allowed_device_serials.len(),
                     m.allowed_packages.len()
                 ));
@@ -247,7 +258,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         if args.uninstall_after {
             actions.push("dry-run: would uninstall-after".to_string());
         }
-        // Phase 2 simulation
+        // Dynamic-extension simulation
         if let Some(ref p) = args.proxy {
             actions.push(format!("dry-run: would configure device global proxy {}", p));
         }
@@ -286,7 +297,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         if args.list_permissions || !args.grant_permissions.is_empty() || !args.revoke_permissions.is_empty() {
             perm_state_for_report = Some("dry-run: simulated permission state after grant/revoke/list".to_string());
         }
-        // P1: include one simulated high-signal finding so report is non-empty and bridge-exercised
+        // Include one simulated high-signal finding so report is non-empty and bridge-exercised
         findings.push(DynamicMobileFinding {
             category: "runtime-permission".to_string(),
             severity: Severity::Low,
@@ -314,14 +325,14 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         }
 
         // Connect / validate reachability (adb module handles pure-Rust TCP for emulator-XXXX or host:port).
-        // We do not retain the connection here; later steps re-connect per operation for simplicity in P1.
+        // We do not retain the connection here; later steps re-connect per operation for simplicity.
         // This produces the audit "connected" entry and fails fast if device is unreachable.
         let _conn = crate::mobile::adb::AdbClient::connect(device)
             .await
             .map_err(|e| EggsecError::Validation(format!("adb connect to {} failed: {}", device, e)))?;
         actions.push(format!("connected to device {}", device));
 
-        // Derive package for launch/uninstall (P1 heuristic; real would parse manifest or require --package)
+        // Derive package for launch/uninstall (heuristic; real would parse manifest or require --package)
         let is_apk_like = target.ends_with(".apk") || Path::new(&target).exists();
         let package: String = if is_apk_like {
             if let Some(ref launch) = args.launch {
@@ -370,7 +381,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             findings.extend(parsed);
         }
 
-        // Phase 2: runtime permission grant/revoke + optional snapshot (before traffic/proxy to allow ordered audit)
+        // Runtime permission grant/revoke + optional snapshot (before traffic/proxy for ordered audit)
         if args.list_permissions || !args.grant_permissions.is_empty() || !args.revoke_permissions.is_empty() {
             let mut conn_p = crate::mobile::adb::AdbClient::connect(device)
                 .await
@@ -406,7 +417,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
         }
 
-        // Phase 2: proxy configuration (device global http_proxy). Level-1 pragmatic: just set the device setting.
+        // Proxy configuration: device global http_proxy (Level-1: just set the device setting; CA trust is user-managed).
         // User is responsible for running mitmproxy (or using Eggsec proxy pool) and trusting the CA on the lab device.
         if let Some(ref proxy_spec) = args.proxy {
             // parse host:port (lenient)
@@ -429,7 +440,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
         }
 
-        // Phase 2: if traffic capture file provided, parse and attach summary + findings
+        // If traffic capture file provided, parse and attach summary + findings
         if let Some(ref cap_path) = args.traffic_capture {
             match tokio::fs::read_to_string(cap_path).await {
                 Ok(content) => {
@@ -473,7 +484,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             actions.push(format!("post-run cleanup: uninstall attempted for {} (best effort)", package));
         }
 
-        // Phase 2: reset proxy at end if requested (best-effort, after app work, before final uninstall if any)
+        // Reset proxy at end if requested (best-effort, after app work, before final uninstall if any)
         if args.reset_proxy {
             if let Ok(mut conn_rs) = crate::mobile::adb::AdbClient::connect(device).await {
                 if conn_rs.clear_global_proxy().await.is_ok() {
@@ -538,7 +549,7 @@ fn build_dynamic_recommendations(report: &DynamicMobileReport) -> Vec<String> {
         recs.push("Review all runtime findings in context of the app's data classification, manifest claims, and threat model.".to_string());
         recs.push("Correlate dynamic observations (e.g. actual permission grants or log leaks) back to static manifest results.".to_string());
     }
-    recs.push("This is ADB + logcat observation only (Phase 1). Future phases add proxy correlation and gated instrumentation.".to_string());
+    recs.push("This is ADB + logcat + proxy-capture observation. Future phases may add active MITM lifecycle and gated instrumentation.".to_string());
     if report.dry_run {
         recs.push("Report generated in --dry-run mode — no device actions were executed.".to_string());
     }
@@ -558,7 +569,7 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
     buf.push_str(&format!("Scan type: {}  |  dry_run: {}\n", report.scan_type, report.dry_run));
     buf.push_str(&format!("Findings: {}  |  Actions logged: {}\n\n", report.findings.len(), report.actions_performed.len()));
     if report.traffic_summary.is_some() || report.permission_state.is_some() {
-        buf.push_str("Phase 2 extensions present:\n");
+        buf.push_str("Runtime extensions:\n");
         if let Some(ref ts) = report.traffic_summary {
             buf.push_str(&format!(
                 "  traffic: requests={}, cleartext={}, domains={}, suspicious={}\n",
@@ -613,7 +624,8 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
     buf
 }
 
-/// Convert DynamicMobileReport into unified ScanReportData (stub but produces valid structure).
+/// Convert DynamicMobileReport into unified ScanReportData for unified report consumers
+/// (mirrors `wireless::to_scan_report_data`).
 /// Categories follow the documented convention: mobile-dynamic-android-*
 pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::output::convert::ScanReportData {
     use crate::output::convert::FindingData;
@@ -633,7 +645,7 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
         })
         .collect();
 
-    // Phase 2: if report carries traffic_summary or permission_state, surface lightweight synthetic findings
+    // If the report carries traffic_summary or permission_state, surface lightweight info findings
     // so that bridged ScanReportData consumers see that extended data was collected (native report has the full structs).
     // If any dynamic findings carry static_correlation (populated by correlate_findings), include a short note.
     let mut extra_findings: Vec<FindingData> = Vec::new();
@@ -693,7 +705,7 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
 }
 
 /// Correlate a static baseline (`MobileScanReport` findings) with dynamic observations.
-/// High-value rules (Phase 2 polish):
+/// High-value correlation rules:
 /// - traffic-cleartext / cleartext-observed (dynamic) ↔ static "manifest" usesCleartextTraffic
 ///   or "network-config" cleartext/user-CA findings.
 /// - runtime-permission (dynamic) ↔ static "permission" (dangerous/overprivileged) by evidence/name match.
@@ -1009,9 +1021,9 @@ W/PackageManager: permission denied: READ_SMS
         assert!(r.traffic_summary.is_some());
         assert!(r.permission_state.is_some());
 
-        // format surfaces the Phase 2 section
+        // format surfaces the Runtime extensions section
         let pretty = format_dynamic_report(&r);
-        assert!(pretty.contains("Phase 2 extensions present:"));
+        assert!(pretty.contains("Runtime extensions:"));
         assert!(pretty.contains("traffic: requests=1, cleartext=1, domains=1, suspicious=1"));
         assert!(pretty.contains("permission_state: captured"));
 
@@ -1052,7 +1064,7 @@ W/PackageManager: permission denied: READ_SMS
         r.actions_performed.push("dry-run: would configure device global proxy 10.0.0.1:8080".into());
 
         let s = format_dynamic_report(&r);
-        assert!(s.contains("Phase 2 extensions present:"));
+        assert!(s.contains("Runtime extensions:"));
         assert!(s.contains("traffic: requests=3, cleartext=1, domains=1, suspicious=1"));
         assert!(s.contains("permission_state: captured (see JSON for details)"));
         assert!(s.contains("would configure device global proxy"));

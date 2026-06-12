@@ -1,16 +1,16 @@
-//! Mobile dynamic traffic summary (Phase 2, under `mobile-dynamic`).
+//! Mobile dynamic traffic summary (under `mobile-dynamic`).
 //!
 //! Provides `TrafficSummary` and a lenient parser for high-level network
 //! observation during dynamic runs.
 //!
-//! Supported inputs (Phase 2a, summary only):
+//! Supported inputs (summary only):
 //! - Plain text logs (mitmproxy-style or ad-hoc) containing request lines with URLs.
 //! - Minimal HAR JSON (log.entries[*].request.url).
 //!
 //! The goal is high-signal summary + a few generated `DynamicMobileFinding`
 //! entries (cleartext endpoints, suspicious patterns) for the report and bridge.
 //! Full body capture, deep inspection, and automatic mitmproxy lifecycle are
-//! out of scope for Phase 2a (see plan).
+//! out of scope by design.
 
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
@@ -122,7 +122,7 @@ fn parse_text_traffic(text: &str, sum: &mut TrafficSummary) {
                 // other schemes ignored for our mobile http focus
             }
         }
-        // Also catch bare hosts in some logs e.g. "Host: api.foo.com" + later path, but for Phase 2a we focus on full URL lines.
+        // Also catch bare hosts in some logs e.g. "Host: api.foo.com" + later path; we focus on full URL lines.
         if l.to_ascii_lowercase().contains("host:") {
             // best effort: if we see "host: foo" and previous context had a scheme-less path, but skip complex reconstruction.
         }
@@ -216,7 +216,7 @@ fn sanitize_for_listing(url: &str) -> String {
     if let Some((pre, _q)) = s.split_once('?') {
         s = pre.to_string();
     }
-    // basic redact in the path portion too (expanded set for Phase 2 polish)
+    // basic redact in the path portion too (expanded pattern set)
     for pat in [
         "api_key=",
         "secret=",
@@ -347,7 +347,7 @@ https://good.test/api?key=sk_live_xxx
         let mut r = crate::mobile::DynamicMobileReport::new("app.apk");
         r.traffic_summary = Some(sum.clone());
         let pretty = crate::mobile::format_dynamic_report(&r);
-        assert!(pretty.contains("Phase 2 extensions present:"));
+        assert!(pretty.contains("Runtime extensions:"));
         assert!(pretty.contains("traffic: requests="));
         // format_dynamic_report surfaces a count-based traffic summary line (domains=N etc.); the actual domain strings
         // live in the native traffic_summary.unique_domains (and in the bridged "mobile-dynamic-android-traffic-summary" info finding description).
