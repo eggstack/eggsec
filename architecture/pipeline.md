@@ -39,6 +39,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 | `waf-regression` | PortScan → Fingerprint → Waf |
 | `protocol-edge` | PortScan → Fingerprint |
 | `nse-safe` | PortScan → Fingerprint → EndpointScan |
+| `db-regression` | PortScan → Fingerprint → EndpointScan → Waf → Fuzz |
 
 **Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, and `jwt` are normalized into canonical stages via `Stage::from_string()`.
 
@@ -153,6 +154,7 @@ Five defense-lab profiles are implemented in `cli/mod.rs:262-266` and mapped to 
 | `waf-regression` | WAF evasion-resistance regression testing | Payload classification focus |
 | `protocol-edge` | Malformed protocol and edge behavior | Requires `packet-inspection` feature |
 | `nse-safe` | Sandboxed NSE scripts (safe/default/version/discovery) | Requires `nse` + `nse-sandbox` features |
+| `db-regression` | Defense-lab family for db-pentest regression; maps to defense-lab stages initially | `db-pentest` feature; full native Stage::DbPentest deferred |
 
 ## Benefits
 
