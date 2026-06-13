@@ -77,6 +77,24 @@ pub struct BudgetUsage {
     pub max_concurrent: Option<u32>,
     /// Peak concurrent connections observed.
     pub peak_concurrent: u32,
+    /// Maximum WebSocket messages per session.
+    #[serde(default)]
+    pub max_ws_messages: Option<u64>,
+    /// WebSocket messages captured so far.
+    #[serde(default)]
+    pub ws_messages_captured: u64,
+    /// Maximum HTTP/2 streams per session.
+    #[serde(default)]
+    pub max_http2_streams: Option<u64>,
+    /// HTTP/2 streams captured so far.
+    #[serde(default)]
+    pub http2_streams_captured: u64,
+    /// Maximum gRPC calls per session.
+    #[serde(default)]
+    pub max_grpc_calls: Option<u64>,
+    /// gRPC calls captured so far.
+    #[serde(default)]
+    pub grpc_calls_captured: u64,
 }
 
 /// Complete session report for an interactive web proxy capture session.

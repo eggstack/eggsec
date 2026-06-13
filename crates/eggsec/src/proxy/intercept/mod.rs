@@ -36,6 +36,7 @@ pub use correlation::{
 use crate::error::{EggsecError, Result};
 use parking_lot::RwLock;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -48,6 +49,7 @@ pub struct ProxyServer {
     addr: SocketAddr,
     cert_generator: CertGenerator,
     rules: Arc<RwLock<RuleSet>>,
+    enhanced_rules: Arc<RwLock<EnhancedRuleSet>>,
     mode: InterceptMode,
 }
 
@@ -57,6 +59,7 @@ impl ProxyServer {
             addr,
             cert_generator: CertGenerator::new(),
             rules: Arc::new(RwLock::new(RuleSet::default())),
+            enhanced_rules: Arc::new(RwLock::new(EnhancedRuleSet::new())),
             mode: InterceptMode::Monitor,
         })
     }
@@ -76,6 +79,11 @@ impl ProxyServer {
         rules.add(rule);
     }
 
+    pub fn add_enhanced_rule(&self, rule: EnhancedRule) {
+        let mut rules = self.enhanced_rules.write();
+        rules.add(rule);
+    }
+
     pub async fn start(&self) -> Result<()> {
         let listener = TcpListener::bind(self.addr)
             .await
@@ -87,12 +95,13 @@ impl ProxyServer {
             match listener.accept().await {
                 Ok((stream, client_addr)) => {
                     let rules = Arc::clone(&self.rules);
+                    let enhanced_rules = Arc::clone(&self.enhanced_rules);
                     let mode = self.mode;
                     let cert_gen = self.cert_generator.clone();
 
                     tokio::spawn(async move {
                         if let Err(e) =
-                            handle_connection(stream, client_addr, rules, mode, cert_gen).await
+                            handle_connection(stream, client_addr, rules, enhanced_rules, mode, cert_gen).await
                         {
                             tracing::debug!("Connection error: {}", e);
                         }
@@ -143,10 +152,32 @@ fn validate_target(host: &str, port: u16) -> Result<()> {
     Ok(())
 }
 
+fn build_rule_context(
+    host: &str,
+    path: &str,
+    method: &str,
+    headers: &HashMap<String, String>,
+    body: Option<&str>,
+    protocol: &str,
+) -> RuleContext {
+    RuleContext {
+        host: host.to_string(),
+        path: path.to_string(),
+        method: method.to_string(),
+        headers: headers.clone(),
+        body: body.map(String::from),
+        body_size: body.map(|b| b.len() as u64),
+        protocol: protocol.to_string(),
+        ws_opcode: None,
+        grpc_method: None,
+    }
+}
+
 async fn handle_connection(
     mut stream: TcpStream,
     _client_addr: SocketAddr,
     rules: Arc<RwLock<RuleSet>>,
+    enhanced_rules: Arc<RwLock<EnhancedRuleSet>>,
     _mode: InterceptMode,
     cert_gen: CertGenerator,
 ) -> Result<()> {
@@ -156,9 +187,9 @@ async fn handle_connection(
     let request = String::from_utf8_lossy(&buf[..n]);
 
     if request.starts_with("CONNECT") {
-        handle_connect_request(stream, &request, rules, cert_gen).await
+        handle_connect_request(stream, &request, rules, enhanced_rules, cert_gen).await
     } else {
-        handle_http_request(stream, &buf[..n], rules).await
+        handle_http_request(stream, &buf[..n], rules, enhanced_rules).await
     }
 }
 
@@ -166,6 +197,7 @@ async fn handle_connect_request(
     mut stream: TcpStream,
     request: &str,
     rules: Arc<RwLock<RuleSet>>,
+    _enhanced_rules: Arc<RwLock<EnhancedRuleSet>>,
     cert_gen: CertGenerator,
 ) -> Result<()> {
     let host_port = request
@@ -262,6 +294,7 @@ async fn handle_http_request(
     mut stream: TcpStream,
     data: &[u8],
     rules: Arc<RwLock<RuleSet>>,
+    enhanced_rules: Arc<RwLock<EnhancedRuleSet>>,
 ) -> Result<()> {
     let request_str = String::from_utf8_lossy(data);
 
@@ -285,6 +318,50 @@ async fn handle_http_request(
             tracing::debug!("HTTP {} {} - {:?}", host, path, rule_action);
         }
         RuleAction::Allow => {}
+    }
+
+    let method = request_str
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().next())
+        .unwrap_or("GET");
+
+    let mut headers = HashMap::new();
+    let mut body_start = None;
+    for (i, line) in request_str.lines().enumerate() {
+        if i == 0 {
+            continue;
+        }
+        if line.is_empty() {
+            body_start = Some(i + 1);
+            break;
+        }
+        if let Some(colon_idx) = line.find(':') {
+            let key = line[..colon_idx].trim().to_string();
+            let value = line[colon_idx + 1..].trim().to_string();
+            headers.insert(key, value);
+        }
+    }
+
+    let request_body = body_start.map(|start| {
+        request_str
+            .lines()
+            .skip(start)
+            .collect::<Vec<_>>()
+            .join("\n")
+    });
+
+    let delay_ms = {
+        let enhanced_rules_guard = enhanced_rules.read();
+        let ctx = build_rule_context(host, path, method, &headers, request_body.as_deref(), "http1");
+        enhanced_rules_guard
+            .evaluate_first(&ctx)
+            .and_then(|r| r.delay_ms)
+    };
+
+    if let Some(ms) = delay_ms {
+        tracing::debug!("Enhanced rule delay: {}ms", ms);
+        tokio::time::sleep(Duration::from_millis(ms)).await;
     }
 
     let response = b"HTTP/1.1 400 Bad Request\r\n\r\n";
@@ -389,5 +466,96 @@ mod tests {
         assert!(is_private_ip("::1".parse().unwrap()));
         assert!(is_private_ip("fc00::1".parse().unwrap()));
         assert!(is_private_ip("fd00::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_build_rule_context() {
+        let mut headers = HashMap::new();
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+        let ctx = build_rule_context(
+            "example.com",
+            "/api/test",
+            "POST",
+            &headers,
+            Some("{\"key\":\"value\"}"),
+            "http1",
+        );
+        assert_eq!(ctx.host, "example.com");
+        assert_eq!(ctx.path, "/api/test");
+        assert_eq!(ctx.method, "POST");
+        assert_eq!(ctx.protocol, "http1");
+        assert_eq!(ctx.headers.get("Content-Type").unwrap(), "application/json");
+        assert_eq!(ctx.body, Some("{\"key\":\"value\"}".to_string()));
+        assert_eq!(ctx.body_size, Some(15));
+    }
+
+    #[test]
+    fn test_build_rule_context_no_body() {
+        let headers = HashMap::new();
+        let ctx = build_rule_context("example.com", "/", "GET", &headers, None, "http1");
+        assert_eq!(ctx.body, None);
+        assert_eq!(ctx.body_size, None);
+    }
+
+    #[test]
+    fn test_proxy_server_with_enhanced_rules() {
+        use crate::proxy::intercept::rules::{RuleCondition, RuleAction};
+
+        let server = ProxyServer::new("127.0.0.1:8080".parse().unwrap()).unwrap();
+        server.add_enhanced_rule(
+            EnhancedRule::new(
+                "test-rule",
+                "Test Rule",
+                RuleCondition::HostMatches("example.com".to_string()),
+                RuleAction::Block,
+            )
+        );
+        let rules = server.enhanced_rules.read();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules.get_by_id("test-rule").unwrap().name, "Test Rule");
+    }
+
+    #[test]
+    fn test_enhanced_rule_evaluation_in_context() {
+        use crate::proxy::intercept::rules::{RuleCondition, RuleAction};
+
+        let mut headers = HashMap::new();
+        headers.insert("Host".to_string(), "example.com".to_string());
+
+        let ctx = build_rule_context(
+            "example.com",
+            "/admin/api",
+            "POST",
+            &headers,
+            Some("secret=data"),
+            "http1",
+        );
+
+        let mut rule_set = EnhancedRuleSet::new();
+        rule_set.add(
+            EnhancedRule::new(
+                "body-inspector",
+                "Body Inspector",
+                RuleCondition::BodyContains("secret".to_string()),
+                RuleAction::Monitor,
+            )
+        );
+        rule_set.add(
+            EnhancedRule::new(
+                "admin-block",
+                "Admin Blocker",
+                RuleCondition::And(vec![
+                    RuleCondition::HostMatches("example.com".to_string()),
+                    RuleCondition::PathMatches("/admin/*".to_string()),
+                ]),
+                RuleAction::Block,
+            )
+        );
+
+        let matches = rule_set.evaluate(&ctx);
+        assert_eq!(matches.len(), 2);
+
+        let first = rule_set.evaluate_first(&ctx).unwrap();
+        assert_eq!(first.id.as_str(), "body-inspector");
     }
 }

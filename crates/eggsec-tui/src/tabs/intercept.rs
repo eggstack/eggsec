@@ -364,9 +364,9 @@ impl InterceptTab {
                 DetailPane::Body => self.render_body(f, area, flow),
                 DetailPane::Manipulations => self.render_manipulations(f, area),
                 DetailPane::Rules => self.render_rules_with_view(f, area),
-                DetailPane::WebSocket => self.render_protocol_placeholder(f, area, "WebSocket"),
-                DetailPane::Http2 => self.render_protocol_placeholder(f, area, "HTTP/2"),
-                DetailPane::Grpc => self.render_protocol_placeholder(f, area, "gRPC"),
+                DetailPane::WebSocket => self.render_protocol_info(f, area, "WebSocket"),
+                DetailPane::Http2 => self.render_protocol_info(f, area, "HTTP/2"),
+                DetailPane::Grpc => self.render_protocol_info(f, area, "gRPC"),
             },
             None => {
                 let placeholder = empty_state_paragraph("Detail", "Select a flow to view details");
@@ -402,7 +402,7 @@ impl InterceptTab {
     }
 
     fn render_rules_content(&self, f: &mut Frame, area: Rect) {
-        let lines = vec![
+        let mut lines = vec![
             Line::from(vec![Span::styled(
                 "Intercept Rules",
                 Style::default()
@@ -437,6 +437,19 @@ impl InterceptTab {
             Line::from("  eggsec proxy intercept --intercept-rule <file>"),
         ];
 
+        if self.selected_rule_view == RuleManagementView::Enhanced {
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![Span::styled(" Enhanced Rules", Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD))]));
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![Span::styled("  Condition Types: ", Style::default().fg(tc!(info))), Span::raw("HostMatches, PathMatches, MethodMatches, HeaderContains, BodyContains, BodySizeGt/Lt")]));
+            lines.push(Line::from(vec![Span::styled("  Combinators: ", Style::default().fg(tc!(info))), Span::raw("AND, OR, NOT for complex conditions")]));
+            lines.push(Line::from(vec![Span::styled("  Protocol: ", Style::default().fg(tc!(info))), Span::raw("ProtocolIs, WebSocketOpcodeIs, GrpcMethodIs")]));
+            lines.push(Line::from(vec![Span::styled("  Actions: ", Style::default().fg(tc!(info))), Span::raw("Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag")]));
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![Span::styled("  Persistence: ", Style::default().fg(tc!(info))), Span::raw("JSON save/load via EnhancedRuleSet")]));
+            lines.push(Line::from("  eggsec proxy intercept --rule-set /path/to/rules.json"));
+        }
+
         let block = Block::default()
             .borders(Borders::ALL)
             .title(format!(" Rules ({:?}) ", self.selected_rule_view));
@@ -444,16 +457,55 @@ impl InterceptTab {
         f.render_widget(paragraph, area);
     }
 
-    fn render_protocol_placeholder(&self, f: &mut Frame, area: Rect, protocol: &str) {
-        let lines = vec![
+    fn render_protocol_info(&self, f: &mut Frame, area: Rect, protocol: &str) {
+        let flow = match self.selected_flow_data() {
+            Some(f) => f,
+            None => {
+                let placeholder = empty_state_paragraph("Protocol", "Select a flow to view protocol details");
+                f.render_widget(placeholder, area);
+                return;
+            }
+        };
+
+        let flow_protocol = &flow.protocol;
+        let mut lines = vec![
             Line::from(vec![Span::styled(
-                format!("{} Protocol View", protocol),
+                format!("{} Protocol Details", protocol),
                 Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
-            Line::from(format!("{} protocol inspection is not yet implemented.", protocol)),
-            Line::from("Coming in a future phase."),
+            Line::from(vec![Span::styled(" Flow Protocol: ", Style::default().fg(tc!(info))), Span::raw(flow_protocol.clone())]),
+            Line::from(""),
         ];
+
+        match protocol {
+            "WebSocket" => {
+                lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("Check Upgrade header for 'websocket' value")]));
+                lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("WebSocket sessions captured during MITM interception")]));
+                lines.push(Line::from(vec![Span::styled(" Manipulation: ", Style::default().fg(tc!(info))), Span::raw("Edit and replay individual frames")]));
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![Span::styled(" Note: ", Style::default().fg(tc!(warning))), Span::raw("WebSocket interception requires tokio-tungstenite")]));
+                lines.push(Line::from(vec![Span::raw("Full frame parsing in Phase 4+.")]));
+            },
+            "HTTP/2" => {
+                lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("HTTP/2 identified by :scheme pseudo-header")]));
+                lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("HTTP/2 streams with ID, priority, window updates")]));
+                lines.push(Line::from(vec![Span::styled(" Streams: ", Style::default().fg(tc!(info))), Span::raw("Multiplexed over single TCP connection")]));
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![Span::styled(" Note: ", Style::default().fg(tc!(warning))), Span::raw("HTTP/2 ALPN negotiation required")]));
+                lines.push(Line::from(vec![Span::raw("Stream demultiplexing in Phase 4+.")]));
+            },
+            "gRPC" => {
+                lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("gRPC identified by Content-Type: application/grpc*")]));
+                lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("gRPC calls with method type, metadata, body")]));
+                lines.push(Line::from(vec![Span::styled(" Methods: ", Style::default().fg(tc!(info))), Span::raw("Unary, ServerStreaming, ClientStreaming, Bidirectional")]));
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![Span::styled(" Note: ", Style::default().fg(tc!(warning))), Span::raw("Binary protobuf decoding best-effort")]));
+                lines.push(Line::from(vec![Span::raw("JSON-transcoded gRPC fully supported.")]));
+            },
+            _ => {},
+        }
+
         let block = Block::default()
             .borders(Borders::ALL)
             .title(format!(" {} ", protocol));
