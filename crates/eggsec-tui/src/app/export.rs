@@ -84,6 +84,7 @@ impl super::App {
             super::tabs::Tab::Wireless => "wireless_results",
             #[cfg(not(feature = "wireless"))]
             super::tabs::Tab::Wireless => "wireless_results",
+            super::tabs::Tab::Intercept => "intercept_results",
         };
 
         let filename = format!("{}.{}", base_name, ext);
@@ -251,6 +252,11 @@ impl super::App {
             }
             super::tabs::Tab::Wireless => {
                 let msg = "Wireless tab: no exportable data available".to_string();
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Warning));
+            }
+            super::tabs::Tab::Intercept => {
+                let msg = "Intercept tab: no exportable data available".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }

@@ -161,6 +161,9 @@ impl super::App {
             super::tabs::Tab::DbPentest => {
                 "Db Pentest - Direct database pentesting (feature not enabled).".to_string()
             }
+            super::tabs::Tab::Intercept => {
+                "Intercept - Interactive web proxy traffic interception (defense-lab only).".to_string()
+            }
             super::tabs::Tab::Cluster => {
                 "Cluster Management - Manage distributed scanning cluster.".to_string()
             }

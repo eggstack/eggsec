@@ -44,6 +44,26 @@ An HTTP/HTTPS intercepting proxy for security testing. Key components:
 - **`InterceptProxy`** (`intercept/interceptor.rs`): Higher-level proxy with `InterceptMode` (Monitor, Intercept, Allow) and channel-based request/response modification.
 - **`RuleSet`** (`intercept/rules.rs`): Evaluates host/path patterns against rules with `RuleAction` variants: `Allow`, `Block`, `Intercept`, `Monitor`, `Modify`.
 
+**Phase 3 additions**: `protocols.rs` (WebSocket/HTTP/2/gRPC types), `correlation.rs` (cross-loadout hooks), enhanced `rules.rs` (complex conditions, persistence).
+
+### Web Proxy / Traffic Interception (`web-proxy` feature)
+
+An interactive MITM proxy for capturing and inspecting HTTP/HTTPS traffic in authorized lab environments.
+
+**Phase 1 (complete)**: MITM server with dynamic SSL cert generation, CA management, rule-based interception, budget-constrained session recording, dry-run reporting with synthetic flows, and policy integration (`OperationRisk::TrafficInterception`; `--allow-web-proxy` for real interception).
+
+**Phase 2 (complete)**: Interactive TUI tab (`Tab::Intercept`) with live flow inspection, header/body detail panes, manipulation audit trail (`ManipulationRecord`), session save/load (JSON), HAR export, intercept rules display, and forward/drop/replay/pause actions. Every edit is recorded as an immutable `ManipulationRecord` with field, before/after values, reason, and timestamp.
+
+**Key types** (`proxy/intercept/types.rs`): `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `ManipulationRecord`, `InterceptSession`, `FlowAction`
+
+**Feature gate**: `web-proxy` (independent of `stress-testing`)
+
+**Policy**: `OperationRisk::TrafficInterception`, `Capability::TrafficInterception`, `--allow-web-proxy` override
+
+**Reporting**: `to_scan_report_data_proxy()` bridge auto-wired in `report convert`
+
+See `architecture/web_proxy.md` and `docs/WEB_PROXY.md` for full details.
+
 ## Key Methods on `ProxyManager`
 
 | Method | Location | Description |

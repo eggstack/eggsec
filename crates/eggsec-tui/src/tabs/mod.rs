@@ -36,6 +36,8 @@ pub mod wireless;
 
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
+#[cfg(feature = "web-proxy")]
+pub mod intercept;
 
 #[cfg(feature = "headless-browser")]
 pub mod browser;
@@ -89,6 +91,8 @@ pub use waf_stress::WafStressTab;
 pub use wireless::WirelessTab;
 #[cfg(feature = "db-pentest")]
 pub use db_pentest::DbPentestTab;
+#[cfg(feature = "web-proxy")]
+pub use intercept::InterceptTab;
 #[cfg(feature = "finding-workflow")]
 pub use workflow::WorkflowTab;
 
@@ -129,6 +133,7 @@ pub enum Tab {
     Wireless = 28,
     Auth = 29,
     DbPentest = 30,
+    Intercept = 31,
 }
 
 impl Tab {
@@ -169,6 +174,7 @@ impl Tab {
                 Tab::History,
                 Tab::Dashboard,
                 Tab::Auth,
+                Tab::Intercept,
             ];
             #[cfg(feature = "advanced-hunting")]
             let tabs = {
@@ -280,6 +286,7 @@ impl Tab {
             28 => Some(Tab::Wireless),
             29 => Some(Tab::Auth),
             30 => Some(Tab::DbPentest),
+            31 => Some(Tab::Intercept),
             _ => None,
         }
     }
@@ -508,6 +515,10 @@ impl Tab {
             Tab::DbPentest => &app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &app.tabs.dashboard,
         }
     }
 
@@ -581,6 +592,10 @@ impl Tab {
             Tab::DbPentest => &mut app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &mut app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &mut app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &mut app.tabs.dashboard,
         }
     }
 
@@ -647,6 +662,10 @@ impl Tab {
             Tab::DbPentest => &app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &app.tabs.dashboard,
         }
     }
 
@@ -713,6 +732,10 @@ impl Tab {
             Tab::DbPentest => &mut app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &mut app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &mut app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &mut app.tabs.dashboard,
         }
     }
 }
@@ -1018,7 +1041,32 @@ mod tests {
         let specs = visible_tab_specs();
         let tabs_from_specs: Vec<Tab> = specs.iter().map(|s| s.tab).collect();
         let all = Tab::all();
-        assert_eq!(tabs_from_specs, all.to_vec());
+
+        // Every visible tab must be in Tab::all()
+        for tab in &tabs_from_specs {
+            assert!(
+                all.contains(tab),
+                "Visible tab {:?} should be in Tab::all()",
+                tab
+            );
+        }
+
+        // Tab::all() must contain all visible tabs (may have extra when feature-gated)
+        // This checks that when web-proxy is disabled, Intercept is still in Tab::all()
+        // but not in visible specs - which is the expected behavior
+        for tab in all.iter() {
+            if tabs_from_specs.contains(tab) {
+                // This tab is visible - verify order matches
+                let pos_in_specs = tabs_from_specs.iter().position(|t| t == tab);
+                let pos_in_all = all.iter().position(|t| t == tab);
+                assert_eq!(
+                    pos_in_specs, pos_in_all,
+                    "Visible tab {:?} should be in same position in both lists",
+                    tab
+                );
+            }
+        }
+
         for s in &specs {
             assert_eq!(s.title, s.tab.title());
             assert_eq!(s.stable_id, s.tab.stable_id());

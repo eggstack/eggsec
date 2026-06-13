@@ -41,6 +41,8 @@ pub struct TabStore {
     pub wireless: tabs::WirelessTab,
     #[cfg(feature = "db-pentest")]
     pub db_pentest: tabs::DbPentestTab,
+    #[cfg(feature = "web-proxy")]
+    pub intercept: tabs::InterceptTab,
 }
 
 impl TabStore {
@@ -86,6 +88,8 @@ impl TabStore {
             wireless: tabs::WirelessTab::new(),
             #[cfg(feature = "db-pentest")]
             db_pentest: tabs::DbPentestTab::new(),
+            #[cfg(feature = "web-proxy")]
+            intercept: tabs::InterceptTab::new(),
         }
     }
 }

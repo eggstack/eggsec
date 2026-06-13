@@ -20,6 +20,7 @@ Eggsec classifies operations by risk level:
 | Intrusive | Fuzzing, injection testing | Blocked |
 | LoadTest | Load testing | Blocked |
 | StressTest | Stress testing | Blocked |
+| TrafficInterception | Interactive web proxy / MITM traffic interception (HTTP + HTTPS) | Blocked |
 | RawPacket | Raw packet operations | Blocked |
 | CredentialTesting | Auth testing (auth-test CLI only; local `Auth*` types; see architecture/auth.md) | Blocked |
 | ExploitAdjacent | Exploit-adjacent testing (e.g. chained primitives) | Blocked |
@@ -28,6 +29,7 @@ Eggsec classifies operations by risk level:
 | (mobile dynamic) | Dynamic/runtime mobile app testing (controlled ADB/logcat/proxy/perms under `mobile-dynamic`). Phase 1 (Android ADB core + logcat) and Phase 2 (proxy Level-1 + runtime permissions + traffic summary + correlation; closed 2026-06-12 per `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md`) complete; design + gating in `plans/dynamic-mobile-testing-loadout-design-plan.md` and handoff plans. Phase 3/4a (Frida + CorrelationEngine + baseline/regression/evidence + polish handoff) delivered 2026-06-12 under single mobile-dynamic per phase3/phase4 + phase4a-final-polish-handoff-plan.md (executed). | Blocked by default; requires `mobile-dynamic` feature + lab context + overrides (like wireless-advanced) |
 | (mobile static) | Static analysis of user-supplied .apk/.ipa in lab (manifest, permissions, transport config, secrets, debug/backup flags, exported components). No execution, no device interaction. | Allowed under SafeActive (feature-gated `mobile`; dynamic phases per `plans/dynamic-mobile-testing-loadout-design-plan.md`) |
 | (db pentest) | Direct Postgres/MySQL/MSSQL/MongoDB/Redis security assessment (lab-only, non-web). Phase 1-5: checks + manifest + bridge + real MSSQL tiberius + TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks behind `--allow-db-pentest-advanced` + correlation engine with scoring + native `Stage::DbPentest` + evidence bundle v2 + MongoDB/Redis engines + cross-DB correlation + compliance mapping (OWASP/PCI/HIPAA) + optional MCP via `db-pentest-mcp` marker. | Blocked by default; requires `db-pentest` feature + `--allow-db-pentest` for non-dry real runs; dry-run always safe; standalone defense-lab. |
+| (web proxy) | Interactive HTTP/HTTPS MITM proxy for authorized lab traffic inspection. Phase 1 (dry-run + synthetic flows + reporting bridge) complete; real MITM deferred to Phase 2. Feature-gated `web-proxy`; `TrafficInterception` risk + `--allow-web-proxy` for non-dry real runs; dry-run always safe; `OperationRisk::SafeActive` for dry-run (no network/listen). Standalone defense-lab (no MCP/agent). See `docs/WEB_PROXY.md`, `architecture/web_proxy.md`. |
 | RemoteExecution | Remote command execution | Blocked |
 | AgentAutonomous | Agent-driven operations | Blocked |
 

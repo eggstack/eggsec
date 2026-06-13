@@ -6,9 +6,9 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 | Metric | Count |
 |--------|-------|
-| Total features | 29 |
+| Total features | 30 |
 | Features with deps | 16 |
-| Marker-only features | 13 |
+| Marker-only features | 14 |
 | In `full` | 17 |
 
 ## Feature Table
@@ -41,6 +41,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
 | `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition/rogue heuristic). **Passive Phase 0 (2026-06-11)**; active phases gated by `wireless-advanced` per `plans/wireless-active-attacks-loadout-design-plan.md`. |
 | `wireless-advanced` | yes | yes (`wireless`) | - | `wireless/active/` | Stable | `cargo check -p eggsec --features wireless-advanced` (active deauth/disassoc under `wireless <iface> deauth`; lab-only, requires `--allow-active-wireless`, monitor-mode interface, root/CAP_NET_ADMIN; dry-run default; policy gate `Intrusive` + `wireless-advanced` feature; TUI active mode with the same task/confirmation flow). **Phase 1 complete 2026-06-12**; Phase 2+ (handshake capture, etc.) per `plans/wireless-active-attacks-loadout-design-plan.md`. Not included in `full`. |
+| `web-proxy` | yes | no | - | `proxy/` | Stable | `cargo check -p eggsec --features web-proxy` (interactive HTTP/HTTPS MITM proxy; Phase 1 (2026-06-12): dry-run + synthetic flows + reporting bridge + `TrafficInterception` risk tier + `--allow-web-proxy`; Phase 2: real MITM server deferred). Not included in `full`. |
 | `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` **Static Phase 1 complete 2026-06-11**; dynamic loadout shipped under `mobile-dynamic` (Phase 1 + Phase 2a + final polish + close-out polish complete 2026-06-12; design per `plans/dynamic-mobile-testing-loadout-design-plan.md`; like wireless active). |
 | `db-pentest` | yes | yes (`sqlx` shared) | yes | `db_pentest/` | Stable | `cargo check -p eggsec --features db-pentest` (Phase 1 complete 2026-06-12: postgres/mysql + manifest + bridge; Phase 2 executed on main 2026-06-12: real MSSQL via tiberius behind marker `db-pentest-mssql-tiberius`, docker lab services + --real smoke, combined web-SQLi+db example artifact with db-* + sqli-* via manual combination + report convert, qcount cleanup, full parity; Phase 3 2026-06-12: TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks + correlation/evidence stubs; Phase 4 2026-06-12: full real advanced execution + correlation engine with scoring + native `Stage::DbPentest` + evidence bundle v2; Phase 5 2026-06-12: MongoDB/Redis engines + cross-DB correlation + compliance mapping + optional MCP via `db-pentest-mcp` marker; standalone defense-lab; dry-run safe; real requires `--allow-db-pentest`; local types + optional `to_scan_report_data_db` bridge auto-wired in report convert; TUI tab `Tab::DbPentest` under feature). See `plans/database-pentesting-phase1-foundation-handoff-plan.md` (executed) + `plans/database-pentesting-phase2-mssql-and-polish-handoff-plan.md` (executed + closed) + `plans/database-pentesting-phase3-advanced-and-integration-handoff-plan.md` (executed). |
 | `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |

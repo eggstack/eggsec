@@ -251,6 +251,7 @@ pub enum ConfirmationClass {
     PrivateResolution,
     CrossHostRedirect,
     TargetExpansion,
+    TrafficInterception,
 }
 
 impl ConfirmationClass {
@@ -265,6 +266,7 @@ impl ConfirmationClass {
             ConfirmationClass::PrivateResolution => "private-resolution",
             ConfirmationClass::CrossHostRedirect => "cross-host-redirect",
             ConfirmationClass::TargetExpansion => "target-expansion",
+            ConfirmationClass::TrafficInterception => "traffic-interception",
         }
     }
 }
@@ -278,6 +280,7 @@ pub struct ManualOverride {
     pub allow_explicit_exclusion: bool,
     pub allow_high_risk: bool,
     pub allow_db_pentest: bool,
+    pub allow_web_proxy: bool,
     pub allow_nonbaseline_capability: bool,
     pub allow_private_resolution: bool,
     pub allow_cross_host_redirect: bool,
@@ -299,6 +302,7 @@ impl ManualOverride {
             ConfirmationClass::CrossHostRedirect => self.allow_cross_host_redirect,
             ConfirmationClass::ExplicitExclusion => self.allow_explicit_exclusion,
             ConfirmationClass::HighRisk => self.allow_high_risk || self.allow_db_pentest,
+            ConfirmationClass::TrafficInterception => self.allow_web_proxy,
             ConfirmationClass::NonBaselineCapability => self.allow_nonbaseline_capability,
         }
     }

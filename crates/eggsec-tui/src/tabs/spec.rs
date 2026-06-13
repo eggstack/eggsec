@@ -450,6 +450,19 @@ pub static TAB_SPECS: &[TabSpec] = &[
         operation: Some("db-pentest"),
         direct_launch: true,
     },
+    TabSpec {
+        tab: Tab::Intercept,
+        stable_id: "intercept",
+        title: "Intercept",
+        cli_command: "eggsec proxy intercept",
+        description: "Interactive web proxy traffic interception (defense-lab only)",
+        category: TabCategory::Traffic,
+        risk_group: TabRiskGroup::Intrusive,
+        feature: Some("web-proxy"),
+        breadcrumb_label: "Web Proxy / Intercept",
+        operation: Some("proxy-intercept"),
+        direct_launch: true,
+    },
 ];
 
 pub fn tab_specs() -> &'static [TabSpec] {
@@ -567,6 +580,12 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
     let specs = {
         let mut t = specs;
         t.push(spec_for(Tab::DbPentest).unwrap());
+        t
+    };
+    #[cfg(feature = "web-proxy")]
+    let specs = {
+        let mut t = specs;
+        t.push(spec_for(Tab::Intercept).unwrap());
         t
     };
     specs

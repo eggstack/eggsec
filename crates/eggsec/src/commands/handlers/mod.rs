@@ -27,6 +27,8 @@ pub mod wireless;
 pub mod mobile;
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
+#[cfg(feature = "web-proxy")]
+pub mod web_proxy;
 pub use config::*;
 pub use doctor::*;
 pub use explain::*;
@@ -69,6 +71,8 @@ pub use wireless::*;
 pub use mobile::*;
 #[cfg(feature = "db-pentest")]
 pub use db_pentest::*;
+#[cfg(feature = "web-proxy")]
+pub use web_proxy::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -322,6 +326,13 @@ impl CommandContext {
                                     None
                                 }
                             }
+                            crate::config::ConfirmationClass::TrafficInterception => {
+                                if !self.manual_override.allow_web_proxy {
+                                    Some("--allow-web-proxy")
+                                } else {
+                                    None
+                                }
+                            }
                         })
                         .collect();
                     let classes_list = classes_str(&required);
@@ -417,6 +428,10 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Report(args)) => handle_report(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Stress(args)) => handle_stress(ctx, args).await,
+        #[cfg(feature = "web-proxy")]
+        Some(Commands::ProxyIntercept(args)) => {
+            web_proxy::handle_proxy_intercept(ctx, args).await
+        }
         #[cfg(feature = "stress-testing")]
         Some(Commands::Proxy(args)) => handle_proxy(ctx, args).await,
         Some(Commands::Cluster(args)) => handle_cluster(ctx, args).await,

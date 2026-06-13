@@ -79,6 +79,7 @@ async fn main() -> Result<()> {
         allow_explicit_exclusion: cli.allow_excluded_target,
         allow_high_risk: cli.allow_high_risk,
         allow_db_pentest: cli.allow_db_pentest,
+        allow_web_proxy: cli.allow_web_proxy,
         allow_nonbaseline_capability: cli.allow_nonbaseline_capability,
         allow_private_resolution: cli.allow_private_resolution,
         allow_cross_host_redirect: cli.allow_cross_host_redirect,

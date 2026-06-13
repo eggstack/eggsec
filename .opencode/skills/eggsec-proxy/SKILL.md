@@ -7,6 +7,16 @@ Intercepting proxy module workflows and patterns for traffic inspection.
 ### Intercepting Proxy
 `proxy/intercept/` - Intercepting proxy with dynamic SSL certificates.
 
+### Phase 3 Types
+- `EnhancedRule` / `EnhancedRuleSet` — Enhanced rule engine with complex conditions
+- `RuleCondition` — AND/OR/NOT condition combinators
+- `RuleContext` — Context for rule evaluation
+- `WebSocketSession` / `WebSocketMessage` — WebSocket interception types
+- `Http2Session` / `Http2Stream` — HTTP/2 stream tracking
+- `GrpcSession` / `GrpcCall` — gRPC call interception
+- `CorrelationContext` / `CorrelationReference` — Cross-loadout correlation
+- `ProxyProtocol` — Protocol detection enum
+
 ### Safe Logging
 `proxy` module uses `to_log_key()` for safe logging of sensitive data.
 

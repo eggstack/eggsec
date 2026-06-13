@@ -26,6 +26,8 @@ pub mod wireless;
 pub mod mobile;
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
+#[cfg(feature = "web-proxy")]
+pub mod web_proxy;
 
 pub use ci::*;
 pub use cluster::*;
@@ -55,6 +57,9 @@ pub use mobile::*;
 
 #[cfg(feature = "db-pentest")]
 pub use db_pentest::*;
+
+#[cfg(feature = "web-proxy")]
+pub use web_proxy::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -175,6 +180,13 @@ pub struct Cli {
     #[arg(
         long,
         global = true,
+        help = "Allow traffic interception / MITM proxy operations (narrow override, audited)"
+    )]
+    pub allow_web_proxy: bool,
+
+    #[arg(
+        long,
+        global = true,
         help = "Allow non-baseline capabilities (manual-only)"
     )]
     pub allow_nonbaseline_capability: bool,
@@ -285,6 +297,16 @@ pub enum Commands {
     Vuln(VulnArgs),
     #[command(about = "Database storage and query operations", long_about = STORAGE_ABOUT)]
     Storage(StorageArgs),
+
+    // --- Web proxy operations (standalone defense-lab) ---
+    #[cfg(feature = "web-proxy")]
+    #[command(
+        about = "Interactive web proxy / traffic interception (defense-lab only)",
+        long_about = "Start an interactive MITM proxy for capturing and inspecting HTTP/HTTPS traffic.\n\n\
+                      WARNING: This tool is for authorized lab/defense environments only.\n\
+                      Traffic interception may be illegal without proper authorization."
+    )]
+    ProxyIntercept(ProxyInterceptArgs),
 
     // --- Stress testing operations ---
     #[cfg(feature = "stress-testing")]
