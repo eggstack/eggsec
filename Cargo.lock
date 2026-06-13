@@ -1750,6 +1750,7 @@ dependencies = [
  "eventsource-stream",
  "flate2",
  "futures",
+ "h2",
  "hdrhistogram",
  "headless_chrome",
  "hex",

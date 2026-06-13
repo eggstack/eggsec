@@ -46,6 +46,8 @@ An HTTP/HTTPS intercepting proxy for security testing. Key components:
 
 **Phase 3 additions**: `protocols.rs` (WebSocket/HTTP/2/gRPC types), `correlation.rs` (cross-loadout hooks), enhanced `rules.rs` (complex conditions, persistence).
 
+**Phase 4 additions**: Pipeline profile (`ScanProfile::WebProxy`, `Stage::WebProxy`), MCP proxy surface (12 tools via `web-proxy-mcp` marker feature), evidence bundle v2 (`EvidenceBundle`/`BundleManifest` in `types.rs`), performance optimizations (`FlowBuffer` LRU-evicting buffer in `buffer.rs`, `ProxyMetrics` in `metrics.rs`), real WebSocket/HTTP2 protocol backends (`tokio-tungstenite`, `h2`). MCP tool types in `mcp.rs` (`WebProxyToolSchema`/`WebProxyToolCall`).
+
 ### Web Proxy / Traffic Interception (`web-proxy` feature)
 
 An interactive MITM proxy for capturing and inspecting HTTP/HTTPS traffic in authorized lab environments.

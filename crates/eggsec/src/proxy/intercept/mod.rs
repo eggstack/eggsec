@@ -7,6 +7,7 @@
 //! - Configurable interception rules
 
 mod bridge;
+mod bundle;
 mod cert;
 mod interceptor;
 pub mod protocols;
@@ -15,6 +16,7 @@ pub mod types;
 pub mod correlation;
 
 pub use bridge::to_scan_report_data_proxy;
+pub use bundle::{EvidenceBundle, BundleManifest, export_evidence_bundle, import_evidence_bundle};
 pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
 pub use rules::{

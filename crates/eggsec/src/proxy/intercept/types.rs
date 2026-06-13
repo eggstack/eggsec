@@ -1,5 +1,5 @@
 use crate::error;
-use crate::proxy::intercept::correlation::CorrelationContext;
+use crate::proxy::intercept::correlation::{CorrelationContext, CorrelationReference};
 use crate::proxy::intercept::protocols::{GrpcSession, Http2Session, WebSocketSession};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -147,6 +147,9 @@ pub struct WebProxySessionReport {
     /// Cross-loadout correlation context.
     #[serde(default)]
     pub correlation: Option<CorrelationContext>,
+    /// Cross-loadout correlation references for evidence bundles.
+    #[serde(default)]
+    pub correlation_refs: Vec<CorrelationReference>,
 }
 
 impl WebProxySessionReport {
@@ -175,6 +178,7 @@ impl WebProxySessionReport {
             http2_sessions: Vec::new(),
             grpc_sessions: Vec::new(),
             correlation: None,
+            correlation_refs: Vec::new(),
         }
     }
 
@@ -529,6 +533,50 @@ pub struct HarTimings {
     pub receive: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+}
+
+/// Configurable flow buffer with LRU eviction for high-volume sessions.
+pub struct FlowBuffer {
+    flows: Vec<ProxyFlow>,
+    max_size: usize,
+}
+
+impl FlowBuffer {
+    pub fn new(max_size: usize) -> Self {
+        Self {
+            flows: Vec::with_capacity(max_size.min(10000)),
+            max_size,
+        }
+    }
+
+    pub fn push(&mut self, flow: ProxyFlow) {
+        if self.flows.len() >= self.max_size {
+            self.flows.remove(0); // LRU eviction: remove oldest
+        }
+        self.flows.push(flow);
+    }
+
+    pub fn flows(&self) -> &[ProxyFlow] {
+        &self.flows
+    }
+
+    pub fn len(&self) -> usize {
+        self.flows.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.flows.is_empty()
+    }
+}
+
+/// Runtime performance telemetry for proxy sessions.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProxyMetrics {
+    pub flows_per_second: f64,
+    pub rule_eval_time_ms: f64,
+    pub memory_usage_bytes: u64,
+    pub active_connections: u32,
+    pub total_rules_evaluated: u64,
 }
 
 #[cfg(test)]

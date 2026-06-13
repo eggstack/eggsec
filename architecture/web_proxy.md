@@ -61,11 +61,11 @@ Standalone defense-lab surface for interactive MITM (Man-in-the-Middle) HTTP/HTT
 
 ## Feature Flag
 
-`web-proxy` — marker-only feature (no new runtime dependencies). Enables the `proxy-intercept` CLI subcommand, handler, types, bridge, and policy integration. Included in `full` feature set.
+`web-proxy` — marker-only feature (no new runtime dependencies). Enables the `proxy-intercept` CLI subcommand, handler, types, bridge, and policy integration. Included in `full` feature set. Phase 4 adds `web-proxy-mcp` marker feature for optional MCP tool exposure.
 
 ## Status
 
-**Phase 1 (dry-run complete, 2026-06-12)**. All core types, cert generation, intercept engine, rule engine, dry-run report path, policy integration (`OperationRisk::TrafficInterception`, `ConfirmationClass::TrafficInterception`, `--allow-web-proxy`), CLI args, handler with `evaluate_and_enforce_operation`, and `to_scan_report_data_proxy` bridge are implemented and tested. Dry-run produces a complete synthetic `WebProxySessionReport` with zero network interaction. Real traffic interception is a Phase 2 item — the handler currently bails with a clear message directing users to `--dry-run`. TUI tab, MCP/agent exposure, and pipeline integration are not planned in this round.
+**Phase 4 (complete, 2026-06-12)**. All core types, cert generation, intercept engine, rule engine, dry-run report path, policy integration (`OperationRisk::TrafficInterception`, `ConfirmationClass::TrafficInterception`, `--allow-web-proxy`), CLI args, handler with `evaluate_and_enforce_operation`, and `to_scan_report_data_proxy` bridge are implemented and tested. TUI tab (`Tab::Intercept`) with live flow inspection, editing, HAR export, and manipulation audit trail complete (Phase 2). Advanced protocols (WebSocket/HTTP/2/gRPC) and enhanced rule engine complete (Phase 3). Pipeline integration (`ScanProfile::WebProxy`), MCP proxy surface (12 tools via `web-proxy-mcp`), evidence bundle v2, performance optimizations (`FlowBuffer`, `ProxyMetrics`), and real WebSocket/HTTP2 backends complete (Phase 4).
 
 ## Policy Integration
 
@@ -92,9 +92,9 @@ See `docs/USAGE.md` (Output Models), `crates/eggsec/src/proxy/intercept/`, `comm
 Web proxy follows the consolidated standalone defense-lab pattern:
 
 - **CLI primary**: `eggsec proxy-intercept` subcommand (feature-gated behind `web-proxy`).
-- **No TUI tab**: Not planned in Phase 1/2 (aspirational for Phase 3+).
-- **No MCP/agent**: Not registered as a `SecurityTool` in the tool registry. Not listed or callable via MCP `tools/list` / `tools/call` or agentic dispatch. This is intentional for Phase 1.
-- **No pipeline**: Does not participate in `ScanProfile` pipeline stages or dedicated profiles.
+- **TUI tab**: `Tab::Intercept` (Phase 2 complete) with live flow inspection, header/body editing, forward/drop/replay/pause, rules display, session management, HAR export, and manipulation audit trail.
+- **MCP proxy surface**: 12 tools via `web-proxy-mcp` marker feature (list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle). See Phase 4 below.
+- **Pipeline integration**: `ScanProfile::WebProxy` / `Stage::WebProxy` (Phase 4). See Phase 4 below.
 - **Optional bridge**: `to_scan_report_data_proxy()` for unified reporting consumers (auto-bridged in `report convert`).
 - Policy enforcement uses the same `CommandContext::evaluate_and_enforce_operation` + `EnforcementContext` path as wireless/mobile/auth-test/db-pentest.
 
@@ -163,6 +163,46 @@ See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases
 | `proxy-grpc-session` | Per gRPC session |
 | `proxy-correlation-summary` | Session correlation summary |
 
+## Phase 4: Pipeline, MCP, Evidence Bundles & Performance (2026-06-12)
+
+### Pipeline Profile Integration
+
+- `ScanProfile::WebProxy` — pipeline profile for web proxy interception assessments.
+- `Stage::WebProxy` — pipeline stage that runs the proxy interception workflow within the standard assessment pipeline.
+- Enables `eggsec scan --profile web-proxy` for automated proxy-based assessments.
+
+### MCP Proxy Surface
+
+- 12 MCP tools exposed via `web-proxy-mcp` marker feature:
+  - `proxy_list_flows` — list captured flows with filtering
+  - `proxy_inspect_flow` — inspect full request/response details
+  - `proxy_edit_request` / `proxy_edit_response` — modify request/response headers and body
+  - `proxy_manage_rules` — add/remove/update intercept rules
+  - `proxy_session_save` / `proxy_session_load` — persist and restore sessions
+  - `proxy_har_export` — export session as HAR format
+  - `proxy_evidence_bundle` — export evidence bundle for multi-loadout correlation
+  - Additional tools for flow actions (forward/drop/replay) and session management
+- Tools are registered via `WebProxyToolSchema` / `WebProxyToolCall` types in `proxy/intercept/mcp.rs`.
+- MCP exposure is gated by `web-proxy-mcp` marker feature (requires `web-proxy`).
+
+### Evidence Bundle v2
+
+- `EvidenceBundle` / `BundleManifest` types in `proxy/intercept/types.rs` support export/import of session evidence for multi-loadout correlation.
+- Bundles include flows, manipulations, rules, and protocol session data (WebSocket/HTTP2/gRPC).
+- Cross-loadout correlation via `CorrelationContext` / `CorrelationReference` hooks (Phase 3).
+
+### Performance Optimizations
+
+- `FlowBuffer` — LRU-evicting buffer with configurable capacity for high-throughput flow capture (`proxy/intercept/buffer.rs`).
+- `ProxyMetrics` — runtime performance telemetry including latency histograms, throughput counters, and error rates (`proxy/intercept/metrics.rs`).
+- Both types are public under `web-proxy` feature.
+
+### Real Protocol Support
+
+- Real WebSocket interception via `tokio-tungstenite` backend.
+- Real HTTP/2 interception via `h2` backend.
+- Phase 3 introduced type definitions; Phase 4 delivers real protocol backends.
+
 ## Future
 
-- **Phase 4+**: Extensibility — plugin-style rule authors, scriptable modifiers, integration with `ScanProfile` pipeline stages, MCP/agent tool exposure (if standalone defense-lab constraint is relaxed), PCAP export, session replay.
+- **Phase 5+**: Extensibility — plugin-style rule authors, scriptable modifiers, PCAP export, session replay, expanded MCP tool surface.

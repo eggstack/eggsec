@@ -209,6 +209,11 @@ fn profile_stages(profile: ScanProfile) -> Vec<PlannedStage> {
                 required_features: vec![],
             },
         ],
+        ScanProfile::WebProxy => vec![PlannedStage {
+            name: "proxy-intercept".to_string(),
+            risk: OperationRisk::TrafficInterception,
+            required_features: vec!["web-proxy".to_string()],
+        }],
     }
 }
 
@@ -232,6 +237,7 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             "protocol-edge",
             "nse-safe",
             "db-regression",
+            "web-proxy",
         ];
         anyhow::anyhow!(
             "Unknown profile '{}'. Valid profiles: {}",

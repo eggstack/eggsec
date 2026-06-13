@@ -26,6 +26,9 @@ pub struct PipelineReport {
     pub vuln_assessment: Option<crate::vuln::VulnAssessment>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub load_test_results: Option<LoadTestResults>,
+    #[cfg(feature = "web-proxy")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub web_proxy_report: Option<crate::proxy::intercept::types::WebProxySessionReport>,
 }
 
 impl std::fmt::Display for PipelineReport {
@@ -97,6 +100,32 @@ impl std::fmt::Display for PipelineReport {
                 "\t{} successful, {} failed",
                 load.successful_requests, load.failed_requests
             )?;
+        }
+
+        #[cfg(feature = "web-proxy")]
+        if let Some(ref proxy) = self.web_proxy_report {
+            writeln!(f, "web proxy intercept")?;
+            writeln!(
+                f,
+                "\t{} flows (HTTPS: {}, HTTP: {}, Blocked: {}, Redacted: {})",
+                proxy.flows.len(),
+                proxy.https_intercepted,
+                proxy.http_logged,
+                proxy.blocked,
+                proxy.redacted
+            )?;
+            if !proxy.ws_sessions.is_empty() {
+                let ws_msgs: usize = proxy.ws_sessions.iter().map(|s| s.messages.len()).sum();
+                writeln!(f, "\t{} WebSocket sessions ({} messages)", proxy.ws_sessions.len(), ws_msgs)?;
+            }
+            if !proxy.http2_sessions.is_empty() {
+                let h2_streams: usize = proxy.http2_sessions.iter().map(|s| s.streams.len()).sum();
+                writeln!(f, "\t{} HTTP/2 sessions ({} streams)", proxy.http2_sessions.len(), h2_streams)?;
+            }
+            if !proxy.grpc_sessions.is_empty() {
+                let grpc_calls: usize = proxy.grpc_sessions.iter().map(|s| s.calls.len()).sum();
+                writeln!(f, "\t{} gRPC sessions ({} calls)", proxy.grpc_sessions.len(), grpc_calls)?;
+            }
         }
 
         Ok(())

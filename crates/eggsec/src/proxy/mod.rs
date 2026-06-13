@@ -2,6 +2,8 @@ mod config;
 mod health;
 mod http_connect;
 pub mod intercept;
+#[cfg(feature = "web-proxy-mcp")]
+pub mod mcp;
 mod pool;
 mod rotator;
 mod socks;

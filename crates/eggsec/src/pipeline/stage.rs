@@ -15,6 +15,8 @@ pub enum Stage {
     Vuln,
     #[cfg(feature = "db-pentest")]
     DbPentest,
+    #[cfg(feature = "web-proxy")]
+    WebProxy,
 }
 
 impl std::fmt::Display for Stage {
@@ -30,6 +32,8 @@ impl std::fmt::Display for Stage {
             Stage::Vuln => write!(f, "Vulnerability Assessment"),
             #[cfg(feature = "db-pentest")]
             Stage::DbPentest => write!(f, "DB Pentest"),
+            #[cfg(feature = "web-proxy")]
+            Stage::WebProxy => write!(f, "Web Proxy Intercept"),
         }
     }
 }
@@ -124,6 +128,17 @@ impl Stage {
                 Stage::Waf,
                 Stage::Fuzz,
             ],
+            // WebProxy runs a single interception stage (like DbRegression).
+            #[cfg(feature = "web-proxy")]
+            ScanProfile::WebProxy => vec![Stage::WebProxy],
+            #[cfg(not(feature = "web-proxy"))]
+            ScanProfile::WebProxy => vec![
+                Stage::PortScan,
+                Stage::Fingerprint,
+                Stage::EndpointScan,
+                Stage::Waf,
+                Stage::Fuzz,
+            ],
         }
     }
 
@@ -146,6 +161,12 @@ impl Stage {
                 #[cfg(not(feature = "db-pentest"))]
                 { None }
             }
+            "proxy" | "webproxy" | "web-proxy" | "intercept" => {
+                #[cfg(feature = "web-proxy")]
+                { Some(Stage::WebProxy) }
+                #[cfg(not(feature = "web-proxy"))]
+                { None }
+            }
             _ => None,
         }
     }
@@ -163,6 +184,8 @@ impl Stage {
             Stage::Vuln => ProbeIntent::ServiceValidation,
             #[cfg(feature = "db-pentest")]
             Stage::DbPentest => ProbeIntent::ServiceValidation,
+            #[cfg(feature = "web-proxy")]
+            Stage::WebProxy => ProbeIntent::WafEvaluation,
         }
     }
 
@@ -183,6 +206,8 @@ impl Stage {
             Stage::Vuln => ProbeRisk::SafeActive,
             #[cfg(feature = "db-pentest")]
             Stage::DbPentest => ProbeRisk::Intrusive,
+            #[cfg(feature = "web-proxy")]
+            Stage::WebProxy => ProbeRisk::Intrusive,
         }
     }
 }
@@ -216,6 +241,7 @@ pub fn profile_from_str(s: &str) -> Option<crate::cli::ScanProfile> {
         "protocol-edge" => Some(crate::cli::ScanProfile::ProtocolEdge),
         "nse-safe" => Some(crate::cli::ScanProfile::NseSafe),
         "db-regression" | "db_regression" | "dbregression" => Some(crate::cli::ScanProfile::DbRegression),
+        "web-proxy" | "webproxy" | "proxy" => Some(crate::cli::ScanProfile::WebProxy),
         _ => None,
     }
 }

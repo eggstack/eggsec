@@ -200,6 +200,8 @@ impl Pipeline {
             (Stage::Vuln, 3),
             #[cfg(feature = "db-pentest")]
             (Stage::DbPentest, 3),
+            #[cfg(feature = "web-proxy")]
+            (Stage::WebProxy, 3),
         ]
         .into_iter()
         .collect();
@@ -409,6 +411,8 @@ impl Pipeline {
             manifest: None,
             vuln_assessment: context.vuln_assessment,
             load_test_results: context.load_test_results,
+            #[cfg(feature = "web-proxy")]
+            web_proxy_report: context.web_proxy_report,
         };
 
         let mut manifest =
@@ -521,6 +525,8 @@ impl Pipeline {
             manifest: None,
             vuln_assessment: context.vuln_assessment,
             load_test_results: context.load_test_results,
+            #[cfg(feature = "web-proxy")]
+            web_proxy_report: context.web_proxy_report,
         };
 
         let mut manifest =
@@ -543,6 +549,8 @@ impl Pipeline {
             Stage::Vuln => self.run_vuln().await,
             #[cfg(feature = "db-pentest")]
             Stage::DbPentest => self.run_db_pentest_stage().await,
+            #[cfg(feature = "web-proxy")]
+            Stage::WebProxy => self.run_web_proxy_stage().await,
         }
     }
 
@@ -589,6 +597,81 @@ impl Pipeline {
                 Err(e.into())
             }
         }
+    }
+
+    #[cfg(feature = "web-proxy")]
+    async fn run_web_proxy_stage(&self) -> Result<()> {
+        use crate::proxy::intercept::types::WebProxySessionReport;
+
+        let dry_run = true;
+
+        // Pipeline always runs in dry-run mode for safety
+        let mut report = WebProxySessionReport::new("pipeline-intercept", dry_run);
+        report.ca_fingerprint = "pipeline-dry-run-fingerprint".to_string();
+        report.manifest_matched = true;
+        report.actions_performed.push("pipeline-dry-run-execution".to_string());
+        report.budget = crate::proxy::intercept::types::BudgetUsage {
+            max_flows: Some(1000),
+            flows_captured: 0,
+            max_bytes_per_flow: Some(1024 * 1024),
+            max_duration_secs: Some(60),
+            elapsed_secs: 0,
+            max_concurrent: Some(100),
+            peak_concurrent: 0,
+            max_ws_messages: None,
+            ws_messages_captured: 0,
+            max_http2_streams: None,
+            http2_streams_captured: 0,
+            max_grpc_calls: None,
+            grpc_calls_captured: 0,
+        };
+
+        // Synthetic dry-run flows for pipeline validation
+        let synthetic_flows = vec![
+            crate::proxy::intercept::types::ProxyFlow {
+                index: 1,
+                method: "GET".to_string(),
+                url: format!("http://{}/get", self.target),
+                host: self.target.clone(),
+                path: "/get".to_string(),
+                request_headers: {
+                    let mut h = std::collections::HashMap::new();
+                    h.insert("User-Agent".to_string(), "eggsec-pipeline/1.0".to_string());
+                    h
+                },
+                request_body: None,
+                response_status: 200,
+                response_headers: {
+                    let mut h = std::collections::HashMap::new();
+                    h.insert("Content-Type".to_string(), "application/json".to_string());
+                    h
+                },
+                response_body: Some("{ \"ok\": true }".to_string()),
+                is_https: false,
+                duration_ms: 45,
+                request_body_size: 0,
+                response_body_size: 18,
+                started_at: chrono::Utc::now().to_rfc3339(),
+                completed_at: chrono::Utc::now().to_rfc3339(),
+                redaction_applied: None,
+                protocol: "http1".to_string(),
+            },
+        ];
+
+        for flow in synthetic_flows {
+            report.add_flow(flow);
+        }
+
+        report.budget.flows_captured = report.flows.len() as u64;
+        report.finalize();
+
+        let mut context = self.context.lock().await;
+        tracing::info!(
+            flows = report.flows.len(),
+            "Web Proxy Intercept stage completed (dry-run)"
+        );
+        context.update_web_proxy_report(report);
+        Ok(())
     }
 
     async fn run_port_scan(&self) -> Result<()> {

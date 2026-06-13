@@ -465,6 +465,7 @@ pub enum ScanProfile {
     ProtocolEdge,
     NseSafe,
     DbRegression,
+    WebProxy,
 }
 
 impl std::fmt::Display for ScanProfile {
@@ -487,6 +488,7 @@ impl std::fmt::Display for ScanProfile {
             ScanProfile::ProtocolEdge => write!(f, "protocol-edge"),
             ScanProfile::NseSafe => write!(f, "nse-safe"),
             ScanProfile::DbRegression => write!(f, "db-regression"),
+            ScanProfile::WebProxy => write!(f, "web-proxy"),
         }
     }
 }
@@ -511,6 +513,7 @@ impl ScanProfile {
             "protocol-edge" => Some(ScanProfile::ProtocolEdge),
             "nse-safe" => Some(ScanProfile::NseSafe),
             "db-regression" | "db_regression" | "dbregression" => Some(ScanProfile::DbRegression),
+            "web-proxy" | "webproxy" | "proxy" => Some(ScanProfile::WebProxy),
             _ => None,
         }
     }
@@ -526,6 +529,7 @@ impl ScanProfile {
                 | ScanProfile::WafRegression
                 | ScanProfile::ProtocolEdge
                 | ScanProfile::NseSafe
+                | ScanProfile::WebProxy
         )
     }
 
@@ -549,7 +553,7 @@ impl ScanProfile {
                 crate::probe::ProbeRisk::SafeActive
             }
             ScanProfile::Stealth => crate::probe::ProbeRisk::Passive,
-            ScanProfile::DefenseLab | ScanProfile::SynvoidLocal | ScanProfile::WafRegression | ScanProfile::DbRegression => {
+            ScanProfile::DefenseLab | ScanProfile::SynvoidLocal | ScanProfile::WafRegression | ScanProfile::DbRegression | ScanProfile::WebProxy => {
                 crate::probe::ProbeRisk::Intrusive
             }
             ScanProfile::Endpoint
@@ -583,7 +587,8 @@ impl ScanProfile {
             | ScanProfile::WafRegression
             | ScanProfile::ProtocolEdge
             | ScanProfile::NseSafe
-            | ScanProfile::DbRegression => crate::config::OperationMode::DefenseLab,
+            | ScanProfile::DbRegression
+            | ScanProfile::WebProxy => crate::config::OperationMode::DefenseLab,
         }
     }
 
@@ -618,6 +623,10 @@ impl ScanProfile {
             }
             ScanProfile::NseSafe => vec![crate::config::IntendedUse::CodingAgentVerification],
             ScanProfile::DbRegression => vec![
+                crate::config::IntendedUse::WafRegression,
+                crate::config::IntendedUse::SynvoidRegression,
+            ],
+            ScanProfile::WebProxy => vec![
                 crate::config::IntendedUse::WafRegression,
                 crate::config::IntendedUse::SynvoidRegression,
             ],

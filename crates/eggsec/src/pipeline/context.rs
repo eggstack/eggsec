@@ -19,6 +19,9 @@ pub struct PipelineContext {
     pub vuln_assessment: Option<VulnAssessment>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub load_test_results: Option<LoadTestResults>,
+    #[cfg(feature = "web-proxy")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub web_proxy_report: Option<crate::proxy::intercept::types::WebProxySessionReport>,
 }
 
 impl PipelineContext {
@@ -71,5 +74,10 @@ impl PipelineContext {
 
     pub fn update_load_test_results(&mut self, results: LoadTestResults) {
         self.load_test_results = Some(results);
+    }
+
+    #[cfg(feature = "web-proxy")]
+    pub fn update_web_proxy_report(&mut self, report: crate::proxy::intercept::types::WebProxySessionReport) {
+        self.web_proxy_report = Some(report);
     }
 }

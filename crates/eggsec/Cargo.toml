@@ -150,6 +150,10 @@ version = "0.26"
 features = ["rustls-tls-webpki-roots"]
 optional = true
 
+[dependencies.h2]
+version = "0.4"
+optional = true
+
 [dependencies.tonic]
 version = "0.14"
 optional = true
@@ -310,7 +314,7 @@ vuln-management = []
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
 
 # WebSocket security testing with real connections
-websocket = ["tokio-tungstenite"]
+websocket = ["dep:tokio-tungstenite"]
 
 # Headless browser testing for DOM XSS and SPA crawling
 headless-browser = ["headless_chrome"]
@@ -382,7 +386,12 @@ wireless-advanced = ["wireless"]
 api-schema = []
 
 # Web proxy for interception and modification of HTTP/HTTPS traffic
-web-proxy = []
+# Pulls in tokio-tungstenite for real WebSocket frame interception and h2 for HTTP/2 ALPN + stream demux.
+web-proxy = ["dep:tokio-tungstenite", "dep:h2"]
+# Optional MCP/agent exposure for web-proxy. When enabled, registers proxy control tools as MCP tools.
+# Default behavior (without this marker) keeps web-proxy as standalone defense-lab surface only.
+# Real runs via MCP require EnforcementContext + policy confirmation.
+web-proxy-mcp = ["web-proxy"]
 
 [dev-dependencies]
 wiremock = "0.6"
