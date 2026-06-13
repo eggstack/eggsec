@@ -110,8 +110,59 @@ See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases
 - **Cert caching**: `CertGenerator` caches per-host certificates with configurable validity duration; cache is in-memory and cleared on drop.
 - **Prominent disclaimers**: Pre-execution banners, help text, and output notes emphasize authorized lab use only.
 
+## Phase 3: Advanced Protocols & Enhanced Rule Engine (2026-06-12)
+
+### New Types
+
+| Type | Location | Description |
+|------|----------|-------------|
+| `ProxyProtocol` | `intercept/protocols.rs` | Protocol enum (Http1, Http2, WebSocket, Grpc) |
+| `WebSocketMessage` | `intercept/protocols.rs` | Captured WebSocket message with opcode, payload, direction |
+| `WebSocketSession` | `intercept/protocols.rs` | Complete WebSocket session with all messages |
+| `WebSocketOpcode` | `intercept/protocols.rs` | WebSocket frame opcode (Text, Binary, Close, Ping, Pong) |
+| `Http2Stream` | `intercept/protocols.rs` | HTTP/2 stream with ID, state, headers, body |
+| `Http2Session` | `intercept/protocols.rs` | HTTP/2 connection with multiplexed streams |
+| `Http2StreamState` | `intercept/protocols.rs` | Stream state (Idle, Open, HalfClosed*, Closed) |
+| `GrpcCall` | `intercept/protocols.rs` | gRPC call with path, method type, metadata, body |
+| `GrpcSession` | `intercept/protocols.rs` | gRPC session with all captured calls |
+| `GrpcMethodType` | `intercept/protocols.rs` | gRPC method type (Unary, ServerStreaming, ClientStreaming, Bidirectional) |
+| `ProtocolDetection` | `intercept/protocols.rs` | Protocol detection result with confidence |
+| `EnhancedRule` | `intercept/rules.rs` | Rule with complex conditions, ID, and additional actions |
+| `EnhancedRuleSet` | `intercept/rules.rs` | Rule collection with persistence and evaluation |
+| `RuleCondition` | `intercept/rules.rs` | Complex condition with AND/OR/NOT combinators |
+| `RuleContext` | `intercept/rules.rs` | Context for rule evaluation |
+| `RuleId` | `intercept/rules.rs` | Rule identifier newtype |
+| `InjectResponseConfig` | `intercept/rules.rs` | Inject-response action configuration |
+| `CorrelationContext` | `intercept/correlation.rs` | Cross-loadout correlation aggregation |
+| `CorrelationReference` | `intercept/correlation.rs` | Reference to a finding in another loadout |
+| `CorrelationSource` | `intercept/correlation.rs` | Source loadout enum |
+| `CorrelationHook` | `intercept/correlation.rs` | Hook definition for cross-loadout linking |
+
+### New Files
+
+| File | Description |
+|------|-------------|
+| `intercept/protocols.rs` | WebSocket, HTTP/2, gRPC protocol types and detection |
+| `intercept/correlation.rs` | Cross-loadout correlation hooks and context |
+
+### Updated Files
+
+| File | Changes |
+|------|---------|
+| `intercept/types.rs` | `ProxyFlow.protocol`, `WebProxySessionReport` protocol session fields and correlation |
+| `intercept/rules.rs` | Enhanced rule engine with complex conditions, persistence, new actions |
+| `intercept/mod.rs` | New module declarations and re-exports |
+| `intercept/bridge.rs` | New finding categories for protocols and correlation |
+
+### Bridge Finding Categories
+
+| Category | Description |
+|----------|-------------|
+| `proxy-websocket-session` | Per WebSocket session |
+| `proxy-http2-session` | Per HTTP/2 session |
+| `proxy-grpc-session` | Per gRPC session |
+| `proxy-correlation-summary` | Session correlation summary |
+
 ## Future
 
-- **Phase 2**: Interactive TUI tab (`Tab::WebProxy`), real traffic interception wired to `ProxyServer`, request/response modification via `InterceptProxy` channels, live flow display, rule management UI, upstream proxy chaining.
-- **Phase 3**: WebSocket interception, HTTP/2 support, request replay, automated vulnerability pattern detection.
 - **Phase 4+**: Extensibility — plugin-style rule authors, scriptable modifiers, integration with `ScanProfile` pipeline stages, MCP/agent tool exposure (if standalone defense-lab constraint is relaxed), PCAP export, session replay.

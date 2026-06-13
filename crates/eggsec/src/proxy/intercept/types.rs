@@ -1,4 +1,6 @@
 use crate::error;
+use crate::proxy::intercept::correlation::CorrelationContext;
+use crate::proxy::intercept::protocols::{GrpcSession, Http2Session, WebSocketSession};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -49,6 +51,13 @@ pub struct ProxyFlow {
     pub completed_at: String,
     /// Redaction applied to this flow (if any).
     pub redaction_applied: Option<String>,
+    /// Detected protocol for this flow.
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
+}
+
+fn default_protocol() -> String {
+    "http1".to_string()
 }
 
 /// Budget usage tracking for a proxy session.
@@ -108,6 +117,18 @@ pub struct WebProxySessionReport {
     /// Manipulation audit trail from interactive session.
     #[serde(default)]
     pub manipulations: Vec<ManipulationRecord>,
+    /// Captured WebSocket sessions.
+    #[serde(default)]
+    pub ws_sessions: Vec<WebSocketSession>,
+    /// Captured HTTP/2 sessions.
+    #[serde(default)]
+    pub http2_sessions: Vec<Http2Session>,
+    /// Captured gRPC sessions.
+    #[serde(default)]
+    pub grpc_sessions: Vec<GrpcSession>,
+    /// Cross-loadout correlation context.
+    #[serde(default)]
+    pub correlation: Option<CorrelationContext>,
 }
 
 impl WebProxySessionReport {
@@ -132,6 +153,10 @@ impl WebProxySessionReport {
             redacted: 0,
             errors: Vec::new(),
             manipulations: Vec::new(),
+            ws_sessions: Vec::new(),
+            http2_sessions: Vec::new(),
+            grpc_sessions: Vec::new(),
+            correlation: None,
         }
     }
 
@@ -512,6 +537,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             completed_at: chrono::Utc::now().to_rfc3339(),
             redaction_applied: None,
+            protocol: "http1".to_string(),
         };
         let json = serde_json::to_string(&flow).unwrap();
         let deserialized: ProxyFlow = serde_json::from_str(&json).unwrap();
@@ -548,6 +574,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             completed_at: chrono::Utc::now().to_rfc3339(),
             redaction_applied: Some("header".to_string()),
+            protocol: "http1".to_string(),
         };
         report.add_flow(flow);
         assert_eq!(report.flows.len(), 1);

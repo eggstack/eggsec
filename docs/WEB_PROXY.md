@@ -260,6 +260,77 @@ The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/brid
 - **No transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
 - **No streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
 
+## Phase 3: Advanced Protocols & Enhanced Rule Engine (2026-06-12)
+
+Phase 3 extends the interactive web proxy with modern protocol support and a powerful rule engine.
+
+### Protocol Support
+
+#### WebSocket Interception
+
+WebSocket traffic is detected via the `Upgrade: websocket` header and tracked separately from HTTP flows.
+
+- **Detection**: Automatic via `detect_protocol()` in `proxy/intercept/protocols.rs`
+- **Types**: `WebSocketSession`, `WebSocketMessage`, `WebSocketOpcode`
+- **Features**: Message list with direction, opcode, payload, masking info; manipulation audit trail; close frame handling; ping/pong tracking
+- **TUI**: Protocol selector in detail pane; WebSocket-specific message stream view
+
+#### HTTP/2 Support
+
+HTTP/2 streams are tracked via pseudo-headers (`:scheme`, `:method`, `:path`).
+
+- **Detection**: Automatic via HTTP/2 pseudo-header presence
+- **Types**: `Http2Session`, `Http2Stream`, `Http2StreamState`
+- **Features**: Stream multiplexing tracking, priority, window updates, per-stream request/response bodies
+- **TUI**: HTTP/2 stream list view with stream ID and state
+
+#### gRPC / Protobuf
+
+gRPC traffic is detected via `Content-Type: application/grpc` headers.
+
+- **Detection**: Automatic via content-type header matching
+- **Types**: `GrpcSession`, `GrpcCall`, `GrpcMethodType`
+- **Features**: Unary, server-streaming, client-streaming, bidirectional detection; JSON-transcoded or text-protobuf inspection where feasible
+- **Limitations**: Binary protobuf editing is partial in Phase 3; best-effort for common services
+- **TUI**: gRPC call inspector view
+
+### Enhanced Rule Engine
+
+The rule engine has been significantly enhanced with complex conditions, persistence, and new actions.
+
+- **Types**: `EnhancedRule`, `EnhancedRuleSet`, `RuleCondition`, `RuleContext`, `RuleId`, `InjectResponseConfig`
+- **Conditions**: AND/OR/NOT combinators, regex, body size thresholds, protocol-specific matching (WebSocket opcode, gRPC method type)
+- **Actions**: `Allow`, `Block`, `Intercept`, `Monitor`, `Modify`, `InjectResponse`, `Delay`, `Tag`
+- **Persistence**: JSON file-based save/load with `save_to_file()`/`load_from_file()`
+- **Import/Export**: JSON format via `export_json()`/`import_json()`
+- **Rule Management**: Enable/disable rules by ID, tag-based grouping, priority ordering
+- **TUI**: Legacy/Enhanced rule view toggle in Rules detail pane
+
+### Cross-Loadout Correlation
+
+Lightweight correlation hooks link proxy flows with other Eggsec loadouts.
+
+- **Types**: `CorrelationContext`, `CorrelationReference`, `CorrelationSource`, `CorrelationHook`
+- **Sources**: `DbPentest`, `AuthTest`, `MobileDynamic`, `Wireless`, `ProxyFlow`, `External`
+- **Built-in Hooks**: `jwt_to_db_query_hook()`, `proxy_auth_hook()`, `proxy_mobile_hook()`
+- **Features**: Per-flow correlation references, confidence scoring, summary statistics
+- **Reporting**: Correlation data included in `web-traffic-summary` finding and dedicated `proxy-correlation-summary` finding
+
+### Reporting Bridge Extensions
+
+The `to_scan_report_data_proxy()` bridge now produces additional finding categories:
+
+- `proxy-websocket-session` — per WebSocket session
+- `proxy-http2-session` — per HTTP/2 session
+- `proxy-grpc-session` — per gRPC session
+- `proxy-correlation-summary` — session correlation summary (when present)
+
+### TUI Enhancements
+
+- **Protocol Selector**: Toggle between Legacy and Enhanced rule views in the Rules detail pane
+- **Protocol Detail Panes**: New WebSocket, HTTP/2, and gRPC detail pane views
+- **Keyboard**: `r` key toggles rule view mode when in Rules detail pane
+
 ## Phase 2: Interactive TUI & Manipulation (Complete - 2026-06-13)
 
 Phase 2 adds the interactive TUI tab for live traffic inspection and manual manipulation.

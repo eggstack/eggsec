@@ -9,13 +9,29 @@
 mod bridge;
 mod cert;
 mod interceptor;
+pub mod protocols;
 mod rules;
 pub mod types;
+pub mod correlation;
 
 pub use bridge::to_scan_report_data_proxy;
 pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
-pub use rules::{InterceptRule, RuleAction, RuleSet};
+pub use rules::{
+    InterceptRule, RuleAction, RuleSet,
+    EnhancedRule, EnhancedRuleSet, RuleCondition, RuleContext, RuleId, InjectResponseConfig,
+};
+
+pub use protocols::{
+    ProxyProtocol, WebSocketMessage, WebSocketSession, WebSocketOpcode,
+    Http2Stream, Http2Session, Http2StreamState,
+    GrpcCall, GrpcSession, GrpcMethodType, ProtocolDetection,
+};
+
+pub use correlation::{
+    CorrelationContext, CorrelationReference, CorrelationSource,
+    CorrelationHook, CorrelationSummary,
+};
 
 use crate::error::{EggsecError, Result};
 use parking_lot::RwLock;
@@ -180,7 +196,13 @@ async fn handle_connect_request(
             stream.write_all(response).await?;
             return Ok(());
         }
-        RuleAction::Modify | RuleAction::Intercept | RuleAction::Monitor | RuleAction::Allow => {
+        RuleAction::Modify
+        | RuleAction::Intercept
+        | RuleAction::Monitor
+        | RuleAction::Allow
+        | RuleAction::InjectResponse
+        | RuleAction::Delay
+        | RuleAction::Tag => {
             let response = b"HTTP/1.1 200 Connection Established\r\n\r\n";
             stream.write_all(response).await?;
         }
@@ -259,7 +281,7 @@ async fn handle_http_request(
         RuleAction::Modify => {
             tracing::debug!("HTTP {} {} - Modify", host, path);
         }
-        RuleAction::Intercept | RuleAction::Monitor => {
+        RuleAction::Intercept | RuleAction::Monitor | RuleAction::InjectResponse | RuleAction::Delay | RuleAction::Tag => {
             tracing::debug!("HTTP {} {} - {:?}", host, path, rule_action);
         }
         RuleAction::Allow => {}

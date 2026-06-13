@@ -34,6 +34,23 @@ pub enum DetailPane {
     Body,
     Manipulations,
     Rules,
+    WebSocket,
+    Http2,
+    Grpc,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProtocolView {
+    Http,
+    WebSocket,
+    Http2,
+    Grpc,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuleManagementView {
+    Legacy,
+    Enhanced,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -90,6 +107,8 @@ pub struct InterceptTab {
     pub edit_modal: EditModal,
     pub pending_action: Option<crate::app::action::UiAction>,
     pub actions_log: Vec<String>,
+    pub selected_protocol_view: ProtocolView,
+    pub selected_rule_view: RuleManagementView,
 }
 
 impl InterceptTab {
@@ -121,6 +140,8 @@ impl InterceptTab {
             },
             pending_action: None,
             actions_log: Vec::new(),
+            selected_protocol_view: ProtocolView::Http,
+            selected_rule_view: RuleManagementView::Legacy,
         }
     }
 
@@ -342,13 +363,102 @@ impl InterceptTab {
                 DetailPane::Headers => self.render_headers(f, area, flow),
                 DetailPane::Body => self.render_body(f, area, flow),
                 DetailPane::Manipulations => self.render_manipulations(f, area),
-                DetailPane::Rules => self.render_rules_info(f, area),
+                DetailPane::Rules => self.render_rules_with_view(f, area),
+                DetailPane::WebSocket => self.render_protocol_placeholder(f, area, "WebSocket"),
+                DetailPane::Http2 => self.render_protocol_placeholder(f, area, "HTTP/2"),
+                DetailPane::Grpc => self.render_protocol_placeholder(f, area, "gRPC"),
             },
             None => {
                 let placeholder = empty_state_paragraph("Detail", "Select a flow to view details");
                 f.render_widget(placeholder, area);
             }
         }
+    }
+
+    fn render_rules_with_view(&self, f: &mut Frame, area: Rect) {
+        let rule_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(area);
+
+        let legacy_style = if self.selected_rule_view == RuleManagementView::Legacy {
+            Style::default().fg(tc!(background)).bg(tc!(accent)).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(text))
+        };
+        let enhanced_style = if self.selected_rule_view == RuleManagementView::Enhanced {
+            Style::default().fg(tc!(background)).bg(tc!(accent)).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(text))
+        };
+        let selector = ratatui::widgets::Paragraph::new(Line::from(vec![
+            Span::styled(" [Legacy] ", legacy_style),
+            Span::raw(" "),
+            Span::styled(" [Enhanced] ", enhanced_style),
+        ]));
+        f.render_widget(selector, rule_layout[0]);
+
+        self.render_rules_content(f, rule_layout[1]);
+    }
+
+    fn render_rules_content(&self, f: &mut Frame, area: Rect) {
+        let lines = vec![
+            Line::from(vec![Span::styled(
+                "Intercept Rules",
+                Style::default()
+                    .fg(tc!(accent))
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from("Rules control which traffic is intercepted:"),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  Allow  ", Style::default().fg(tc!(success))),
+                Span::raw("Pass through without inspection"),
+            ]),
+            Line::from(vec![
+                Span::styled("  Block  ", Style::default().fg(tc!(error))),
+                Span::raw("Reject the connection"),
+            ]),
+            Line::from(vec![
+                Span::styled("  Intercept ", Style::default().fg(tc!(warning))),
+                Span::raw("Pause for manual inspection"),
+            ]),
+            Line::from(vec![
+                Span::styled("  Monitor ", Style::default().fg(tc!(info))),
+                Span::raw("Log without pausing"),
+            ]),
+            Line::from(vec![
+                Span::styled("  Modify ", Style::default().fg(Color::Magenta)),
+                Span::raw("Apply automatic modifications"),
+            ]),
+            Line::from(""),
+            Line::from("Use the CLI to configure rules:"),
+            Line::from("  eggsec proxy intercept --intercept-rule <file>"),
+        ];
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" Rules ({:?}) ", self.selected_rule_view));
+        let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
+        f.render_widget(paragraph, area);
+    }
+
+    fn render_protocol_placeholder(&self, f: &mut Frame, area: Rect, protocol: &str) {
+        let lines = vec![
+            Line::from(vec![Span::styled(
+                format!("{} Protocol View", protocol),
+                Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(""),
+            Line::from(format!("{} protocol inspection is not yet implemented.", protocol)),
+            Line::from("Coming in a future phase."),
+        ];
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" {} ", protocol));
+        let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
+        f.render_widget(paragraph, area);
     }
 
     fn render_headers(&self, f: &mut Frame, area: Rect, flow: &ProxyFlow) {
@@ -488,49 +598,6 @@ impl InterceptTab {
         f.render_widget(paragraph, area);
     }
 
-    fn render_rules_info(&self, f: &mut Frame, area: Rect) {
-        let lines = vec![
-            Line::from(vec![Span::styled(
-                "Intercept Rules",
-                Style::default()
-                    .fg(tc!(accent))
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from(""),
-            Line::from("Rules control which traffic is intercepted:"),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("  Allow  ", Style::default().fg(tc!(success))),
-                Span::raw("Pass through without inspection"),
-            ]),
-            Line::from(vec![
-                Span::styled("  Block  ", Style::default().fg(tc!(error))),
-                Span::raw("Reject the connection"),
-            ]),
-            Line::from(vec![
-                Span::styled("  Intercept ", Style::default().fg(tc!(warning))),
-                Span::raw("Pause for manual inspection"),
-            ]),
-            Line::from(vec![
-                Span::styled("  Monitor ", Style::default().fg(tc!(info))),
-                Span::raw("Log without pausing"),
-            ]),
-            Line::from(vec![
-                Span::styled("  Modify ", Style::default().fg(Color::Magenta)),
-                Span::raw("Apply automatic modifications"),
-            ]),
-            Line::from(""),
-            Line::from("Use the CLI to configure rules:"),
-            Line::from("  eggsec proxy intercept --intercept-rule <file>"),
-        ];
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Rules ");
-        let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
-        f.render_widget(paragraph, area);
-    }
-
     fn render_action_bar(&self, f: &mut Frame, area: Rect) {
         let actions = ["Forward", "Drop", "Replay", "Pause All", "Resume All", "Save", "Export HAR"];
         let spans: Vec<Span> = actions
@@ -642,6 +709,17 @@ impl InterceptTab {
         let help_para = Paragraph::new(help_text)
             .style(Style::default().fg(tc!(muted)));
         f.render_widget(help_para, modal_layout[6]);
+    }
+
+    pub fn set_protocol_view(&mut self, view: ProtocolView) {
+        self.selected_protocol_view = view;
+    }
+
+    pub fn toggle_rule_view(&mut self) {
+        self.selected_rule_view = match self.selected_rule_view {
+            RuleManagementView::Legacy => RuleManagementView::Enhanced,
+            RuleManagementView::Enhanced => RuleManagementView::Legacy,
+        };
     }
 
     fn execute_action(&mut self, action_index: usize) {
@@ -772,6 +850,8 @@ impl TabState for InterceptTab {
         self.focus_area = InterceptFocusArea::FlowList;
         self.detail_pane = DetailPane::Headers;
         self.action_bar_index = 0;
+        self.selected_protocol_view = ProtocolView::Http;
+        self.selected_rule_view = RuleManagementView::Legacy;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -787,6 +867,9 @@ impl TabRender for InterceptTab {
             DetailPane::Body => "Body",
             DetailPane::Manipulations => "Manipulations",
             DetailPane::Rules => "Rules",
+            DetailPane::WebSocket => "WebSocket",
+            DetailPane::Http2 => "HTTP/2",
+            DetailPane::Grpc => "gRPC",
         };
         Some(vec!["Intercept", pane])
     }
@@ -923,6 +1006,8 @@ impl InterceptTab {
             edit_modal: self.edit_modal.clone(),
             pending_action: None,
             actions_log: self.actions_log.clone(),
+            selected_protocol_view: self.selected_protocol_view.clone(),
+            selected_rule_view: self.selected_rule_view.clone(),
         }
     }
 }
@@ -958,6 +1043,9 @@ impl TabInput for InterceptTab {
         if self.is_edit_modal_open() {
             self.edit_modal.edit_buffer.push(c);
             return;
+        }
+        if c == 'r' && self.detail_pane == DetailPane::Rules {
+            self.toggle_rule_view();
         }
     }
 
@@ -1014,6 +1102,9 @@ impl TabInput for InterceptTab {
                     DetailPane::Body => DetailPane::Headers,
                     DetailPane::Manipulations => DetailPane::Body,
                     DetailPane::Rules => DetailPane::Manipulations,
+                    DetailPane::WebSocket => DetailPane::Grpc,
+                    DetailPane::Http2 => DetailPane::WebSocket,
+                    DetailPane::Grpc => DetailPane::Http2,
                 };
             }
             InterceptFocusArea::ActionBar => {}
@@ -1038,6 +1129,9 @@ impl TabInput for InterceptTab {
                     DetailPane::Body => DetailPane::Manipulations,
                     DetailPane::Manipulations => DetailPane::Rules,
                     DetailPane::Rules => DetailPane::Headers,
+                    DetailPane::WebSocket => DetailPane::Http2,
+                    DetailPane::Http2 => DetailPane::Grpc,
+                    DetailPane::Grpc => DetailPane::WebSocket,
                 };
             }
             InterceptFocusArea::ActionBar => {}
@@ -1135,6 +1229,9 @@ impl DetailPane {
             1 => DetailPane::Body,
             2 => DetailPane::Manipulations,
             3 => DetailPane::Rules,
+            4 => DetailPane::WebSocket,
+            5 => DetailPane::Http2,
+            6 => DetailPane::Grpc,
             _ => DetailPane::Headers,
         }
     }
@@ -1205,6 +1302,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             completed_at: chrono::Utc::now().to_rfc3339(),
             redaction_applied: None,
+            protocol: "http1".to_string(),
         };
         tab.add_flow(flow);
         assert_eq!(tab.flows.len(), 1);

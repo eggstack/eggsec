@@ -86,6 +86,7 @@ pub async fn handle_proxy_intercept(
                 started_at: chrono::Utc::now().to_rfc3339(),
                 completed_at: chrono::Utc::now().to_rfc3339(),
                 redaction_applied: None,
+                protocol: "http1".to_string(),
             },
             crate::proxy::intercept::types::ProxyFlow {
                 index: 2,
@@ -109,6 +110,7 @@ pub async fn handle_proxy_intercept(
                 started_at: chrono::Utc::now().to_rfc3339(),
                 completed_at: chrono::Utc::now().to_rfc3339(),
                 redaction_applied: Some("header".to_string()),
+                protocol: "http1".to_string(),
             },
         ];
 
