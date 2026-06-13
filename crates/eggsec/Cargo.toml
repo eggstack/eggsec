@@ -279,7 +279,7 @@ rest-api = ["tool-api", "axum", "tower", "tower-http", "async-stream"]
 ws-api = ["axum/ws"]
 
 # gRPC API server for external tool integration
-grpc-api = ["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build", "async-stream", "tokio-stream"]
+grpc-api = ["tool-api", "tonic", "dep:prost", "dep:prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build", "async-stream", "tokio-stream"]
 
 # Low-level network stress testing
 stress-testing = ["pnet", "pnet_packet", "socket2", "nix", "libc", "surge-ping", "eggsec-nse?/stress-testing"]
@@ -391,11 +391,14 @@ api-schema = []
 
 # Web proxy for interception and modification of HTTP/HTTPS traffic
 # Pulls in tokio-tungstenite for real WebSocket frame interception and h2 for HTTP/2 ALPN + stream demux.
-web-proxy = ["dep:tokio-tungstenite", "dep:h2", "dep:http"]
+# Also includes prost for gRPC protobuf message decoding/encoding.
+web-proxy = ["dep:tokio-tungstenite", "dep:h2", "dep:http", "dep:prost", "dep:prost-types"]
 # Optional MCP/agent exposure for web-proxy. When enabled, registers proxy control tools as MCP tools.
 # Default behavior (without this marker) keeps web-proxy as standalone defense-lab surface only.
 # Real runs via MCP require EnforcementContext + policy confirmation.
 web-proxy-mcp = ["web-proxy"]
+# Transparent proxy mode (Linux iptables/nftables REDIRECT). Marker feature; no new deps.
+transparent-proxy = ["web-proxy"]
 
 [dev-dependencies]
 wiremock = "0.6"
@@ -406,3 +409,8 @@ proptest = "1"
 [build-dependencies.tonic-prost-build]
 version = "0.14"
 optional = true
+
+[[bench]]
+name = "proxy_benchmarks"
+harness = false
+required-features = ["web-proxy"]

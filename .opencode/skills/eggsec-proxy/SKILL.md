@@ -26,12 +26,35 @@ Intercepting proxy module workflows and patterns for traffic inspection.
 
 ### Phase 4: Pipeline, MCP, Evidence, Performance
 - `ScanProfile::WebProxy` / `Stage::WebProxy` — Pipeline profile integration
-- 12 MCP tools via `web-proxy-mcp` marker feature (list flows, inspect flow, edit, rules, session, HAR, evidence bundle)
 - `EvidenceBundle` / `BundleManifest` — Evidence bundle export/import for multi-loadout correlation (`proxy/intercept/bundle.rs`)
 - `FlowBuffer` — Capacity-capped flow buffer (`proxy/intercept/types.rs`)
 - `ProxyMetrics` — Runtime performance telemetry snapshot (`proxy/intercept/types.rs`)
 - `WebProxyToolSchema` / `WebProxyToolCall` — MCP proxy tool types (`proxy/mcp.rs`)
+- `ProxyTool` — MCP tool handler implementation (`tool/implementations/proxy.rs`)
 - Real WebSocket (`tokio-tungstenite`) and HTTP/2 (`h2`) protocol backends
+
+### MCP Proxy Tools (12 tools via `web-proxy-mcp` feature)
+
+The following 12 tools are available when the `web-proxy-mcp` feature is enabled:
+
+| Tool ID | Action | Description |
+|---------|--------|-------------|
+| `proxy-start` | Start proxy | Start the intercepting proxy on a listen address |
+| `proxy-stop` | Stop proxy | Stop the running proxy and clear session |
+| `proxy-status` | Status | Get session status, flow count, and budget usage |
+| `proxy-list-flows` | List flows | List intercepted flows with pagination |
+| `proxy-inspect-flow` | Inspect flow | Get full detail of a specific flow by index |
+| `proxy-forward-flow` | Forward | Forward a paused flow to upstream |
+| `proxy-drop-flow` | Drop | Drop a paused flow without forwarding |
+| `proxy-replay-flow` | Replay | Replay a flow |
+| `proxy-add-rule` | Add rule | Add an intercept rule with pattern and action |
+| `proxy-list-rules` | List rules | List all configured intercept rules |
+| `proxy-remove-rule` | Remove rule | Remove a rule by ID |
+| `proxy-export-session` | Export | Export session data as JSON or HAR |
+
+**Policy enforcement:** All proxy tools require `EnforcementContext::evaluate()` before dispatch. Real runs need `--allow-web-proxy` + policy confirmation. Dry-run is always safe.
+
+**Tool implementation:** `tool/implementations/proxy.rs` implements the `SecurityTool` trait with all 12 actions. Tools use a shared `PROXY_SESSION` static for session state.
 
 ### Safe Logging
 `proxy` module uses `to_log_key()` for safe logging of sensitive data.
@@ -68,9 +91,20 @@ Follow existing test patterns in `proxy/` modules, testing interception and safe
 
 ### Working with Phase 4
 1. Pipeline profile: `ScanProfile::WebProxy` in pipeline module
-2. MCP tools: `proxy/mcp.rs` (requires `web-proxy-mcp` feature)
+2. MCP tools: `tool/implementations/proxy.rs` (requires `web-proxy-mcp` feature)
 3. Evidence bundles: `proxy/intercept/bundle.rs` (`EvidenceBundle`/`BundleManifest`)
 4. Performance: `proxy/intercept/types.rs` (`FlowBuffer`, `ProxyMetrics`)
+5. gRPC protobuf: `proxy/intercept/protocols.rs` (prost-based encoding/decoding)
+6. Async rules: `EnhancedRuleSet::evaluate_async()` and `evaluate_indexed_async()`
+7. Session resume: `WebProxySessionReport::save_to_file()` / `load_from_file()`
+
+### Adding a New MCP Proxy Tool
+1. Add the tool action to `ProxyAction` enum in `proxy/mcp.rs`
+2. Add the handler in `tool/implementations/proxy.rs` `execute()` method
+3. Add tool ID to `classify_tool_risk()` and `infer_tool_category()` in `tool/protocol/mcp/policy.rs`
+4. Add policy entries in `McpProfilePolicy` for tool visibility per profile
+5. Add capability definition in `SecurityTool::capabilities()`
+6. Add tests in both `proxy/mcp.rs` and `tool/implementations/proxy.rs`
 
 ## Bug Fixes (2026-05-30)
 

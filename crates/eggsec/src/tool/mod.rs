@@ -125,5 +125,10 @@ pub fn create_default_registry() -> ToolRegistry {
         tracing::warn!("Failed to register tool: search: {}", e);
     }
 
+    #[cfg(feature = "web-proxy-mcp")]
+    if let Err(e) = registry.register(crate::tool::implementations::proxy::ProxyTool::new()) {
+        tracing::warn!("Failed to register tool: proxy: {}", e);
+    }
+
     registry
 }

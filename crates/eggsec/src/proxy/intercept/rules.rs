@@ -216,35 +216,171 @@ impl EnhancedRule {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnhancedRuleSet {
     rules: Vec<EnhancedRule>,
+    /// Index for fast host prefix lookup: maps host prefix to rule indices.
+    host_prefix_index: HashMap<String, Vec<usize>>,
+    /// Index for fast path prefix lookup: maps path prefix to rule indices.
+    path_prefix_index: HashMap<String, Vec<usize>>,
 }
 
 impl EnhancedRuleSet {
     pub fn new() -> Self {
         Self {
             rules: Vec::new(),
+            host_prefix_index: HashMap::new(),
+            path_prefix_index: HashMap::new(),
         }
     }
 
     pub fn add(&mut self, rule: EnhancedRule) {
+        let _idx = self.rules.len();
         self.rules.push(rule);
         self.rules.sort_by_key(|r| std::cmp::Reverse(r.priority));
+        self.rebuild_index();
     }
 
     pub fn remove(&mut self, id: &str) -> bool {
         let len_before = self.rules.len();
         self.rules.retain(|r| r.id.as_str() != id);
-        self.rules.len() < len_before
+        if self.rules.len() < len_before {
+            self.rebuild_index();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Rebuild the host and path prefix indices from the current rule set.
+    fn rebuild_index(&mut self) {
+        self.host_prefix_index.clear();
+        self.path_prefix_index.clear();
+
+        for (idx, rule) in self.rules.iter().enumerate() {
+            if !rule.enabled {
+                continue;
+            }
+            extract_prefixes(&rule.condition, &mut self.host_prefix_index, &mut self.path_prefix_index, idx);
+        }
     }
 
     pub fn evaluate(&self, context: &RuleContext) -> Vec<&EnhancedRule> {
         self.rules
             .iter()
-            .filter(|r| r.evaluate(context))
+            .filter(|r| r.enabled && r.evaluate(context))
             .collect()
     }
 
     pub fn evaluate_first(&self, context: &RuleContext) -> Option<&EnhancedRule> {
-        self.rules.iter().find(|r| r.evaluate(context))
+        self.rules.iter().find(|r| r.enabled && r.evaluate(context))
+    }
+
+    /// Evaluate rules using the prefix index for fast candidate selection.
+    ///
+    /// Returns rules that match based on the host and path prefixes,
+    /// then applies full condition evaluation to filter the candidates.
+    pub fn evaluate_indexed(&self, context: &RuleContext) -> Vec<&EnhancedRule> {
+        let mut candidate_indices = rustc_hash::FxHashSet::default();
+
+        // Find candidates by host prefix
+        for (prefix, indices) in &self.host_prefix_index {
+            if context.host.starts_with(prefix.as_str()) || context.host.contains(prefix.as_str()) {
+                for &idx in indices {
+                    candidate_indices.insert(idx);
+                }
+            }
+        }
+
+        // Find candidates by path prefix
+        for (prefix, indices) in &self.path_prefix_index {
+            if context.path.starts_with(prefix.as_str()) || context.path.contains(prefix.as_str()) {
+                for &idx in indices {
+                    candidate_indices.insert(idx);
+                }
+            }
+        }
+
+        // If no prefix matches found, fall back to full scan
+        if candidate_indices.is_empty() {
+            return self.evaluate(context);
+        }
+
+        // Evaluate full conditions on candidates
+        candidate_indices
+            .iter()
+            .filter_map(|&idx| {
+                let rule = &self.rules[idx];
+                if rule.enabled && rule.evaluate(context) {
+                    Some(rule)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Evaluate rules asynchronously using spawn_blocking for CPU-intensive conditions.
+    ///
+    /// This offloads regex-heavy condition evaluation to a blocking thread pool,
+    /// preventing async tasks from blocking the event loop.
+    pub async fn evaluate_async(&self, context: RuleContext) -> Vec<EnhancedRule> {
+        let rules: Vec<EnhancedRule> = self.rules.iter().cloned().collect();
+
+        tokio::task::spawn_blocking(move || {
+            rules
+                .iter()
+                .filter(|r| r.enabled && r.evaluate(&context))
+                .cloned()
+                .collect()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
+    /// Evaluate rules asynchronously using indexed lookup for fast candidate selection.
+    ///
+    /// Combines prefix indexing with async evaluation for optimal performance
+    /// on large rule sets with CPU-intensive conditions.
+    pub async fn evaluate_indexed_async(&self, context: RuleContext) -> Vec<EnhancedRule> {
+        let candidate_indices: Vec<usize> = {
+            let mut indices = rustc_hash::FxHashSet::default();
+
+            for (prefix, idxs) in &self.host_prefix_index {
+                if context.host.starts_with(prefix.as_str()) || context.host.contains(prefix.as_str()) {
+                    for &idx in idxs {
+                        indices.insert(idx);
+                    }
+                }
+            }
+
+            for (prefix, idxs) in &self.path_prefix_index {
+                if context.path.starts_with(prefix.as_str()) || context.path.contains(prefix.as_str()) {
+                    for &idx in idxs {
+                        indices.insert(idx);
+                    }
+                }
+            }
+
+            if indices.is_empty() {
+                // Fall back to all rules
+                (0..self.rules.len()).collect()
+            } else {
+                indices.into_iter().collect()
+            }
+        };
+
+        let rules: Vec<EnhancedRule> = candidate_indices
+            .iter()
+            .map(|&idx| self.rules[idx].clone())
+            .collect();
+
+        tokio::task::spawn_blocking(move || {
+            rules
+                .iter()
+                .filter(|r| r.enabled && r.evaluate(&context))
+                .cloned()
+                .collect()
+        })
+        .await
+        .unwrap_or_default()
     }
 
     pub fn get_by_id(&self, id: &str) -> Option<&EnhancedRule> {
@@ -307,6 +443,43 @@ impl EnhancedRuleSet {
     pub fn import_json(json: &str) -> Result<Self> {
         serde_json::from_str(json)
             .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to import rules: {}", e)))
+    }
+}
+
+/// Extract host and path prefixes from a rule condition for indexing.
+///
+/// This function recursively walks the condition tree and extracts
+/// simple string prefixes that can be used for fast candidate selection.
+fn extract_prefixes(
+    condition: &RuleCondition,
+    host_index: &mut HashMap<String, Vec<usize>>,
+    path_index: &mut HashMap<String, Vec<usize>>,
+    rule_idx: usize,
+) {
+    match condition {
+        RuleCondition::HostMatches(pattern) => {
+            // Extract the prefix before any wildcard
+            let prefix = pattern.split('*').next().unwrap_or(pattern).to_string();
+            if !prefix.is_empty() {
+                host_index.entry(prefix).or_default().push(rule_idx);
+            }
+        }
+        RuleCondition::PathMatches(pattern) => {
+            // Extract the prefix before any wildcard
+            let prefix = pattern.split('*').next().unwrap_or(pattern).to_string();
+            if !prefix.is_empty() {
+                path_index.entry(prefix).or_default().push(rule_idx);
+            }
+        }
+        RuleCondition::And(conditions) | RuleCondition::Or(conditions) => {
+            for c in conditions {
+                extract_prefixes(c, host_index, path_index, rule_idx);
+            }
+        }
+        RuleCondition::Not(inner) => {
+            extract_prefixes(inner, host_index, path_index, rule_idx);
+        }
+        _ => {}
     }
 }
 
@@ -1184,5 +1357,117 @@ action: inject_response
 
         let ctx4 = RuleContext::new("c.com", "/admin", "GET");
         assert!(!cond.evaluate(&ctx4));
+    }
+
+    // ==================== Performance/Benchmark tests ====================
+
+    #[test]
+    fn test_rule_evaluation_throughput_1000_rules() {
+        let mut rules = EnhancedRuleSet::new();
+
+        // Add 1000 rules with varying conditions
+        for i in 0..1000 {
+            let condition = if i % 3 == 0 {
+                RuleCondition::HostMatches(format!("host-{}.example.com", i))
+            } else if i % 3 == 1 {
+                RuleCondition::PathMatches(format!("/api/v{}/", i % 10))
+            } else {
+                RuleCondition::And(vec![
+                    RuleCondition::HostMatches("target.example.com".to_string()),
+                    RuleCondition::PathMatches(format!("/path/{}", i)),
+                ])
+            };
+
+            rules.add(EnhancedRule::new(
+                &format!("rule-{}", i),
+                &format!("Rule {}", i),
+                condition,
+                RuleAction::Intercept,
+            ));
+        }
+
+        let ctx = RuleContext::new("target.example.com", "/path/100", "GET");
+
+        // Benchmark: evaluate 1000 rules
+        let start = std::time::Instant::now();
+        let iterations = 1000;
+        for _ in 0..iterations {
+            let _ = rules.evaluate(&ctx);
+        }
+        let elapsed = start.elapsed();
+        let per_eval = elapsed / iterations;
+
+        // Should complete in <1ms per evaluation for 1000 rules
+        assert!(
+            per_eval.as_micros() < 1000,
+            "Rule evaluation too slow: {:?} per eval for 1000 rules",
+            per_eval
+        );
+    }
+
+    #[test]
+    fn test_indexed_evaluation_throughput_1000_rules() {
+        let mut rules = EnhancedRuleSet::new();
+
+        // Add 1000 rules with host prefixes for indexing
+        for i in 0..1000 {
+            let condition = RuleCondition::HostMatches(format!("host-{}.example.com", i));
+            rules.add(EnhancedRule::new(
+                &format!("rule-{}", i),
+                &format!("Rule {}", i),
+                condition,
+                RuleAction::Intercept,
+            ));
+        }
+
+        let ctx = RuleContext::new("host-500.example.com", "/", "GET");
+
+        // Benchmark indexed evaluation
+        let start = std::time::Instant::now();
+        let iterations = 1000;
+        for _ in 0..iterations {
+            let _ = rules.evaluate_indexed(&ctx);
+        }
+        let elapsed = start.elapsed();
+        let per_eval = elapsed / iterations;
+
+        // Indexed evaluation should be faster than full scan
+        assert!(
+            per_eval.as_micros() < 500,
+            "Indexed rule evaluation too slow: {:?} per eval",
+            per_eval
+        );
+    }
+
+    #[test]
+    fn test_rule_set_with_complex_nested_conditions() {
+        let mut rules = EnhancedRuleSet::new();
+
+        // Add rules with complex nested conditions
+        for i in 0..100 {
+            let condition = RuleCondition::And(vec![
+                RuleCondition::Or(vec![
+                    RuleCondition::HostMatches("api.example.com".to_string()),
+                    RuleCondition::HostMatches("cdn.example.com".to_string()),
+                ]),
+                RuleCondition::Not(Box::new(RuleCondition::PathMatches("/health".to_string()))),
+                RuleCondition::Or(vec![
+                    RuleCondition::MethodMatches("POST".to_string()),
+                    RuleCondition::MethodMatches("PUT".to_string()),
+                    RuleCondition::MethodMatches("DELETE".to_string()),
+                ]),
+            ]);
+
+            rules.add(EnhancedRule::new(
+                &format!("complex-rule-{}", i),
+                &format!("Complex Rule {}", i),
+                condition.clone(),
+                RuleAction::Intercept,
+            ));
+        }
+
+        let ctx = RuleContext::new("api.example.com", "/api/data", "POST");
+        let matches = rules.evaluate(&ctx);
+        assert!(!matches.is_empty(), "Complex rules should match");
     }
 }

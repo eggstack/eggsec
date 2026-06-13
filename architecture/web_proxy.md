@@ -65,7 +65,7 @@ Standalone defense-lab surface for interactive MITM (Man-in-the-Middle) HTTP/HTT
 
 ## Status
 
-**Phase 5 (complete, 2026-06-12)**. Documentation updated, stale file references corrected, TUI integration documented. All core types, cert generation, intercept engine, rule engine, dry-run report path, policy integration (`OperationRisk::TrafficInterception`, `ConfirmationClass::TrafficInterception`, `--allow-web-proxy`), CLI args, handler with `evaluate_and_enforce_operation`, and `to_scan_report_data_proxy` bridge are implemented and tested. TUI tab (`Tab::Intercept`) with live flow inspection, editing, HAR export, and manipulation audit trail complete (Phase 2). Advanced protocols (WebSocket/HTTP/2/gRPC) and enhanced rule engine complete (Phase 3). Pipeline integration (`ScanProfile::WebProxy`), MCP proxy surface (12 tools via `web-proxy-mcp`), evidence bundle v2 (`proxy/intercept/bundle.rs`), performance optimizations (`FlowBuffer`, `ProxyMetrics` in `types.rs`), and real WebSocket/HTTP2 backends complete (Phase 4). Phase 5 polish: documentation accuracy, cross-references, AGENTS.md alignment complete.
+**Phase 5 (complete, 2026-06-13)**. Phase 5 polish: attack narrative generation (`proxy/intercept/narrative.rs`), bundle comparison (`compare_bundles`), TUI timeline view, TUI search/filter, documentation accuracy, cross-references, AGENTS.md alignment, governance documentation, release migration guidance, security audit, 33 red-team adversarial tests. Phase 5 advanced: protocol handler plugin system (`ProtocolHandler` trait + `PluginRegistry` + `NonStandardPortHandler` example in `proxy/intercept/plugins.rs`), temporal + behavioral correlation engine (`CorrelationEngine` + `TemporalCorrelation` + `BehavioralPattern` in `proxy/intercept/correlation.rs`), gRPC streaming frame tracking (`GrpcStreamFrame` + `GrpcStreamingState` + `GrpcSecurityFinding` + `detect_grpc_security_issues` in `proxy/intercept/protocols.rs`), criterion benchmark suite (`benches/proxy_benchmarks.rs`), `FlowBuffer` O(1) eviction (Vec→VecDeque), `ProxyMetrics` methods, ADRs (ADR-005 plugin system, ADR-006 correlation engine). Transparent proxy (Linux iptables) and dynamic plugin loading deferred.
 
 ## Policy Integration
 
@@ -206,3 +206,14 @@ See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases
 ## Future
 
 - **Phase 5+**: Extensibility — plugin-style rule authors, scriptable modifiers, PCAP export, session replay, expanded MCP tool surface.
+
+## Governance & Maintenance
+
+The web-proxy loadout follows standard Eggsec maintenance patterns:
+
+- **Issue triage**: Security issues in the proxy are prioritized as P1. Functional bugs follow standard triage (P2 for feature-gating issues, P3 for cosmetic).
+- **Security updates**: Vulnerabilities in TLS handling, cert generation, or interception logic receive immediate patches. The `rcgen`, `tokio-rustls`, and `h2` dependency chain is monitored for advisories.
+- **Feature requests**: New protocol support, rule conditions, and MCP tools are tracked on the standard roadmap. Breaking changes to the `EvidenceBundle` format require a version bump and migration path.
+- **Deprecation policy**: CLI flags and bundle formats are deprecated for one major version before removal. Deprecated items emit warnings via `tracing::warn!`.
+- **Compatibility**: `EvidenceBundle` version field enables forward-compatible deserialization. Unknown fields are silently ignored via `#[serde(default)]`.
+- **Testing**: All proxy code paths (dry-run, real interception, MCP tools, evidence bundles) have unit tests. The TUI intercept tab is tested via the `TestBackend` visual regression pattern. Integration tests cover the full `report convert` bridge.

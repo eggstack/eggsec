@@ -241,3 +241,63 @@ Early coordination on MCP tool IDs and correlation reference format is critical.
 **End of Phase 4 Pipeline, MCP & Evidence Bundle Handoff Plan**
 
 This document is the execution blueprint for Phase 4. Implement in the recommended order after Phase 3 is complete. Maintain the safety, quality, and consistency standards of the Eggsec loadout model. Ensure all MCP tool invocations are gated through `EnforcementContext` and respect dry-run defaults.
+
+---
+
+## Phase 4 Closeout Note (2026-06-13)
+
+**Status**: COMPLETE
+
+**Deliverables Completed**:
+
+| Category | Items | Status |
+|----------|-------|--------|
+| **Pipeline** | `ScanProfile::WebProxy`, `Stage::WebProxy`, CLI integration, `run_web_proxy_stage()` with real target discovery and finding extraction | ✅ Complete |
+| **MCP Tools** | `ProxyTool` implementation with all 12 actions (start, stop, status, list/inspect/forward/drop/replay flows, add/list/remove rules, export), registered in `create_default_registry()` with `web-proxy-mcp` feature gate | ✅ Complete |
+| **Evidence Bundle** | `EvidenceBundle`/`BundleManifest` with gzip compression, HMAC-SHA256 signing (`sign()`/`verify()`), `export_signed_evidence_bundle()` | ✅ Complete |
+| **gRPC Protobuf** | prost-based encoding/decoding in `GrpcCall` (`decode_request_body()`/`decode_response_body()`/`encode_request_body()`/`encode_response_body()`), wire format parsing | ✅ Complete |
+| **HTTP/2 Tuning** | `Http2Session` window size fields, `tune_windows()`, `optimal_window_sizes()`, `WindowTuningScenario` enum | ✅ Complete |
+| **Session Resume** | `WebProxySessionReport::save_to_file()`/`load_from_file()`/`merge_from_previous()` | ✅ Complete |
+| **Async Rules** | `EnhancedRuleSet::evaluate_async()`/`evaluate_indexed_async()` using `spawn_blocking` | ✅ Complete |
+| **Rule Indexing** | `host_prefix_index`/`path_prefix_index` for fast candidate selection | ✅ Complete |
+| **TUI Performance** | Virtual scrolling in `render_flow_list()`, auto-performance mode at >5000 flows | ✅ Complete |
+| **Documentation** | SKILL.md updated with 12 MCP tools, docs/WEB_PROXY.md updated, architecture/web_proxy.md updated | ✅ Complete |
+| **Testing** | 1668 eggsec lib tests + 305 TUI tests pass, stress tests (10k flows), benchmark tests (1000 rules) | ✅ Complete |
+| **Phase 5 Plan** | `plans/interactive-web-proxy-phase5-advanced-features-handoff-plan.md` created | ✅ Complete |
+
+**Key Files Modified**:
+- `crates/eggsec/src/tool/implementations/proxy.rs` (new)
+- `crates/eggsec/src/tool/implementations/mod.rs`
+- `crates/eggsec/src/tool/mod.rs`
+- `crates/eggsec/src/proxy/intercept/protocols.rs` (gRPC protobuf, HTTP/2 tuning)
+- `crates/eggsec/src/proxy/intercept/rules.rs` (async evaluation, indexing)
+- `crates/eggsec/src/proxy/intercept/bundle.rs` (signing)
+- `crates/eggsec/src/proxy/intercept/types.rs` (session resume)
+- `crates/eggsec/src/proxy/intercept/mod.rs`
+- `crates/eggsec/src/proxy/mcp.rs`
+- `crates/eggsec/src/pipeline/executor.rs` (pipeline automation)
+- `crates/eggsec/Cargo.toml` (prost deps)
+- `crates/eggsec-tui/src/tabs/intercept.rs` (virtual scrolling, WS pagination)
+- `.opencode/skills/eggsec-proxy/SKILL.md`
+- `docs/WEB_PROXY.md`
+
+**Test Results**:
+- 1668 eggsec lib tests pass with `web-proxy-mcp` feature
+- 305 TUI tests pass
+- 124 intercept tests pass
+- 38 rules tests pass (including benchmark tests)
+- All stress tests pass (10k flows)
+
+**Deferred to Phase 5**:
+- Transparent proxy mode (iptables/nftables)
+- Deep plugin system for arbitrary protocol handlers
+- Full gRPC bidirectional streaming with complex flow control
+- Advanced multi-loadout correlation engine
+- Criterion benchmark suite (formal)
+- Integration tests with real protocol servers
+
+**Phase 5 handoff plan**: `plans/interactive-web-proxy-phase5-advanced-features-handoff-plan.md`
+
+---
+
+*Phase 4 completed 2026-06-13. All core infrastructure (MCP tools, protobuf support, virtual scrolling, async rules, pipeline automation, session resume, bundle signing, HTTP/2 tuning) implemented and tested.*

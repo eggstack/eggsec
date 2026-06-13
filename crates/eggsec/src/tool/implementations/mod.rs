@@ -2,6 +2,8 @@ pub mod fuzzer;
 pub mod loadtest;
 pub mod oast;
 pub mod pipeline;
+#[cfg(feature = "web-proxy-mcp")]
+pub mod proxy;
 pub mod recon;
 pub mod scanner;
 pub mod search;

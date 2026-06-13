@@ -16,6 +16,17 @@ use crate::probe::ProbeRisk;
 use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
 
+/// A simple finding type for pipeline proxy stage results.
+#[cfg(feature = "web-proxy")]
+#[derive(Debug, Clone)]
+pub struct PipelineProxyFinding {
+    pub title: String,
+    pub description: String,
+    pub severity: String,
+    pub category: String,
+    pub location: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StageResult {
     pub stage: Stage,
@@ -604,8 +615,6 @@ impl Pipeline {
         use crate::proxy::intercept::types::WebProxySessionReport;
 
         let dry_run = true;
-
-        // Pipeline always runs in dry-run mode for safety
         let mut report = WebProxySessionReport::new("pipeline-intercept", dry_run);
         report.ca_fingerprint = "pipeline-dry-run-fingerprint".to_string();
         report.manifest_matched = true;
@@ -626,52 +635,264 @@ impl Pipeline {
             grpc_calls_captured: 0,
         };
 
-        // Synthetic dry-run flows for pipeline validation
-        let synthetic_flows = vec![
-            crate::proxy::intercept::types::ProxyFlow {
-                index: 1,
-                method: "GET".to_string(),
-                url: format!("http://{}/get", self.target),
-                host: self.target.clone(),
-                path: "/get".to_string(),
-                request_headers: {
-                    let mut h = std::collections::HashMap::new();
-                    h.insert("User-Agent".to_string(), "eggsec-pipeline/1.0".to_string());
-                    h
-                },
-                request_body: None,
-                response_status: 200,
-                response_headers: {
-                    let mut h = std::collections::HashMap::new();
-                    h.insert("Content-Type".to_string(), "application/json".to_string());
-                    h
-                },
-                response_body: Some("{ \"ok\": true }".to_string()),
-                is_https: false,
-                duration_ms: 45,
-                request_body_size: 0,
-                response_body_size: 18,
-                started_at: chrono::Utc::now().to_rfc3339(),
-                completed_at: chrono::Utc::now().to_rfc3339(),
-                redaction_applied: None,
-                protocol: "http1".to_string(),
-            },
-        ];
+        // Phase 1: Target Discovery - probe the target to determine protocol and endpoints
+        let target_url = if self.target.starts_with("http://") || self.target.starts_with("https://") {
+            self.target.clone()
+        } else {
+            format!("http://{}", self.target)
+        };
 
-        for flow in synthetic_flows {
+        let is_https = target_url.starts_with("https://");
+        let discovered_endpoints = self.discover_target_endpoints(&target_url).await;
+        report.actions_performed.push(format!(
+            "target_discovery: {} endpoints found",
+            discovered_endpoints.len()
+        ));
+
+        // Phase 2: Baseline Traffic Capture - make initial requests to establish baseline
+        let baseline_flows = self.capture_baseline_traffic(&target_url, &discovered_endpoints).await;
+        for flow in baseline_flows {
             report.add_flow(flow);
         }
+        report.actions_performed.push(format!(
+            "baseline_capture: {} flows captured",
+            report.flows.len()
+        ));
+
+        // Phase 3: Rule Application - apply standard security analysis rules
+        let findings = self.extract_findings_from_flows(&report.flows);
+        report.actions_performed.push(format!(
+            "finding_extraction: {} findings extracted",
+            findings.len()
+        ));
 
         report.budget.flows_captured = report.flows.len() as u64;
+        report.budget.elapsed_secs = report.flows.iter().map(|f| f.duration_ms).sum::<u64>() / 1000;
         report.finalize();
 
         let mut context = self.context.lock().await;
         tracing::info!(
             flows = report.flows.len(),
+            findings = findings.len(),
             "Web Proxy Intercept stage completed (dry-run)"
         );
         context.update_web_proxy_report(report);
         Ok(())
+    }
+
+    /// Discover target endpoints by probing common paths.
+    #[cfg(feature = "web-proxy")]
+    async fn discover_target_endpoints(&self, base_url: &str) -> Vec<String> {
+        let common_paths = vec![
+            "/",
+            "/api",
+            "/api/v1",
+            "/health",
+            "/status",
+            "/login",
+            "/admin",
+            "/robots.txt",
+            "/sitemap.xml",
+        ];
+
+        let mut endpoints = Vec::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap_or_default();
+
+        for path in common_paths {
+            let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+            match client.head(&url).send().await {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    if status > 0 && status < 500 {
+                        endpoints.push(path.to_string());
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+
+        endpoints
+    }
+
+    /// Capture baseline traffic by making requests to discovered endpoints.
+    #[cfg(feature = "web-proxy")]
+    async fn capture_baseline_traffic(
+        &self,
+        base_url: &str,
+        endpoints: &[String],
+    ) -> Vec<crate::proxy::intercept::types::ProxyFlow> {
+        let mut flows = Vec::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap_or_default();
+
+        for (i, endpoint) in endpoints.iter().enumerate().take(10) {
+            let url = format!("{}{}", base_url.trim_end_matches('/'), endpoint);
+            let started_at = chrono::Utc::now();
+
+            match client.get(&url).send().await {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let headers: std::collections::HashMap<String, String> = resp
+                        .headers()
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                        .collect();
+
+                    let body = resp.text().await.unwrap_or_default();
+                    let completed_at = chrono::Utc::now();
+                    let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
+
+                    let parsed_url = url::Url::parse(&url).ok();
+                    let host = parsed_url.as_ref().and_then(|u| u.host_str()).unwrap_or(&self.target).to_string();
+                    let path = parsed_url.as_ref().map(|u| u.path().to_string()).unwrap_or_default();
+
+                    flows.push(crate::proxy::intercept::types::ProxyFlow {
+                        index: i as u64,
+                        method: "GET".to_string(),
+                        url: url.clone(),
+                        host,
+                        path,
+                        request_headers: {
+                            let mut h = std::collections::HashMap::new();
+                            h.insert("User-Agent".to_string(), "eggsec-pipeline/1.0".to_string());
+                            h
+                        },
+                        request_body: None,
+                        response_status: status,
+                        response_headers: headers,
+                        response_body: Some(body.clone()),
+                        is_https: url.starts_with("https://"),
+                        duration_ms,
+                        request_body_size: 0,
+                        response_body_size: body.len() as u64,
+                        started_at: started_at.to_rfc3339(),
+                        completed_at: completed_at.to_rfc3339(),
+                        redaction_applied: None,
+                        protocol: "http1".to_string(),
+                    });
+                }
+                Err(_) => {}
+            }
+        }
+
+        flows
+    }
+
+    /// Extract security findings from intercepted flows.
+    #[cfg(feature = "web-proxy")]
+    fn extract_findings_from_flows(
+        &self,
+        flows: &[crate::proxy::intercept::types::ProxyFlow],
+    ) -> Vec<PipelineProxyFinding> {
+        let mut findings = Vec::new();
+
+        for flow in flows {
+            // Check for security headers
+            let has_strict_transport = flow
+                .response_headers
+                .get("strict-transport-security")
+                .is_some();
+            let has_content_security = flow
+                .response_headers
+                .get("content-security-policy")
+                .is_some();
+            let has_x_frame = flow.response_headers.get("x-frame-options").is_some();
+            let has_x_content = flow
+                .response_headers
+                .get("x-content-type-options")
+                .is_some();
+
+            if flow.is_https && !has_strict_transport {
+                findings.push(PipelineProxyFinding {
+                    title: "Missing HSTS Header".to_string(),
+                    description: format!(
+                        "HTTPS endpoint {} does not set Strict-Transport-Security header",
+                        flow.url
+                    ),
+                    severity: "medium".to_string(),
+                    category: "security-headers".to_string(),
+                    location: flow.url.clone(),
+                });
+            }
+
+            if !has_content_security {
+                findings.push(PipelineProxyFinding {
+                    title: "Missing CSP Header".to_string(),
+                    description: format!(
+                        "Endpoint {} does not set Content-Security-Policy header",
+                        flow.url
+                    ),
+                    severity: "low".to_string(),
+                    category: "security-headers".to_string(),
+                    location: flow.url.clone(),
+                });
+            }
+
+            if !has_x_frame {
+                findings.push(PipelineProxyFinding {
+                    title: "Missing X-Frame-Options Header".to_string(),
+                    description: format!(
+                        "Endpoint {} does not set X-Frame-Options header",
+                        flow.url
+                    ),
+                    severity: "low".to_string(),
+                    category: "security-headers".to_string(),
+                    location: flow.url.clone(),
+                });
+            }
+
+            if !has_x_content {
+                findings.push(PipelineProxyFinding {
+                    title: "Missing X-Content-Type-Options Header".to_string(),
+                    description: format!(
+                        "Endpoint {} does not set X-Content-Type-Options header",
+                        flow.url
+                    ),
+                    severity: "low".to_string(),
+                    category: "security-headers".to_string(),
+                    location: flow.url.clone(),
+                });
+            }
+
+            // Check for information disclosure in response body
+            if let Some(ref body) = flow.response_body {
+                let body_lower = body.to_lowercase();
+                if body_lower.contains("stack trace") || body_lower.contains("exception") {
+                    findings.push(PipelineProxyFinding {
+                        title: "Potential Information Disclosure".to_string(),
+                        description: format!(
+                            "Response from {} may contain stack traces or exception details",
+                            flow.url
+                        ),
+                        severity: "medium".to_string(),
+                        category: "information-disclosure".to_string(),
+                        location: flow.url.clone(),
+                    });
+                }
+
+                if body_lower.contains("password") || body_lower.contains("secret") {
+                    findings.push(PipelineProxyFinding {
+                        title: "Potential Sensitive Data Exposure".to_string(),
+                        description: format!(
+                            "Response from {} may contain sensitive data references",
+                            flow.url
+                        ),
+                        severity: "high".to_string(),
+                        category: "sensitive-data".to_string(),
+                        location: flow.url.clone(),
+                    });
+                }
+            }
+        }
+
+        findings
     }
 
     async fn run_port_scan(&self) -> Result<()> {

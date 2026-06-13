@@ -66,6 +66,16 @@ pub struct BundleManifest {
     pub correlation_count: usize,
     /// Number of rules in the rule set.
     pub rule_count: usize,
+    /// HMAC-SHA256 signature for bundle integrity (hex-encoded).
+    /// Computed over the serialized manifest fields (excluding this signature).
+    #[serde(default)]
+    pub signature: Option<String>,
+    /// Timestamp when the bundle was signed (RFC 3339).
+    #[serde(default)]
+    pub signed_at: Option<String>,
+    /// Signing key identifier (for key rotation tracking).
+    #[serde(default)]
+    pub signing_key_id: Option<String>,
 }
 
 impl EvidenceBundle {
@@ -77,9 +87,7 @@ impl EvidenceBundle {
         let rule_set = rules.cloned().unwrap_or_default();
         let correlations: Vec<CorrelationReference> = report
             .correlation_refs
-            .iter()
-            .cloned()
-            .collect();
+            .to_vec();
 
         let manifest = BundleManifest {
             target: report.listen_addr.clone(),
@@ -95,6 +103,9 @@ impl EvidenceBundle {
             manipulation_count: report.manipulations.len(),
             correlation_count: correlations.len(),
             rule_count: rule_set.len(),
+            signature: None,
+            signed_at: None,
+            signing_key_id: None,
         };
 
         Self {
@@ -162,6 +173,82 @@ impl EvidenceBundle {
             correlation_refs: self.correlations.clone(),
         }
     }
+
+    /// Sign the bundle manifest with HMAC-SHA256 for integrity verification.
+    ///
+    /// The signature is computed over a canonical representation of the manifest fields.
+    /// After signing, the `signature`, `signed_at`, and `signing_key_id` fields are set.
+    ///
+    /// # Arguments
+    /// * `key` - HMAC signing key (bytes)
+    /// * `key_id` - Optional key identifier for tracking
+    pub fn sign(&mut self, key: &[u8], key_id: Option<&str>) -> Result<()> {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        type HmacSha256 = Hmac<Sha256>;
+
+        let canonical = self.manifest_canonical_string();
+        let mut mac = HmacSha256::new_from_slice(key)
+            .map_err(|e| EggsecError::Proxy(format!("HMAC key error: {}", e)))?;
+        mac.update(canonical.as_bytes());
+        let signature = mac.finalize().into_bytes();
+
+        self.manifest.signature = Some(hex::encode(signature));
+        self.manifest.signed_at = Some(chrono::Utc::now().to_rfc3339());
+        self.manifest.signing_key_id = key_id.map(|s| s.to_string());
+
+        Ok(())
+    }
+
+    /// Verify the bundle signature with HMAC-SHA256.
+    ///
+    /// Returns `Ok(true)` if the signature is valid, `Ok(false)` if invalid,
+    /// or `Err` if the bundle is unsigned or verification fails.
+    pub fn verify(&self, key: &[u8]) -> Result<bool> {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        type HmacSha256 = Hmac<Sha256>;
+
+        let provided_sig = self
+            .manifest
+            .signature
+            .as_deref()
+            .ok_or_else(|| EggsecError::Proxy("Bundle is unsigned".to_string()))?;
+
+        let sig_bytes = hex::decode(provided_sig)
+            .map_err(|e| EggsecError::Proxy(format!("Invalid signature hex: {}", e)))?;
+
+        let canonical = self.manifest_canonical_string();
+        let mut mac = HmacSha256::new_from_slice(key)
+            .map_err(|e| EggsecError::Proxy(format!("HMAC key error: {}", e)))?;
+        mac.update(canonical.as_bytes());
+
+        Ok(mac.verify_slice(&sig_bytes).is_ok())
+    }
+
+    /// Generate a canonical string representation of the manifest for signing.
+    ///
+    /// This ensures consistent signature computation regardless of serialization order.
+    fn manifest_canonical_string(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.manifest.target,
+            self.manifest.scope.as_deref().unwrap_or(""),
+            self.manifest.started_at,
+            self.manifest.ended_at,
+            self.manifest.user.as_deref().unwrap_or(""),
+            self.manifest.dry_run,
+            self.manifest.flow_count,
+            self.manifest.ws_session_count,
+            self.manifest.http2_session_count,
+            self.manifest.grpc_session_count,
+            self.manifest.manipulation_count,
+            self.manifest.correlation_count,
+            self.manifest.rule_count,
+        )
+    }
 }
 
 /// Export an evidence bundle from a session report to a file path.
@@ -181,11 +268,185 @@ pub fn export_evidence_bundle(
     Ok(bundle_path.to_string())
 }
 
+/// Export a signed evidence bundle from a session report to a file path.
+///
+/// Signs the bundle with HMAC-SHA256 before writing. The signature provides
+/// integrity verification but not authenticity (symmetric key).
+pub fn export_signed_evidence_bundle(
+    report: &WebProxySessionReport,
+    rules: Option<&EnhancedRuleSet>,
+    bundle_path: &str,
+    signing_key: &[u8],
+    key_id: Option<&str>,
+) -> Result<String> {
+    let mut bundle = EvidenceBundle::from_report(report, rules);
+    bundle.sign(signing_key, key_id)?;
+    let bytes = bundle.to_bytes()?;
+    let mut file = std::fs::File::create(bundle_path)
+        .map_err(|e| EggsecError::Proxy(format!("Failed to create bundle file {}: {}", bundle_path, e)))?;
+    file.write_all(&bytes)
+        .map_err(|e| EggsecError::Proxy(format!("Failed to write bundle file: {}", e)))?;
+    Ok(bundle_path.to_string())
+}
+
 /// Import an evidence bundle from a gzipped JSON file.
 pub fn import_evidence_bundle(bundle_path: &str) -> Result<EvidenceBundle> {
     let data = std::fs::read(bundle_path)
         .map_err(|e| EggsecError::Proxy(format!("Failed to read bundle file {}: {}", bundle_path, e)))?;
     EvidenceBundle::from_bytes(&data)
+}
+
+/// Differences between two evidence bundles.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BundleDiff {
+    /// Flows present in `baseline` but not in `other`.
+    pub flows_added: Vec<u64>,
+    /// Flows present in `other` but not in `baseline`.
+    pub flows_removed: Vec<u64>,
+    /// Flows present in both but with different data.
+    pub flows_modified: Vec<u64>,
+    /// Manipulations present in `baseline` but not in `other`.
+    pub manipulations_added: usize,
+    /// Manipulations present in `other` but not in `baseline`.
+    pub manipulations_removed: usize,
+    /// Rules present in `baseline` but not in `other`.
+    pub rules_added: usize,
+    /// Rules present in `other` but not in `baseline`.
+    pub rules_removed: usize,
+    /// Correlations present in `baseline` but not in `other`.
+    pub correlations_added: usize,
+    /// Correlations present in `other` but not in `baseline`.
+    pub correlations_removed: usize,
+    /// Whether the manifests differ.
+    pub manifest_changed: bool,
+}
+
+impl BundleDiff {
+    /// Returns true if no differences were found.
+    pub fn is_empty(&self) -> bool {
+        self.flows_added.is_empty()
+            && self.flows_removed.is_empty()
+            && self.flows_modified.is_empty()
+            && self.manipulations_added == 0
+            && self.manipulations_removed == 0
+            && self.rules_added == 0
+            && self.rules_removed == 0
+            && self.correlations_added == 0
+            && self.correlations_removed == 0
+            && !self.manifest_changed
+    }
+
+    /// Human-readable summary of the diff.
+    pub fn summary(&self) -> String {
+        let mut parts = Vec::new();
+        if !self.flows_added.is_empty() {
+            parts.push(format!("{} flows added", self.flows_added.len()));
+        }
+        if !self.flows_removed.is_empty() {
+            parts.push(format!("{} flows removed", self.flows_removed.len()));
+        }
+        if !self.flows_modified.is_empty() {
+            parts.push(format!("{} flows modified", self.flows_modified.len()));
+        }
+        if self.manipulations_added > 0 {
+            parts.push(format!("{} manipulations added", self.manipulations_added));
+        }
+        if self.manipulations_removed > 0 {
+            parts.push(format!("{} manipulations removed", self.manipulations_removed));
+        }
+        if self.rules_added > 0 {
+            parts.push(format!("{} rules added", self.rules_added));
+        }
+        if self.rules_removed > 0 {
+            parts.push(format!("{} rules removed", self.rules_removed));
+        }
+        if self.correlations_added > 0 {
+            parts.push(format!("{} correlations added", self.correlations_added));
+        }
+        if self.correlations_removed > 0 {
+            parts.push(format!("{} correlations removed", self.correlations_removed));
+        }
+        if self.manifest_changed {
+            parts.push("manifest changed".to_string());
+        }
+        if parts.is_empty() {
+            "No differences".to_string()
+        } else {
+            parts.join("; ")
+        }
+    }
+}
+
+/// Compare two evidence bundles and return the differences.
+///
+/// `baseline` is the older/reference bundle; `other` is the newer/compared bundle.
+/// Flows are matched by their `index` field; manipulations, rules, and correlations
+/// are compared by count.
+pub fn compare_bundles(baseline: &EvidenceBundle, other: &EvidenceBundle) -> BundleDiff {
+    use std::collections::HashSet;
+
+    let baseline_flow_indices: HashSet<u64> = baseline.flows.iter().map(|f| f.index).collect();
+    let other_flow_indices: HashSet<u64> = other.flows.iter().map(|f| f.index).collect();
+
+    let flows_added: Vec<u64> = other_flow_indices
+        .difference(&baseline_flow_indices)
+        .copied()
+        .collect();
+    let flows_removed: Vec<u64> = baseline_flow_indices
+        .difference(&other_flow_indices)
+        .copied()
+        .collect();
+
+    // Check for modified flows (same index, different data)
+    let mut flows_modified = Vec::new();
+    for b_flow in &baseline.flows {
+        if let Some(o_flow) = other.flows.iter().find(|f| f.index == b_flow.index) {
+            let b_json = serde_json::to_string(b_flow).unwrap_or_default();
+            let o_json = serde_json::to_string(o_flow).unwrap_or_default();
+            if b_json != o_json {
+                flows_modified.push(b_flow.index);
+            }
+        }
+    }
+
+    let manipulations_diff =
+        baseline.manipulations.len() as i64 - other.manipulations.len() as i64;
+    let manipulations_added = if manipulations_diff > 0 {
+        manipulations_diff as usize
+    } else {
+        0
+    };
+    let manipulations_removed = if manipulations_diff < 0 {
+        (-manipulations_diff) as usize
+    } else {
+        0
+    };
+
+    let rules_diff = baseline.rules.len() as i64 - other.rules.len() as i64;
+    let rules_added = if rules_diff > 0 { rules_diff as usize } else { 0 };
+    let rules_removed = if rules_diff < 0 { (-rules_diff) as usize } else { 0 };
+
+    let corr_diff =
+        baseline.correlations.len() as i64 - other.correlations.len() as i64;
+    let correlations_added = if corr_diff > 0 { corr_diff as usize } else { 0 };
+    let correlations_removed = if corr_diff < 0 { (-corr_diff) as usize } else { 0 };
+
+    let manifest_changed = baseline.manifest.flow_count != other.manifest.flow_count
+        || baseline.manifest.started_at != other.manifest.started_at
+        || baseline.manifest.ended_at != other.manifest.ended_at;
+
+    BundleDiff {
+        flows_added,
+        flows_removed,
+        flows_modified,
+        manipulations_added,
+        manipulations_removed,
+        rules_added,
+        rules_removed,
+        correlations_added,
+        correlations_removed,
+        manifest_changed,
+    }
 }
 
 #[cfg(test)]
@@ -370,5 +631,125 @@ mod tests {
         assert_eq!(restored.ws_sessions.len(), 1);
         assert_eq!(restored.http2_sessions.len(), 1);
         assert_eq!(restored.grpc_sessions.len(), 1);
+    }
+
+    #[test]
+    fn test_compare_bundles_identical() {
+        let report = sample_report();
+        let rules = sample_rules();
+        let bundle_a = EvidenceBundle::from_report(&report, Some(&rules));
+        let bundle_b = EvidenceBundle::from_report(&report, Some(&rules));
+        let diff = compare_bundles(&bundle_a, &bundle_b);
+        assert!(diff.is_empty());
+        assert_eq!(diff.summary(), "No differences");
+    }
+
+    #[test]
+    fn test_compare_bundles_added_flow() {
+        let report_a = sample_report();
+        let mut report_b = sample_report();
+        report_b.flows.push(ProxyFlow {
+            index: 1,
+            method: "POST".to_string(),
+            url: "https://example.com/api".to_string(),
+            host: "example.com".to_string(),
+            path: "/api".to_string(),
+            request_headers: std::collections::HashMap::new(),
+            request_body: None,
+            response_status: 201,
+            response_headers: std::collections::HashMap::new(),
+            response_body: None,
+            is_https: true,
+            duration_ms: 50,
+            request_body_size: 0,
+            response_body_size: 0,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            completed_at: chrono::Utc::now().to_rfc3339(),
+            redaction_applied: None,
+            protocol: "http1".to_string(),
+        });
+
+        let bundle_a = EvidenceBundle::from_report(&report_a, None);
+        let bundle_b = EvidenceBundle::from_report(&report_b, None);
+        let diff = compare_bundles(&bundle_a, &bundle_b);
+
+        assert_eq!(diff.flows_added, vec![1]);
+        assert!(diff.flows_removed.is_empty());
+        assert!(!diff.is_empty());
+        assert!(diff.summary().contains("1 flows added"));
+    }
+
+    #[test]
+    fn test_compare_bundles_removed_flow() {
+        let mut report_a = sample_report();
+        report_a.flows.push(ProxyFlow {
+            index: 1,
+            method: "POST".to_string(),
+            url: "https://example.com/api".to_string(),
+            host: "example.com".to_string(),
+            path: "/api".to_string(),
+            request_headers: std::collections::HashMap::new(),
+            request_body: None,
+            response_status: 201,
+            response_headers: std::collections::HashMap::new(),
+            response_body: None,
+            is_https: true,
+            duration_ms: 50,
+            request_body_size: 0,
+            response_body_size: 0,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            completed_at: chrono::Utc::now().to_rfc3339(),
+            redaction_applied: None,
+            protocol: "http1".to_string(),
+        });
+        let report_b = sample_report();
+
+        let bundle_a = EvidenceBundle::from_report(&report_a, None);
+        let bundle_b = EvidenceBundle::from_report(&report_b, None);
+        let diff = compare_bundles(&bundle_a, &bundle_b);
+
+        assert!(diff.flows_added.is_empty());
+        assert_eq!(diff.flows_removed, vec![1]);
+        assert!(!diff.is_empty());
+    }
+
+    #[test]
+    fn test_compare_bundles_modified_flow() {
+        let report_a = sample_report();
+        let mut report_b = sample_report();
+        report_b.flows[0].response_status = 500;
+
+        let bundle_a = EvidenceBundle::from_report(&report_a, None);
+        let bundle_b = EvidenceBundle::from_report(&report_b, None);
+        let diff = compare_bundles(&bundle_a, &bundle_b);
+
+        assert!(diff.flows_added.is_empty());
+        assert!(diff.flows_removed.is_empty());
+        assert_eq!(diff.flows_modified, vec![0]);
+        assert!(diff.summary().contains("1 flows modified"));
+    }
+
+    #[test]
+    fn test_compare_bundles_diff_summary() {
+        let report_a = sample_report();
+        let mut report_b = sample_report();
+        report_b.flows[0].response_status = 500;
+        report_b.manipulations.push(ManipulationRecord {
+            flow_index: 0,
+            direction: ProxyFlowDirection::Request,
+            field: "body".to_string(),
+            before: None,
+            after: Some("injected".to_string()),
+            reason: "test".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        });
+
+        let bundle_a = EvidenceBundle::from_report(&report_a, None);
+        let bundle_b = EvidenceBundle::from_report(&report_b, None);
+        let diff = compare_bundles(&bundle_a, &bundle_b);
+        let summary = diff.summary();
+
+        assert!(summary.contains("1 flows modified"));
+        assert!(summary.contains("1 manipulations removed"));
     }
 }

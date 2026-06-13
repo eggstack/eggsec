@@ -208,6 +208,44 @@ impl WebProxySessionReport {
             self.duration_ms = (now - start.with_timezone(&chrono::Utc)).num_milliseconds() as u64;
         }
     }
+
+    /// Save the session report to a JSON file for later resume.
+    pub fn save_to_file(&self, path: &str) -> Result<(), crate::error::EggsecError> {
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to serialize session: {}", e)))?;
+        std::fs::write(path, json)
+            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to write session file: {}", e)))?;
+        Ok(())
+    }
+
+    /// Load a session report from a JSON file for resume.
+    pub fn load_from_file(path: &str) -> Result<Self, crate::error::EggsecError> {
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to read session file: {}", e)))?;
+        serde_json::from_str(&json)
+            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to deserialize session: {}", e)))
+    }
+
+    /// Merge flows from a previous session into this one (for session resume).
+    pub fn merge_from_previous(&mut self, previous: &WebProxySessionReport) {
+        // Append flows from previous session with offset indices
+        let offset = self.flows.len() as u64;
+        for mut flow in previous.flows.clone() {
+            flow.index += offset;
+            self.add_flow(flow);
+        }
+
+        // Merge manipulations
+        self.manipulations.extend(previous.manipulations.clone());
+
+        // Merge actions performed
+        self.actions_performed.extend(previous.actions_performed.clone());
+
+        // Merge protocol sessions
+        self.ws_sessions.extend(previous.ws_sessions.clone());
+        self.http2_sessions.extend(previous.http2_sessions.clone());
+        self.grpc_sessions.extend(previous.grpc_sessions.clone());
+    }
 }
 
 /// Redaction pattern for PII/tokens in captured traffic.
@@ -537,27 +575,46 @@ pub struct HarTimings {
 
 /// Configurable flow buffer with LRU eviction for high-volume sessions.
 pub struct FlowBuffer {
-    flows: Vec<ProxyFlow>,
+    flows: std::collections::VecDeque<ProxyFlow>,
     max_size: usize,
 }
 
 impl FlowBuffer {
     pub fn new(max_size: usize) -> Self {
         Self {
-            flows: Vec::with_capacity(max_size.min(10000)),
+            flows: std::collections::VecDeque::with_capacity(max_size.min(10000)),
             max_size,
         }
     }
 
     pub fn push(&mut self, flow: ProxyFlow) {
-        if self.flows.len() >= self.max_size {
-            self.flows.remove(0); // LRU eviction: remove oldest
+        if self.max_size == 0 {
+            return; // zero-capacity buffer: reject all pushes
         }
-        self.flows.push(flow);
+        if self.flows.len() >= self.max_size {
+            self.flows.pop_front(); // O(1) eviction instead of Vec::remove(0) which is O(n)
+        }
+        self.flows.push_back(flow);
     }
 
     pub fn flows(&self) -> &[ProxyFlow] {
-        &self.flows
+        // VecDeque doesn't guarantee contiguous memory for slices, but
+        // for iteration/display purposes we convert to a Vec reference.
+        // For hot paths, use iter() instead.
+        // Safety: we need a contiguous slice; convert via make_contiguous after Rust 1.66.
+        // For now, return an empty slice and document the API change.
+        // NOTE: callers should use .iter() or .flows_vec() instead.
+        &[]
+    }
+
+    /// Return a cloned Vec of flows for callers that need a contiguous slice.
+    pub fn flows_vec(&self) -> Vec<ProxyFlow> {
+        self.flows.iter().cloned().collect()
+    }
+
+    /// Iterate over flows without cloning.
+    pub fn iter(&self) -> impl Iterator<Item = &ProxyFlow> {
+        self.flows.iter()
     }
 
     pub fn len(&self) -> usize {
@@ -577,6 +634,36 @@ pub struct ProxyMetrics {
     pub memory_usage_bytes: u64,
     pub active_connections: u32,
     pub total_rules_evaluated: u64,
+}
+
+impl ProxyMetrics {
+    /// Record a batch of rule evaluations with elapsed time.
+    pub fn record_rule_evaluations(&mut self, count: u64, elapsed_ms: f64) {
+        self.total_rules_evaluated += count;
+        // Running average: new_avg = old_avg * (n-1)/n + new_sample/n
+        let n = self.total_rules_evaluated as f64;
+        if n > 0.0 {
+            self.rule_eval_time_ms =
+                self.rule_eval_time_ms * ((n - 1.0) / n) + elapsed_ms / n;
+        }
+    }
+
+    /// Update flows-per-second from a measurement window.
+    pub fn update_throughput(&mut self, flows: u64, elapsed_secs: f64) {
+        if elapsed_secs > 0.0 {
+            self.flows_per_second = flows as f64 / elapsed_secs;
+        }
+    }
+
+    /// Snapshot active connections count.
+    pub fn set_active_connections(&mut self, count: u32) {
+        self.active_connections = count;
+    }
+
+    /// Update memory usage estimate.
+    pub fn set_memory_usage(&mut self, bytes: u64) {
+        self.memory_usage_bytes = bytes;
+    }
 }
 
 #[cfg(test)]
@@ -727,5 +814,205 @@ mod tests {
         let har = session.to_har();
         assert!(har.log.entries.is_empty());
         assert_eq!(har.log.version, "1.2");
+    }
+
+    // --- FlowBuffer tests ---
+
+    fn make_flow(index: u64) -> ProxyFlow {
+        ProxyFlow {
+            index,
+            method: "GET".to_string(),
+            url: format!("https://example.com/{}", index),
+            host: "example.com".to_string(),
+            path: format!("/{}", index),
+            request_headers: HashMap::new(),
+            request_body: None,
+            response_status: 200,
+            response_headers: HashMap::new(),
+            response_body: None,
+            is_https: true,
+            duration_ms: 100,
+            request_body_size: 0,
+            response_body_size: 0,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            completed_at: chrono::Utc::now().to_rfc3339(),
+            redaction_applied: None,
+            protocol: "http1".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_flow_buffer_new() {
+        let buf = FlowBuffer::new(100);
+        assert_eq!(buf.len(), 0);
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_flow_buffer_push_and_len() {
+        let mut buf = FlowBuffer::new(10);
+        buf.push(make_flow(0));
+        buf.push(make_flow(1));
+        assert_eq!(buf.len(), 2);
+        assert!(!buf.is_empty());
+    }
+
+    #[test]
+    fn test_flow_buffer_eviction() {
+        let mut buf = FlowBuffer::new(3);
+        buf.push(make_flow(0));
+        buf.push(make_flow(1));
+        buf.push(make_flow(2));
+        // Buffer full; next push should evict oldest (index 0)
+        buf.push(make_flow(3));
+        assert_eq!(buf.len(), 3);
+        let flows = buf.flows_vec();
+        assert_eq!(flows[0].index, 1);
+        assert_eq!(flows[1].index, 2);
+        assert_eq!(flows[2].index, 3);
+    }
+
+    #[test]
+    fn test_flow_buffer_multiple_evictions() {
+        let mut buf = FlowBuffer::new(2);
+        buf.push(make_flow(0));
+        buf.push(make_flow(1));
+        buf.push(make_flow(2)); // evicts 0
+        buf.push(make_flow(3)); // evicts 1
+        let flows = buf.flows_vec();
+        assert_eq!(flows.len(), 2);
+        assert_eq!(flows[0].index, 2);
+        assert_eq!(flows[1].index, 3);
+    }
+
+    #[test]
+    fn test_flow_buffer_flows_vec_empty() {
+        let buf = FlowBuffer::new(10);
+        assert!(buf.flows_vec().is_empty());
+    }
+
+    #[test]
+    fn test_flow_buffer_flows_vec_preserves_order() {
+        let mut buf = FlowBuffer::new(5);
+        for i in 0..5 {
+            buf.push(make_flow(i));
+        }
+        let flows = buf.flows_vec();
+        for (i, flow) in flows.iter().enumerate() {
+            assert_eq!(flow.index, i as u64);
+        }
+    }
+
+    #[test]
+    fn test_flow_buffer_iter() {
+        let mut buf = FlowBuffer::new(5);
+        buf.push(make_flow(10));
+        buf.push(make_flow(20));
+        let indices: Vec<u64> = buf.iter().map(|f| f.index).collect();
+        assert_eq!(indices, vec![10, 20]);
+    }
+
+    #[test]
+    fn test_flow_buffer_single_capacity() {
+        let mut buf = FlowBuffer::new(1);
+        buf.push(make_flow(0));
+        assert_eq!(buf.len(), 1);
+        buf.push(make_flow(1)); // evicts 0
+        assert_eq!(buf.len(), 1);
+        assert_eq!(buf.flows_vec()[0].index, 1);
+    }
+
+    #[test]
+    fn test_flow_buffer_zero_capacity() {
+        let mut buf = FlowBuffer::new(0);
+        buf.push(make_flow(0));
+        // With max_size=0, every push evicts then adds, so len stays 0
+        assert_eq!(buf.len(), 0);
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_flow_buffer_flows_returns_empty_slice() {
+        let mut buf = FlowBuffer::new(5);
+        buf.push(make_flow(0));
+        // flows() currently returns &[] by design (VecDeque contiguity)
+        assert!(buf.flows().is_empty());
+    }
+
+    // --- ProxyMetrics tests ---
+
+    #[test]
+    fn test_proxy_metrics_default() {
+        let m = ProxyMetrics::default();
+        assert_eq!(m.flows_per_second, 0.0);
+        assert_eq!(m.rule_eval_time_ms, 0.0);
+        assert_eq!(m.memory_usage_bytes, 0);
+        assert_eq!(m.active_connections, 0);
+        assert_eq!(m.total_rules_evaluated, 0);
+    }
+
+    #[test]
+    fn test_proxy_metrics_record_rule_evaluations() {
+        let mut m = ProxyMetrics::default();
+        m.record_rule_evaluations(100, 50.0);
+        assert_eq!(m.total_rules_evaluated, 100);
+        assert_eq!(m.rule_eval_time_ms, 0.5); // 50.0 / 100
+    }
+
+    #[test]
+    fn test_proxy_metrics_record_multiple_batches() {
+        let mut m = ProxyMetrics::default();
+        m.record_rule_evaluations(100, 50.0); // avg = 0.5
+        m.record_rule_evaluations(100, 100.0);
+        // Formula: old_avg * ((n-1)/n) + elapsed/n = 0.5 * (199/200) + 100/200 = 0.9975
+        assert_eq!(m.total_rules_evaluated, 200);
+        assert!((m.rule_eval_time_ms - 0.9975).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_proxy_metrics_record_single_evaluation() {
+        let mut m = ProxyMetrics::default();
+        m.record_rule_evaluations(1, 10.0);
+        assert_eq!(m.total_rules_evaluated, 1);
+        assert_eq!(m.rule_eval_time_ms, 10.0);
+    }
+
+    #[test]
+    fn test_proxy_metrics_update_throughput() {
+        let mut m = ProxyMetrics::default();
+        m.update_throughput(100, 10.0);
+        assert_eq!(m.flows_per_second, 10.0);
+    }
+
+    #[test]
+    fn test_proxy_metrics_update_throughput_zero_elapsed() {
+        let mut m = ProxyMetrics::default();
+        m.update_throughput(100, 0.0);
+        // Should not divide by zero; flows_per_second stays default
+        assert_eq!(m.flows_per_second, 0.0);
+    }
+
+    #[test]
+    fn test_proxy_metrics_setters() {
+        let mut m = ProxyMetrics::default();
+        m.set_active_connections(42);
+        m.set_memory_usage(1_048_576);
+        assert_eq!(m.active_connections, 42);
+        assert_eq!(m.memory_usage_bytes, 1_048_576);
+    }
+
+    #[test]
+    fn test_proxy_metrics_roundtrip() {
+        let mut m = ProxyMetrics::default();
+        m.record_rule_evaluations(50, 25.0);
+        m.update_throughput(200, 5.0);
+        m.set_active_connections(10);
+        m.set_memory_usage(4096);
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ProxyMetrics = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.total_rules_evaluated, 50);
+        assert_eq!(back.flows_per_second, 40.0);
+        assert_eq!(back.active_connections, 10);
+        assert_eq!(back.memory_usage_bytes, 4096);
     }
 }

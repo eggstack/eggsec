@@ -10,13 +10,18 @@ mod bridge;
 mod bundle;
 mod cert;
 mod interceptor;
+pub mod narrative;
+pub mod plugins;
 pub mod protocols;
+mod redteam;
 mod rules;
 pub mod types;
 pub mod correlation;
+#[cfg(feature = "transparent-proxy")]
+pub mod transparent;
 
 pub use bridge::to_scan_report_data_proxy;
-pub use bundle::{EvidenceBundle, BundleManifest, export_evidence_bundle, import_evidence_bundle};
+pub use bundle::{EvidenceBundle, BundleManifest, BundleDiff, export_evidence_bundle, export_signed_evidence_bundle, import_evidence_bundle, compare_bundles};
 pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
 pub use rules::{
@@ -28,11 +33,21 @@ pub use protocols::{
     ProxyProtocol, WebSocketMessage, WebSocketSession, WebSocketOpcode,
     Http2Stream, Http2Session, Http2StreamState,
     GrpcCall, GrpcSession, GrpcMethodType, ProtocolDetection,
+    GrpcStreamFrame, GrpcStreamingState, GrpcSecurityFinding,
+    detect_grpc_security_issues,
 };
 
 pub use correlation::{
     CorrelationContext, CorrelationReference, CorrelationSource,
     CorrelationHook, CorrelationSummary,
+    CorrelationEngine, TemporalCorrelation, BehavioralPattern,
+};
+
+pub use narrative::{AttackNarrative, NarrativeEvent, build_narrative};
+
+pub use plugins::{
+    ProtocolHandler, PluginRegistry, PluginInfo, PluginError,
+    DetectionResult, HandleResult, PluginFinding,
 };
 
 use crate::error::{EggsecError, Result};

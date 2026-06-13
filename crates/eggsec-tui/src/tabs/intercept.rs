@@ -37,6 +37,7 @@ pub enum DetailPane {
     Body,
     Manipulations,
     Rules,
+    Timeline,
     WebSocket,
     Http2,
     Grpc,
@@ -174,6 +175,12 @@ pub struct InterceptTab {
     pub debounce: DebounceState,
     /// WebSocket sessions captured during the intercept session.
     pub ws_sessions: Vec<WebSocketSession>,
+    /// Active search/filter query string.
+    pub filter_query: String,
+    /// Which field to filter on: 0=all, 1=method, 2=host, 3=path, 4=status.
+    pub filter_field: usize,
+    /// Whether the filter input is focused.
+    pub filter_active: bool,
 }
 
 impl InterceptTab {
@@ -212,6 +219,9 @@ impl InterceptTab {
             cached_detail: None,
             debounce: DebounceState::new(),
             ws_sessions: Vec::new(),
+            filter_query: String::new(),
+            filter_field: 0,
+            filter_active: false,
         }
     }
 
@@ -320,6 +330,29 @@ impl InterceptTab {
             .map_or(0, |s| s.messages.len())
     }
 
+    /// Get flows matching the current filter query.
+    pub fn filtered_flows(&self) -> Vec<(usize, &ProxyFlow)> {
+        if self.filter_query.is_empty() {
+            return self.flows.iter().enumerate().collect();
+        }
+        let q = self.filter_query.to_lowercase();
+        self.flows
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| match self.filter_field {
+                0 => f.method.to_lowercase().contains(&q)
+                    || f.host.to_lowercase().contains(&q)
+                    || f.path.to_lowercase().contains(&q)
+                    || f.response_status.to_string().contains(&q),
+                1 => f.method.to_lowercase().contains(&q),
+                2 => f.host.to_lowercase().contains(&q),
+                3 => f.path.to_lowercase().contains(&q),
+                4 => f.response_status.to_string().contains(&q),
+                _ => true,
+            })
+            .collect()
+    }
+
     pub fn primary_target(&self) -> Option<String> {
         self.session
             .as_ref()
@@ -344,6 +377,10 @@ impl InterceptTab {
         if self.selected_flow.is_none() {
             self.selected_flow = Some(idx);
             self.table_state.select(Some(idx));
+        }
+        // Auto-enable performance mode for high-volume sessions
+        if self.flows.len() > 5000 && !self.performance_mode {
+            self.performance_mode = true;
         }
     }
 
@@ -478,7 +515,12 @@ impl InterceptTab {
             .map(|h| Cell::from(*h).style(Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD)));
         let header = Row::new(header_cells).height(1);
 
-        let rows = self.flows.iter().enumerate().map(|(i, flow)| {
+        // Virtual scrolling: only render flows visible in the viewport
+        let viewport_height = area.height.saturating_sub(3) as usize; // subtract borders + header
+        let visible = self.visible_flows(viewport_height);
+
+        let rows = visible.iter().enumerate().map(|(offset, flow)| {
+            let actual_index = self.scroll_offset + offset;
             let status_color = if flow.response_status >= 200 && flow.response_status < 300 {
                 tc!(success)
             } else if flow.response_status >= 400 {
@@ -487,7 +529,7 @@ impl InterceptTab {
                 tc!(text)
             };
             Row::new(vec![
-                Cell::from(format!("{}", i)),
+                Cell::from(format!("{}", actual_index)),
                 Cell::from(flow.method.clone()),
                 Cell::from(truncate_str(&flow.host, 20)),
                 Cell::from(truncate_str(&flow.path, 25)),
@@ -517,7 +559,13 @@ impl InterceptTab {
         .highlight_style(Style::default().bg(tc!(selected)))
         .highlight_symbol("> ");
 
-        f.render_stateful_widget(table, area, &mut self.table_state.clone());
+        let mut table_state = self.table_state.clone();
+        // Adjust selected position relative to viewport
+        if let Some(selected) = self.selected_flow {
+            table_state.select(Some(selected.saturating_sub(self.scroll_offset)));
+        }
+
+        f.render_stateful_widget(table, area, &mut table_state);
     }
 
     fn render_detail_pane(&self, f: &mut Frame, area: Rect) {
@@ -527,13 +575,18 @@ impl InterceptTab {
                 DetailPane::Body => self.render_body(f, area, flow),
                 DetailPane::Manipulations => self.render_manipulations(f, area),
                 DetailPane::Rules => self.render_rules_with_view(f, area),
+                DetailPane::Timeline => self.render_timeline(f, area),
                 DetailPane::WebSocket => self.render_protocol_info(f, area, "WebSocket"),
                 DetailPane::Http2 => self.render_protocol_info(f, area, "HTTP/2"),
                 DetailPane::Grpc => self.render_protocol_info(f, area, "gRPC"),
             },
             None => {
-                let placeholder = empty_state_paragraph("Detail", "Select a flow to view details");
-                f.render_widget(placeholder, area);
+                if self.detail_pane == DetailPane::Timeline {
+                    self.render_timeline(f, area);
+                } else {
+                    let placeholder = empty_state_paragraph("Detail", "Select a flow to view details");
+                    f.render_widget(placeholder, area);
+                }
             }
         }
     }
@@ -647,8 +700,55 @@ impl InterceptTab {
                 lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("WebSocket sessions captured during MITM interception")]));
                 lines.push(Line::from(vec![Span::styled(" Manipulation: ", Style::default().fg(tc!(info))), Span::raw("Edit and replay individual frames")]));
                 lines.push(Line::from(""));
-                lines.push(Line::from(vec![Span::styled(" Note: ", Style::default().fg(tc!(warning))), Span::raw("WebSocket interception requires tokio-tungstenite")]));
-                lines.push(Line::from(vec![Span::raw("Full frame parsing in Phase 4+.")]));
+
+                // Show captured WebSocket messages with pagination
+                if !self.ws_sessions.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled(" Captured Sessions: ", Style::default().fg(tc!(info))),
+                        Span::raw(format!("{}", self.ws_sessions.len())),
+                    ]));
+
+                    for (session_idx, session) in self.ws_sessions.iter().enumerate() {
+                        lines.push(Line::from(""));
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  Session {}: ", session_idx),
+                                Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(format!("{} ({} messages)", session.host, session.messages.len())),
+                        ]));
+
+                        // Show first page of messages (10 per page)
+                        let page_size = 10;
+                        let messages = self.ws_messages_page(session_idx, 0, page_size);
+                        for (i, msg) in messages.iter().enumerate() {
+                            let prefix = if msg.direction == eggsec::proxy::intercept::types::ProxyFlowDirection::Request { "  -> " } else { " <-  " };
+                            lines.push(Line::from(vec![
+                                Span::raw(prefix.to_string()),
+                                Span::styled(
+                                    format!("{:?}", msg.opcode),
+                                    Style::default().fg(tc!(text)),
+                                ),
+                                Span::raw(format!(" {}", truncate_str(&msg.payload, 60))),
+                            ]));
+                        }
+
+                        let total = self.ws_session_message_count(session_idx);
+                        if total > page_size {
+                            lines.push(Line::from(vec![
+                                Span::styled(
+                                    format!("  ... {} more messages (scroll to see more)", total - page_size),
+                                    Style::default().fg(tc!(muted)),
+                                ),
+                            ]));
+                        }
+                    }
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::styled(" Note: ", Style::default().fg(tc!(warning))),
+                        Span::raw("No WebSocket sessions captured yet"),
+                    ]));
+                }
             },
             "HTTP/2" => {
                 lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("HTTP/2 identified by :scheme pseudo-header")]));
@@ -809,6 +909,160 @@ impl InterceptTab {
         let block = Block::default()
             .borders(Borders::ALL)
             .title(format!(" Manipulations ({}) ", self.manipulation_history.len()));
+        let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
+        f.render_widget(paragraph, area);
+    }
+
+    fn render_timeline(&self, f: &mut Frame, area: Rect) {
+        let mut lines: Vec<Line> = Vec::new();
+        lines.push(Line::from(vec![Span::styled(
+            "Session Timeline",
+            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+        )]));
+        lines.push(Line::from(""));
+
+        if let Some(ref session) = self.session {
+            lines.push(Line::from(vec![
+                Span::styled("  Started: ", Style::default().fg(tc!(info))),
+                Span::raw(session.started_at.clone()),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("  Ended:   ", Style::default().fg(tc!(info))),
+                Span::raw(session.ended_at.clone()),
+            ]));
+            lines.push(Line::from(""));
+        }
+
+        if self.flows.is_empty() && self.manipulation_history.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "  No events yet. Start an intercept session to see the timeline.",
+                Style::default().fg(tc!(muted)),
+            )));
+        } else {
+            // Build a merged timeline of flows and manipulations sorted by timestamp
+            #[derive(Clone)]
+            enum TimelineEvent {
+                FlowStart(usize, String, String, String),
+                FlowEnd(usize, u16, String),
+                Manipulation(usize, String, String, String),
+            }
+
+            let mut events: Vec<(String, TimelineEvent)> = Vec::new();
+
+            for flow in &self.flows {
+                events.push((
+                    flow.started_at.clone(),
+                    TimelineEvent::FlowStart(
+                        flow.index as usize,
+                        flow.method.clone(),
+                        flow.host.clone(),
+                        flow.path.clone(),
+                    ),
+                ));
+                events.push((
+                    flow.completed_at.clone(),
+                    TimelineEvent::FlowEnd(
+                        flow.index as usize,
+                        flow.response_status,
+                        flow.host.clone(),
+                    ),
+                ));
+            }
+
+            for m in &self.manipulation_history {
+                events.push((
+                    m.timestamp.clone(),
+                    TimelineEvent::Manipulation(
+                        m.flow_index as usize,
+                        m.field.clone(),
+                        m.reason.clone(),
+                        m.after.clone().unwrap_or_default(),
+                    ),
+                ));
+            }
+
+            events.sort_by(|a, b| a.0.cmp(&b.0));
+
+            // Render up to 50 events to avoid overflow
+            let display_count = events.len().min(50);
+            for (_, event) in events.iter().take(display_count) {
+                match event {
+                    TimelineEvent::FlowStart(idx, method, host, path) => {
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  [{}] ", idx),
+                                Style::default().fg(tc!(accent)),
+                            ),
+                            Span::styled(
+                                format!("{} ", method),
+                                Style::default().fg(tc!(success)).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(format!("{}{}", host, path)),
+                        ]));
+                    }
+                    TimelineEvent::FlowEnd(idx, status, host) => {
+                        let status_color = if *status >= 200 && *status < 300 {
+                            tc!(success)
+                        } else if *status >= 400 {
+                            tc!(error)
+                        } else {
+                            tc!(text)
+                        };
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  [{}] ", idx),
+                                Style::default().fg(tc!(muted)),
+                            ),
+                            Span::styled(
+                                format!("{} ", status),
+                                Style::default().fg(status_color),
+                            ),
+                            Span::raw(format!("{} ", host)),
+                            Span::styled("completed", Style::default().fg(tc!(muted))),
+                        ]));
+                    }
+                    TimelineEvent::Manipulation(idx, field, reason, after) => {
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  [{}] ", idx),
+                                Style::default().fg(tc!(warning)),
+                            ),
+                            Span::styled(
+                                "EDIT ",
+                                Style::default().fg(tc!(warning)).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(format!("{} ", field)),
+                            Span::styled(
+                                format!("-> {} ({})", truncate_str(after, 30), reason),
+                                Style::default().fg(tc!(muted)),
+                            ),
+                        ]));
+                    }
+                }
+            }
+
+            if events.len() > 50 {
+                lines.push(Line::from(Span::styled(
+                    format!("  ... {} more events", events.len() - 50),
+                    Style::default().fg(tc!(muted)),
+                )));
+            }
+        }
+
+        // Correlation summary if present
+        if !self.manipulation_history.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![Span::styled(
+                "  Manipulations: ",
+                Style::default().fg(tc!(info)),
+            ),
+            Span::raw(format!("{}", self.manipulation_history.len())),
+            ]));
+        }
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Timeline ");
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
     }
@@ -1071,6 +1325,9 @@ impl TabState for InterceptTab {
         self.performance_mode = false;
         self.cached_detail = None;
         self.ws_sessions.clear();
+        self.filter_query.clear();
+        self.filter_field = 0;
+        self.filter_active = false;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -1086,6 +1343,7 @@ impl TabRender for InterceptTab {
             DetailPane::Body => "Body",
             DetailPane::Manipulations => "Manipulations",
             DetailPane::Rules => "Rules",
+            DetailPane::Timeline => "Timeline",
             DetailPane::WebSocket => "WebSocket",
             DetailPane::Http2 => "HTTP/2",
             DetailPane::Grpc => "gRPC",
@@ -1144,13 +1402,20 @@ impl TabRender for InterceptTab {
         };
 
         let status_text = format!(
-            " {} | {} | Flows: {} | {}{}",
+            " {} | {} | Flows: {} | {}{}{}",
             self.listen_addr,
             if self.state == AppState::Running { "ACTIVE" } else { "IDLE" },
             self.flows.len(),
             if self.dry_run { "DRY-RUN" } else { "LIVE" },
             if self.performance_mode {
                 format!(" | PERF | ~{}", format_bytes(self.estimate_memory_usage() as u64))
+            } else {
+                String::new()
+            },
+            if self.filter_active {
+                format!(" | FILTER: /{}", self.filter_query)
+            } else if !self.filter_query.is_empty() {
+                format!(" | /{}", self.filter_query)
             } else {
                 String::new()
             }
@@ -1173,7 +1438,7 @@ impl TabRender for InterceptTab {
         self.render_flow_list(f, flow_area);
 
         // Detail pane tabs
-        let tab_names = ["Headers", "Body", "Manipulations", "Rules"];
+        let tab_names = ["Headers", "Body", "Manipulations", "Rules", "Timeline"];
         let tab_line: Vec<Span> = tab_names
             .iter()
             .enumerate()
@@ -1237,6 +1502,9 @@ impl InterceptTab {
             cached_detail: None,
             debounce: DebounceState::new(),
             ws_sessions: Vec::new(),
+            filter_query: self.filter_query.clone(),
+            filter_field: self.filter_field,
+            filter_active: self.filter_active,
         }
     }
 }
@@ -1273,9 +1541,17 @@ impl TabInput for InterceptTab {
             self.edit_modal.edit_buffer.push(c);
             return;
         }
+        if self.filter_active {
+            self.filter_query.push(c);
+            return;
+        }
         match c {
             'r' if self.detail_pane == DetailPane::Rules => self.toggle_rule_view(),
             'p' if !self.is_running() => self.toggle_performance_mode(),
+            '/' if !self.is_running() => {
+                self.filter_active = true;
+                self.filter_query.clear();
+            }
             _ => {}
         }
     }
@@ -1283,6 +1559,13 @@ impl TabInput for InterceptTab {
     fn handle_backspace(&mut self) {
         if self.is_edit_modal_open() {
             self.edit_modal.edit_buffer.pop();
+            return;
+        }
+        if self.filter_active {
+            self.filter_query.pop();
+            if self.filter_query.is_empty() {
+                self.filter_active = false;
+            }
             return;
         }
     }
@@ -1312,6 +1595,11 @@ impl TabInput for InterceptTab {
             self.close_edit_modal();
             return;
         }
+        if self.filter_active {
+            self.filter_active = false;
+            self.filter_query.clear();
+            return;
+        }
         self.focus_area = InterceptFocusArea::FlowList;
     }
 
@@ -1335,7 +1623,8 @@ impl TabInput for InterceptTab {
                     DetailPane::Headers => DetailPane::Rules,
                     DetailPane::Body => DetailPane::Headers,
                     DetailPane::Manipulations => DetailPane::Body,
-                    DetailPane::Rules => DetailPane::Manipulations,
+                    DetailPane::Rules => DetailPane::Timeline,
+                    DetailPane::Timeline => DetailPane::Manipulations,
                     DetailPane::WebSocket => DetailPane::Grpc,
                     DetailPane::Http2 => DetailPane::WebSocket,
                     DetailPane::Grpc => DetailPane::Http2,
@@ -1365,7 +1654,8 @@ impl TabInput for InterceptTab {
                 self.detail_pane = match self.detail_pane {
                     DetailPane::Headers => DetailPane::Body,
                     DetailPane::Body => DetailPane::Manipulations,
-                    DetailPane::Manipulations => DetailPane::Rules,
+                    DetailPane::Manipulations => DetailPane::Timeline,
+                    DetailPane::Timeline => DetailPane::Rules,
                     DetailPane::Rules => DetailPane::Headers,
                     DetailPane::WebSocket => DetailPane::Http2,
                     DetailPane::Http2 => DetailPane::Grpc,
@@ -1474,9 +1764,10 @@ impl DetailPane {
             1 => DetailPane::Body,
             2 => DetailPane::Manipulations,
             3 => DetailPane::Rules,
-            4 => DetailPane::WebSocket,
-            5 => DetailPane::Http2,
-            6 => DetailPane::Grpc,
+            4 => DetailPane::Timeline,
+            5 => DetailPane::WebSocket,
+            6 => DetailPane::Http2,
+            7 => DetailPane::Grpc,
             _ => DetailPane::Headers,
         }
     }
@@ -1836,5 +2127,109 @@ mod tests {
         tab.scroll_offset = 10;
         tab.ensure_selected_visible(10);
         assert_eq!(tab.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_stress_10000_flows_memory_estimate() {
+        let mut tab = InterceptTab::new();
+
+        // Add 10,000 flows with realistic payload sizes
+        for i in 0..10_000 {
+            tab.flows.push(ProxyFlow {
+                index: i,
+                method: if i % 2 == 0 { "GET" } else { "POST" }.to_string(),
+                url: format!("https://example.com/api/endpoint/{}", i),
+                host: "example.com".to_string(),
+                path: format!("/api/endpoint/{}", i),
+                request_headers: {
+                    let mut h = std::collections::HashMap::new();
+                    h.insert("User-Agent".to_string(), "stress-test/1.0".to_string());
+                    h.insert("Accept".to_string(), "application/json".to_string());
+                    h
+                },
+                request_body: if i % 2 == 0 {
+                    None
+                } else {
+                    Some(format!(r#"{{"id": {}, "data": "test payload"}}"#, i))
+                },
+                response_status: if i % 10 == 0 { 404 } else { 200 },
+                response_headers: {
+                    let mut h = std::collections::HashMap::new();
+                    h.insert("Content-Type".to_string(), "application/json".to_string());
+                    h
+                },
+                response_body: Some(format!(
+                    r#"{{"status": "ok", "id": {}, "result": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."}}"#,
+                    i
+                )),
+                is_https: true,
+                duration_ms: (i as u64) % 1000,
+                request_body_size: if i % 2 == 0 { 0 } else { 50 },
+                response_body_size: 150,
+                started_at: chrono::Utc::now().to_rfc3339(),
+                completed_at: chrono::Utc::now().to_rfc3339(),
+                redaction_applied: None,
+                protocol: "http1".to_string(),
+            });
+        }
+
+        // Verify memory estimate is reasonable (>10MB for 10k flows with payloads)
+        let usage = tab.estimate_memory_usage();
+        assert!(
+            usage > 10 * 1024 * 1024,
+            "Memory estimate should be >10MB for 10k flows, got {} bytes",
+            usage
+        );
+
+        // Verify virtual scrolling works with large flow count
+        let visible = tab.visible_flows(20);
+        assert_eq!(visible.len(), 20);
+        assert_eq!(visible[0].index, 0);
+
+        tab.scroll_offset = 9980;
+        let visible = tab.visible_flows(20);
+        assert_eq!(visible.len(), 20);
+        assert_eq!(visible[0].index, 9980);
+
+        // Verify navigation works
+        tab.selected_flow = Some(5000);
+        tab.ensure_selected_visible(20);
+        assert!(tab.scroll_offset <= 5000);
+        assert!(tab.scroll_offset + 20 > 5000);
+    }
+
+    #[test]
+    fn test_stress_10000_flows_performance_mode_auto_enables() {
+        let mut tab = InterceptTab::new();
+
+        // Add flows up to the threshold
+        for i in 0..5001 {
+            tab.flows.push(ProxyFlow {
+                index: i,
+                method: "GET".to_string(),
+                url: format!("http://example.com/{}", i),
+                host: "example.com".to_string(),
+                path: format!("/{}", i),
+                request_headers: Default::default(),
+                request_body: None,
+                response_status: 200,
+                response_headers: Default::default(),
+                response_body: None,
+                is_https: false,
+                duration_ms: 0,
+                request_body_size: 0,
+                response_body_size: 0,
+                started_at: String::new(),
+                completed_at: String::new(),
+                redaction_applied: None,
+                protocol: "http1".to_string(),
+            });
+        }
+
+        // Performance mode should auto-enable after 5000 flows
+        assert!(
+            tab.performance_mode,
+            "Performance mode should auto-enable when flows exceed 5000"
+        );
     }
 }

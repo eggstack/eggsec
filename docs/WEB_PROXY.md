@@ -247,22 +247,24 @@ The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/brid
 
 When built with `--features web-proxy-mcp` (requires `web-proxy`), 12 MCP tools are available for agent and automation integration:
 
-| Tool | Description |
-|------|-------------|
-| `proxy_list_flows` | List captured flows with filtering |
-| `proxy_inspect_flow` | Inspect full request/response details |
-| `proxy_edit_request` | Modify request headers and body |
-| `proxy_edit_response` | Modify response headers and body |
-| `proxy_manage_rules` | Add/remove/update intercept rules |
-| `proxy_session_save` | Save session to JSON file |
-| `proxy_session_load` | Load session from JSON file |
-| `proxy_har_export` | Export session as HAR 1.2 |
-| `proxy_evidence_bundle` | Export evidence bundle for multi-loadout correlation |
-| `proxy_forward_flow` | Forward a specific flow |
-| `proxy_drop_flow` | Drop a specific flow |
-| `proxy_replay_flow` | Replay a specific flow |
+| Tool | Action | Description |
+|------|--------|-------------|
+| `proxy-start` | Start | Start the intercepting proxy on a listen address |
+| `proxy-stop` | Stop | Stop the running proxy and clear session |
+| `proxy-status` | Status | Get session status, flow count, and budget usage |
+| `proxy-list-flows` | List flows | List intercepted flows with pagination |
+| `proxy-inspect-flow` | Inspect | Get full detail of a specific flow by index |
+| `proxy-forward-flow` | Forward | Forward a paused flow to upstream |
+| `proxy-drop-flow` | Drop | Drop a paused flow without forwarding |
+| `proxy-replay-flow` | Replay | Replay a flow |
+| `proxy-add-rule` | Add rule | Add an intercept rule with pattern and action |
+| `proxy-list-rules` | List rules | List all configured intercept rules |
+| `proxy-remove-rule` | Remove rule | Remove a rule by ID |
+| `proxy-export-session` | Export | Export session data as JSON or HAR |
 
-Tools are defined in `proxy/mcp.rs` as `WebProxyToolSchema` / `WebProxyToolCall` types. MCP exposure is gated by the `web-proxy-mcp` marker feature.
+Tools are implemented in `tool/implementations/proxy.rs` as `ProxyTool` implementing the `SecurityTool` trait. MCP exposure is gated by the `web-proxy-mcp` marker feature.
+
+**Policy enforcement:** All proxy tools require `EnforcementContext::evaluate()` before dispatch. Real runs need `--allow-web-proxy` + policy confirmation. Dry-run is always safe.
 
 ```bash
 # Build with MCP proxy tools
@@ -303,6 +305,21 @@ eggsec report convert proxy.json -f json -o evidence.json
 | `manipulations` | All request/response manipulations |
 | `correlations` | Cross-loadout correlation references |
 
+### Bundle Signing
+
+Evidence bundles can be signed with HMAC-SHA256 for integrity verification:
+
+```rust
+// Sign a bundle
+let mut bundle = EvidenceBundle::from_report(&report, Some(&rules));
+bundle.sign(b"my-secret-key", Some("key-1"))?;
+
+// Verify a bundle
+let is_valid = bundle.verify(b"my-secret-key")?;
+```
+
+Signed bundles include `signature`, `signed_at`, and `signing_key_id` fields in the manifest. The signature is computed over a canonical representation of all manifest fields.
+
 ### Cross-Loadout Correlation
 
 Evidence bundles can be correlated with other Eggsec loadouts:
@@ -327,7 +344,7 @@ Built-in correlation hooks: `jwt_to_db_query_hook()`, `proxy_auth_hook()`, `prox
 - **No request/response modification via CLI**: The CLI handler supports dry-run; real interception with request/response modification is available through the TUI tab.
 - **No transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
 - **No streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
-- **Binary protobuf editing**: gRPC binary protobuf editing is best-effort for common services; complex or unknown schemas may not round-trip correctly.
+- **Binary protobuf editing**: gRPC binary protobuf encoding/decoding uses prost with simplified wire format parsing. Complex or unknown schemas may not round-trip correctly. Full JSON<->Protobuf translation is deferred to future phases.
 
 ## Phase 3: Advanced Protocols & Enhanced Rule Engine (2026-06-12)
 
@@ -602,12 +619,24 @@ Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 
 
 **Phase 4 (Pipeline, MCP, Evidence, Performance, complete)**:
 - Pipeline profile: `ScanProfile::WebProxy` / `Stage::WebProxy` for automated proxy assessments
-- MCP proxy surface: 12 tools via `web-proxy-mcp` marker feature (list flows, inspect, edit, rules, session, HAR, evidence bundle, flow actions)
-- Evidence bundle v2: `EvidenceBundle` / `BundleManifest` in `proxy/intercept/bundle.rs` with gzip compression and multi-loadout correlation
+- MCP proxy surface: 12 tools via `web-proxy-mcp` marker feature (start, stop, status, list flows, inspect, forward, drop, replay, add/list/remove rules, export session)
+- Evidence bundle v2: `EvidenceBundle` / `BundleManifest` in `proxy/intercept/bundle.rs` with gzip compression, multi-loadout correlation, and HMAC-SHA256 signing
 - Performance: `FlowBuffer` (capacity-capped) and `ProxyMetrics` (telemetry snapshot) in `proxy/intercept/types.rs`
 - Real WebSocket backend via `tokio-tungstenite`
-- Real HTTP/2 backend via `h2`
+- Real HTTP/2 backend via `h2` with window size tuning (`tune_windows()`, `optimal_window_sizes()`)
+- gRPC protobuf: prost-based encoding/decoding for binary protobuf messages
+- Session resume: `WebProxySessionReport::save_to_file()` / `load_from_file()` / `merge_from_previous()`
+- Async rule evaluation: `EnhancedRuleSet::evaluate_async()` and `evaluate_indexed_async()` using `tokio::task::spawn_blocking`
+- Rule indexing: `host_prefix_index` and `path_prefix_index` for fast candidate selection
+- Virtual scrolling: Flow list renders only visible rows for high-volume sessions
+- Auto-performance mode: Activates when flows exceed 5000
 - Extended bridge categories: `proxy-websocket-session`, `proxy-http2-session`, `proxy-grpc-session`, `proxy-correlation-summary`
+
+**Phase 5 (Polish & Release Readiness, complete)**:
+- **Attack Narrative Generation**: `build_narrative()` produces a structured `AttackNarrative` from session reports with chronological events, risk assessment, cross-loadout correlations, and recommendations. Available as `AttackNarrative::to_text()` for human-readable output.
+- **Bundle Comparison**: `compare_bundles()` diffs two `EvidenceBundle` instances, reporting added/removed/modified flows, manipulation and rule count changes, and manifest differences. Returns `BundleDiff` with `summary()` for human-readable output.
+- **TUI Timeline View**: New `Timeline` detail pane shows a chronological view of all session events (flow starts, completions, manipulations) sorted by timestamp. Accessible via ↑/↓ cycling in the detail pane.
+- **TUI Search/Filter**: Press `/` to enter filter mode. Type a query to filter the flow list by method, host, path, or status. Press `Esc` to clear. Filter state is shown in the status bar.
 
 ## Policy Note
 
@@ -616,15 +645,48 @@ Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 
 - `operation: "proxy-intercept"`, `mode: DefenseLab`, `risk: TrafficInterception` (real) / `SafeActive` (dry-run), `required_features: ["web-proxy"]`.
 - Non-dry-run requires explicit `--allow-web-proxy` (audited; same pattern as `wireless deauth --allow-active-wireless`).
 - `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate via `CommandContext::evaluate_and_enforce_operation()`.
-- MCP/agent exposure is intentionally absent (standalone defense-lab; no `SecurityTool` registration).
+- MCP/agent exposure via `ProxyTool` in `tool/implementations/proxy.rs` (gated by `web-proxy-mcp` feature).
 - Always produces policy decision + actions audit even in dry-run.
 
 See `config/policy_decision.rs`, `commands/handlers/web_proxy.rs`, and `proxy/intercept/mod.rs`.
 
+## Migration Guidance
+
+### Upgrading from Pre-Release
+
+If you have been using the web-proxy feature from a pre-release or development branch:
+
+1. **Session files**: `InterceptSession` JSON files are fully backward-compatible. No migration needed.
+2. **Evidence bundles**: If you have exported bundles from earlier phases, re-export them to pick up the new `version: "2"` format with correlation and protocol data.
+3. **CLI flags**: No breaking changes. All existing flags remain valid.
+4. **Feature flags**: `web-proxy` and `web-proxy-mcp` remain unchanged. No new required features.
+5. **MCP tools**: Tool names and schemas are stable. If you have MCP agent configurations referencing proxy tools, they will continue to work.
+6. **Rule files**: Enhanced rule JSON format is backward-compatible. New fields (`delay_ms`, `inject_response`) are optional.
+
+### Evidence Bundle Format
+
+The `EvidenceBundle` format is versioned. Current version: `2`. Unknown fields are silently ignored during deserialization, ensuring forward compatibility.
+
+```rust
+// Check bundle version
+let bundle = import_evidence_bundle("session.json.gz")?;
+assert_eq!(bundle.version, "2");
+```
+
+### Report Conversion
+
+The `report convert` auto-bridge continues to work identically. Native `WebProxySessionReport` JSON is automatically bridged when the `web-proxy` feature is present:
+
+```bash
+eggsec proxy-intercept --dry-run --json -o report.json
+eggsec report convert report.json -f sarif  # works as before
+```
+
 ## References
 
-- Source: `crates/eggsec/src/proxy/intercept/` (types, cert, rules, interceptor, bridge, mod)
+- Source: `crates/eggsec/src/proxy/intercept/` (types, cert, rules, interceptor, bridge, mod, bundle, correlation, narrative)
 - CLI: `crates/eggsec/src/cli/web_proxy.rs`
 - Handler/policy: `crates/eggsec/src/commands/handlers/web_proxy.rs`
 - Output conversion: `crates/eggsec/src/commands/handlers/report.rs` (auto-bridge)
 - Architecture: `architecture/proxy.md`
+- TUI: `crates/eggsec-tui/src/tabs/intercept.rs`

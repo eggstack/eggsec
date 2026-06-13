@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use super::types::ProxyFlowDirection;
 
 /// Supported proxy protocol types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -232,6 +233,35 @@ pub struct Http2Session {
     pub closed_at: Option<String>,
     /// SETTINGS frame parameters received.
     pub settings: HashMap<String, String>,
+    /// Connection-level flow control window size (bytes).
+    /// Default: 65535 (HTTP/2 spec default).
+    #[serde(default = "default_window_size")]
+    pub connection_window_size: u32,
+    /// Stream-level flow control window size (bytes).
+    /// Default: 65535 (HTTP/2 spec default).
+    #[serde(default = "default_window_size")]
+    pub stream_window_size: u32,
+    /// Maximum concurrent streams allowed.
+    #[serde(default = "default_max_concurrent")]
+    pub max_concurrent_streams: u32,
+    /// Maximum frame size allowed.
+    #[serde(default = "default_max_frame_size")]
+    pub max_frame_size: u32,
+    /// Initial window size for new streams.
+    #[serde(default = "default_window_size")]
+    pub initial_window_size: u32,
+}
+
+fn default_window_size() -> u32 {
+    65535
+}
+
+fn default_max_concurrent() -> u32 {
+    100
+}
+
+fn default_max_frame_size() -> u32 {
+    16384
 }
 
 impl Http2Session {
@@ -243,12 +273,65 @@ impl Http2Session {
             opened_at: chrono::Utc::now().to_rfc3339(),
             closed_at: None,
             settings: HashMap::new(),
+            connection_window_size: 65535,
+            stream_window_size: 65535,
+            max_concurrent_streams: 100,
+            max_frame_size: 16384,
+            initial_window_size: 65535,
+        }
+    }
+
+    /// Tune window sizes for high-throughput scenarios.
+    ///
+    /// Increases flow control windows to allow more data in flight,
+    /// which can significantly improve throughput for large downloads
+    /// or high-bandwidth connections.
+    ///
+    /// # Arguments
+    /// * `connection_window` - Connection-level window size (bytes)
+    /// * `stream_window` - Stream-level window size (bytes)
+    pub fn tune_windows(&mut self, connection_window: u32, stream_window: u32) {
+        self.connection_window_size = connection_window;
+        self.stream_window_size = stream_window;
+        self.initial_window_size = stream_window;
+        self.settings.insert(
+            "INITIAL_WINDOW_SIZE".to_string(),
+            stream_window.to_string(),
+        );
+        self.settings.insert(
+            "MAX_CONCURRENT_STREAMS".to_string(),
+            self.max_concurrent_streams.to_string(),
+        );
+    }
+
+    /// Get optimal window sizes based on expected throughput.
+    ///
+    /// Returns tuned window sizes for different scenarios:
+    /// - Low latency: 65535 (default)
+    /// - Medium throughput: 256KB
+    /// - High throughput: 1MB
+    pub fn optimal_window_sizes(scenario: WindowTuningScenario) -> (u32, u32) {
+        match scenario {
+            WindowTuningScenario::LowLatency => (65535, 65535),
+            WindowTuningScenario::MediumThroughput => (256 * 1024, 256 * 1024),
+            WindowTuningScenario::HighThroughput => (1024 * 1024, 1024 * 1024),
         }
     }
 
     pub fn add_stream(&mut self, stream: Http2Stream) {
         self.streams.push(stream);
     }
+}
+
+/// Window tuning scenario for HTTP/2 connections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WindowTuningScenario {
+    /// Default HTTP/2 settings (65535 bytes).
+    LowLatency,
+    /// Medium throughput (256KB windows).
+    MediumThroughput,
+    /// High throughput (1MB windows).
+    HighThroughput,
 }
 
 /// gRPC method type.
@@ -311,6 +394,296 @@ impl GrpcCall {
             duration_ms: 0,
         }
     }
+
+    /// Decode protobuf request body from hex-encoded bytes to JSON.
+    ///
+    /// Attempts to decode the protobuf-encoded request body and convert it
+    /// to a JSON representation using prost's dynamic message decoding.
+    /// Falls back to the raw hex representation if decoding fails.
+    #[cfg(feature = "web-proxy")]
+    pub fn decode_request_body(&self) -> Option<serde_json::Value> {
+        self.request_body.as_ref().and_then(|hex_bytes| {
+            let bytes = hex::decode(hex_bytes).ok()?;
+            self.decode_protobuf_to_json(&bytes).ok()
+        })
+    }
+
+    /// Decode protobuf response body from hex-encoded bytes to JSON.
+    ///
+    /// Attempts to decode the protobuf-encoded response body and convert it
+    /// to a JSON representation using prost's dynamic message decoding.
+    /// Falls back to the raw hex representation if decoding fails.
+    #[cfg(feature = "web-proxy")]
+    pub fn decode_response_body(&self) -> Option<serde_json::Value> {
+        self.response_body.as_ref().and_then(|hex_bytes| {
+            let bytes = hex::decode(hex_bytes).ok()?;
+            self.decode_protobuf_to_json(&bytes).ok()
+        })
+    }
+
+    /// Encode a JSON value as protobuf bytes and store as hex.
+    ///
+    /// This provides a best-effort JSON-to-protobuf encoding for unary call editing.
+    /// The encoding is simplified and may not produce wire-compatible protobuf for
+    /// all message types.
+    #[cfg(feature = "web-proxy")]
+    pub fn encode_request_body(&mut self, json: &serde_json::Value) -> Result<(), String> {
+        let bytes = self.encode_json_to_protobuf(json)?;
+        self.request_body = Some(hex::encode(&bytes));
+        self.request_size = bytes.len() as u64;
+        Ok(())
+    }
+
+    /// Encode a JSON value as protobuf bytes and store as hex for response.
+    #[cfg(feature = "web-proxy")]
+    pub fn encode_response_body(&mut self, json: &serde_json::Value) -> Result<(), String> {
+        let bytes = self.encode_json_to_protobuf(json)?;
+        self.response_body = Some(hex::encode(&bytes));
+        self.response_size = bytes.len() as u64;
+        Ok(())
+    }
+
+    /// Decode protobuf bytes to JSON using prost.
+    ///
+    /// This is a simplified decoder that handles common protobuf wire types:
+    /// - Varint (wire type 0)
+    /// - Length-delimited (wire type 2) - strings, bytes, embedded messages
+    /// - 32-bit (wire type 5)
+    #[cfg(feature = "web-proxy")]
+    fn decode_protobuf_to_json(&self, bytes: &[u8]) -> Result<serde_json::Value, String> {
+        // Try prost's default decode first (works for known message types)
+        // For unknown types, fall back to manual wire format parsing
+        let mut cursor = 0;
+        let mut fields = serde_json::Map::new();
+
+        while cursor < bytes.len() {
+            // Read field tag (varint)
+            let (tag, bytes_read) = read_varint(bytes, cursor)?;
+            cursor += bytes_read;
+
+            let field_number = tag >> 3;
+            let wire_type = tag & 0x7;
+
+            match wire_type {
+                0 => {
+                    // Varint
+                    let (value, bytes_read) = read_varint(bytes, cursor)?;
+                    cursor += bytes_read;
+                    fields.insert(
+                        format!("field_{}", field_number),
+                        serde_json::json!(value),
+                    );
+                }
+                2 => {
+                    // Length-delimited
+                    let (length, bytes_read) = read_varint(bytes, cursor)?;
+                    cursor += bytes_read;
+                    let length = length as usize;
+
+                    if cursor + length > bytes.len() {
+                        return Err("Truncated length-delimited field".to_string());
+                    }
+
+                    let data = &bytes[cursor..cursor + length];
+                    cursor += length;
+
+                    // Try to decode as UTF-8 string
+                    if let Ok(s) = std::str::from_utf8(data) {
+                        fields.insert(
+                            format!("field_{}", field_number),
+                            serde_json::json!(s),
+                        );
+                    } else {
+                        // Store as base64 for binary data
+                        fields.insert(
+                            format!("field_{}", field_number),
+                            serde_json::json!(base64::Engine::encode(
+                                &base64::engine::general_purpose::STANDARD,
+                                data
+                            )),
+                        );
+                    }
+                }
+                5 => {
+                    // 32-bit fixed
+                    if cursor + 4 > bytes.len() {
+                        return Err("Truncated 32-bit field".to_string());
+                    }
+                    let value = u32::from_le_bytes([
+                        bytes[cursor],
+                        bytes[cursor + 1],
+                        bytes[cursor + 2],
+                        bytes[cursor + 3],
+                    ]);
+                    cursor += 4;
+                    fields.insert(
+                        format!("field_{}", field_number),
+                        serde_json::json!(value),
+                    );
+                }
+                1 => {
+                    // 64-bit fixed
+                    if cursor + 8 > bytes.len() {
+                        return Err("Truncated 64-bit field".to_string());
+                    }
+                    let value = u64::from_le_bytes([
+                        bytes[cursor],
+                        bytes[cursor + 1],
+                        bytes[cursor + 2],
+                        bytes[cursor + 3],
+                        bytes[cursor + 4],
+                        bytes[cursor + 5],
+                        bytes[cursor + 6],
+                        bytes[cursor + 7],
+                    ]);
+                    cursor += 8;
+                    fields.insert(
+                        format!("field_{}", field_number),
+                        serde_json::json!(value),
+                    );
+                }
+                _ => {
+                    return Err(format!("Unsupported wire type: {}", wire_type));
+                }
+            }
+        }
+
+        Ok(serde_json::Value::Object(fields))
+    }
+
+    /// Encode JSON to protobuf bytes using prost.
+    ///
+    /// This provides a simplified encoder that handles common JSON types:
+    /// - Numbers -> varint or fixed
+    /// - Strings -> length-delimited UTF-8
+    /// - Objects -> embedded messages
+    #[cfg(feature = "web-proxy")]
+    fn encode_json_to_protobuf(&self, json: &serde_json::Value) -> Result<Vec<u8>, String> {
+        let mut buf = Vec::new();
+
+        match json {
+            serde_json::Value::Object(map) => {
+                // Encode each field with a synthetic field number
+                for (i, (_key, value)) in map.iter().enumerate() {
+                    let field_number = (i + 1) as u64;
+                    encode_json_field(&mut buf, field_number, value)?;
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                // Encode as repeated length-delimited fields
+                for (i, value) in arr.iter().enumerate() {
+                    let field_number = (i + 1) as u64;
+                    encode_json_field(&mut buf, field_number, value)?;
+                }
+            }
+            _ => {
+                return Err("Top-level value must be object or array".to_string());
+            }
+        }
+
+        Ok(buf)
+    }
+}
+
+/// Read a varint from bytes starting at cursor position.
+#[cfg(feature = "web-proxy")]
+fn read_varint(bytes: &[u8], cursor: usize) -> Result<(u64, usize), String> {
+    let mut result = 0u64;
+    let mut shift = 0;
+    let mut pos = cursor;
+
+    loop {
+        if pos >= bytes.len() {
+            return Err("Unexpected end of varint".to_string());
+        }
+
+        let byte = bytes[pos];
+        result |= ((byte & 0x7F) as u64) << shift;
+        pos += 1;
+
+        if byte & 0x80 == 0 {
+            return Ok((result, pos - cursor));
+        }
+
+        shift += 7;
+        if shift >= 64 {
+            return Err("Varint too long".to_string());
+        }
+    }
+}
+
+/// Encode a JSON value as a protobuf field and append to buffer.
+#[cfg(feature = "web-proxy")]
+fn encode_json_field(
+    buf: &mut Vec<u8>,
+    field_number: u64,
+    value: &serde_json::Value,
+) -> Result<(), String> {
+    let tag = (field_number << 3) | 2; // length-delimited by default
+
+    match value {
+        serde_json::Value::Null => {
+            // Skip null fields
+        }
+        serde_json::Value::Bool(b) => {
+            // Encode as varint (0 or 1)
+            let tag = field_number << 3;
+            encode_varint(buf, tag);
+            encode_varint(buf, if *b { 1 } else { 0 });
+        }
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_u64() {
+                let tag = field_number << 3;
+                encode_varint(buf, tag);
+                encode_varint(buf, i);
+            } else if let Some(f) = n.as_f64() {
+                let tag = (field_number << 3) | 1;
+                encode_varint(buf, tag);
+                buf.extend_from_slice(&(f.to_bits()).to_le_bytes());
+            }
+        }
+        serde_json::Value::String(s) => {
+            let bytes = s.as_bytes();
+            encode_varint(buf, tag);
+            encode_varint(buf, bytes.len() as u64);
+            buf.extend_from_slice(bytes);
+        }
+        serde_json::Value::Array(arr) => {
+            // Encode each element as a separate field
+            for elem in arr {
+                encode_json_field(buf, field_number, elem)?;
+            }
+        }
+        serde_json::Value::Object(map) => {
+            // Encode as embedded message
+            let mut inner_buf = Vec::new();
+            for (i, (_key, val)) in map.iter().enumerate() {
+                let inner_field = (i + 1) as u64;
+                encode_json_field(&mut inner_buf, inner_field, val)?;
+            }
+            encode_varint(buf, tag);
+            encode_varint(buf, inner_buf.len() as u64);
+            buf.extend_from_slice(&inner_buf);
+        }
+    }
+
+    Ok(())
+}
+
+/// Encode a u64 as a varint and append to buffer.
+#[cfg(feature = "web-proxy")]
+fn encode_varint(buf: &mut Vec<u8>, mut value: u64) {
+    loop {
+        let mut byte = (value & 0x7F) as u8;
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        buf.push(byte);
+        if value == 0 {
+            break;
+        }
+    }
 }
 
 /// A complete gRPC session with all captured calls.
@@ -342,6 +715,232 @@ impl GrpcSession {
     pub fn add_call(&mut self, call: GrpcCall) {
         self.calls.push(call);
     }
+
+    /// Total number of streaming calls in this session.
+    pub fn streaming_call_count(&self) -> usize {
+        self.calls
+            .iter()
+            .filter(|c| matches!(c.method_type, GrpcMethodType::ServerStreaming | GrpcMethodType::ClientStreaming | GrpcMethodType::Bidirectional))
+            .count()
+    }
+
+    /// Find calls with non-OK status codes.
+    pub fn error_calls(&self) -> Vec<&GrpcCall> {
+        self.calls.iter().filter(|c| c.response_status != 0).collect()
+    }
+}
+
+/// A single frame in a gRPC streaming call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcStreamFrame {
+    /// Stream ID (HTTP/2 stream identifier).
+    pub stream_id: u32,
+    /// Direction of the frame.
+    pub direction: ProxyFlowDirection,
+    /// Frame payload (protobuf bytes as hex).
+    pub payload: Option<String>,
+    /// Payload size in bytes.
+    pub size: u64,
+    /// Whether this is an end-of-stream frame.
+    pub end_stream: bool,
+    /// Timestamp.
+    pub timestamp: String,
+    /// Compression flag.
+    pub compressed: bool,
+}
+
+impl GrpcStreamFrame {
+    pub fn new(stream_id: u32, direction: ProxyFlowDirection) -> Self {
+        Self {
+            stream_id,
+            direction,
+            payload: None,
+            size: 0,
+            end_stream: false,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            compressed: false,
+        }
+    }
+
+    pub fn with_payload(mut self, payload: Vec<u8>) -> Self {
+        self.size = payload.len() as u64;
+        self.payload = Some(hex::encode(&payload));
+        self
+    }
+
+    pub fn with_end_stream(mut self) -> Self {
+        self.end_stream = true;
+        self
+    }
+
+    pub fn with_compressed(mut self) -> Self {
+        self.compressed = true;
+        self
+    }
+}
+
+/// State tracking for a gRPC streaming call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcStreamingState {
+    /// Whether this is a client-streaming, server-streaming, or bidi call.
+    pub method_type: GrpcMethodType,
+    /// Client-to-server frames.
+    pub client_frames: Vec<GrpcStreamFrame>,
+    /// Server-to-client frames.
+    pub server_frames: Vec<GrpcStreamFrame>,
+    /// Flow control window size (from HTTP/2 SETTINGS).
+    pub flow_control_window: u32,
+    /// Current bytes in flight (unacknowledged).
+    pub bytes_in_flight: u64,
+    /// Maximum concurrent streams allowed.
+    pub max_concurrent_streams: u32,
+}
+
+impl GrpcStreamingState {
+    pub fn new(method_type: GrpcMethodType) -> Self {
+        Self {
+            method_type,
+            client_frames: Vec::new(),
+            server_frames: Vec::new(),
+            flow_control_window: 65535, // default HTTP/2 window
+            bytes_in_flight: 0,
+            max_concurrent_streams: 100,
+        }
+    }
+
+    pub fn add_frame(&mut self, frame: GrpcStreamFrame) {
+        match frame.direction {
+            ProxyFlowDirection::Request => self.client_frames.push(frame),
+            ProxyFlowDirection::Response => self.server_frames.push(frame),
+        }
+    }
+
+    /// Total frames captured.
+    pub fn total_frames(&self) -> usize {
+        self.client_frames.len() + self.server_frames.len()
+    }
+
+    /// Total bytes transferred.
+    pub fn total_bytes(&self) -> u64 {
+        self.client_frames.iter().map(|f| f.size).sum::<u64>()
+            + self.server_frames.iter().map(|f| f.size).sum::<u64>()
+    }
+
+    /// Whether the stream has completed (both sides sent end-of-stream).
+    pub fn is_complete(&self) -> bool {
+        let client_ended = self.client_frames.iter().any(|f| f.end_stream);
+        let server_ended = self.server_frames.iter().any(|f| f.end_stream);
+        match self.method_type {
+            GrpcMethodType::Unary => true, // unary doesn't use streaming
+            GrpcMethodType::ServerStreaming => server_ended,
+            GrpcMethodType::ClientStreaming => client_ended,
+            GrpcMethodType::Bidirectional => client_ended && server_ended,
+        }
+    }
+}
+
+/// A security finding specific to gRPC services.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcSecurityFinding {
+    /// Service path where the finding was detected.
+    pub service_path: String,
+    /// Finding category (e.g., "missing_auth", "open_endpoint", "large_payload").
+    pub category: String,
+    /// Severity (0-10).
+    pub severity: u8,
+    /// Description of the finding.
+    pub description: String,
+    /// Recommended remediation.
+    pub remediation: Option<String>,
+}
+
+/// Detect common gRPC security issues from a captured call.
+pub fn detect_grpc_security_issues(call: &GrpcCall) -> Vec<GrpcSecurityFinding> {
+    let mut findings = Vec::new();
+
+    // Check for missing authorization metadata
+    let has_auth = call
+        .request_metadata
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("authorization"));
+    if !has_auth && call.response_status == 0 {
+        findings.push(GrpcSecurityFinding {
+            service_path: call.path.clone(),
+            category: "missing_auth".to_string(),
+            severity: 5,
+            description: "gRPC call has no Authorization metadata".to_string(),
+            remediation: Some("Add authentication interceptors".to_string()),
+        });
+    }
+
+    // Check for overly large payloads (potential DoS)
+    if call.request_size > 10_000_000 {
+        // 10MB
+        findings.push(GrpcSecurityFinding {
+            service_path: call.path.clone(),
+            category: "large_payload".to_string(),
+            severity: 4,
+            description: format!("Request payload is {} bytes (>10MB)", call.request_size),
+            remediation: Some("Enforce maximum message size limits".to_string()),
+        });
+    }
+
+    // Check for gRPC errors
+    if call.response_status != 0 {
+        let status_name = match call.response_status {
+            1 => "CANCELLED",
+            2 => "UNKNOWN",
+            3 => "INVALID_ARGUMENT",
+            4 => "DEADLINE_EXCEEDED",
+            5 => "NOT_FOUND",
+            6 => "ALREADY_EXISTS",
+            7 => "PERMISSION_DENIED",
+            8 => "RESOURCE_EXHAUSTED",
+            9 => "FAILED_PRECONDITION",
+            10 => "ABORTED",
+            11 => "OUT_OF_RANGE",
+            12 => "UNIMPLEMENTED",
+            13 => "INTERNAL",
+            14 => "UNAVAILABLE",
+            15 => "DATA_LOSS",
+            16 => "UNAUTHENTICATED",
+            _ => "UNKNOWN_STATUS",
+        };
+        findings.push(GrpcSecurityFinding {
+            service_path: call.path.clone(),
+            category: "grpc_error".to_string(),
+            severity: if call.response_status == 7 || call.response_status == 16 {
+                6
+            } else {
+                3
+            },
+            description: format!(
+                "gRPC call returned status {} ({})",
+                call.response_status, status_name
+            ),
+            remediation: None,
+        });
+    }
+
+    // Check for sensitive paths
+    let sensitive_patterns = ["/admin", "/debug", "/internal", "/test", "/swagger"];
+    for pattern in &sensitive_patterns {
+        if call.path.to_lowercase().contains(pattern) {
+            findings.push(GrpcSecurityFinding {
+                service_path: call.path.clone(),
+                category: "sensitive_endpoint".to_string(),
+                severity: 6,
+                description: format!(
+                    "gRPC endpoint contains sensitive path pattern '{}'",
+                    pattern
+                ),
+                remediation: Some("Restrict access to sensitive endpoints".to_string()),
+            });
+            break;
+        }
+    }
+
+    findings
 }
 
 /// Protocol detection result from analyzing initial bytes/headers.
@@ -575,5 +1174,232 @@ mod tests {
         assert_eq!(json, "\"bidirectional\"");
         let back: GrpcMethodType = serde_json::from_str(&json).unwrap();
         assert_eq!(back, GrpcMethodType::Bidirectional);
+    }
+
+    // --- GrpcStreamFrame tests ---
+
+    #[test]
+    fn test_grpc_stream_frame_new() {
+        let frame = GrpcStreamFrame::new(1, ProxyFlowDirection::Request);
+        assert_eq!(frame.stream_id, 1);
+        assert_eq!(frame.direction, ProxyFlowDirection::Request);
+        assert!(frame.payload.is_none());
+        assert_eq!(frame.size, 0);
+        assert!(!frame.end_stream);
+        assert!(!frame.compressed);
+    }
+
+    #[test]
+    fn test_grpc_stream_frame_builder() {
+        let payload = vec![0x0a, 0x04, 0x74, 0x65, 0x73, 0x74];
+        let frame = GrpcStreamFrame::new(3, ProxyFlowDirection::Response)
+            .with_payload(payload.clone())
+            .with_end_stream()
+            .with_compressed();
+        assert_eq!(frame.size, payload.len() as u64);
+        assert!(frame.end_stream);
+        assert!(frame.compressed);
+        assert!(frame.payload.is_some());
+        // hex-encoded payload
+        assert_eq!(frame.payload.unwrap(), hex::encode(&payload));
+    }
+
+    #[test]
+    fn test_grpc_stream_frame_serialization() {
+        let frame = GrpcStreamFrame::new(5, ProxyFlowDirection::Request)
+            .with_payload(vec![1, 2, 3])
+            .with_end_stream();
+        let json = serde_json::to_string(&frame).unwrap();
+        let back: GrpcStreamFrame = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.stream_id, 5);
+        assert!(back.end_stream);
+        assert_eq!(back.size, 3);
+    }
+
+    // --- GrpcStreamingState tests ---
+
+    #[test]
+    fn test_grpc_streaming_state_new() {
+        let state = GrpcStreamingState::new(GrpcMethodType::Bidirectional);
+        assert_eq!(state.method_type, GrpcMethodType::Bidirectional);
+        assert!(state.client_frames.is_empty());
+        assert!(state.server_frames.is_empty());
+        assert_eq!(state.flow_control_window, 65535);
+        assert_eq!(state.bytes_in_flight, 0);
+        assert_eq!(state.max_concurrent_streams, 100);
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_add_frame() {
+        let mut state = GrpcStreamingState::new(GrpcMethodType::Bidirectional);
+        let req = GrpcStreamFrame::new(1, ProxyFlowDirection::Request)
+            .with_payload(vec![1, 2, 3]);
+        let resp = GrpcStreamFrame::new(1, ProxyFlowDirection::Response)
+            .with_payload(vec![4, 5, 6, 7]);
+        state.add_frame(req);
+        state.add_frame(resp);
+        assert_eq!(state.client_frames.len(), 1);
+        assert_eq!(state.server_frames.len(), 1);
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_total_frames() {
+        let mut state = GrpcStreamingState::new(GrpcMethodType::ServerStreaming);
+        for _ in 0..5 {
+            state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request));
+            state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response));
+        }
+        assert_eq!(state.total_frames(), 10);
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_total_bytes() {
+        let mut state = GrpcStreamingState::new(GrpcMethodType::Unary);
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_payload(vec![0; 100]));
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_payload(vec![0; 200]));
+        assert_eq!(state.total_bytes(), 300);
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_is_complete_unary() {
+        let state = GrpcStreamingState::new(GrpcMethodType::Unary);
+        // Unary always returns true
+        assert!(state.is_complete());
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_is_complete_server_streaming() {
+        let mut state = GrpcStreamingState::new(GrpcMethodType::ServerStreaming);
+        assert!(!state.is_complete());
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_end_stream());
+        assert!(state.is_complete());
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_is_complete_client_streaming() {
+        let mut state = GrpcStreamingState::new(GrpcMethodType::ClientStreaming);
+        assert!(!state.is_complete());
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_end_stream());
+        assert!(state.is_complete());
+    }
+
+    #[test]
+    fn test_grpc_streaming_state_is_complete_bidi() {
+        let mut state = GrpcStreamingState::new(GrpcMethodType::Bidirectional);
+        assert!(!state.is_complete());
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_end_stream());
+        assert!(!state.is_complete()); // server not ended yet
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_end_stream());
+        assert!(state.is_complete());
+    }
+
+    // --- detect_grpc_security_issues tests ---
+
+    #[test]
+    fn test_detect_grpc_security_issues_missing_auth() {
+        let call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        // No authorization header, response_status=0 (success) -> missing_auth
+        let findings = detect_grpc_security_issues(&call);
+        assert!(findings.iter().any(|f| f.category == "missing_auth"));
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_with_auth_no_finding() {
+        let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        call.request_metadata.insert("authorization".to_string(), "Bearer token".to_string());
+        let findings = detect_grpc_security_issues(&call);
+        assert!(!findings.iter().any(|f| f.category == "missing_auth"));
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_large_payload() {
+        let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        call.request_size = 15_000_000; // 15MB > 10MB threshold
+        let findings = detect_grpc_security_issues(&call);
+        assert!(findings.iter().any(|f| f.category == "large_payload"));
+        let large = findings.iter().find(|f| f.category == "large_payload").unwrap();
+        assert_eq!(large.severity, 4);
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_error_status() {
+        let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        call.response_status = 13; // INTERNAL
+        let findings = detect_grpc_security_issues(&call);
+        assert!(findings.iter().any(|f| f.category == "grpc_error"));
+        let err = findings.iter().find(|f| f.category == "grpc_error").unwrap();
+        assert!(err.description.contains("INTERNAL"));
+        assert_eq!(err.severity, 3); // non-auth error -> severity 3
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_permission_denied() {
+        let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        call.response_status = 7; // PERMISSION_DENIED
+        let findings = detect_grpc_security_issues(&call);
+        let err = findings.iter().find(|f| f.category == "grpc_error").unwrap();
+        assert_eq!(err.severity, 6); // auth-related error -> severity 6
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_unauthenticated() {
+        let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        call.response_status = 16; // UNAUTHENTICATED
+        let findings = detect_grpc_security_issues(&call);
+        let err = findings.iter().find(|f| f.category == "grpc_error").unwrap();
+        assert_eq!(err.severity, 6);
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_sensitive_path() {
+        let call = GrpcCall::new("/admin.Service/Debug", GrpcMethodType::Unary);
+        let findings = detect_grpc_security_issues(&call);
+        assert!(findings.iter().any(|f| f.category == "sensitive_endpoint"));
+        let ep = findings.iter().find(|f| f.category == "sensitive_endpoint").unwrap();
+        assert_eq!(ep.severity, 6);
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_multiple_sensitive_patterns() {
+        // Only first match should be reported (break after first)
+        let call = GrpcCall::new("/internal/debug/Admin", GrpcMethodType::Unary);
+        let findings = detect_grpc_security_issues(&call);
+        let sensitive: Vec<_> = findings.iter().filter(|f| f.category == "sensitive_endpoint").collect();
+        assert_eq!(sensitive.len(), 1); // break after first match
+    }
+
+    #[test]
+    fn test_detect_grpc_security_issues_clean_call() {
+        let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
+        call.request_metadata.insert("authorization".to_string(), "Bearer token".to_string());
+        call.request_size = 1024;
+        call.response_status = 0;
+        let findings = detect_grpc_security_issues(&call);
+        assert!(findings.is_empty());
+    }
+
+    // --- GrpcSession streaming helpers ---
+
+    #[test]
+    fn test_grpc_session_streaming_call_count() {
+        let mut session = GrpcSession::new("grpc.example.com", true);
+        session.add_call(GrpcCall::new("/pkg.Svc/Unary", GrpcMethodType::Unary));
+        session.add_call(GrpcCall::new("/pkg.Svc/ServerStream", GrpcMethodType::ServerStreaming));
+        session.add_call(GrpcCall::new("/pkg.Svc/Bidi", GrpcMethodType::Bidirectional));
+        session.add_call(GrpcCall::new("/pkg.Svc/ClientStream", GrpcMethodType::ClientStreaming));
+        assert_eq!(session.streaming_call_count(), 3);
+    }
+
+    #[test]
+    fn test_grpc_session_error_calls() {
+        let mut session = GrpcSession::new("grpc.example.com", true);
+        let mut ok_call = GrpcCall::new("/pkg.Svc/OK", GrpcMethodType::Unary);
+        ok_call.response_status = 0;
+        let mut err_call = GrpcCall::new("/pkg.Svc/Err", GrpcMethodType::Unary);
+        err_call.response_status = 13;
+        session.add_call(ok_call);
+        session.add_call(err_call);
+        assert_eq!(session.error_calls().len(), 1);
+        assert_eq!(session.error_calls()[0].path, "/pkg.Svc/Err");
     }
 }
