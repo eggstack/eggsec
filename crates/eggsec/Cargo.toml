@@ -154,6 +154,10 @@ optional = true
 version = "0.4"
 optional = true
 
+[dependencies.http]
+version = "1"
+optional = true
+
 [dependencies.tonic]
 version = "0.14"
 optional = true
@@ -387,7 +391,7 @@ api-schema = []
 
 # Web proxy for interception and modification of HTTP/HTTPS traffic
 # Pulls in tokio-tungstenite for real WebSocket frame interception and h2 for HTTP/2 ALPN + stream demux.
-web-proxy = ["dep:tokio-tungstenite", "dep:h2"]
+web-proxy = ["dep:tokio-tungstenite", "dep:h2", "dep:http"]
 # Optional MCP/agent exposure for web-proxy. When enabled, registers proxy control tools as MCP tools.
 # Default behavior (without this marker) keeps web-proxy as standalone defense-lab surface only.
 # Real runs via MCP require EnforcementContext + policy confirmation.

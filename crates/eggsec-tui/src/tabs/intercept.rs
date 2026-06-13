@@ -3,6 +3,9 @@ use crate::components::{empty_state_paragraph, ScrollableText};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use crate::workers::TaskConfig;
+use eggsec::proxy::intercept::protocols::{WebSocketMessage, WebSocketSession};
+#[cfg(test)]
+use eggsec::proxy::intercept::protocols::WebSocketOpcode;
 use eggsec::proxy::intercept::types::{
     FlowAction, InterceptSession, ManipulationRecord, ProxyFlow,
 };
@@ -88,6 +91,58 @@ pub struct EditModal {
     pub direction: eggsec::proxy::intercept::types::ProxyFlowDirection,
 }
 
+/// Debounce state for search/filter operations.
+pub struct DebounceState {
+    pub last_input_time: std::time::Instant,
+    pub pending_filter: Option<String>,
+    pub debounce_ms: u64,
+}
+
+impl DebounceState {
+    pub fn new() -> Self {
+        Self {
+            last_input_time: std::time::Instant::now(),
+            pending_filter: None,
+            debounce_ms: 300,
+        }
+    }
+
+    /// Returns `true` if the debounce window has elapsed and a filter is pending.
+    pub fn should_apply(&self) -> bool {
+        self.pending_filter.is_some()
+            && self.last_input_time.elapsed().as_millis() >= self.debounce_ms as u128
+    }
+
+    /// Queue a filter string for debounced application.
+    pub fn enqueue(&mut self, filter: String) {
+        self.pending_filter = Some(filter);
+        self.last_input_time = std::time::Instant::now();
+    }
+
+    /// Consume the pending filter if ready, returning it.
+    pub fn take_if_ready(&mut self) -> Option<String> {
+        if self.should_apply() {
+            self.pending_filter.take()
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for DebounceState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Cached detail pane content to avoid re-parsing on every tab switch.
+#[derive(Debug, Clone)]
+pub enum DetailPaneContent {
+    Headers(Vec<String>),
+    Body(Vec<String>),
+    Manipulations(usize),
+}
+
 pub struct InterceptTab {
     pub flows: Vec<ProxyFlow>,
     pub selected_flow: Option<usize>,
@@ -109,6 +164,16 @@ pub struct InterceptTab {
     pub actions_log: Vec<String>,
     pub selected_protocol_view: ProtocolView,
     pub selected_rule_view: RuleManagementView,
+    /// Scroll offset for virtual scrolling in the flow list.
+    pub scroll_offset: usize,
+    /// Whether performance mode is active (simplified rendering for >5000 flows).
+    pub performance_mode: bool,
+    /// Cached detail pane content: (selected_flow_index, content).
+    pub cached_detail: Option<(usize, DetailPaneContent)>,
+    /// Debounce state for search/filter operations.
+    pub debounce: DebounceState,
+    /// WebSocket sessions captured during the intercept session.
+    pub ws_sessions: Vec<WebSocketSession>,
 }
 
 impl InterceptTab {
@@ -142,6 +207,11 @@ impl InterceptTab {
             actions_log: Vec::new(),
             selected_protocol_view: ProtocolView::Http,
             selected_rule_view: RuleManagementView::Legacy,
+            scroll_offset: 0,
+            performance_mode: false,
+            cached_detail: None,
+            debounce: DebounceState::new(),
+            ws_sessions: Vec::new(),
         }
     }
 
@@ -155,6 +225,99 @@ impl InterceptTab {
 
     pub fn max_flows(&self) -> u64 {
         self.max_flows
+    }
+
+    /// Get only the flows visible in the current viewport (virtual scrolling).
+    pub fn visible_flows(&self, viewport_height: usize) -> &[ProxyFlow] {
+        let start = self.scroll_offset.min(self.flows.len());
+        let end = (start + viewport_height).min(self.flows.len());
+        &self.flows[start..end]
+    }
+
+    /// Number of flows visible in the current viewport.
+    fn visible_flows_len(&self) -> usize {
+        let start = self.scroll_offset.min(self.flows.len());
+        self.flows.len() - start
+    }
+
+    /// Adjust scroll offset so that `selected_flow` remains visible.
+    pub fn ensure_selected_visible(&mut self, viewport_height: usize) {
+        if let Some(idx) = self.selected_flow {
+            if idx < self.scroll_offset {
+                self.scroll_offset = idx;
+            } else if idx >= self.scroll_offset + viewport_height {
+                self.scroll_offset = idx + 1 - viewport_height;
+            }
+        }
+    }
+
+    /// Toggle performance mode on/off.
+    pub fn toggle_performance_mode(&mut self) {
+        self.performance_mode = !self.performance_mode;
+        self.cached_detail = None;
+    }
+
+    /// Estimate memory usage of the intercept tab state in bytes.
+    pub fn estimate_memory_usage(&self) -> usize {
+        let flows_size: usize = self
+            .flows
+            .iter()
+            .map(|f| {
+                f.method.len()
+                    + f.url.len()
+                    + f.host.len()
+                    + f.path.len()
+                    + f.request_headers.values().map(|v| v.len()).sum::<usize>()
+                    + f.response_headers.values().map(|v| v.len()).sum::<usize>()
+                    + f.request_body.as_ref().map_or(0, |b| b.len())
+                    + f.response_body.as_ref().map_or(0, |b| b.len())
+            })
+            .sum();
+
+        let ws_size: usize = self
+            .ws_sessions
+            .iter()
+            .map(|s| s.messages.iter().map(|m| m.payload.len()).sum::<usize>())
+            .sum();
+
+        let manip_size: usize = self
+            .manipulation_history
+            .iter()
+            .map(|m| {
+                m.field.len()
+                    + m.before.as_ref().map_or(0, |b| b.len())
+                    + m.after.as_ref().map_or(0, |a| a.len())
+                    + m.reason.len()
+            })
+            .sum();
+
+        flows_size + ws_size + manip_size
+    }
+
+    /// Get a page of WebSocket messages for display.
+    pub fn ws_messages_page(
+        &self,
+        session_idx: usize,
+        page: usize,
+        page_size: usize,
+    ) -> &[WebSocketMessage] {
+        if let Some(session) = self.ws_sessions.get(session_idx) {
+            let start = page * page_size;
+            if start >= session.messages.len() {
+                return &[];
+            }
+            let end = (start + page_size).min(session.messages.len());
+            &session.messages[start..end]
+        } else {
+            &[]
+        }
+    }
+
+    /// Total WebSocket message count for a session.
+    pub fn ws_session_message_count(&self, session_idx: usize) -> usize {
+        self.ws_sessions
+            .get(session_idx)
+            .map_or(0, |s| s.messages.len())
     }
 
     pub fn primary_target(&self) -> Option<String> {
@@ -904,6 +1067,10 @@ impl TabState for InterceptTab {
         self.action_bar_index = 0;
         self.selected_protocol_view = ProtocolView::Http;
         self.selected_rule_view = RuleManagementView::Legacy;
+        self.scroll_offset = 0;
+        self.performance_mode = false;
+        self.cached_detail = None;
+        self.ws_sessions.clear();
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -977,11 +1144,16 @@ impl TabRender for InterceptTab {
         };
 
         let status_text = format!(
-            " {} | {} | Flows: {} | {}",
+            " {} | {} | Flows: {} | {}{}",
             self.listen_addr,
             if self.state == AppState::Running { "ACTIVE" } else { "IDLE" },
             self.flows.len(),
-            if self.dry_run { "DRY-RUN" } else { "LIVE" }
+            if self.dry_run { "DRY-RUN" } else { "LIVE" },
+            if self.performance_mode {
+                format!(" | PERF | ~{}", format_bytes(self.estimate_memory_usage() as u64))
+            } else {
+                String::new()
+            }
         );
         let status = ratatui::widgets::Paragraph::new(Line::from(vec![posture_badge, Span::raw(status_text)]))
         .block(Block::default().borders(Borders::ALL).title(" Status "))
@@ -1060,6 +1232,11 @@ impl InterceptTab {
             actions_log: self.actions_log.clone(),
             selected_protocol_view: self.selected_protocol_view.clone(),
             selected_rule_view: self.selected_rule_view.clone(),
+            scroll_offset: self.scroll_offset,
+            performance_mode: self.performance_mode,
+            cached_detail: None,
+            debounce: DebounceState::new(),
+            ws_sessions: Vec::new(),
         }
     }
 }
@@ -1096,8 +1273,10 @@ impl TabInput for InterceptTab {
             self.edit_modal.edit_buffer.push(c);
             return;
         }
-        if c == 'r' && self.detail_pane == DetailPane::Rules {
-            self.toggle_rule_view();
+        match c {
+            'r' if self.detail_pane == DetailPane::Rules => self.toggle_rule_view(),
+            'p' if !self.is_running() => self.toggle_performance_mode(),
+            _ => {}
         }
     }
 
@@ -1146,6 +1325,9 @@ impl TabInput for InterceptTab {
                 if i > 0 {
                     self.selected_flow = Some(i - 1);
                     self.table_state.select(Some(i - 1));
+                    if i - 1 < self.scroll_offset {
+                        self.scroll_offset = i - 1;
+                    }
                 }
             }
             InterceptFocusArea::DetailView => {
@@ -1173,6 +1355,10 @@ impl TabInput for InterceptTab {
                 if i + 1 < self.flows.len() {
                     self.selected_flow = Some(i + 1);
                     self.table_state.select(Some(i + 1));
+                    let viewport = self.visible_flows_len().max(1);
+                    if i + 1 >= self.scroll_offset + viewport {
+                        self.scroll_offset = i + 2 - viewport;
+                    }
                 }
             }
             InterceptFocusArea::DetailView => {
@@ -1244,6 +1430,9 @@ impl TabInput for InterceptTab {
             let new_i = i.saturating_sub(20);
             self.selected_flow = Some(new_i);
             self.table_state.select(Some(new_i));
+            if new_i < self.scroll_offset {
+                self.scroll_offset = new_i;
+            }
         }
     }
 
@@ -1253,6 +1442,10 @@ impl TabInput for InterceptTab {
             let new_i = (i + 20).min(self.flows.len().saturating_sub(1));
             self.selected_flow = Some(new_i);
             self.table_state.select(Some(new_i));
+            let viewport = self.visible_flows_len().max(1);
+            if new_i >= self.scroll_offset + viewport {
+                self.scroll_offset = new_i + 1 - viewport;
+            }
         }
     }
 
@@ -1397,5 +1590,251 @@ mod tests {
         assert_eq!(format_bytes(512), "512B");
         assert_eq!(format_bytes(1536), "1.5K");
         assert_eq!(format_bytes(2097152), "2.0M");
+    }
+
+    #[test]
+    fn test_visible_flows() {
+        let mut tab = InterceptTab::new();
+        for i in 0..10 {
+            tab.flows.push(ProxyFlow {
+                index: i,
+                method: "GET".to_string(),
+                url: format!("https://example.com/{}", i),
+                host: "example.com".to_string(),
+                path: format!("/{}", i),
+                request_headers: Default::default(),
+                request_body: None,
+                response_status: 200,
+                response_headers: Default::default(),
+                response_body: None,
+                is_https: true,
+                duration_ms: 0,
+                request_body_size: 0,
+                response_body_size: 0,
+                started_at: String::new(),
+                completed_at: String::new(),
+                redaction_applied: None,
+                protocol: "http1".to_string(),
+            });
+        }
+
+        tab.scroll_offset = 0;
+        assert_eq!(tab.visible_flows(5).len(), 5);
+        assert_eq!(tab.visible_flows(5)[0].index, 0);
+
+        tab.scroll_offset = 7;
+        assert_eq!(tab.visible_flows(5).len(), 3);
+        assert_eq!(tab.visible_flows(5)[0].index, 7);
+
+        tab.scroll_offset = 100;
+        assert!(tab.visible_flows(5).is_empty());
+    }
+
+    #[test]
+    fn test_scroll_offset_maintained_on_nav() {
+        let mut tab = InterceptTab::new();
+        for i in 0..30 {
+            tab.flows.push(ProxyFlow {
+                index: i,
+                method: "GET".to_string(),
+                url: format!("https://example.com/{}", i),
+                host: "example.com".to_string(),
+                path: format!("/{}", i),
+                request_headers: Default::default(),
+                request_body: None,
+                response_status: 200,
+                response_headers: Default::default(),
+                response_body: None,
+                is_https: false,
+                duration_ms: 0,
+                request_body_size: 0,
+                response_body_size: 0,
+                started_at: String::new(),
+                completed_at: String::new(),
+                redaction_applied: None,
+                protocol: "http1".to_string(),
+            });
+        }
+
+        tab.selected_flow = Some(0);
+        tab.table_state.select(Some(0));
+
+        tab.handle_down();
+        assert_eq!(tab.scroll_offset, 0);
+        assert_eq!(tab.selected_flow, Some(1));
+
+        tab.handle_up();
+        assert_eq!(tab.scroll_offset, 0);
+        assert_eq!(tab.selected_flow, Some(0));
+    }
+
+    #[test]
+    fn test_performance_mode_toggle() {
+        let mut tab = InterceptTab::new();
+        assert!(!tab.performance_mode);
+        tab.toggle_performance_mode();
+        assert!(tab.performance_mode);
+        tab.toggle_performance_mode();
+        assert!(!tab.performance_mode);
+    }
+
+    #[test]
+    fn test_estimate_memory_usage() {
+        let mut tab = InterceptTab::new();
+        assert_eq!(tab.estimate_memory_usage(), 0);
+
+        tab.flows.push(ProxyFlow {
+            index: 0,
+            method: "GET".to_string(),
+            url: "https://example.com/".to_string(),
+            host: "example.com".to_string(),
+            path: "/".to_string(),
+            request_headers: Default::default(),
+            request_body: Some("body".to_string()),
+            response_status: 200,
+            response_headers: Default::default(),
+            response_body: Some("response".to_string()),
+            is_https: true,
+            duration_ms: 0,
+            request_body_size: 0,
+            response_body_size: 0,
+            started_at: String::new(),
+            completed_at: String::new(),
+            redaction_applied: None,
+            protocol: "http1".to_string(),
+        });
+
+        let usage = tab.estimate_memory_usage();
+        assert!(usage > 0);
+    }
+
+    #[test]
+    fn test_ws_messages_page() {
+        let mut tab = InterceptTab::new();
+        assert!(tab.ws_messages_page(0, 0, 10).is_empty());
+        assert_eq!(tab.ws_session_message_count(0), 0);
+
+        let mut session = WebSocketSession::new("ws://example.com", "example.com", "/ws", false);
+        for i in 0..25 {
+            session.messages.push(WebSocketMessage {
+                direction: eggsec::proxy::intercept::types::ProxyFlowDirection::Request,
+                opcode: WebSocketOpcode::Text,
+                payload: format!("msg{}", i),
+                masked: false,
+                payload_size: 0,
+                timestamp: String::new(),
+                manipulation: None,
+            });
+        }
+        tab.ws_sessions.push(session);
+
+        assert_eq!(tab.ws_messages_page(0, 0, 10).len(), 10);
+        assert_eq!(tab.ws_messages_page(0, 0, 10)[0].payload, "msg0");
+        assert_eq!(tab.ws_messages_page(0, 1, 10).len(), 10);
+        assert_eq!(tab.ws_messages_page(0, 1, 10)[0].payload, "msg10");
+        assert_eq!(tab.ws_messages_page(0, 2, 10).len(), 5);
+        assert_eq!(tab.ws_messages_page(0, 2, 10)[0].payload, "msg20");
+        assert!(tab.ws_messages_page(0, 3, 10).is_empty());
+        assert!(tab.ws_messages_page(1, 0, 10).is_empty());
+        assert_eq!(tab.ws_session_message_count(0), 25);
+    }
+
+    #[test]
+    fn test_debounce_state() {
+        let mut debounce = DebounceState::new();
+        assert!(!debounce.should_apply());
+        assert!(debounce.take_if_ready().is_none());
+
+        debounce.enqueue("test".to_string());
+        assert!(debounce.pending_filter.is_some());
+        // Immediately after enqueue, debounce should not be ready
+        assert!(!debounce.should_apply());
+    }
+
+    #[test]
+    fn test_debounce_take_if_ready() {
+        let mut debounce = DebounceState::new();
+        debounce.enqueue("filter".to_string());
+        assert!(debounce.take_if_ready().is_none());
+    }
+
+    #[test]
+    fn test_performance_mode_detail_pane() {
+        let mut tab = InterceptTab::new();
+        tab.flows.push(ProxyFlow {
+            index: 0,
+            method: "GET".to_string(),
+            url: "https://example.com/".to_string(),
+            host: "example.com".to_string(),
+            path: "/".to_string(),
+            request_headers: Default::default(),
+            request_body: None,
+            response_status: 200,
+            response_headers: Default::default(),
+            response_body: None,
+            is_https: true,
+            duration_ms: 0,
+            request_body_size: 0,
+            response_body_size: 0,
+            started_at: String::new(),
+            completed_at: String::new(),
+            redaction_applied: None,
+            protocol: "http1".to_string(),
+        });
+        tab.selected_flow = Some(0);
+
+        tab.toggle_performance_mode();
+        assert!(tab.performance_mode);
+        assert!(tab.cached_detail.is_none());
+    }
+
+    #[test]
+    fn test_reset_clears_new_fields() {
+        let mut tab = InterceptTab::new();
+        tab.scroll_offset = 5;
+        tab.performance_mode = true;
+        tab.cached_detail = Some((0, DetailPaneContent::Headers(vec![])));
+        tab.reset();
+        assert_eq!(tab.scroll_offset, 0);
+        assert!(!tab.performance_mode);
+        assert!(tab.cached_detail.is_none());
+        assert!(tab.ws_sessions.is_empty());
+    }
+
+    #[test]
+    fn test_ensure_selected_visible() {
+        let mut tab = InterceptTab::new();
+        for i in 0..20 {
+            tab.flows.push(ProxyFlow {
+                index: i,
+                method: "GET".to_string(),
+                url: "https://example.com/".to_string(),
+                host: "example.com".to_string(),
+                path: "/".to_string(),
+                request_headers: Default::default(),
+                request_body: None,
+                response_status: 200,
+                response_headers: Default::default(),
+                response_body: None,
+                is_https: false,
+                duration_ms: 0,
+                request_body_size: 0,
+                response_body_size: 0,
+                started_at: String::new(),
+                completed_at: String::new(),
+                redaction_applied: None,
+                protocol: "http1".to_string(),
+            });
+        }
+
+        tab.selected_flow = Some(15);
+        tab.scroll_offset = 0;
+        tab.ensure_selected_visible(10);
+        assert_eq!(tab.scroll_offset, 6);
+
+        tab.selected_flow = Some(0);
+        tab.scroll_offset = 10;
+        tab.ensure_selected_visible(10);
+        assert_eq!(tab.scroll_offset, 0);
     }
 }

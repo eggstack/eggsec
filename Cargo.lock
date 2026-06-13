@@ -1757,6 +1757,7 @@ dependencies = [
  "hickory-resolver",
  "hmac",
  "hostname",
+ "http",
  "indicatif",
  "ipnetwork 0.20.0",
  "k8s-openapi",
