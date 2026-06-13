@@ -1,0 +1,60 @@
+# Example intercept rules for the Eggsec web proxy
+#
+# Use with: eggsec proxy-intercept --intercept-rule "host:path:action" ...
+#
+# These rules demonstrate common interception patterns for authorized lab use.
+
+# Block all traffic to known-malicious domains
+- host: "evil.com"
+  path: "*"
+  action: "block"
+  priority: 100
+  description: "Block all traffic to evil.com"
+
+# Block tracking and analytics endpoints
+- host: "*"
+  path: "/analytics/*"
+  action: "block"
+  priority: 90
+  description: "Block analytics endpoints"
+
+# Intercept API endpoints for security testing
+- host: "example.com"
+  path: "/api/*"
+  action: "intercept"
+  priority: 80
+  description: "Intercept all API traffic on example.com"
+
+# Monitor authentication flows
+- host: "*"
+  path: "/auth/*"
+  action: "monitor"
+  priority: 70
+  description: "Monitor authentication endpoints"
+
+# Allow health checks and static assets through
+- host: "*"
+  path: "/health"
+  action: "allow"
+  priority: 60
+  description: "Allow health checks"
+
+- host: "*"
+  path: "/static/*"
+  action: "allow"
+  priority: 60
+  description: "Allow static assets"
+
+# Intercept WebSocket connections
+- host: "ws.example.com"
+  path: "/chat"
+  action: "intercept"
+  priority: 50
+  description: "Intercept WebSocket chat traffic"
+
+# Monitor all traffic (catch-all, lowest priority)
+- host: "*"
+  path: "*"
+  action: "monitor"
+  priority: 0
+  description: "Monitor all remaining traffic"

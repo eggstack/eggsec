@@ -1,0 +1,42 @@
+# Example web-proxy configuration section for eggsec.toml
+#
+# Copy the relevant sections into ~/.config/eggsec/eggsec.toml
+
+# Web proxy settings (used by proxy-intercept command and TUI Intercept tab)
+[web_proxy]
+# Default listen address
+listen_addr = "127.0.0.1:8080"
+
+# Default CA certificate directory
+# ca_dir = "~/.config/eggsec/ca"
+
+# Auto-generate CA if missing (default: true)
+# generate_ca_if_missing = true
+
+# Budget defaults
+max_flows = 1000
+max_bytes_per_flow = 65536
+max_duration_secs = 300
+max_concurrent = 100
+
+# Default intercept rules (applied to all sessions unless overridden)
+# [[web_proxy.default_rules]]
+# host = "*"
+# path = "/analytics/*"
+# action = "block"
+# priority = 50
+
+# [[web_proxy.default_rules]]
+# host = "*"
+# path = "/api/*"
+# action = "intercept"
+# priority = 40
+
+# Upstream proxy for chaining
+# upstream_proxy = "http://corporate-proxy.example.com:8080"
+
+# Session settings
+# session_dir = "~/.local/share/eggsec/sessions"
+
+# HAR export settings
+# har_export_dir = "./har-exports"

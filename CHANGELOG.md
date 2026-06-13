@@ -32,6 +32,31 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 
 ### Added
 
+#### Web Proxy / Traffic Interception
+- Interactive MITM web proxy (`web-proxy` feature) for HTTP/HTTPS traffic interception in authorized lab environments
+- Dynamic TLS certificate generation via `rcgen` with per-host caching
+- CLI command `proxy-intercept` with full policy integration (`OperationRisk::TrafficInterception`, `--allow-web-proxy` gate)
+- Dry-run mode: complete `WebProxySessionReport` with synthetic flows, zero network activity
+- Budget enforcement (flows, bytes per flow, duration, concurrent connections)
+- Intercept rules with host/path pattern matching, priority, and YAML parsing
+- Reporting bridge: `to_scan_report_data_proxy()` converts to `ScanReportData` (auto-bridged in `report convert`)
+- Interactive TUI tab `Tab::Intercept` with live flow inspection, header/body editing, forward/drop/replay/pause actions
+- Session save/load (JSON) with full manipulation history and flow actions
+- HAR 1.2 export for browser DevTools import
+- Manipulation audit trail (`ManipulationRecord`) for every request/response edit
+- WebSocket interception via `tokio-tungstenite` with full message capture
+- HTTP/2 stream tracking via `h2` with multiplexed stream state
+- gRPC call interception with method type detection (unary, streaming)
+- Enhanced rule engine: AND/OR/NOT conditions, regex, body size, protocol-specific matching
+- Rule actions: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag
+- Rule persistence: JSON file save/load
+- Cross-loadout correlation hooks (jwt-to-db, auth, mobile)
+- Pipeline profile: `ScanProfile::WebProxy` / `Stage::WebProxy`
+- MCP proxy surface: 12 tools via `web-proxy-mcp` marker feature
+- Evidence bundle v2: `EvidenceBundle` / `BundleManifest` with gzip compression and multi-loadout correlation
+- Performance: `FlowBuffer` (capacity-capped) and `ProxyMetrics` (telemetry snapshot)
+- Standalone defense-lab pattern (same as wireless, mobile, auth-test, db-pentest)
+
 #### Security
 - Auth control validation (`eggsec auth-test`): Stabilized under runtime policy gate only (`OperationRisk::CredentialTesting` + `allow_credential_testing` in `ExecutionPolicy`, default false; central `EnforcementContext::evaluate()`). Local `AuthTestReport`/`AuthFinding` only (no canonical conversion or pipeline profile integration). Distinct from `ScanProfile::Auth` (JWT/OAuth/IDOR). TUI `AuthTab` is CLI-only (excluded from `Tab` enum). No dedicated Cargo feature. See `docs/AUTH_LAB.md` and `architecture/auth.md`. All tests green.
 - Mobile dynamic testing close-out (Phase 1 + Phase 2a + final polish + close-out polish): Android ADB core + runtime log analysis + Phase 2a proxy Level-1 device config + traffic summary + runtime permission testing all complete 2026-06-12 under `mobile-dynamic` feature (`mobile-dynamic = ["mobile"]`; standalone defense-lab CLI, MCP-absent, `to_scan_report_data_dynamic` bridge with `mobile-dynamic-android-*` categories; auto-bridged in `report convert`; no TUI/pipeline/MCP in this round). Includes a `correlate_findings` helper that populates `DynamicMobileFinding.static_correlation` for high-value static ↔ dynamic overlaps (cleartext traffic ↔ static `usesCleartextTraffic`/network-config; runtime-perm ↔ static declared dangerous perms). Final polish (F2 correlation + F3 parser robustness + F5 report surface + F6 docs) per `plans/mobile-dynamic-phase2-final-polish-handoff-plan.md` (executed). Close-out polish (final code hygiene: `format_dynamic_report` "Phase 2 extensions present" header renamed to "Runtime extensions"; "P1 skeleton"/"stub" doc comments updated to reflect current state; CLI about-string + struct docs updated for Phase 2a; smoke-test script header refreshed; feature gating decision documented to keep all dynamic functionality under `mobile-dynamic` with no `mobile-dynamic-advanced` sub-feature) per `plans/mobile-dynamic-phase2-close-out-polish-plan.md` (executed). Design in `plans/dynamic-mobile-testing-loadout-design-plan.md`; Phase 1 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed); Phase 2a per `plans/mobile-dynamic-phase2-implementation-handoff-plan.md` (executed). All tests + smoke + clippy green. See `docs/MOBILE.md`, `architecture/mobile.md`, `crates/eggsec/src/mobile/AGENTS.override.md`, and `scripts/test-mobile-dynamic.sh`.

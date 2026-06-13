@@ -1,0 +1,32 @@
+# Scope for web-proxy traffic interception
+#
+# Use with: eggsec proxy-intercept --scope examples/web-proxy/scope.toml --allow-web-proxy
+#
+# This scope controls which upstream hosts/ports the proxy may forward traffic to.
+
+require_explicit_scope = true
+
+# Localhost targets (lab web servers)
+[[allowed_targets]]
+pattern = "127.0.0.1"
+description = "Localhost"
+
+[[allowed_targets]]
+pattern = "localhost"
+description = "Localhost"
+
+# Lab web application servers
+[[allowed_targets]]
+pattern = "lab-web.internal"
+description = "Lab web application server"
+
+[[allowed_targets]]
+pattern = "*.lab"
+description = "Any .lab domain"
+
+[[allowed_targets]]
+pattern = "httpbin.org"
+description = "httpbin.org for testing"
+
+# Allowed upstream ports
+allowed_ports = [80, 443, 8080, 8443, 9090]

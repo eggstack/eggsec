@@ -137,8 +137,8 @@ sudo update-ca-certificates
 
 - **Certificate pinning**: Applications that use certificate pinning (HPKP, custom trust stores, network security config) will reject intercepted connections. This is expected behavior — the proxy cannot bypass pinning without additional instrumentation.
 - **Client certificate authentication**: Mutual TLS (mTLS) endpoints will fail unless the client is configured to present certificates to the proxy.
-- **HTTP/2**: HTTP/2 `CONNECT` semantics are not fully supported in Phase 1; connections may fall back to HTTP/1.1 or be refused.
-- **WebSocket**: WebSocket upgrade requests are not intercepted in Phase 1 (pass-through only).
+- **Transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
+- **Streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
 
 ## What It Captures
 
@@ -243,6 +243,76 @@ Bridged findings use these categories:
 
 The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/bridge.rs` and auto-wired in `commands/handlers/report.rs` when the feature is present.
 
+## MCP Proxy Tools
+
+When built with `--features web-proxy-mcp` (requires `web-proxy`), 12 MCP tools are available for agent and automation integration:
+
+| Tool | Description |
+|------|-------------|
+| `proxy_list_flows` | List captured flows with filtering |
+| `proxy_inspect_flow` | Inspect full request/response details |
+| `proxy_edit_request` | Modify request headers and body |
+| `proxy_edit_response` | Modify response headers and body |
+| `proxy_manage_rules` | Add/remove/update intercept rules |
+| `proxy_session_save` | Save session to JSON file |
+| `proxy_session_load` | Load session from JSON file |
+| `proxy_har_export` | Export session as HAR 1.2 |
+| `proxy_evidence_bundle` | Export evidence bundle for multi-loadout correlation |
+| `proxy_forward_flow` | Forward a specific flow |
+| `proxy_drop_flow` | Drop a specific flow |
+| `proxy_replay_flow` | Replay a specific flow |
+
+Tools are defined in `proxy/mcp.rs` as `WebProxyToolSchema` / `WebProxyToolCall` types. MCP exposure is gated by the `web-proxy-mcp` marker feature.
+
+```bash
+# Build with MCP proxy tools
+cargo build --release -p eggsec-cli --features web-proxy-mcp
+```
+
+## Evidence Bundles
+
+The proxy supports evidence bundle export/import for multi-loadout correlation analysis. Bundles are compressed gzip JSON files containing flows, manipulations, rules, and protocol session data.
+
+### Exporting
+
+From the TUI:
+1. Navigate to the Intercept tab
+2. Select "Export HAR" or use the evidence bundle action
+3. The bundle is saved as `intercept_session_YYYYMMDD_HHMMSS.json.gz`
+
+From the CLI (via bridge):
+```bash
+# Generate dry-run session
+eggsec proxy-intercept --dry-run --json -o proxy.json
+
+# Convert to evidence bundle format
+eggsec report convert proxy.json -f json -o evidence.json
+```
+
+### Bundle Contents
+
+| Field | Description |
+|-------|-------------|
+| `version` | Bundle format version |
+| `manifest` | Session metadata (target, scope, timestamps, dry_run, counts) |
+| `flows` | All captured HTTP/HTTPS flows |
+| `ws_sessions` | WebSocket sessions with messages |
+| `http2_sessions` | HTTP/2 sessions with streams |
+| `grpc_sessions` | gRPC sessions with calls |
+| `rules` | Intercept rules (legacy + enhanced) |
+| `manipulations` | All request/response manipulations |
+| `correlations` | Cross-loadout correlation references |
+
+### Cross-Loadout Correlation
+
+Evidence bundles can be correlated with other Eggsec loadouts:
+
+- **Database pentest**: JWT tokens intercepted in proxy → correlated with SQL injection findings
+- **Auth testing**: Authentication tokens → correlated with proxy session flows
+- **Mobile dynamic**: Mobile app traffic → correlated with proxy captures
+
+Built-in correlation hooks: `jwt_to_db_query_hook()`, `proxy_auth_hook()`, `proxy_mobile_hook()`.
+
 ## Troubleshooting
 
 - **"Traffic interception requires --allow-web-proxy"**: Real (non-dry-run) paths are intentionally gated. Use `--dry-run` for planning/safe validation, or pass `--allow-web-proxy --manual-override-reason "..."` for authorized lab runs. The flag is audited on the policy decision.
@@ -254,11 +324,10 @@ The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/brid
 
 ## Limitations
 
-- **No request/response modification via CLI**: The CLI handler supports dry-run; real interception with request/response modification is available through the TUI tab (Phase 2).
-- **No WebSocket interception**: WebSocket upgrade requests pass through without capture.
-- **No HTTP/2 support**: HTTP/2 CONNECT semantics are not fully supported; connections may fall back or fail.
+- **No request/response modification via CLI**: The CLI handler supports dry-run; real interception with request/response modification is available through the TUI tab.
 - **No transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
 - **No streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
+- **Binary protobuf editing**: gRPC binary protobuf editing is best-effort for common services; complex or unknown schemas may not round-trip correctly.
 
 ## Phase 3: Advanced Protocols & Enhanced Rule Engine (2026-06-12)
 
@@ -504,9 +573,9 @@ Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 
 - Auto-bridge in `report convert` when `web-proxy` feature is present
 - Budget enforcement (flows, bytes, duration, concurrent)
 - `--intercept-rule` CLI flag for runtime rule injection
-- `--upstream-proxy` flag defined for proxy chaining (Phase 2)
+- `--upstream-proxy` flag for proxy chaining
 
-**Phase 2 (Interactive TUI & Manipulation, complete - 2026-06-13)**:
+**Phase 2 (Interactive TUI & Manipulation, complete)**:
 - Interactive TUI tab `Tab::Intercept` with live flow inspection
 - Flow list with method, host, path, status, size, HTTPS indicator
 - Header/body detail panes with cycling navigation
@@ -516,6 +585,29 @@ Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 
 - Intercept rules display with pattern matching
 - `ManipulationRecord` audit trail for every edit
 - `InterceptSession` type for saveable sessions with flow actions
+- Edit modal for in-place header/body/path modification with diff preview
+- Performance mode for large sessions (>5000 flows)
+- Virtual scrolling for efficient flow list rendering
+
+**Phase 3 (Advanced Protocols & Enhanced Rule Engine, complete)**:
+- WebSocket interception via `tokio-tungstenite` with full message capture (text, binary, close, ping, pong)
+- HTTP/2 stream tracking via `h2` with multiplexed stream state, priority, and window updates
+- gRPC call interception with method type detection (unary, server/client/bidirectional streaming)
+- Enhanced rule engine: AND/OR/NOT condition combinators, regex, body size thresholds, protocol-specific matching
+- Rule actions: Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag
+- Rule persistence: JSON file save/load with `save_to_file()`/`load_from_file()`
+- Cross-loadout correlation hooks (jwt-to-db, auth, mobile)
+- Protocol detail panes in TUI (WebSocket message stream, HTTP/2 stream list, gRPC call inspector)
+- Legacy/Enhanced rule view toggle in TUI Rules pane
+
+**Phase 4 (Pipeline, MCP, Evidence, Performance, complete)**:
+- Pipeline profile: `ScanProfile::WebProxy` / `Stage::WebProxy` for automated proxy assessments
+- MCP proxy surface: 12 tools via `web-proxy-mcp` marker feature (list flows, inspect, edit, rules, session, HAR, evidence bundle, flow actions)
+- Evidence bundle v2: `EvidenceBundle` / `BundleManifest` in `proxy/intercept/bundle.rs` with gzip compression and multi-loadout correlation
+- Performance: `FlowBuffer` (capacity-capped) and `ProxyMetrics` (telemetry snapshot) in `proxy/intercept/types.rs`
+- Real WebSocket backend via `tokio-tungstenite`
+- Real HTTP/2 backend via `h2`
+- Extended bridge categories: `proxy-websocket-session`, `proxy-http2-session`, `proxy-grpc-session`, `proxy-correlation-summary`
 
 ## Policy Note
 

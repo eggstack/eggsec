@@ -452,6 +452,9 @@ See [DOCKER_COMPOSE.md](DOCKER_COMPOSE.md) for detailed Docker setup.
 - [API Testing with OpenAPI Schemas](docs/API_TESTING.md) - Schema import, fuzz target generation
 - [Agent Documentation](docs/AGENT.md) - Autonomous agent setup and usage
 - [Capabilities](docs/CAPABILITIES.md) - Feature matrix and capabilities overview
+- [Web Proxy Guide](docs/WEB_PROXY.md) - Interactive MITM proxy, HTTPS interception, TUI, rules
+- [Web Proxy Playbook](docs/web-proxy-playbook.md) - Common attack/defense patterns and lab scenarios
+- [Database Pentesting](docs/DATABASE_PENTEST.md) - Direct DB security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis)
 
 ## Security Considerations
 
