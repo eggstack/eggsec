@@ -1,6 +1,6 @@
 # TUI (Terminal User Interface)
 
-Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 31 different tabs.
+Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 32 different tabs.
 
 ## Core Components (`src/tui/`)
 
@@ -32,7 +32,7 @@ Manages the overall application state, event loop, and rendering.
 
 ### Tabs (`tabs/`)
 
-31 specialized tabs for different security testing functions:
+32 specialized tabs for different security testing functions:
 
 | Tab | File | Purpose |
 |-----|------|---------|
@@ -56,6 +56,7 @@ Manages the overall application state, event loop, and rendering.
 | Hunt | `hunt.rs` | Intelligent vulnerability hunting |
 | Browser | `browser.rs` | Headless browser security testing |
 | Wireless | `wireless.rs` | WiFi scanning plus active deauth/disassoc (`wireless` passive; `wireless-advanced` active mode with dry-run default and live confirmation) |
+| Intercept | `intercept.rs` | Interactive web proxy traffic interception — flow inspection, header/body editing, manipulation audit trail, session save/load, HAR export, protocol detail panes (HTTP/WS/HTTP2/gRPC) (`web-proxy` feature) |
 | Compliance | `compliance.rs` | Compliance report generation (OWASP, PCI, HIPAA, SOC2) |
 | Storage | `storage.rs` | Database storage and query management |
 | Integrations | `integrations.rs` | Issue tracker integration (Jira, GitHub, GitLab) |
@@ -74,6 +75,8 @@ Manages the overall application state, event loop, and rendering.
 - `TabRender` - Rendering: `render()`, `render_overlays()`, `breadcrumb()`
 
 **Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
+
+**Intercept tab** (`tabs/intercept.rs`, under `web-proxy` feature): `InterceptTab` is fully integrated as `Tab::Intercept` (TabSpec with Intrusive risk_group, direct_launch: true, `TabCategory::Traffic`, `operation: "proxy-intercept"`). Provides interactive web proxy traffic interception for defense-lab use. Three focus areas (`FlowList`, `DetailView`, `ActionBar`) with 7 detail sub-panes (Headers, Body, Manipulations, Rules, WebSocket, Http2, Grpc). Supports session save/load, HAR export, request/response editing via modal, manipulation audit trail, performance mode for large sessions (>5000 flows), and virtual scrolling. Task runner (`intercept_worker.rs`) creates `InterceptSession` with configured listen address and dry-run flag. The real MITM proxy server runs via CLI (`eggsec proxy-intercept`); the TUI tab focuses on interactive flow inspection, session management, and manipulation editing. Worker dispatch: `TaskConfig::Intercept { listen_addr, dry_run, max_flows, target }` → `TaskResult::Intercept(InterceptSession)`.
 
 **Wireless tab Active Mode** (`tabs/wireless.rs`, under `wireless-advanced`): the wireless tab supports both passive scanning (default) and an opt-in **Active Mode** for deauth/disassoc. Keymap:
 

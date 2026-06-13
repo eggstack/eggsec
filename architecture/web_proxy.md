@@ -65,7 +65,7 @@ Standalone defense-lab surface for interactive MITM (Man-in-the-Middle) HTTP/HTT
 
 ## Status
 
-**Phase 4 (complete, 2026-06-12)**. All core types, cert generation, intercept engine, rule engine, dry-run report path, policy integration (`OperationRisk::TrafficInterception`, `ConfirmationClass::TrafficInterception`, `--allow-web-proxy`), CLI args, handler with `evaluate_and_enforce_operation`, and `to_scan_report_data_proxy` bridge are implemented and tested. TUI tab (`Tab::Intercept`) with live flow inspection, editing, HAR export, and manipulation audit trail complete (Phase 2). Advanced protocols (WebSocket/HTTP/2/gRPC) and enhanced rule engine complete (Phase 3). Pipeline integration (`ScanProfile::WebProxy`), MCP proxy surface (12 tools via `web-proxy-mcp`), evidence bundle v2, performance optimizations (`FlowBuffer`, `ProxyMetrics`), and real WebSocket/HTTP2 backends complete (Phase 4).
+**Phase 5 (complete, 2026-06-12)**. Documentation updated, stale file references corrected, TUI integration documented. All core types, cert generation, intercept engine, rule engine, dry-run report path, policy integration (`OperationRisk::TrafficInterception`, `ConfirmationClass::TrafficInterception`, `--allow-web-proxy`), CLI args, handler with `evaluate_and_enforce_operation`, and `to_scan_report_data_proxy` bridge are implemented and tested. TUI tab (`Tab::Intercept`) with live flow inspection, editing, HAR export, and manipulation audit trail complete (Phase 2). Advanced protocols (WebSocket/HTTP/2/gRPC) and enhanced rule engine complete (Phase 3). Pipeline integration (`ScanProfile::WebProxy`), MCP proxy surface (12 tools via `web-proxy-mcp`), evidence bundle v2 (`proxy/intercept/bundle.rs`), performance optimizations (`FlowBuffer`, `ProxyMetrics` in `types.rs`), and real WebSocket/HTTP2 backends complete (Phase 4). Phase 5 polish: documentation accuracy, cross-references, AGENTS.md alignment complete.
 
 ## Policy Integration
 
@@ -182,19 +182,19 @@ See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases
   - `proxy_har_export` — export session as HAR format
   - `proxy_evidence_bundle` — export evidence bundle for multi-loadout correlation
   - Additional tools for flow actions (forward/drop/replay) and session management
-- Tools are registered via `WebProxyToolSchema` / `WebProxyToolCall` types in `proxy/intercept/mcp.rs`.
+- Tools are registered via `WebProxyToolSchema` / `WebProxyToolCall` types in `proxy/mcp.rs`.
 - MCP exposure is gated by `web-proxy-mcp` marker feature (requires `web-proxy`).
 
 ### Evidence Bundle v2
 
-- `EvidenceBundle` / `BundleManifest` types in `proxy/intercept/types.rs` support export/import of session evidence for multi-loadout correlation.
+- `EvidenceBundle` / `BundleManifest` types in `proxy/intercept/bundle.rs` support export/import of session evidence for multi-loadout correlation.
 - Bundles include flows, manipulations, rules, and protocol session data (WebSocket/HTTP2/gRPC).
 - Cross-loadout correlation via `CorrelationContext` / `CorrelationReference` hooks (Phase 3).
 
 ### Performance Optimizations
 
-- `FlowBuffer` — LRU-evicting buffer with configurable capacity for high-throughput flow capture (`proxy/intercept/buffer.rs`).
-- `ProxyMetrics` — runtime performance telemetry including latency histograms, throughput counters, and error rates (`proxy/intercept/metrics.rs`).
+- `FlowBuffer` — Capacity-capped flow buffer with configurable max size for high-throughput flow capture (`proxy/intercept/types.rs`).
+- `ProxyMetrics` — runtime performance telemetry snapshot (`proxy/intercept/types.rs`).
 - Both types are public under `web-proxy` feature.
 
 ### Real Protocol Support

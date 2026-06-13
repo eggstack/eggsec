@@ -27,10 +27,10 @@ Intercepting proxy module workflows and patterns for traffic inspection.
 ### Phase 4: Pipeline, MCP, Evidence, Performance
 - `ScanProfile::WebProxy` / `Stage::WebProxy` — Pipeline profile integration
 - 12 MCP tools via `web-proxy-mcp` marker feature (list flows, inspect flow, edit, rules, session, HAR, evidence bundle)
-- `EvidenceBundle` / `BundleManifest` — Evidence bundle export/import for multi-loadout correlation
-- `FlowBuffer` — LRU-evicting flow buffer (`proxy/intercept/buffer.rs`)
-- `ProxyMetrics` — Runtime performance telemetry (`proxy/intercept/metrics.rs`)
-- `WebProxyToolSchema` / `WebProxyToolCall` — MCP proxy tool types (`proxy/intercept/mcp.rs`)
+- `EvidenceBundle` / `BundleManifest` — Evidence bundle export/import for multi-loadout correlation (`proxy/intercept/bundle.rs`)
+- `FlowBuffer` — Capacity-capped flow buffer (`proxy/intercept/types.rs`)
+- `ProxyMetrics` — Runtime performance telemetry snapshot (`proxy/intercept/types.rs`)
+- `WebProxyToolSchema` / `WebProxyToolCall` — MCP proxy tool types (`proxy/mcp.rs`)
 - Real WebSocket (`tokio-tungstenite`) and HTTP/2 (`h2`) protocol backends
 
 ### Safe Logging
@@ -68,9 +68,9 @@ Follow existing test patterns in `proxy/` modules, testing interception and safe
 
 ### Working with Phase 4
 1. Pipeline profile: `ScanProfile::WebProxy` in pipeline module
-2. MCP tools: `proxy/intercept/mcp.rs` (requires `web-proxy-mcp` feature)
-3. Evidence bundles: `proxy/intercept/types.rs` (`EvidenceBundle`/`BundleManifest`)
-4. Performance: `proxy/intercept/buffer.rs` (`FlowBuffer`), `proxy/intercept/metrics.rs` (`ProxyMetrics`)
+2. MCP tools: `proxy/mcp.rs` (requires `web-proxy-mcp` feature)
+3. Evidence bundles: `proxy/intercept/bundle.rs` (`EvidenceBundle`/`BundleManifest`)
+4. Performance: `proxy/intercept/types.rs` (`FlowBuffer`, `ProxyMetrics`)
 
 ## Bug Fixes (2026-05-30)
 

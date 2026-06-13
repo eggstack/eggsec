@@ -120,7 +120,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`output/`](../crates/eggsec/src/output/) | Compatibility facade over `eggsec-output` plus engine-coupled report modules (PDF, report, report_summary, run_manifest, attack_graph) | [output.md](output.md) |
-| [`proxy/`](../crates/eggsec/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies | [proxy.md](proxy.md) |
+| [`proxy/`](../crates/eggsec/src/proxy/) | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking, rotation strategies; `proxy/intercept/` submodule for MITM web proxy (feature-gated `web-proxy`) | [proxy.md](proxy.md) |
 | [`config/`](../crates/eggsec/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
 | [`storage/`](../crates/eggsec/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
 | [`workflow/`](../crates/eggsec/src/workflow/) | Finding lifecycle management (assignment, SLA tracking, status transitions) | [workflow.md](workflow.md) |
@@ -208,7 +208,7 @@ The terminal user interface uses `ratatui` with 29 tabs organized by function. T
 | **Recon** | Targets, DNS, Subdomains, SSL, Technologies, CVEs |
 | **Scanning** | Ports, Endpoints, Services, Spoof Config |
 | **Security** | Fuzzer, WAF, Auth, Hunt, Browser |
-| **Infrastructure** | Proxy, Load Test, Stress, Packets |
+| **Infrastructure** | Proxy (Intercept), Load Test, Stress, Packets |
 | **Intelligence** | Findings, Workflow, Compliance, Vulns |
 | **Agent** | Portfolio, Skills, Schedule, Memory |
 | **System** | Config, Scope, Logs, About |
@@ -423,6 +423,8 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `pdf` | `output/pdf` | PDF report generation |
 | `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
 | `db-pentest` | `db_pentest/` | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP via `db-pentest-mcp` marker). Defense-lab only. TUI tab + native pipeline stage. |
+| `web-proxy` | `proxy/intercept/` | Standalone defense-lab MITM web proxy for HTTP/HTTPS/WebSocket/HTTP2/gRPC traffic interception. Dry-run always safe; real interception requires `--allow-web-proxy` + policy. TUI `Tab::Intercept` (interactive flow inspection, editing, HAR export, manipulation audit trail). |
+| `web-proxy-mcp` | `proxy/mcp.rs` | Optional MCP tool exposure for web proxy (12 tools: list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle). Marker feature; requires `web-proxy`. |
 | `full` | All | All features combined |
 
 See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
@@ -648,7 +650,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 |----------|-----------|
 | **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md) |
 | **Security** | [scanner.md](scanner.md), [fuzzer.md](fuzzer.md), [waf.md](waf.md), [recon.md](recon.md), [auth.md](auth.md), [hunt.md](hunt.md) |
-| **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [loadtest.md](loadtest.md) |
+| **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md) |
 | **Output** | [output.md](output.md), [findings.md](findings.md), [diff.md](diff.md), [workflow.md](workflow.md) |
 | **Integration** | [ai_agents.md](ai_agents.md), [nse_integration.md](nse_integration.md), [integrations.md](integrations.md), [notify.md](notify.md) |
 | **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md) |
@@ -662,4 +664,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-06-11*
+*Last updated: 2026-06-12*
