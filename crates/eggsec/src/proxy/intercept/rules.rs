@@ -27,6 +27,9 @@ pub enum RuleAction {
 pub struct InterceptRule {
     pub host_pattern: String,
     pub path_pattern: Option<String>,
+    pub method_pattern: Option<String>,
+    pub header_name: Option<String>,
+    pub header_value_pattern: Option<String>,
     pub action: RuleAction,
     pub request_modifications: Vec<RequestModification>,
     pub response_modifications: Vec<ResponseModification>,
@@ -38,6 +41,9 @@ impl InterceptRule {
         Self {
             host_pattern,
             path_pattern,
+            method_pattern: None,
+            header_name: None,
+            header_value_pattern: None,
             action,
             request_modifications: Vec::new(),
             response_modifications: Vec::new(),
@@ -47,6 +53,17 @@ impl InterceptRule {
 
     pub fn with_priority(mut self, priority: u32) -> Self {
         self.priority = priority;
+        self
+    }
+
+    pub fn with_method(mut self, method: String) -> Self {
+        self.method_pattern = Some(method);
+        self
+    }
+
+    pub fn with_header(mut self, name: String, value_pattern: Option<String>) -> Self {
+        self.header_name = Some(name);
+        self.header_value_pattern = value_pattern;
         self
     }
 
@@ -64,10 +81,36 @@ impl InterceptRule {
         }
 
         if let Some(ref path_pattern) = self.path_pattern {
-            self.path_matches(path, path_pattern)
-        } else {
-            true
+            if !self.path_matches(path, path_pattern) {
+                return false;
+            }
         }
+
+        true
+    }
+
+    /// Check if this rule matches a full request context.
+    pub fn matches_request(&self, host: &str, path: &str, method: &str, headers: &std::collections::HashMap<String, String>) -> bool {
+        if !self.matches(host, path) {
+            return false;
+        }
+
+        if let Some(ref method_pattern) = self.method_pattern {
+            if !method.eq_ignore_ascii_case(method_pattern) {
+                return false;
+            }
+        }
+
+        if let Some(ref header_name) = self.header_name {
+            let header_value = headers.get(header_name).map(|v| v.as_str()).unwrap_or("");
+            if let Some(ref value_pattern) = self.header_value_pattern {
+                if !header_value.contains(value_pattern.as_str()) {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     fn host_matches(&self, host: &str) -> bool {
@@ -189,6 +232,9 @@ pub fn parse_rule_from_yaml(yaml: &str) -> Result<InterceptRule> {
     struct YamlRule {
         host: String,
         path: Option<String>,
+        method: Option<String>,
+        header_name: Option<String>,
+        header_value: Option<String>,
         action: String,
         priority: Option<u32>,
     }
@@ -214,6 +260,13 @@ pub fn parse_rule_from_yaml(yaml: &str) -> Result<InterceptRule> {
 
     if let Some(priority) = parsed.priority {
         rule = rule.with_priority(priority);
+    }
+
+    if let Some(method) = parsed.method {
+        rule = rule.with_method(method);
+    }
+    if let Some(header_name) = parsed.header_name {
+        rule = rule.with_header(header_name, parsed.header_value);
     }
 
     Ok(rule)
@@ -288,5 +341,36 @@ priority: 100
         assert_eq!(rule.host_pattern, "example.com");
         assert!(matches!(rule.action, RuleAction::Intercept));
         assert_eq!(rule.priority, 100);
+    }
+
+    #[test]
+    fn test_method_matching() {
+        let rule = InterceptRule::new(
+            "example.com".to_string(),
+            None,
+            RuleAction::Intercept,
+        ).with_method("POST".to_string());
+
+        let headers = std::collections::HashMap::new();
+        assert!(rule.matches_request("example.com", "/", "POST", &headers));
+        assert!(!rule.matches_request("example.com", "/", "GET", &headers));
+        assert!(rule.matches("example.com", "/")); // base match still works
+    }
+
+    #[test]
+    fn test_header_matching() {
+        let rule = InterceptRule::new(
+            "example.com".to_string(),
+            None,
+            RuleAction::Intercept,
+        ).with_header("Authorization".to_string(), Some("Bearer".to_string()));
+
+        let mut headers = std::collections::HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer token123".to_string());
+        assert!(rule.matches_request("example.com", "/", "GET", &headers));
+
+        let mut headers2 = std::collections::HashMap::new();
+        headers2.insert("Authorization".to_string(), "Basic abc".to_string());
+        assert!(!rule.matches_request("example.com", "/", "GET", &headers2));
     }
 }

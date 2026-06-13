@@ -201,6 +201,13 @@ pub enum TaskConfig {
         max_queries: u64,
         max_duration: u64,
     },
+    #[cfg(feature = "web-proxy")]
+    Intercept {
+        listen_addr: String,
+        dry_run: bool,
+        max_flows: u64,
+        target: Option<String>,
+    },
 }
 
 #[derive(Debug)]
@@ -276,6 +283,8 @@ pub enum TaskResult {
     Auth(eggsec::auth::AuthTestReport),
     #[cfg(feature = "db-pentest")]
     DbPentest(eggsec::db_pentest::DbPentestReport),
+    #[cfg(feature = "web-proxy")]
+    Intercept(eggsec::proxy::intercept::types::InterceptSession),
     Error(String),
 }
 
@@ -705,6 +714,15 @@ impl TaskRunner {
                     progress_tx,
                     result_tx,
                 ).await
+            }
+            #[cfg(feature = "web-proxy")]
+            TaskConfig::Intercept { listen_addr, dry_run, max_flows, target } => {
+                super::intercept_worker::run_intercept_task(
+                    TaskConfig::Intercept { listen_addr, dry_run, max_flows, target },
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
         };
         result

@@ -1,3 +1,4 @@
+use crate::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -174,6 +175,310 @@ impl Default for RedactionPattern {
     }
 }
 
+/// An immutable record of a request or response manipulation performed during an interactive session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManipulationRecord {
+    /// Flow index this manipulation was applied to.
+    pub flow_index: u64,
+    /// Whether this was a request or response modification.
+    pub direction: ProxyFlowDirection,
+    /// The field that was modified (e.g. "header:Authorization", "body", "path").
+    pub field: String,
+    /// Original value before modification (None for additions).
+    pub before: Option<String>,
+    /// New value after modification.
+    pub after: Option<String>,
+    /// Human-readable reason for the modification.
+    pub reason: String,
+    /// Timestamp when the manipulation occurred (RFC 3339).
+    pub timestamp: String,
+}
+
+/// Action taken on a captured flow during interactive inspection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlowAction {
+    /// Forward the (possibly modified) request to the upstream server.
+    Forward,
+    /// Drop the request without forwarding.
+    Drop,
+    /// Replay the original unmodified request.
+    Replay,
+    /// The flow is paused at a breakpoint, awaiting operator decision.
+    Paused,
+}
+
+/// A complete interactive intercept session that can be saved/loaded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptSession {
+    /// Session metadata.
+    pub listen_addr: String,
+    pub ca_fingerprint: String,
+    pub dry_run: bool,
+    pub started_at: String,
+    pub ended_at: String,
+    pub target: Option<String>,
+    /// All captured flows.
+    pub flows: Vec<ProxyFlow>,
+    /// Manipulations performed during the session.
+    pub manipulations: Vec<ManipulationRecord>,
+    /// Actions taken on each flow (indexed by flow index).
+    pub flow_actions: Vec<FlowActionRecord>,
+    /// Budget usage at session end.
+    pub budget: BudgetUsage,
+}
+
+/// Records the action taken on a specific flow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowActionRecord {
+    /// Flow index.
+    pub flow_index: u64,
+    /// Action taken.
+    pub action: FlowAction,
+    /// Timestamp of the action.
+    pub timestamp: String,
+}
+
+impl InterceptSession {
+    /// Create a new empty session.
+    pub fn new(listen_addr: &str, dry_run: bool) -> Self {
+        let now = chrono::Utc::now().to_rfc3339();
+        Self {
+            listen_addr: listen_addr.to_string(),
+            ca_fingerprint: String::new(),
+            dry_run,
+            started_at: now.clone(),
+            ended_at: now,
+            target: None,
+            flows: Vec::new(),
+            manipulations: Vec::new(),
+            flow_actions: Vec::new(),
+            budget: BudgetUsage::default(),
+        }
+    }
+
+    /// Add a flow to the session.
+    pub fn add_flow(&mut self, flow: ProxyFlow) {
+        self.flows.push(flow);
+    }
+
+    /// Record a manipulation.
+    pub fn record_manipulation(&mut self, record: ManipulationRecord) {
+        self.manipulations.push(record);
+    }
+
+    /// Record an action on a flow.
+    pub fn record_action(&mut self, flow_index: u64, action: FlowAction) {
+        self.flow_actions.push(FlowActionRecord {
+            flow_index,
+            action,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        });
+    }
+
+    /// Finalize the session.
+    pub fn finalize(&mut self) {
+        self.ended_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Save the session to a JSON file.
+    pub fn save_to_file(&self, path: &str) -> error::Result<()> {
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| error::EggsecError::Proxy(format!("Failed to serialize session: {}", e)))?;
+        std::fs::write(path, json)
+            .map_err(|e| error::EggsecError::Proxy(format!("Failed to write session file: {}", e)))?;
+        Ok(())
+    }
+
+    /// Load a session from a JSON file.
+    pub fn load_from_file(path: &str) -> error::Result<Self> {
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| error::EggsecError::Proxy(format!("Failed to read session file: {}", e)))?;
+        serde_json::from_str(&json)
+            .map_err(|e| error::EggsecError::Proxy(format!("Failed to deserialize session: {}", e)))
+    }
+
+    /// Export the session as HAR 1.2 format.
+    pub fn to_har(&self) -> HarExport {
+        let entries: Vec<HarEntry> = self.flows.iter().map(|flow| {
+            HarEntry {
+                started_date_time: flow.started_at.clone(),
+                time_ms: flow.duration_ms,
+                request: HarRequest {
+                    method: flow.method.clone(),
+                    url: flow.url.clone(),
+                    http_version: "HTTP/1.1".to_string(),
+                    cookies: Vec::new(),
+                    headers: flow.request_headers.iter().map(|(k, v)| HarNameValuePair {
+                        name: k.clone(),
+                        value: v.clone(),
+                    }).collect(),
+                    query_string: Vec::new(),
+                    headers_size: -1,
+                    body_size: flow.request_body_size as i64,
+                    comment: None,
+                },
+                response: HarResponse {
+                    status: flow.response_status,
+                    status_text: String::new(),
+                    http_version: "HTTP/1.1".to_string(),
+                    cookies: Vec::new(),
+                    headers: flow.response_headers.iter().map(|(k, v)| HarNameValuePair {
+                        name: k.clone(),
+                        value: v.clone(),
+                    }).collect(),
+                    content: HarContent {
+                        size: flow.response_body_size as i64,
+                        mime_type: "application/octet-stream".to_string(),
+                        text: flow.response_body.clone(),
+                        encoding: None,
+                        comment: None,
+                    },
+                    redirect_url: String::new(),
+                    headers_size: -1,
+                    body_size: flow.response_body_size as i64,
+                    comment: None,
+                },
+                cache: HarCache { before_request: None, after_request: None },
+                timings: HarTimings {
+                    send: 0.0,
+                    wait: flow.duration_ms as f64,
+                    receive: 0.0,
+                    comment: None,
+                },
+                server_ip_address: None,
+                connection: None,
+                comment: None,
+            }
+        }).collect();
+
+        HarExport {
+            log: HarLog {
+                version: "1.2".to_string(),
+                creator: HarCreator {
+                    name: "eggsec-web-proxy".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    comment: None,
+                },
+                browsers: Vec::new(),
+                entries,
+                pages: Vec::new(),
+                comment: None,
+            },
+        }
+    }
+}
+
+/// HAR 1.2 export structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarExport {
+    pub log: HarLog,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarLog {
+    pub version: String,
+    pub creator: HarCreator,
+    #[serde(default)]
+    pub browsers: Vec<serde_json::Value>,
+    pub entries: Vec<HarEntry>,
+    #[serde(default)]
+    pub pages: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarCreator {
+    pub name: String,
+    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarEntry {
+    pub started_date_time: String,
+    pub time_ms: u64,
+    pub request: HarRequest,
+    pub response: HarResponse,
+    pub cache: HarCache,
+    pub timings: HarTimings,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_ip_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarRequest {
+    pub method: String,
+    pub url: String,
+    pub http_version: String,
+    #[serde(default)]
+    pub cookies: Vec<serde_json::Value>,
+    pub headers: Vec<HarNameValuePair>,
+    #[serde(default)]
+    pub query_string: Vec<serde_json::Value>,
+    pub headers_size: i64,
+    pub body_size: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarResponse {
+    pub status: u16,
+    pub status_text: String,
+    pub http_version: String,
+    #[serde(default)]
+    pub cookies: Vec<serde_json::Value>,
+    pub headers: Vec<HarNameValuePair>,
+    pub content: HarContent,
+    pub redirect_url: String,
+    pub headers_size: i64,
+    pub body_size: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarNameValuePair {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarContent {
+    pub size: i64,
+    pub mime_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HarCache {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_request: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_request: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarTimings {
+    pub send: f64,
+    pub wait: f64,
+    pub receive: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,5 +560,70 @@ mod tests {
         let deserialized: WebProxySessionReport = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.listen_addr, "127.0.0.1:9090");
         assert!(deserialized.dry_run);
+    }
+
+    #[test]
+    fn test_manipulation_record_roundtrip() {
+        let record = ManipulationRecord {
+            flow_index: 1,
+            direction: ProxyFlowDirection::Request,
+            field: "header:Authorization".to_string(),
+            before: Some("Bearer old-token".to_string()),
+            after: Some("Bearer new-token".to_string()),
+            reason: "Token refresh".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        let deserialized: ManipulationRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.field, "header:Authorization");
+        assert_eq!(deserialized.before, Some("Bearer old-token".to_string()));
+    }
+
+    #[test]
+    fn test_flow_action_roundtrip() {
+        let action = FlowAction::Forward;
+        let json = serde_json::to_string(&action).unwrap();
+        let deserialized: FlowAction = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, FlowAction::Forward);
+    }
+
+    #[test]
+    fn test_intercept_session_new() {
+        let session = InterceptSession::new("127.0.0.1:8080", true);
+        assert!(session.dry_run);
+        assert!(session.flows.is_empty());
+        assert!(session.manipulations.is_empty());
+    }
+
+    #[test]
+    fn test_intercept_session_record_manipulation() {
+        let mut session = InterceptSession::new("127.0.0.1:8080", false);
+        let record = ManipulationRecord {
+            flow_index: 0,
+            direction: ProxyFlowDirection::Request,
+            field: "body".to_string(),
+            before: None,
+            after: Some("injected".to_string()),
+            reason: "SQLi test".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        session.record_manipulation(record);
+        assert_eq!(session.manipulations.len(), 1);
+    }
+
+    #[test]
+    fn test_intercept_session_record_action() {
+        let mut session = InterceptSession::new("127.0.0.1:8080", false);
+        session.record_action(0, FlowAction::Drop);
+        assert_eq!(session.flow_actions.len(), 1);
+        assert_eq!(session.flow_actions[0].action, FlowAction::Drop);
+    }
+
+    #[test]
+    fn test_intercept_session_to_har_empty() {
+        let session = InterceptSession::new("127.0.0.1:8080", false);
+        let har = session.to_har();
+        assert!(har.log.entries.is_empty());
+        assert_eq!(har.log.version, "1.2");
     }
 }

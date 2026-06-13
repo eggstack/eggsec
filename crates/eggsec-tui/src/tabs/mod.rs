@@ -36,6 +36,8 @@ pub mod wireless;
 
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
+#[cfg(feature = "web-proxy")]
+pub mod intercept;
 
 #[cfg(feature = "headless-browser")]
 pub mod browser;
@@ -89,6 +91,8 @@ pub use waf_stress::WafStressTab;
 pub use wireless::WirelessTab;
 #[cfg(feature = "db-pentest")]
 pub use db_pentest::DbPentestTab;
+#[cfg(feature = "web-proxy")]
+pub use intercept::InterceptTab;
 #[cfg(feature = "finding-workflow")]
 pub use workflow::WorkflowTab;
 
@@ -129,6 +133,7 @@ pub enum Tab {
     Wireless = 28,
     Auth = 29,
     DbPentest = 30,
+    Intercept = 31,
 }
 
 impl Tab {
@@ -169,6 +174,7 @@ impl Tab {
                 Tab::History,
                 Tab::Dashboard,
                 Tab::Auth,
+                Tab::Intercept,
             ];
             #[cfg(feature = "advanced-hunting")]
             let tabs = {
@@ -280,6 +286,7 @@ impl Tab {
             28 => Some(Tab::Wireless),
             29 => Some(Tab::Auth),
             30 => Some(Tab::DbPentest),
+            31 => Some(Tab::Intercept),
             _ => None,
         }
     }
@@ -508,6 +515,10 @@ impl Tab {
             Tab::DbPentest => &app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &app.tabs.dashboard,
         }
     }
 
@@ -581,6 +592,10 @@ impl Tab {
             Tab::DbPentest => &mut app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &mut app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &mut app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &mut app.tabs.dashboard,
         }
     }
 
@@ -647,6 +662,10 @@ impl Tab {
             Tab::DbPentest => &app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &app.tabs.dashboard,
         }
     }
 
@@ -713,6 +732,10 @@ impl Tab {
             Tab::DbPentest => &mut app.tabs.db_pentest,
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => &mut app.tabs.dashboard,
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => &mut app.tabs.intercept,
+            #[cfg(not(feature = "web-proxy"))]
+            Tab::Intercept => &mut app.tabs.dashboard,
         }
     }
 }

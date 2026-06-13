@@ -532,6 +532,8 @@ impl App {
             Tab::Wireless => self.tabs.wireless.primary_target(),
             #[cfg(feature = "db-pentest")]
             Tab::DbPentest => self.tabs.db_pentest.primary_target(),
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => self.tabs.intercept.primary_target(),
             _ => None,
         }
     }
@@ -692,6 +694,10 @@ impl App {
             Tab::Vuln => self.tabs.vuln.build_task_config(),
             #[cfg(feature = "wireless")]
             Tab::Wireless => self.tabs.wireless.build_task_config(),
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => self.tabs.db_pentest.build_task_config(),
+            #[cfg(feature = "web-proxy")]
+            Tab::Intercept => self.tabs.intercept.build_task_config(),
             _ => None,
         }
     }

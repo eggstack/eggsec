@@ -442,6 +442,11 @@ impl super::App {
                 self.tabs.db_pentest.set_results(report);
                 None
             }
+            #[cfg(feature = "web-proxy")]
+            TaskResult::Intercept(session) => {
+                self.tabs.intercept.set_session(session);
+                None
+            }
             _ => Some(result),
         }
     }
@@ -511,6 +516,10 @@ impl TabProgressUpdate for super::tabs::Tab {
             }
             super::tabs::Tab::Auth => {
                 // Auth progress is handled via the task system
+            }
+            #[cfg(feature = "web-proxy")]
+            super::tabs::Tab::Intercept => {
+                // Intercept progress is event-driven, not percentage-based.
             }
             _ => {}
         }

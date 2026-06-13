@@ -416,3 +416,15 @@ impl TaskBuilder for super::tabs::AuthTab {
         })
     }
 }
+
+#[cfg(feature = "web-proxy")]
+impl TaskBuilder for super::tabs::InterceptTab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        Some(workers::TaskConfig::Intercept {
+            listen_addr: self.listen_addr(),
+            dry_run: self.is_dry_run(),
+            max_flows: self.max_flows(),
+            target: self.primary_target(),
+        })
+    }
+}

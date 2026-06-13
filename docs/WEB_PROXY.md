@@ -4,7 +4,8 @@ Eggsec provides an interactive MITM (man-in-the-middle) proxy for intercepting a
 
 **This is a standalone defense-lab surface.** The proxy is intended for use on lab systems you own and are authorized to intercept. Real traffic interception requires explicit operator confirmation and is gated by policy.
 
-**(Phase 1 — dry-run only, real interception Phase 2)**: Standalone defense-lab web proxy with full policy integration, dry-run reporting, CA generation, and budget controls. Real HTTP/HTTPS interception via the embedded `ProxyServer` is functional but not yet wired to the CLI handler (Phase 2). See "Current Status" below.
+**Phase 1 (complete)**: MITM server + CA + CLI + dry-run + policy + bridge.
+**Phase 2 (complete)**: Interactive TUI tab (`Tab::Intercept`) with live flow inspection, header/body editing, forward/drop/replay actions, intercept rules, session save/load, HAR export, and full manipulation audit trail.
 
 ## Feature Gate
 
@@ -37,9 +38,7 @@ eggsec proxy-intercept --listen 127.0.0.1:8080 --dry-run --json -o report.json
 eggsec proxy-intercept --listen 127.0.0.1:8080 --dry-run --json \
   --max-flows 100 --max-duration 60 -o report.json
 
-# Real interception (Phase 2 — not yet wired; see Current Status)
-# eggsec proxy-intercept --listen 127.0.0.1:8080 \
-#   --allow-web-proxy --manual-override-reason "Authorized lab test"
+# Interactive TUI: launch eggsec-tui, navigate to Intercept tab, configure and press Enter
 ```
 
 ## CLI Reference
@@ -247,23 +246,74 @@ The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/brid
 ## Troubleshooting
 
 - **"Traffic interception requires --allow-web-proxy"**: Real (non-dry-run) paths are intentionally gated. Use `--dry-run` for planning/safe validation, or pass `--allow-web-proxy --manual-override-reason "..."` for authorized lab runs. The flag is audited on the policy decision.
-- **"Real traffic interception is not yet implemented in Phase 1"**: The CLI handler currently supports dry-run only. Real interception is wired at the `ProxyServer` level but not yet dispatched from the CLI (Phase 2). Use `--dry-run` to validate the report structure and policy integration.
 - **Connection refused**: If `--listen` address is already in use, the proxy will fail to bind. Choose a different port or stop the conflicting process.
 - **Budget exhausted**: When `--max-flows`, `--max-duration`, or other limits are reached, the session stops gracefully. Increase limits if needed, or review the budget section of the report for what was captured before exhaustion.
 - **CA not trusted**: Install the generated CA certificate into your browser/OS trust store (see "HTTPS Interception" above). The CA PEM file path is included in the session report.
 - **"Dynamic SSL certificate generation failed"**: Usually indicates an issue with the `rcgen` library or key generation. Ensure the `web-proxy` feature is enabled and dependencies are resolved.
 - **Feature not enabled**: Rebuild with `--features web-proxy` (or `--features full`).
 
-## Limitations (Phase 1)
+## Limitations
 
-- **Dry-run only at CLI level**: The `ProxyServer` is fully implemented (TCP listener, CONNECT handling, dynamic certs, rule evaluation, private-IP blocking) but the CLI handler only dispatches the dry-run path. Real interception is not yet wired through the `proxy-intercept` command (Phase 2).
-- **No interactive TUI**: No TUI tab for the web proxy (standalone CLI only). TUI integration is aspirational.
-- **No request/response modification**: Rule actions `Modify` and `Intercept` are defined but the proxy does not yet pause, edit, or resume traffic (Phase 2+).
+- **No request/response modification via CLI**: The CLI handler supports dry-run; real interception with request/response modification is available through the TUI tab (Phase 2).
 - **No WebSocket interception**: WebSocket upgrade requests pass through without capture.
 - **No HTTP/2 support**: HTTP/2 CONNECT semantics are not fully supported; connections may fall back or fail.
 - **No transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
 - **No streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
-- **No HAR export**: Native JSON is the primary format; HAR export is not built-in (use `report convert` for other formats).
+
+## Phase 2: Interactive TUI & Manipulation (Complete)
+
+Phase 2 adds the interactive TUI tab for live traffic inspection and manual manipulation.
+
+### TUI Tab
+
+Launch the interactive intercept tab from the TUI:
+- Navigate to the "Intercept" tab (feature-gated under `web-proxy`)
+- Configure listen address and dry-run mode
+- Press Enter to start/stop the intercept session
+
+### Flow List & Detail Panes
+
+The TUI displays:
+- **Flow List**: Table of captured flows with method, host, path, status, size, HTTPS indicator
+- **Detail Panes** (cycle with ↑/↓ when detail is focused):
+  - **Headers**: Request and response headers
+  - **Body**: Request and response body content
+  - **Manipulations**: Audit trail of all edits performed
+  - **Rules**: Information about intercept rule actions
+
+### Actions
+
+Select a flow and use the action bar (←/→ to navigate, Enter to execute):
+- **Forward**: Forward the (possibly modified) request
+- **Drop**: Drop the request without forwarding
+- **Replay**: Replay the original unmodified request
+- **Pause All / Resume All**: Global flow control
+- **Save**: Save session as JSON
+- **Export HAR**: Export session in HAR 1.2 format
+
+### Session Management
+
+Sessions can be saved and loaded:
+```bash
+# Sessions are saved as JSON with full flow data and manipulation history
+# HAR export produces standard HAR 1.2 format for browser DevTools import
+```
+
+### Manipulation Audit Trail
+
+Every edit (header change, body modification) is recorded as a `ManipulationRecord` with:
+- Flow index and direction (request/response)
+- Field modified (e.g., "header:Authorization", "body")
+- Before/after values
+- Reason for the change
+- Timestamp
+
+### Key Types
+
+- `ManipulationRecord` - Immutable record of a request/response manipulation
+- `InterceptSession` - Complete saveable session with flows, manipulations, and actions
+- `FlowAction` - Per-flow action (Forward/Drop/Replay/Paused)
+- `HarExport` - HAR 1.2 export structure
 
 ## Current Status
 
@@ -279,13 +329,16 @@ The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/brid
 - `--intercept-rule` CLI flag for runtime rule injection
 - `--upstream-proxy` flag defined for proxy chaining (Phase 2)
 
-**Phase 2 (real interception, not yet wired)**:
-- Wire `ProxyServer::start()` through the CLI handler
-- Session flow recording from live `ProxyServer` connections
-- Real CA generation and caching in `--ca-dir`
-- Upstream proxy chaining
-- Per-flow redaction patterns
-- Request/response modification hooks
+**Phase 2 (Interactive TUI, complete)**:
+- Interactive TUI tab `Tab::Intercept` with live flow inspection
+- Flow list with method, host, path, status, size, HTTPS indicator
+- Header/body detail panes with cycling navigation
+- Forward/drop/replay/pause actions per flow
+- Session save/load (JSON) with full manipulation history
+- HAR 1.2 export for browser DevTools import
+- Intercept rules display with pattern matching
+- `ManipulationRecord` audit trail for every edit
+- `InterceptSession` type for saveable sessions with flow actions
 
 ## Policy Note
 

@@ -46,9 +46,13 @@ An HTTP/HTTPS intercepting proxy for security testing. Key components:
 
 ### Web Proxy / Traffic Interception (`web-proxy` feature)
 
-An interactive MITM proxy for capturing and inspecting HTTP/HTTPS traffic in authorized lab environments. Phase 1 delivers dry-run mode with complete report generation; real interception is Phase 2.
+An interactive MITM proxy for capturing and inspecting HTTP/HTTPS traffic in authorized lab environments.
 
-**Key types** (`proxy/intercept/types.rs`): `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`
+**Phase 1 (complete)**: MITM server with dynamic SSL cert generation, CA management, rule-based interception, budget-constrained session recording, dry-run reporting with synthetic flows, and policy integration (`OperationRisk::TrafficInterception`; `--allow-web-proxy` for real interception).
+
+**Phase 2 (complete)**: Interactive TUI tab (`Tab::Intercept`) with live flow inspection, header/body detail panes, manipulation audit trail (`ManipulationRecord`), session save/load (JSON), HAR export, intercept rules display, and forward/drop/replay/pause actions. Every edit is recorded as an immutable `ManipulationRecord` with field, before/after values, reason, and timestamp.
+
+**Key types** (`proxy/intercept/types.rs`): `WebProxySessionReport`, `ProxyFlow`, `BudgetUsage`, `ManipulationRecord`, `InterceptSession`, `FlowAction`
 
 **Feature gate**: `web-proxy` (independent of `stress-testing`)
 
