@@ -10,9 +10,16 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Row, Table, TableState},
     Frame,
 };
+
+#[macro_export]
+macro_rules! inner {
+    ($area:expr, $margin:expr) => {
+        Rect::new($area.x + $margin, $area.y + $margin, $area.width - $margin * 2, $area.height - $margin * 2)
+    };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InterceptFocusArea {
@@ -36,6 +43,34 @@ pub enum InterceptView {
     Rules,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum EditTarget {
+    RequestHeader(String),
+    ResponseHeader(String),
+    RequestBody,
+    ResponseBody,
+    Path,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EditModalState {
+    Closed,
+    SelectingField,
+    EditingValue,
+    DiffPreview,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EditModal {
+    pub state: EditModalState,
+    pub target: Option<EditTarget>,
+    pub original_value: String,
+    pub edit_buffer: String,
+    pub reason: String,
+    pub flow_index: u64,
+    pub direction: eggsec::proxy::intercept::types::ProxyFlowDirection,
+}
+
 pub struct InterceptTab {
     pub flows: Vec<ProxyFlow>,
     pub selected_flow: Option<usize>,
@@ -52,6 +87,9 @@ pub struct InterceptTab {
     pub table_state: TableState,
     pub action_bar_index: usize,
     pub max_flows: u64,
+    pub edit_modal: EditModal,
+    pub pending_action: Option<crate::app::action::UiAction>,
+    pub actions_log: Vec<String>,
 }
 
 impl InterceptTab {
@@ -72,6 +110,17 @@ impl InterceptTab {
             table_state: TableState::default(),
             action_bar_index: 0,
             max_flows: 100,
+            edit_modal: EditModal {
+                state: EditModalState::Closed,
+                target: None,
+                original_value: String::new(),
+                edit_buffer: String::new(),
+                reason: String::new(),
+                flow_index: 0,
+                direction: eggsec::proxy::intercept::types::ProxyFlowDirection::Request,
+            },
+            pending_action: None,
+            actions_log: Vec::new(),
         }
     }
 
@@ -116,6 +165,97 @@ impl InterceptTab {
 
     pub fn record_manipulation(&mut self, record: ManipulationRecord) {
         self.manipulation_history.push(record);
+    }
+
+    pub fn open_edit_modal(&mut self, target: EditTarget, original_value: String) {
+        self.edit_modal = EditModal {
+            state: EditModalState::EditingValue,
+            target: Some(target.clone()),
+            original_value: original_value.clone(),
+            edit_buffer: original_value,
+            reason: String::new(),
+            flow_index: self.selected_flow.map(|i| i as u64).unwrap_or(0),
+            direction: eggsec::proxy::intercept::types::ProxyFlowDirection::Request,
+        };
+    }
+
+    pub fn close_edit_modal(&mut self) {
+        self.edit_modal.state = EditModalState::Closed;
+        self.edit_modal.target = None;
+        self.edit_modal.original_value.clear();
+        self.edit_modal.edit_buffer.clear();
+        self.edit_modal.reason.clear();
+    }
+
+    pub fn apply_edit(&mut self) {
+        if self.edit_modal.state != EditModalState::EditingValue && self.edit_modal.state != EditModalState::DiffPreview {
+            return;
+        }
+
+        let target = self.edit_modal.target.clone();
+        let before = self.edit_modal.original_value.clone();
+        let after = self.edit_modal.edit_buffer.clone();
+        let reason = self.edit_modal.reason.clone();
+        let flow_index = self.edit_modal.flow_index;
+        let direction = self.edit_modal.direction;
+
+        if before != after {
+            if let Some(idx) = self.selected_flow {
+                if let Some(flow) = self.flows.get_mut(idx) {
+                    match target.as_ref() {
+                        Some(EditTarget::RequestHeader(name)) => {
+                            flow.request_headers.insert(name.clone(), after.clone());
+                        }
+                        Some(EditTarget::ResponseHeader(name)) => {
+                            flow.response_headers.insert(name.clone(), after.clone());
+                        }
+                        Some(EditTarget::RequestBody) => {
+                            flow.request_body = Some(after.clone());
+                        }
+                        Some(EditTarget::ResponseBody) => {
+                            flow.response_body = Some(after.clone());
+                        }
+                        Some(EditTarget::Path) => {
+                            flow.path = after.clone();
+                        }
+                        None => {}
+                    }
+                }
+            }
+
+            let record = ManipulationRecord {
+                flow_index,
+                direction,
+                field: match target.as_ref() {
+                    Some(EditTarget::RequestHeader(n)) => format!("header:{}", n),
+                    Some(EditTarget::ResponseHeader(n)) => format!("response:header:{}", n),
+                    Some(EditTarget::RequestBody) => "request:body".to_string(),
+                    Some(EditTarget::ResponseBody) => "response:body".to_string(),
+                    Some(EditTarget::Path) => "path".to_string(),
+                    None => "unknown".to_string(),
+                },
+                before: if before.is_empty() { None } else { Some(before) },
+                after: if after.is_empty() { None } else { Some(after) },
+                reason: if reason.is_empty() { "manual edit".to_string() } else { reason },
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+
+            self.record_manipulation(record.clone());
+
+            if let Some(ref mut session) = self.session {
+                session.record_manipulation(record);
+            }
+        }
+
+        self.close_edit_modal();
+    }
+
+    pub fn is_edit_modal_open(&self) -> bool {
+        self.edit_modal.state != EditModalState::Closed
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.state == AppState::Running
     }
 
     pub fn start_session(&mut self) {
@@ -397,11 +537,19 @@ impl InterceptTab {
             .iter()
             .enumerate()
             .flat_map(|(i, action)| {
+                let is_destructive = i == 1 || i == 2;
                 let style = if i == self.action_bar_index {
-                    Style::default()
-                        .fg(tc!(background))
-                        .bg(tc!(accent))
-                        .add_modifier(Modifier::BOLD)
+                    if is_destructive {
+                        Style::default()
+                            .fg(Color::Red)
+                            .bg(tc!(background))
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(tc!(background))
+                            .bg(tc!(accent))
+                            .add_modifier(Modifier::BOLD)
+                    }
                 } else {
                     Style::default().fg(tc!(text))
                 };
@@ -411,60 +559,162 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Actions (←/→ to navigate, Enter to execute) ");
+            .title(" Actions (←/→ navigate · Enter execute · D=Drop R=Replay F=Forward · Esc=back ");
         let paragraph = ratatui::widgets::Paragraph::new(Line::from(spans)).block(block);
         f.render_widget(paragraph, area);
+    }
+
+    fn render_edit_modal(&self, f: &mut Frame, area: Rect) {
+        use ratatui::widgets::Paragraph;
+
+        f.render_widget(Clear, area);
+        f.render_widget(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Edit ")
+                .style(Style::default().bg(tc!(surface)).fg(tc!(text))),
+            area,
+        );
+
+        let modal_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(3),
+                Constraint::Length(1),
+                Constraint::Length(3),
+                Constraint::Length(3),
+            ])
+            .margin(1)
+            .split(area);
+
+        let field_name = match &self.edit_modal.target {
+            Some(EditTarget::RequestHeader(n)) => format!("Request Header: {}", n),
+            Some(EditTarget::ResponseHeader(n)) => format!("Response Header: {}", n),
+            Some(EditTarget::RequestBody) => "Request Body".to_string(),
+            Some(EditTarget::ResponseBody) => "Response Body".to_string(),
+            Some(EditTarget::Path) => "Path".to_string(),
+            None => "Unknown".to_string(),
+        };
+
+        let field_para = Paragraph::new(field_name)
+            .style(Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD));
+        f.render_widget(field_para, modal_layout[0]);
+
+        let orig_label = Paragraph::new(format!("Original: {}", truncate_str(&self.edit_modal.original_value, 60)))
+            .style(Style::default().fg(tc!(muted)));
+        f.render_widget(orig_label, modal_layout[1]);
+
+        let edit_area = modal_layout[2];
+        let edit_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Edit Value (type to modify) ");
+
+        let edit_content = if self.edit_modal.edit_buffer.is_empty() {
+            "[empty - type to add]".to_string()
+        } else {
+            self.edit_modal.edit_buffer.clone()
+        };
+        let edit_para = Paragraph::new(edit_content)
+            .style(Style::default().fg(tc!(text)));
+        f.render_widget(edit_block, edit_area);
+        let inner_rect = Rect::new(edit_area.x + 1, edit_area.y + 1, edit_area.width - 2, edit_area.height - 2);
+        f.render_widget(edit_para, inner_rect);
+
+        let diff_label = if self.edit_modal.original_value != self.edit_modal.edit_buffer {
+            format!("~ Change: {} → {}",
+                truncate_str(&self.edit_modal.original_value, 30),
+                truncate_str(&self.edit_modal.edit_buffer, 30))
+        } else {
+            "(no change)".to_string()
+        };
+        let diff_para = Paragraph::new(diff_label)
+            .style(Style::default().fg(tc!(warning)));
+        f.render_widget(diff_para, modal_layout[4]);
+
+        let reason_para = Paragraph::new("Reason: (optional) ")
+            .style(Style::default().fg(tc!(muted)));
+        f.render_widget(reason_para, modal_layout[5]);
+
+        let help_text = "Enter=apply  Esc=cancel  Tab=switch focus";
+        let help_para = Paragraph::new(help_text)
+            .style(Style::default().fg(tc!(muted)));
+        f.render_widget(help_para, modal_layout[6]);
     }
 
     fn execute_action(&mut self, action_index: usize) {
         match action_index {
             0 => {
-                // Forward
                 if let Some(idx) = self.selected_flow {
                     if let Some(ref mut session) = self.session {
                         session.record_action(idx as u64, FlowAction::Forward);
+                        self.actions_log.push(format!(
+                            "[{}] Forward flow #{}",
+                            chrono::Local::now().format("%H:%M:%S"),
+                            idx
+                        ));
                     }
                 }
             }
             1 => {
-                // Drop
                 if let Some(idx) = self.selected_flow {
                     if let Some(ref mut session) = self.session {
                         session.record_action(idx as u64, FlowAction::Drop);
+                        self.actions_log.push(format!(
+                            "[{}] DROP flow #{} (NOT actually dropped - MITM not running)",
+                            chrono::Local::now().format("%H:%M:%S"),
+                            idx
+                        ));
                     }
                 }
             }
             2 => {
-                // Replay
                 if let Some(idx) = self.selected_flow {
                     if let Some(ref mut session) = self.session {
                         session.record_action(idx as u64, FlowAction::Replay);
+                        self.actions_log.push(format!(
+                            "[{}] REPLAY flow #{} (NOT actually replayed - MITM not running)",
+                            chrono::Local::now().format("%H:%M:%S"),
+                            idx
+                        ));
                     }
                 }
             }
             3 => {
-                // Pause All (placeholder - real implementation needs async server control)
+                self.actions_log.push(format!(
+                    "[{}] Pause all (not implemented - MITM server not running)",
+                    chrono::Local::now().format("%H:%M:%S")
+                ));
             }
             4 => {
-                // Resume All (placeholder)
+                self.actions_log.push(format!(
+                    "[{}] Resume all (not implemented - MITM server not running)",
+                    chrono::Local::now().format("%H:%M:%S")
+                ));
             }
             5 => {
-                // Save session
                 if let Some(ref session) = self.session {
                     let path = format!(
                         "intercept_session_{}.json",
                         chrono::Utc::now().format("%Y%m%d_%H%M%S")
                     );
-                    if let Err(e) = session.save_to_file(&path) {
-                        self.error = Some(TabError::Unknown(format!(
-                            "Failed to save session: {}",
-                            e
-                        )));
+                    match session.save_to_file(&path) {
+                        Ok(_) => {
+                            self.actions_log.push(format!(
+                                "[{}] Session saved to {}",
+                                chrono::Local::now().format("%H:%M:%S"),
+                                path
+                            ));
+                        }
+                        Err(e) => {
+                            self.error = Some(TabError::Unknown(format!("Failed to save: {}", e)));
+                        }
                     }
                 }
             }
             6 => {
-                // Export HAR
                 if let Some(ref session) = self.session {
                     let har = session.to_har();
                     let path = format!(
@@ -472,19 +722,20 @@ impl InterceptTab {
                         chrono::Utc::now().format("%Y%m%d_%H%M%S")
                     );
                     match serde_json::to_string_pretty(&har) {
-                        Ok(json) => {
-                            if let Err(e) = std::fs::write(&path, json) {
-                                self.error = Some(TabError::Unknown(format!(
-                                    "Failed to write HAR: {}",
-                                    e
-                                )));
+                        Ok(json) => match std::fs::write(&path, json) {
+                            Ok(_) => {
+                                self.actions_log.push(format!(
+                                    "[{}] HAR exported to {}",
+                                    chrono::Local::now().format("%H:%M:%S"),
+                                    path
+                                ));
                             }
-                        }
+                            Err(e) => {
+                                self.error = Some(TabError::Unknown(format!("Failed to write HAR: {}", e)));
+                            }
+                        },
                         Err(e) => {
-                            self.error = Some(TabError::Unknown(format!(
-                                "Failed to serialize HAR: {}",
-                                e
-                            )));
+                            self.error = Some(TabError::Unknown(format!("Failed to serialize HAR: {}", e)));
                         }
                     }
                 }
@@ -553,6 +804,11 @@ impl TabRender for InterceptTab {
             return;
         }
 
+        if self.is_edit_modal_open() {
+            self.render_edit_modal(f, area);
+            return;
+        }
+
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -562,34 +818,39 @@ impl TabRender for InterceptTab {
             ])
             .split(area);
 
+        if area.width < 60 || area.height < 15 {
+            let too_small = ratatui::widgets::Paragraph::new(
+                "Terminal too small for Intercept tab.\nNeed at least 60x15."
+            )
+            .block(Block::default().borders(Borders::ALL).title(" Too Small "))
+            .style(Style::default().fg(tc!(error)));
+            f.render_widget(too_small, area);
+            return;
+        }
+
         let status_area = layout[0];
         let content_area = layout[1];
         let action_area = layout[2];
 
-        // Status bar
-        let status_text = if self.state == AppState::Running {
-            format!(
-                " Listening on {} | Flows: {} | Mode: {} | LIVE",
-                self.listen_addr,
-                self.flows.len(),
-                if self.dry_run { "Dry-Run" } else { "Live" }
-            )
-        } else if let Some(ref session) = self.session {
-            format!(
-                " Session loaded | Flows: {} | Manipulations: {}",
-                session.flows.len(),
-                session.manipulations.len()
-            )
+        // Status bar with enforcement posture badge
+        let posture_badge = if self.dry_run {
+            Span::styled(" DRY-RUN ", Style::default().fg(tc!(background)).bg(tc!(success)).add_modifier(Modifier::BOLD))
+        } else if self.state == AppState::Running {
+            Span::styled(" LIVE ", Style::default().fg(tc!(background)).bg(tc!(warning)).add_modifier(Modifier::BOLD))
         } else {
-            format!(" Proxy Intercept | {}", self.listen_addr)
+            Span::styled(" IDLE ", Style::default().fg(tc!(muted)))
         };
-        let status = ratatui::widgets::Paragraph::new(status_text)
-            .block(Block::default().borders(Borders::ALL).title(" Status "))
-            .style(Style::default().fg(if self.state == AppState::Running {
-                tc!(success)
-            } else {
-                tc!(text)
-            }));
+
+        let status_text = format!(
+            " {} | {} | Flows: {} | {}",
+            self.listen_addr,
+            if self.state == AppState::Running { "ACTIVE" } else { "IDLE" },
+            self.flows.len(),
+            if self.dry_run { "DRY-RUN" } else { "LIVE" }
+        );
+        let status = ratatui::widgets::Paragraph::new(Line::from(vec![posture_badge, Span::raw(status_text)]))
+        .block(Block::default().borders(Borders::ALL).title(" Status "))
+        .style(Style::default().fg(if self.state == AppState::Running { tc!(success) } else { tc!(text) }));
         f.render_widget(status, status_area);
 
         // Content: flow list (left) + detail pane (right)
@@ -659,6 +920,9 @@ impl InterceptTab {
             table_state: TableState::default(),
             action_bar_index: self.action_bar_index,
             max_flows: self.max_flows,
+            edit_modal: self.edit_modal.clone(),
+            pending_action: None,
+            actions_log: self.actions_log.clone(),
         }
     }
 }
@@ -690,13 +954,28 @@ impl TabInput for InterceptTab {
         }
     }
 
-    fn handle_char(&mut self, _c: char) {}
+    fn handle_char(&mut self, c: char) {
+        if self.is_edit_modal_open() {
+            self.edit_modal.edit_buffer.push(c);
+            return;
+        }
+    }
 
-    fn handle_backspace(&mut self) {}
+    fn handle_backspace(&mut self) {
+        if self.is_edit_modal_open() {
+            self.edit_modal.edit_buffer.pop();
+            return;
+        }
+    }
 
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
+            return;
+        }
+
+        if self.is_edit_modal_open() {
+            self.apply_edit();
             return;
         }
 
@@ -708,6 +987,10 @@ impl TabInput for InterceptTab {
     fn handle_escape(&mut self) {
         if self.is_running() {
             self.stop();
+            return;
+        }
+        if self.is_edit_modal_open() {
+            self.close_edit_modal();
             return;
         }
         self.focus_area = InterceptFocusArea::FlowList;

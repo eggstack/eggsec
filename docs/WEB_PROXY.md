@@ -260,7 +260,7 @@ The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/brid
 - **No transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
 - **No streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
 
-## Phase 2: Interactive TUI & Manipulation (Complete)
+## Phase 2: Interactive TUI & Manipulation (Complete - 2026-06-13)
 
 Phase 2 adds the interactive TUI tab for live traffic inspection and manual manipulation.
 
@@ -315,6 +315,112 @@ Every edit (header change, body modification) is recorded as a `ManipulationReco
 - `FlowAction` - Per-flow action (Forward/Drop/Replay/Paused)
 - `HarExport` - HAR 1.2 export structure
 
+## TUI Keybindings (Phase 2 Interactive)
+
+The Intercept tab provides keyboard-driven traffic inspection and manipulation.
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Navigate flow list / cycle detail panes |
+| `←` / `→` | Navigate action bar / move within focused input |
+| `Tab` | Cycle focus: Flow List → Detail View → Action Bar |
+| `g` / `G` | Jump to first / last flow (vim-style, if enabled) |
+| `Home` / `End` | Jump to start / end of flow list |
+| `PgUp` / `PgDn` | Page up / down through flows |
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Execute selected action in action bar / apply edit in modal |
+| `Esc` | Close modal / cancel edit / return to flow list focus |
+| `e` | Open edit modal for selected flow's detail pane |
+| `d` | Toggle dry-run mode (default on) |
+| `r` | Refresh / reload flows |
+| `s` | Quick-save session |
+| `x` | Export HAR |
+
+### Action Bar Actions (←/→ to select, Enter to execute)
+
+| Index | Action | Description |
+|-------|--------|-------------|
+| 0 | Forward | Forward the (possibly modified) request upstream |
+| 1 | Drop | Drop the request without forwarding (logged only) |
+| 2 | Replay | Replay the original unmodified request (logged only) |
+| 3 | Pause | Pause all flow interception |
+| 4 | Resume | Resume flow interception |
+| 5 | Save | Save session to JSON file |
+| 6 | HAR | Export session to HAR 1.2 format |
+
+### Edit Modal
+
+| Key | Action |
+|-----|--------|
+| Type | Add characters to edit buffer |
+| `Backspace` | Remove character from edit buffer |
+| `Enter` | Apply edit and close modal |
+| `Esc` | Cancel and close modal without applying |
+
+### Detail Panes (when Detail View is focused)
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Cycle: Headers → Body → Manipulations → Rules |
+
+## Example: Session Artifacts
+
+### JSON Session Format
+
+Sessions are saved as `intercept_session_YYYYMMDD_HHMMSS.json`:
+
+```json
+{
+  "listen_addr": "127.0.0.1:8080",
+  "ca_fingerprint": "SHA256:...",
+  "dry_run": false,
+  "started_at": "2026-06-13T10:00:00Z",
+  "ended_at": "2026-06-13T10:30:00Z",
+  "target": "https://example.com",
+  "flows": [
+    {
+      "index": 0,
+      "method": "GET",
+      "url": "https://example.com/api/user",
+      "host": "example.com",
+      "path": "/api/user",
+      "request_headers": {"Authorization": "Bearer token123", "Content-Type": "application/json"},
+      "response_status": 200,
+      "is_https": true,
+      "duration_ms": 150
+    }
+  ],
+  "manipulations": [
+    {
+      "flow_index": 0,
+      "direction": "request",
+      "field": "header:Authorization",
+      "before": "Bearer old-token",
+      "after": "Bearer new-token",
+      "reason": "Token refresh test",
+      "timestamp": "2026-06-13T10:15:00Z"
+    }
+  ],
+  "flow_actions": [
+    {"flow_index": 0, "action": "forward", "timestamp": "2026-06-13T10:15:01Z"}
+  ],
+  "budget": {
+    "max_flows": 100,
+    "flows_captured": 42
+  }
+}
+```
+
+### HAR Export
+
+Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 specification and can be imported into browser DevTools or tools like Postman.
+
 ## Current Status
 
 **Phase 1 (dry-run, complete)**:
@@ -329,7 +435,7 @@ Every edit (header change, body modification) is recorded as a `ManipulationReco
 - `--intercept-rule` CLI flag for runtime rule injection
 - `--upstream-proxy` flag defined for proxy chaining (Phase 2)
 
-**Phase 2 (Interactive TUI, complete)**:
+**Phase 2 (Interactive TUI & Manipulation, complete - 2026-06-13)**:
 - Interactive TUI tab `Tab::Intercept` with live flow inspection
 - Flow list with method, host, path, status, size, HTTPS indicator
 - Header/body detail panes with cycling navigation

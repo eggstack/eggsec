@@ -30,14 +30,47 @@ pub fn to_scan_report_data_proxy(report: &WebProxySessionReport) -> ScanReportDa
         .collect();
 
     let mut all_findings = findings;
+
+    for manip in &report.manipulations {
+        let finding_type = if manip.field.starts_with("header:") {
+            "header-modification"
+        } else if manip.field == "body" {
+            "body-modification"
+        } else if manip.field == "path" {
+            "path-modification"
+        } else {
+            "proxy-manipulation"
+        };
+
+        all_findings.push(FindingData {
+            title: format!("Proxy manipulation: {} on flow #{}", manip.field, manip.flow_index),
+            severity: "info".to_string(),
+            category: format!("proxy-manipulation-{}", finding_type),
+            description: format!(
+                "field={} direction={:?} before={:?} after={:?} reason={} timestamp={}",
+                manip.field,
+                manip.direction,
+                manip.before.as_ref().map(|s| s.len().min(100)),
+                manip.after.as_ref().map(|s| s.len().min(100)),
+                manip.reason,
+                manip.timestamp
+            ),
+            location: format!("flow_{}", manip.flow_index),
+            evidence: manip.after.clone(),
+            remediation: None,
+            cwe_ids: Vec::new(),
+        });
+    }
+
     all_findings.push(FindingData {
         title: "Web proxy intercept session metadata".to_string(),
         severity: "info".to_string(),
         category: "web-traffic-summary".to_string(),
         description: format!(
-            "listen_addr={} total_flows={} https_intercepted={} redacted={} blocked={} dry_run={} duration_ms={}",
+            "listen_addr={} total_flows={} manipulations={} https_intercepted={} redacted={} blocked={} dry_run={} duration_ms={}",
             report.listen_addr,
             report.flows.len(),
+            report.manipulations.len(),
             report.https_intercepted,
             report.redacted,
             report.blocked,
@@ -66,7 +99,7 @@ pub fn to_scan_report_data_proxy(report: &WebProxySessionReport) -> ScanReportDa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proxy::intercept::types::ProxyFlow;
+    use crate::proxy::intercept::types::{ManipulationRecord, ProxyFlow, ProxyFlowDirection};
 
     #[test]
     fn bridge_produces_valid_scan_report_data() {
@@ -130,5 +163,27 @@ mod tests {
         assert!(srd.wireless_networks.is_empty());
         assert!(srd.policy_summary.is_none());
         assert_eq!(srd.duration_ms, 0);
+    }
+
+    #[test]
+    fn bridge_includes_manipulation_findings() {
+        let mut r = WebProxySessionReport::new("127.0.0.1:8080", false);
+        r.started_at = "2026-01-01T00:00:00Z".to_string();
+        r.ended_at = "2026-01-01T00:01:00Z".to_string();
+        r.duration_ms = 60_000;
+
+        r.manipulations.push(ManipulationRecord {
+            flow_index: 0,
+            direction: ProxyFlowDirection::Request,
+            field: "header:Authorization".to_string(),
+            before: Some("Bearer old-token".to_string()),
+            after: Some("Bearer new-token".to_string()),
+            reason: "Testing token refresh".to_string(),
+            timestamp: "2026-01-01T00:00:30Z".to_string(),
+        });
+
+        let srd = to_scan_report_data_proxy(&r);
+        assert_eq!(srd.findings.len(), 2);
+        assert!(srd.findings.iter().any(|f| f.category.contains("proxy-manipulation-header")));
     }
 }

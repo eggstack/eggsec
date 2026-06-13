@@ -105,6 +105,9 @@ pub struct WebProxySessionReport {
     pub redacted: u64,
     /// Error messages encountered during the session.
     pub errors: Vec<String>,
+    /// Manipulation audit trail from interactive session.
+    #[serde(default)]
+    pub manipulations: Vec<ManipulationRecord>,
 }
 
 impl WebProxySessionReport {
@@ -128,6 +131,7 @@ impl WebProxySessionReport {
             blocked: 0,
             redacted: 0,
             errors: Vec::new(),
+            manipulations: Vec::new(),
         }
     }
 
@@ -142,6 +146,11 @@ impl WebProxySessionReport {
             self.redacted += 1;
         }
         self.flows.push(flow);
+    }
+
+    /// Add a manipulation record to the session.
+    pub fn add_manipulation(&mut self, record: ManipulationRecord) {
+        self.manipulations.push(record);
     }
 
     /// Finalize the report with end timestamp and duration.
