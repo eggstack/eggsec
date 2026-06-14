@@ -17,6 +17,7 @@ crates/
   eggsec-tui/       # Terminal UI adapter (ratatui/crossterm)
   eggsec-cli/       # CLI binary entry point (binary named "eggsec")
   eggsec-output/    # Report formatting and output adapters
+  eggsec-agent/     # Agent coordination primitives (extracted from tool/agents/)
 ```
 
 ## Third pass changes

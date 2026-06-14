@@ -66,7 +66,8 @@ eggsec scan-endpoints https://localhost:8443 --insecure
 eggsec fuzz https://dev-server.local/api -t sqli --insecure
 
 # Skip TLS verification in the TUI
-eggsec tui --insecure
+# Note: The TUI is a separate binary (eggsec-tui), not a subcommand
+# Configure insecure mode in eggsec.toml or use CLI flags
 ```
 
 ### CLI Help
@@ -111,7 +112,7 @@ The `--insecure` flag is appropriate in the following scenarios:
 |----------|------|
 | Production systems | Exposes sensitive data to interception |
 | Public internet scanning | Attackers can intercept your traffic |
-| Untrusted networks |咖啡馆、机场、酒店等公共网络 |
+| Untrusted networks | Coffee shops, airports, hotels, and other public networks |
 | Real user credentials | Credentials could be captured |
 
 ### Best Practices

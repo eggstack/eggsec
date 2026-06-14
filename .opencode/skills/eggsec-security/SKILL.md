@@ -294,12 +294,34 @@ eggsec scan --target 192.168.1.0/24
 | Feature | Description |
 |---------|-------------|
 | `rest-api` | REST API server with OpenAI compatibility |
+| `grpc-api` | gRPC API server for external tool integration |
 | `ai-integration` | AI/LLM integration for analysis |
 | `stress-testing` | ICMP probing, IP spoofing, raw sockets |
 | `packet-inspection` | Packet capture features |
 | `nse` | Nmap NSE script support |
+| `nse-ssh2` | NSE with SSH2/libssh2 support |
 | `nse-sandbox` | Sandboxed NSE execution |
-| `full` | All features (except grpc-api) |
+| `websocket` | WebSocket security testing |
+| `headless-browser` | DOM XSS and SPA crawling |
+| `database` | SQLx-based persistence |
+| `container` | Kubernetes/Docker scanning |
+| `sbom` | SBOM generation |
+| `advanced-hunting` | Advanced threat hunting |
+| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) |
+| `external-integrations` | Jira, GitHub, GitLab connectors |
+| `finding-workflow` | Finding lifecycle management |
+| `vuln-management` | Vulnerability triage and CVSS scoring |
+| `cloud` | AWS/GCP/Azure asset discovery |
+| `git-secrets` | Git secrets scanning |
+| `wireless` | Passive WiFi scanning and security analysis |
+| `wireless-advanced` | Active wireless attacks (deauth/disassoc, lab-only) |
+| `mobile` | Mobile app static analysis (APK/IPA) |
+| `mobile-dynamic` | Mobile dynamic testing (ADB + Frida) |
+| `db-pentest` | Database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis) |
+| `web-proxy` | Interactive web proxy (HTTP/HTTPS/WebSocket/HTTP2/gRPC) |
+| `pdf` | PDF report generation |
+| `api-schema` | OpenAPI v3 schema-based fuzzing (marker-only) |
+| `full` | All features combined (21 sub-features; excludes `grpc-api`, `ws-api`, `pdf`) |
 
 ## Error Handling
 

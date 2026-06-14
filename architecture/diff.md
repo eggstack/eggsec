@@ -8,7 +8,7 @@ There is no single "diff module." Finding comparison, response diffing, and diff
 
 ## 1. Output Baseline Comparison
 
-**File:** `crates/eggsec/src/output/baseline.rs` (192 lines)
+**File:** `crates/eggsec-output/src/baseline.rs` (192 lines)
 
 Compares two `AgentFinding` slices by `id` field and classifies results into new, resolved, and unchanged categories. This is the actual finding-level comparison engine.
 
@@ -47,7 +47,7 @@ Matching uses `FxHashSet` of finding `id` fields:
 
 ## 2. Output Diff Summary
 
-**File:** `crates/eggsec/src/output/diff.rs` (27 lines)
+**File:** `crates/eggsec-output/src/diff.rs` (27 lines)
 
 A minimal numeric summary struct for attaching diff results to pipeline run manifests.
 
@@ -140,13 +140,13 @@ A completely separate `ResponseDiff` type for WAF detection, comparing normal vs
 ## Cross-Module Relationships
 
 ```
-output/baseline.rs    -> AgentFinding (finding-level comparison)
-output/diff.rs        -> DiffSummary (numeric summary for RunManifest)
-output/run_manifest.rs -> uses DiffSummary
-fuzzer/diff.rs        -> ResponseDiffer (HTTP response-level comparison)
-fuzzer/engine/core.rs -> uses ResponseDiffer
-waf/detector/types.rs -> ResponseDiff (WAF detection, unrelated)
-findings/mod.rs       -> compute_fingerprint() (deduplication only, not used by any diff)
+eggsec-output/src/baseline.rs -> AgentFinding (finding-level comparison)
+eggsec-output/src/diff.rs     -> DiffSummary (numeric summary for RunManifest)
+output/run_manifest.rs         -> uses DiffSummary
+fuzzer/diff.rs                -> ResponseDiffer (HTTP response-level comparison)
+fuzzer/engine/core.rs         -> uses ResponseDiffer
+waf/detector/types.rs         -> ResponseDiff (WAF detection, unrelated)
+findings/mod.rs               -> compute_fingerprint() (deduplication only, not used by any diff)
 ```
 
 ## Missing Functionality

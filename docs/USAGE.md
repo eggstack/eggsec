@@ -181,9 +181,9 @@ eggsec fuzz https://api.example.com/auth -t jwt
 
 ```bash
 # Test OAuth security
-eggsec o-auth https://oauth.example.com/authorize --redirect-test
-eggsec o-auth https://oauth.example.com/authorize --scope-test
-eggsec o-auth https://oauth.example.com/authorize --state-test
+eggsec oauth https://oauth.example.com/authorize --redirect-test
+eggsec oauth https://oauth.example.com/authorize --scope-test
+eggsec oauth https://oauth.example.com/authorize --state-test
 ```
 
 ## Advanced Fuzzing

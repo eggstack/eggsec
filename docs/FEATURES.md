@@ -12,12 +12,41 @@ Eggsec uses Cargo feature flags to enable optional capabilities. This allows use
 | `tool-api` | Tool abstraction layer (SecurityTool trait, ToolRegistry) | None |
 | `rest-api` | REST API server with MCP (Model Context Protocol) for AI agent integration | `tool-api`, axum, tower |
 | `grpc-api` | gRPC API server for external tool integration | `tool-api`, tonic, prost |
+| `ws-api` | WebSocket pub/sub API | axum/ws |
 | `stress-testing` | DoS testing tools, proxy management, ICMP, IP spoofing | pnet, pnet_packet, socket2, nix, libc, surge-ping |
 | `packet-inspection` | Live packet capture, advanced packet tools | pnet, pnet_packet, libc |
 | `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, eggsec-nse |
+| `nse-ssh2` | NSE with SSH2/libssh2 support | nse, ssh2 |
 | `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, eggsec-nse/sandbox |
-| `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only). Dynamic mobile (Android ADB + logcat + Phase 2 (proxy + permissions + correlation; closed 2026-06-12) + correlation) shipped under `mobile-dynamic`; Phase 3/4a (Frida + CorrelationEngine + baseline/regression/evidence bundles + polish handoff) delivered 2026-06-12 under single mobile-dynamic per phase3/phase4 + phase4a-final-polish-handoff-plan.md (executed); future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md`. | zip, plist (optional under feature) |
-| `full` | All features combined (excludes `grpc-api`, `ws-api`, `pdf`) | stress-testing, packet-inspection, rest-api, nse, ai-integration, websocket, headless-browser, database, container, sbom, advanced-hunting, compliance, external-integrations, finding-workflow, vuln-management, wireless, mobile |
+| `ai-integration` | AI/LLM integration for analysis and planning | tool-api, eventsource-stream, semver |
+| `websocket` | WebSocket security testing | tokio-tungstenite |
+| `headless-browser` | DOM XSS and SPA crawling | headless_chrome |
+| `database` | SQLx-based persistence for findings and scan history | sqlx |
+| `container` | Kubernetes/Docker scanning | kube, k8s-openapi |
+| `cloud` | AWS/GCP/Azure asset discovery | None |
+| `sbom` | SBOM generation (CycloneDX, SPDX) | cyclonedx-bom, spdx, walkdir |
+| `git-secrets` | Git secrets scanning | None |
+| `advanced-hunting` | Advanced threat hunting | None |
+| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | None |
+| `external-integrations` | Jira, GitHub, GitLab connectors | None |
+| `finding-workflow` | Finding lifecycle management | None |
+| `vuln-management` | Vulnerability triage and CVSS scoring | None |
+| `wireless` | Passive WiFi scanning and security analysis | None |
+| `wireless-advanced` | Active wireless attacks (deauth/disassoc, lab-only) | `wireless` |
+| `mobile` | Mobile app static analysis (APK/IPA) | zip, plist |
+| `mobile-dynamic` | Mobile dynamic testing (Android ADB + Frida) | `mobile` |
+| `db-pentest` | Database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis) | sqlx |
+| `db-pentest-mssql-tiberius` | Real MSSQL client via tiberius | tiberius |
+| `db-pentest-mongodb` | Real MongoDB client | mongodb, bson |
+| `db-pentest-redis` | Real Redis client | redis |
+| `db-pentest-mcp` | MCP tool exposure for db-pentest | `db-pentest` |
+| `web-proxy` | Interactive web proxy (HTTP/HTTPS/WebSocket/HTTP2/gRPC) | tokio-tungstenite, h2, http, prost, prost-types |
+| `web-proxy-mcp` | MCP tool exposure for web proxy (12 tools) | `web-proxy` |
+| `transparent-proxy` | Transparent proxy mode (Linux iptables/nftables REDIRECT) | `web-proxy` |
+| `dynamic-plugins` | Dynamic plugin loading from shared libraries (.so/.dylib) | `web-proxy` |
+| `api-schema` | OpenAPI v3 schema-based fuzzing (marker-only) | None |
+| `pdf` | PDF report generation | printpdf |
+| `full` | All features combined (21 sub-features) | See below |
 
 ## Available Builds
 
@@ -73,13 +102,27 @@ Adds:
 cargo build --release --features full
 ```
 
-Includes all features:
+Includes all 21 sub-features:
 - Core functionality
 - Stress testing tools
 - Packet inspection
 - REST API server
 - NSE (Nmap Scripting Engine) support
-- Mobile static analysis (APK/IPA manifest & config checks)
+- AI integration
+- WebSocket security testing
+- Headless browser testing
+- Database persistence
+- Container scanning
+- SBOM generation
+- Advanced threat hunting
+- Compliance scanning
+- External integrations
+- Finding workflow
+- Vulnerability management
+- Wireless scanning (passive + active)
+- Mobile testing (static + dynamic)
+- Database pentesting
+- Web proxy interception
 
 ### With Mobile Static Analysis
 
@@ -89,13 +132,29 @@ cargo build --release --features mobile
 
 Adds:
 - `eggsec mobile <path.{apk,ipa}>` - Static security analysis of Android APKs and iOS IPAs (authorized lab/defense use only).
-- Coverage: manifest attributes, permissions (normal/dangerous/signature), transport security (cleartext/ATS), secrets in assets, debug/backup/exported flags, signing/provisioning notes, custom URL schemes.
-- Phase 1: static-only (no execution, no device interaction). Pure-Rust ZIP/plist + bounded AXML extraction. Requires `--features mobile` (or `--features full`, which includes it). See `crates/eggsec/src/mobile/{mod,apk,ipa}.rs` and `docs/CAPABILITIES.md` (Mobile App Security section). Dynamic mobile (Phase 1 + Phase 2 (closed 2026-06-12) + final polish + close-out polish, complete 2026-06-12) is shipped under `--features mobile-dynamic`; Phase 3/4a (Frida + CorrelationEngine + baseline/regression/evidence bundles + polish handoff) delivered 2026-06-12 under single mobile-dynamic per phase3/phase4 + phase4a-final-polish-handoff-plan.md (executed); future phases per `plans/dynamic-mobile-testing-loadout-design-plan.md`.
+
+### With Database Pentesting
+
+```bash
+cargo build --release --features db-pentest
+```
+
+Adds:
+- `eggsec db pentest <connection-string>` - Direct database security assessment (Postgres, MySQL, MSSQL, MongoDB, Redis).
+
+### With Web Proxy
+
+```bash
+cargo build --release --features web-proxy
+```
+
+Adds:
+- `eggsec proxy intercept` - Interactive MITM web proxy for HTTP/HTTPS/WebSocket/HTTP2/gRPC traffic interception.
 
 ## Feature Hierarchy
 
 ```
-full
+full (21 sub-features)
 ├── stress-testing
 │   ├── pnet, pnet_packet
 │   ├── socket2, nix, libc
@@ -110,7 +169,6 @@ full
 ├── nse
 │   ├── tool-api
 │   └── eggsec-nse
-│       └── sandbox (optional)
 ├── ai-integration
 ├── websocket
 ├── headless-browser
@@ -122,100 +180,23 @@ full
 ├── external-integrations
 ├── finding-workflow
 ├── vuln-management
-└── wireless
+├── wireless
+├── wireless-advanced (depends on wireless)
+├── mobile
+├── mobile-dynamic (depends on mobile)
+├── db-pentest
+└── web-proxy
 
 grpc-api (standalone, NOT in full)
-└── tool-api
-    ├── tonic
-    └── prost, prost-build
+├── tool-api
+├── tonic
+└── prost, prost-build
 
 ws-api (standalone, NOT in full)
-
 pdf (standalone, NOT in full)
 ```
 
-## API Server Features
-
-### REST API
-
-```bash
-cargo build --release --features rest-api
-```
-
-Adds:
-- REST API server with Axum
-- MCP (Model Context Protocol) endpoints for AI agent integration
-- SSE streaming support
-- Health check and metrics endpoints
-
-### gRPC API
-
-```bash
-cargo build --release --features grpc-api
-```
-
-Adds:
-- gRPC API server with Tonic
-- Protocol Buffers message definitions
-- Bidirectional streaming support
-
-## NSE (Nmap Scripting Engine)
-
-### Basic NSE Support
-
-```bash
-cargo build --release --features nse
-```
-
-Adds:
-- Run Lua NSE scripts
-- NSE script loading and execution
-- Integration with Eggsec's scanning pipeline
-
-**Note:** `eggsec-nse` uses `native-tls` (OpenSSL) for TLS support. This is intentional — Nmap NSE scripts expect OpenSSL-based TLS behavior. Do not migrate to `rustls`.
-
-### NSE Sandbox Mode
-
-```bash
-cargo build --release --features nse-sandbox
-```
-
-Adds:
-- Restricted Lua environment for untrusted NSE scripts
-- Blocks dangerous operations: `io.popen`, `os.setenv`, filesystem access
-- Safe subset of NSE libraries
-
-## Build Time Impact
-
-| Feature | Approx. Compile Time Impact | Binary Size Impact |
-|---------|---------------------------|-------------------|
-| `tool-api` | Minimal | Minimal |
-| `rest-api` | Low (axum + tower) | Medium |
-| `grpc-api` | Medium (tonic + prost) | Medium |
-| `stress-testing` | Medium (pnet + nix) | Medium |
-| `packet-inspection` | Low (pnet) | Low |
-| `nse` | Medium (mlua + Lua) | Medium |
-| `full` | High (all combined) | High |
-
-## Verifying Enabled Features
-
-To see which features are enabled in your current build:
-
-```bash
-./eggsec --version
-```
-
-To check available commands:
-
-```bash
-eggsec --help
-```
-
-If a command is not available, rebuild with the required feature flag.
-
 ## Command Feature Requirements
-
-The following commands require specific build features:
 
 | Command | Required Feature |
 |---------|-----------------|
@@ -239,6 +220,8 @@ The following commands require specific build features:
 | `report` | Default |
 | `remote` | Default |
 | `exec` | Default |
+| `config` | Default |
+| `doctor` | Default |
 | `stress` | `stress-testing` |
 | `proxy` | `stress-testing` |
 | `icmp` | `stress-testing` |
@@ -257,9 +240,10 @@ The following commands require specific build features:
 | `sbom` | `sbom` |
 | `grpc` | `grpc-api` |
 | `wireless` | `wireless` |
+| `wireless deauth/disassoc` | `wireless-advanced` |
 | `mobile` | `mobile` |
+| `mobile dynamic` | `mobile-dynamic` |
 | `vuln` | `vuln-management` |
 | `storage` | `database` |
-| `config` | Default |
-| `doctor` | Default |
-| `report` | Default |
+| `proxy intercept` | `web-proxy` |
+| `db pentest` | `db-pentest` |

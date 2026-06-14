@@ -16,7 +16,7 @@ Pipeline module workflows and patterns for orchestrating security assessments.
 
 ## Core Concepts
 
-### Stage Enum (`stage.rs:5-14`)
+### Stage Enum (`stage.rs:6-20`)
 
 ```rust
 pub enum Stage {
@@ -27,19 +27,28 @@ pub enum Stage {
     LoadTest,
     Waf,
     Recon,
+    Vuln,
+    #[cfg(feature = "db-pentest")]
+    DbPentest,
+    #[cfg(feature = "web-proxy")]
+    WebProxy,
 }
 ```
 
 ### Profiles
 
-`Stage::from_profile(ScanProfile)` maps CLI profiles to stage sequences:
+`Stage::from_profile(ScanProfile)` maps CLI profiles to stage sequences. There are 18 `ScanProfile` variants:
 - `Quick`: PortScan + Fingerprint
 - `Endpoint`: PortScan + Fingerprint + EndpointScan
 - `Web`: PortScan + Fingerprint + EndpointScan + Fuzz
-- `Full`: PortScan + Fingerprint + EndpointScan + Fuzz + LoadTest
 - `Waf`: PortScan + Fingerprint + EndpointScan + Waf
+- `Full`: PortScan + Fingerprint + EndpointScan + Fuzz + LoadTest + Vuln
 - `Api`: PortScan + Fingerprint + EndpointScan + Fuzz
 - `Recon`: PortScan + Fingerprint + EndpointScan + Recon + Fuzz
+- `Stealth`, `Deep`, `Vuln`, `Auth`: Web-like subsets with variations
+- `DefenseLab`, `SynvoidLocal`, `WafRegression`, `ProtocolEdge`, `NseSafe`: defense-lab profiles
+- `DbRegression`: DbPentest (when `db-pentest` feature enabled)
+- `WebProxy`: WebProxy stage (when `web-proxy` feature enabled)
 
 ### Stage Aliases
 
@@ -51,6 +60,9 @@ Supported aliases in `Stage::from_string()`:
 - `load`, `loadtest`, `load-test` → LoadTest
 - `waf` → Waf
 - `recon` → Recon
+- `vuln` → Vuln
+- `db-pentest`, `dbpentest` → DbPentest (feature-gated)
+- `web-proxy`, `webproxy` → WebProxy (feature-gated)
 
 ### PipelineContext (`context.rs`)
 
@@ -98,6 +110,9 @@ execute_stage() → match Stage:
   Stage::LoadTest → LoadTestRunner::from_args_with_config().run()
   Stage::Waf → waf::run_cli()
   Stage::Recon → recon::run_cli()
+  Stage::Vuln → vuln::run_cli()
+  Stage::DbPentest → db_pentest::run_cli() (feature-gated)
+  Stage::WebProxy → proxy::intercept::run_cli() (feature-gated)
               ↓
          PipelineReport → Display / JSON / HTML / CSV / SARIF / JUnit
 ```

@@ -45,22 +45,34 @@ Each handler module corresponds to a command group:
 
 ```
 handlers/
-├── mod.rs      # CommandContext, handle_command dispatcher
-├── scan.rs     # Port scan, endpoint scan, fingerprint, scan, resume
-├── fuzz.rs     # Fuzz, WAF stress, WAF, GraphQL, OAuth
-├── recon.rs    # Reconnaissance
-├── load.rs     # HTTP load testing
-├── ci.rs       # CI/CD mode
-├── plan.rs     # Plan preview
-├── cluster.rs  # Cluster operations
-├── network.rs  # Packet, ICMP, traceroute
-├── stress.rs   # Stress, proxy
-├── report.rs   # Report conversion and scheduling
-├── notify.rs   # Notifications, serve, mcp-serve
-├── auth_test.rs # Authentication testing
-├── agent.rs    # Autonomous agent
-├── ai_analyze.rs # AI analysis
-└── sbom.rs     # SBOM generation
+├── mod.rs          # CommandContext, handle_command dispatcher
+├── scan.rs         # Port scan, endpoint scan, fingerprint, scan, resume
+├── fuzz.rs         # Fuzz, WAF stress, WAF, GraphQL, OAuth
+├── recon.rs        # Reconnaissance
+├── load.rs         # HTTP load testing
+├── ci.rs           # CI/CD mode
+├── plan.rs         # Plan preview
+├── cluster.rs      # Cluster operations
+├── network.rs      # Packet, ICMP, traceroute
+├── stress.rs       # Stress, proxy
+├── report.rs       # Report conversion and scheduling
+├── notify.rs       # Notifications, serve, mcp-serve
+├── auth_test.rs    # Authentication testing
+├── agent.rs        # Autonomous agent
+├── ai_analyze.rs   # AI analysis
+├── sbom.rs         # SBOM generation
+├── browser.rs      # Headless browser testing
+├── config.rs       # Configuration management
+├── db_pentest.rs   # Database pentesting
+├── doctor.rs       # System diagnostics
+├── explain.rs      # Finding explanations
+├── grpc.rs         # gRPC API server
+├── hunt.rs         # Advanced threat hunting
+├── mobile.rs       # Mobile app security
+├── storage.rs      # Database storage
+├── vuln.rs         # Vulnerability management
+├── web_proxy.rs    # Web proxy interception
+└── wireless.rs     # Wireless security testing
 ```
 
 ## Command Dispatch

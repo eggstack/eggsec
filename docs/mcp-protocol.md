@@ -168,14 +168,14 @@ List tools filtered by category.
 
 **Categories:** `Recon`, `Scanning`, `Fuzzing`, `Waf`, `LoadTest`, `Stress`, `Pipeline`
 
-#### `tool/execute`
+#### `tools/call`
 Execute a specific tool.
 
 ```json
 {
   "jsonrpc": "2.0",
   "id": 4,
-  "method": "tool/execute",
+  "method": "tools/call",
   "params": {
     "name": "recon",
     "arguments": {
@@ -535,7 +535,7 @@ resp = client.post("/mcp", json=[{
 resp = client.post("/mcp", json=[{
     "jsonrpc": "2.0",
     "id": 3,
-    "method": "tool/execute",
+    "method": "tools/call",
     "params": {
         "name": "recon",
         "arguments": {"target": "https://example.com"}
@@ -567,5 +567,5 @@ curl -X POST http://localhost:8081/mcp \
 # Execute tool
 curl -X POST http://localhost:8081/mcp \
   -H "Content-Type: application/json" \
-  -d '[{"jsonrpc":"2.0","id":1,"method":"tool/execute","params":{"name":"recon","arguments":{"target":"https://example.com"}}}]'
+  -d '[{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"recon","arguments":{"target":"https://example.com"}}}]'
 ```

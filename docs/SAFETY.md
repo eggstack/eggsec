@@ -240,7 +240,7 @@ eggsec scan target --scope /tmp/lab-scope.toml
 
 When running high-risk features:
 1. Monitor the target for service degradation, error spikes, or resource exhaustion
-2. Have a kill switch (Ctrl+C or `eggsec stop`)
+2. Have a kill switch (Ctrl+C in the TUI or terminal)
 3. Log everything (Eggsec logs all operations)
 4. Have a rollback plan
 5. Document what was tested, when, and results

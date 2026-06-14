@@ -124,9 +124,11 @@ Use these sections as the canonical reference points when updating guidance or s
 - `db-pentest` - Standalone defense-lab direct Postgres/MySQL/MSSQL/MongoDB/Redis security assessment (Phase 1 foundation + Phase 2 real MSSQL tiberius + Phase 3 TUI tab + pipeline ScanProfile::DbRegression + advanced gated checks + correlation/evidence stubs + Phase 4 full real advanced execution, correlation engine with scoring/typed results, native Stage::DbPentest pipeline stage, evidence bundle v2 + Phase 5 MongoDB/Redis engines, cross-DB correlation, compliance mapping, optional MCP exposure via `db-pentest-mcp` marker + Phase 6 baseline capture + regression comparison (`DbBaseline`/`DbRegressionResult`), MCP deepening (baseline operations, parameterized calls), extended compliance (NIST SP 800-53, ISO 27001), cloud DB guidance notes; cleanup + polish: shared URL builders in `utils.rs`, standardized error handling, improved redaction, types-only MCP module; requires `--allow-db-pentest` for non-dry runs; dry-run always safe; local `DbPentestReport`/`DbFinding` + optional `to_scan_report_data_db` bridge; auto-bridged in report convert; TUI tab `Tab::DbPentest` under feature). See `plans/database-pentesting-phase1-foundation-handoff-plan.md` (executed), `plans/database-pentesting-phase3-advanced-and-integration-handoff-plan.md` (executed), and `plans/database-pentesting-phase5-engines-mcp-and-correlation-handoff-plan.md` (executed).
 - `web-proxy` - Standalone defense-lab interactive web proxy for HTTP/HTTPS/WebSocket/HTTP2/gRPC traffic interception. Phase 1: MITM server + CA + CLI + dry-run + policy + bridge. Phase 2: Interactive TUI tab (`Tab::Intercept`) with live flow inspection, header/body editing, forward/drop/replay actions, intercept rules, session save/load, HAR export, and full manipulation audit trail. Phase 3: WebSocket/HTTP/2/gRPC protocol support (real `tokio-tungstenite` and `h2` backends), enhanced rule engine with complex conditions (AND/OR/NOT, regex, body size, protocol-specific), persistence (JSON), new actions (InjectResponse/Delay/Tag), cross-loadout correlation hooks (`CorrelationContext`), TUI protocol detail panes and rule management toggle, extended bridge findings. Phase 4: pipeline profile (`ScanProfile::WebProxy`, `Stage::WebProxy`), MCP proxy surface (12 tools via `web-proxy-mcp` marker feature), evidence bundle v2 (export/import, multi-loadout correlation), performance optimizations (`FlowBuffer` LRU-evicting buffer, `ProxyMetrics` runtime telemetry), real WebSocket/HTTP2 protocol support. Requires `--allow-web-proxy` + policy for real interception. `web-proxy = []` marker feature; `web-proxy-mcp` optional MCP exposure marker.
 - `web-proxy-mcp` - Optional MCP tool exposure for web proxy (12 tools: list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle). Marker feature; requires `web-proxy`.
+- `transparent-proxy` - Transparent proxy mode (Linux iptables/nftables REDIRECT). Marker feature; requires `web-proxy`.
+- `dynamic-plugins` - Dynamic plugin loading from shared libraries (.so/.dylib). Marker feature; requires `web-proxy`. SECURITY WARNING: Only load plugins from trusted sources!
 - `pdf` - PDF report generation
 - `api-schema` - OpenAPI v3 schema-based fuzzing (marker-only)
-- `full` - All features combined (16 sub-features, does not include `grpc-api`, `ws-api`, or `pdf`)
+- `full` - All features combined (21 sub-features, does not include `grpc-api`, `ws-api`, or `pdf`)
 
 ### Key Types
 
@@ -222,17 +224,17 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 3450 (3118 #[test] + 332 #[tokio::test]) |
+| Tests | 3999 (3640 #[test] + 359 #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 794 (.rs files in crates/) |
 | Payload types | 40 |
-| Tabs | 30 (Tab enum variants 0-29) |
+| Tabs | 32 (Tab enum variants 0-31) |
 | WAF products | 34 |
 | NSE libraries | 166 public modules |
-| Modules | 39 (top-level directories in `crates/eggsec/src/`) |
+| Modules | 40 (top-level directories in `crates/eggsec/src/`) |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
-| CLI commands | 30 base, ~42 with all features (gated commands e.g. mobile) |
+| CLI commands | 26 base, 45 total with all features |
 
 ### Codebase Issues (Known Stub Implementations)
 
@@ -485,7 +487,9 @@ cargo test --lib -p eggsec --features web-proxy-mcp
 
 When implementing items:
 
-1. **Verify before implementing**: Always verify file paths, line numbers, and whether issues still exist before implementing.
+1. **Plan lifecycle**: Implementation plans in `plans/` are executed and then cleaned up (deleted) after completion. Docs and AGENTS.md may still reference plans that no longer exist on disk — this is expected. The plans served their purpose during execution. Focus on the current codebase state rather than plan files.
+
+2. **Verify before implementing**: Always verify file paths, line numbers, and whether issues still exist before implementing.
 
 2. **Error pattern verification**: When addressing silent error suppression issues, verify the full context - some `let _ =` patterns are followed by proper error logging, and some `.ok()` usages are actually `if let Ok` patterns which are correct.
 

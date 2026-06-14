@@ -6,47 +6,55 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 | Metric | Count |
 |--------|-------|
-| Total features | 30 |
-| Features with deps | 16 |
-| Marker-only features | 14 |
-| In `full` | 17 |
+| Total features | 40 |
+| Features with deps | 18 |
+| Marker-only features | 22 |
+| In `full` | 21 |
 
 ## Feature Table
 
-| Feature | Declared | Has deps | In `full` | Primary module | Stability | Build command |
-|---------|----------|----------|-----------|----------------|-----------|---------------|
-| `default` | yes | no | - | (core) | Stable | `cargo check -p eggsec` |
-| `tool-api` | yes | no | - | `tool/` | Stable | `cargo check -p eggsec --features tool-api` |
-| `insecure-tls` | yes | no | - | `utils/` | Testing-only | `cargo check -p eggsec --features insecure-tls` |
-| `rest-api` | yes | yes | yes | `tool/`, `agent/` | Stable | `cargo check -p eggsec --features rest-api` |
-| `ws-api` | yes | yes | - | (WebSocket API) | Beta | `cargo check -p eggsec --features ws-api` |
-| `grpc-api` | yes | yes | - | `tool/` | Stable | `cargo check -p eggsec --features grpc-api` |
-| `stress-testing` | yes | yes | yes | `stress/`, `packet/` | Stable | `cargo check -p eggsec --features stress-testing` |
-| `packet-inspection` | yes | yes | yes | `packet/` | Stable | `cargo check -p eggsec --features packet-inspection` |
-| `nse` | yes | yes | yes | `eggsec-nse` | Stable | `cargo check -p eggsec --features nse` |
-| `nse-ssh2` | yes | yes | - | `eggsec-nse` | Stable | `cargo check -p eggsec --features nse-ssh2` |
-| `nse-sandbox` | yes | yes | - | `eggsec-nse` | Stable | `cargo check -p eggsec --features nse-sandbox` |
-| `ai-integration` | yes | yes | yes | `ai/` | Stable | `cargo check -p eggsec --features ai-integration` |
-| `websocket` | yes | yes | yes | `websocket/` | Stable | `cargo check -p eggsec --features websocket` |
-| `headless-browser` | yes | yes | yes | `browser/` | Stable | `cargo check -p eggsec --features headless-browser` |
-| `database` | yes | yes | yes | `storage/` | Stable | `cargo check -p eggsec --features database` |
-| `container` | yes | yes | yes | `container/` | Stable | `cargo check -p eggsec --features container` |
-| `cloud` | yes | no | - | `recon/cloud/` | Stable | `cargo check -p eggsec --features cloud` |
-| `sbom` | yes | yes | yes | `supply_chain/` | Stable | `cargo check -p eggsec --features sbom` |
-| `advanced-hunting` | yes | no | yes | `hunt/` | Stable | `cargo check -p eggsec --features advanced-hunting` |
-| `compliance` | yes | no | yes | `compliance/` | Stable | `cargo check -p eggsec --features compliance` |
-| `external-integrations` | yes | no | yes | `integrations/` | Stable | `cargo check -p eggsec --features external-integrations` |
-| `finding-workflow` | yes | no | yes | `workflow/` | Stable | `cargo check -p eggsec --features finding-workflow` |
-| `vuln-management` | yes | no | yes | `vuln/` | Stable | `cargo check -p eggsec --features vuln-management` |
-| `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p eggsec --features git-secrets` |
-| `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p eggsec --features wireless` (passive; supports --repeat, --known-good, --dry-run, --detect-suspicious; WPS/hidden/transition/rogue heuristic). **Passive Phase 0 (2026-06-11)**; active phases gated by `wireless-advanced` per `plans/wireless-active-attacks-loadout-design-plan.md`. |
-| `wireless-advanced` | yes | yes (`wireless`) | - | `wireless/active/` | Stable | `cargo check -p eggsec --features wireless-advanced` (active deauth/disassoc under `wireless <iface> deauth`; lab-only, requires `--allow-active-wireless`, monitor-mode interface, root/CAP_NET_ADMIN; dry-run default; policy gate `Intrusive` + `wireless-advanced` feature; TUI active mode with the same task/confirmation flow). **Phase 1 complete 2026-06-12**; Phase 2+ (handshake capture, etc.) per `plans/wireless-active-attacks-loadout-design-plan.md`. Not included in `full`. |
-| `web-proxy` | yes | no | - | `proxy/` | Stable | `cargo check -p eggsec --features web-proxy` (interactive HTTP/HTTPS MITM proxy; Phase 1 (2026-06-12): dry-run + synthetic flows + reporting bridge + `TrafficInterception` risk tier + `--allow-web-proxy`; Phase 2: real MITM server deferred). Not included in `full`. |
-| `mobile` | yes | no | yes | `mobile/` | Stable | `cargo check -p eggsec --features mobile` **Static Phase 1 complete 2026-06-11**; dynamic loadout shipped under `mobile-dynamic` (Phase 1 + Phase 2a + final polish + close-out polish complete 2026-06-12; design per `plans/dynamic-mobile-testing-loadout-design-plan.md`; like wireless active). |
-| `db-pentest` | yes | yes (`sqlx` shared) | yes | `db_pentest/` | Stable | `cargo check -p eggsec --features db-pentest` (Phase 1 complete 2026-06-12: postgres/mysql + manifest + bridge; Phase 2 executed on main 2026-06-12: real MSSQL via tiberius behind marker `db-pentest-mssql-tiberius`, docker lab services + --real smoke, combined web-SQLi+db example artifact with db-* + sqli-* via manual combination + report convert, qcount cleanup, full parity; Phase 3 2026-06-12: TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks + correlation/evidence stubs; Phase 4 2026-06-12: full real advanced execution + correlation engine with scoring + native `Stage::DbPentest` + evidence bundle v2; Phase 5 2026-06-12: MongoDB/Redis engines + cross-DB correlation + compliance mapping + optional MCP via `db-pentest-mcp` marker; standalone defense-lab; dry-run safe; real requires `--allow-db-pentest`; local types + optional `to_scan_report_data_db` bridge auto-wired in report convert; TUI tab `Tab::DbPentest` under feature). See `plans/database-pentesting-phase1-foundation-handoff-plan.md` (executed) + `plans/database-pentesting-phase2-mssql-and-polish-handoff-plan.md` (executed + closed) + `plans/database-pentesting-phase3-advanced-and-integration-handoff-plan.md` (executed). |
-| `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p eggsec --features pdf` |
-| `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p eggsec --features api-schema` |
-| `full` | yes | yes | - | (all) | Deprecated | `cargo check -p eggsec --features full` |
+| Feature | Declared | Has deps | In `full` | Primary module | Stability |
+|---------|----------|----------|-----------|----------------|-----------|
+| `default` | yes | no | - | (core) | Stable |
+| `tool-api` | yes | no | - | `tool/` | Stable |
+| `insecure-tls` | yes | no | - | `utils/` | Testing-only |
+| `rest-api` | yes | yes | yes | `tool/`, `agent/` | Stable |
+| `ws-api` | yes | yes | - | (WebSocket API) | Beta |
+| `grpc-api` | yes | yes | - | `tool/` | Stable |
+| `stress-testing` | yes | yes | yes | `stress/`, `packet/` | Stable |
+| `packet-inspection` | yes | yes | yes | `packet/` | Stable |
+| `nse` | yes | yes | yes | `eggsec-nse` | Stable |
+| `nse-ssh2` | yes | yes | - | `eggsec-nse` | Stable |
+| `nse-sandbox` | yes | yes | - | `eggsec-nse` | Stable |
+| `ai-integration` | yes | yes | yes | `ai/` | Stable |
+| `websocket` | yes | yes | yes | `websocket/` | Stable |
+| `headless-browser` | yes | yes | yes | `browser/` | Stable |
+| `database` | yes | yes | yes | `storage/` | Stable |
+| `container` | yes | yes | yes | `container/` | Stable |
+| `cloud` | yes | no | - | `recon/cloud/` | Stable |
+| `sbom` | yes | yes | yes | `supply_chain/` | Stable |
+| `advanced-hunting` | yes | no | yes | `hunt/` | Stable |
+| `compliance` | yes | no | yes | `compliance/` | Stable |
+| `external-integrations` | yes | no | yes | `integrations/` | Stable |
+| `finding-workflow` | yes | no | yes | `workflow/` | Stable |
+| `vuln-management` | yes | no | yes | `vuln/` | Stable |
+| `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable |
+| `wireless` | yes | no | yes | `wireless/` | Stable |
+| `wireless-advanced` | yes | yes (`wireless`) | yes | `wireless/active/` | Stable |
+| `mobile` | yes | no | yes | `mobile/` | Stable |
+| `mobile-dynamic` | yes | yes (`mobile`) | yes | `mobile/dynamic.rs` | Stable |
+| `db-pentest` | yes | yes (`sqlx`) | yes | `db_pentest/` | Stable |
+| `db-pentest-mssql-tiberius` | yes | yes | - | `db_pentest/mssql.rs` | Stable |
+| `db-pentest-mongodb` | yes | yes | - | `db_pentest/mongodb.rs` | Stable |
+| `db-pentest-redis` | yes | yes | - | `db_pentest/redis.rs` | Stable |
+| `db-pentest-mcp` | yes | yes (`db-pentest`) | - | `tool/implementations/db_pentest.rs` | Stable |
+| `web-proxy` | yes | yes | yes | `proxy/intercept/` | Stable |
+| `web-proxy-mcp` | yes | yes (`web-proxy`) | - | `proxy/intercept/mcp.rs` | Stable |
+| `transparent-proxy` | yes | yes (`web-proxy`) | - | `proxy/intercept/` | Stable |
+| `dynamic-plugins` | yes | yes (`web-proxy`) | - | `proxy/intercept/` | Stable |
+| `api-schema` | yes | no | - | `api_schema/` | Stable |
+| `pdf` | yes | yes | - | `output/` | Stable |
+| `full` | yes | yes | - | (all) | Deprecated |
 
 ## Stability Levels
 
@@ -61,7 +69,7 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
 ### `full` feature
 
-The `full` feature enables 17 sub-features. It does not include `grpc-api`, `ws-api`, or `pdf`.
+The `full` feature enables 21 sub-features. It does not include `grpc-api`, `ws-api`, or `pdf`.
 
 Note: The `container` feature pulls in `k8s-openapi` which requires a Kubernetes version feature (e.g., `v1_30`) to be enabled. This must be provided by the final binary crate.
 
@@ -82,15 +90,25 @@ full WebSocket pub/sub support.
 ### Marker-only features
 
 Features like `advanced-hunting`, `compliance`, `external-integrations`,
-`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `mobile` (dynamic per `plans/dynamic-mobile-testing-loadout-design-plan.md`), and `db-pentest` (Phase 1-5 complete: Phase 1 postgres/mysql + manifest + bridge; Phase 2 real MSSQL tiberius behind marker `db-pentest-mssql-tiberius`, docker lab + --real smoke, combined web+db example artifact, full parity; Phase 3: TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks + correlation/evidence stubs; Phase 4: full real advanced execution + correlation engine + native `Stage::DbPentest` + evidence bundle v2; Phase 5: MongoDB/Redis engines + cross-DB correlation + compliance mapping + optional MCP via `db-pentest-mcp` marker; standalone defense-lab; see Phase 1-5 handoff plans + `plans/non-web-database-pentesting-loadout-design-plan.md`)
-have no extra runtime dependencies beyond optional crates (`zip`/`plist` for `mobile`; sqlx is shared with the `database` feature for `db-pentest`).
-They gate module compilation via `#[cfg(feature = "...")]` in `lib.rs`.
+`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `mobile`,
+`api-schema`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`,
+`transparent-proxy`, and `dynamic-plugins` have no extra runtime dependencies beyond
+optional crates. They gate module compilation via `#[cfg(feature = "...")]` in `lib.rs`.
 
 `wireless-advanced` is a dependent feature on `wireless` and pulls in the
 `wireless/active/` module (deauth/disassoc frame crafting and injection). It is
-intentionally **not** in `full` because active attacks are lab-only and require
-`--allow-active-wireless` plus a monitor-mode interface, so it is opted into
-explicitly at build time.
+included in `full`.
+
+`mobile-dynamic` is a dependent feature on `mobile` and includes Android ADB core,
+Frida instrumentation, and correlation engine.
+
+`db-pentest` shares `sqlx` with the `database` feature. Sub-features
+`db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis` pull
+additional database drivers. `db-pentest-mcp` enables MCP tool exposure.
+
+`web-proxy` pulls `tokio-tungstenite`, `h2`, `http`, `prost`, and `prost-types` for
+real WebSocket/HTTP2/gRPC interception. `web-proxy-mcp`, `transparent-proxy`, and
+`dynamic-plugins` are dependent marker features.
 
 ### Module gating pattern
 

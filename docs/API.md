@@ -470,21 +470,28 @@ pub struct ReconResult {
 
 ### Scan Profiles
 
-Eggsec provides 16 pre-configured scan profiles:
+Eggsec provides 18 pre-configured scan profiles:
 
 ```rust
 pub enum ScanProfile {
-    Quick,     // Port scan + fingerprint
-    Endpoint,  // Quick + endpoint discovery
-    Web,       // Endpoint + web fuzzing
-    Waf,       // Endpoint + WAF detection and bypass
-    Full,      // All stages including load testing
-    Api,       // GraphQL/JWT/OAuth focused
-    Recon,     // Intelligence-led with tech detection + CVE mapping
-    Stealth,   // Web scan with evasion techniques
-    Deep,      // Web scan with mutation fuzzing
-    Vuln,      // CVE-prioritized based on detected tech
-    Auth,      // JWT/OAuth/IDOR focused
+    Quick,         // Port scan + fingerprint
+    Endpoint,      // Quick + endpoint discovery
+    Web,           // Endpoint + web fuzzing
+    Waf,           // Endpoint + WAF detection and bypass
+    Full,          // All stages including load testing
+    Api,           // GraphQL/JWT/OAuth focused
+    Recon,         // Intelligence-led with tech detection + CVE mapping
+    Stealth,       // Web scan with evasion techniques
+    Deep,          // Web scan with mutation fuzzing
+    Vuln,          // CVE-prioritized based on detected tech
+    Auth,          // JWT/OAuth/IDOR focused
+    DefenseLab,    // Baseline diff and defense validation
+    SynvoidLocal,  // Localhost SYN scan testing
+    WafRegression, // WAF detection regression testing
+    ProtocolEdge,  // Protocol edge case testing
+    NseSafe,       // Safe NSE script execution
+    DbRegression,  // Database pentest regression (Stage::DbPentest)
+    WebProxy,      // Web proxy interception (Stage::WebProxy)
 }
 ```
 
