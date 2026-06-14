@@ -349,9 +349,6 @@ db-pentest-redis = ["dep:redis"]
 # Default behavior (without this marker) keeps db-pentest as standalone defense-lab surface only.
 # Real runs via MCP require EnforcementContext + policy confirmation.
 db-pentest-mcp = ["db-pentest"]
-# Enabling this marker (together with db-pentest) pulls the oracle crate and activates the real Oracle client path.
-# Use: cargo ... --features db-pentest,db-pentest-oracle
-db-pentest-oracle = []
 
 # Kubernetes container security scanning
 container = ["kube", "k8s-openapi"]
