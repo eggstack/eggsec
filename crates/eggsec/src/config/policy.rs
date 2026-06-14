@@ -16,6 +16,7 @@ pub enum OperationRisk {
     CredentialTesting,
     DbPentest,
     TrafficInterception,
+    EvasionTesting,
     ExploitAdjacent,
     RemoteExecution,
     AgentAutonomous,
@@ -59,6 +60,11 @@ pub struct ExecutionPolicy {
     #[serde(default)]
     pub allow_remote_execution: bool,
 
+    /// Allow evasion technique detection testing (defense-lab only).
+    /// Standalone defense-lab surface; requires explicit --allow-evasion-testing for non-dry runs.
+    #[serde(default)]
+    pub allow_evasion_testing: bool,
+
     #[serde(default)]
     pub allow_exploit_adjacent: bool,
 
@@ -98,6 +104,7 @@ impl Default for ExecutionPolicy {
             allow_traffic_interception: false,
             allow_exploit_adjacent: false,
             allow_remote_execution: false,
+            allow_evasion_testing: false,
             allow_agent_autonomous: false,
             max_risk_without_confirm: OperationRisk::SafeActive,
             allowed_capabilities: Vec::new(),
@@ -119,6 +126,7 @@ impl OperationRisk {
             Self::DbPentest => policy.allow_db_pentesting,
             Self::TrafficInterception => policy.allow_traffic_interception,
             Self::ExploitAdjacent => policy.allow_exploit_adjacent,
+            Self::EvasionTesting => policy.allow_evasion_testing,
             Self::RemoteExecution => policy.allow_remote_execution,
             Self::AgentAutonomous => policy.allow_agent_autonomous,
         }
@@ -138,6 +146,7 @@ impl std::fmt::Display for OperationRisk {
             Self::DbPentest => write!(f, "db pentest"),
             Self::TrafficInterception => write!(f, "traffic interception"),
             Self::ExploitAdjacent => write!(f, "exploit adjacent"),
+            Self::EvasionTesting => write!(f, "evasion testing"),
             Self::RemoteExecution => write!(f, "remote execution"),
             Self::AgentAutonomous => write!(f, "agent autonomous"),
         }
@@ -342,6 +351,7 @@ pub enum Capability {
     NseSafe,
     NseIntrusive,
     TrafficInterception,
+    EvasionTesting,
     DatabaseAssessment,
 }
 
@@ -363,6 +373,7 @@ impl std::fmt::Display for Capability {
             Self::NseSafe => write!(f, "nse-safe"),
             Self::NseIntrusive => write!(f, "nse-intrusive"),
             Self::TrafficInterception => write!(f, "traffic-interception"),
+            Self::EvasionTesting => write!(f, "evasion-testing"),
             Self::DatabaseAssessment => write!(f, "database-assessment"),
         }
     }
@@ -479,6 +490,7 @@ mod tests {
         policy.allow_exploit_adjacent = true;
         policy.allow_remote_execution = true;
         policy.allow_agent_autonomous = true;
+        policy.allow_evasion_testing = true;
         assert!(OperationRisk::Intrusive.is_allowed_by(&policy));
         assert!(OperationRisk::LoadTest.is_allowed_by(&policy));
         assert!(OperationRisk::StressTest.is_allowed_by(&policy));
@@ -486,6 +498,7 @@ mod tests {
         assert!(OperationRisk::CredentialTesting.is_allowed_by(&policy));
         assert!(OperationRisk::ExploitAdjacent.is_allowed_by(&policy));
         assert!(OperationRisk::RemoteExecution.is_allowed_by(&policy));
+        assert!(OperationRisk::EvasionTesting.is_allowed_by(&policy));
         assert!(OperationRisk::AgentAutonomous.is_allowed_by(&policy));
     }
 

@@ -27,6 +27,8 @@ pub mod wireless;
 pub mod mobile;
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
+#[cfg(feature = "evasion")]
+pub mod evasion;
 #[cfg(feature = "web-proxy")]
 pub mod web_proxy;
 pub use config::*;
@@ -71,6 +73,8 @@ pub use wireless::*;
 pub use mobile::*;
 #[cfg(feature = "db-pentest")]
 pub use db_pentest::*;
+#[cfg(feature = "evasion")]
+pub use evasion::*;
 #[cfg(feature = "web-proxy")]
 pub use web_proxy::*;
 
@@ -459,6 +463,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,
         #[cfg(feature = "wireless")]
         Some(Commands::Wireless(args)) => handle_wireless(ctx, args).await,
+        #[cfg(feature = "evasion")]
+        Some(Commands::Evasion(args)) => handle_evasion(ctx, args).await,
         #[cfg(feature = "mobile")]
         Some(Commands::Mobile(args)) => handle_mobile(ctx, args).await,
         #[cfg(feature = "db-pentest")]

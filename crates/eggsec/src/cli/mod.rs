@@ -26,6 +26,8 @@ pub mod wireless;
 pub mod mobile;
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
+#[cfg(feature = "evasion")]
+pub mod evasion;
 #[cfg(feature = "web-proxy")]
 pub mod web_proxy;
 
@@ -57,6 +59,9 @@ pub use mobile::*;
 
 #[cfg(feature = "db-pentest")]
 pub use db_pentest::*;
+
+#[cfg(feature = "evasion")]
+pub use evasion::*;
 
 #[cfg(feature = "web-proxy")]
 pub use web_proxy::*;
@@ -375,6 +380,11 @@ pub enum Commands {
     #[cfg(feature = "mobile")]
     #[command(about = "Static security analysis of Android APKs and iOS IPAs (lab/defense use only)", long_about = MOBILE_ABOUT)]
     Mobile(MobileArgs),
+
+    // --- Evasion testing operations ---
+    #[cfg(feature = "evasion")]
+    #[command(about = "Validate detection of common evasion techniques (defense-lab only)", long_about = EVASION_ABOUT)]
+    Evasion(EvasionArgs),
 
     // --- Database pentesting operations (standalone defense-lab) ---
     #[cfg(feature = "db-pentest")]

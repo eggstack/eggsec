@@ -170,6 +170,9 @@ pub mod packet;
 #[cfg(feature = "wireless")]
 pub mod wireless;
 
+#[cfg(feature = "evasion")]
+pub mod evasion;
+
 #[cfg(feature = "mobile")]
 pub mod mobile;
 #[cfg(not(feature = "mobile"))]
