@@ -587,6 +587,7 @@ impl Pipeline {
             baseline: None,
             baseline_label: None,
             capture_baseline: false,
+            baseline_output: None,
             host: None,
             port: None,
             user: None,

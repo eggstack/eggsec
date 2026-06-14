@@ -41,6 +41,11 @@ cargo test --lib -p eggsec --features db-pentest
 cargo clippy --lib -p eggsec --features db-pentest
 # Oracle (dry-run always safe; real driver behind marker):
 cargo check -p eggsec --features db-pentest,db-pentest-oracle
+# Oracle dry-run example:
+# eggsec db pentest oracle://system@127.0.0.1:1521/ORCL --dry-run --json
+# Baseline capture + regression comparison:
+# eggsec db pentest postgres://lab@127.0.0.1:5432/labdb --dry-run --capture-baseline --baseline-label "v1" --json -o baseline.json
+# eggsec db pentest postgres://lab@127.0.0.1:5432/labdb --dry-run --baseline baseline.json --json -o result.json
 ```
 
 ### Module Override Files
