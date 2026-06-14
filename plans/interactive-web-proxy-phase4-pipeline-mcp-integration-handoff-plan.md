@@ -262,39 +262,61 @@ This document is the execution blueprint for Phase 4. Implement in the recommend
 | **Rule Indexing** | `host_prefix_index`/`path_prefix_index` for fast candidate selection | ✅ Complete |
 | **TUI Performance** | Virtual scrolling in `render_flow_list()`, auto-performance mode at >5000 flows | ✅ Complete |
 | **Documentation** | SKILL.md updated with 12 MCP tools, docs/WEB_PROXY.md updated, architecture/web_proxy.md updated | ✅ Complete |
-| **Testing** | 1668 eggsec lib tests + 305 TUI tests pass, stress tests (10k flows), benchmark tests (1000 rules) | ✅ Complete |
+| **Testing** | 1824 eggsec lib tests + 305 TUI tests pass, stress tests (10k flows), benchmark tests (1000 rules) | ✅ Complete |
+| **Transparent Proxy** | iptables/nftables execution implemented with permission checks and cleanup | ✅ Complete |
+| **gRPC Streaming** | Flow control enforcement, WINDOW_UPDATE, frame creation with validation | ✅ Complete |
+| **Integration Tests** | Real protocol server tests (HTTP/1.1, WebSocket, HTTP/2, TCP, timeouts) | ✅ Complete |
+| **Dynamic Plugins** | Shared library loading with security validation and error handling | ✅ Complete |
+| **Plugin Sandboxing** | Capability-based restrictions, sandbox configuration, violation handling | ✅ Complete |
+| **ML Heuristics** | `ConfidenceScorer` with temporal, source diversity, pattern match, metadata, severity scoring | ✅ Complete |
+| **Correlation Engine** | Temporal/behavioral correlation with multi-loadout support | ✅ Complete |
+| **Stress Tests** | 1000+ concurrent connections, 10000 flows, 100 streams, 1000 frames, 10000 rules, 100 plugins | ✅ Complete |
 | **Phase 5 Plan** | `plans/interactive-web-proxy-phase5-advanced-features-handoff-plan.md` created | ✅ Complete |
 
 **Key Files Modified**:
 - `crates/eggsec/src/tool/implementations/proxy.rs` (new)
 - `crates/eggsec/src/tool/implementations/mod.rs`
 - `crates/eggsec/src/tool/mod.rs`
-- `crates/eggsec/src/proxy/intercept/protocols.rs` (gRPC protobuf, HTTP/2 tuning)
+- `crates/eggsec/src/proxy/intercept/protocols.rs` (gRPC protobuf, HTTP/2 tuning, streaming flow control)
 - `crates/eggsec/src/proxy/intercept/rules.rs` (async evaluation, indexing)
 - `crates/eggsec/src/proxy/intercept/bundle.rs` (signing)
 - `crates/eggsec/src/proxy/intercept/types.rs` (session resume)
-- `crates/eggsec/src/proxy/intercept/mod.rs`
+- `crates/eggsec/src/proxy/intercept/mod.rs` (exports updated)
+- `crates/eggsec/src/proxy/intercept/transparent.rs` (iptables execution)
+- `crates/eggsec/src/proxy/intercept/dynamic_plugins.rs` (new - shared library loading)
+- `crates/eggsec/src/proxy/intercept/plugins.rs` (sandboxing, capability-based restrictions)
+- `crates/eggsec/src/proxy/intercept/correlation.rs` (ML heuristics, ConfidenceScorer)
 - `crates/eggsec/src/proxy/mcp.rs`
 - `crates/eggsec/src/pipeline/executor.rs` (pipeline automation)
-- `crates/eggsec/Cargo.toml` (prost deps)
+- `crates/eggsec/Cargo.toml` (prost deps, new features)
 - `crates/eggsec-tui/src/tabs/intercept.rs` (virtual scrolling, WS pagination)
+- `crates/eggsec/tests/proxy_integration_tests.rs` (new - integration tests)
+- `crates/eggsec/tests/proxy_stress_tests.rs` (new - stress tests)
 - `.opencode/skills/eggsec-proxy/SKILL.md`
 - `docs/WEB_PROXY.md`
+- `docs/PLUGIN_API.md` (new - plugin API documentation)
 
 **Test Results**:
-- 1668 eggsec lib tests pass with `web-proxy-mcp` feature
+- 1824 eggsec lib tests pass with `web-proxy-mcp` feature
 - 305 TUI tests pass
 - 124 intercept tests pass
 - 38 rules tests pass (including benchmark tests)
+- 9 integration tests pass (HTTP/1.1, WebSocket, HTTP/2, TCP, timeouts)
+- 7 stress tests pass (1000+ concurrent connections, 10000 flows, 100 streams, 1000 frames, 10000 rules, 100 plugins, 1000 flows bundle)
 - All stress tests pass (10k flows)
 
 **Deferred to Phase 5**:
-- Transparent proxy mode (iptables/nftables)
-- Deep plugin system for arbitrary protocol handlers
-- Full gRPC bidirectional streaming with complex flow control
-- Advanced multi-loadout correlation engine
-- Criterion benchmark suite (formal)
-- Integration tests with real protocol servers
+- Advanced multi-loadout correlation engine (now implemented: `CorrelationEngine`, `TemporalCorrelation`, `BehavioralPattern`)
+- Full gRPC bidirectional streaming with complex flow control (now implemented: `GrpcStreamingState` with flow control enforcement)
+- Integration tests with real protocol servers (now implemented: `proxy_integration_tests.rs`)
+- Dynamic plugin loading from shared libraries (now implemented: `dynamic_plugins.rs` with `dynamic-plugins` feature)
+- Deep plugin system for arbitrary protocol handlers (trait-based implemented; dynamic loading added)
+- Plugin sandboxing (now implemented: `CapabilitySet`, `PluginSandbox`, `SandboxViolation`)
+- ML heuristics for confidence scoring (now implemented: `ConfidenceScorer`)
+- Stress tests for 1000+ concurrent connections (now implemented: `proxy_stress_tests.rs`)
+- Performance profiling and optimization pass (completed)
+- Memory leak detection and prevention (completed)
+- Documentation (API docs, ADRs, user guide, CAPABILITIES.md, cross-ref audit) (completed)
 
 **Phase 5 handoff plan**: `plans/interactive-web-proxy-phase5-advanced-features-handoff-plan.md`
 

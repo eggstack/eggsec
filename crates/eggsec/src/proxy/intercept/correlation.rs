@@ -371,6 +371,131 @@ impl CorrelationEngine {
     }
 }
 
+/// ML heuristics for confidence scoring in correlation.
+///
+/// Provides machine learning-inspired scoring functions that consider
+/// multiple factors to produce a confidence score for correlations.
+pub struct ConfidenceScorer {
+    /// Weight for temporal proximity (0.0 - 1.0).
+    pub temporal_weight: f64,
+    /// Weight for source diversity (0.0 - 1.0).
+    pub source_diversity_weight: f64,
+    /// Weight for pattern match strength (0.0 - 1.0).
+    pub pattern_match_weight: f64,
+    /// Weight for metadata similarity (0.0 - 1.0).
+    pub metadata_weight: f64,
+    /// Weight for finding severity (0.0 - 1.0).
+    pub severity_weight: f64,
+}
+
+impl Default for ConfidenceScorer {
+    fn default() -> Self {
+        Self {
+            temporal_weight: 0.3,
+            source_diversity_weight: 0.2,
+            pattern_match_weight: 0.25,
+            metadata_weight: 0.15,
+            severity_weight: 0.1,
+        }
+    }
+}
+
+impl ConfidenceScorer {
+    /// Create a new confidence scorer with custom weights.
+    pub fn new(
+        temporal_weight: f64,
+        source_diversity_weight: f64,
+        pattern_match_weight: f64,
+        metadata_weight: f64,
+        severity_weight: f64,
+    ) -> Self {
+        Self {
+            temporal_weight,
+            source_diversity_weight,
+            pattern_match_weight,
+            metadata_weight,
+            severity_weight,
+        }
+    }
+
+    /// Calculate confidence score for a temporal correlation.
+    pub fn score_temporal(&self, correlation: &TemporalCorrelation) -> f64 {
+        let temporal_score = 1.0 - (correlation.delta_ms as f64 / 60_000.0).min(1.0);
+        temporal_score * self.temporal_weight
+    }
+
+    /// Calculate confidence score for source diversity.
+    pub fn score_source_diversity(&self, sources: &[CorrelationSource]) -> f64 {
+        let unique_sources: std::collections::HashSet<_> = sources.iter().collect();
+        let diversity_score = unique_sources.len() as f64 / sources.len().max(1) as f64;
+        diversity_score * self.source_diversity_weight
+    }
+
+    /// Calculate confidence score for pattern match strength.
+    pub fn score_pattern_match(
+        &self,
+        pattern: &BehavioralPattern,
+        matched_sources: &[CorrelationSource],
+    ) -> f64 {
+        let match_ratio = matched_sources.len() as f64 / pattern.required_sources.len().max(1) as f64;
+        match_ratio * self.pattern_match_weight
+    }
+
+    /// Calculate confidence score for metadata similarity.
+    pub fn score_metadata_similarity(
+        &self,
+        metadata1: &HashMap<String, String>,
+        metadata2: &HashMap<String, String>,
+    ) -> f64 {
+        let keys1: std::collections::HashSet<_> = metadata1.keys().collect();
+        let keys2: std::collections::HashSet<_> = metadata2.keys().collect();
+        let common_keys = keys1.intersection(&keys2).count();
+        let total_keys = keys1.union(&keys2).count();
+        let similarity = common_keys as f64 / total_keys.max(1) as f64;
+        similarity * self.metadata_weight
+    }
+
+    /// Calculate confidence score for finding severity.
+    pub fn score_severity(&self, severity: u8) -> f64 {
+        let normalized = severity as f64 / 10.0;
+        normalized * self.severity_weight
+    }
+
+    /// Calculate combined confidence score from multiple factors.
+    pub fn calculate_combined_confidence(
+        &self,
+        temporal_score: f64,
+        diversity_score: f64,
+        pattern_score: f64,
+        metadata_score: f64,
+        severity_score: f64,
+    ) -> f64 {
+        let combined = temporal_score + diversity_score + pattern_score + metadata_score + severity_score;
+        combined.clamp(0.0, 1.0)
+    }
+
+    /// Score a correlation reference with all available factors.
+    pub fn score_reference(
+        &self,
+        reference: &CorrelationReference,
+        all_references: &[CorrelationReference],
+    ) -> f64 {
+        let temporal_score = self.temporal_weight; // Base score for single reference
+        let sources: Vec<_> = all_references.iter().map(|r| r.source).collect();
+        let diversity_score = self.score_source_diversity(&sources);
+        let metadata_score = self.score_metadata_similarity(&reference.metadata, &HashMap::new());
+        let severity_score = self.score_severity(0); // Default severity
+
+        self.calculate_combined_confidence(
+            temporal_score,
+            diversity_score,
+            0.0, // No pattern match for single reference
+            metadata_score,
+            severity_score,
+        )
+    }
+}
+
 impl Default for CorrelationEngine {
     fn default() -> Self {
         Self::new()
@@ -1015,5 +1140,127 @@ mod tests {
         let temporal = engine.find_temporal_correlations(&ctx);
         // 3 pairs: (db,auth), (db,mob), (auth,mob)
         assert_eq!(temporal.len(), 3);
+    }
+
+    // --- Confidence Scorer Tests ---
+
+    #[test]
+    fn test_confidence_scorer_default() {
+        let scorer = ConfidenceScorer::default();
+        assert_eq!(scorer.temporal_weight, 0.3);
+        assert_eq!(scorer.source_diversity_weight, 0.2);
+        assert_eq!(scorer.pattern_match_weight, 0.25);
+        assert_eq!(scorer.metadata_weight, 0.15);
+        assert_eq!(scorer.severity_weight, 0.1);
+    }
+
+    #[test]
+    fn test_confidence_scorer_score_temporal() {
+        let scorer = ConfidenceScorer::default();
+        let correlation = TemporalCorrelation {
+            a: CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "test"),
+            b: CorrelationReference::new(CorrelationSource::AuthTest, "auth-1", "test"),
+            delta_ms: 0,
+            confidence: 1.0,
+        };
+        assert_eq!(scorer.score_temporal(&correlation), 0.3); // 1.0 * 0.3
+
+        let correlation = TemporalCorrelation {
+            a: CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "test"),
+            b: CorrelationReference::new(CorrelationSource::AuthTest, "auth-1", "test"),
+            delta_ms: 30_000, // 30 seconds
+            confidence: 0.5,
+        };
+        let score = scorer.score_temporal(&correlation);
+        assert!(score > 0.0 && score < 0.3); // Should be less than max
+    }
+
+    #[test]
+    fn test_confidence_scorer_score_source_diversity() {
+        let scorer = ConfidenceScorer::default();
+        let sources = vec![
+            CorrelationSource::DbPentest,
+            CorrelationSource::AuthTest,
+            CorrelationSource::MobileDynamic,
+        ];
+        let score = scorer.score_source_diversity(&sources);
+        assert_eq!(score, 0.2); // 3 unique / 3 total = 1.0 * 0.2
+
+        let sources = vec![
+            CorrelationSource::DbPentest,
+            CorrelationSource::DbPentest, // duplicate
+        ];
+        let score = scorer.score_source_diversity(&sources);
+        assert!(score < 0.2); // 1 unique / 2 total = 0.5 * 0.2
+    }
+
+    #[test]
+    fn test_confidence_scorer_score_pattern_match() {
+        let scorer = ConfidenceScorer::default();
+        let pattern = BehavioralPattern {
+            id: "test".to_string(),
+            description: "Test".to_string(),
+            host_pattern: None,
+            path_pattern: None,
+            required_sources: vec![
+                CorrelationSource::DbPentest,
+                CorrelationSource::AuthTest,
+                CorrelationSource::MobileDynamic,
+            ],
+            min_sources: 2,
+        };
+        let matched = vec![
+            CorrelationSource::DbPentest,
+            CorrelationSource::AuthTest,
+        ];
+        let score = scorer.score_pattern_match(&pattern, &matched);
+        assert!(score > 0.0 && score <= 0.25);
+    }
+
+    #[test]
+    fn test_confidence_scorer_score_metadata_similarity() {
+        let scorer = ConfidenceScorer::default();
+        let mut meta1 = HashMap::new();
+        meta1.insert("host".to_string(), "api.example.com".to_string());
+        meta1.insert("path".to_string(), "/data".to_string());
+
+        let mut meta2 = HashMap::new();
+        meta2.insert("host".to_string(), "api.example.com".to_string());
+
+        let score = scorer.score_metadata_similarity(&meta1, &meta2);
+        assert!(score > 0.0); // Should have some similarity
+    }
+
+    #[test]
+    fn test_confidence_scorer_score_severity() {
+        let scorer = ConfidenceScorer::default();
+        assert_eq!(scorer.score_severity(0), 0.0);
+        assert_eq!(scorer.score_severity(10), 0.1); // 10/10 * 0.1
+    }
+
+    #[test]
+    fn test_confidence_scorer_calculate_combined_confidence() {
+        let scorer = ConfidenceScorer::default();
+        let combined = scorer.calculate_combined_confidence(0.3, 0.2, 0.25, 0.15, 0.1);
+        assert_eq!(combined, 1.0);
+
+        let combined = scorer.calculate_combined_confidence(0.1, 0.1, 0.1, 0.1, 0.1);
+        assert_eq!(combined, 0.5);
+    }
+
+    #[test]
+    fn test_confidence_scorer_score_reference() {
+        let scorer = ConfidenceScorer::default();
+        let reference = CorrelationReference::new(
+            CorrelationSource::DbPentest,
+            "db-1",
+            "SQLi finding",
+        );
+        let all_references = vec![
+            CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "SQLi finding"),
+            CorrelationReference::new(CorrelationSource::AuthTest, "auth-1", "Auth bypass"),
+        ];
+        let score = scorer.score_reference(&reference, &all_references);
+        assert!(score > 0.0 && score <= 1.0);
     }
 }

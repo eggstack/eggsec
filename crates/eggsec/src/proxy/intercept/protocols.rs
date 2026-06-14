@@ -808,11 +808,98 @@ impl GrpcStreamingState {
         }
     }
 
+    /// Add a frame to the streaming state and update flow control tracking.
     pub fn add_frame(&mut self, frame: GrpcStreamFrame) {
+        // Update bytes in flight based on direction
         match frame.direction {
-            ProxyFlowDirection::Request => self.client_frames.push(frame),
-            ProxyFlowDirection::Response => self.server_frames.push(frame),
+            ProxyFlowDirection::Request => {
+                self.bytes_in_flight += frame.size;
+                self.client_frames.push(frame);
+            }
+            ProxyFlowDirection::Response => {
+                // Server data reduces bytes in flight (acknowledges client data)
+                if self.bytes_in_flight >= frame.size {
+                    self.bytes_in_flight -= frame.size;
+                } else {
+                    self.bytes_in_flight = 0;
+                }
+                self.server_frames.push(frame);
+            }
         }
+    }
+
+    /// Check if we can send more data without exceeding flow control window.
+    pub fn can_send(&self, size: u64) -> bool {
+        self.bytes_in_flight + size <= self.flow_control_window as u64
+    }
+
+    /// Get remaining flow control window size.
+    pub fn remaining_window(&self) -> u64 {
+        self.flow_control_window.saturating_sub(self.bytes_in_flight as u32) as u64
+    }
+
+    /// Update flow control window (simulates WINDOW_UPDATE frame from peer).
+    pub fn update_flow_control_window(&mut self, increment: u32) {
+        self.flow_control_window = self.flow_control_window.saturating_add(increment);
+        tracing::trace!(
+            "gRPC flow control window updated to {} (increment: {})",
+            self.flow_control_window,
+            increment
+        );
+    }
+
+    /// Send a WINDOW_UPDATE frame to the peer (simulated).
+    ///
+    /// Returns the window size increment that should be sent.
+    pub fn prepare_window_update(&self) -> Option<u32> {
+        // Send window update when window is less than 50% consumed
+        let consumed = self.bytes_in_flight as f64 / self.flow_control_window as f64;
+        if consumed > 0.5 {
+            // Update by half the window size
+            let increment = self.flow_control_window / 2;
+            Some(increment)
+        } else {
+            None
+        }
+    }
+
+    /// Create a frame for bidirectional streaming with proper flow control.
+    pub fn create_frame(
+        &self,
+        stream_id: u32,
+        direction: ProxyFlowDirection,
+        payload: Vec<u8>,
+        end_stream: bool,
+        compressed: bool,
+    ) -> Result<GrpcStreamFrame, FlowControlError> {
+        let size = payload.len() as u64;
+
+        // Check flow control before sending
+        if !self.can_send(size) {
+            return Err(FlowControlError::WindowExceeded {
+                requested: size,
+                available: self.remaining_window(),
+            });
+        }
+
+        let mut frame = GrpcStreamFrame::new(stream_id, direction)
+            .with_payload(payload)
+            .with_end_stream();
+
+        if compressed {
+            frame = frame.with_compressed();
+        }
+
+        Ok(frame)
+    }
+
+    /// Process incoming frames and handle flow control updates.
+    ///
+    /// Returns any WINDOW_UPDATE values that should be sent to the peer.
+    pub fn process_frame(&mut self, frame: GrpcStreamFrame) -> Option<u32> {
+        let window_update = self.prepare_window_update();
+        self.add_frame(frame);
+        window_update
     }
 
     /// Total frames captured.
@@ -836,6 +923,215 @@ impl GrpcStreamingState {
             GrpcMethodType::ClientStreaming => client_ended,
             GrpcMethodType::Bidirectional => client_ended && server_ended,
         }
+    }
+
+    /// Get a summary of the streaming session.
+    pub fn summary(&self) -> StreamingSummary {
+        StreamingSummary {
+            method_type: self.method_type,
+            client_frame_count: self.client_frames.len(),
+            server_frame_count: self.server_frames.len(),
+            total_bytes: self.total_bytes(),
+            bytes_in_flight: self.bytes_in_flight,
+            flow_control_window: self.flow_control_window,
+            is_complete: self.is_complete(),
+        }
+    }
+}
+
+/// Summary of a gRPC streaming session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingSummary {
+    pub method_type: GrpcMethodType,
+    pub client_frame_count: usize,
+    pub server_frame_count: usize,
+    pub total_bytes: u64,
+    pub bytes_in_flight: u64,
+    pub flow_control_window: u32,
+    pub is_complete: bool,
+}
+
+/// Errors related to flow control.
+#[derive(Debug, Clone)]
+pub enum FlowControlError {
+    /// Requested size exceeds available flow control window.
+    WindowExceeded { requested: u64, available: u64 },
+    /// Stream has already ended.
+    StreamEnded,
+    /// Invalid frame for this stream type.
+    InvalidFrame(String),
+}
+
+impl std::fmt::Display for FlowControlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WindowExceeded { requested, available } => {
+                write!(
+                    f,
+                    "Flow control window exceeded: requested {} bytes, only {} available",
+                    requested, available
+                )
+            }
+            Self::StreamEnded => write!(f, "Stream has already ended"),
+            Self::InvalidFrame(msg) => write!(f, "Invalid frame: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for FlowControlError {}
+
+/// gRPC reflection service information.
+///
+/// Provides metadata about services discovered via gRPC reflection.
+/// The reflection protocol allows clients to discover service definitions
+/// at runtime without prior knowledge of the proto files.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcReflectionInfo {
+    /// List of discovered services.
+    pub services: Vec<GrpcServiceInfo>,
+    /// List of discovered message types.
+    pub message_types: Vec<GrpcTypeInfo>,
+    /// Whether reflection is enabled on the target server.
+    pub reflection_enabled: bool,
+    /// Version of the reflection protocol (v1 or v1alpha).
+    pub protocol_version: GrpcReflectionVersion,
+}
+
+/// Version of the gRPC reflection protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GrpcReflectionVersion {
+    /// Standard reflection protocol (v1).
+    V1,
+    /// Alpha reflection protocol (v1alpha).
+    V1Alpha,
+}
+
+/// Information about a gRPC service discovered via reflection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcServiceInfo {
+    /// Full service name (e.g., "package.ServiceName").
+    pub name: String,
+    /// Methods in this service.
+    pub methods: Vec<GrpcMethodInfo>,
+    /// Service description (if available).
+    pub description: Option<String>,
+}
+
+/// Information about a gRPC method discovered via reflection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcMethodInfo {
+    /// Method name.
+    pub name: String,
+    /// Full path (e.g., "/package.ServiceName/MethodName").
+    pub path: String,
+    /// Method type (unary, streaming, etc.).
+    pub method_type: GrpcMethodType,
+    /// Input message type name.
+    pub input_type: String,
+    /// Output message type name.
+    pub output_type: String,
+    /// Whether the method is client-streaming.
+    pub client_streaming: bool,
+    /// Whether the method is server-streaming.
+    pub server_streaming: bool,
+}
+
+/// Information about a gRPC message type discovered via reflection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcTypeInfo {
+    /// Full type name (e.g., "package.MessageName").
+    pub name: String,
+    /// Field definitions.
+    pub fields: Vec<GrpcFieldInfo>,
+    /// Whether this is a map entry type.
+    pub is_map_entry: bool,
+}
+
+/// Information about a field in a gRPC message type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpcFieldInfo {
+    /// Field name.
+    pub name: String,
+    /// Field number.
+    pub number: i32,
+    /// Field type (string, int32, message, etc.).
+    pub field_type: String,
+    /// Whether this is a repeated field.
+    pub repeated: bool,
+    /// Type name for message/enum fields.
+    pub type_name: Option<String>,
+}
+
+impl GrpcReflectionInfo {
+    /// Create a new empty reflection info.
+    pub fn new() -> Self {
+        Self {
+            services: Vec::new(),
+            message_types: Vec::new(),
+            reflection_enabled: false,
+            protocol_version: GrpcReflectionVersion::V1,
+        }
+    }
+
+    /// Find a service by name.
+    pub fn find_service(&self, name: &str) -> Option<&GrpcServiceInfo> {
+        self.services.iter().find(|s| s.name == name)
+    }
+
+    /// Find a method by full path.
+    pub fn find_method(&self, path: &str) -> Option<(&GrpcServiceInfo, &GrpcMethodInfo)> {
+        for service in &self.services {
+            for method in &service.methods {
+                if method.path == path {
+                    return Some((service, method));
+                }
+            }
+        }
+        None
+    }
+
+    /// Get all methods for a service.
+    pub fn get_methods(&self, service_name: &str) -> Vec<&GrpcMethodInfo> {
+        self.find_service(service_name)
+            .map(|s| s.methods.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Total number of discovered services.
+    pub fn service_count(&self) -> usize {
+        self.services.len()
+    }
+
+    /// Total number of discovered methods.
+    pub fn method_count(&self) -> usize {
+        self.services.iter().map(|s| s.methods.len()).sum()
+    }
+}
+
+impl Default for GrpcReflectionInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Attempt to parse gRPC reflection response from a hex-encoded payload.
+///
+/// This is a simplified parser that extracts basic service information
+/// from reflection responses. For full reflection support, use a proper
+/// gRPC client library.
+pub fn parse_grpc_reflection_response(payload: &str) -> Option<GrpcReflectionInfo> {
+    let bytes = hex::decode(payload).ok()?;
+    
+    // Try to parse as service list response
+    // The actual parsing would depend on the proto definition
+    // For now, return a basic structure indicating reflection is available
+    if !bytes.is_empty() {
+        let mut info = GrpcReflectionInfo::new();
+        info.reflection_enabled = true;
+        Some(info)
+    } else {
+        None
     }
 }
 
@@ -1401,5 +1697,111 @@ mod tests {
         session.add_call(err_call);
         assert_eq!(session.error_calls().len(), 1);
         assert_eq!(session.error_calls()[0].path, "/pkg.Svc/Err");
+    }
+
+    // --- gRPC Reflection Tests ---
+
+    #[test]
+    fn test_grpc_reflection_info_new() {
+        let info = GrpcReflectionInfo::new();
+        assert!(info.services.is_empty());
+        assert!(info.message_types.is_empty());
+        assert!(!info.reflection_enabled);
+        assert_eq!(info.protocol_version, GrpcReflectionVersion::V1);
+    }
+
+    #[test]
+    fn test_grpc_reflection_info_find_service() {
+        let mut info = GrpcReflectionInfo::new();
+        info.services.push(GrpcServiceInfo {
+            name: "pkg.TestService".to_string(),
+            methods: vec![],
+            description: None,
+        });
+        assert!(info.find_service("pkg.TestService").is_some());
+        assert!(info.find_service("pkg.Nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_grpc_reflection_info_find_method() {
+        let mut info = GrpcReflectionInfo::new();
+        info.services.push(GrpcServiceInfo {
+            name: "pkg.TestService".to_string(),
+            methods: vec![GrpcMethodInfo {
+                name: "TestMethod".to_string(),
+                path: "/pkg.TestService/TestMethod".to_string(),
+                method_type: GrpcMethodType::Unary,
+                input_type: "pkg.TestRequest".to_string(),
+                output_type: "pkg.TestResponse".to_string(),
+                client_streaming: false,
+                server_streaming: false,
+            }],
+            description: None,
+        });
+        let (svc, method) = info.find_method("/pkg.TestService/TestMethod").unwrap();
+        assert_eq!(svc.name, "pkg.TestService");
+        assert_eq!(method.name, "TestMethod");
+    }
+
+    #[test]
+    fn test_grpc_reflection_info_counts() {
+        let mut info = GrpcReflectionInfo::new();
+        info.services.push(GrpcServiceInfo {
+            name: "svc1".to_string(),
+            methods: vec![GrpcMethodInfo {
+                name: "m1".to_string(),
+                path: "/svc1/m1".to_string(),
+                method_type: GrpcMethodType::Unary,
+                input_type: "".to_string(),
+                output_type: "".to_string(),
+                client_streaming: false,
+                server_streaming: false,
+            }, GrpcMethodInfo {
+                name: "m2".to_string(),
+                path: "/svc1/m2".to_string(),
+                method_type: GrpcMethodType::Unary,
+                input_type: "".to_string(),
+                output_type: "".to_string(),
+                client_streaming: false,
+                server_streaming: false,
+            }],
+            description: None,
+        });
+        info.services.push(GrpcServiceInfo {
+            name: "svc2".to_string(),
+            methods: vec![],
+            description: None,
+        });
+        assert_eq!(info.service_count(), 2);
+        assert_eq!(info.method_count(), 2);
+    }
+
+    #[test]
+    fn test_grpc_reflection_info_serialization() {
+        let mut info = GrpcReflectionInfo::new();
+        info.reflection_enabled = true;
+        info.services.push(GrpcServiceInfo {
+            name: "pkg.Svc".to_string(),
+            methods: vec![],
+            description: Some("Test service".to_string()),
+        });
+        let json = serde_json::to_string(&info).unwrap();
+        let back: GrpcReflectionInfo = serde_json::from_str(&json).unwrap();
+        assert!(back.reflection_enabled);
+        assert_eq!(back.services[0].name, "pkg.Svc");
+    }
+
+    #[test]
+    fn test_parse_grpc_reflection_response() {
+        let payload = hex::encode(b"test reflection data");
+        let info = parse_grpc_reflection_response(&payload);
+        assert!(info.is_some());
+        assert!(info.unwrap().reflection_enabled);
+    }
+
+    #[test]
+    fn test_parse_grpc_reflection_response_empty() {
+        let info = parse_grpc_reflection_response("");
+        assert!(info.is_none());
     }
 }

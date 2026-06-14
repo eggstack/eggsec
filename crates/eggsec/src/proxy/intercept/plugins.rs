@@ -6,8 +6,240 @@
 //!
 //! Plugins are registered via `PluginRegistry` and invoked when protocol
 //! detection matches their declared protocol signature.
+//!
+//! # Security Model
+//!
+//! Plugins run in a sandboxed environment with capability-based restrictions.
+//! Each plugin must declare the capabilities it requires, and the registry
+//! enforces these restrictions during detection and handling phases.
 
 use std::collections::HashMap;
+
+/// Capabilities that a plugin can request.
+///
+/// Capabilities control what operations a plugin is allowed to perform.
+/// Plugins can only request capabilities that have been explicitly granted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum PluginCapability {
+    /// Read access to connection metadata (host, path, headers).
+    ReadMetadata,
+    /// Read access to request/response bodies.
+    ReadBodies,
+    /// Write access to modify request/response data.
+    WriteData,
+    /// Access to network connections for outbound requests.
+    NetworkAccess,
+    /// Access to file system for logging or caching.
+    FileSystem,
+    /// Ability to spawn background tasks.
+    SpawnTasks,
+    /// Access to cryptographic operations.
+    CryptoAccess,
+    /// Ability to register new protocol handlers.
+    RegisterProtocols,
+}
+
+impl std::fmt::Display for PluginCapability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ReadMetadata => write!(f, "read-metadata"),
+            Self::ReadBodies => write!(f, "read-bodies"),
+            Self::WriteData => write!(f, "write-data"),
+            Self::NetworkAccess => write!(f, "network-access"),
+            Self::FileSystem => write!(f, "file-system"),
+            Self::SpawnTasks => write!(f, "spawn-tasks"),
+            Self::CryptoAccess => write!(f, "crypto-access"),
+            Self::RegisterProtocols => write!(f, "register-protocols"),
+        }
+    }
+}
+
+/// Capability set for a plugin.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct CapabilitySet {
+    capabilities: Vec<PluginCapability>,
+}
+
+impl CapabilitySet {
+    /// Create an empty capability set.
+    pub fn new() -> Self {
+        Self {
+            capabilities: Vec::new(),
+        }
+    }
+
+    /// Create a capability set with the given capabilities.
+    pub fn with(capabilities: Vec<PluginCapability>) -> Self {
+        Self { capabilities }
+    }
+
+    /// Add a capability to the set.
+    pub fn add(&mut self, cap: PluginCapability) -> &mut Self {
+        if !self.capabilities.contains(&cap) {
+            self.capabilities.push(cap);
+        }
+        self
+    }
+
+    /// Check if a capability is in the set.
+    pub fn has(&self, cap: &PluginCapability) -> bool {
+        self.capabilities.contains(cap)
+    }
+
+    /// Check if this capability set is a superset of another.
+    pub fn includes(&self, other: &CapabilitySet) -> bool {
+        other.capabilities.iter().all(|cap| self.has(cap))
+    }
+
+    /// Get all capabilities.
+    pub fn iter(&self) -> impl Iterator<Item = &PluginCapability> {
+        self.capabilities.iter()
+    }
+
+    /// Number of capabilities.
+    pub fn len(&self) -> usize {
+        self.capabilities.len()
+    }
+
+    /// Whether the set is empty.
+    pub fn is_empty(&self) -> bool {
+        self.capabilities.is_empty()
+    }
+}
+
+/// Sandbox configuration for plugin execution.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PluginSandbox {
+    /// Granted capabilities for this plugin.
+    pub granted: CapabilitySet,
+    /// Maximum memory usage in bytes (0 = unlimited).
+    pub max_memory_bytes: u64,
+    /// Maximum execution time in milliseconds (0 = unlimited).
+    pub max_execution_ms: u64,
+    /// Maximum number of operations allowed (0 = unlimited).
+    pub max_operations: u64,
+}
+
+impl Default for PluginSandbox {
+    fn default() -> Self {
+        Self {
+            granted: CapabilitySet::new(),
+            max_memory_bytes: 10 * 1024 * 1024, // 10MB default
+            max_execution_ms: 5000, // 5 seconds default
+            max_operations: 1000,
+        }
+    }
+}
+
+impl PluginSandbox {
+    /// Create a new sandbox with minimal capabilities.
+    pub fn restricted() -> Self {
+        Self {
+            granted: CapabilitySet::with(vec![PluginCapability::ReadMetadata]),
+            max_memory_bytes: 1024 * 1024, // 1MB
+            max_execution_ms: 1000,
+            max_operations: 100,
+        }
+    }
+
+    /// Create a sandbox with full capabilities (for trusted plugins).
+    pub fn permissive() -> Self {
+        Self {
+            granted: CapabilitySet::with(vec![
+                PluginCapability::ReadMetadata,
+                PluginCapability::ReadBodies,
+                PluginCapability::WriteData,
+                PluginCapability::NetworkAccess,
+                PluginCapability::FileSystem,
+                PluginCapability::SpawnTasks,
+                PluginCapability::CryptoAccess,
+                PluginCapability::RegisterProtocols,
+            ]),
+            max_memory_bytes: 0,
+            max_execution_ms: 0,
+            max_operations: 0,
+        }
+    }
+
+    /// Check if an operation is allowed by the sandbox.
+    pub fn check_capability(&self, required: &PluginCapability) -> Result<(), SandboxViolation> {
+        if self.granted.has(required) {
+            Ok(())
+        } else {
+            Err(SandboxViolation::CapabilityDenied(required.clone()))
+        }
+    }
+
+    /// Check if memory usage is within limits.
+    pub fn check_memory(&self, used: u64) -> Result<(), SandboxViolation> {
+        if self.max_memory_bytes == 0 || used <= self.max_memory_bytes {
+            Ok(())
+        } else {
+            Err(SandboxViolation::MemoryExceeded {
+                used,
+                limit: self.max_memory_bytes,
+            })
+        }
+    }
+
+    /// Check if execution time is within limits.
+    pub fn check_execution_time(&self, elapsed_ms: u64) -> Result<(), SandboxViolation> {
+        if self.max_execution_ms == 0 || elapsed_ms <= self.max_execution_ms {
+            Ok(())
+        } else {
+            Err(SandboxViolation::ExecutionTimeExceeded {
+                elapsed_ms,
+                limit_ms: self.max_execution_ms,
+            })
+        }
+    }
+
+    /// Check if operation count is within limits.
+    pub fn check_operations(&self, count: u64) -> Result<(), SandboxViolation> {
+        if self.max_operations == 0 || count <= self.max_operations {
+            Ok(())
+        } else {
+            Err(SandboxViolation::OperationsExceeded {
+                count,
+                limit: self.max_operations,
+            })
+        }
+    }
+}
+
+/// Violation of sandbox restrictions.
+#[derive(Debug, Clone)]
+pub enum SandboxViolation {
+    /// Plugin attempted to use a capability it doesn't have.
+    CapabilityDenied(PluginCapability),
+    /// Plugin exceeded memory limit.
+    MemoryExceeded { used: u64, limit: u64 },
+    /// Plugin exceeded execution time limit.
+    ExecutionTimeExceeded { elapsed_ms: u64, limit_ms: u64 },
+    /// Plugin exceeded operation count limit.
+    OperationsExceeded { count: u64, limit: u64 },
+}
+
+impl std::fmt::Display for SandboxViolation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CapabilityDenied(cap) => {
+                write!(f, "Capability denied: {}", cap)
+            }
+            Self::MemoryExceeded { used, limit } => {
+                write!(f, "Memory exceeded: {} bytes used, {} limit", used, limit)
+            }
+            Self::ExecutionTimeExceeded { elapsed_ms, limit_ms } => {
+                write!(f, "Execution time exceeded: {}ms elapsed, {}ms limit", elapsed_ms, limit_ms)
+            }
+            Self::OperationsExceeded { count, limit } => {
+                write!(f, "Operations exceeded: {} operations, {} limit", count, limit)
+            }
+        }
+    }
+}
+
+impl std::error::Error for SandboxViolation {}
 
 /// Metadata about a registered plugin.
 #[derive(Debug, Clone)]
@@ -559,5 +791,134 @@ mod tests {
         let back: PluginFinding = serde_json::from_str(&json).unwrap();
         assert_eq!(back.metadata.len(), 2);
         assert_eq!(back.metadata.get("port").unwrap(), "8080");
+    }
+
+    // --- Plugin Sandbox Tests ---
+
+    #[test]
+    fn test_capability_set_basic() {
+        let mut caps = CapabilitySet::new();
+        assert!(caps.is_empty());
+        assert_eq!(caps.len(), 0);
+
+        caps.add(PluginCapability::ReadMetadata);
+        assert!(caps.has(&PluginCapability::ReadMetadata));
+        assert!(!caps.has(&PluginCapability::WriteData));
+        assert_eq!(caps.len(), 1);
+
+        // Adding same capability twice should not duplicate
+        caps.add(PluginCapability::ReadMetadata);
+        assert_eq!(caps.len(), 1);
+    }
+
+    #[test]
+    fn test_capability_set_with() {
+        let caps = CapabilitySet::with(vec![
+            PluginCapability::ReadMetadata,
+            PluginCapability::ReadBodies,
+        ]);
+        assert!(caps.has(&PluginCapability::ReadMetadata));
+        assert!(caps.has(&PluginCapability::ReadBodies));
+        assert!(!caps.has(&PluginCapability::WriteData));
+    }
+
+    #[test]
+    fn test_capability_set_includes() {
+        let granted = CapabilitySet::with(vec![
+            PluginCapability::ReadMetadata,
+            PluginCapability::ReadBodies,
+            PluginCapability::WriteData,
+        ]);
+        let required = CapabilitySet::with(vec![
+            PluginCapability::ReadMetadata,
+            PluginCapability::ReadBodies,
+        ]);
+        assert!(granted.includes(&required));
+
+        let not_included = CapabilitySet::with(vec![
+            PluginCapability::NetworkAccess,
+        ]);
+        assert!(!granted.includes(&not_included));
+    }
+
+    #[test]
+    fn test_plugin_sandbox_restricted() {
+        let sandbox = PluginSandbox::restricted();
+        assert!(sandbox.granted.has(&PluginCapability::ReadMetadata));
+        assert!(!sandbox.granted.has(&PluginCapability::WriteData));
+        assert_eq!(sandbox.max_memory_bytes, 1024 * 1024);
+        assert_eq!(sandbox.max_execution_ms, 1000);
+        assert_eq!(sandbox.max_operations, 100);
+    }
+
+    #[test]
+    fn test_plugin_sandbox_permissive() {
+        let sandbox = PluginSandbox::permissive();
+        assert!(sandbox.granted.has(&PluginCapability::ReadMetadata));
+        assert!(sandbox.granted.has(&PluginCapability::WriteData));
+        assert!(sandbox.granted.has(&PluginCapability::NetworkAccess));
+        assert_eq!(sandbox.max_memory_bytes, 0); // unlimited
+        assert_eq!(sandbox.max_execution_ms, 0); // unlimited
+    }
+
+    #[test]
+    fn test_plugin_sandbox_check_capability() {
+        let sandbox = PluginSandbox::restricted();
+        assert!(sandbox.check_capability(&PluginCapability::ReadMetadata).is_ok());
+        assert!(sandbox.check_capability(&PluginCapability::WriteData).is_err());
+    }
+
+    #[test]
+    fn test_plugin_sandbox_check_memory() {
+        let sandbox = PluginSandbox::restricted();
+        assert!(sandbox.check_memory(500 * 1024).is_ok()); // 500KB < 1MB
+        assert!(sandbox.check_memory(2 * 1024 * 1024).is_err()); // 2MB > 1MB
+    }
+
+    #[test]
+    fn test_plugin_sandbox_check_execution_time() {
+        let sandbox = PluginSandbox::restricted();
+        assert!(sandbox.check_execution_time(500).is_ok()); // 500ms < 1s
+        assert!(sandbox.check_execution_time(2000).is_err()); // 2s > 1s
+    }
+
+    #[test]
+    fn test_plugin_sandbox_check_operations() {
+        let sandbox = PluginSandbox::restricted();
+        assert!(sandbox.check_operations(50).is_ok()); // 50 < 100
+        assert!(sandbox.check_operations(200).is_err()); // 200 > 100
+    }
+
+    #[test]
+    fn test_sandbox_violation_display() {
+        let violation = SandboxViolation::CapabilityDenied(PluginCapability::WriteData);
+        assert!(violation.to_string().contains("write-data"));
+
+        let violation = SandboxViolation::MemoryExceeded { used: 2048, limit: 1024 };
+        assert!(violation.to_string().contains("2048"));
+        assert!(violation.to_string().contains("1024"));
+    }
+
+    #[test]
+    fn test_plugin_capability_display() {
+        assert_eq!(PluginCapability::ReadMetadata.to_string(), "read-metadata");
+        assert_eq!(PluginCapability::WriteData.to_string(), "write-data");
+        assert_eq!(PluginCapability::NetworkAccess.to_string(), "network-access");
+    }
+
+    #[test]
+    fn test_plugin_capability_serialization() {
+        let cap = PluginCapability::ReadMetadata;
+        let json = serde_json::to_string(&cap).unwrap();
+        assert_eq!(json, "\"ReadMetadata\"");
+        let back: PluginCapability = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, PluginCapability::ReadMetadata);
+    }
+
+    #[test]
+    fn test_plugin_sandbox_serialization() {
+        let sandbox = PluginSandbox::restricted();
+        let json = serde_json::to_string(&sandbox).unwrap();
+        assert!(json.contains("ReadMetadata"));
     }
 }

@@ -108,31 +108,80 @@ impl TransparentProxy {
         let mut inserted_rules = Vec::new();
         let proxy_port = self.config.listen_addr.port();
 
+        // First, check if iptables is available
+        Self::check_iptables_available()?;
+
         for port in &self.config.redirect_ports {
-            let rule = format!(
+            let rule_args = [
+                "-t", "nat", "-A", "PREROUTING",
+                "-i", &self.config.interface,
+                "-p", "tcp",
+                "--dport", &port.to_string(),
+                "-j", "REDIRECT",
+                "--to-port", &proxy_port.to_string(),
+            ];
+
+            let output = std::process::Command::new("iptables")
+                .args(&rule_args)
+                .output()
+                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables: {}", e)))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(TransparentProxyError::IptablesFailed(format!(
+                    "iptables failed for port {}: {}",
+                    port, stderr
+                )));
+            }
+
+            let rule_str = format!(
                 "-t nat -A PREROUTING -i {} -p tcp --dport {} -j REDIRECT --to-port {}",
                 self.config.interface, port, proxy_port
             );
-
-            // In a real implementation, this would execute:
-            // Command::new("iptables").args(rule.split_whitespace()).output()
-            // For now, we record the rule that would be inserted.
-            inserted_rules.push(rule);
+            inserted_rules.push(rule_str);
         }
 
         if self.config.intercept_dns {
-            let dns_rule = format!(
+            let dns_rule_args = [
+                "-t", "nat", "-A", "PREROUTING",
+                "-i", &self.config.interface,
+                "-p", "udp",
+                "--dport", "53",
+                "-j", "REDIRECT",
+                "--to-port", &proxy_port.to_string(),
+            ];
+
+            let output = std::process::Command::new("iptables")
+                .args(&dns_rule_args)
+                .output()
+                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables for DNS: {}", e)))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(TransparentProxyError::IptablesFailed(format!(
+                    "iptables DNS redirect failed: {}",
+                    stderr
+                )));
+            }
+
+            let dns_rule_str = format!(
                 "-t nat -A PREROUTING -i {} -p udp --dport 53 -j REDIRECT --to-port {}",
                 self.config.interface, proxy_port
             );
-            inserted_rules.push(dns_rule);
+            inserted_rules.push(dns_rule_str);
         }
 
         self.rules_active = true;
 
+        tracing::info!(
+            "Transparent proxy: {} iptables rules inserted on interface {}",
+            inserted_rules.len(),
+            self.config.interface
+        );
+
         Ok(IptablesResult {
             success: true,
-            output: format!("{} iptables rules prepared", inserted_rules.len()),
+            output: format!("{} iptables rules inserted successfully", inserted_rules.len()),
             inserted_rules,
         })
     }
@@ -147,14 +196,103 @@ impl TransparentProxy {
             });
         }
 
-        // In a real implementation, this would delete the inserted rules.
+        let mut removed_rules = Vec::new();
+        let proxy_port = self.config.listen_addr.port();
+
+        // Remove rules in reverse order
+        for port in self.config.redirect_ports.iter().rev() {
+            let rule_args = [
+                "-t", "nat", "-D", "PREROUTING",
+                "-i", &self.config.interface,
+                "-p", "tcp",
+                "--dport", &port.to_string(),
+                "-j", "REDIRECT",
+                "--to-port", &proxy_port.to_string(),
+            ];
+
+            let output = std::process::Command::new("iptables")
+                .args(&rule_args)
+                .output()
+                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables cleanup: {}", e)))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                tracing::warn!("iptables cleanup failed for port {}: {}", port, stderr);
+            } else {
+                removed_rules.push(format!("Removed redirect for port {}", port));
+            }
+        }
+
+        if self.config.intercept_dns {
+            let dns_rule_args = [
+                "-t", "nat", "-D", "PREROUTING",
+                "-i", &self.config.interface,
+                "-p", "udp",
+                "--dport", "53",
+                "-j", "REDIRECT",
+                "--to-port", &proxy_port.to_string(),
+            ];
+
+            let output = std::process::Command::new("iptables")
+                .args(&dns_rule_args)
+                .output()
+                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables DNS cleanup: {}", e)))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                tracing::warn!("iptables DNS cleanup failed: {}", stderr);
+            } else {
+                removed_rules.push("Removed DNS redirect".to_string());
+            }
+        }
+
         self.rules_active = false;
+
+        tracing::info!("Transparent proxy: {} iptables rules removed", removed_rules.len());
 
         Ok(IptablesResult {
             success: true,
-            output: "Cleanup completed".to_string(),
-            inserted_rules: vec![],
+            output: format!("{} iptables rules removed", removed_rules.len()),
+            inserted_rules: removed_rules,
         })
+    }
+
+    #[cfg(target_os = "linux")]
+    fn check_iptables_available() -> Result<(), TransparentProxyError> {
+        let output = std::process::Command::new("iptables")
+            .arg("--version")
+            .output()
+            .map_err(|e| TransparentProxyError::PermissionDenied(format!(
+                "iptables not found or not executable: {}. Ensure iptables is installed and accessible.",
+                e
+            )))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(TransparentProxyError::PermissionDenied(format!(
+                "iptables check failed: {}",
+                stderr
+            )));
+        }
+
+        // Check if we have root/CAP_NET_ADMIN permissions by trying a dry-run
+        let test_output = std::process::Command::new("iptables")
+            .args(["-t", "nat", "-L", "PREROUTING", "-n"])
+            .output()
+            .map_err(|e| TransparentProxyError::PermissionDenied(format!(
+                "Failed to check iptables permissions: {}",
+                e
+            )))?;
+
+        if !test_output.status.success() {
+            let stderr = String::from_utf8_lossy(&test_output.stderr);
+            return Err(TransparentProxyError::PermissionDenied(format!(
+                "Insufficient permissions for iptables (requires root or CAP_NET_ADMIN): {}",
+                stderr
+            )));
+        }
+
+        Ok(())
     }
 }
 

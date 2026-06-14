@@ -138,6 +138,8 @@ Dynamic mobile (Android ADB + logcat + Phase 2 (proxy + permissions + correlatio
 | **REST API** | `crates/eggsec/src/tool/protocol/rest.rs` | REST API server - exposes eggsec tools via HTTP (requires rest-api feature) |
 | **gRPC API** | `crates/eggsec/src/tool/protocol/grpc.rs` | gRPC API server - exposes eggsec tools via protocol buffers (requires grpc-api feature) |
 | **MCP Server** | `crates/eggsec/src/tool/protocol/mcp/` | MCP (Model Context Protocol) - JSON-RPC server for AI agent integration (built-in) |
+| **Web Proxy** | `crates/eggsec/src/proxy/intercept/` | Interactive HTTP/HTTPS MITM proxy with protocol interception, rule engine, session management, and MCP integration (requires web-proxy feature) |
+| **Plugin System** | `crates/eggsec/src/proxy/intercept/plugins.rs` | Extensible protocol handler plugin system with capability-based sandboxing (requires dynamic-plugins feature) |
 
 ---
 

@@ -399,6 +399,9 @@ web-proxy = ["dep:tokio-tungstenite", "dep:h2", "dep:http", "dep:prost", "dep:pr
 web-proxy-mcp = ["web-proxy"]
 # Transparent proxy mode (Linux iptables/nftables REDIRECT). Marker feature; no new deps.
 transparent-proxy = ["web-proxy"]
+# Dynamic plugin loading from shared libraries (.so/.dylib). Marker feature; no new deps.
+# SECURITY WARNING: Only load plugins from trusted sources!
+dynamic-plugins = ["web-proxy"]
 
 [dev-dependencies]
 wiremock = "0.6"

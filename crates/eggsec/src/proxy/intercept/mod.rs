@@ -19,6 +19,8 @@ pub mod types;
 pub mod correlation;
 #[cfg(feature = "transparent-proxy")]
 pub mod transparent;
+#[cfg(feature = "dynamic-plugins")]
+pub mod dynamic_plugins;
 
 pub use bridge::to_scan_report_data_proxy;
 pub use bundle::{EvidenceBundle, BundleManifest, BundleDiff, export_evidence_bundle, export_signed_evidence_bundle, import_evidence_bundle, compare_bundles};
@@ -34,13 +36,16 @@ pub use protocols::{
     Http2Stream, Http2Session, Http2StreamState,
     GrpcCall, GrpcSession, GrpcMethodType, ProtocolDetection,
     GrpcStreamFrame, GrpcStreamingState, GrpcSecurityFinding,
-    detect_grpc_security_issues,
+    detect_grpc_security_issues, StreamingSummary, FlowControlError,
+    GrpcReflectionInfo, GrpcReflectionVersion, GrpcServiceInfo,
+    GrpcMethodInfo, GrpcTypeInfo, GrpcFieldInfo,
 };
 
 pub use correlation::{
     CorrelationContext, CorrelationReference, CorrelationSource,
     CorrelationHook, CorrelationSummary,
     CorrelationEngine, TemporalCorrelation, BehavioralPattern,
+    ConfidenceScorer,
 };
 
 pub use narrative::{AttackNarrative, NarrativeEvent, build_narrative};
@@ -48,6 +53,7 @@ pub use narrative::{AttackNarrative, NarrativeEvent, build_narrative};
 pub use plugins::{
     ProtocolHandler, PluginRegistry, PluginInfo, PluginError,
     DetectionResult, HandleResult, PluginFinding,
+    PluginCapability, CapabilitySet, PluginSandbox, SandboxViolation,
 };
 
 use crate::error::{EggsecError, Result};
