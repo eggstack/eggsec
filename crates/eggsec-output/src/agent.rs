@@ -49,6 +49,7 @@ pub enum AttackSurface {
     Internal,
     Cloud,
     Cdn,
+    Database,
 }
 
 impl AttackSurface {
@@ -63,6 +64,7 @@ impl AttackSurface {
             AttackSurface::Internal => "Internal Service",
             AttackSurface::Cloud => "Cloud Infrastructure",
             AttackSurface::Cdn => "CDN/Proxy",
+            AttackSurface::Database => "Database Service",
         }
     }
 }

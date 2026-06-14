@@ -430,7 +430,7 @@ fn infer_tool_category(tool_id: &str) -> ToolCategory {
         "recon" | "recon-all" | "subdomain" => ToolCategory::Recon,
         "waf-detect" | "waf-bypass" => ToolCategory::Waf,
         "scan" | "scan-ports" | "fingerprint" | "scan-endpoints" => ToolCategory::Scanning,
-        "pipeline" | "search" => ToolCategory::Pipeline,
+        "pipeline" | "search" | "db-pentest" => ToolCategory::Pipeline,
         "oast" => ToolCategory::Scanning,
         _ => ToolCategory::Scanning,
     }
@@ -457,6 +457,7 @@ pub fn classify_tool_risk(tool_id: &str) -> crate::config::OperationRisk {
         "load" | "loadtest" | "http-bench" => OperationRisk::LoadTest,
         "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
         "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
+        "db-pentest" => OperationRisk::DbPentest,
         _ => OperationRisk::SafeActive,
     }
 }
@@ -486,6 +487,7 @@ pub fn required_capabilities_for_tool_call(
             vec![Capability::RawPacketProbe]
         }
         "auth-test" | "credential" | "brute" => vec![Capability::CredentialTesting],
+        "db-pentest" => vec![Capability::DatabaseAssessment],
         "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
         "proxy-start" | "proxy-stop" | "proxy-status" | "proxy-list-flows" | "proxy-inspect-flow"
         | "proxy-forward-flow" | "proxy-drop-flow" | "proxy-replay-flow"
@@ -1339,6 +1341,37 @@ mod tests {
             classify_tool_risk("remote"),
             crate::config::OperationRisk::RemoteExecution
         );
+    }
+
+    #[test]
+    fn test_classify_tool_risk_db_pentest() {
+        assert_eq!(
+            classify_tool_risk("db-pentest"),
+            crate::config::OperationRisk::DbPentest
+        );
+    }
+
+    #[test]
+    fn test_db_pentest_capability() {
+        let caps = required_capabilities_for_tool_call("db-pentest", None, &serde_json::json!({}));
+        assert_eq!(caps.len(), 1);
+        assert_eq!(caps[0], crate::config::Capability::DatabaseAssessment);
+    }
+
+    #[test]
+    fn test_coding_agent_denies_db_pentest() {
+        let policy = McpProfilePolicy::coding_agent();
+        assert!(policy
+            .validate_tool_call("db-pentest", None, &serde_json::json!({}))
+            .is_err());
+    }
+
+    #[test]
+    fn test_ops_agent_allows_db_pentest() {
+        let policy = McpProfilePolicy::ops_agent();
+        assert!(policy
+            .validate_tool_call("db-pentest", None, &serde_json::json!({}))
+            .is_ok());
     }
 
     #[test]

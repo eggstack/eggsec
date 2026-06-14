@@ -130,5 +130,11 @@ pub fn create_default_registry() -> ToolRegistry {
         tracing::warn!("Failed to register tool: proxy: {}", e);
     }
 
+    #[cfg(feature = "db-pentest-mcp")]
+    if let Err(e) = registry.register(crate::tool::implementations::db_pentest::DbPentestTool::new())
+    {
+        tracing::warn!("Failed to register tool: db-pentest: {}", e);
+    }
+
     registry
 }

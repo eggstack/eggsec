@@ -8,3 +8,5 @@ pub mod recon;
 pub mod scanner;
 pub mod search;
 pub mod waf;
+#[cfg(feature = "db-pentest-mcp")]
+pub mod db_pentest;

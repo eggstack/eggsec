@@ -342,6 +342,7 @@ pub enum Capability {
     NseSafe,
     NseIntrusive,
     TrafficInterception,
+    DatabaseAssessment,
 }
 
 impl std::fmt::Display for Capability {
@@ -362,6 +363,7 @@ impl std::fmt::Display for Capability {
             Self::NseSafe => write!(f, "nse-safe"),
             Self::NseIntrusive => write!(f, "nse-intrusive"),
             Self::TrafficInterception => write!(f, "traffic-interception"),
+            Self::DatabaseAssessment => write!(f, "database-assessment"),
         }
     }
 }
