@@ -23,6 +23,8 @@ fn command_to_tab(command: &str) -> Option<Tab> {
         "graphql" => Some(Tab::GraphQl),
         "oauth" => Some(Tab::OAuth),
         "auth" | "auth-test" => Some(Tab::Auth),
+        #[cfg(feature = "c2")]
+        "c2" => Some(Tab::C2),
         "cluster" => Some(Tab::Cluster),
         "stress" => Some(Tab::Stress),
         "report" => Some(Tab::Report),
@@ -569,6 +571,8 @@ mod tests {
             ("oauth", Tab::OAuth),
             ("cluster", Tab::Cluster),
             ("auth-test", Tab::Auth),
+            #[cfg(feature = "c2")]
+            ("c2", Tab::C2),
             ("stress", Tab::Stress),
             ("report", Tab::Report),
             ("history", Tab::History),

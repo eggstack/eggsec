@@ -208,6 +208,12 @@ pub enum TaskConfig {
         max_flows: u64,
         target: Option<String>,
     },
+    #[cfg(feature = "c2")]
+    C2 {
+        target: String,
+        campaign: String,
+        dry_run: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -285,6 +291,8 @@ pub enum TaskResult {
     DbPentest(eggsec::db_pentest::DbPentestReport),
     #[cfg(feature = "web-proxy")]
     Intercept(eggsec::proxy::intercept::types::InterceptSession),
+    #[cfg(feature = "c2")]
+    C2(eggsec::c2::C2Report),
     Error(String),
 }
 
@@ -723,6 +731,10 @@ impl TaskRunner {
                     result_tx,
                 )
                 .await
+            }
+            #[cfg(feature = "c2")]
+            TaskConfig::C2 { target, campaign, dry_run } => {
+                super::c2_worker::run_c2_task(target, campaign, dry_run, progress_tx, result_tx).await
             }
         };
         result

@@ -266,6 +266,20 @@ pub fn get_static_help_data() -> StaticHelpData {
     );
 
     sections.insert(
+        Tab::C2,
+        HelpSection {
+            title: "C2 Campaign".to_string(),
+            content: "C2 campaign simulation (defense-lab only). Beacons, tasking, OPSEC scoring, attack graph.".to_string(),
+            commands: vec![
+                HelpCommand { key: "Enter".to_string(), description: "Start C2 simulation".to_string(), category: "Action".to_string() },
+                HelpCommand { key: "Esc".to_string(), description: "Stop simulation".to_string(), category: "Control".to_string() },
+                HelpCommand { key: "Tab".to_string(), description: "Next field".to_string(), category: "Navigation".to_string() },
+                HelpCommand { key: "Shift+Tab".to_string(), description: "Previous field".to_string(), category: "Navigation".to_string() },
+            ],
+        },
+    );
+
+    sections.insert(
         Tab::Cluster,
         HelpSection {
             title: "Cluster".to_string(),

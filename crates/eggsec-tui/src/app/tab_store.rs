@@ -21,6 +21,8 @@ pub struct TabStore {
     pub settings: tabs::SettingsTab,
     pub dashboard: tabs::DashboardTab,
     pub auth: tabs::AuthTab,
+    #[cfg(feature = "c2")]
+    pub c2: tabs::C2Tab,
     #[cfg(feature = "nse")]
     pub nse: tabs::NseTab,
     #[cfg(feature = "advanced-hunting")]
@@ -68,6 +70,8 @@ impl TabStore {
             settings: tabs::SettingsTab::new(),
             dashboard: tabs::DashboardTab::new(),
             auth: tabs::AuthTab::new(),
+            #[cfg(feature = "c2")]
+            c2: tabs::C2Tab::new(),
             #[cfg(feature = "nse")]
             nse: tabs::NseTab::new(),
             #[cfg(feature = "advanced-hunting")]

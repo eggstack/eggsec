@@ -520,6 +520,8 @@ impl App {
             Tab::GraphQl => self.tabs.graphql.primary_target(),
             Tab::OAuth => self.tabs.oauth.primary_target(),
             Tab::Auth => self.tabs.auth.primary_target(),
+            #[cfg(feature = "c2")]
+            Tab::C2 => self.tabs.c2.primary_target(),
             #[cfg(feature = "nse")]
             Tab::Nse => self.tabs.nse.primary_target(),
             #[cfg(feature = "advanced-hunting")]
@@ -603,6 +605,13 @@ impl App {
                     out.push_str(&format!(" --wordlist {}", shell_escape(passwords)));
                 }
             }
+            #[cfg(feature = "c2")]
+            Tab::C2 => {
+                if let Some(campaign) = self.tabs.c2.campaign() {
+                    out.push_str(&format!(" --campaign {}", shell_escape(campaign)));
+                }
+                out.push_str(" --dry-run");
+            }
             #[cfg(feature = "wireless-advanced")]
             Tab::Wireless if self.tabs.wireless.active_mode => {
                 if let Some((_, _, bssid, client, frame_count, rate_limit, dry_run)) =
@@ -677,6 +686,8 @@ impl App {
             Tab::GraphQl => self.tabs.graphql.build_task_config(),
             Tab::OAuth => self.tabs.oauth.build_task_config(),
             Tab::Auth => self.tabs.auth.build_task_config(),
+            #[cfg(feature = "c2")]
+            Tab::C2 => self.tabs.c2.build_task_config(),
             Tab::Cluster => self.tabs.cluster.build_task_config(),
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.tabs.hunt.build_task_config(),

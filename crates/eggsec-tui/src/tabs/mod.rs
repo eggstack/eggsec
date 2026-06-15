@@ -1,4 +1,6 @@
 mod auth;
+#[cfg(feature = "c2")]
+mod c2;
 mod cluster;
 #[cfg(feature = "compliance")]
 pub mod compliance;
@@ -53,6 +55,8 @@ pub(crate) use spec::{
 pub(crate) use spec::{all_specs, visible_tab_specs};
 
 pub use auth::AuthTab;
+#[cfg(feature = "c2")]
+pub use c2::C2Tab;
 #[cfg(feature = "headless-browser")]
 pub use browser::BrowserTab;
 pub use cluster::ClusterTab;
@@ -134,6 +138,7 @@ pub enum Tab {
     Auth = 29,
     DbPentest = 30,
     Intercept = 31,
+    C2 = 32,
 }
 
 impl Tab {
@@ -174,7 +179,6 @@ impl Tab {
                 Tab::History,
                 Tab::Dashboard,
                 Tab::Auth,
-                Tab::Intercept,
             ];
             #[cfg(feature = "advanced-hunting")]
             let tabs = {
@@ -236,6 +240,18 @@ impl Tab {
                 t.push(Tab::DbPentest);
                 t
             };
+            #[cfg(feature = "c2")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::C2);
+                t
+            };
+            #[cfg(feature = "web-proxy")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Intercept);
+                t
+            };
             tabs
         });
         &TABS
@@ -287,6 +303,7 @@ impl Tab {
             29 => Some(Tab::Auth),
             30 => Some(Tab::DbPentest),
             31 => Some(Tab::Intercept),
+            32 => Some(Tab::C2),
             _ => None,
         }
     }
@@ -519,6 +536,10 @@ impl Tab {
             Tab::Intercept => &app.tabs.intercept,
             #[cfg(not(feature = "web-proxy"))]
             Tab::Intercept => &app.tabs.dashboard,
+            #[cfg(feature = "c2")]
+            Tab::C2 => &app.tabs.c2,
+            #[cfg(not(feature = "c2"))]
+            Tab::C2 => &app.tabs.dashboard,
         }
     }
 
@@ -596,6 +617,10 @@ impl Tab {
             Tab::Intercept => &mut app.tabs.intercept,
             #[cfg(not(feature = "web-proxy"))]
             Tab::Intercept => &mut app.tabs.dashboard,
+            #[cfg(feature = "c2")]
+            Tab::C2 => &mut app.tabs.c2,
+            #[cfg(not(feature = "c2"))]
+            Tab::C2 => &mut app.tabs.dashboard,
         }
     }
 
@@ -666,6 +691,10 @@ impl Tab {
             Tab::Intercept => &app.tabs.intercept,
             #[cfg(not(feature = "web-proxy"))]
             Tab::Intercept => &app.tabs.dashboard,
+            #[cfg(feature = "c2")]
+            Tab::C2 => &app.tabs.c2,
+            #[cfg(not(feature = "c2"))]
+            Tab::C2 => &app.tabs.dashboard,
         }
     }
 
@@ -736,6 +765,10 @@ impl Tab {
             Tab::Intercept => &mut app.tabs.intercept,
             #[cfg(not(feature = "web-proxy"))]
             Tab::Intercept => &mut app.tabs.dashboard,
+            #[cfg(feature = "c2")]
+            Tab::C2 => &mut app.tabs.c2,
+            #[cfg(not(feature = "c2"))]
+            Tab::C2 => &mut app.tabs.dashboard,
         }
     }
 }

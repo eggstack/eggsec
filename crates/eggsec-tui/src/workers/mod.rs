@@ -1,5 +1,7 @@
 mod api;
 mod auth;
+#[cfg(feature = "c2")]
+mod c2_worker;
 #[cfg(feature = "db-pentest")]
 mod db_pentest;
 #[cfg(feature = "web-proxy")]

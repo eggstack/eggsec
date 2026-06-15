@@ -243,6 +243,19 @@ pub static TAB_SPECS: &[TabSpec] = &[
         direct_launch: true,
     },
     TabSpec {
+        tab: Tab::C2,
+        stable_id: "c2",
+        title: "C2",
+        cli_command: "eggsec c2",
+        description: "C2 campaign simulation (beacons, tasking, OPSEC, attack graph — defense-lab only)",
+        category: TabCategory::Assessment,
+        risk_group: TabRiskGroup::Intrusive,
+        feature: Some("c2"),
+        breadcrumb_label: "C2 Campaign",
+        operation: Some("c2"),
+        direct_launch: true,
+    },
+    TabSpec {
         tab: Tab::Cluster,
         stable_id: "cluster",
         title: "Cluster",
@@ -580,6 +593,12 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
     let specs = {
         let mut t = specs;
         t.push(spec_for(Tab::DbPentest).unwrap());
+        t
+    };
+    #[cfg(feature = "c2")]
+    let specs = {
+        let mut t = specs;
+        t.push(spec_for(Tab::C2).unwrap());
         t
     };
     #[cfg(feature = "web-proxy")]

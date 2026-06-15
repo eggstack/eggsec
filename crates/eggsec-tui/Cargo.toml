@@ -81,6 +81,7 @@ tool-api = ["eggsec/tool-api"]
 rest-api = ["eggsec/rest-api"]
 db-pentest = ["eggsec/db-pentest"]
 web-proxy = ["eggsec/web-proxy"]
+c2 = ["eggsec/c2"]
 full = [
     "nse",
     "headless-browser",
@@ -99,4 +100,5 @@ full = [
     "rest-api",
     "db-pentest",
     "web-proxy",
+    "c2",
 ]

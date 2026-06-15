@@ -153,6 +153,14 @@ impl super::App {
             super::tabs::Tab::Auth => {
                 "Auth Test - Validate authentication controls (defense-lab only).".to_string()
             }
+            #[cfg(feature = "c2")]
+            super::tabs::Tab::C2 => {
+                "C2 - Campaign simulation with beacons, tasking, OPSEC (defense-lab only).".to_string()
+            }
+            #[cfg(not(feature = "c2"))]
+            super::tabs::Tab::C2 => {
+                "C2 - Campaign simulation (feature not enabled).".to_string()
+            }
             #[cfg(feature = "db-pentest")]
             super::tabs::Tab::DbPentest => {
                 "Db Pentest - Direct database pentesting (defense-lab only).".to_string()

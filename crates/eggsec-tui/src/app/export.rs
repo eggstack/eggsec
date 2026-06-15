@@ -44,6 +44,8 @@ impl super::App {
             super::tabs::Tab::GraphQl => "graphql_results",
             super::tabs::Tab::OAuth => "oauth_results",
             super::tabs::Tab::Auth => "auth_results",
+            #[cfg(feature = "c2")]
+            super::tabs::Tab::C2 => "c2_results",
             #[cfg(feature = "db-pentest")]
             super::tabs::Tab::DbPentest => "db_pentest_results",
             #[cfg(not(feature = "db-pentest"))]
@@ -159,6 +161,12 @@ impl super::App {
             }
             super::tabs::Tab::Auth => {
                 let msg = "Auth tab: no exportable data available (defense-lab only)".to_string();
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Warning));
+            }
+            #[cfg(feature = "c2")]
+            super::tabs::Tab::C2 => {
+                let msg = "C2 tab: use CLI export (eggsec c2 --json -o report.json)".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }

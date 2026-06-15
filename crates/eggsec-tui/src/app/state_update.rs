@@ -447,6 +447,31 @@ impl super::App {
                 self.tabs.intercept.set_session(session);
                 None
             }
+            #[cfg(feature = "c2")]
+            TaskResult::C2(report) => {
+                let mut display = String::new();
+                display.push_str(&format!("Target: {}\n", report.target));
+                display.push_str(&format!("Campaign: {} ({})\n", report.campaign.name, report.campaign.mitre_profile));
+                display.push_str(&format!("Dry-run: {}\n\n", report.dry_run));
+                display.push_str(&format!("Beacons: {}/{} successful\n", report.summary.successful_beacons, report.summary.total_beacons));
+                display.push_str(&format!("Tasks: {}/{} completed\n", report.summary.completed_tasks, report.summary.total_tasks));
+                display.push_str(&format!("OPSEC: {}/{}\n\n", report.summary.opsec_score, report.summary.opsec_max));
+                for phase in &report.campaign.phases {
+                    display.push_str(&format!("  Phase {}: {} - {}\n", phase.order, phase.name, phase.description));
+                }
+                if let Some(ref graph) = report.attack_graph {
+                    display.push_str(&format!("\nAttack Graph: {} nodes, critical path: {}\n", graph.nodes.len(), graph.critical_path.join(" -> ")));
+                }
+                if let Some(ref timeline) = report.timeline {
+                    display.push_str(&format!("Timeline: {} phases, {} techniques\n", timeline.total_phases, timeline.total_techniques));
+                }
+                for finding in &report.opsec_assessment.findings {
+                    display.push_str(&format!("\n  [{:?}] {} - {:?}\n    {}\n", finding.severity, finding.description, finding.category, finding.recommendation));
+                }
+                self.tabs.c2.results = display;
+                self.tabs.c2.state = super::tabs::AppState::Completed;
+                None
+            }
             _ => Some(result),
         }
     }
@@ -516,6 +541,10 @@ impl TabProgressUpdate for super::tabs::Tab {
             }
             super::tabs::Tab::Auth => {
                 // Auth progress is handled via the task system
+            }
+            #[cfg(feature = "c2")]
+            super::tabs::Tab::C2 => {
+                // C2 progress is handled via the task system
             }
             #[cfg(feature = "web-proxy")]
             super::tabs::Tab::Intercept => {

@@ -428,3 +428,10 @@ impl TaskBuilder for super::tabs::InterceptTab {
         })
     }
 }
+
+#[cfg(feature = "c2")]
+impl TaskBuilder for super::tabs::C2Tab {
+    fn build_task_config(&self) -> Option<workers::TaskConfig> {
+        self.build_task_config()
+    }
+}

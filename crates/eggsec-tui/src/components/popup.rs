@@ -296,6 +296,10 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
                 "  Enter            - Start OAuth/OIDC security test".to_string()
             }
             crate::tabs::Tab::Auth => "  Enter            - Start authentication testing (defense-lab only)".to_string(),
+            #[cfg(feature = "c2")]
+            crate::tabs::Tab::C2 => "  Enter            - Start C2 simulation (defense-lab only)".to_string(),
+            #[cfg(not(feature = "c2"))]
+            crate::tabs::Tab::C2 => "  Enter            - C2 (feature not enabled)".to_string(),
             crate::tabs::Tab::Cluster => "  Enter            - Start cluster operation".to_string(),
             crate::tabs::Tab::Stress => "  Enter            - Start stress test".to_string(),
             crate::tabs::Tab::Report => "  Enter            - Execute report action".to_string(),
