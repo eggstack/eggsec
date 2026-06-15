@@ -350,6 +350,10 @@ db-pentest-redis = ["dep:redis"]
 # Real runs via MCP require EnforcementContext + policy confirmation.
 db-pentest-mcp = ["db-pentest"]
 
+# C2 MCP tool exposure (enables c2 tool in MCP server)
+# Default behavior (without this marker) keeps c2 as standalone defense-lab surface only.
+c2-mcp = ["c2"]
+
 # Kubernetes container security scanning
 container = ["kube", "k8s-openapi"]
 

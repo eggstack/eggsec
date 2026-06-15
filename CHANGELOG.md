@@ -22,6 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `to_scan_report_data()` bridge (auto-detected in `report convert`)
   - Policy: `C2Operation` risk tier, `allow_c2` flag, `--allow-c2` CLI gate
   - 44 unit tests; all green
+- C2 TUI tab (`Tab::C2`) under `c2` feature
+  - Target and campaign profile inputs
+  - Results display with beacons, tasks, OPSEC, attack graph, timeline
+  - Full keyboard navigation, focus management, error handling
+  - Worker integration with progress tracking
+  - 310 TUI tests; all green
+- C2 MCP tool exposure under `c2-mcp` marker feature
+  - `C2Tool` implementing `SecurityTool` trait (id: "c2")
+  - Always forces dry-run for safety
+  - OpsAgent visible, CodingAgent hidden
+  - `C2Simulation` capability added to policy enum
+  - Risk mapping: `c2` → `C2Operation`
+  - Capability mapping: `c2` → `C2Simulation`
 - `architecture/c2.md` documentation
 
 ### Fixed

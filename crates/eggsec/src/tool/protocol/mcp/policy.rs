@@ -430,7 +430,7 @@ fn infer_tool_category(tool_id: &str) -> ToolCategory {
         "recon" | "recon-all" | "subdomain" => ToolCategory::Recon,
         "waf-detect" | "waf-bypass" => ToolCategory::Waf,
         "scan" | "scan-ports" | "fingerprint" | "scan-endpoints" => ToolCategory::Scanning,
-        "pipeline" | "search" | "db-pentest" => ToolCategory::Pipeline,
+        "pipeline" | "search" | "db-pentest" | "c2" => ToolCategory::Pipeline,
         "oast" => ToolCategory::Scanning,
         _ => ToolCategory::Scanning,
     }
@@ -458,6 +458,7 @@ pub fn classify_tool_risk(tool_id: &str) -> crate::config::OperationRisk {
         "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
         "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
         "db-pentest" => OperationRisk::DbPentest,
+        "c2" => OperationRisk::C2Operation,
         _ => OperationRisk::SafeActive,
     }
 }
@@ -488,6 +489,7 @@ pub fn required_capabilities_for_tool_call(
         }
         "auth-test" | "credential" | "brute" => vec![Capability::CredentialTesting],
         "db-pentest" => vec![Capability::DatabaseAssessment],
+        "c2" => vec![Capability::C2Simulation],
         "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
         "proxy-start" | "proxy-stop" | "proxy-status" | "proxy-list-flows" | "proxy-inspect-flow"
         | "proxy-forward-flow" | "proxy-drop-flow" | "proxy-replay-flow"

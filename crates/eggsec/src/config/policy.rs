@@ -371,6 +371,7 @@ pub enum Capability {
     TrafficInterception,
     EvasionTesting,
     DatabaseAssessment,
+    C2Simulation,
 }
 
 impl std::fmt::Display for Capability {
@@ -393,6 +394,7 @@ impl std::fmt::Display for Capability {
             Self::TrafficInterception => write!(f, "traffic-interception"),
             Self::EvasionTesting => write!(f, "evasion-testing"),
             Self::DatabaseAssessment => write!(f, "database-assessment"),
+            Self::C2Simulation => write!(f, "c2-simulation"),
         }
     }
 }

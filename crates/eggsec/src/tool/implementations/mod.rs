@@ -1,3 +1,5 @@
+#[cfg(feature = "c2-mcp")]
+pub mod c2;
 pub mod fuzzer;
 pub mod loadtest;
 pub mod oast;

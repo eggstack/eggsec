@@ -136,5 +136,10 @@ pub fn create_default_registry() -> ToolRegistry {
         tracing::warn!("Failed to register tool: db-pentest: {}", e);
     }
 
+    #[cfg(feature = "c2-mcp")]
+    if let Err(e) = registry.register(crate::tool::implementations::c2::C2Tool::new()) {
+        tracing::warn!("Failed to register tool: c2: {}", e);
+    }
+
     registry
 }
