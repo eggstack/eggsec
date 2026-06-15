@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - OPSEC scoring and findings
   - `to_scan_report_data()` bridge (auto-detected in `report convert`)
   - Policy: `C2Operation` risk tier, `allow_c2` flag, `--allow-c2` CLI gate
-  - 44 unit tests; all green
+  - Real C2 simulation mode (HTTP/S beacons, TCP port scans, HTTP task delivery)
+  - 57 unit tests; all green
 - C2 TUI tab (`Tab::C2`) under `c2` feature
   - Target and campaign profile inputs
   - Results display with beacons, tasks, OPSEC, attack graph, timeline

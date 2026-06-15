@@ -18,6 +18,7 @@ Examples:
   eggsec c2 --target 10.0.0.1 --campaign apt29 --dry-run
   eggsec c2 --target 10.0.0.1 --campaign carbanak --dry-run -o c2-report.json
   eggsec c2 --dry-run --json
+  eggsec c2 --target 10.0.0.1 --allow-c2 --json
 
 Requires building with --features c2.
 All dry-run operations produce complete reports with synthetic data (no side effects).
@@ -49,4 +50,8 @@ pub struct C2Args {
     /// Suppress non-essential output
     #[arg(long, short = 'q')]
     pub quiet: bool,
+
+    /// Allow real C2 simulation (requires policy approval; use --dry-run for safe validation)
+    #[arg(long)]
+    pub allow_c2: bool,
 }

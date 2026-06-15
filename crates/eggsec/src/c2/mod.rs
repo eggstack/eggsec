@@ -300,7 +300,7 @@ impl C2Scanner {
         let timestamp = chrono::Utc::now().to_rfc3339();
 
         let (beacon_results, task_results, opsec_assessment) = if self.dry_run {
-            self.dry_run_simulation()
+            self.dry_run_simulation().await
         } else {
             self.real_simulation(target).await
         };
@@ -342,9 +342,9 @@ impl C2Scanner {
         })
     }
 
-    fn dry_run_simulation(&self) -> (Vec<BeaconResult>, Vec<TaskResult>, OpsecAssessment) {
-        let beacon_results = self::beacon::simulate_beacons(&self.campaign);
-        let task_results = self::tasking::simulate_tasks(&self.campaign);
+    async fn dry_run_simulation(&self) -> (Vec<BeaconResult>, Vec<TaskResult>, OpsecAssessment) {
+        let beacon_results = self::beacon::simulate_beacons(&self.campaign, "dry-run", true).await;
+        let task_results = self::tasking::simulate_tasks(&self.campaign, "dry-run", true).await;
         let opsec_assessment = self::opsec::simulate_opsec_assessment();
 
         (beacon_results, task_results, opsec_assessment)
@@ -352,11 +352,13 @@ impl C2Scanner {
 
     async fn real_simulation(
         &self,
-        _target: &str,
+        target: &str,
     ) -> (Vec<BeaconResult>, Vec<TaskResult>, OpsecAssessment) {
-        // In a real implementation, this would perform actual C2 operations.
-        // For now, delegate to dry-run simulation as defense-lab only.
-        self.dry_run_simulation()
+        let beacon_results = self::beacon::simulate_beacons(&self.campaign, target, false).await;
+        let task_results = self::tasking::simulate_tasks(&self.campaign, target, false).await;
+        let opsec_assessment = self::opsec::simulate_opsec_assessment();
+
+        (beacon_results, task_results, opsec_assessment)
     }
 
     pub fn campaign(&self) -> &C2Campaign {
@@ -880,5 +882,78 @@ mod tests {
     fn test_opsec_category_serialization() {
         let json = serde_json::to_string(&OpsecCategory::ProcessMasquerading).unwrap();
         assert_eq!(json, "\"process_masquerading\"");
+    }
+
+    #[tokio::test]
+    async fn test_real_simulation_produces_different_evidence_than_dry_run() {
+        let dry_scanner = C2Scanner::new(true, "apt29");
+        let dry_report = dry_scanner.scan("test-target").await.unwrap();
+
+        // Real simulation against an unreachable target produces different evidence
+        let real_scanner = C2Scanner::new(false, "apt29");
+        let real_report = real_scanner.scan("127.0.0.1:1").await.unwrap();
+
+        // Dry-run beacons always succeed; real beacons fail against unreachable target
+        assert!(
+            dry_report
+                .beacon_results
+                .iter()
+                .all(|b| b.success),
+            "dry-run beacons should always succeed"
+        );
+        assert!(
+            real_report
+                .beacon_results
+                .iter()
+                .all(|b| !b.success),
+            "real beacons should fail against unreachable target"
+        );
+
+        // Evidence should differ: dry-run has "dry-run:" prefix, real has "real:" or error
+        let dry_evidence = dry_report.beacon_results[0]
+            .evidence
+            .as_ref()
+            .unwrap();
+        let real_evidence = real_report.beacon_results[0]
+            .evidence
+            .as_ref()
+            .unwrap();
+        assert!(
+            dry_evidence.contains("dry-run"),
+            "dry-run evidence should contain 'dry-run'"
+        );
+        assert!(
+            !real_evidence.contains("dry-run"),
+            "real evidence should NOT contain 'dry-run'"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_real_simulation_report_marked_not_dry_run() {
+        let scanner = C2Scanner::new(false, "apt29");
+        let report = scanner.scan("127.0.0.1:1").await.unwrap();
+        assert!(
+            !report.dry_run,
+            "real simulation report should have dry_run=false"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dry_run_scan_always_succeeds() {
+        let scanner = C2Scanner::new(true, "apt29");
+        let report = scanner.scan("totally-invalid-target-that-does-not-exist").await.unwrap();
+        assert!(report.dry_run);
+        assert!(
+            report.beacon_results.iter().all(|b| b.success),
+            "dry-run beacons should always succeed regardless of target"
+        );
+        assert!(
+            report
+                .task_results
+                .iter()
+                .all(|t| t.status == TaskStatus::Completed
+                    || t.status == TaskStatus::Simulated),
+            "dry-run tasks should always complete or be simulated"
+        );
     }
 }
