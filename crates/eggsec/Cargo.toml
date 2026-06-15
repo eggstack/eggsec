@@ -312,7 +312,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest", "web-proxy", "evasion", "postex"]
+  full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless", "wireless-advanced", "mobile", "mobile-dynamic", "db-pentest", "web-proxy", "evasion", "postex", "c2"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]
@@ -376,6 +376,11 @@ evasion = []
 
 # Post-exploitation and living-off-the-land (LOTL) simulation for defense validation (purple teaming)
 postex = []
+
+# C2 (Command & Control) framework for defense-lab purple teaming and red team simulation.
+# Depends on postex and evasion for integrated campaign orchestration.
+# Standalone defense-lab surface; heavily gated by policy + --allow-c2 + dry-run support.
+c2 = ["postex", "evasion"]
 
   # Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
   mobile = ["zip", "plist"]

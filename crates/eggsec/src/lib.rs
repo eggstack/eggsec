@@ -176,6 +176,9 @@ pub mod postex;
 #[cfg(feature = "evasion")]
 pub mod evasion;
 
+#[cfg(feature = "c2")]
+pub mod c2;
+
 #[cfg(feature = "mobile")]
 pub mod mobile;
 #[cfg(not(feature = "mobile"))]

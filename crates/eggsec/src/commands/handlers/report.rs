@@ -261,5 +261,17 @@ fn try_bridge_defense_lab(content: &str) -> Option<crate::output::convert::ScanR
             return Some(crate::postex::to_scan_report_data(&p));
         }
     }
+    #[cfg(feature = "evasion")]
+    {
+        if let Ok(p) = serde_json::from_str::<crate::evasion::EvasionReport>(content) {
+            return Some(crate::evasion::to_scan_report_data(&p));
+        }
+    }
+    #[cfg(feature = "c2")]
+    {
+        if let Ok(p) = serde_json::from_str::<crate::c2::C2Report>(content) {
+            return Some(crate::c2::to_scan_report_data(&p));
+        }
+    }
     None
 }

@@ -19,6 +19,7 @@ pub enum OperationRisk {
     EvasionTesting,
     PostExploitation,
     ExploitAdjacent,
+    C2Operation,
     RemoteExecution,
     AgentAutonomous,
 }
@@ -74,6 +75,11 @@ pub struct ExecutionPolicy {
     #[serde(default)]
     pub allow_exploit_adjacent: bool,
 
+    /// Allow C2 operations (beaconing, tasking, campaign orchestration) for defense-lab only.
+    /// Standalone defense-lab surface; requires explicit --allow-c2 for non-dry runs.
+    #[serde(default)]
+    pub allow_c2_operations: bool,
+
     #[serde(default)]
     pub allow_agent_autonomous: bool,
 
@@ -112,6 +118,7 @@ impl Default for ExecutionPolicy {
             allow_remote_execution: false,
             allow_evasion_testing: false,
             allow_post_exploitation: false,
+            allow_c2_operations: false,
             allow_agent_autonomous: false,
             max_risk_without_confirm: OperationRisk::SafeActive,
             allowed_capabilities: Vec::new(),
@@ -135,6 +142,7 @@ impl OperationRisk {
             Self::ExploitAdjacent => policy.allow_exploit_adjacent,
             Self::EvasionTesting => policy.allow_evasion_testing,
             Self::PostExploitation => policy.allow_post_exploitation,
+            Self::C2Operation => policy.allow_c2_operations,
             Self::RemoteExecution => policy.allow_remote_execution,
             Self::AgentAutonomous => policy.allow_agent_autonomous,
         }
@@ -156,6 +164,7 @@ impl std::fmt::Display for OperationRisk {
             Self::ExploitAdjacent => write!(f, "exploit adjacent"),
             Self::EvasionTesting => write!(f, "evasion testing"),
             Self::PostExploitation => write!(f, "post-exploitation"),
+            Self::C2Operation => write!(f, "c2 operation"),
             Self::RemoteExecution => write!(f, "remote execution"),
             Self::AgentAutonomous => write!(f, "agent autonomous"),
         }
@@ -489,6 +498,12 @@ mod tests {
     }
 
     #[test]
+    fn default_policy_blocks_c2_operation() {
+        let policy = ExecutionPolicy::default();
+        assert!(!OperationRisk::C2Operation.is_allowed_by(&policy));
+    }
+
+    #[test]
     fn custom_policy_can_enable_all() {
         let mut policy = ExecutionPolicy::default();
         policy.allow_intrusive_fuzzing = true;
@@ -501,12 +516,14 @@ mod tests {
         policy.allow_agent_autonomous = true;
         policy.allow_evasion_testing = true;
         policy.allow_post_exploitation = true;
+        policy.allow_c2_operations = true;
         assert!(OperationRisk::Intrusive.is_allowed_by(&policy));
         assert!(OperationRisk::LoadTest.is_allowed_by(&policy));
         assert!(OperationRisk::StressTest.is_allowed_by(&policy));
         assert!(OperationRisk::RawPacket.is_allowed_by(&policy));
         assert!(OperationRisk::CredentialTesting.is_allowed_by(&policy));
         assert!(OperationRisk::ExploitAdjacent.is_allowed_by(&policy));
+        assert!(OperationRisk::C2Operation.is_allowed_by(&policy));
         assert!(OperationRisk::RemoteExecution.is_allowed_by(&policy));
         assert!(OperationRisk::EvasionTesting.is_allowed_by(&policy));
         assert!(OperationRisk::PostExploitation.is_allowed_by(&policy));
@@ -534,6 +551,10 @@ mod tests {
         assert_eq!(
             format!("{}", OperationRisk::ExploitAdjacent),
             "exploit adjacent"
+        );
+        assert_eq!(
+            format!("{}", OperationRisk::C2Operation),
+            "c2 operation"
         );
         assert_eq!(
             format!("{}", OperationRisk::AgentAutonomous),

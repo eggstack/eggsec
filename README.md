@@ -44,6 +44,7 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **Database Pentesting (lab)** | Direct Postgres/MySQL/MSSQL/MongoDB/Redis checks for authorized lab use (requires `--features db-pentest`; standalone defense-lab; dry-run always safe; real runs require `--allow-db-pentest`; advanced gated checks require `--allow-db-pentest-advanced`; local `DbPentestReport`/`DbFinding` + optional `to_scan_report_data_db` bridge via report convert; Phase 1–4: postgres/mysql/mssql + TUI tab + pipeline + advanced checks + correlation engine; Phase 5 (complete 2026-06-12): MongoDB + Redis engines (marker features `db-pentest-mongodb`, `db-pentest-redis`), compliance mapping (OWASP/PCI/HIPAA/SOC2), MCP opt-in (`db-pentest-mcp`); Phase 6 (complete 2026-06-14): baseline capture + regression comparison (`--baseline`, `--capture-baseline`, `--baseline-label`), MCP deepening (baseline ops, parameterized calls), extended compliance (NIST/ISO27001); see docs/DATABASE_PENTEST.md) |
 | **Evasion Detection (lab)** | Detect common defense evasion techniques (syscalls, hook bypass, obfuscation, injection, anti-analysis, traffic obfuscation) mapped to MITRE ATT&CK IDs with confidence scores (requires `--features evasion`; standalone defense-lab; dry-run always safe; real runs require explicit authorization; local `EvasionReport`/`EvasionDetection` + optional `to_scan_report_data` bridge via report convert; 16 built-in techniques across 6 categories; no MCP/agent/TUI/pipeline integration) |
 | **Post-Exploitation Simulation (lab)** | Simulate post-exploitation techniques for purple teaming (requires `--features postex`; standalone defense-lab; dry-run always safe; real runs require `--allow-postex` + scope; reversible actions in lab mode; MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access; local `PostexReport`/`PostexFinding` + optional `to_scan_report_data` bridge; no MCP/agent/TUI/pipeline integration) |
+| **C2 Framework (lab)** | Simulate C2 operations for defense validation and purple teaming (requires `--features c2`; depends on postex + evasion; standalone defense-lab; dry-run always safe; real runs require `--allow-c2`; MITRE ATT&CK profiles: APT29, Carbanak; beaconing, tasking, campaign orchestration, OPSEC scoring; local `C2Report`/`C2Campaign` + optional `to_scan_report_data` bridge; no MCP/agent/TUI/pipeline integration) |
 
 ## What Eggsec is not
 
@@ -288,6 +289,11 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 ./eggsec postex --target 10.0.0.5 --profile minimal --dry-run
 ./eggsec postex --category lotl --dry-run --json
 
+# C2 simulation (defense-lab; requires --features c2)
+./eggsec c2 --target 10.0.0.5 --dry-run --json
+./eggsec c2 --target 10.0.0.5 --campaign apt29 --dry-run
+./eggsec c2 --target 10.0.0.5 --campaign carbanak --dry-run -o c2-report.json
+
 # Web proxy / traffic interception (defense-lab; requires --features web-proxy)
 ./eggsec proxy-intercept --dry-run --json
 # TUI: launch eggsec-tui, navigate to Intercept tab, configure and press Enter for interactive flow inspection
@@ -319,6 +325,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec mobile <path.{apk,ipa}>` (or `eggsec mobile static ...`) | defense-lab (static) | Standalone static analysis of Android APKs and iOS IPAs (manifest, permissions, transport config, secrets, debug/backup/exported components, signing/provisioning). Pure-Rust offline on user-supplied lab binaries only. Feature-gated `mobile` (default/legacy static path). Policy via SafeActive + required_features:["mobile"]; local MobileScanReport/MobileFinding + optional to_scan_report_data bridge. Native `--json` auto-bridges for `eggsec report convert`. See docs/MOBILE.md (Integration section) and architecture/mobile.md. `eggsec mobile dynamic ...` requires `--features mobile-dynamic` (Phase 1: Android ADB core + runtime log analysis; Phase 2 closed 2026-06-12: proxy Level-1 + --traffic-capture + runtime permission grant/revoke/list + correlation; Phase 3/4a Frida + CorrelationEngine + baseline/regression/evidence bundles delivered 2026-06-12 under single mobile-dynamic; standalone defense-lab, MCP-absent; `to_scan_report_data_dynamic` bridge with `mobile-dynamic-*` + behavioral-regression + frida-* categories; auto-bridged in `report convert`; no TUI/pipeline/MCP). Design per `plans/dynamic-mobile-testing-loadout-design-plan.md`; Phase 1 per `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` (executed 2026-06-12); Phase 1 polish complete 2026-06-12 per `plans/mobile-dynamic-post-phase1-polish-and-phase2-planning.md` (executed); Phase 2 closed per closeout plan (executed); Phase 4a polish handoff executed per `plans/mobile-dynamic-phase4a-final-polish-handoff-plan.md`. Same pattern as wireless active. |
 | `eggsec evasion` | defense-lab | Detect common defense evasion techniques (16 built-in techniques across 6 categories: syscall, hook bypass, obfuscation, injection, anti-analysis, traffic obfuscation) mapped to MITRE ATT&CK IDs with confidence scores. Standalone defense-lab module (dry-run always safe; real runs require explicit authorization). Local `EvasionReport`/`EvasionDetection` + optional `to_scan_report_data` bridge via report convert. Feature-gated `evasion`. No MCP/agent/TUI/pipeline integration. |
 | `eggsec postex` | defense-lab | Simulate post-exploitation techniques for purple teaming (16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access) mapped to MITRE ATT&CK IDs. Standalone defense-lab module (dry-run always safe; real runs require `--allow-postex` + scope; reversible actions in lab mode). Local `PostexReport`/`PostexFinding` + optional `to_scan_report_data` bridge via report convert. Feature-gated `postex`. No MCP/agent/TUI/pipeline integration. |
+| `eggsec c2` | defense-lab | Simulate C2 operations for purple teaming (beaconing, tasking, campaign orchestration, OPSEC scoring; MITRE ATT&CK profiles: APT29, Carbanak). Standalone defense-lab module (dry-run always safe; real runs require `--allow-c2`; depends on postex + evasion features). Local `C2Report`/`C2Campaign` + optional `to_scan_report_data` bridge via report convert. Feature-gated `c2`. No MCP/agent/TUI/pipeline integration. |
 
 ## Build Features
 
@@ -349,6 +356,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `wireless-advanced` | Wireless active attack primitives (deauth, disassoc) for lab-only defense validation. Phase 1: targeted/broadcast deauth frame crafting and injection via `eggsec wireless <iface> deauth --bssid MAC [--client MAC] [--broadcast] [--count N]`. Pure-Rust 802.11 + radiotap + Linux AF_PACKET/SOCK_RAW. Policy gated (`OperationRisk::Intrusive` + `wireless-advanced` feature). Same standalone defense-lab pattern (no MCP/agent exposure). Requires `wireless` feature. Also powers the TUI Wireless tab active mode (dry-run default; live attacks prompt for policy confirmation). | Stable |
 | `evasion` | Evasion technique detection (MITRE ATT&CK mapped; 16 techniques across 6 categories: syscall, hook bypass, obfuscation, injection, anti-analysis, traffic obfuscation). Standalone defense-lab module; dry-run always safe; real runs require explicit authorization. Local `EvasionReport`/`EvasionDetection` + optional `to_scan_report_data` bridge. No MCP/agent/TUI/pipeline integration. | Stable |
 | `postex` | Post-exploitation and LOTL simulation for purple teaming (MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access). Standalone defense-lab module; dry-run always safe; real runs require `--allow-postex` + scope; reversible actions in lab mode. Local `PostexReport`/`PostexFinding` + optional `to_scan_report_data` bridge. No MCP/agent/TUI/pipeline integration. | Stable |
+| `c2` | C2 (Command & Control) framework for defense-lab purple teaming (depends on postex + evasion; beaconing, tasking, campaign orchestration, OPSEC scoring; MITRE ATT&CK profiles: APT29, Carbanak). Standalone defense-lab module; dry-run always safe; real runs require `--allow-c2`. Local `C2Report`/`C2Campaign` + optional `to_scan_report_data` bridge. No MCP/agent/TUI/pipeline integration. | Stable |
 | `pdf` | PDF report generation | Stable |
 | `advanced-hunting` | Advanced threat hunting | Stable |
 | `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |
@@ -386,6 +394,9 @@ cargo build --release -p eggsec-cli --features evasion
 
 # With post-exploitation simulation (defense-lab postex/LOTL simulation)
 cargo build --release -p eggsec-cli --features postex
+
+# With C2 framework (defense-lab C2 simulation; depends on postex + evasion)
+cargo build --release -p eggsec-cli --features c2
 
 # With web proxy MCP tools (requires web-proxy)
 cargo build --release -p eggsec-cli --features web-proxy-mcp

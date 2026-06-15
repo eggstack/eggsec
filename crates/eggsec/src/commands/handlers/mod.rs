@@ -33,6 +33,8 @@ pub mod evasion;
 pub mod web_proxy;
 #[cfg(feature = "postex")]
 pub mod postex;
+#[cfg(feature = "c2")]
+pub mod c2;
 pub use config::*;
 pub use doctor::*;
 pub use explain::*;
@@ -81,6 +83,8 @@ pub use evasion::*;
 pub use web_proxy::*;
 #[cfg(feature = "postex")]
 pub use postex::*;
+#[cfg(feature = "c2")]
+pub use c2::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -471,6 +475,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Evasion(args)) => handle_evasion(ctx, args).await,
         #[cfg(feature = "postex")]
         Some(Commands::Postex(args)) => handle_postex(ctx, args).await,
+        #[cfg(feature = "c2")]
+        Some(Commands::C2(args)) => handle_c2(ctx, args).await,
         #[cfg(feature = "mobile")]
         Some(Commands::Mobile(args)) => handle_mobile(ctx, args).await,
         #[cfg(feature = "db-pentest")]

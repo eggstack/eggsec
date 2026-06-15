@@ -32,6 +32,8 @@ pub mod evasion;
 pub mod web_proxy;
 #[cfg(feature = "postex")]
 pub mod postex;
+#[cfg(feature = "c2")]
+pub mod c2;
 
 pub use ci::*;
 pub use cluster::*;
@@ -69,6 +71,8 @@ pub use evasion::*;
 pub use web_proxy::*;
 #[cfg(feature = "postex")]
 pub use postex::*;
+#[cfg(feature = "c2")]
+pub use c2::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -394,6 +398,11 @@ pub enum Commands {
     #[cfg(feature = "postex")]
     #[command(about = "Simulate post-exploitation techniques for defense validation (defense-lab only)", long_about = POSTEX_ABOUT)]
     Postex(PostexArgs),
+
+    // --- C2 simulation operations ---
+    #[cfg(feature = "c2")]
+    #[command(about = "Simulate C2 operations for defense validation (defense-lab only)", long_about = C2_ABOUT)]
+    C2(C2Args),
 
     // --- Database pentesting operations (standalone defense-lab) ---
     #[cfg(feature = "db-pentest")]
