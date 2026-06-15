@@ -255,5 +255,11 @@ fn try_bridge_defense_lab(content: &str) -> Option<crate::output::convert::ScanR
             return Some(crate::db_pentest::to_scan_report_data_db(&d));
         }
     }
+    #[cfg(feature = "postex")]
+    {
+        if let Ok(p) = serde_json::from_str::<crate::postex::PostexReport>(content) {
+            return Some(crate::postex::to_scan_report_data(&p));
+        }
+    }
     None
 }

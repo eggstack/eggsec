@@ -140,6 +140,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 |--------|---------|------------------|
 | [`mobile/`](../crates/eggsec/src/mobile/) | Static analysis of Android APKs and iOS IPAs (Phase 1: pure-Rust manifest/config findings; SafeActive; standalone CLI + optional report bridge). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. | [mobile.md](mobile.md) |
 | [`db_pentest/`](../crates/eggsec/src/db_pentest/) | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP). Defense-lab only. TUI tab, native pipeline stage, evidence bundles. | [database_pentest.md](database_pentest.md) |
+| [`postex/`](../crates/eggsec/src/postex/) | Post-exploitation and LOTL simulation for purple teaming (MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access). Defense-lab only; dry-run always safe. | [postex.md](postex.md) |
 
 ### Integration & External Services
 
@@ -423,6 +424,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `pdf` | `output/pdf` | PDF report generation |
 | `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
 | `db-pentest` | `db_pentest/` | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP via `db-pentest-mcp` marker). Defense-lab only. TUI tab + native pipeline stage. |
+| `postex` | `postex/` | Post-exploitation and LOTL simulation for purple teaming (MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access). Defense-lab only; dry-run always safe; real requires `--allow-postex`. |
 | `web-proxy` | `proxy/intercept/` | Standalone defense-lab MITM web proxy for HTTP/HTTPS/WebSocket/HTTP2/gRPC traffic interception. Dry-run always safe; real interception requires `--allow-web-proxy` + policy. TUI `Tab::Intercept` (interactive flow inspection, editing, HAR export, manipulation audit trail). |
 | `web-proxy-mcp` | `proxy/mcp.rs` | Optional MCP tool exposure for web proxy (12 tools: list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle). Marker feature; requires `web-proxy`. |
 | `full` | All | All features combined |

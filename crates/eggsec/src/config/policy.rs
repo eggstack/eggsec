@@ -17,6 +17,7 @@ pub enum OperationRisk {
     DbPentest,
     TrafficInterception,
     EvasionTesting,
+    PostExploitation,
     ExploitAdjacent,
     RemoteExecution,
     AgentAutonomous,
@@ -65,6 +66,11 @@ pub struct ExecutionPolicy {
     #[serde(default)]
     pub allow_evasion_testing: bool,
 
+    /// Allow post-exploitation and LOTL simulation (defense-lab only).
+    /// Standalone defense-lab surface; requires explicit --allow-postex for non-dry runs.
+    #[serde(default)]
+    pub allow_post_exploitation: bool,
+
     #[serde(default)]
     pub allow_exploit_adjacent: bool,
 
@@ -105,6 +111,7 @@ impl Default for ExecutionPolicy {
             allow_exploit_adjacent: false,
             allow_remote_execution: false,
             allow_evasion_testing: false,
+            allow_post_exploitation: false,
             allow_agent_autonomous: false,
             max_risk_without_confirm: OperationRisk::SafeActive,
             allowed_capabilities: Vec::new(),
@@ -127,6 +134,7 @@ impl OperationRisk {
             Self::TrafficInterception => policy.allow_traffic_interception,
             Self::ExploitAdjacent => policy.allow_exploit_adjacent,
             Self::EvasionTesting => policy.allow_evasion_testing,
+            Self::PostExploitation => policy.allow_post_exploitation,
             Self::RemoteExecution => policy.allow_remote_execution,
             Self::AgentAutonomous => policy.allow_agent_autonomous,
         }
@@ -147,6 +155,7 @@ impl std::fmt::Display for OperationRisk {
             Self::TrafficInterception => write!(f, "traffic interception"),
             Self::ExploitAdjacent => write!(f, "exploit adjacent"),
             Self::EvasionTesting => write!(f, "evasion testing"),
+            Self::PostExploitation => write!(f, "post-exploitation"),
             Self::RemoteExecution => write!(f, "remote execution"),
             Self::AgentAutonomous => write!(f, "agent autonomous"),
         }
@@ -491,6 +500,7 @@ mod tests {
         policy.allow_remote_execution = true;
         policy.allow_agent_autonomous = true;
         policy.allow_evasion_testing = true;
+        policy.allow_post_exploitation = true;
         assert!(OperationRisk::Intrusive.is_allowed_by(&policy));
         assert!(OperationRisk::LoadTest.is_allowed_by(&policy));
         assert!(OperationRisk::StressTest.is_allowed_by(&policy));
@@ -499,6 +509,7 @@ mod tests {
         assert!(OperationRisk::ExploitAdjacent.is_allowed_by(&policy));
         assert!(OperationRisk::RemoteExecution.is_allowed_by(&policy));
         assert!(OperationRisk::EvasionTesting.is_allowed_by(&policy));
+        assert!(OperationRisk::PostExploitation.is_allowed_by(&policy));
         assert!(OperationRisk::AgentAutonomous.is_allowed_by(&policy));
     }
 

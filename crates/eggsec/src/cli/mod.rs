@@ -30,6 +30,8 @@ pub mod db_pentest;
 pub mod evasion;
 #[cfg(feature = "web-proxy")]
 pub mod web_proxy;
+#[cfg(feature = "postex")]
+pub mod postex;
 
 pub use ci::*;
 pub use cluster::*;
@@ -65,6 +67,8 @@ pub use evasion::*;
 
 #[cfg(feature = "web-proxy")]
 pub use web_proxy::*;
+#[cfg(feature = "postex")]
+pub use postex::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -385,6 +389,11 @@ pub enum Commands {
     #[cfg(feature = "evasion")]
     #[command(about = "Validate detection of common evasion techniques (defense-lab only)", long_about = EVASION_ABOUT)]
     Evasion(EvasionArgs),
+
+    // --- Post-exploitation simulation operations ---
+    #[cfg(feature = "postex")]
+    #[command(about = "Simulate post-exploitation techniques for defense validation (defense-lab only)", long_about = POSTEX_ABOUT)]
+    Postex(PostexArgs),
 
     // --- Database pentesting operations (standalone defense-lab) ---
     #[cfg(feature = "db-pentest")]
