@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- C2 (Command & Control) framework under `c2` feature (`postex` + `evasion` dependencies)
+  - `C2Scanner` with dry-run and defense-lab simulation
+  - `C2Campaign` with APT29, Carbanak/FIN7, and generic profiles
+  - Beacon protocol simulation (HTTP/S, DNS, TCP)
+  - Task queue with MITRE ATT&CK technique mapping
+  - Agent lifecycle (register, check-in, task dispatch, self-destruct)
+  - Postex integration: LOTL, lateral, credential, persistence techniques mapped to C2 tasks
+  - Attack graph generation with critical path analysis
+  - Campaign timeline with sequential phase events
+  - OPSEC scoring and findings
+  - `to_scan_report_data()` bridge (auto-detected in `report convert`)
+  - Policy: `C2Operation` risk tier, `allow_c2` flag, `--allow-c2` CLI gate
+  - 44 unit tests; all green
+- `architecture/c2.md` documentation
+
 ### Fixed
 
 - Fixed broken import paths in test files (`recon_tests.rs`)

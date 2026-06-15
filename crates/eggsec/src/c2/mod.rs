@@ -10,6 +10,7 @@
 //! Real execution requires explicit `--allow-c2` policy flag.
 //! Standalone defense-lab surface. No MCP/agent/TUI/pipeline integration.
 
+pub mod agent;
 pub mod beacon;
 pub mod campaign;
 pub mod opsec;
@@ -29,6 +30,10 @@ pub struct C2Report {
     pub summary: C2Summary,
     pub timestamp: String,
     pub dry_run: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attack_graph: Option<campaign::AttackGraph>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeline: Option<campaign::CampaignTimeline>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +52,13 @@ pub struct CampaignPhase {
     pub description: String,
     pub mitre_techniques: Vec<String>,
     pub order: u32,
+}
+
+impl CampaignPhase {
+    /// Returns the MITRE technique IDs (same as `mitre_techniques`).
+    pub fn mitre_technique_ids(&self) -> Vec<String> {
+        self.mitre_techniques.clone()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,6 +317,17 @@ impl C2Scanner {
             opsec_max: opsec_assessment.max_score,
         };
 
+        let attack_graph = Some(campaign::build_attack_graph(
+            &self.campaign.id,
+            &self.campaign.name,
+            &self.campaign.phases,
+        ));
+        let timeline = Some(campaign::build_timeline(
+            &self.campaign.id,
+            &self.campaign.name,
+            &self.campaign.phases,
+        ));
+
         Ok(C2Report {
             target: target.to_string(),
             campaign: self.campaign.clone(),
@@ -314,6 +337,8 @@ impl C2Scanner {
             summary,
             timestamp,
             dry_run: self.dry_run,
+            attack_graph,
+            timeline,
         })
     }
 
@@ -519,6 +544,34 @@ pub async fn run_cli(
             ));
         }
         buf.push('\n');
+
+        // Attack graph critical path
+        if let Some(ref graph) = report.attack_graph {
+            buf.push_str(&format!(
+                "Attack Graph: {} nodes, critical path: {}\n",
+                graph.nodes.len(),
+                graph.critical_path.join(" -> ")
+            ));
+            buf.push('\n');
+        }
+
+        // Timeline summary
+        if let Some(ref timeline) = report.timeline {
+            buf.push_str(&format!(
+                "Timeline: {} phases, {} techniques\n",
+                timeline.total_phases, timeline.total_techniques
+            ));
+            for entry in &timeline.entries {
+                buf.push_str(&format!(
+                    "  [{}] Phase {}: {} ({})\n",
+                    &entry.timestamp[11..19],
+                    entry.phase_order,
+                    entry.technique_id,
+                    entry.phase_name
+                ));
+            }
+            buf.push('\n');
+        }
 
         for beacon in &report.beacon_results {
             let status = if beacon.success { "OK" } else { "FAIL" };
@@ -727,6 +780,8 @@ mod tests {
             },
             timestamp: "2024-01-01T00:00:00Z".to_string(),
             dry_run: true,
+            attack_graph: None,
+            timeline: None,
         };
         let bridge = to_scan_report_data(&report);
         assert_eq!(bridge.target, "test-target");
@@ -763,6 +818,8 @@ mod tests {
             },
             timestamp: "2024-01-01T00:00:00Z".to_string(),
             dry_run: true,
+            attack_graph: None,
+            timeline: None,
         };
         let bridge = to_scan_report_data(&report);
         // Only the summary finding
@@ -798,6 +855,8 @@ mod tests {
             },
             timestamp: "2024-01-01T00:00:00Z".to_string(),
             dry_run: true,
+            attack_graph: None,
+            timeline: None,
         };
         let json = serde_json::to_string(&report).unwrap();
         let deserialized: C2Report = serde_json::from_str(&json).unwrap();
