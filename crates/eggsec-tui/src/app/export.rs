@@ -46,6 +46,8 @@ impl super::App {
             super::tabs::Tab::Auth => "auth_results",
             #[cfg(feature = "c2")]
             super::tabs::Tab::C2 => "c2_results",
+            #[cfg(not(feature = "c2"))]
+            super::tabs::Tab::C2 => "c2_results",
             #[cfg(feature = "db-pentest")]
             super::tabs::Tab::DbPentest => "db_pentest_results",
             #[cfg(not(feature = "db-pentest"))]
@@ -167,6 +169,12 @@ impl super::App {
             #[cfg(feature = "c2")]
             super::tabs::Tab::C2 => {
                 let msg = "C2 tab: use CLI export (eggsec c2 --json -o report.json)".to_string();
+                self.overlay.notification =
+                    Some(Notification::new(msg, NotificationSeverity::Warning));
+            }
+            #[cfg(not(feature = "c2"))]
+            super::tabs::Tab::C2 => {
+                let msg = "C2 tab: requires c2 feature".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }
