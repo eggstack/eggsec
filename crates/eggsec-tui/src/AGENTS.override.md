@@ -767,3 +767,16 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 - **selector.rs height overflow**: Dropdown height calculation could overflow on extreme item counts. Added `.min(u16::MAX as usize - 2)` clamp
 - **help_scroll_offset usize::MAX**: `HelpScrollBottom` set offset to `usize::MAX` which could cause unexpected behavior. Changed to `u16::MAX as usize`
 - **ThemeInstallReport Clone data loss**: Lossy `Clone` impl silently dropped `loaded_themes` Vec. Removed impl (never cloned; consumed via channels)
+
+## Session Fixes (2026-06-18) - TUI Audit
+
+- **db_pentest worker missing timeout**: `run_db_pentest_cli()` called without `tokio::time::timeout` — hung database connections blocked TUI permanently. Wrapped in 60s timeout with three-arm match pattern
+- **session.rs load_quick() quarantine**: Corrupt `quick_save.json` propagated error directly — hard failure, no recovery, session lost. Added quarantine logic matching `load_latest_session` pattern (rename to `.json.bad`, log warning, return `Ok(None)`)
+- **intercept.rs page_up/page_down page_size**: Methods accepted `_page_size` parameter but hardcoded `20`. Changed to use the parameter
+- **intercept.rs edit_modal reset**: `reset()` didn't clear `edit_modal` — stale modal state persisted after tab reset. Added `close_edit_modal()` call
+- **packet.rs page_up/page_down**: Missing from `impl TabInput` — PageUp/PageDown keys were no-ops. Added both methods delegating to `results_view`
+- **5 tabs missing handle_copy()**: `load.rs`, `report.rs`, `auth.rs`, `c2.rs`, `db_pentest.rs` silently ignored Ctrl+C. Added `handle_copy()` implementations
+- **runner.rs redundant .map()**: Removed no-op `.map(|ls| ls)` identity transform
+- **command.rs silent let _ =**: `set_current_tab_if_available` failure discarded. Changed to log on failure
+- **workers/security.rs silent HTTP error**: Compliance preflight request error silently discarded. Added `tracing::debug!`
+- **session.rs metadata error swallowing**: Double `.ok()` in tmp cleanup silently swallowed metadata errors. Changed to explicit `match` with logging

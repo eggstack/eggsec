@@ -884,6 +884,20 @@ impl TabInput for PacketTab {
         }
     }
 
+    fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.page_down(page_size);
+    }
+
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
     }

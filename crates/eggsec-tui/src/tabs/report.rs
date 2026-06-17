@@ -742,6 +742,17 @@ impl TabInput for ReportTab {
         }
     }
 
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
+        match self.focus_area {
+            ReportFocusArea::Inputs => self.current_inputs().get_focused_value(),
+            ReportFocusArea::Results => Some(self.results_view.get_content()),
+            _ => None,
+        }
+    }
+
     fn page_up(&mut self, page_size: usize) {
         if self.is_running() {
             return;

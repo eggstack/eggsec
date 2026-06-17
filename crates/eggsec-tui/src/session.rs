@@ -121,9 +121,27 @@ impl SessionManager {
         if !path.exists() {
             return Ok(None);
         }
-        let content = fs::read_to_string(&path)?;
-        let state: SessionState = serde_json::from_str(&content)?;
-        Ok(Some(state))
+        match fs::read_to_string(&path)
+            .and_then(|s| serde_json::from_str::<SessionState>(&s).map_err(|e| e.into()))
+        {
+            Ok(state) => Ok(Some(state)),
+            Err(e) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "quick_save.json is corrupt; quarantining"
+                );
+                let quarantine = path.with_extension("json.bad");
+                if let Err(e) = fs::rename(&path, &quarantine) {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %e,
+                        "failed to quarantine corrupt quick_save.json"
+                    );
+                }
+                Ok(None)
+            }
+        }
     }
 
     pub fn load_latest_session(&self) -> anyhow::Result<Option<SessionState>> {
@@ -189,15 +207,24 @@ impl SessionManager {
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().ends_with(".json.tmp"))
             {
-                if let Some(modified) = entry.metadata().ok().and_then(|m| m.modified().ok()) {
-                    if modified.elapsed().unwrap_or_default() > Duration::from_secs(3600) {
-                        if let Err(e) = fs::remove_file(&path) {
-                            tracing::debug!(
-                                path = %path.display(),
-                                error = %e,
-                                "failed to remove orphaned temp session file"
-                            );
-                        }
+                let modified = match entry.metadata().and_then(|m| m.modified()) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        tracing::debug!(
+                            path = %path.display(),
+                            error = %e,
+                            "failed to read metadata for temp session file"
+                        );
+                        continue;
+                    }
+                };
+                if modified.elapsed().unwrap_or_default() > Duration::from_secs(3600) {
+                    if let Err(e) = fs::remove_file(&path) {
+                        tracing::debug!(
+                            path = %path.display(),
+                            error = %e,
+                            "failed to remove orphaned temp session file"
+                        );
                     }
                 }
             }

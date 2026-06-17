@@ -806,6 +806,17 @@ impl TabInput for LoadTab {
         self.results_view.page_down(page_size);
     }
 
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
+        match self.focus_area {
+            LoadFocusArea::Inputs => self.inputs.get_focused_value(),
+            LoadFocusArea::Results => Some(self.results_view.get_content()),
+            _ => None,
+        }
+    }
+
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
     }

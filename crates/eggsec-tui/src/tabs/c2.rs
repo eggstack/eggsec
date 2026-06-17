@@ -359,6 +359,16 @@ impl TabInput for C2Tab {
         }
     }
 
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
+        match self.focus_area {
+            C2FocusArea::Results => Some(self.results.clone()),
+            _ => self.inputs.get_focused_value(),
+        }
+    }
+
     fn is_input_focused(&self) -> bool {
         !matches!(self.focus_area, C2FocusArea::Results)
     }

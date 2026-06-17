@@ -146,7 +146,9 @@ impl super::App {
             }
             "jump-active" => {
                 if let Some(t) = self.active_task_tab() {
-                    let _ = self.set_current_tab_if_available(t);
+                    if !self.set_current_tab_if_available(t) {
+                        tracing::debug!("Failed to jump to active task tab");
+                    }
                 } else {
                     self.overlay.notification = Some(super::notifications::Notification::new(
                         "No active task to jump to".to_string(),

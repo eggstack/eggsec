@@ -2112,6 +2112,7 @@ impl TabState for InterceptTab {
         self.selected_http2_session = 0;
         self.selected_grpc_session = 0;
         self.stream_mux_scroll = 0;
+        self.close_edit_modal();
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -2516,10 +2517,10 @@ impl TabInput for InterceptTab {
         }
     }
 
-    fn page_up(&mut self, _page_size: usize) {
+    fn page_up(&mut self, page_size: usize) {
         if !self.is_running() && self.focus_area == InterceptFocusArea::FlowList {
             let i = self.selected_flow.unwrap_or(0);
-            let new_i = i.saturating_sub(20);
+            let new_i = i.saturating_sub(page_size);
             self.selected_flow = Some(new_i);
             self.table_state.select(Some(new_i));
             if new_i < self.scroll_offset {
@@ -2528,10 +2529,10 @@ impl TabInput for InterceptTab {
         }
     }
 
-    fn page_down(&mut self, _page_size: usize) {
+    fn page_down(&mut self, page_size: usize) {
         if !self.is_running() && self.focus_area == InterceptFocusArea::FlowList {
             let i = self.selected_flow.unwrap_or(0);
-            let new_i = (i + 20).min(self.flows.len().saturating_sub(1));
+            let new_i = (i + page_size).min(self.flows.len().saturating_sub(1));
             self.selected_flow = Some(new_i);
             self.table_state.select(Some(new_i));
             let viewport = self.visible_flows_len().max(1);

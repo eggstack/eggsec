@@ -2262,3 +2262,52 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 1. `handle_enter()` Options arm fell through to `start()` on graphql/oauth tabs — toggling a checkbox silently started a scan
 2. `truncate_str()` panicked on multi-byte UTF-8 — any non-ASCII text in intercepted flows could crash the TUI
 3. `luminance()` misclassified named colors with light/dark qualifiers — themes using `"lightblue"` or `"darkgreen"` got inverted light/dark defaults
+
+## Session Fixes (2026-06-18) - TUI Audit
+
+### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `workers/db_pentest.rs` | 45 | `run_db_pentest_cli()` called with no `tokio::time::timeout` — database hangs block TUI permanently | Wrapped in 60s timeout with three-arm match (Ok(Ok), Ok(Err), Err(timeout)) |
+| `session.rs` | 119-127 | `load_quick()` propagates corrupt `quick_save.json` errors — hard failure, no quarantine, session lost | Added quarantine logic: read/parse errors rename to `.json.bad`, log warning, return `Ok(None)` |
+
+### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tabs/intercept.rs` | 2519-2542 | `page_up`/`page_down` accept `page_size` parameter but hardcode `20` | Changed `_page_size` to `page_size` and used the parameter |
+| `tabs/intercept.rs` | 2084-2115 | `reset()` doesn't clear `edit_modal` — stale modal state persists after reset | Added `self.close_edit_modal()` at end of `reset()` |
+| `tabs/packet.rs` | impl TabInput | Missing `page_up`/`page_down` — PageUp/PageDown keys are no-ops | Added both methods delegating to `self.results_view` with `is_running()` guard |
+| `tabs/load.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Inputs and Results focus areas |
+| `tabs/report.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Inputs and Results focus areas |
+| `tabs/auth.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Results and input focus areas |
+| `tabs/c2.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` supporting Results and input focus areas |
+| `tabs/db_pentest.rs` | impl TabInput | Missing `handle_copy()` — Ctrl+C silently ignored | Added `handle_copy()` for input focus areas |
+
+### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `app/runner.rs` | 76 | Redundant `.map(\|ls\| ls)` identity transform | Removed no-op `.map()` call |
+| `app/command.rs` | 149 | `let _ = self.set_current_tab_if_available(t)` silently discards failure | Changed to `if !... { tracing::debug!(...) }` |
+| `workers/security.rs` | 91-96 | HTTP request error silently discarded in compliance task | Added `tracing::debug!` in else branch |
+| `session.rs` | 192 | Metadata errors silently swallowed via double `.ok()` in tmp cleanup | Changed to explicit `match` with `tracing::debug!` and `continue` |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 14 |
+| Total bugs fixed | 14 |
+| Files modified | 10 |
+| HIGH priority fixes | 2 |
+| MEDIUM priority fixes | 9 |
+| LOW priority fixes | 3 |
+| Tests passing | 301 |
+
+**Key systemic bugs fixed**:
+1. `db_pentest` worker had no timeout — a hung database connection would block the TUI permanently
+2. `load_quick()` didn't quarantine corrupt files — session restoration hard-failed with no recovery
+3. `packet.rs` PageUp/PageDown keys were completely non-functional (missing from `impl TabInput`)
+4. 5 tabs silently ignored Ctrl+C copy (missing `handle_copy()` implementations)

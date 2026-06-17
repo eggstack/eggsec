@@ -73,7 +73,6 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         });
     let loaded_scope = if let Some(ref sp) = scope_path_opt {
         eggsec::config::load_scope_with_source(Some(sp))
-            .map(|ls| ls)
             .unwrap_or_else(|_| {
                 eggsec::config::load_scope_with_source(None)
                     .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty().into())

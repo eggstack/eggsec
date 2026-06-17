@@ -200,6 +200,7 @@ pub async fn run_compliance_task(
             findings.push(Severity::Medium);
         }
     } else {
+        tracing::debug!("Compliance preflight request to {} failed", target);
         findings.push(Severity::High);
     }
 
