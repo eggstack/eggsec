@@ -311,7 +311,7 @@ impl TabInput for AuthTab {
             return;
         }
         self.inputs.blur();
-        self.focus_area = AuthFocusArea::Results;
+        self.focus_area = AuthFocusArea::Target;
         self.sync_input_focus();
     }
 

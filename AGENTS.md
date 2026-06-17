@@ -368,6 +368,21 @@ No remaining stub implementations.
 - **Session cleanup perf**: Changed `sessions.remove(0)` O(n) to `swap_remove(0)` O(1) in `session.rs`
 - **Dead code cleanup**: Removed empty `if is_advanced {}` block, `let _ = d` PolicyDecision discard, stale `#[allow(unused_variables)]`, and redundant `#[cfg(feature)]` pairs in `app/export.rs`
 
+### Session Fixes (2026-06-17) - Deep Audit
+
+- **UTF-8 panic fix**: `ui/shell.rs:201,341` used byte-offset slicing which panics on multi-byte characters. Changed to character-aware truncation
+- **handle_enter() scan-from-input**: `graphql.rs`, `oauth.rs`, `cluster.rs` started scans when Enter pressed in input fields (blurred without returning). Added `return;` after blur. `wireless.rs` added Results focus area guard
+- **Theme loader luminance()**: Named colors like "black" were misclassified as Light mode. Extended to handle named colors
+- **Theme loader has_any_color**: Check omitted `buttons` section — added guard
+- **db_pentest handle_left/right**: Missing `is_running()` guard — added
+- **proxy page_up/page_down**: Ignored `page_size` param, hardcoded 20. Fixed to use parameter
+- **graphql/oauth page_up/page_down**: Missing overrides — PageUp/PageDown were non-functional. Added delegates
+- **auth handle_escape**: Transitions to Results instead of Target. Fixed
+- **runner.rs config error**: `.ok()` silently swallowed parse errors. Changed to `match` with `tracing::warn!`
+- **workers/auth.rs**: Dead `if let Some(ref cred_file)` block removed
+- **help_config.rs**: Stale Ctrl+T description "Cycle built-in theme" → "Cycle theme"
+- **Dead code cleanup**: Removed stale `#[allow(dead_code)]` on `InputField.label`, replaced blanket `#[allow(dead_code)]` on Popup impl with per-method annotations
+
 ### Active Wireless Reporting Bridge (2026-06-12)
 
 - **Bridge function**: `to_active_scan_report_data()` in `wireless/active/mod.rs` bridges `ActiveWirelessAttackResult` → `ScanReportData` with `wireless-active-*` finding categories (deauth, disassoc, etc.).

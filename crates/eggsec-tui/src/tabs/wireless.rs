@@ -687,6 +687,9 @@ impl TabInput for WirelessTab {
         if self.is_running() {
             return;
         }
+        if self.focus_area == WirelessFocusArea::Results {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.blur();
             return;

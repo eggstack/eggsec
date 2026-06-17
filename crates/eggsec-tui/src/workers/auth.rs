@@ -27,10 +27,6 @@ pub async fn run_auth_task(
         .unwrap_or_default();
     engine.load_wordlists(usernames, passwords);
 
-    if let Some(ref cred_file) = credential_file {
-        let _ = cred_file;
-    }
-
     let report = match tokio::time::timeout(
         std::time::Duration::from_secs(timeout * 8),
         engine.run_full_test(&target),

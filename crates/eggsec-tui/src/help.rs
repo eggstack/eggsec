@@ -4,6 +4,8 @@ use std::sync::Arc;
 use crate::utils::fuzzy::fuzzy_score;
 use crate::Tab;
 
+/// Context for help content rendering. Currently only `Normal` is used;
+/// reserved for future use (e.g. context-sensitive help for different modes).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HelpContext {
     Normal,

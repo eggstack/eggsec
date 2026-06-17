@@ -197,8 +197,8 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
                 let (c_text, c_color) = get_preflight_status(app, theme, true, use_very_compact);
                 status_text = c_text;
                 status_color = c_color;
-            } else if status_text.len() > 45 {
-                status_text = format!("{}…", &status_text[..42]);
+            } else if status_text.chars().count() > 45 {
+                status_text = format!("{}…", status_text.chars().take(42).collect::<String>());
             }
         }
     }
@@ -337,8 +337,8 @@ fn get_preflight_status(
         .as_ref()
         .and_then(|d| d.target.clone())
         .unwrap_or_default();
-    let target_short = if target.len() > 28 {
-        format!("{}…", &target[..25])
+    let target_short = if target.chars().count() > 28 {
+        format!("{}…", target.chars().take(25).collect::<String>())
     } else {
         target.clone()
     };

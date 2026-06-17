@@ -43,7 +43,13 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 
     let history = state::create_shared_history();
     let mut app = App::new(history);
-    let loaded_config = eggsec::config::load_config(config_path.as_deref()).ok();
+    let loaded_config = match eggsec::config::load_config(config_path.as_deref()) {
+        Ok(c) => Some(c),
+        Err(e) => {
+            tracing::warn!("Failed to load TUI config: {e}");
+            None
+        }
+    };
     if let Some(ref config) = loaded_config {
         app.tabs.settings.load_config(config);
         app.session_manager.config = crate::session::SessionConfig::default()

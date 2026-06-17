@@ -737,3 +737,18 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 - **page_up/page_down guard**: `cluster.rs:732-738` missing `is_running()` guard; added
 - **Session cleanup perf**: `session.rs:248` `sessions.remove(0)` O(n) changed to `swap_remove(0)` O(1)
 - **Dead code cleanup**: Empty `if is_advanced {}` block in `app/mod.rs:485-487` removed; `let _ = d` PolicyDecision discard at `app/mod.rs:973` removed; stale `#[allow(unused_variables)]` in `workers/recon.rs:5` removed; redundant `#[cfg(feature)]`/`#[cfg(not(feature))]` pairs in `app/export.rs` collapsed
+
+## Session Fixes (2026-06-17) - Deep Audit
+
+- **UTF-8 panic fix**: `ui/shell.rs:201,341` used byte-offset slicing (`&status_text[..42]`, `&target[..25]`) which panics on multi-byte characters. Changed to character-aware truncation via `.chars().take(N).collect::<String>()`
+- **handle_enter() scan-from-input**: `graphql.rs:459`, `oauth.rs:508`, `cluster.rs:573` all started scans when Enter was pressed in input fields (Inputs arm blurred but didn't return). Added `return;` after blur. `wireless.rs:690` added Results focus area early return guard
+- **Theme loader luminance()**: Named colors like "black" returned 0.5 (neutral), incorrectly classified as Light mode. Extended `luminance()` to handle named colors
+- **Theme loader has_any_color**: Check omitted `buttons` section — added `|| halloy.buttons.is_some()`
+- **db_pentest handle_left/right**: Missing `is_running()` guard — added
+- **proxy page_up/page_down**: Ignored `page_size` parameter, hardcoded 20. Changed to use parameter
+- **graphql/oauth page_up/page_down**: Missing overrides — PageUp/PageDown were non-functional. Added delegates to `results_view`
+- **auth handle_escape**: Transitions to Results instead of Target. Fixed to Target
+- **runner.rs config error**: `.ok()` silently swallowed parse errors. Changed to `match` with `tracing::warn!`
+- **workers/auth.rs**: Dead `if let Some(ref cred_file)` block removed
+- **help_config.rs**: Stale Ctrl+T description "Cycle built-in theme" → "Cycle theme"
+- **Dead code cleanup**: Removed stale `#[allow(dead_code)]` on `InputField.label` (is used), replaced blanket `#[allow(dead_code)]` on Popup impl with per-method annotations, added `#[allow(dead_code)]` on unused PopupKind variants, added doc comment on HelpContext placeholder

@@ -113,33 +113,46 @@ fn parse_color_or(s: &Option<String>, default: Color) -> Color {
     s.as_deref().and_then(parse_hex_color).unwrap_or(default)
 }
 
-fn luminance(hex: &str) -> f64 {
-    let Some(hex) = hex.strip_prefix('#') else {
-        return 0.5;
-    };
-    // Expand 3-char shorthand hex (#FFF -> #FFFFFF) before parsing
-    let hex = if hex.len() == 3 {
-        let mut expanded = String::with_capacity(6);
-        for ch in hex.chars() {
-            expanded.push(ch);
-            expanded.push(ch);
+fn luminance(color: &str) -> f64 {
+    if let Some(hex) = color.strip_prefix('#') {
+        // Expand 3-char shorthand hex (#FFF -> #FFFFFF) before parsing
+        let hex = if hex.len() == 3 {
+            let mut expanded = String::with_capacity(6);
+            for ch in hex.chars() {
+                expanded.push(ch);
+                expanded.push(ch);
+            }
+            expanded
+        } else {
+            hex.to_string()
+        };
+        if hex.len() < 6 {
+            return 0.5;
         }
-        expanded
-    } else {
-        hex.to_string()
-    };
-    if hex.len() < 6 {
-        return 0.5;
+        let parse = |start: usize| -> f64 {
+            u8::from_str_radix(&hex[start..start + 2], 16)
+                .map(|v| v as f64 / 255.0)
+                .unwrap_or(0.0)
+        };
+        let r = parse(0);
+        let g = parse(2);
+        let b = parse(4);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     }
-    let parse = |start: usize| -> f64 {
-        u8::from_str_radix(&hex[start..start + 2], 16)
-            .map(|v| v as f64 / 255.0)
-            .unwrap_or(0.0)
-    };
-    let r = parse(0);
-    let g = parse(2);
-    let b = parse(4);
-    0.2126 * r + 0.7152 * g + 0.0722 * b
+    match color.to_ascii_lowercase().as_str() {
+        "black" => 0.0,
+        "white" => 1.0,
+        "red" | "darkred" | "lightred" => 0.3,
+        "green" | "darkgreen" | "lightgreen" => 0.5,
+        "blue" | "darkblue" | "lightblue" => 0.3,
+        "yellow" | "lightyellow" => 0.8,
+        "orange" | "darkorange" => 0.6,
+        "gray" | "grey" | "darkgray" | "darkgrey" => 0.35,
+        "lightgray" | "lightgrey" | "silver" => 0.75,
+        "cyan" | "darkcyan" | "lightcyan" => 0.6,
+        "magenta" | "purple" => 0.4,
+        _ => 0.5,
+    }
 }
 
 fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, ThemeLoadError> {
@@ -152,6 +165,7 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
     let has_any_color = bg_hex.is_some()
         || halloy.text.is_some()
         || halloy.buffer.is_some()
+        || halloy.buttons.is_some()
         || halloy.general.as_ref().is_some_and(|g| {
             g.border.is_some() || g.horizontal_rule.is_some() || g.unread_indicator.is_some()
         });

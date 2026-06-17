@@ -15,7 +15,6 @@ pub struct ValidationResult {
 }
 
 pub struct InputField {
-    #[allow(dead_code)]
     pub label: String,
     pub value: String,
     pub focused: bool,

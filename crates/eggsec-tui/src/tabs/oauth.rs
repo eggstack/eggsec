@@ -498,6 +498,20 @@ impl TabInput for OAuthTab {
         self.focus_area = OAuthFocusArea::Results;
     }
 
+    fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.scroll_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.scroll_down(page_size);
+    }
+
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
@@ -506,6 +520,7 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             OAuthFocusArea::Inputs => {
                 self.inputs.blur();
+                return;
             }
             OAuthFocusArea::Options => {
                 let checkboxes = [

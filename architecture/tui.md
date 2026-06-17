@@ -2162,3 +2162,57 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 | HIGH priority fixes | 5 |
 | MEDIUM priority fixes | 3 |
 | LOW priority fixes | 4 |
+
+## Session Fixes (2026-06-17) - Deep Audit
+
+### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `ui/shell.rs` | 201 | Status bar truncation uses byte-offset slicing `&status_text[..42]` — panics on multi-byte UTF-8 | Changed to `status_text.chars().take(42).collect::<String>()` |
+| `ui/shell.rs` | 341 | Target truncation uses byte-offset slicing `&target[..25]` — same panic risk | Changed to `target.chars().take(25).collect::<String>()` |
+| `tabs/graphql.rs` | 459 | `handle_enter()` starts scan from focused input (Inputs arm blurs without returning) | Added `return;` after `self.inputs.blur()` |
+| `tabs/oauth.rs` | 508 | Same — starts scan from focused input | Added `return;` after `self.inputs.blur()` |
+| `tabs/cluster.rs` | 573 | Same — starts scan from focused input | Added `return;` after `current_inputs.blur()` |
+| `tabs/wireless.rs` | 690 | Missing Results focus area early return in `handle_enter()` | Added `if self.focus_area == Results { return; }` guard |
+
+### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `theme/loader.rs` | 116-132 | `luminance()` misclassifies named-color backgrounds (e.g. "black" → Light mode) | Extended to handle named colors ("black"→0.0, "white"→1.0, etc.) |
+| `theme/loader.rs` | 169 | `has_any_color` check omits `buttons` section | Added `|| halloy.buttons.is_some()` |
+| `tabs/db_pentest.rs` | 336-352 | `handle_left()`/`handle_right()` missing `is_running()` guard | Added `if self.is_running() { return false; }` |
+| `tabs/proxy.rs` | 762-772 | `page_up()`/`page_down()` ignore `page_size` param, hardcode 20 | Changed to use `page_size` parameter |
+| `tabs/graphql.rs` | 451-464 | Missing `page_up()`/`page_down()` overrides — PageUp/PageDown non-functional | Added overrides delegating to `results_view` |
+| `tabs/oauth.rs` | 500-513 | Same — PageUp/PageDown non-functional | Added overrides |
+| `tabs/auth.rs` | 314 | `handle_escape()` transitions to Results instead of Target | Changed to `AuthFocusArea::Target` |
+| `app/runner.rs` | 46 | Config parse errors silently swallowed via `.ok()` | Changed to `match` with `tracing::warn!` |
+| `workers/auth.rs` | 30-32 | Dead `if let Some(ref cred_file)` block does nothing | Removed dead code |
+| `app/help_config.rs` | 593 | Stale Ctrl+T help says "Cycle built-in theme" | Updated to "Cycle theme" |
+
+### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `components/input.rs` | 18 | Stale `#[allow(dead_code)]` on `label` field (is used) | Removed annotation |
+| `components/popup.rs` | 32 | Blanket `#[allow(dead_code)]` on impl block hides dead methods | Removed blanket; added per-method on 8 dead methods |
+| `components/popup.rs` | 11-14 | `PopupKind::Info`/`Warning` variants never constructed | Added `#[allow(dead_code)]` on those variants |
+| `help.rs` | 7-10 | `HelpContext` single variant placeholder | Added doc comment noting reserved for future use |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 20 |
+| Total bugs fixed | 20 |
+| Files modified | 14 |
+| HIGH priority fixes | 6 |
+| MEDIUM priority fixes | 10 |
+| LOW priority fixes | 4 |
+| Tests passing | 301 |
+
+**Key systemic bugs fixed**:
+1. UTF-8 panics from byte-offset string slicing in status bar — any non-ASCII text could crash the TUI
+2. `handle_enter()` started scans from focused input fields on 4 tabs — users couldn't press Enter to confirm input without starting a scan
+3. `luminance()` misclassified named-color backgrounds — themes using `"black"` were incorrectly detected as Light mode

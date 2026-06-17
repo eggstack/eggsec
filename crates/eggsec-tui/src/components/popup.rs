@@ -8,9 +8,10 @@ use ratatui::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum PopupKind {
+    #[allow(dead_code)]
     Info,
+    #[allow(dead_code)]
     Warning,
     Error,
     Confirm,
@@ -29,7 +30,6 @@ pub struct Popup {
     pub scroll_offset: usize,
 }
 
-#[allow(dead_code)]
 impl Popup {
     pub fn new(title: impl Into<String>, kind: PopupKind) -> Self {
         Self {
@@ -65,18 +65,21 @@ impl Popup {
         self
     }
 
+    #[allow(dead_code)]
     pub fn destructive(title: impl Into<String>, content: Vec<String>) -> Self {
         Self::new(title, PopupKind::Destructive)
             .content(content)
             .buttons(vec!["Cancel", "Confirm"])
     }
 
+    #[allow(dead_code)]
     pub fn next_button(&mut self) {
         if !self.buttons.is_empty() {
             self.active_button = (self.active_button + 1) % self.buttons.len();
         }
     }
 
+    #[allow(dead_code)]
     pub fn prev_button(&mut self) {
         if !self.buttons.is_empty() {
             self.active_button = if self.active_button == 0 {
@@ -87,23 +90,28 @@ impl Popup {
         }
     }
 
+    #[allow(dead_code)]
     pub fn selected_button(&self) -> Option<&str> {
         self.buttons.get(self.active_button).map(|s| s.as_str())
     }
 
+    #[allow(dead_code)]
     pub fn scroll_up(&mut self, amount: usize) {
         self.scroll_offset = self.scroll_offset.saturating_sub(amount);
     }
 
+    #[allow(dead_code)]
     pub fn scroll_down(&mut self, amount: usize) {
         let max_scroll = self.content.len().saturating_sub(1);
         self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
     }
 
+    #[allow(dead_code)]
     pub fn scroll_to_top(&mut self) {
         self.scroll_offset = 0;
     }
 
+    #[allow(dead_code)]
     pub fn scroll_to_bottom(&mut self) {
         self.scroll_offset = self.content.len().saturating_sub(1);
     }

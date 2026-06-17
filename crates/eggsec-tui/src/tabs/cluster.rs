@@ -570,6 +570,7 @@ impl TabInput for ClusterTab {
                     ClusterView::Status => &mut self.status_inputs,
                 };
                 current_inputs.blur();
+                return;
             }
             ClusterFocusArea::Results => {}
         }

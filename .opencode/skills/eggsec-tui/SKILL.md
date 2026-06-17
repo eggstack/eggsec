@@ -103,6 +103,20 @@ crates/eggsec-tui/src/
 - **Session cleanup perf**: `session.rs` `sessions.remove(0)` O(n) changed to `swap_remove(0)` O(1)
 - **Dead code cleanup**: Empty `if is_advanced {}` block, `let _ = d` PolicyDecision discard, stale `#[allow(unused_variables)]`, redundant `#[cfg(feature)]` pairs removed
 
+### Deep Audit Fixes (2026-06-17)
+- **UTF-8 panic fix**: `ui/shell.rs:201,341` byte-offset slicing → character-aware truncation
+- **handle_enter() scan-from-input**: `graphql.rs`, `oauth.rs`, `cluster.rs` added `return;` after blur; `wireless.rs` added Results guard
+- **Theme loader luminance()**: Named colors misclassified — extended to handle "black", "white", etc.
+- **Theme loader has_any_color**: Added `|| halloy.buttons.is_some()` guard
+- **db_pentest handle_left/right**: Added `is_running()` guard
+- **proxy page_up/page_down**: Changed hardcoded 20 to use `page_size` parameter
+- **graphql/oauth page_up/page_down**: Added missing overrides (PageUp/PageDown were non-functional)
+- **auth handle_escape**: Changed from Results to Target transition
+- **runner.rs config error**: `.ok()` → `match` with `tracing::warn!`
+- **workers/auth.rs**: Removed dead credential file block
+- **help_config.rs**: "Cycle built-in theme" → "Cycle theme"
+- **Dead code cleanup**: Removed stale `#[allow(dead_code)]` on `InputField.label`, replaced blanket Popup `#[allow(dead_code)]` with per-method
+
 ### Policy Enforcement Alignment (2026-06-11)
 - TUI now uses the shared `EnforcementContext::evaluate()` (via `App.enforcement` initialized to `manual_permissive` in runner.rs) for **all** target-bearing launches. Matches the CLI model exactly (narrow `--yes` semantics, dedicated `--allow-*` flags, stable kebab audit strings).
 - **Central gate**: in `handle_enter` / before `spawn_task` (via `build_current_task` + `build_current_operation_descriptor` producing `OperationDescriptor`).

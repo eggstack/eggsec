@@ -759,15 +759,15 @@ impl TabInput for ProxyTab {
         }
     }
 
-    fn page_up(&mut self, _page_size: usize) {
+    fn page_up(&mut self, page_size: usize) {
         if !self.is_running() {
-            self.results_view.scroll_up(20);
+            self.results_view.scroll_up(page_size);
         }
     }
 
-    fn page_down(&mut self, _page_size: usize) {
+    fn page_down(&mut self, page_size: usize) {
         if !self.is_running() {
-            self.results_view.scroll_down(20);
+            self.results_view.scroll_down(page_size);
         }
     }
 }

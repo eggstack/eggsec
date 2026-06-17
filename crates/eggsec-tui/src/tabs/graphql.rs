@@ -449,6 +449,20 @@ impl TabInput for GraphQlTab {
         self.inputs.blur();
     }
 
+    fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.scroll_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.scroll_down(page_size);
+    }
+
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
@@ -457,6 +471,7 @@ impl TabInput for GraphQlTab {
         match self.focus_area {
             GraphQlFocusArea::Inputs => {
                 self.inputs.blur();
+                return;
             }
             GraphQlFocusArea::Options => {
                 let checkboxes = [
