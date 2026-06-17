@@ -38,7 +38,7 @@ crates/eggsec-tui/src/
 │   ├── builtin.rs      # dark_theme(), light_theme()
 │   ├── manager.rs      # ThemeManager
 │   ├── style.rs        # Theme style methods
-│   └── legacy.rs       # Thread-local macros (tc!, theme!)
+│   └── legacy.rs       # Thread-local macro (tc!)
 ├── ui/           # Rendering layer
 │   ├── mod.rs          # draw(), LAYOUT_MARGIN, TAB_BAR_HEIGHT
 │   ├── shell.rs        # draw_tabs, draw_breadcrumb, draw_content, draw_status_bar
@@ -270,7 +270,7 @@ let style = Style::default().fg(tc!(text));
 
 Semantic colors: `primary`, `secondary`, `accent`, `background`, `text`, `text_dim`, `success`, `warning`, `error`, `info`.
 
-The Settings tab has a theme selector dropdown. `Ctrl+T` cycles the built-in theme trio only, while the selector exposes canonical values with readable labels. Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, and deferred restore request together so startup stays non-blocking. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/eggsec-tui/src/theme/packaged.rs`. The script is deterministic.
+The Settings tab has a theme selector dropdown. `Ctrl+T` cycles through all installed themes in alphabetical order (wrapping at end), while the selector exposes canonical values with readable labels. Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, and deferred restore request together so startup stays non-blocking. After modifying `themes/*.toml`, run `python3 scripts/package_themes.py` to regenerate `crates/eggsec-tui/src/theme/packaged.rs`. The script is deterministic.
 
 ### Notifications
 

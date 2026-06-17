@@ -69,7 +69,7 @@ crates/eggsec/src/tui/
 │   ├── builtin.rs      # dark_theme(), light_theme()
 │   ├── manager.rs      # ThemeManager
 │   ├── style.rs        # Theme style methods
-│   └── legacy.rs       # Thread-local macros (tc!, theme!)
+│   └── legacy.rs       # Thread-local macro (tc!)
 ├── ui/           # Rendering layer
 │   ├── mod.rs          # draw(), LAYOUT_MARGIN, TAB_BAR_HEIGHT
 │   ├── shell.rs        # draw_tabs, draw_breadcrumb, draw_content, draw_status_bar
@@ -780,3 +780,14 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 - **command.rs silent let _ =**: `set_current_tab_if_available` failure discarded. Changed to log on failure
 - **workers/security.rs silent HTTP error**: Compliance preflight request error silently discarded. Added `tracing::debug!`
 - **session.rs metadata error swallowing**: Double `.ok()` in tmp cleanup silently swallowed metadata errors. Changed to explicit `match` with logging
+
+## Session Fixes (2026-06-18) - Critical Bug Audit
+
+- **graphql.rs/oauth.rs handle_enter unreachable start()**: Both tabs had a `match` over all focus areas that returned/diverged on every arm, then called `self.start()` (unreachable). Refactored to follow the `fuzz.rs` pattern: `if Results return; if is_running stop+return; if Inputs focused blur+return; if Options toggle+return; else (Inputs with `is_focused() == false`) start()`. Users can now actually start GraphQL and OAuth scans from the TUI.
+- **Popup::content() overflow**: `content.len() + 5` could overflow in release builds on huge content. Changed to `content.len().saturating_add(5)` to match the project-wide pattern.
+- **ui/shell.rs identical if/else**: scope label had both branches returning `"out"`. Changed the non-compact branch to `"out-of-scope"` to match the `"in-scope"` pattern.
+- **Theme polish**: `toggle_theme` notification now uses `display_theme_name()` (e.g. "Catppuccin Mocha" instead of "catppuccin-mocha"); `Selector::set_items_with_extra` now deduplicates by value; `theme/loader.rs` `luminance()` logs a `tracing::warn!` for unknown named colors; `Settings::set_available_themes` early-returns on empty list and uses clearer `[! id] (not installed)` placeholder prefix; settings Theme hint now describes the full theme story; `help_config` Ctrl+T and `theme` palette entries now say "next theme (alphabetical)".
+- **Settings save hint footer**: persistent `[s] Save [Esc] Discard [Tab] Next field [↑↓] Section` at the bottom of the Settings tab (the `s` key was previously undiscoverable).
+- **Terminal too small message**: clearer wording ("Resize your window or scroll horizontally").
+- **Dead code warnings**: 16 TUI dead-code warnings reduced to 0 by adding `#[allow(dead_code)]` annotations with explanatory comments on forward-compat fields (HalloyBuffer/HalloyButtonStyle, PopupKind::Info/Warning/Error, TabSpec::category, theme constants, `decode_key_event`, etc.).
+- **9 new unit tests**: 3 for `graphql::handle_enter`, 3 for `oauth::handle_enter`, 4 for `popup::content` (including the overflow guard). All 311 TUI tests pass.

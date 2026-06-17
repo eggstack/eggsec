@@ -2,6 +2,20 @@
 
 Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 33 different tabs.
 
+## Recent Improvements (2026-06-18)
+
+- **handle_enter() reachable in graphql/oauth**: The `start()` call was unreachable after an exhaustive match; refactored to follow the `fuzz.rs` pattern (Inputs with `is_focused() == false` triggers `start()` after tabbing past the last field). Users can now actually start GraphQL and OAuth scans from the TUI.
+- **Popup::content overflow guard**: `content.len() + 5` would overflow in release builds on huge content. Changed to `content.len().saturating_add(5)` to match the project-wide pattern.
+- **scope label fix**: identical if/else in `ui/shell.rs` now correctly returns "out-of-scope" (was just "out") in non-compact mode, matching the "in-scope" pattern.
+- **Theme notification uses display name**: `toggle_theme` notification now says `"Theme: Catppuccin Mocha"` instead of `"Theme: catppuccin-mocha"`.
+- **Settings save hint footer**: persistent `[s] Save [Esc] Discard [Tab] Next field [↑↓] Section` hint at the bottom of the Settings tab (the `s` key was previously undiscoverable).
+- **Theme hint expanded**: Settings > Theme now describes the full theme story (`~/.config/eggsec/themes/` dir, bundled install, Ctrl+T).
+- **Selector::set_items_with_extra dedup**: now deduplicates by value to prevent unbounded growth if called multiple times.
+- **luminance() warns on unknown names**: logs a `tracing::warn!` when a non-standard color name is encountered in a theme file.
+- **Theme selector placeholder improved**: `set_available_themes` early-returns on empty list (avoids silent stale state) and uses clearer placeholder prefix `[! id] (not installed)` to distinguish placeholders from real themes.
+- **Dead code removed**: 16 dead-code warnings → 0. Forward-compat fields and reserved enum variants now have `#[allow(dead_code)]` annotations with explanatory comments.
+- **9 new unit tests**: 3 for `graphql::handle_enter`, 3 for `oauth::handle_enter`, 4 for `popup::content` (including the overflow guard). All 311 TUI tests pass.
+
 ## Core Components (`src/tui/`)
 
 ### App & UI (`app/`)
