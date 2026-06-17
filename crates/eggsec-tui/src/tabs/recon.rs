@@ -1004,6 +1004,36 @@ mod tests {
     }
 
     #[test]
+    fn test_enter_in_inputs_focused_blurs_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        assert_eq!(tab.focus_area, ReconFocusArea::Inputs);
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_options_toggles_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = 0;
+        assert!(!tab.option_checkboxes[0].checked);
+        tab.handle_enter();
+        assert!(tab.option_checkboxes[0].checked);
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_from_results_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
     fn test_render_keeps_focused_checkbox_visible_in_small_terminal() {
         let mut tab = create_test_tab();
         tab.focus_area = ReconFocusArea::Options;

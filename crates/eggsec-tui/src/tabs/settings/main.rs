@@ -459,7 +459,82 @@ impl SettingsTab {
         config
     }
 
+    fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        if let Some(field) = self.http_inputs.fields.first() {
+            match field.value.parse::<u64>() {
+                Ok(v) if v > 0 => {}
+                Ok(_) => errors.push("HTTP timeout_secs must be greater than 0".to_string()),
+                Err(_) => errors.push("HTTP timeout_secs must be a valid number".to_string()),
+            }
+        }
+        if let Some(field) = self.http_inputs.fields.get(1) {
+            if field.value.parse::<u32>().is_err() {
+                errors.push("HTTP max_retries must be a valid number".to_string());
+            }
+        }
+        if let Some(field) = self.http_inputs.fields.get(2) {
+            if field.value.parse::<u64>().is_err() {
+                errors.push("HTTP retry_delay_ms must be a valid number".to_string());
+            }
+        }
+        if let Some(field) = self.http_inputs.fields.get(3) {
+            if field.value.parse::<u32>().is_err() {
+                errors.push("HTTP max_redirects must be a valid number".to_string());
+            }
+        }
+        if let Some(field) = self.scan_inputs.fields.first() {
+            match field.value.parse::<u32>() {
+                Ok(v) if v > 0 => {}
+                Ok(_) => errors.push("Scan default_concurrency must be greater than 0".to_string()),
+                Err(_) => {
+                    errors.push("Scan default_concurrency must be a valid number".to_string())
+                }
+            }
+        }
+        if let Some(field) = self.scan_inputs.fields.get(2) {
+            match field.value.parse::<u64>() {
+                Ok(v) if v > 0 => {}
+                Ok(_) => errors.push("Scan port_timeout_secs must be greater than 0".to_string()),
+                Err(_) => errors.push("Scan port_timeout_secs must be a valid number".to_string()),
+            }
+        }
+        if let Some(field) = self.session_inputs.fields.first() {
+            match field.value.parse::<u64>() {
+                Ok(v) if v > 0 => {}
+                Ok(_) => {
+                    errors.push("Session auto_save_interval_secs must be greater than 0".to_string())
+                }
+                Err(_) => errors.push(
+                    "Session auto_save_interval_secs must be a valid number".to_string(),
+                ),
+            }
+        }
+        if let Some(field) = self.report_inputs.fields.get(2) {
+            let fmt = field.value.to_lowercase();
+            let valid = ["json", "csv", "html", "sarif", "junit", "markdown"];
+            if !valid.contains(&fmt.as_str()) {
+                errors.push(format!(
+                    "Report format must be one of: {}",
+                    valid.join(", ")
+                ));
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
     pub fn save_config(&mut self) {
+        if let Err(errors) = self.validate() {
+            self.status_message = errors.first().cloned().unwrap_or_default();
+            return;
+        }
+
         let mut config = self
             .config
             .clone()
@@ -789,5 +864,158 @@ impl TabState for SettingsTab {
 
     fn set_error(&mut self, error: TabError) {
         self.error = Some(error);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set_http_field(tab: &mut SettingsTab, idx: usize, val: &str) {
+        if let Some(f) = tab.http_inputs.fields.get_mut(idx) {
+            f.value = val.to_string();
+        }
+    }
+
+    fn set_scan_field(tab: &mut SettingsTab, idx: usize, val: &str) {
+        if let Some(f) = tab.scan_inputs.fields.get_mut(idx) {
+            f.value = val.to_string();
+        }
+    }
+
+    fn set_session_field(tab: &mut SettingsTab, idx: usize, val: &str) {
+        if let Some(f) = tab.session_inputs.fields.get_mut(idx) {
+            f.value = val.to_string();
+        }
+    }
+
+    fn set_report_field(tab: &mut SettingsTab, idx: usize, val: &str) {
+        if let Some(f) = tab.report_inputs.fields.get_mut(idx) {
+            f.value = val.to_string();
+        }
+    }
+
+    #[test]
+    fn validate_defaults_pass() {
+        let tab = SettingsTab::new();
+        assert!(tab.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_valid_values_pass() {
+        let mut tab = SettingsTab::new();
+        set_http_field(&mut tab, 0, "10");
+        set_http_field(&mut tab, 1, "5");
+        set_http_field(&mut tab, 2, "500");
+        set_http_field(&mut tab, 3, "20");
+        set_scan_field(&mut tab, 0, "100");
+        set_scan_field(&mut tab, 2, "5");
+        set_session_field(&mut tab, 0, "60");
+        set_report_field(&mut tab, 2, "json");
+        assert!(tab.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_invalid_timeout_fails() {
+        let mut tab = SettingsTab::new();
+        set_http_field(&mut tab, 0, "abc");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("timeout_secs")));
+    }
+
+    #[test]
+    fn validate_zero_timeout_fails() {
+        let mut tab = SettingsTab::new();
+        set_http_field(&mut tab, 0, "0");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("timeout_secs")));
+    }
+
+    #[test]
+    fn validate_invalid_auto_save_fails() {
+        let mut tab = SettingsTab::new();
+        set_session_field(&mut tab, 0, "xyz");
+        let err = tab.validate().unwrap_err();
+        assert!(err
+            .iter()
+            .any(|e| e.contains("auto_save_interval_secs")));
+    }
+
+    #[test]
+    fn validate_zero_auto_save_fails() {
+        let mut tab = SettingsTab::new();
+        set_session_field(&mut tab, 0, "0");
+        let err = tab.validate().unwrap_err();
+        assert!(err
+            .iter()
+            .any(|e| e.contains("auto_save_interval_secs")));
+    }
+
+    #[test]
+    fn validate_invalid_report_format_fails() {
+        let mut tab = SettingsTab::new();
+        set_report_field(&mut tab, 2, "xml");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("Report format")));
+    }
+
+    #[test]
+    fn validate_report_format_case_insensitive() {
+        let mut tab = SettingsTab::new();
+        set_report_field(&mut tab, 2, "JSON");
+        assert!(tab.validate().is_ok());
+
+        set_report_field(&mut tab, 2, "Html");
+        assert!(tab.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_empty_concurrency_fails() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 0, "");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("default_concurrency")));
+    }
+
+    #[test]
+    fn validate_zero_concurrency_fails() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 0, "0");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("default_concurrency")));
+    }
+
+    #[test]
+    fn validate_multiple_errors() {
+        let mut tab = SettingsTab::new();
+        set_http_field(&mut tab, 0, "nope");
+        set_scan_field(&mut tab, 0, "0");
+        set_session_field(&mut tab, 0, "bad");
+        let err = tab.validate().unwrap_err();
+        assert!(err.len() >= 3);
+    }
+
+    #[test]
+    fn validate_invalid_port_timeout_fails() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 2, "abc");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("port_timeout_secs")));
+    }
+
+    #[test]
+    fn validate_invalid_max_retries_fails() {
+        let mut tab = SettingsTab::new();
+        set_http_field(&mut tab, 1, "abc");
+        let err = tab.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("max_retries")));
+    }
+
+    #[test]
+    fn save_config_blocks_on_validation_error() {
+        let mut tab = SettingsTab::new();
+        set_http_field(&mut tab, 0, "bad");
+        tab.save_config();
+        assert!(tab.status_message.contains("timeout_secs"));
     }
 }

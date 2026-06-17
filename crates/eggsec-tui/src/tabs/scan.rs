@@ -459,15 +459,16 @@ impl TabRender for ScanTab {
             ])
             .split(config_area);
 
+        let vh = f.area().height;
         if let Some(info) = self
             .profile_selector
-            .dropdown_info(config_chunks.get(2).copied().unwrap_or(config_area))
+            .dropdown_info(config_chunks.get(2).copied().unwrap_or(config_area), vh)
         {
             info.render(f);
         }
         if let Some(info) = self
             .output_selector
-            .dropdown_info(config_chunks.get(3).copied().unwrap_or(config_area))
+            .dropdown_info(config_chunks.get(3).copied().unwrap_or(config_area), vh)
         {
             info.render(f);
         }

@@ -207,3 +207,265 @@ impl OverlayController {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{create_shared_history, App, PendingAction};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use eggsec::config::{OperationDescriptor, OperationMode, OperationRisk, PolicyDecision};
+
+    fn create_test_app() -> App {
+        App::new_for_testing(create_shared_history())
+    }
+
+    #[test]
+    fn test_ctrl_c_bubbles_through_overlays() {
+        let app = create_test_app();
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+        // No overlay active — Ctrl+C bubbles (empty vec)
+        let actions = OverlayController::new().decode(&app, &ctrl_c);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_ctrl_c_bubbles_through_help_overlay() {
+        let mut app = create_test_app();
+        app.overlay.show_help = true;
+        assert!(app.topmost_overlay().is_some());
+
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        let actions = OverlayController::new().decode(&app, &ctrl_c);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_ctrl_c_bubbles_through_policy_confirm() {
+        let mut app = create_test_app();
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = PolicyDecision::denied(
+            "fuzz",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk",
+        );
+        app.request_policy_confirmation(desc, decision, None);
+        assert_eq!(
+            app.topmost_overlay(),
+            Some(OverlayType::PolicyConfirm)
+        );
+
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        let actions = OverlayController::new().decode(&app, &ctrl_c);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_noop_when_no_overlay() {
+        let app = create_test_app();
+        assert!(app.topmost_overlay().is_none());
+
+        // Any key with no overlay returns empty vec (no overlay to route to)
+        let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_unknown_key_returns_noop_when_overlay_active() {
+        let mut app = create_test_app();
+        app.overlay.show_help = true;
+
+        // Ctrl+Z is unbound for Help overlay — should return Noop, not empty
+        let key = KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_unknown_key_returns_noop_for_policy_confirm() {
+        let mut app = create_test_app();
+        let desc = OperationDescriptor {
+            operation: "stress".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::StressTest,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://lab.example".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = PolicyDecision::denied(
+            "stress",
+            OperationMode::StandardAssessment,
+            OperationRisk::StressTest,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk",
+        );
+        app.request_policy_confirmation(desc, decision, None);
+
+        // Down arrow is unbound for PolicyConfirm — should return Noop
+        let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_policy_confirm_enter_returns_confirm() {
+        let mut app = create_test_app();
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = PolicyDecision::denied(
+            "fuzz",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk",
+        );
+        app.request_policy_confirmation(desc, decision, None);
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::ConfirmPolicyAction]);
+    }
+
+    #[test]
+    fn test_policy_confirm_esc_returns_cancel() {
+        let mut app = create_test_app();
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = PolicyDecision::denied(
+            "fuzz",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk",
+        );
+        app.request_policy_confirmation(desc, decision, None);
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::CancelPolicyAction]);
+    }
+
+    #[test]
+    fn test_search_enter_performs_search() {
+        let mut app = create_test_app();
+        app.overlay.show_search = true;
+        app.search.query = "needle".to_string();
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::SearchPerform]);
+    }
+
+    #[test]
+    fn test_search_backspace_removes_char() {
+        let mut app = create_test_app();
+        app.overlay.show_search = true;
+        app.search.query = "needle".to_string();
+
+        let key = KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::SearchQueryBackspace]);
+    }
+
+    #[test]
+    fn test_confirm_popup_enter_returns_confirm_pending() {
+        let mut app = create_test_app();
+        app.request_confirmation(PendingAction::ResetTab);
+        assert!(app.is_confirm_popup_visible());
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::ConfirmPendingAction]);
+    }
+
+    #[test]
+    fn test_confirm_popup_esc_returns_cancel_pending() {
+        let mut app = create_test_app();
+        app.request_confirmation(PendingAction::ResetTab);
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::CancelPendingAction]);
+    }
+
+    #[test]
+    fn test_confirm_popup_unknown_key_returns_noop() {
+        let mut app = create_test_app();
+        app.request_confirmation(PendingAction::ResetTab);
+
+        // Right arrow is unbound for ConfirmPopup
+        let key = KeyEvent::new(KeyCode::Right, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_precedence_policy_confirm_over_help() {
+        let mut app = create_test_app();
+        // Both active — PolicyConfirm should win (higher precedence)
+        app.overlay.show_help = true;
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = PolicyDecision::denied(
+            "fuzz",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![eggsec::config::IntendedUse::WebAssessment],
+            "high risk",
+        );
+        app.request_policy_confirmation(desc, decision, None);
+
+        // Enter should route to PolicyConfirm, not Help
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::ConfirmPolicyAction]);
+    }
+}

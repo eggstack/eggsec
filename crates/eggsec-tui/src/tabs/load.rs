@@ -425,7 +425,7 @@ impl TabRender for LoadTab {
         if let Some(selector_area) = chunks.first() {
             self.test_type_selector.render(f, *selector_area);
 
-            if let Some(dropdown) = self.test_type_selector.dropdown_info(*selector_area) {
+            if let Some(dropdown) = self.test_type_selector.dropdown_info(*selector_area, f.area().height) {
                 dropdown.render(f);
             }
         }
@@ -510,7 +510,7 @@ impl TabRender for LoadTab {
 
         let selector_area = *chunks.first().unwrap_or(&area);
 
-        if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area) {
+        if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area, f.area().height) {
             dropdown.render(f);
         }
     }
@@ -819,5 +819,45 @@ impl TabInput for LoadTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> LoadTab {
+        LoadTab::new()
+    }
+
+    #[test]
+    fn test_enter_in_inputs_focused_blurs_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = LoadFocusArea::Inputs;
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_selector_open_confirms_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = LoadFocusArea::Selector;
+        tab.test_type_selector.focus();
+        tab.test_type_selector.open();
+        assert!(tab.test_type_selector.is_open());
+        tab.handle_enter();
+        assert!(!tab.test_type_selector.is_open());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_results_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = LoadFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
     }
 }

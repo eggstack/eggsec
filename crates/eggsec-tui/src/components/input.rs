@@ -396,33 +396,38 @@ impl InputField {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(f, area, insert_mode, &theme);
+    }
+
+    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, insert_mode: bool, theme: &crate::theme::Theme) {
         let (border_style, title_style) = if self.focused {
             (
                 Style::default()
-                    .fg(tc!(focus_input))
+                    .fg(theme.colors.focus_input)
                     .add_modifier(ratatui::style::Modifier::BOLD),
                 Style::default()
-                    .fg(tc!(focus_input))
+                    .fg(theme.colors.focus_input)
                     .add_modifier(ratatui::style::Modifier::BOLD),
             )
         } else if let Some(ref validation) = self.validation {
             if validation.valid {
                 (
-                    Style::default().fg(tc!(success)),
-                    Style::default().fg(tc!(text_dim)),
+                    Style::default().fg(theme.colors.success),
+                    Style::default().fg(theme.colors.text_dim),
                 )
             } else {
                 (
-                    Style::default().fg(tc!(error)),
+                    Style::default().fg(theme.colors.error),
                     Style::default()
-                        .fg(tc!(error))
+                        .fg(theme.colors.error)
                         .add_modifier(ratatui::style::Modifier::BOLD),
                 )
             }
         } else {
             (
-                Style::default().fg(tc!(border)),
-                Style::default().fg(tc!(text_dim)),
+                Style::default().fg(theme.colors.border),
+                Style::default().fg(theme.colors.text_dim),
             )
         };
 
@@ -437,14 +442,12 @@ impl InputField {
             .borders(Borders::ALL)
             .border_style(border_style);
 
-        // Convert byte cursor position to character position for display logic
         let cursor_char_pos = self.byte_to_char_pos();
         let char_count = self.value.chars().count();
 
         let display_value = if let Some(w) = self.width {
             let available = w.saturating_sub(2);
             if char_count > available {
-                // Calculate visible window in character space
                 let start = if cursor_char_pos <= available / 2 {
                     0
                 } else if cursor_char_pos >= char_count - available / 2 {
@@ -467,9 +470,9 @@ impl InputField {
         let text_style = if self.focused {
             Style::default()
                 .add_modifier(ratatui::style::Modifier::BOLD)
-                .fg(tc!(focus_input))
+                .fg(theme.colors.focus_input)
         } else {
-            Style::default().fg(tc!(text))
+            Style::default().fg(theme.colors.text)
         };
 
         let paragraph = Paragraph::new(display_value.as_str())
@@ -478,7 +481,6 @@ impl InputField {
         f.render_widget(paragraph, area);
 
         if self.focused && insert_mode {
-            // Calculate display cursor position
             let display_cursor = if let Some(w) = self.width {
                 let available = w.saturating_sub(2);
                 if char_count > available {
@@ -892,5 +894,52 @@ mod tests {
 
         field2.move_end();
         assert_eq!(field2.byte_to_char_pos(), 3);
+    }
+
+    #[test]
+    fn test_render_with_theme_does_not_panic() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
+                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
+                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
+                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
+                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
+                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
+                mode_normal: Color::Green, mode_insert: Color::Yellow,
+                tab_active: Color::Cyan, tab_inactive: Color::Gray,
+                status_running: Color::Green, status_idle: Color::Gray,
+                status_error: Color::Red, focus_normal: Color::Green,
+                focus_input: Color::Yellow, focus_results: Color::Cyan,
+                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
+                active_task: Color::Green, paused_task: Color::Yellow,
+                scope_match: Color::Green, scope_miss: Color::Red,
+                policy_required: Color::Yellow, policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(30, 5)).unwrap();
+        let mut field = InputField::new("Target").with_value("192.168.1.1");
+        field.focused = true;
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 30, 3);
+                field.render_with_theme(f, area, true, &theme);
+            })
+            .unwrap();
+
+        let unfocused = InputField::new("Port").with_value("80");
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 30, 3);
+                unfocused.render_with_theme(f, area, false, &theme);
+            })
+            .unwrap();
     }
 }

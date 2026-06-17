@@ -290,8 +290,9 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 | `builtin.rs` | `dark_theme()`, `light_theme()`, `cyber_red_theme()` factory functions |
 | `manager.rs` | `ThemeManager` - holds registered themes, private `current`, canonical ID lookup, theme switching |
 | `style.rs` | Theme style methods for rendering: `border_style`, semantic helpers (`safe`, `danger`, `muted`, `active_task`, `paused_task`, `scope_match`, `scope_miss`, `policy_required`, `policy_denied`), composite helpers (`style_for_risk`, `style_for_policy_outcome`, `style_for_task_state`) |
-| `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
-| `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; missing fields use defaults from built-in themes |
+| `contrast.rs` | Theme contrast validation: `relative_luminance()`, `contrast_ratio()`, `check_contrast()` (min 4.5:1); low contrast triggers fallback with warning |
+| `legacy.rs` | Thread-local macros (`tc!`) for backward compatibility |
+| `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; shared `named_color()` for 27 named colors; missing fields use defaults from built-in themes |
 | `install.rs` | Idempotent installer: writes packaged themes to `~/.config/eggsec/themes`, never overwrites existing files |
 | `archive.rs` | LZMA decode for packaged theme data |
 | `packaged.rs` | Auto-generated LZMA-compressed blob of 50 Halloy themes (regenerated via `scripts/package_themes.py`) |

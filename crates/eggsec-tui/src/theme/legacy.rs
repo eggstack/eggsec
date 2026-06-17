@@ -13,6 +13,10 @@ pub fn sync_theme_to_thread_local(theme: &Theme) {
     });
 }
 
+pub fn current_theme() -> Theme {
+    THEME_MANAGER.with(|tm| tm.borrow().current().clone())
+}
+
 #[macro_export]
 macro_rules! tc {
     ($field:ident) => {

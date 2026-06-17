@@ -529,3 +529,31 @@ impl TabInput for FingerprintTab {
         Some(self.target().to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> FingerprintTab {
+        FingerprintTab::new()
+    }
+
+    #[test]
+    fn test_enter_in_inputs_focused_blurs_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FingerprintFocusArea::Inputs;
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_results_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FingerprintFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+}

@@ -1,5 +1,6 @@
 pub mod archive;
 pub mod builtin;
+pub mod contrast;
 pub mod install;
 pub mod legacy;
 pub mod loader;

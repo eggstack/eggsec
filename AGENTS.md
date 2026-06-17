@@ -239,7 +239,7 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4080 (includes #[test] + #[tokio::test]) |
+| Tests | ~4144 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 865 (.rs files in crates/) |
 | Payload types | 40 |
@@ -584,6 +584,17 @@ cargo check -p eggsec --features c2-mcp
 cargo test --lib -p eggsec --features c2-mcp
 cargo clippy --lib -p eggsec --features c2-mcp
 ```
+
+## Session Fixes (2026-06-18) - TUI Bugs Plan
+
+- **Settings validation** (`tabs/settings/main.rs`): Added `validate()` method returning `Result<(), Vec<String>>` for all numeric fields and report format. `save_config()` now validates before writing; invalid values produce error status message instead of silent fallback. 14 new unit tests.
+- **Theme named-color unification** (`theme/loader.rs`): New shared `named_color()` function with all 27 named colors. `parse_hex_color()` and `luminance()` now share one table. 5 new tests.
+- **Theme contrast validation** (`theme/contrast.rs`): New module with `relative_luminance()`, `contrast_ratio()`, `check_contrast()`. Loaded themes validate text/background and selected_text/selected contrast (min 4.5:1). Low contrast triggers fallback to base theme with warning (non-fatal). 7 new tests.
+- **Selector dropdown clamping** (`components/selector.rs`): `dropdown_info()` now takes `viewport_height: u16` parameter. Dropdowns clamp to viewport and flip above anchor when no room below. 6 new tests, 10 call sites updated across 6 files.
+- **Overlay leakage tests** (`app/overlay.rs`): 14 new tests verifying Ctrl+C bubbles, unknown keys produce Noop, overlay precedence.
+- **Enter/Escape regression tests** (6 tab files): 18 new tests across recon, load, scan_ports, fingerprint, stress, packet tabs. Verify Enter in focused input blurs without starting, Options toggle without starting, Results no-op.
+- **Explicit theme render path** (`components/selector.rs`, `components/input.rs`): `render_with_theme()` methods for Selector, Checkbox, InputField. Existing `render()` delegates to theme-based version. 3 new tests.
+- **AGENTS.override.md**: Fixed stale "Ctrl+T cycles built-in trio" → "Ctrl+T cycles all registered themes alphabetically".
 
 ## Planning Notes for Future Agents
 

@@ -608,7 +608,7 @@ impl TabRender for PacketTab {
             ])
             .split(area);
         let selector_area = chunks.first().copied().unwrap_or(area);
-        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
+        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area, f.area().height) {
             dropdown.render(f);
         }
     }
@@ -900,5 +900,35 @@ impl TabInput for PacketTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> PacketTab {
+        PacketTab::new()
+    }
+
+    #[test]
+    fn test_enter_in_inputs_focused_blurs_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_selector_open_confirms_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.view_selector.focus();
+        tab.view_selector.open();
+        assert!(tab.view_selector.is_open());
+        tab.handle_enter();
+        assert!(!tab.view_selector.is_open());
+        assert!(!tab.is_running());
     }
 }

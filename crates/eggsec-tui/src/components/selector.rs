@@ -166,7 +166,7 @@ impl Selector {
         *self.dropdown_state.borrow_mut() = None;
     }
 
-    pub fn dropdown_info(&self, anchor_area: Rect) -> Option<DropdownInfo> {
+    pub fn dropdown_info(&self, anchor_area: Rect, viewport_height: u16) -> Option<DropdownInfo> {
         if !self.expanded {
             return None;
         }
@@ -175,11 +175,36 @@ impl Selector {
             *self.dropdown_state.borrow_mut() = Some(ListState::default());
         }
 
+        let max_height = 10u16;
+        let desired_height = (self.items.len().min(u16::MAX as usize - 2) + 2).min(max_height as usize) as u16;
+
+        let below_y = anchor_area.y.saturating_add(anchor_area.height);
+        let below_fits = below_y.saturating_add(desired_height) <= viewport_height;
+
+        let (y, height) = if below_fits {
+            (below_y, desired_height)
+        } else {
+            let available_below = viewport_height.saturating_sub(below_y);
+            if available_below >= desired_height {
+                (below_y, desired_height)
+            } else if available_below >= 3 {
+                (below_y, available_below)
+            } else {
+                let above_y = anchor_area.y.saturating_sub(desired_height);
+                if above_y + desired_height <= viewport_height && anchor_area.y >= desired_height {
+                    (above_y, desired_height)
+                } else {
+                    let h = anchor_area.y.min(desired_height);
+                    (anchor_area.y.saturating_sub(h), h)
+                }
+            }
+        };
+
         let dropdown_area = Rect {
             x: anchor_area.x,
-            y: anchor_area.y + anchor_area.height,
+            y,
             width: anchor_area.width,
-            height: (self.items.len().min(u16::MAX as usize - 2) + 2).min(10) as u16,
+            height: height.max(1),
         };
 
         let items: Vec<(usize, String, bool)> = self
@@ -320,10 +345,15 @@ impl Selector {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(f, area, &theme);
+    }
+
+    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, theme: &crate::theme::Theme) {
         let border_style = if self.focused {
-            Style::default().fg(tc!(border_focused))
+            Style::default().fg(theme.colors.border_focused)
         } else {
-            Style::default().fg(tc!(border))
+            Style::default().fg(theme.colors.border)
         };
 
         let block = Block::default()
@@ -348,9 +378,9 @@ impl Selector {
         let text_style = if self.focused {
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .fg(tc!(focus_input))
+                .fg(theme.colors.focus_input)
         } else {
-            Style::default().fg(tc!(text))
+            Style::default().fg(theme.colors.text)
         };
 
         let paragraph = Paragraph::new(text).style(text_style).block(block);
@@ -393,16 +423,21 @@ impl Checkbox {
     }
 
     pub fn render_with_focus(&self, focused: bool, f: &mut Frame, area: Rect) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(focused, f, area, &theme);
+    }
+
+    pub fn render_with_theme(&self, focused: bool, f: &mut Frame, area: Rect, theme: &crate::theme::Theme) {
         let check = if self.checked { "[✓]" } else { "[ ]" };
         let prefix = if focused { "▶ " } else { "  " };
         let text = format!("{}{}{}", prefix, check, self.label);
 
         let style = if focused {
             Style::default()
-                .fg(tc!(focus_input))
+                .fg(theme.colors.focus_input)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(tc!(text))
+            Style::default().fg(theme.colors.text)
         };
 
         let paragraph = Paragraph::new(text).style(style);
@@ -785,5 +820,175 @@ mod tests {
             selector.selected, 1,
             "move_prev should do nothing when closed"
         );
+    }
+
+    #[test]
+    fn dropdown_info_returns_none_when_collapsed() {
+        let selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        let anchor = Rect::new(0, 0, 20, 3);
+        assert!(selector.dropdown_info(anchor, 24).is_none());
+    }
+
+    #[test]
+    fn dropdown_info_fits_below_anchor_when_space_available() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        let anchor = Rect::new(0, 0, 20, 3);
+        let info = selector.dropdown_info(anchor, 24).unwrap();
+        assert_eq!(info.area.y, 3);
+        assert_eq!(info.area.height, 5);
+    }
+
+    #[test]
+    fn dropdown_info_clamps_height_when_near_bottom() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        let anchor = Rect::new(0, 20, 20, 3);
+        let info = selector.dropdown_info(anchor, 24).unwrap();
+        assert!(info.area.y + info.area.height <= 24);
+        assert!(info.area.height >= 1);
+    }
+
+    #[test]
+    fn dropdown_info_flips_above_anchor_when_no_space_below() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        let anchor = Rect::new(0, 22, 20, 3);
+        let info = selector.dropdown_info(anchor, 24).unwrap();
+        assert!(info.area.y + info.area.height <= 24);
+        assert!(info.area.y < anchor.y);
+    }
+
+    #[test]
+    fn dropdown_info_never_exceeds_viewport() {
+        let mut selector = Selector::new("Test").simple_items(vec![
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
+        ]);
+        selector.expand();
+        let anchor = Rect::new(0, 0, 20, 3);
+        let info = selector.dropdown_info(anchor, 12).unwrap();
+        assert!(info.area.y + info.area.height <= 12);
+    }
+
+    #[test]
+    fn dropdown_info_never_goes_above_y_zero() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        let anchor = Rect::new(0, 0, 20, 3);
+        let info = selector.dropdown_info(anchor, 10).unwrap();
+        assert!(info.area.y + info.area.height <= 10);
+    }
+
+    #[test]
+    fn selector_render_with_theme_does_not_panic() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test-theme".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red,
+                secondary: Color::Blue,
+                accent: Color::Cyan,
+                background: Color::Black,
+                foreground: Color::White,
+                surface: Color::DarkGray,
+                border: Color::Gray,
+                border_focused: Color::Yellow,
+                text: Color::White,
+                text_dim: Color::DarkGray,
+                text_bright: Color::White,
+                success: Color::Green,
+                warning: Color::Yellow,
+                error: Color::Red,
+                info: Color::Cyan,
+                selected: Color::Blue,
+                selected_text: Color::White,
+                highlight: Color::Yellow,
+                mode_normal: Color::Green,
+                mode_insert: Color::Yellow,
+                tab_active: Color::Cyan,
+                tab_inactive: Color::Gray,
+                status_running: Color::Green,
+                status_idle: Color::Gray,
+                status_error: Color::Red,
+                focus_normal: Color::Green,
+                focus_input: Color::Yellow,
+                focus_results: Color::Cyan,
+                safe: Color::Green,
+                danger: Color::Red,
+                muted: Color::DarkGray,
+                active_task: Color::Green,
+                paused_task: Color::Yellow,
+                scope_match: Color::Green,
+                scope_miss: Color::Red,
+                policy_required: Color::Yellow,
+                policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(30, 5)).unwrap();
+        let selector = Selector::new("Test").simple_items(vec!["Alpha", "Beta", "Gamma"]);
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, 30, 3);
+                selector.render_with_theme(f, area, &theme);
+            })
+            .unwrap();
+
+        let mut expanded = Selector::new("Test").simple_items(vec!["X", "Y"]);
+        expanded.focus_open();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, 30, 3);
+                expanded.render_with_theme(f, area, &theme);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn checkbox_render_with_theme_does_not_panic() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
+                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
+                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
+                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
+                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
+                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
+                mode_normal: Color::Green, mode_insert: Color::Yellow,
+                tab_active: Color::Cyan, tab_inactive: Color::Gray,
+                status_running: Color::Green, status_idle: Color::Gray,
+                status_error: Color::Red, focus_normal: Color::Green,
+                focus_input: Color::Yellow, focus_results: Color::Cyan,
+                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
+                active_task: Color::Green, paused_task: Color::Yellow,
+                scope_match: Color::Green, scope_miss: Color::Red,
+                policy_required: Color::Yellow, policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+        let cb = Checkbox::new("Enable feature").checked(true);
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, 30, 1);
+                cb.render_with_theme(true, f, area, &theme);
+            })
+            .unwrap();
+        terminal
+            .draw(|f| {
+                let area = Rect::new(0, 0, 30, 1);
+                cb.render_with_theme(false, f, area, &theme);
+            })
+            .unwrap();
     }
 }

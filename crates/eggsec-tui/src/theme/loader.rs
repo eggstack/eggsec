@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use super::builtin::{dark_theme, light_theme};
 use super::canonical_theme_id;
+use super::contrast::{check_contrast, contrast_ratio};
 use super::palette::{Theme, ThemeColors, ThemeMode};
 
 #[derive(Debug, Error)]
@@ -74,6 +75,34 @@ struct HalloyButtonStyle {
     background_selected_hover: Option<String>,
 }
 
+fn named_color(name: &str) -> Option<Color> {
+    match name {
+        "black" => Some(Color::Rgb(0, 0, 0)),
+        "red" => Some(Color::Rgb(255, 0, 0)),
+        "green" => Some(Color::Rgb(0, 255, 0)),
+        "yellow" => Some(Color::Rgb(255, 255, 0)),
+        "blue" => Some(Color::Rgb(0, 0, 255)),
+        "magenta" | "purple" => Some(Color::Rgb(255, 0, 255)),
+        "cyan" => Some(Color::Rgb(0, 255, 255)),
+        "white" => Some(Color::Rgb(255, 255, 255)),
+        "gray" | "grey" => Some(Color::Rgb(128, 128, 128)),
+        "darkgray" | "darkgrey" => Some(Color::Rgb(64, 64, 64)),
+        "darkred" => Some(Color::Rgb(128, 0, 0)),
+        "lightred" => Some(Color::Rgb(255, 102, 102)),
+        "darkgreen" => Some(Color::Rgb(0, 100, 0)),
+        "lightgreen" => Some(Color::Rgb(144, 238, 144)),
+        "darkblue" => Some(Color::Rgb(0, 0, 128)),
+        "lightblue" => Some(Color::Rgb(173, 216, 230)),
+        "lightyellow" => Some(Color::Rgb(255, 255, 224)),
+        "orange" => Some(Color::Rgb(255, 165, 0)),
+        "darkorange" => Some(Color::Rgb(255, 140, 0)),
+        "lightgray" | "lightgrey" | "silver" => Some(Color::Rgb(192, 192, 192)),
+        "darkcyan" => Some(Color::Rgb(0, 128, 128)),
+        "lightcyan" => Some(Color::Rgb(224, 255, 255)),
+        _ => None,
+    }
+}
+
 fn parse_hex_color(s: &str) -> Option<Color> {
     let s = s.trim();
     if let Some(hex) = s.strip_prefix('#') {
@@ -93,21 +122,7 @@ fn parse_hex_color(s: &str) -> Option<Color> {
             _ => None,
         }
     } else {
-        match s {
-            "black" => Some(Color::Black),
-            "red" => Some(Color::Red),
-            "green" => Some(Color::Green),
-            "yellow" => Some(Color::Yellow),
-            "blue" => Some(Color::Blue),
-            "magenta" | "purple" => Some(Color::Magenta),
-            "cyan" => Some(Color::Cyan),
-            "white" => Some(Color::White),
-            "gray" | "grey" => Some(Color::Gray),
-            "darkgray" | "darkgrey" => Some(Color::DarkGray),
-            "lightgreen" => Some(Color::LightGreen),
-            "lightblue" => Some(Color::LightBlue),
-            _ => None,
-        }
+        named_color(s)
     }
 }
 
@@ -141,30 +156,19 @@ fn luminance(color: &str) -> f64 {
         let b = parse(4);
         return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     }
-    match color.to_ascii_lowercase().as_str() {
-        "black" => 0.0,
-        "white" => 1.0,
-        "red" | "darkred" => 0.3,
-        "lightred" => 0.7,
-        "green" => 0.7,
-        "darkgreen" => 0.2,
-        "lightgreen" => 0.8,
-        "blue" | "darkblue" => 0.3,
-        "lightblue" => 0.8,
-        "yellow" | "lightyellow" => 0.8,
-        "orange" => 0.6,
-        "darkorange" => 0.4,
-        "gray" | "grey" | "darkgray" | "darkgrey" => 0.35,
-        "lightgray" | "lightgrey" | "silver" => 0.75,
-        "cyan" | "darkcyan" => 0.4,
-        "lightcyan" => 0.8,
-        "magenta" | "purple" => 0.4,
+    let color_lower = color.to_ascii_lowercase();
+    match named_color(&color_lower) {
+        Some(Color::Rgb(r, g, b)) => {
+            let r = r as f64 / 255.0;
+            let g = g as f64 / 255.0;
+            let b = b as f64 / 255.0;
+            0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
         _ => {
             // Unknown color name - warn once per unique name to avoid noise.
             use std::sync::LazyLock;
             static WARNED_COLORS: LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
                 LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
-            let color_lower = color.to_ascii_lowercase();
             if let Ok(mut warned) = WARNED_COLORS.lock() {
                 if warned.insert(color_lower) {
                     tracing::warn!(
@@ -214,7 +218,7 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
     let buffer = halloy.buffer.as_ref();
     let buttons = halloy.buttons.as_ref();
 
-    let colors = ThemeColors {
+    let mut colors = ThemeColors {
         primary: parse_color_or(
             &text.and_then(|t| t.primary.clone()),
             defaults.colors.primary,
@@ -352,6 +356,32 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
         ),
     };
 
+    // --- Contrast validation (non-fatal; fall back to base theme pair) ---
+
+    // text vs background (min 4.5:1 for normal text per WCAG AA)
+    if !check_contrast(colors.text, colors.background, 4.5) {
+        let ratio = contrast_ratio(colors.text, colors.background);
+        tracing::warn!(
+            "Theme '{}' text/background contrast ratio {:.2}:1 is below 4.5:1 minimum; \
+             falling back to base theme text color",
+            file_stem,
+            ratio,
+        );
+        colors.text = defaults.colors.text;
+    }
+
+    // selected_text vs selected (min 4.5:1)
+    if !check_contrast(colors.selected_text, colors.selected, 4.5) {
+        let ratio = contrast_ratio(colors.selected_text, colors.selected);
+        tracing::warn!(
+            "Theme '{}' selected_text/selected contrast ratio {:.2}:1 is below 4.5:1 minimum; \
+             falling back to base theme selected_text color",
+            file_stem,
+            ratio,
+        );
+        colors.selected_text = defaults.colors.selected_text;
+    }
+
     Ok(Theme {
         mode,
         name: canonical_theme_id(file_stem),
@@ -430,9 +460,9 @@ background = "#2E3440"
 
     #[test]
     fn parse_named_color() {
-        assert_eq!(parse_hex_color("red"), Some(Color::Red));
-        assert_eq!(parse_hex_color("cyan"), Some(Color::Cyan));
-        assert_eq!(parse_hex_color("darkgray"), Some(Color::DarkGray));
+        assert_eq!(parse_hex_color("red"), Some(Color::Rgb(255, 0, 0)));
+        assert_eq!(parse_hex_color("cyan"), Some(Color::Rgb(0, 255, 255)));
+        assert_eq!(parse_hex_color("darkgray"), Some(Color::Rgb(64, 64, 64)));
     }
 
     #[test]
@@ -487,10 +517,10 @@ border_selected = "#81A1C1"
 code = "#8FBCBB"
 highlight = "#434C5E"
 nickname = "#88C0D0"
-selection = "#4C566A"
-timestamp = "#616E88"
-topic = "#D8DEE9"
-url = "#88C0D0"
+        selection = "#2E3440"
+        timestamp = "#616E88"
+        topic = "#D8DEE9"
+        url = "#88C0D0"
 
 [buttons.primary]
 background = "#3B4252"
@@ -515,7 +545,7 @@ background_selected_hover = "#88C0D0"
         assert_eq!(theme.colors.error, Color::Rgb(0xBF, 0x61, 0x6A));
         assert_eq!(theme.colors.warning, Color::Rgb(0x81, 0xA1, 0xC1));
         assert_eq!(theme.colors.info, Color::Rgb(0xD0, 0x87, 0x70));
-        assert_eq!(theme.colors.selected, Color::Rgb(0x4C, 0x56, 0x6A));
+        assert_eq!(theme.colors.selected, Color::Rgb(0x2E, 0x34, 0x40));
         assert_eq!(theme.colors.selected_text, Color::Rgb(0x88, 0xC0, 0xD0));
         assert_eq!(theme.colors.highlight, Color::Rgb(0x43, 0x4C, 0x5E));
         assert_eq!(theme.colors.mode_normal, Color::Rgb(0x3B, 0x42, 0x52));
@@ -550,5 +580,64 @@ background = "#1A1A2E"
         let content = b"[general]\nbackground = \"#\xFF\xFE\"";
         let result = load_halloy_theme_bytes(content, "bad-utf8");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn named_color_all_names_return_expected_rgb() {
+        let expected: &[(&str, u8, u8, u8)] = &[
+            ("black", 0, 0, 0),
+            ("red", 255, 0, 0),
+            ("green", 0, 255, 0),
+            ("yellow", 255, 255, 0),
+            ("blue", 0, 0, 255),
+            ("magenta", 255, 0, 255),
+            ("purple", 255, 0, 255),
+            ("cyan", 0, 255, 255),
+            ("white", 255, 255, 255),
+            ("gray", 128, 128, 128),
+            ("grey", 128, 128, 128),
+            ("darkgray", 64, 64, 64),
+            ("darkgrey", 64, 64, 64),
+            ("darkred", 128, 0, 0),
+            ("lightred", 255, 102, 102),
+            ("darkgreen", 0, 100, 0),
+            ("lightgreen", 144, 238, 144),
+            ("darkblue", 0, 0, 128),
+            ("lightblue", 173, 216, 230),
+            ("lightyellow", 255, 255, 224),
+            ("orange", 255, 165, 0),
+            ("darkorange", 255, 140, 0),
+            ("lightgray", 192, 192, 192),
+            ("lightgrey", 192, 192, 192),
+            ("silver", 192, 192, 192),
+            ("darkcyan", 0, 128, 128),
+            ("lightcyan", 224, 255, 255),
+        ];
+        for &(name, r, g, b) in expected {
+            assert_eq!(
+                named_color(name),
+                Some(Color::Rgb(r, g, b)),
+                "named_color({name:?}) mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_hex_color_darkred_returns_rgb() {
+        assert_eq!(parse_hex_color("darkred"), Some(Color::Rgb(128, 0, 0)));
+    }
+
+    #[test]
+    fn parse_hex_color_lightcyan_returns_rgb() {
+        assert_eq!(
+            parse_hex_color("lightcyan"),
+            Some(Color::Rgb(224, 255, 255))
+        );
+    }
+
+    #[test]
+    fn named_color_unknown_returns_none() {
+        assert_eq!(named_color("notacolor"), None);
+        assert_eq!(named_color(""), None);
     }
 }

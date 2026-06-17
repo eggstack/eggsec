@@ -67,8 +67,10 @@ crates/eggsec-tui/src/
 │   ├── mod.rs          # Module re-exports
 │   ├── palette.rs      # ThemeMode, Theme, ThemeColors
 │   ├── builtin.rs      # dark_theme(), light_theme()
+│   ├── contrast.rs     # Theme contrast validation (min 4.5:1)
 │   ├── manager.rs      # ThemeManager
 │   ├── style.rs        # Theme style methods
+│   ├── loader.rs       # Parses .toml themes; shared named_color() for 27 colors
 │   └── legacy.rs       # Thread-local macro (tc!)
 ├── ui/           # Rendering layer
 │   ├── mod.rs          # draw(), LAYOUT_MARGIN, TAB_BAR_HEIGHT
@@ -241,9 +243,11 @@ This ensures small terminals (< 24 rows) still show usable UI.
 
 ## Theme
 
-`Theme.name` is the canonical stable ID for the theme, selector labels are derived separately for display, `Ctrl+T` cycles the built-in theme trio only, and `ThemeManager.current` is private.
+`Theme.name` is the canonical stable ID for the theme, selector labels are derived separately for display, `Ctrl+T` cycles all registered themes alphabetically, and `ThemeManager.current` is private.
 
 Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, and deferred restore request together so startup stays non-blocking.
+
+**Contrast validation** (`theme/contrast.rs`): Loaded themes are validated for minimum contrast ratio (4.5:1) on text/background and selected_text/selected pairs. Low-contrast themes trigger a fallback to the base theme with a warning (non-fatal). The shared `named_color()` function in `loader.rs` maps all 27 named CSS colors for consistent parsing across `parse_hex_color()` and `luminance()`.
 
 New rendering code should prefer explicit `&Theme` parameters:
 ```rust

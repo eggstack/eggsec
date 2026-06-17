@@ -592,3 +592,42 @@ impl StressTab {
         self.state = AppState::Idle;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> StressTab {
+        StressTab::new()
+    }
+
+    #[test]
+    fn test_enter_in_inputs_blurs_opens_selector() {
+        let mut tab = create_test_tab();
+        tab.focus_area = StressFocusArea::Inputs;
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
+        assert!(tab.type_selector.is_open());
+    }
+
+    #[test]
+    fn test_enter_in_type_selector_opens_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = StressFocusArea::TypeSelector;
+        tab.type_selector.open();
+        assert!(tab.type_selector.is_open());
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_results_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = StressFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+}

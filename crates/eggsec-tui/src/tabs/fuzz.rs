@@ -647,18 +647,19 @@ impl TabRender for FuzzTab {
             .split(config_area);
 
         if config_chunks.len() >= 10 {
+            let vh = f.area().height;
             if let Some(chunk) = config_chunks.get(7) {
-                if let Some(info) = self.payload_selector.dropdown_info(*chunk) {
+                if let Some(info) = self.payload_selector.dropdown_info(*chunk, vh) {
                     info.render(f);
                 }
             }
             if let Some(chunk) = config_chunks.get(8) {
-                if let Some(info) = self.mode_selector.dropdown_info(*chunk) {
+                if let Some(info) = self.mode_selector.dropdown_info(*chunk, vh) {
                     info.render(f);
                 }
             }
             if let Some(chunk) = config_chunks.get(9) {
-                if let Some(info) = self.target_selector.dropdown_info(*chunk) {
+                if let Some(info) = self.target_selector.dropdown_info(*chunk, vh) {
                     info.render(f);
                 }
             }

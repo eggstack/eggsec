@@ -645,3 +645,41 @@ impl TabInput for ScanPortsTab {
         Some(self.target().to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> ScanPortsTab {
+        ScanPortsTab::new()
+    }
+
+    #[test]
+    fn test_enter_in_inputs_focused_blurs_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanPortsFocusArea::Inputs;
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_options_toggles_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanPortsFocusArea::Options;
+        let before = tab.udp_checkbox.checked;
+        tab.handle_enter();
+        assert_eq!(tab.udp_checkbox.checked, !before);
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_results_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanPortsFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+}
