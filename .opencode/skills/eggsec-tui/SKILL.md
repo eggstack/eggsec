@@ -75,6 +75,25 @@ crates/eggsec-tui/src/
 - `y` / `n` confirm/cancel in confirmation dialog
 - `pending_key` cleared on overlay open (fixes stale `gg` after opening quick switch)
 
+## Session Fixes (2026-06-17)
+
+### Theme System Improvements
+- **luminance() 3-char hex fix**: `loader.rs` now expands `#FFF` to `#FFFFFF` before computing luminance (was returning 0.5 for all 3-char hex)
+- **Dead style methods removed**: `style_for_tab`, `style_for_mode`, `style_for_status` removed from `style.rs` (never called)
+- **Dead manager methods removed**: `register_theme_if_absent` (deprecated) and `set_current_by_name` (tests-only) removed from `manager.rs`
+- **Theme toggle logging**: `toggle()` now logs debug on `set_theme` failure instead of `let _ =`
+
+### Worker Error Handling
+- All `let _ =` on channel sends in `security.rs`, `c2_worker.rs`, `intercept_worker.rs`, `db_pentest.rs` now use `if let Err(e) = ... { tracing::warn!(...) }`
+
+### Dead Code Removal
+- **key_handler.rs**: Removed 20 dead shim methods (~180 lines) - `handle_global_shortcuts`, `handle_mode_specific_input`, `handle_normal_mode_input`, `handle_insert_mode_input`, `handle_topmost_overlay`, `handle_ctrl_c`, `handle_ctrl_f`, `handle_escape`, `handle_enter_insert_mode`, `handle_quit`, `handle_reset`, `handle_save_settings`, `handle_delete_entry`, `handle_enter`, `decode_command_palette`, `handle_command_palette`, `decode_overlay_input`, `handle_overlay_input`, `decode_quick_switch`, `handle_quick_switch`
+- **overlay.rs**: Removed 3 dead transition shim methods (~25 lines)
+- **settings/main.rs**: Removed dead `sync_with_theme` and `sync_theme_selector`
+
+### Session Management
+- Quarantine rename and orphan cleanup in `session.rs` now log errors instead of silent `let _ =`
+
 ### Policy Enforcement Alignment (2026-06-11)
 - TUI now uses the shared `EnforcementContext::evaluate()` (via `App.enforcement` initialized to `manual_permissive` in runner.rs) for **all** target-bearing launches. Matches the CLI model exactly (narrow `--yes` semantics, dedicated `--allow-*` flags, stable kebab audit strings).
 - **Central gate**: in `handle_enter` / before `spawn_task` (via `build_current_task` + `build_current_operation_descriptor` producing `OperationDescriptor`).

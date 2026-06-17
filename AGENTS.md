@@ -350,6 +350,17 @@ No remaining stub implementations.
 - **Session interval**: `auto_save_interval` clamped to min 1 second
 - **Session snapshots**: `load_latest_session` filters out `quick_save.json` from snapshot candidates
 
+### Session Fixes (2026-06-17)
+
+- **Theme luminance bug fixed**: `luminance()` in `theme/loader.rs` now correctly handles 3-char hex shorthand (#FFF → #FFFFFF) instead of returning neutral 0.5
+- **Dead style methods removed**: Removed `style_for_tab`, `style_for_mode`, `style_for_status` from `theme/style.rs` (never called anywhere)
+- **Dead manager methods removed**: Removed deprecated `register_theme_if_absent` and dead `set_current_by_name` from `theme/manager.rs` + 4 associated tests
+- **Theme toggle result handling**: `ThemeManager::toggle()` now logs debug on `set_theme` failure instead of discarding via `let _ =`
+- **Worker error handling**: All 15 `let _ =` on channel sends across `workers/security.rs`, `c2_worker.rs`, `intercept_worker.rs`, `db_pentest.rs` now use `if let Err(e) = ... { tracing::warn!(...) }`
+- **Dead shim methods removed**: Removed 20 dead transition shim methods from `app/key_handler.rs` (~180 lines) and 3 dead shim methods from `app/overlay.rs` (~25 lines)
+- **Dead settings methods removed**: Removed `sync_with_theme` and `sync_theme_selector` from `tabs/settings/main.rs` (never called)
+- **Session error handling**: Quarantine rename and orphan cleanup in `session.rs` now log errors instead of silent `let _ =`
+
 ### Active Wireless Reporting Bridge (2026-06-12)
 
 - **Bridge function**: `to_active_scan_report_data()` in `wireless/active/mod.rs` bridges `ActiveWirelessAttackResult` → `ScanReportData` with `wireless-active-*` finding categories (deauth, disassoc, etc.).

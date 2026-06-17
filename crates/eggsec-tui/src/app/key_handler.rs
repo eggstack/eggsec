@@ -196,19 +196,6 @@ impl KeyHandler {
         }
     }
 
-    // Compatibility wrapper so that any remaining internal self.handle_* calls
-    // inside this file continue to compile during the refactor. They now go
-    // through decode + immediate apply so that the public handle_key_event path
-    // still sees the same net mutations.
-    fn handle_global_shortcuts(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
-        let actions = self.decode_global_shortcuts(app, key);
-        if actions.is_empty() {
-            return false;
-        }
-        app.apply_actions(actions);
-        true
-    }
-
     fn decode_mode_specific_input(
         &self,
         app: &App,
@@ -377,50 +364,6 @@ impl KeyHandler {
         }
     }
 
-    fn handle_mode_specific_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
-        let actions = self.decode_mode_specific_input(app, key);
-        if actions.is_empty() {
-            // Special-case the one remaining tiny insert-mode mutation
-            // (autocomplete) so that the public path continues to work.
-            if app.mode == InputMode::Insert {
-                if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char(' ') {
-                    app.handle_autocomplete();
-                    return true;
-                }
-            }
-            return false;
-        }
-        app.apply_actions(actions);
-        true
-    }
-
-    fn handle_normal_mode_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
-        // For the compatibility path we also need to manage the 'g' pending
-        // write that the old code did directly.
-        if let (KeyModifiers::NONE, KeyCode::Char('g')) = (key.modifiers, key.code) {
-            if app.mode == InputMode::Normal {
-                app.pending_key = Some(KeyCode::Char('g'));
-                return true;
-            }
-        }
-        let actions = self.decode_normal_mode_input(app, key);
-        if actions.is_empty() {
-            return false;
-        }
-        app.apply_actions(actions);
-        true
-    }
-
-    fn handle_insert_mode_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
-        let actions = self.decode_insert_mode_input(app, key);
-        if actions.is_empty() {
-            // autocomplete handled in the mode wrapper above
-            return false;
-        }
-        app.apply_actions(actions);
-        true
-    }
-
     fn decode_topmost_overlay(&self, app: &App, key: &crossterm::event::KeyEvent) -> Vec<UiAction> {
         if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
             // Ctrl-C is always allowed to bubble out of overlays (historical).
@@ -438,133 +381,6 @@ impl KeyHandler {
         }
     }
 
-    // Compatibility wrapper (preserves the bool "handled" contract for any
-    // internal call sites that still use the old name during the transition).
-    fn handle_topmost_overlay(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
-        let actions = self.decode_topmost_overlay(app, key);
-        if actions.is_empty() {
-            return false;
-        }
-        app.apply_actions(actions);
-        true
-    }
-
-    // The old tiny handle_* methods that were only called from the now-replaced
-    // top-level handle_* paths are kept as thin shims that go through decode
-    // for uniformity where possible. Some (handle_enter_insert_mode, handle_quit,
-    // handle_reset, etc.) are still used by the compatibility wrappers above
-    // and by a few direct call sites; they now delegate to apply_action so that
-    // the "apply is the mutation point" contract is satisfied even for those
-    // legacy call sites during Phase 1.
-
-    fn handle_ctrl_c(&self, app: &mut App) {
-        // This path is no longer reached from the main handle_key_event
-        // (Ctrl-C is handled in decode_global_shortcuts), but keep for any
-        // direct callers.
-        let actions = if app.has_active_task() {
-            vec![UiAction::StopActiveTask {
-                message: "Interrupted by user".to_string(),
-            }]
-        } else {
-            vec![UiAction::Quit]
-        };
-        app.apply_actions(actions);
-    }
-
-    fn handle_ctrl_f(&self, app: &mut App) {
-        let actions = if app.is_search_visible() {
-            vec![UiAction::SearchPerform]
-        } else {
-            vec![UiAction::ToggleSearch { global: true }]
-        };
-        app.apply_actions(actions);
-    }
-
-    fn handle_escape(&self, app: &mut App) {
-        // pending_key clear is now done at the top of handle_key_event for the
-        // normal escape path; the overlay-specific escapes are emitted by decode.
-        // For any direct call we still want the old behavior, so we synthesize
-        // the right Escape (which apply will route based on current topmost).
-        app.apply_action(UiAction::Escape);
-    }
-
-    fn handle_enter_insert_mode(&self, app: &mut App) {
-        app.apply_action(UiAction::EnterInsertMode);
-    }
-
-    fn handle_quit(&self, app: &mut App) {
-        // The guard lives in decode now.
-        let actions = if !app.has_active_task() {
-            vec![UiAction::Quit]
-        } else {
-            vec![]
-        };
-        app.apply_actions(actions);
-    }
-
-    fn handle_reset(&self, app: &mut App) {
-        app.apply_action(UiAction::ResetCurrent);
-    }
-
-    fn handle_save_settings(&self, app: &mut App) {
-        app.apply_action(UiAction::SaveSettings);
-    }
-
-    fn handle_delete_entry(&self, app: &mut App) {
-        app.apply_action(UiAction::DeleteHistoryEntry);
-    }
-
-    fn handle_enter(&self, app: &mut App) {
-        // The policy/confirm special cases are now in decode_topmost_overlay.
-        // The generic Enter goes to the tab (or confirm).
-        app.apply_action(UiAction::Enter);
-    }
-
-    // Overlay-specific decode fns removed in Phase 2 (tui-architecture-usability-pass.md).
-    // All overlay routing + per-overlay rules now live in OverlayController (overlay.rs).
-    // The thin shims below are retained only for any remaining direct call sites
-    // during transition; they forward to the controller for uniformity.
-    // Overlay-specific decode fns removed in Phase 2 (tui-architecture-usability-pass.md).
-    // All overlay routing + per-overlay rules now live in OverlayController (overlay.rs).
-    // The thin shims below are retained only for any remaining direct call sites
-    // during transition; they forward to the controller for uniformity.
-    #[allow(dead_code)]
-    fn decode_command_palette(
-        &self,
-        _app: &App,
-        key: &crossterm::event::KeyEvent,
-    ) -> Vec<UiAction> {
-        OverlayController::new().decode_command_palette_for_shim(key)
-    }
-
-    #[allow(dead_code)]
-    fn handle_command_palette(&self, app: &mut App, key: &crossterm::event::KeyEvent) {
-        let actions = self.decode_command_palette(app, key);
-        app.apply_actions(actions);
-    }
-
-    #[allow(dead_code)]
-    fn decode_overlay_input(&self, app: &App, key: &crossterm::event::KeyEvent) -> Vec<UiAction> {
-        OverlayController::new().decode_overlay_input_for_shim(app, key)
-    }
-
-    #[allow(dead_code)]
-    fn handle_overlay_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) {
-        let actions = self.decode_overlay_input(app, key);
-        app.apply_actions(actions);
-    }
-
-    #[allow(dead_code)]
-    fn decode_quick_switch(&self, _app: &App, key: &crossterm::event::KeyEvent) -> Vec<UiAction> {
-        OverlayController::new().decode_quick_switch_for_shim(key)
-    }
-
-    #[allow(dead_code)]
-    fn handle_quick_switch(&self, app: &mut App, key: &crossterm::event::KeyEvent) {
-        let actions = self.decode_quick_switch(app, key);
-        app.apply_actions(actions);
-    }
-
     // The old clamp is no longer needed; the logic lives in apply_action for
     // QuickSwitchInput variants that mutate selection.
 }
@@ -579,7 +395,7 @@ impl Default for KeyHandler {
 mod tests {
     use super::*;
     use crate::app::{
-        create_shared_history, App, CommandPaletteInput, PendingAction, QuickSwitchInput,
+        create_shared_history, App, PendingAction, QuickSwitchInput,
     };
     use crossterm::event::KeyEvent;
 

@@ -48,5 +48,5 @@ pub fn display_theme_name(id: &str) -> String {
 pub use legacy::sync_theme_to_thread_local;
 pub use manager::ThemeManager;
 pub use palette::Theme;
-#[allow(unused_imports)]
+#[allow(unused_imports)] // Used in tests and theme module internals
 pub use palette::ThemeMode;

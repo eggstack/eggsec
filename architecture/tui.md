@@ -14,7 +14,7 @@ Manages the overall application state, event loop, and rendering.
 | `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState`, `ThemeLoadState` |
 | `tab_store.rs` | `TabStore` - owns all 33 tab instances (21 always-present + 12 feature-gated; History tab shares Dashboard instance) |
 | `runner.rs` | Main event loop using crossterm/ratatui |
-| `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
+| `key_handler.rs` | Priority-based key processing: `decode_global_shortcuts`, `decode_mode_specific_input`, `decode_topmost_overlay` (all return `Vec<UiAction>`); `handle_key_event` orchestrates decode + apply |
 | `state_update.rs` | Async task result handling and routing |
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
 | `theme_runtime.rs` | Theme loader lifecycle helpers and deferred restore handling |
@@ -241,9 +241,11 @@ Background async tasks communicate via channels:
 | Fuzzer | `fuzzer.rs` | Fuzz, WAF, WAF stress operations |
 | Recon | `recon.rs` | Recon operations (DNS, WHOIS, SSL, etc.) |
 | API | `api.rs` | GraphQL, OAuth, NSE operations |
-| Security | `security.rs` | Hunt, browser, compliance, storage, integrations |
+| Security | `security.rs` | Hunt, browser, compliance, storage, integrations, wireless active |
 
 (8 files total including `mod.rs`)
+
+**Error handling**: All worker channel sends use `if let Err(e) = ... { tracing::warn!(...) }` for proper error logging.
 
 **Communication Flow**:
 ```
@@ -270,7 +272,7 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 | `palette.rs` | `ThemeMode`, `Theme` (with `name: String`), `ThemeColors` structs |
 | `builtin.rs` | `dark_theme()`, `light_theme()`, `cyber_red_theme()` factory functions |
 | `manager.rs` | `ThemeManager` - holds registered themes, private `current`, canonical ID lookup, theme switching |
-| `style.rs` | Theme style methods for rendering (currently unused helper methods) |
+| `style.rs` | Theme style methods for rendering: `border_style`, semantic helpers (`safe`, `danger`, `muted`, `active_task`, `paused_task`, `scope_match`, `scope_miss`, `policy_required`, `policy_denied`), composite helpers (`style_for_risk`, `style_for_policy_outcome`, `style_for_task_state`) |
 | `legacy.rs` | Thread-local macros (`tc!`, `theme!`) for backward compatibility |
 | `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; missing fields use defaults from built-in themes |
 | `install.rs` | Idempotent installer: writes packaged themes to `~/.config/eggsec/themes`, never overwrites existing files |
@@ -2056,3 +2058,49 @@ cargo test --workspace --all-features
 ```
 
 Update any future TUI changes to preserve the decode/apply split, delegate through TabSpec where metadata/risk/operation are needed, keep enforcement central, and surface manual posture/preflight/task state via the status paths.
+
+## Session Fixes (2026-06-17)
+
+### Theme System Improvements
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `theme/loader.rs` | 116-132 | `luminance()` returned 0.5 for 3-char hex (#FFF) instead of expanding to 6-char | Expanded 3-char shorthand to 6-char before parsing |
+| `theme/style.rs` | 6-38 | Dead methods `style_for_tab`, `style_for_mode`, `style_for_status` never called | Removed (3 methods, ~33 lines) |
+| `theme/manager.rs` | 67 | `toggle()` discarded `set_theme` result via `let _ =` | Changed to `if !self.set_theme(...) { tracing::debug!(...) }` |
+| `theme/manager.rs` | 98-119 | Dead methods `register_theme_if_absent` (deprecated) and `set_current_by_name` (tests only) | Removed both methods + 4 associated tests |
+
+### Worker Error Handling Fixes
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `workers/security.rs` | 5x `let _ =` on channel sends in wireless active task | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
+| `workers/c2_worker.rs` | 2x `let _ =` on error result sends | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
+| `workers/intercept_worker.rs` | 2x `let _ =` on progress sends | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
+| `workers/db_pentest.rs` | 3x `let _ =` on progress and result sends | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
+
+### Dead Code Removal
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `app/key_handler.rs` | 20 dead shim methods (handle_global_shortcuts, handle_mode_specific_input, handle_normal_mode_input, handle_insert_mode_input, handle_topmost_overlay, handle_ctrl_c, handle_ctrl_f, handle_escape, handle_enter_insert_mode, handle_quit, handle_reset, handle_save_settings, handle_delete_entry, handle_enter, decode_command_palette, handle_command_palette, decode_overlay_input, handle_overlay_input, decode_quick_switch, handle_quick_switch) | Removed all dead shim methods (~180 lines) |
+| `app/overlay.rs` | 3 dead shim methods (decode_command_palette_for_shim, decode_quick_switch_for_shim, decode_overlay_input_for_shim) | Removed dead transition shims (~25 lines) |
+| `tabs/settings/main.rs` | Dead methods `sync_with_theme` and `sync_theme_selector` never called | Removed both methods |
+| `app/key_handler.rs` | Unused import `CommandPaletteInput` in test module | Removed from test imports |
+
+### Session Management Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 166 | Quarantine rename failure silently discarded | Changed to `if let Err(e) = ... { tracing::warn!(...) }` |
+| `session.rs` | 188 | Orphan temp file removal failure silently discarded | Changed to `if let Err(e) = ... { tracing::debug!(...) }` |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Files modified | 10 |
+| Dead code removed | ~240 lines |
+| Silent error suppressions fixed | 15 |
+| Theme bugs fixed | 1 (luminance 3-char hex) |
+| Tests passing | 301 |

@@ -163,7 +163,13 @@ impl SessionManager {
                         "session file is corrupt; quarantining and trying next"
                     );
                     let quarantine = entry.path().with_extension("json.bad");
-                    let _ = fs::rename(entry.path(), quarantine);
+                    if let Err(e) = fs::rename(entry.path(), &quarantine) {
+                        tracing::warn!(
+                            path = %entry.path().display(),
+                            error = %e,
+                            "failed to quarantine corrupt session file"
+                        );
+                    }
                 }
             }
         }
@@ -185,7 +191,13 @@ impl SessionManager {
             {
                 if let Some(modified) = entry.metadata().ok().and_then(|m| m.modified().ok()) {
                     if modified.elapsed().unwrap_or_default() > Duration::from_secs(3600) {
-                        let _ = fs::remove_file(&path);
+                        if let Err(e) = fs::remove_file(&path) {
+                            tracing::debug!(
+                                path = %path.display(),
+                                error = %e,
+                                "failed to remove orphaned temp session file"
+                            );
+                        }
                     }
                 }
             }

@@ -206,32 +206,4 @@ impl OverlayController {
             _ => vec![],
         }
     }
-
-    // ---------------------------------------------------------------------
-    // Transition shims for any remaining direct call sites in KeyHandler.
-    // These are intentionally not pub and are only for the old private fns
-    // that now delegate. Phase 2 callers should prefer the main `decode`.
-    // ---------------------------------------------------------------------
-
-    pub(crate) fn decode_command_palette_for_shim(
-        &self,
-        key: &crossterm::event::KeyEvent,
-    ) -> Vec<UiAction> {
-        self.decode_command_palette(key)
-    }
-
-    pub(crate) fn decode_quick_switch_for_shim(
-        &self,
-        key: &crossterm::event::KeyEvent,
-    ) -> Vec<UiAction> {
-        self.decode_quick_switch(key)
-    }
-
-    pub(crate) fn decode_overlay_input_for_shim(
-        &self,
-        app: &App,
-        key: &crossterm::event::KeyEvent,
-    ) -> Vec<UiAction> {
-        self.decode_overlay_input(app, key)
-    }
 }

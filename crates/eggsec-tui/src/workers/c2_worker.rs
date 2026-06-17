@@ -28,15 +28,19 @@ pub async fn run_c2_task(
         Ok(Ok(report)) => report,
         Ok(Err(e)) => {
             tracing::warn!("C2 simulation error: {}", e);
-            let _ = result_tx
+            if let Err(send_err) = result_tx
                 .send(TaskResult::Error(format!("C2 simulation failed: {}", e)))
-                .await;
+                .await {
+                tracing::warn!("Failed to send C2 error result: {}", send_err);
+            }
             return Ok(());
         }
         Err(_) => {
-            let _ = result_tx
+            if let Err(send_err) = result_tx
                 .send(TaskResult::Error("C2 simulation timed out".to_string()))
-                .await;
+                .await {
+                tracing::warn!("Failed to send C2 timeout result: {}", send_err);
+            }
             return Ok(());
         }
     };

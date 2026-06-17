@@ -855,7 +855,9 @@ pub async fn run_wireless_task(
             }
         }
         Err(e) => {
-            let _ = result_tx.send(TaskResult::Error(e.to_string())).await;
+            if let Err(send_err) = result_tx.send(TaskResult::Error(e.to_string())).await {
+                tracing::warn!("Failed to send wireless error result: {}", send_err);
+            }
         }
     }
     Ok(())
@@ -876,7 +878,9 @@ pub async fn run_wireless_active_task(
     use eggsec::wireless::active::ActiveAttackConfig;
     use eggsec::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
 
-    let _ = progress_tx.send((0, 2)).await;
+    if let Err(e) = progress_tx.send((0, 2)).await {
+        tracing::warn!("Failed to send wireless active progress: {}", e);
+    }
 
     let parsed_bssid = bssid.as_deref().and_then(ActiveAttackConfig::parse_mac);
     let parsed_client = client.as_deref().and_then(ActiveAttackConfig::parse_mac);
@@ -906,21 +910,29 @@ pub async fn run_wireless_active_task(
         }
     };
 
-    let _ = progress_tx.send((2, 2)).await;
+    if let Err(e) = progress_tx.send((2, 2)).await {
+        tracing::warn!("Failed to send wireless active progress: {}", e);
+    }
 
     match result {
         Ok(Ok(attack_result)) => {
-            let _ = result_tx.send(super::runner::TaskResult::WirelessActive(attack_result)).await;
+            if let Err(e) = result_tx.send(super::runner::TaskResult::WirelessActive(attack_result)).await {
+                tracing::warn!("Failed to send wireless active result: {}", e);
+            }
         }
         Ok(Err(e)) => {
-            let _ = result_tx.send(super::runner::TaskResult::Error(
+            if let Err(send_err) = result_tx.send(super::runner::TaskResult::Error(
                 format!("Active wireless attack failed: {e}")
-            )).await;
+            )).await {
+                tracing::warn!("Failed to send wireless active error result: {}", send_err);
+            }
         }
         Err(_) => {
-            let _ = result_tx.send(super::runner::TaskResult::Error(
+            if let Err(send_err) = result_tx.send(super::runner::TaskResult::Error(
                 "Active wireless attack timed out after 60s".to_string()
-            )).await;
+            )).await {
+                tracing::warn!("Failed to send wireless active timeout result: {}", send_err);
+            }
         }
     }
     Ok(())

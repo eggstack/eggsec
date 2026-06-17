@@ -117,14 +117,25 @@ fn luminance(hex: &str) -> f64 {
     let Some(hex) = hex.strip_prefix('#') else {
         return 0.5;
     };
+    // Expand 3-char shorthand hex (#FFF -> #FFFFFF) before parsing
+    let hex = if hex.len() == 3 {
+        let mut expanded = String::with_capacity(6);
+        for ch in hex.chars() {
+            expanded.push(ch);
+            expanded.push(ch);
+        }
+        expanded
+    } else {
+        hex.to_string()
+    };
+    if hex.len() < 6 {
+        return 0.5;
+    }
     let parse = |start: usize| -> f64 {
         u8::from_str_radix(&hex[start..start + 2], 16)
             .map(|v| v as f64 / 255.0)
             .unwrap_or(0.0)
     };
-    if hex.len() < 6 {
-        return 0.5;
-    }
     let r = parse(0);
     let g = parse(2);
     let b = parse(4);

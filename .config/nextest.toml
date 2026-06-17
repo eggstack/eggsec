@@ -1,0 +1,36 @@
+[store]
+dir = "target/nextest"
+
+# Default profile for all test runs
+[profile.default]
+# Per-test timeout - kill test if it exceeds 60s
+slow-timeout = { period = "60s", terminate-after = 3 }
+# Retry flaky tests twice locally (CI will override)
+retries = 2
+
+# CI profile with stricter settings
+[profile.ci]
+# No retries in CI - flaky tests must be fixed
+retries = 0
+# Per-test timeout - kill test if it exceeds 90s (more lenient for CI runners)
+slow-timeout = { period = "90s", terminate-after = 3 }
+# Fail fast - stop on first failure
+fail-fast = false
+
+# Unit tests - quick, parallel, no retries needed
+[profile.unit]
+filter = 'test(/^tests::/)'
+retries = 0
+slow-timeout = { period = "10s", terminate-after = 2 }
+
+# Integration tests - may need network
+[profile.integration]
+filter = 'test(/^test/)'
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 3 }
+
+# NSE tests - feature-gated, may be slow
+[profile.nse]
+filter = 'package(eggsec) + test(nse)'
+retries = 1
+slow-timeout = { period = "180s", terminate-after = 2 }

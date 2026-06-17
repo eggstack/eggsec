@@ -487,16 +487,6 @@ impl SettingsTab {
         self.config = Some(config);
     }
 
-    pub fn sync_with_theme(&mut self, theme: &crate::theme::Theme) {
-        let theme_name = canonical_theme_id(&theme.name);
-        self.theme_selector.select_by_value(&theme_name);
-    }
-
-    pub fn sync_theme_selector(&mut self, theme_name: &str) {
-        let theme_name = canonical_theme_id(theme_name);
-        self.theme_selector.select_by_value(&theme_name);
-    }
-
     pub fn reset(&mut self) {
         self.config = None;
         self.error = None;
