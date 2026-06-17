@@ -517,32 +517,27 @@ impl TabInput for OAuthTab {
             self.stop();
             return;
         }
-        match self.focus_area {
-            OAuthFocusArea::Inputs => {
-                self.inputs.blur();
-                return;
-            }
-            OAuthFocusArea::Options => {
-                let checkboxes = [
-                    &mut self.redirect_test_checkbox,
-                    &mut self.scope_test_checkbox,
-                    &mut self.state_test_checkbox,
-                    &mut self.grant_test_checkbox,
-                ];
-                let idx = self.checkbox_focus_index % checkboxes.len();
-                checkboxes[idx].toggle();
-                return;
-            }
-            OAuthFocusArea::Results => {
-                return;
-            }
+        if self.focus_area == OAuthFocusArea::Results {
+            return;
         }
-
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
+        if self.focus_area == OAuthFocusArea::Inputs && self.inputs.is_focused() {
+            self.inputs.blur();
+            return;
         }
+        if self.focus_area == OAuthFocusArea::Options {
+            let checkboxes = [
+                &mut self.redirect_test_checkbox,
+                &mut self.scope_test_checkbox,
+                &mut self.state_test_checkbox,
+                &mut self.grant_test_checkbox,
+            ];
+            let idx = self.checkbox_focus_index % checkboxes.len();
+            checkboxes[idx].toggle();
+            return;
+        }
+        // focus_area is Inputs but inputs.is_focused() == false (user tabbed past last field).
+        // At this point is_running() is guaranteed false; start the scan.
+        self.start();
     }
 
     fn handle_escape(&mut self) {
@@ -640,5 +635,43 @@ impl TabInput for OAuthTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> OAuthTab {
+        OAuthTab::new()
+    }
+
+    #[test]
+    fn test_handle_enter_results_focus_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = OAuthFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_handle_enter_options_toggles_checkbox() {
+        let mut tab = create_test_tab();
+        tab.focus_area = OAuthFocusArea::Options;
+        let before = tab.redirect_test_checkbox.checked;
+        tab.handle_enter();
+        assert_eq!(tab.redirect_test_checkbox.checked, !before);
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_handle_enter_inputs_focused_blurs() {
+        let mut tab = create_test_tab();
+        tab.focus_area = OAuthFocusArea::Inputs;
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
     }
 }

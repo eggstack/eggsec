@@ -420,7 +420,7 @@ fn get_preflight_status(
                 if compact {
                     "out"
                 } else {
-                    "out"
+                    "out-of-scope"
                 }
             }
             Err(_) => "?",

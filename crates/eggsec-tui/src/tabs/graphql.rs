@@ -468,32 +468,27 @@ impl TabInput for GraphQlTab {
             self.stop();
             return;
         }
-        match self.focus_area {
-            GraphQlFocusArea::Inputs => {
-                self.inputs.blur();
-                return;
-            }
-            GraphQlFocusArea::Options => {
-                let checkboxes = [
-                    &mut self.introspection_checkbox,
-                    &mut self.inject_checkbox,
-                    &mut self.depth_bypass_checkbox,
-                    &mut self.alias_overload_checkbox,
-                ];
-                let idx = self.checkbox_focus_index % checkboxes.len();
-                checkboxes[idx].toggle();
-                return;
-            }
-            GraphQlFocusArea::Results => {
-                return;
-            }
+        if self.focus_area == GraphQlFocusArea::Results {
+            return;
         }
-
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
+        if self.focus_area == GraphQlFocusArea::Inputs && self.inputs.is_focused() {
+            self.inputs.blur();
+            return;
         }
+        if self.focus_area == GraphQlFocusArea::Options {
+            let checkboxes = [
+                &mut self.introspection_checkbox,
+                &mut self.inject_checkbox,
+                &mut self.depth_bypass_checkbox,
+                &mut self.alias_overload_checkbox,
+            ];
+            let idx = self.checkbox_focus_index % checkboxes.len();
+            checkboxes[idx].toggle();
+            return;
+        }
+        // focus_area is Inputs but inputs.is_focused() == false (user tabbed past last field).
+        // At this point is_running() is guaranteed false; start the scan.
+        self.start();
     }
 
     fn handle_escape(&mut self) {
@@ -591,5 +586,47 @@ impl TabInput for GraphQlTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> GraphQlTab {
+        GraphQlTab::new()
+    }
+
+    #[test]
+    fn test_handle_enter_results_focus_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = GraphQlFocusArea::Results;
+        // Should not crash, should not start
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_handle_enter_options_toggles_checkbox() {
+        let mut tab = create_test_tab();
+        tab.focus_area = GraphQlFocusArea::Options;
+        let before = tab.introspection_checkbox.checked;
+        tab.handle_enter();
+        assert_eq!(tab.introspection_checkbox.checked, !before);
+        // Not running yet
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_handle_enter_inputs_focused_blurs() {
+        let mut tab = create_test_tab();
+        tab.focus_area = GraphQlFocusArea::Inputs;
+        tab.inputs.focus(0);
+        // Make sure focused
+        assert!(tab.inputs.is_focused());
+        tab.handle_enter();
+        // Should blur, not start
+        assert!(!tab.inputs.is_focused());
+        assert!(!tab.is_running());
     }
 }
