@@ -84,6 +84,7 @@ impl KeyHandler {
     /// Decode entry point (pub(crate) so tests can directly assert decode
     /// results without going through apply, per the Phase 1 test guidance).
     /// Manages the transient pending_key field on App (decode state only).
+    #[allow(dead_code)] // only used in #[cfg(test)] decode tests
     pub(crate) fn decode_key_event(
         &self,
         app: &mut App,

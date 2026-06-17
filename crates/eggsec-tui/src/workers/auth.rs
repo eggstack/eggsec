@@ -4,7 +4,7 @@ pub async fn run_auth_task(
     target: String,
     username: Option<String>,
     password_list: Option<String>,
-    credential_file: Option<String>,
+    _credential_file: Option<String>,
     max_attempts: usize,
     concurrency: usize,
     timeout: u64,

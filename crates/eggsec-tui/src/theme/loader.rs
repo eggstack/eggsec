@@ -42,6 +42,7 @@ struct HalloyText {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)] // Several fields are reserved for forward-compat with future theme use
 struct HalloyBuffer {
     action: Option<String>,
     background: Option<String>,
@@ -65,6 +66,7 @@ struct HalloyButtons {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)] // Hover/selected variants reserved for future use
 struct HalloyButtonStyle {
     background: Option<String>,
     background_hover: Option<String>,
@@ -354,6 +356,7 @@ pub fn load_halloy_theme(content: &str, file_stem: &str) -> Result<Theme, ThemeL
     halloy_to_theme(&halloy, file_stem)
 }
 
+#[allow(dead_code)] // Used in #[cfg(test)] only
 pub fn load_halloy_theme_bytes(content: &[u8], file_stem: &str) -> Result<Theme, ThemeLoadError> {
     let s = std::str::from_utf8(content).map_err(|e| {
         use serde::de::Error;

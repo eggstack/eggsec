@@ -38,6 +38,10 @@ pub struct TabSpec {
     pub title: &'static str,
     pub cli_command: &'static str,
     pub description: &'static str,
+    /// Tab grouping for filtering/grouping (reserved for future use; not
+    /// currently rendered anywhere). Each spec sets one of Assessment,
+    /// Traffic, Reporting, Configuration, Workflow, History, Dashboard.
+    #[allow(dead_code)]
     pub category: TabCategory,
     pub risk_group: TabRiskGroup,
     pub feature: Option<&'static str>,
@@ -482,6 +486,7 @@ pub fn tab_specs() -> &'static [TabSpec] {
     TAB_SPECS
 }
 
+#[allow(dead_code)] // used in mod.rs tests; kept for forward compat
 pub fn all_specs() -> &'static [TabSpec] {
     TAB_SPECS
 }
@@ -511,6 +516,7 @@ impl Tab {
     }
 }
 
+#[allow(dead_code)] // used in mod.rs tests; kept for forward compat
 pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
     let specs = vec![
         spec_for(Tab::Recon).unwrap(),

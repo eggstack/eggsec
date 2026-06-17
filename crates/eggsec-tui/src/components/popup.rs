@@ -9,10 +9,11 @@ use ratatui::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupKind {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // reserved for future informational popups
     Info,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // reserved for future warning popups
     Warning,
+    #[allow(dead_code)] // reserved for future error popups
     Error,
     Confirm,
     Help,

@@ -48,7 +48,7 @@ use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use eggsec::config::{
     confirmation_classes_for, EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
-    ManualOverride, OperationDescriptor, OperationMode, OperationRisk,
+    ManualOverride, OperationDescriptor, OperationMode,
 };
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
@@ -959,7 +959,7 @@ impl App {
             // Re-evaluate using the same central path the CLI uses (EnforcementContext).
             let outcome = self.enforcement.evaluate(&pending.descriptor);
             match outcome {
-                EnforcementOutcome::Allow(d) | EnforcementOutcome::Warn(d) => {
+                EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                     // already allowed; unusual after we got RequireConfirmation, but proceed
                     tracing::info!(operation = %pending.descriptor.operation, "policy allowed after re-eval (no override needed)");
                     if let Some(cfg) = pending.captured_task_config {
