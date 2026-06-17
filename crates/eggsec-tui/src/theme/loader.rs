@@ -160,11 +160,19 @@ fn luminance(color: &str) -> f64 {
         "lightcyan" => 0.8,
         "magenta" | "purple" => 0.4,
         _ => {
-            // Unknown color name - warn so contributors notice non-standard names.
-            tracing::warn!(
-                "Theme color '{}' is not a recognized name; defaulting to neutral luminance",
-                color
-            );
+            // Unknown color name - warn once per unique name to avoid noise.
+            use std::sync::LazyLock;
+            static WARNED_COLORS: LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+                LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+            let color_lower = color.to_ascii_lowercase();
+            if let Ok(mut warned) = WARNED_COLORS.lock() {
+                if warned.insert(color_lower) {
+                    tracing::warn!(
+                        "Theme color '{}' is not a recognized name; defaulting to neutral luminance",
+                        color
+                    );
+                }
+            }
             0.5
         }
     }

@@ -36,11 +36,11 @@ TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverr
 ## Module Structure
 
 ```
-crates/eggsec/src/tui/
+crates/eggsec-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
 │   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
-│   ├── tab_store.rs     # TabStore - owns all 30 tab instances
+│   ├── tab_store.rs     # TabStore - owns all 33 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
 │   ├── state_update.rs  # Background task handling, result dispatch
@@ -660,7 +660,7 @@ When adding new error types, prefer adding to this list rather than creating new
 
 ## Tab Count
 
-The `Tab` enum in `tui/tabs/mod.rs` has exactly **30 variants**. Do not reference "29 tabs" or "31 payload types" — these are stale counts from earlier versions.
+The `Tab` enum in `tabs/mod.rs` has exactly **33 variants**. Do not reference "30 tabs" or "31 payload types" — these are stale counts from earlier versions.
 
 ## Uniform Look & Feel (Completed)
 
@@ -791,3 +791,12 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 - **Terminal too small message**: clearer wording ("Resize your window or scroll horizontally").
 - **Dead code warnings**: 16 TUI dead-code warnings reduced to 0 by adding `#[allow(dead_code)]` annotations with explanatory comments on forward-compat fields (HalloyBuffer/HalloyButtonStyle, PopupKind::Info/Warning/Error, TabSpec::category, theme constants, `decode_key_event`, etc.).
 - **9 new unit tests**: 3 for `graphql::handle_enter`, 3 for `oauth::handle_enter`, 4 for `popup::content` (including the overflow guard). All 311 TUI tests pass.
+
+## Session Fixes (2026-06-17) - TUI Bugs Plan
+
+- **gg normal-mode sequence fixed**: Added `UiAction::BeginGgSequence` to `action.rs`; `decode_normal_mode_input` returns it for first `g`; `apply_action` sets `pending_key = Some(KeyCode::Char('g'))`. Second `g` in `handle_key_event` now correctly triggers `MoveTop`. 3 new regression tests.
+- **Ctrl-Space autocomplete fixed**: Added `UiAction::Autocomplete` to `action.rs`; `decode_insert_mode_input` returns it for Ctrl-Space; `apply_action` calls `handle_autocomplete()` and sets `needs_redraw` on success. 2 new tests.
+- **Settings theme selector notification**: `handle_enter()` now shows `Notification::new("Theme: ...", Info)` on successful theme change and `Notification::new("Theme not available: ...", Warning)` on failure, matching Ctrl+T feedback.
+- **Settings footer wording**: Changed `[Esc] Discard` to `[Esc] Back` to match actual behavior (Escape navigates back, does not discard unsaved edits).
+- **Theme loader warning dedup**: `luminance()` now uses `LazyLock<Mutex<FxHashSet>>` to warn once per unique unknown color name per process lifetime instead of per occurrence.
+- **Documentation drift fixed**: `AGENTS.override.md` module path corrected from `crates/eggsec/src/tui/` to `crates/eggsec-tui/src/`; tab count corrected from "30" to "33".

@@ -234,39 +234,7 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char('l')) => vec![UiAction::MoveRight],
 
             (KeyModifiers::NONE, KeyCode::Char('G')) => vec![UiAction::MoveBottom],
-            (KeyModifiers::NONE, KeyCode::Char('g')) => {
-                // Record the pending 'g' for the gg lookahead.
-                // The actual second-g handling is done in the early return in
-                // handle_key_event / decode_key_event. Returning an empty list here
-                // keeps the pending state for the next key; the caller will have
-                // already cleared it on the first g.
-                // We still need to set the pending_key so the next decode sees it.
-                // Because decode is read-only on App for the main path, we set it
-                // via the App we were given (the public path does the take before
-                // calling decode). For the direct decode_key_event test path we
-                // also set it here.
-                // In practice the public handle_key_event already did the take
-                // before reaching here for a plain 'g', so we set it back for the
-                // next event.
-                // (This is the only place we still write to a decode-state field
-                // from decode; it is transient 1-char lookahead state.)
-                // We cannot avoid the write if we want the state machine to work
-                // when someone calls decode directly in tests. So we do the write.
-                // The field is documented as "transient decode state".
-                // Safety: this is exactly the historical behavior.
-                // (We are &App here in the pure signature; the real call sites
-                // pass &mut App to the wrapper that does the write. For the
-                // pub(crate) decode_key_event we take &mut App.)
-                // To keep the signature clean we accept that the normal-mode
-                // 'g' case is the one place decode still observes/mutates the
-                // pending_key field on the App it was given.
-                // In this read-only &App version we just return the intent that
-                // "a first g was seen"; the caller of the &App variant will
-                // have to manage pending. The &mut App variant below does the set.
-                // For now we keep the write in the &mut App path that the
-                // existing handle_* wrappers use.
-                vec![]
-            }
+            (KeyModifiers::NONE, KeyCode::Char('g')) => vec![UiAction::BeginGgSequence],
             (KeyModifiers::NONE, KeyCode::Char('w')) => vec![UiAction::MoveWordForward],
             (KeyModifiers::SHIFT, KeyCode::Char('B')) => vec![UiAction::MoveWordBackward],
             (KeyModifiers::NONE, KeyCode::Char('n')) => vec![UiAction::NextTab],
@@ -329,35 +297,7 @@ impl KeyHandler {
         key: &crossterm::event::KeyEvent,
     ) -> Vec<UiAction> {
         match (key.modifiers, key.code) {
-            (KeyModifiers::CONTROL, KeyCode::Char(' ')) => {
-                // Autocomplete is a tab-local action; we still want it to go
-                // through the central apply for uniformity, but it is tiny.
-                // We emit a dedicated action that apply will route to the
-                // existing handle_autocomplete for now.
-                // (For Phase 1 we keep it simple and just call the old path
-                // via a one-off action; the action enum already has room for
-                // future expansion. Here we synthesize an ad-hoc by using
-                // a no-op + side note, but instead we just let the wrapper
-                // call the old tiny method. To keep decode pure we add a
-                // small action.)
-                // For cleanliness we introduce no new variant yet; the
-                // wrapper will call handle_autocomplete directly (it only
-                // mutates the focused tab dispatcher, which is acceptable
-                // "tab content" mutation). We return empty here so the
-                // caller knows "handled inside insert path".
-                // Actually, to keep the contract that decode returns the
-                // actions and apply performs them, we can treat autocomplete
-                // as a tab-dispatcher mutation that still happens in apply
-                // time. For Phase 1 we add a tiny action that apply will
-                // special-case to call the dispatcher method.
-                // To avoid enlarging the enum further right now we keep the
-                // historical tiny mutation inside the compatibility wrapper
-                // for insert-mode autocomplete (it does not change global UI
-                // state in the same way as the other actions). All the
-                // plan-mandated decode tests still pass because they do not
-                // exercise autocomplete.
-                vec![]
-            }
+            (KeyModifiers::CONTROL, KeyCode::Char(' ')) => vec![UiAction::Autocomplete],
             (KeyModifiers::NONE, KeyCode::Backspace) => vec![UiAction::Backspace],
             (KeyModifiers::NONE, KeyCode::Delete) => vec![UiAction::Delete],
             (KeyModifiers::NONE, KeyCode::Char(c)) => vec![UiAction::InputChar(c)],
@@ -685,6 +625,49 @@ mod tests {
     }
 
     #[test]
+    fn test_first_g_sets_pending_state_without_moving() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::BeginGgSequence]);
+        // Apply the action and verify pending_key is set
+        app.apply_action(UiAction::BeginGgSequence);
+        assert_eq!(app.pending_key, Some(KeyCode::Char('g')));
+    }
+
+    #[test]
+    fn test_gg_emits_move_top() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        // First g sets pending
+        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.pending_key, Some(KeyCode::Char('g')));
+
+        // Second g should trigger MoveTop
+        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert!(app.pending_key.is_none());
+    }
+
+    #[test]
+    fn test_non_g_key_clears_pending_state() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        // First g sets pending
+        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.pending_key, Some(KeyCode::Char('g')));
+
+        // Pressing a non-g key should clear pending state
+        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert!(app.pending_key.is_none());
+    }
+
+    #[test]
     fn test_decode_normal_backspace_delete_do_not_edit() {
         let mut app = create_test_app();
         let handler = KeyHandler::new();
@@ -709,5 +692,33 @@ mod tests {
         assert!(actions.is_empty());
 
         assert_eq!(app.tabs.recon.inputs.fields[0].value, "abc");
+    }
+
+    #[test]
+    fn test_decode_ctrl_space_emits_autocomplete() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.mode = InputMode::Insert;
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char(' '), KeyModifiers::CONTROL),
+        );
+        assert_eq!(actions, vec![UiAction::Autocomplete]);
+    }
+
+    #[test]
+    fn test_ctrl_space_autocomplete_in_insert_mode() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.mode = InputMode::Insert;
+
+        app.needs_redraw = false;
+        handler.handle_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char(' '), KeyModifiers::CONTROL),
+        );
+
+        assert!(app.needs_redraw);
     }
 }

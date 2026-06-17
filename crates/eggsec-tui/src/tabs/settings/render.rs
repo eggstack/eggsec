@@ -181,7 +181,7 @@ impl TabRender for super::SettingsTab {
         // (1 line above the status bar) so it is always visible.
         if inner.height >= 2 {
             let hint = Paragraph::new(
-                "[s] Save   [Esc] Discard   [Tab] Next field   [\u{2191}\u{2193}] Section",
+                "[s] Save   [Esc] Back   [Tab] Next field   [\u{2191}\u{2193}] Section",
             )
             .style(Style::default().fg(tc!(text_dim)));
             let hint_area = Rect {

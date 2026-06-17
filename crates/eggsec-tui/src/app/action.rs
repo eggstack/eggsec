@@ -78,6 +78,9 @@ pub enum UiAction {
     MoveRight,
     MoveTop,
     MoveBottom,
+
+    // Normal-mode gg sequence (first g)
+    BeginGgSequence,
     MoveWordForward,
     MoveWordBackward,
     Home,
@@ -92,6 +95,9 @@ pub enum UiAction {
     InputChar(char),
     Backspace,
     Delete,
+
+    // Autocomplete (Ctrl-Space in insert mode)
+    Autocomplete,
 
     // Clipboard (apply performs the actual Clipboard I/O + dispatch)
     Paste(String),

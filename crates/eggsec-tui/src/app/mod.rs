@@ -318,8 +318,19 @@ impl App {
                     crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
                     self.update_settings_theme_selector();
                     self.needs_redraw = true;
+                    self.overlay.notification = Some(Notification::new(
+                        format!(
+                            "Theme: {}",
+                            display_theme_name(&self.theme_manager.current().name)
+                        ),
+                        NotificationSeverity::Info,
+                    ));
                 } else {
                     tracing::warn!("Unknown theme selected: {}", theme_name);
+                    self.overlay.notification = Some(Notification::new(
+                        format!("Theme not available: {}", theme_name),
+                        NotificationSeverity::Warning,
+                    ));
                 }
             }
         }
@@ -1370,6 +1381,11 @@ impl App {
                 self.needs_redraw = true;
             }
 
+            UiAction::BeginGgSequence => {
+                self.pending_key = Some(KeyCode::Char('g'));
+                // No visible change on first g — do not set needs_redraw
+            }
+
             UiAction::MoveBottom => {
                 self.handle_bottom();
                 self.needs_redraw = true;
@@ -1423,6 +1439,12 @@ impl App {
             UiAction::Delete => {
                 self.handle_delete();
                 self.needs_redraw = true;
+            }
+
+            UiAction::Autocomplete => {
+                if self.handle_autocomplete() {
+                    self.needs_redraw = true;
+                }
             }
 
             UiAction::Paste(text) => {

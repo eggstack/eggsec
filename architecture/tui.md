@@ -8,13 +8,16 @@ Eggsec includes a powerful real-time Terminal User Interface (TUI) built with th
 - **Popup::content overflow guard**: `content.len() + 5` would overflow in release builds on huge content. Changed to `content.len().saturating_add(5)` to match the project-wide pattern.
 - **scope label fix**: identical if/else in `ui/shell.rs` now correctly returns "out-of-scope" (was just "out") in non-compact mode, matching the "in-scope" pattern.
 - **Theme notification uses display name**: `toggle_theme` notification now says `"Theme: Catppuccin Mocha"` instead of `"Theme: catppuccin-mocha"`.
-- **Settings save hint footer**: persistent `[s] Save [Esc] Discard [Tab] Next field [↑↓] Section` hint at the bottom of the Settings tab (the `s` key was previously undiscoverable).
+- **Settings save hint footer**: persistent `[s] Save [Esc] Back [Tab] Next field [↑↓] Section` hint at the bottom of the Settings tab (the `s` key was previously undiscoverable).
 - **Theme hint expanded**: Settings > Theme now describes the full theme story (`~/.config/eggsec/themes/` dir, bundled install, Ctrl+T).
 - **Selector::set_items_with_extra dedup**: now deduplicates by value to prevent unbounded growth if called multiple times.
-- **luminance() warns on unknown names**: logs a `tracing::warn!` when a non-standard color name is encountered in a theme file.
+- **luminance() warns on unknown names**: logs a `tracing::warn!` when a non-standard color name is encountered in a theme file (deduplicated per unique name).
 - **Theme selector placeholder improved**: `set_available_themes` early-returns on empty list (avoids silent stale state) and uses clearer placeholder prefix `[! id] (not installed)` to distinguish placeholders from real themes.
 - **Dead code removed**: 16 dead-code warnings → 0. Forward-compat fields and reserved enum variants now have `#[allow(dead_code)]` annotations with explanatory comments.
-- **9 new unit tests**: 3 for `graphql::handle_enter`, 3 for `oauth::handle_enter`, 4 for `popup::content` (including the overflow guard). All 311 TUI tests pass.
+- **gg normal-mode sequence fixed**: `UiAction::BeginGgSequence` wires first `g` through decode→apply to set `pending_key`; second `g` correctly triggers `MoveTop`. 3 regression tests added.
+- **Ctrl-Space autocomplete fixed**: `UiAction::Autocomplete` wires Ctrl-Space in insert mode through decode→apply to call `handle_autocomplete()`. 2 tests added.
+- **Settings theme selector feedback**: Theme changes from Settings selector now show the same `Notification("Theme: ...")` as Ctrl+T; failed changes show a warning.
+- **New unit tests**: 5 regression tests for gg/autocomplete; all TUI tests pass.
 
 ## Core Components (`src/tui/`)
 
