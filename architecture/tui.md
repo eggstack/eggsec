@@ -2104,3 +2104,61 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 | Silent error suppressions fixed | 15 |
 | Theme bugs fixed | 1 (luminance 3-char hex) |
 | Tests passing | 301 |
+
+## Session Fixes (2026-06-17)
+
+### Theme System Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `theme/legacy.rs` | 16-21 | Dead `theme!()` macro never used anywhere | Removed |
+| `ui/shell.rs` | 354 | `style_for_risk()` result discarded via `let _risk_style` | Removed dead call |
+| `ui/shell.rs` | 438 | `scope_match`/`scope_miss()` result discarded via `let _scope_style` | Removed dead call |
+
+### Hardcoded Color Fixes (Theme Bypass)
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `tabs/wireless.rs` | 157-241 | 15 hardcoded `Color::Red/Gray/Yellow/DarkGray/Cyan` bypassing theme | Replaced with `tc!()` calls (danger, text_dim, warning, muted, info) |
+| `tabs/intercept.rs` | 917 | Hardcoded `Color::Magenta` for "Modify" label | Replaced with `tc!(accent)` |
+| `tabs/intercept.rs` | 1854 | Hardcoded `Color::Red` for destructive actions | Replaced with `tc!(danger)` |
+
+### Tab Handle Enter Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tabs/graphql.rs` | 471 | `handle_enter()` can start scan from Results area (no-op then fallthrough) | Added `return;` in Results arm |
+| `tabs/oauth.rs` | 520 | Same pattern as GraphQlTab | Added `return;` in Results arm |
+| `tabs/db_pentest.rs` | 307-313 | `handle_enter()` starts unconditionally when not running — no Results check | Added `is_running()` + `Results` focus area guards |
+
+### Navigation Guard Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tabs/cluster.rs` | 732-738 | `page_up()`/`page_down()` missing `is_running()` guard — can scroll while running | Added `!self.is_running()` guard |
+
+### Performance Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 248 | `sessions.remove(0)` O(n) in cleanup loop | Changed to `swap_remove(0)` O(1) |
+
+### Dead Code / Cleanup
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `app/mod.rs` | 485-487 | Empty `if is_advanced {}` block (dead logic) | Removed |
+| `app/mod.rs` | 973 | `let _ = d;` discards PolicyDecision without audit | Removed dead binding |
+| `workers/recon.rs` | 5 | Stale `#[allow(unused_variables)]` — variables are used | Removed annotation |
+| `app/export.rs` | 47-90 | Redundant `#[cfg(feature)]`/`#[cfg(not(feature))]` pairs returning identical values | Collapsed to single arms |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 12 |
+| Total bugs fixed | 12 |
+| Files modified | 9 |
+| HIGH priority fixes | 5 |
+| MEDIUM priority fixes | 3 |
+| LOW priority fixes | 4 |

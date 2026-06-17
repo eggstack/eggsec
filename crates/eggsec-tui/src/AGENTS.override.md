@@ -727,3 +727,13 @@ cargo test --workspace --all-features
 ```
 
 Update any future TUI changes to preserve the decode/apply split, delegate through TabSpec where metadata/risk/operation are needed, keep enforcement central, and surface manual posture/preflight/task state via the status paths.
+
+## Session Fixes (2026-06-17)
+
+- **Dead theme macro removed**: `theme!()` macro in `legacy.rs` was never used (only `tc!()`); removed
+- **Dead style calls removed**: `style_for_risk()` and `scope_match()`/`scope_miss()` calls in `ui/shell.rs` assigned to `let _` (results discarded); removed
+- **Hardcoded colors fixed**: `wireless.rs:157-241` had 15 hardcoded `Color::Red/Gray/Yellow/DarkGray/Cyan`; replaced with `tc!()` theme tokens (danger, text_dim, warning, muted, info). `intercept.rs:917` had `Color::Magenta`; replaced with `tc!(accent)`. `intercept.rs:1854` had `Color::Red`; replaced with `tc!(danger)`
+- **handle_enter() Results guard**: `graphql.rs:471` and `oauth.rs:520` had empty `Results => {}` arms that fell through to `self.start()`; added `return;`. `db_pentest.rs:307` started unconditionally; added `is_running()` + `Results` focus guards
+- **page_up/page_down guard**: `cluster.rs:732-738` missing `is_running()` guard; added
+- **Session cleanup perf**: `session.rs:248` `sessions.remove(0)` O(n) changed to `swap_remove(0)` O(1)
+- **Dead code cleanup**: Empty `if is_advanced {}` block in `app/mod.rs:485-487` removed; `let _ = d` PolicyDecision discard at `app/mod.rs:973` removed; stale `#[allow(unused_variables)]` in `workers/recon.rs:5` removed; redundant `#[cfg(feature)]`/`#[cfg(not(feature))]` pairs in `app/export.rs` collapsed

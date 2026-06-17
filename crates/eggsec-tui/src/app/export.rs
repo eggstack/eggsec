@@ -44,13 +44,7 @@ impl super::App {
             super::tabs::Tab::GraphQl => "graphql_results",
             super::tabs::Tab::OAuth => "oauth_results",
             super::tabs::Tab::Auth => "auth_results",
-            #[cfg(feature = "c2")]
             super::tabs::Tab::C2 => "c2_results",
-            #[cfg(not(feature = "c2"))]
-            super::tabs::Tab::C2 => "c2_results",
-            #[cfg(feature = "db-pentest")]
-            super::tabs::Tab::DbPentest => "db_pentest_results",
-            #[cfg(not(feature = "db-pentest"))]
             super::tabs::Tab::DbPentest => "db_pentest_results",
             super::tabs::Tab::Cluster => "cluster_status",
             super::tabs::Tab::Stress => "stress_results",
@@ -59,34 +53,13 @@ impl super::App {
             super::tabs::Tab::Settings => "settings",
             super::tabs::Tab::History => "history",
             super::tabs::Tab::Dashboard => "dashboard",
-            #[cfg(feature = "advanced-hunting")]
-            super::tabs::Tab::Hunt => "hunt_results",
-            #[cfg(not(feature = "advanced-hunting"))]
             super::tabs::Tab::Hunt => "hunt_results",
             super::tabs::Tab::Browser => "browser_results",
-            #[cfg(feature = "compliance")]
             super::tabs::Tab::Compliance => "compliance_results",
-            #[cfg(not(feature = "compliance"))]
-            super::tabs::Tab::Compliance => "compliance_results",
-            #[cfg(feature = "database")]
             super::tabs::Tab::Storage => "storage_results",
-            #[cfg(not(feature = "database"))]
-            super::tabs::Tab::Storage => "storage_results",
-            #[cfg(feature = "external-integrations")]
             super::tabs::Tab::Integrations => "integration_results",
-            #[cfg(not(feature = "external-integrations"))]
-            super::tabs::Tab::Integrations => "integration_results",
-            #[cfg(feature = "finding-workflow")]
             super::tabs::Tab::Workflow => "workflow_results",
-            #[cfg(not(feature = "finding-workflow"))]
-            super::tabs::Tab::Workflow => "workflow_results",
-            #[cfg(feature = "vuln-management")]
             super::tabs::Tab::Vuln => "vuln_results",
-            #[cfg(not(feature = "vuln-management"))]
-            super::tabs::Tab::Vuln => "vuln_results",
-            #[cfg(feature = "wireless")]
-            super::tabs::Tab::Wireless => "wireless_results",
-            #[cfg(not(feature = "wireless"))]
             super::tabs::Tab::Wireless => "wireless_results",
             super::tabs::Tab::Intercept => "intercept_results",
         };
@@ -166,15 +139,8 @@ impl super::App {
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }
-            #[cfg(feature = "c2")]
             super::tabs::Tab::C2 => {
                 let msg = "C2 tab: use CLI export (eggsec c2 --json -o report.json)".to_string();
-                self.overlay.notification =
-                    Some(Notification::new(msg, NotificationSeverity::Warning));
-            }
-            #[cfg(not(feature = "c2"))]
-            super::tabs::Tab::C2 => {
-                let msg = "C2 tab: requires c2 feature".to_string();
                 self.overlay.notification =
                     Some(Notification::new(msg, NotificationSeverity::Warning));
             }

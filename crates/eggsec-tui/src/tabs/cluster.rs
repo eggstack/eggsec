@@ -730,11 +730,15 @@ impl TabInput for ClusterTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
-        self.results_view.scroll_up(page_size);
+        if !self.is_running() {
+            self.results_view.scroll_up(page_size);
+        }
     }
 
     fn page_down(&mut self, page_size: usize) {
-        self.results_view.scroll_down(page_size);
+        if !self.is_running() {
+            self.results_view.scroll_down(page_size);
+        }
     }
 }
 

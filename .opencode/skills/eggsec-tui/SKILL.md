@@ -94,6 +94,15 @@ crates/eggsec-tui/src/
 ### Session Management
 - Quarantine rename and orphan cleanup in `session.rs` now log errors instead of silent `let _ =`
 
+### Additional Session Fixes (2026-06-17)
+- **Dead theme macro removed**: `theme!()` macro in `legacy.rs` was never used (only `tc!()`); removed
+- **Dead style calls removed**: `style_for_risk()` and `scope_match()`/`scope_miss()` calls in `ui/shell.rs` assigned to `let _`; removed
+- **Hardcoded colors fixed**: 15 hardcoded `Color::Red/Gray/Yellow/DarkGray/Cyan` in `wireless.rs` replaced with `tc!()` theme tokens; 2 hardcoded colors in `intercept.rs` replaced with `tc!(accent)` and `tc!(danger)`
+- **handle_enter() Results guard**: `graphql.rs`, `oauth.rs`, `db_pentest.rs` could trigger `start()` from Results area; added `return;` guards
+- **page_up/page_down guard**: `cluster.rs` page navigation missing `is_running()` guard; added
+- **Session cleanup perf**: `session.rs` `sessions.remove(0)` O(n) changed to `swap_remove(0)` O(1)
+- **Dead code cleanup**: Empty `if is_advanced {}` block, `let _ = d` PolicyDecision discard, stale `#[allow(unused_variables)]`, redundant `#[cfg(feature)]` pairs removed
+
 ### Policy Enforcement Alignment (2026-06-11)
 - TUI now uses the shared `EnforcementContext::evaluate()` (via `App.enforcement` initialized to `manual_permissive` in runner.rs) for **all** target-bearing launches. Matches the CLI model exactly (narrow `--yes` semantics, dedicated `--allow-*` flags, stable kebab audit strings).
 - **Central gate**: in `handle_enter` / before `spawn_task` (via `build_current_task` + `build_current_operation_descriptor` producing `OperationDescriptor`).

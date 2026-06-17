@@ -2,7 +2,6 @@ use crate::tabs::recon::ReconOptions;
 use crate::workers::TaskResult;
 use eggsec::cli::ScanProfile;
 
-#[allow(unused_variables)]
 pub async fn run_pipeline(
     target: String,
     profile: ScanProfile,

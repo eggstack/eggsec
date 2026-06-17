@@ -349,12 +349,6 @@ fn get_preflight_status(
         TabRiskGroup::Intrusive => "intrusive",
         TabRiskGroup::Administrative => "admin",
     };
-    // Phase 10: use semantic style helper for risk badge (intrusive->danger, passive/safe->safe, admin->danger)
-    // (color used for preflight risk state representation; actual status bar fg uses policy outcome)
-    let _risk_style = theme.style_for_risk(risk_str);
-
-    // Phase 10: scope semantic helpers (placed after scope_match definition below)
-
     let mode_str = match app.enforcement.execution_profile {
         ExecutionProfile::ManualPermissive => {
             if compact {
@@ -431,14 +425,6 @@ fn get_preflight_status(
             }
             Err(_) => "?",
         }
-    };
-
-    // Phase 10: invoke scope semantic helpers for scope match/miss state in preflight/status path
-    // (after scope_match computed from target + loaded_scope)
-    let _scope_style = if scope_match.contains("in") || scope_match == "in-scope" {
-        theme.scope_match()
-    } else {
-        theme.scope_miss()
     };
 
     if compact {

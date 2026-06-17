@@ -245,7 +245,7 @@ impl SessionManager {
                     tracing::warn!("Failed to cleanup old session {:?}: {:?}", oldest.path(), e);
                     break;
                 }
-                sessions.remove(0);
+                sessions.swap_remove(0);
             }
         }
 

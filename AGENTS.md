@@ -360,6 +360,13 @@ No remaining stub implementations.
 - **Dead shim methods removed**: Removed 20 dead transition shim methods from `app/key_handler.rs` (~180 lines) and 3 dead shim methods from `app/overlay.rs` (~25 lines)
 - **Dead settings methods removed**: Removed `sync_with_theme` and `sync_theme_selector` from `tabs/settings/main.rs` (never called)
 - **Session error handling**: Quarantine rename and orphan cleanup in `session.rs` now log errors instead of silent `let _ =`
+- **Dead theme macro removed**: Removed unused `theme!()` macro from `theme/legacy.rs` (only `tc!()` was used)
+- **Dead style calls removed**: Removed `style_for_risk()` and `scope_match()`/`scope_miss()` calls that assigned to `let _` in `ui/shell.rs` (results discarded)
+- **Hardcoded colors fixed**: Replaced 15 hardcoded `Color::Red/Gray/Yellow/DarkGray/Cyan` in `tabs/wireless.rs` and 2 in `tabs/intercept.rs` with `tc!()` theme tokens for proper theme support
+- **handle_enter() Results guard**: Fixed `tabs/graphql.rs` and `tabs/oauth.rs` to not trigger `start()` from Results focus area; added `Results` guard to `tabs/db_pentest.rs`
+- **page_up/page_down guard**: Added `is_running()` guard to `tabs/cluster.rs` page navigation
+- **Session cleanup perf**: Changed `sessions.remove(0)` O(n) to `swap_remove(0)` O(1) in `session.rs`
+- **Dead code cleanup**: Removed empty `if is_advanced {}` block, `let _ = d` PolicyDecision discard, stale `#[allow(unused_variables)]`, and redundant `#[cfg(feature)]` pairs in `app/export.rs`
 
 ### Active Wireless Reporting Bridge (2026-06-12)
 

@@ -154,41 +154,41 @@ impl WirelessTab {
 
     #[cfg(feature = "wireless-advanced")]
     fn update_active_results_view(&mut self, result: &ActiveWirelessAttackResult) {
-        use ratatui::style::{Color, Modifier};
+        use ratatui::style::Modifier;
 
         self.results_view.clear();
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             format!("Active Attack: {}", result.attack_type),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::default().fg(tc!(danger)).add_modifier(Modifier::BOLD),
         )]));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Interface: ", Style::default().fg(Color::Gray)),
+            Span::styled("Interface: ", Style::default().fg(tc!(text_dim))),
             Span::raw(result.interface.clone()),
         ]));
         if let Some(ref bssid) = result.target_bssid {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Target BSSID: ", Style::default().fg(Color::Gray)),
+                Span::styled("Target BSSID: ", Style::default().fg(tc!(text_dim))),
                 Span::raw(bssid.clone()),
             ]));
         }
         if let Some(ref client) = result.target_client {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Target Client: ", Style::default().fg(Color::Gray)),
+                Span::styled("Target Client: ", Style::default().fg(tc!(text_dim))),
                 Span::raw(client.clone()),
             ]));
         }
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Frames Sent: ", Style::default().fg(Color::Gray)),
+            Span::styled("Frames Sent: ", Style::default().fg(tc!(text_dim))),
             Span::raw(result.frames_sent.to_string()),
         ]));
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Duration: ", Style::default().fg(Color::Gray)),
+            Span::styled("Duration: ", Style::default().fg(tc!(text_dim))),
             Span::raw(format!("{}s", result.duration_secs)),
         ]));
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Dry Run: ", Style::default().fg(Color::Gray)),
+            Span::styled("Dry Run: ", Style::default().fg(tc!(text_dim))),
             Span::raw(result.dry_run.to_string()),
         ]));
         self.results_view.add_line(Line::from(""));
@@ -197,26 +197,26 @@ impl WirelessTab {
             self.results_view.add_line(Line::from(vec![Span::styled(
                 "Findings:",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(tc!(warning))
                     .add_modifier(Modifier::BOLD),
             )]));
             for finding in &result.findings {
                 self.results_view.add_line(Line::from(vec![
                     Span::styled(
                         format!("  [{}] ", finding.severity),
-                        Style::default().fg(Color::Yellow),
+                        Style::default().fg(tc!(warning)),
                     ),
                     Span::raw(finding.description.clone()),
                 ]));
                 if !finding.evidence.is_empty() {
                     self.results_view.add_line(Line::from(vec![
-                        Span::styled("    Evidence: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("    Evidence: ", Style::default().fg(tc!(muted))),
                         Span::raw(finding.evidence.clone()),
                     ]));
                 }
                 if !finding.remediation.is_empty() {
                     self.results_view.add_line(Line::from(vec![
-                        Span::styled("    Remediation: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("    Remediation: ", Style::default().fg(tc!(muted))),
                         Span::raw(finding.remediation.clone()),
                     ]));
                 }
@@ -228,12 +228,12 @@ impl WirelessTab {
             self.results_view.add_line(Line::from(vec![Span::styled(
                 "Recommendations:",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(tc!(info))
                     .add_modifier(Modifier::BOLD),
             )]));
             for rec in &result.recommendations {
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled("  • ", Style::default().fg(Color::Cyan)),
+                    Span::styled("  • ", Style::default().fg(tc!(info))),
                     Span::raw(rec.clone()),
                 ]));
             }

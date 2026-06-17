@@ -468,7 +468,9 @@ impl TabInput for GraphQlTab {
                 let idx = self.checkbox_focus_index % checkboxes.len();
                 checkboxes[idx].toggle();
             }
-            GraphQlFocusArea::Results => {}
+            GraphQlFocusArea::Results => {
+                return;
+            }
         }
 
         if self.is_running() {

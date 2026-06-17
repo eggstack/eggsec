@@ -482,9 +482,6 @@ impl App {
                     OperationRisk::SafeActive
                 };
                 let req_features = vec!["db-pentest".to_string()];
-                if is_advanced {
-                    // Advanced behavior is runtime gated; still declare the base feature.
-                }
                 return Some(OperationDescriptor {
                     operation: "db-pentest".to_string(),
                     mode: OperationMode::DefenseLab,
@@ -969,8 +966,6 @@ impl App {
                         self.spawn_task(Some(cfg));
                     }
                     self.needs_redraw = true;
-                    // Record a decision if it carries the audit fields (best effort)
-                    let _ = d; // nothing more to do
                 }
                 EnforcementOutcome::RequireConfirmation(decision) => {
                     // Check if our constructed override permits all required classes

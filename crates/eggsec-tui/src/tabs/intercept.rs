@@ -18,7 +18,7 @@ use eggsec::proxy::intercept::types::{
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Clear, Row, Table, TableState},
     Frame,
@@ -914,7 +914,7 @@ impl InterceptTab {
                 Span::raw("Log without pausing"),
             ]),
             Line::from(vec![
-                Span::styled("  Modify ", Style::default().fg(Color::Magenta)),
+                Span::styled("  Modify ", Style::default().fg(tc!(accent))),
                 Span::raw("Apply automatic modifications"),
             ]),
             Line::from(""),
@@ -1851,7 +1851,7 @@ impl InterceptTab {
                 let style = if i == self.action_bar_index {
                     if is_destructive {
                         Style::default()
-                            .fg(Color::Red)
+                            .fg(tc!(danger))
                             .bg(tc!(background))
                             .add_modifier(Modifier::BOLD)
                     } else {
