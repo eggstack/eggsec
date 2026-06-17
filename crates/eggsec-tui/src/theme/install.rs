@@ -27,22 +27,9 @@ pub struct ThemeInstallReport {
     pub loaded_themes: Vec<Result<Theme, ThemeLoadError>>,
 }
 
-impl Clone for ThemeInstallReport {
-    fn clone(&self) -> Self {
-        // ThemeLoadError contains non-Clone types (io::Error, toml::Error),
-        // so we cannot derive Clone for ThemeInstallReport.  Preserve
-        // loaded_themes: Vec::new() was incorrect, but we have no choice
-        // since Result<Theme, ThemeLoadError> is not Clone.
-        Self {
-            theme_dir: self.theme_dir.clone(),
-            installed: self.installed,
-            skipped_existing: self.skipped_existing,
-            loaded: self.loaded,
-            errors: self.errors.clone(),
-            loaded_themes: Vec::new(),
-        }
-    }
-}
+// ThemeLoadError contains non-Clone types (io::Error, toml::Error),
+// so ThemeInstallReport does not implement Clone. It is consumed
+// via channels and does not need to be cloned.
 
 pub fn user_theme_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "eggsec").map(|proj| {

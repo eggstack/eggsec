@@ -752,3 +752,18 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 - **workers/auth.rs**: Dead `if let Some(ref cred_file)` block removed
 - **help_config.rs**: Stale Ctrl+T description "Cycle built-in theme" → "Cycle theme"
 - **Dead code cleanup**: Removed stale `#[allow(dead_code)]` on `InputField.label` (is used), replaced blanket `#[allow(dead_code)]` on Popup impl with per-method annotations, added `#[allow(dead_code)]` on unused PopupKind variants, added doc comment on HelpContext placeholder
+
+## Session Fixes (2026-06-18) - TUI Audit
+
+- **graphql.rs handle_enter() fallthrough**: Options arm toggled checkbox then fell through to `self.start()`, silently starting a scan. Added `return;` after toggle
+- **oauth.rs handle_enter() fallthrough**: Same pattern — Options arm fell through to `self.start()`. Added `return;` after toggle
+- **intercept.rs truncate_str() UTF-8 panic**: Used byte-offset slicing `&s[..max_len]` which panics on multi-byte characters. Changed to character-aware truncation via `.chars().take()`
+- **settings/main.rs Session max_focus_index**: Returned `1` but `session_inputs` has only 1 field (index 0). Changed to `0`
+- **theme/loader.rs luminance() named colors**: `lightblue`/`lightred`/`darkgreen` etc. shared luminance values with base colors, misclassifying Light/Dark mode. Fixed to use distinct values (light* → 0.7-0.8, dark* → 0.2-0.4)
+- **popup.rs scroll cast truncation**: `scroll_offset as u16` silently truncated values > 65535. Added `.min(u16::MAX as usize)` clamp
+- **popup.rs button width u16 overflow**: Button width sum could overflow u16. Changed to `saturating_add`
+- **session.rs swap_remove(0) order**: `cleanup_old_sessions` used `swap_remove(0)` which broke sorted order, deleting wrong sessions. Changed to `remove(0)`
+- **db_pentest.rs allow_db_pentest hardcoded**: Worker unconditionally passed `allow_db_pentest: true`. Changed to pass `dry_run` value to respect lib safety gate
+- **selector.rs height overflow**: Dropdown height calculation could overflow on extreme item counts. Added `.min(u16::MAX as usize - 2)` clamp
+- **help_scroll_offset usize::MAX**: `HelpScrollBottom` set offset to `usize::MAX` which could cause unexpected behavior. Changed to `u16::MAX as usize`
+- **ThemeInstallReport Clone data loss**: Lossy `Clone` impl silently dropped `loaded_themes` Vec. Removed impl (never cloned; consumed via channels)

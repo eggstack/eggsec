@@ -176,7 +176,7 @@ impl Selector {
             x: anchor_area.x,
             y: anchor_area.y + anchor_area.height,
             width: anchor_area.width,
-            height: (self.items.len() + 2).min(10) as u16,
+            height: (self.items.len().min(u16::MAX as usize - 2) + 2).min(10) as u16,
         };
 
         let items: Vec<(usize, String, bool)> = self

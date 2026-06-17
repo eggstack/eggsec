@@ -157,7 +157,7 @@ impl Popup {
             let paragraph = Paragraph::new(content_lines)
                 .style(Style::default().fg(tc!(text)))
                 .wrap(Wrap { trim: true })
-                .scroll((self.scroll_offset as u16, 0));
+                .scroll((self.scroll_offset.min(u16::MAX as usize) as u16, 0));
             f.render_widget(paragraph, *content_chunk);
         }
 
@@ -166,9 +166,9 @@ impl Popup {
                 let button_widths: Vec<u16> = self
                     .buttons
                     .iter()
-                    .map(|b| (b.chars().count() + 4) as u16)
+                    .map(|b| (b.chars().count() + 4).min(u16::MAX as usize) as u16)
                     .collect();
-                let total_width: u16 = button_widths.iter().sum();
+                let total_width: u16 = button_widths.iter().copied().fold(0u16, |a, b| a.saturating_add(b));
                 let spacing = (button_area.width.saturating_sub(total_width))
                     / (self.buttons.len().saturating_sub(1).max(1) as u16);
 

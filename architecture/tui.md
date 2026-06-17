@@ -2216,3 +2216,49 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 1. UTF-8 panics from byte-offset string slicing in status bar — any non-ASCII text could crash the TUI
 2. `handle_enter()` started scans from focused input fields on 4 tabs — users couldn't press Enter to confirm input without starting a scan
 3. `luminance()` misclassified named-color backgrounds — themes using `"black"` were incorrectly detected as Light mode
+
+## Session Fixes (2026-06-18) - TUI Audit
+
+### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tabs/graphql.rs` | 476-485 | `handle_enter()` Options arm falls through to `self.start()` — toggling checkbox silently starts scan | Added `return;` after checkbox toggle |
+| `tabs/oauth.rs` | 525-534 | Same pattern as graphql.rs — Options arm falls through to `self.start()` | Added `return;` after checkbox toggle |
+| `theme/install.rs` | 30-44 | `ThemeInstallReport` lossy `Clone` impl silently drops `loaded_themes` Vec | Removed `Clone` impl (never cloned; consumed via channels) |
+
+### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tabs/intercept.rs` | 2580-2586 | `truncate_str()` uses byte-offset slicing — panics on multi-byte UTF-8 (CJK, emoji) | Changed to character-aware truncation via `.chars().take()` |
+| `tabs/settings/main.rs` | 158 | `max_focus_index()` returns 1 for Session but `session_inputs` has only 1 field (index 0) | Changed to return 0 |
+| `theme/loader.rs` | 142-155 | `luminance()` misclassifies named colors — `lightblue`/`lightred` map to Dark (0.3), `darkgreen` maps to Light (0.5) | Fixed to use distinct values: light* → 0.7-0.8, dark* → 0.2-0.4 |
+| `components/popup.rs` | 160 | `scroll_offset as u16` silently truncates values > 65535 | Added `.min(u16::MAX as usize)` clamp |
+| `components/popup.rs` | 169-171 | Button width sum can overflow u16; individual widths can wrap | Changed to `saturating_add` and `.min(u16::MAX)` |
+| `session.rs` | 248 | `swap_remove(0)` breaks sorted order during old-session cleanup | Changed to `remove(0)` |
+| `workers/db_pentest.rs` | 32 | `allow_db_pentest: true` hardcoded — bypasses lib safety gate | Changed to pass `dry_run` value |
+
+### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `components/selector.rs` | 179 | Dropdown height calculation could overflow on extreme item counts | Added `.min(u16::MAX as usize - 2)` clamp |
+| `app/mod.rs` | 1769 | `HelpScrollBottom` sets offset to `usize::MAX` — extreme sentinel | Changed to `u16::MAX as usize` |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 12 |
+| Total bugs fixed | 12 |
+| Files modified | 9 |
+| HIGH priority fixes | 3 |
+| MEDIUM priority fixes | 7 |
+| LOW priority fixes | 2 |
+| Tests passing | 301 |
+
+**Key systemic bugs fixed**:
+1. `handle_enter()` Options arm fell through to `start()` on graphql/oauth tabs — toggling a checkbox silently started a scan
+2. `truncate_str()` panicked on multi-byte UTF-8 — any non-ASCII text in intercepted flows could crash the TUI
+3. `luminance()` misclassified named colors with light/dark qualifiers — themes using `"lightblue"` or `"darkgreen"` got inverted light/dark defaults

@@ -155,7 +155,7 @@ impl SettingsTab {
         match self.current_section {
             SettingsSection::Http => 5,
             SettingsSection::Scan => 3,
-            SettingsSection::Session => 1,
+            SettingsSection::Session => 0,
             SettingsSection::Proxy => 2,
             SettingsSection::Scope => 1,
             SettingsSection::Report => 3,

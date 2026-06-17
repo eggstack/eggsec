@@ -531,6 +531,7 @@ impl TabInput for OAuthTab {
                 ];
                 let idx = self.checkbox_focus_index % checkboxes.len();
                 checkboxes[idx].toggle();
+                return;
             }
             OAuthFocusArea::Results => {
                 return;

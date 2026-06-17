@@ -1766,7 +1766,7 @@ impl App {
 
             UiAction::HelpScrollBottom => {
                 if self.is_help_visible() {
-                    self.overlay.help_scroll_offset = usize::MAX;
+                    self.overlay.help_scroll_offset = u16::MAX as usize;
                     self.needs_redraw = true;
                 }
             }
@@ -1971,11 +1971,14 @@ mod tests {
         app.spawn_theme_loader();
 
         let report = make_theme_install_report(vec![]);
-        tx.send(report.clone()).unwrap();
+        let loaded = report.loaded;
+        let installed = report.installed;
+        let skipped_existing = report.skipped_existing;
+        tx.send(report).unwrap();
         let received = app.theme_load.rx.as_ref().unwrap().try_recv().unwrap();
-        assert_eq!(received.loaded, report.loaded);
-        assert_eq!(received.installed, report.installed);
-        assert_eq!(received.skipped_existing, report.skipped_existing);
+        assert_eq!(received.loaded, loaded);
+        assert_eq!(received.installed, installed);
+        assert_eq!(received.skipped_existing, skipped_existing);
 
         app.theme_load.handle.take().unwrap().join().unwrap();
     }
