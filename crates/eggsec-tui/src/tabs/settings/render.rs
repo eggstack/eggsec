@@ -175,5 +175,22 @@ impl TabRender for super::SettingsTab {
             };
             f.render_widget(status, status_area);
         }
+
+        // Persistent footer hint: tells the user about the save shortcut and
+        // section navigation. Rendered on the very last line of the section
+        // (1 line above the status bar) so it is always visible.
+        if inner.height >= 2 {
+            let hint = Paragraph::new(
+                "[s] Save   [Esc] Discard   [Tab] Next field   [\u{2191}\u{2193}] Section",
+            )
+            .style(Style::default().fg(tc!(text_dim)));
+            let hint_area = Rect {
+                x: inner.x,
+                y: inner.y + inner.height.saturating_sub(1),
+                width: inner.width,
+                height: 1,
+            };
+            f.render_widget(hint, hint_area);
+        }
     }
 }

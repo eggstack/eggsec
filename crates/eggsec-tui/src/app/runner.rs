@@ -35,7 +35,7 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         if size.width < 80 || size.height < 24 {
             eprintln!(
                 "Warning: Terminal size ({}x{}) is smaller than recommended (80x24). \
-                 Some UI elements may not display correctly.",
+                 Resize your window or scroll horizontally for full UI.",
                 size.width, size.height
             );
         }
