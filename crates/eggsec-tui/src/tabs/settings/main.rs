@@ -728,22 +728,28 @@ impl SettingsTab {
             .collect();
         self.theme_selector.set_items(items);
         let current_id = canonical_theme_id(current_id);
-        if !self.theme_selector.items.is_empty() {
+        if self.theme_selector.items.is_empty() {
+            // No themes registered (extreme edge case - cyber-red is always
+            // built-in). Avoid selecting from an empty list to keep the
+            // selector in a consistent state.
+            return;
+        }
+        self.theme_selector.select_by_value(&current_id);
+        // If the current theme isn't in the list (e.g., it failed to load
+        // and was skipped during install), keep the user's chosen theme
+        // in the dropdown so they can see what's actually applied. The
+        // `select(0)` fallback was visually confusing because it would
+        // imply a theme switch.
+        if self.theme_selector.selected_value() != Some(current_id.as_str()) {
+            // Leading marker and "unavailable" suffix make it visually clear
+            // that this entry is a placeholder, not an installed theme.
+            let placeholder = format!("[! {current_id}] (not installed)");
+            self.theme_selector
+                .set_items_with_extra(crate::components::SelectorItem::new(
+                    &placeholder,
+                    &current_id,
+                ));
             self.theme_selector.select_by_value(&current_id);
-            // If the current theme isn't in the list (e.g., it failed to load
-            // and was skipped during install), keep the user's chosen theme
-            // in the dropdown so they can see what's actually applied. The
-            // `select(0)` fallback was visually confusing because it would
-            // imply a theme switch.
-            if self.theme_selector.selected_value() != Some(current_id.as_str()) {
-                let placeholder = format!("[{current_id}] (unavailable)");
-                self.theme_selector
-                    .set_items_with_extra(crate::components::SelectorItem::new(
-                        &placeholder,
-                        &current_id,
-                    ));
-                self.theme_selector.select_by_value(&current_id);
-            }
         }
     }
 

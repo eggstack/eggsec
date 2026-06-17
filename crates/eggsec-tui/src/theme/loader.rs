@@ -157,7 +157,14 @@ fn luminance(color: &str) -> f64 {
         "cyan" | "darkcyan" => 0.4,
         "lightcyan" => 0.8,
         "magenta" | "purple" => 0.4,
-        _ => 0.5,
+        _ => {
+            // Unknown color name - warn so contributors notice non-standard names.
+            tracing::warn!(
+                "Theme color '{}' is not a recognized name; defaulting to neutral luminance",
+                color
+            );
+            0.5
+        }
     }
 }
 

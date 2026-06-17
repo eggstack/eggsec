@@ -147,7 +147,10 @@ impl TabRender for super::SettingsTab {
 
                 let form_height: u16 = 5;
                 let theme_hint = Paragraph::new(
-                    "Bundled themes are installed when possible; Cyber Red is always available as fallback",
+                    "Themes from ~/.config/eggsec/themes/ are loaded on startup; \
+                     bundled themes are installed when missing; \
+                     Cyber Red is always available as fallback. \
+                     Press Ctrl+T to cycle all themes.",
                 );
                 let hint_y = inner.y + form_height;
                 if hint_y < inner.y + inner.height {

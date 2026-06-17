@@ -115,10 +115,13 @@ impl Selector {
         }
     }
 
-    /// Append a single item to the list (used to keep a "missing" current
-    /// theme visible after a refresh that omitted it).
+    /// Append a single item to the list, deduplicating by value (used to
+    /// keep a "missing" current theme visible after a refresh that omitted
+    /// it). Safe to call multiple times - duplicates are skipped.
     pub fn set_items_with_extra(&mut self, item: SelectorItem) {
-        self.items.push(item);
+        if !self.items.iter().any(|i| i.value == item.value) {
+            self.items.push(item);
+        }
     }
 
     pub fn simple_items(mut self, items: Vec<&str>) -> Self {

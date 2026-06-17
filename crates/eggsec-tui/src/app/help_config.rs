@@ -590,7 +590,7 @@ pub fn get_static_help_data() -> StaticHelpData {
         },
         HelpCommand {
             key: "Ctrl+T".to_string(),
-            description: "Cycle theme".to_string(),
+            description: "Cycle to next theme (alphabetical)".to_string(),
             category: "Settings".to_string(),
         },
         HelpCommand {
@@ -711,7 +711,7 @@ pub fn get_static_help_data() -> StaticHelpData {
         },
         CommandPaletteResult {
             command: "theme".to_string(),
-            description: "Cycle theme (next)".to_string(),
+            description: "Cycle to next theme (alphabetical)".to_string(),
             category: "Appearance".to_string(),
             shortcut: Some("Ctrl+T".to_string()),
         },

@@ -1125,8 +1125,10 @@ impl App {
         self.update_settings_theme_selector();
         self.needs_redraw = true;
         // Acknowledge the change so the user knows Ctrl+T worked.
+        // Use the human-readable display name (e.g. "Catppuccin Mocha") rather
+        // than the raw canonical ID (e.g. "catppuccin-mocha").
         self.overlay.notification = Some(Notification::new(
-            format!("Theme: {}", self.theme_manager.current().name),
+            format!("Theme: {}", display_theme_name(&self.theme_manager.current().name)),
             NotificationSeverity::Info,
         ));
     }
