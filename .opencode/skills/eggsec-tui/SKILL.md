@@ -9,7 +9,7 @@ crates/eggsec-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
 │   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
-│   ├── tab_store.rs     # TabStore - owns all 29 tab instances
+│   ├── tab_store.rs     # TabStore - owns all 33 tab instances
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
 │   ├── state_update.rs  # Background task handling, result dispatch
@@ -116,7 +116,7 @@ Files fixed with this pattern:
 
 ### is_running() Guards Added
 
-All 29 tabs now properly guard input handlers with `!self.is_running()`. This prevents input during running state:
+All 33 tabs now properly guard input handlers with `!self.is_running()`. This prevents input during running state:
 
 | Tab | handle_char | handle_backspace | handle_paste |
 |-----|-------------|------------------|-------------|

@@ -18,7 +18,7 @@ eggsec
 ```
 
 Key TUI features:
-- 29 tabs covering all security testing functions
+- 33 tabs covering all security testing functions
 - Real-time progress monitoring with spinners
 - Session persistence (resume previous scans)
 - Bookmark favorite tabs with Ctrl+B

@@ -109,7 +109,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`pipeline/`](../crates/eggsec/src/pipeline/) | Chained security assessment profiles (16 built-in profiles) | [pipeline.md](pipeline.md) |
+| [`pipeline/`](../crates/eggsec/src/pipeline/) | Chained security assessment profiles (18 built-in profiles) | [pipeline.md](pipeline.md) |
 | [`tool/`](../crates/eggsec/src/tool/) | Unified tool registry, execution framework, MCP/OpenAI protocol integration; core DTOs in `eggsec-tool-core` | [ai_agents.md](ai_agents.md) |
 | [`agent/`](../crates/eggsec/src/agent/) | Autonomous security agent with scheduling, longitudinal memory, portfolio management | [ai_agents.md](ai_agents.md) |
 | [`agent/enforcement.rs`](../crates/eggsec/src/agent/enforcement.rs) | Agent scan enforcement helpers (risk/capability mapping from scan depth and type) | [ai_agents.md](ai_agents.md) |
@@ -155,8 +155,8 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 42 commands | [cli_commands.md](cli_commands.md) |
-| [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 29 tabs, event loop | [tui.md](tui.md) |
+| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 45 commands | [cli_commands.md](cli_commands.md) |
+| [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 33 tabs, event loop | [tui.md](tui.md) |
 
 ### Supporting Modules
 
@@ -201,7 +201,7 @@ eggsec pipeline  # Pipeline profile execution
 
 ### TUI (`tui/`)
 
-The terminal user interface uses `ratatui` with 29 tabs organized by function. The TUI is now a separate crate (`eggsec-tui`), extracted from the main `eggsec` crate.
+The terminal user interface uses `ratatui` with 33 tabs organized by function. The TUI is now a separate crate (`eggsec-tui`), extracted from the main `eggsec` crate.
 
 | Tab Group | Tabs |
 |-----------|------|
@@ -306,7 +306,7 @@ Configuration management with scope enforcement:
 | **TOML/YAML Loading** | Hierarchical config from files and env vars |
 | **Scope Enforcement** | Target restrictions via pattern/CIDR rules |
 | **TUI Settings** | Partial save with field exposure control |
-| **Profile Management** | 16 built-in scan profiles |
+| **Profile Management** | 18 built-in scan profiles |
 
 - **Documentation**: [config.md](config.md)
 
@@ -622,7 +622,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: 3999 (3640 #[test] + 359 #[tokio::test])
+- **Test count**: ~4080 (includes #[test] + #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---

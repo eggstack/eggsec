@@ -84,14 +84,14 @@ Use these sections as the canonical reference points when updating guidance or s
 - `architecture/config.md` - Config loading, scope enforcement, TUI settings save semantics
 - `architecture/cli_commands.md` - CLI parsing, command dispatch, handler patterns
 - `architecture/output.md` - Report formatting, exports, and rendering integration
-- `architecture/pipeline.md` - Security assessment pipeline, 16 profiles
+- `architecture/pipeline.md` - Security assessment pipeline, 18 profiles
 - `architecture/scanner.md` - Port scanning and endpoint discovery
 - `architecture/fuzzer.md` - Fuzzing engine and payload generation
 - `architecture/waf.md` - WAF detection and bypass
 - `architecture/recon.md` - Reconnaissance module
 - `architecture/distributed.md` - Distributed coordinator/worker architecture
 - `architecture/compile_time_baseline.md` - Workspace crate layout and compile-time baseline
-- `architecture/mobile.md` - Mobile app static analysis (APK/IPA; Phase 1 static only, pure-Rust parsers, lab/defense framing; standalone CLI + local reports + to_scan_report_data bridge). Dynamic Phase 1 complete 2026-06-12; Phase 2 (proxy + permissions + correlation) closed 2026-06-12 per combined `plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md` (executed; all under single mobile-dynamic, no sub-feature split per M1). Phase 3a (Frida foundation + basic_method_trace) delivered 2026-06-12 under single mobile-dynamic per `plans/mobile-dynamic-phase3-frida-expansion-plan.md` (executed; Key Decision: no separate mobile-frida sub-feature; runtime --allow-frida + Intrusive policy; dry-run safe; frida.rs real + CLI/handler/report/bridge/smoke). See `plans/dynamic-mobile-testing-loadout-design-plan.md`.
+- `architecture/mobile.md` - Mobile app static + dynamic analysis (APK/IPA; static pure-Rust parsers; dynamic Phase 1-4a delivered under `mobile-dynamic` feature; standalone defense-lab, MCP-absent; `to_scan_report_data` bridge)
 - `architecture/auth.md` - Authentication testing module (CLI `auth-test`, policy via `CredentialTesting`, local findings only; TUI `AuthTab` fully integrated as `Tab::Auth`). See `architecture/auth.md` for current design.
 - `architecture/c2.md` - C2 (Command & Control) framework (beaconing, tasking, campaign orchestration, OPSEC scoring; MITRE ATT&CK profiles; depends on postex + evasion; standalone defense-lab; `to_scan_report_data` bridge; auto-bridged in report convert; TUI tab `Tab::C2`; MCP exposure via `c2-mcp` marker)
 
@@ -239,17 +239,18 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | 4017 (3658 #[test] + 359 #[tokio::test]; includes 18 evasion tests) |
+| Tests | ~4080 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
-| Source files | 794 (.rs files in crates/) |
+| Source files | 865 (.rs files in crates/) |
 | Payload types | 40 |
-| Tabs | 32 (Tab enum variants 0-31) |
+| Tabs | 33 (Tab enum variants 0-32) |
 | WAF products | 34 |
 | NSE libraries | 166 public modules |
-| Modules | 41 (top-level directories in `crates/eggsec/src/`) |
+| Modules | 45 (top-level directories in `crates/eggsec/src/`) |
 | Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
 | Themes | 50 packaged + 3 built-in (cyber-red, dark, light) |
 | CLI commands | 26 base, 45 total with all features |
+| Pipeline profiles | 18 (Quick, Endpoint, Web, Waf, Full, Api, Recon, Stealth, Deep, Vuln, Auth, DefenseLab, SynvoidLocal, WafRegression, ProtocolEdge, NseSafe, DbRegression, WebProxy) |
 
 ### Codebase Issues (Known Stub Implementations)
 
@@ -398,7 +399,7 @@ Skills are located in `.opencode/skills/`:
 | `eggsec-waf/` | WAF module workflows |
 | `eggsec-wave-implementation/` | Historical wave implementation reference (all waves completed 2026-06-02) |
 
-Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the wireless workflow, CLI help, or lab-use guidance. Active loadout guidance is now available post-Phase 1 (see `plans/wireless-active-attacks-loadout-design-plan.md`).
+Wireless-specific guidance lives in `.opencode/skills/eggsec-agent/wireless_security_testing.md` and should be used when updating the wireless workflow, CLI help, or lab-use guidance.
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
@@ -422,7 +423,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/networking.md` | Networking & packets module |
 | `architecture/output.md` | Output & reporting module |
 | `architecture/nse_integration.md` | NSE integration |
-| `architecture/tui.md` | Terminal User Interface (TUI) module, 30 tabs, event loop, components |
+| `architecture/tui.md` | Terminal User Interface (TUI) module, 33 tabs, event loop, components |
 | `architecture/compile_time_baseline.md` | Workspace crate layout and compile-time baseline |
 | `architecture/defense_lab.md` | Defense-lab mode and regression validation |
 | `architecture/stress.md` | Stress testing module (raw sockets, IP spoofing) |
@@ -450,7 +451,11 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/supply_chain.md` | SBOM generation |
 | `architecture/vuln.md` | Vulnerability triage |
 | `architecture/websocket.md` | WebSocket security testing |
-| `architecture/wireless.md` | Standalone-complete passive WiFi scanning + active attacks (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition; deauth/disassoc under `wireless-advanced`). TUI tab with full passive + active integration; MCP/agent exposure intentionally absent (standalone defense-lab). **Phase 0 passive + Phase 1 active = complete (2026-06-12)**; see `plans/wireless-active-attacks-loadout-design-plan.md` for future phases (MCP/agent exposure absent). See also `docs/USAGE.md` Output Models. |
+| `architecture/wireless.md` | Standalone-complete passive WiFi scanning + active attacks (summary-by-default rogue heuristic; `--detect-suspicious` expands details; `--repeat`, `--known-good`, `--dry-run`; WPS/hidden/transition; deauth/disassoc under `wireless-advanced`). TUI tab with full passive + active integration; MCP/agent exposure intentionally absent (standalone defense-lab). **Phase 0 passive + Phase 1 active = complete (2026-06-12)**. See also `docs/USAGE.md` Output Models. |
+| `architecture/evasion.md` | Evasion technique detection (MITRE ATT&CK mapped; standalone defense-lab) |
+| `architecture/postex.md` | Post-exploitation and LOTL simulation (MITRE ATT&CK mapped; standalone defense-lab) |
+| `architecture/web_proxy.md` | Interactive MITM web proxy (HTTP/HTTPS/WebSocket/HTTP2/gRPC; Phases 1-5 complete) |
+| `architecture/database_pentest.md` | Database pentesting (Postgres/MySQL/MSSQL/MongoDB/Redis; Phases 1-6 complete) |
 | `architecture/workflow.md` | Finding lifecycle management |
 
 ## Verification Commands
@@ -478,7 +483,7 @@ cargo check -p eggsec --features wireless-advanced
 cargo test --lib -p eggsec --features wireless-advanced
 cargo clippy --lib -p eggsec --features wireless-advanced
 
-# Mobile-dynamic (Phase 1 + Phase 2 closed 2026-06-12 proxy/permissions/correlation; no hardware required for unit tests)
+# Mobile-dynamic (no hardware required for unit tests)
 cargo check -p eggsec --features mobile-dynamic
 cargo test --lib -p eggsec --features mobile-dynamic
 cargo clippy --lib -p eggsec --features mobile-dynamic
@@ -488,12 +493,12 @@ cargo check -p eggsec --features db-pentest
 cargo test --lib -p eggsec --features db-pentest
 cargo clippy --lib -p eggsec --features db-pentest
 
-# web-proxy (Phase 1: dry-run; no hardware required)
+# web-proxy (dry-run; no hardware required)
 cargo check -p eggsec --features web-proxy
 cargo test --lib -p eggsec --features web-proxy
 cargo clippy --lib -p eggsec --features web-proxy
 
-# web-proxy-mcp (Phase 4: MCP proxy surface)
+# web-proxy-mcp (MCP proxy surface)
 cargo check -p eggsec --features web-proxy-mcp
 cargo test --lib -p eggsec --features web-proxy-mcp
 cargo clippy --lib -p eggsec --features web-proxy-mcp

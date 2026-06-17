@@ -1,6 +1,6 @@
 # TUI (Terminal User Interface)
 
-Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 32 different tabs.
+Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 33 different tabs.
 
 ## Core Components (`src/tui/`)
 
@@ -12,7 +12,7 @@ Manages the overall application state, event loop, and rendering.
 |------|---------|
 | `mod.rs` | `App` struct - central state container holding all tabs, mode, overlays, theme |
 | `state.rs` | Focused state structs: `OverlayState`, `SearchState`, `QuickSwitchState`, `TaskState`, `ThemeLoadState` |
-| `tab_store.rs` | `TabStore` - owns all 31 tab instances (20 always-present + 10 feature-gated; History tab shares Dashboard instance) |
+| `tab_store.rs` | `TabStore` - owns all 33 tab instances (21 always-present + 12 feature-gated; History tab shares Dashboard instance) |
 | `runner.rs` | Main event loop using crossterm/ratatui |
 | `key_handler.rs` | Priority-based key processing (pending combos → overlays → global → mode) |
 | `state_update.rs` | Async task result handling and routing |
@@ -32,7 +32,7 @@ Manages the overall application state, event loop, and rendering.
 
 ### Tabs (`tabs/`)
 
-32 specialized tabs for different security testing functions:
+33 specialized tabs for different security testing functions:
 
 | Tab | File | Purpose |
 |-----|------|---------|
@@ -68,6 +68,7 @@ Manages the overall application state, event loop, and rendering.
 | Dashboard | `dashboard.rs` | Security assessment dashboard |
 | Settings | `settings/main.rs` | Application configuration |
 | Db Pentest | `db_pentest.rs` | Direct database security assessment (Phase 3-5: Postgres/MySQL/MSSQL/MongoDB/Redis, correlation engine, compliance mapping, evidence bundles) |
+| C2 | `c2.rs` | C2 (Command & Control) framework simulation for defense validation (depends on `c2` feature) |
 
 **Tab Traits** (`tabs/mod.rs`):
 - `TabState` - State: `state()`, `progress()`, `reset()`, `set_error()`
@@ -75,6 +76,8 @@ Manages the overall application state, event loop, and rendering.
 - `TabRender` - Rendering: `render()`, `render_overlays()`, `breadcrumb()`
 
 **Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
+
+**C2 tab** (`tabs/c2.rs`, under `c2` feature): `C2Tab` is fully integrated as `Tab::C2` (TabSpec with Intrusive risk_group, direct_launch: true). Simulates C2 operations for defense validation and purple teaming. Always runs dry-run in TUI. Depends on `c2` feature (which requires `postex` + `evasion`). MITRE ATT&CK profiles: APT29, Carbanak.
 
 **Intercept tab** (`tabs/intercept.rs`, under `web-proxy` feature): `InterceptTab` is fully integrated as `Tab::Intercept` (TabSpec with Intrusive risk_group, direct_launch: true, `TabCategory::Traffic`, `operation: "proxy-intercept"`). Provides interactive web proxy traffic interception for defense-lab use. Three focus areas (`FlowList`, `DetailView`, `ActionBar`) with 7 detail sub-panes (Headers, Body, Manipulations, Rules, WebSocket, Http2, Grpc). Supports session save/load, HAR export, request/response editing via modal, manipulation audit trail, performance mode for large sessions (>5000 flows), and virtual scrolling. Task runner (`intercept_worker.rs`) creates `InterceptSession` with configured listen address and dry-run flag. The real MITM proxy server runs via CLI (`eggsec proxy-intercept`); the TUI tab focuses on interactive flow inspection, session management, and manipulation editing. Worker dispatch: `TaskConfig::Intercept { listen_addr, dry_run, max_flows, target }` → `TaskResult::Intercept(InterceptSession)`.
 

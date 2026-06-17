@@ -205,7 +205,7 @@ See `architecture/defense_lab.md`, `architecture/cli_commands.md` (Special Cases
 
 ## Future
 
-- **Phase 5+**: Extensibility — plugin-style rule authors, scriptable modifiers, PCAP export, session replay, expanded MCP tool surface.
+- PCAP export, session replay, expanded MCP tool surface.
 
 ## Governance & Maintenance
 
