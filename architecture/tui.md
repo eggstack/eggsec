@@ -355,6 +355,10 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Theme metadata tracking**: `ThemeManager` stores a `theme_info: FxHashMap<String, ThemeInfo>` alongside the theme data. `ThemeInfo` carries `id`, `display_name`, `mode` (Dark/Light), `source` (`ThemeSource::BuiltIn | Packaged | Custom`), and `status` (`ThemeLoadStatus::Loaded | FallbackAdjusted | Invalid(String) | Missing`). Source attribution is determined by checking if the file stem is in the packaged theme set (from the archive), not by counting installed themes — this correctly labels re-launched packaged themes as `Packaged` instead of `Custom`. `register_theme_with_source()` records metadata at registration time; `register_theme_invalid()` inserts metadata for themes that fail to load so Settings shows them with `Invalid` status. Contrast validation can set `FallbackAdjusted` or `Invalid` status. Query methods: `get_info(id)`, `theme_info_list()`, `get_all_info()`, `themes_with_status(status)`, `invalid_themes()`.
 
+**Theme preview/apply/cancel semantics**: Opening the theme selector enters preview mode — the UI shows what the selected theme will look like without committing. Up/Down changes the selected preview (triggering `needs_theme_preview_refresh` to update `resolved_theme_colors`). Enter applies the selected theme immediately via `set_theme()` and performs a best-effort quick-save (`session_manager.save_quick()`) so the choice persists across restarts without requiring `[s] Save`. Escape cancels and restores the selector to the applied theme via `select_by_value(applied_theme_id)`, reverting the preview. The `[s] Save` key saves non-theme config only — theme changes are already persisted by the Enter action.
+
+**Selector dropdown rendering**: Embedded selectors in `FormBuilder` render visible dropdown overlays via `collect_dropdowns()` (`components/input.rs`). The method computes dropdown position and height with viewport-aware clamping (fits below anchor when space is available, flips above when no room below, clamps height to viewport). Dropdowns are rendered as overlays on top of the form body in `tabs/settings/render.rs`. The `Selector` component tracks open/closed state independently of focus — focus does not automatically open the dropdown, Enter on a closed selector opens it, Enter on an open selector commits and closes, and Escape closes without committing.
+
 **Selected vs Applied theme distinction**: `SettingsTab.applied_theme_id` tracks the theme that was active when the Settings tab was opened (the "applied" theme). The theme selector's current selection represents the "selected" theme, which may differ from the applied theme until the user saves. This distinction lets the preview show what the selected theme will look like while preserving the ability to revert on Escape.
 
 **ThemeManager.current_id() accessor**: `ThemeManager` exposes a `current_id()` method returning the canonical ID of the currently active theme. This is used by `SettingsTab` to initialize `applied_theme_id` and by session persistence to save/restore the selected theme.
@@ -370,6 +374,8 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 **Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying. The preview uses the selected theme's resolved colors (from `ThemeManager`), not the thread-local applied theme from `tc!()`, so it accurately reflects what the selected theme will look like before the user commits. The preview refreshes live as the selector moves — `update_settings_theme_selector()` resolves the newly selected theme's colors and stores them in `SettingsTab.resolved_theme_colors`, which the render path reads on each frame.
 
 **Settings layout split** (Settings tab render): The Settings content area is split into `body`, optional `status`, and `footer` rows before rendering any section content. `FormBuilder` renders into `body` only. The status message uses severity-aware styling (error/warning/success) and prevents overlap with form content. Layout tests validate at 80x24, 60x20 (small terminal), and status-collision edge cases.
+
+**Settings data parity**: `rate_limit_per_second` (Scan section, field index 1) and `port_timeout_secs` (Scan section, field index 2) are now loaded from config on tab open and validated on save. `rate_limit_per_second` accepts `Option<u32>` — empty string means no limit, 0 is rejected. `port_timeout_secs` requires a value > 0. Both fields have dedicated validation tests (14 total for the validate method) covering valid, invalid, zero, empty, and case-insensitive cases.
 
 **Contrast validation**: `theme/contrast.rs` implements WCAG 2.x relative luminance and contrast ratio. `check_contrast(fg, bg, min_ratio)` returns whether a color pair meets the minimum ratio (4.5:1 for normal text). Both `theme/loader.rs` (on theme parse) and `theme/manager.rs` (on registration) validate text/background and selected_text/selected contrast. `ThemeManager::validate_contrast(id)` returns per-theme contrast warnings for use in the Settings Theme details pane. Low contrast triggers fallback to the base theme with a warning (non-fatal). 7 unit tests cover luminance boundaries, ratio calculation, and pass/fail cases.
 
@@ -472,6 +478,26 @@ The TUI launches automatically when:
 This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which calls `tui::run()`.
 
 **Not via `--tui` flag** - that flag does not exist.
+
+## Embedded Selector Key Containment
+
+When an embedded Settings selector is open (theme, proxy rotation, or severity), normal-mode shortcuts are blocked via `has_settings_selector_open()` in `decode_normal_mode_input` (`app/key_handler.rs:223`). This guard returns `UiAction::Noop` for all normal-mode keys (`q`, `r`, `s`, `n`, `p`, `h/j/k/l`, `1-9`, etc.) while a selector dropdown is visible.
+
+**Why this is needed**: Selectors are not overlays (`topmost_overlay()` returns `None` when only a selector is open), so without this guard, normal-mode shortcuts fire their actions while the user navigates a dropdown.
+
+**Allowed keys** (handled by global shortcuts before the normal-mode guard):
+- `Up/Down` — navigate selector items
+- `Enter` — confirm selection (open→commit or closed→open)
+- `Escape` — close selector without committing
+- `Left/Right` — not consumed by selectors; fall through to normal navigation
+- All modifier keys (`Ctrl+C`, `Ctrl+P`, `Ctrl+X`, etc.)
+
+**Blocked keys** (return `Noop` when selector is open):
+- `q` (quit), `r` (reset/reload), `s` (save), `n/p` (next/prev tab)
+- `h/j/k/l` (navigation), `1-9/0` (tab jump), `g/G` (top/bottom)
+- `Space` (help toggle), `/` (search), `e` (export)
+
+The guard checks `theme_selector.is_open()`, `proxy_rotation_selector.is_open()`, and `severity_selector.is_open()` — the three embedded selectors in the Settings tab.
 
 ## Key Bindings
 

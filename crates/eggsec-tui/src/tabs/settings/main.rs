@@ -81,7 +81,7 @@ impl SettingsTab {
 
         let scan_inputs = InputGroup::new()
             .add(InputField::new("Default Concurrency").with_value("50"))
-            .add(InputField::new("Rate Limit (req/s)").with_value("0"))
+            .add(InputField::new("Rate Limit (req/s)"))
             .add(InputField::new("Port Timeout (s)").with_value("2"));
 
         let proxy_inputs = InputGroup::new()
@@ -329,6 +329,16 @@ impl SettingsTab {
         if let Some(field) = self.scan_inputs.fields.get_mut(0) {
             field.value = config.scan.default_concurrency.to_string();
         }
+        if let Some(field) = self.scan_inputs.fields.get_mut(1) {
+            field.value = config
+                .scan
+                .rate_limit_per_second
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+        }
+        if let Some(field) = self.scan_inputs.fields.get_mut(2) {
+            field.value = config.scan.port_timeout_secs.to_string();
+        }
         self.stealth_mode.checked = config.scan.stealth_mode;
 
         if let Some(field) = self.session_inputs.fields.get_mut(0) {
@@ -415,7 +425,13 @@ impl SettingsTab {
             .scan_inputs
             .fields
             .get(1)
-            .and_then(|f| f.value.parse().ok());
+            .and_then(|f| {
+                if f.value.is_empty() {
+                    None
+                } else {
+                    f.value.parse::<u32>().ok()
+                }
+            });
         config.scan.port_timeout_secs = self
             .scan_inputs
             .fields
@@ -545,6 +561,20 @@ impl SettingsTab {
                 }
             }
         }
+        if let Some(field) = self.scan_inputs.fields.get(1) {
+            if !field.value.is_empty() {
+                match field.value.parse::<u32>() {
+                    Ok(0) => errors.push(
+                        "Scan rate_limit_per_second cannot be 0 (leave empty for no limit)"
+                            .to_string(),
+                    ),
+                    Ok(_) => {}
+                    Err(_) => errors.push(
+                        "Scan rate_limit_per_second must be a valid number".to_string(),
+                    ),
+                }
+            }
+        }
         if let Some(field) = self.scan_inputs.fields.get(2) {
             match field.value.parse::<u64>() {
                 Ok(v) if v > 0 => {}
@@ -633,7 +663,7 @@ impl SettingsTab {
             field.value = "50".to_string();
         }
         if let Some(field) = self.scan_inputs.fields.get_mut(1) {
-            field.value = "0".to_string();
+            field.value.clear();
         }
         if let Some(field) = self.scan_inputs.fields.get_mut(2) {
             field.value = "2".to_string();
@@ -1093,6 +1123,7 @@ mod tests {
             mode: ThemeMode::Dark,
             source: ThemeSource::BuiltIn,
             status: ThemeLoadStatus::Loaded,
+            contrast_warnings: Vec::new(),
         }];
         tab.update_theme_metadata(
             infos,
@@ -1121,6 +1152,7 @@ mod tests {
                 mode: ThemeMode::Dark,
                 source: ThemeSource::BuiltIn,
                 status: ThemeLoadStatus::Loaded,
+                contrast_warnings: Vec::new(),
             },
             ThemeInfo {
                 id: "light".to_string(),
@@ -1128,6 +1160,7 @@ mod tests {
                 mode: ThemeMode::Light,
                 source: ThemeSource::BuiltIn,
                 status: ThemeLoadStatus::Loaded,
+                contrast_warnings: Vec::new(),
             },
         ];
         let mut cache = rustc_hash::FxHashMap::default();
@@ -1271,5 +1304,422 @@ mod tests {
         let mut tab = SettingsTab::new();
         tab.applied_theme_id = Some("cyber-red".to_string());
         assert_eq!(tab.applied_theme_id.as_deref(), Some("cyber-red"));
+    }
+
+    #[test]
+    fn escape_restores_applied_theme_selection() {
+        let mut tab = SettingsTab::new();
+        // Simulate an applied theme.
+        tab.applied_theme_id = Some("dark".to_string());
+        // Set up a multi-theme selector.
+        tab.theme_selector = Selector::new("Theme").items(vec![
+            SelectorItem::new("Cyber Red", "cyber-red"),
+            SelectorItem::new("Dark", "dark"),
+            SelectorItem::new("Light", "light"),
+        ]);
+        // Open the selector and move to a different theme.
+        tab.theme_selector.open();
+        tab.theme_selector.select(0); // cyber-red
+        assert_eq!(tab.theme_selector.selected_value(), Some("cyber-red"));
+
+        // Press Escape — should restore to applied theme.
+        tab.handle_escape();
+
+        assert!(!tab.theme_selector.is_open());
+        assert_eq!(
+            tab.theme_selector.selected_value(),
+            Some("dark"),
+            "Escape should restore selector to applied_theme_id"
+        );
+        assert!(
+            tab.needs_theme_preview_refresh,
+            "Escape should flag preview refresh"
+        );
+    }
+
+    #[test]
+    fn escape_does_not_restore_when_no_applied_theme() {
+        let mut tab = SettingsTab::new();
+        tab.applied_theme_id = None;
+        tab.theme_selector = Selector::new("Theme").items(vec![
+            SelectorItem::new("Cyber Red", "cyber-red"),
+            SelectorItem::new("Dark", "dark"),
+        ]);
+        tab.theme_selector.open();
+        tab.theme_selector.select(0);
+
+        tab.handle_escape();
+
+        assert!(!tab.theme_selector.is_open());
+        // Selection stays where the user left it (no applied theme to restore to).
+        assert_eq!(tab.theme_selector.selected_value(), Some("cyber-red"));
+    }
+
+    #[test]
+    fn enter_on_theme_selector_sets_pending_theme() {
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        tab.focus_area = SettingsFocusArea::SectionDetail;
+        tab.detail_focus_index = 0;
+        tab.theme_selector = Selector::new("Theme").items(vec![
+            SelectorItem::new("Cyber Red", "cyber-red"),
+            SelectorItem::new("Dark", "dark"),
+            SelectorItem::new("Light", "light"),
+        ]);
+        tab.theme_selector.open();
+        tab.theme_selector.select(1); // dark
+
+        // Enter confirms the selection and sets pending_theme_name.
+        tab.handle_enter();
+
+        assert!(!tab.theme_selector.is_open());
+        assert_eq!(
+            tab.take_pending_theme().as_deref(),
+            Some("dark"),
+            "Enter should set pending_theme_name to the selected theme"
+        );
+    }
+
+    #[test]
+    fn enter_on_theme_section_opens_selector() {
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        tab.focus_area = SettingsFocusArea::SectionDetail;
+        tab.detail_focus_index = 0;
+        tab.sync_component_focus();
+        assert!(!tab.theme_selector.is_open());
+
+        tab.handle_enter();
+        assert!(tab.theme_selector.is_open(), "Enter should open the selector");
+    }
+
+    #[test]
+    fn theme_hint_shows_apply_when_selector_open() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::tabs::TabRender;
+
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        tab.theme_selector = Selector::new("Theme").items(vec![
+            SelectorItem::new("Dark", "dark"),
+        ]);
+        tab.theme_selector.open();
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+
+        let content: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol().to_string())
+            .collect();
+        assert!(
+            content.contains("Enter:apply"),
+            "Footer should show Enter:apply when selector is open"
+        );
+        assert!(
+            content.contains("Esc:cancel"),
+            "Footer should show Esc:cancel when selector is open"
+        );
+    }
+
+    #[test]
+    fn theme_hint_shows_themes_when_selector_closed() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::tabs::TabRender;
+
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        // Selector is closed by default.
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+
+        let content: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol().to_string())
+            .collect();
+        assert!(
+            content.contains("Enter:themes"),
+            "Footer should show Enter:themes when selector is closed"
+        );
+        assert!(
+            content.contains("r:reload"),
+            "Footer should show r:reload when selector is closed"
+        );
+    }
+
+    #[test]
+    fn validate_invalid_rate_limit_fails() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 1, "abc");
+        let err = tab.validate().unwrap_err();
+        assert!(err
+            .iter()
+            .any(|e| e.contains("rate_limit_per_second")));
+    }
+
+    #[test]
+    fn validate_zero_rate_limit_fails() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 1, "0");
+        let err = tab.validate().unwrap_err();
+        assert!(err
+            .iter()
+            .any(|e| e.contains("rate_limit_per_second")));
+    }
+
+    #[test]
+    fn validate_empty_rate_limit_passes() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 1, "");
+        assert!(tab.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_valid_rate_limit_passes() {
+        let mut tab = SettingsTab::new();
+        set_scan_field(&mut tab, 1, "100");
+        assert!(tab.validate().is_ok());
+    }
+
+    #[test]
+    fn scan_fields_round_trip_no_data_loss() {
+        use eggsec::config::{EggsecConfig, HttpConfig, ScanConfig};
+
+        let mut tab = SettingsTab::new();
+
+        // Build a config with specific scan values.
+        let config = EggsecConfig {
+            http: HttpConfig {
+                timeout_secs: 30,
+                max_retries: 3,
+                follow_redirects: true,
+                verify_tls: true,
+                max_redirects: 10,
+                proxy: None,
+                proxy_auth: None,
+                default_headers: rustc_hash::FxHashMap::default(),
+                default_user_agent: None,
+                retry_delay_ms: 1000,
+            },
+            scan: ScanConfig {
+                default_concurrency: 123,
+                rate_limit_per_second: Some(500),
+                jitter_ms: None,
+                stealth_mode: true,
+                exclude_ports: Vec::new(),
+                exclude_hosts: Vec::new(),
+                port_timeout_secs: 10,
+                save_session: false,
+                session_dir: None,
+            },
+            output: eggsec::config::OutputConfig::default(),
+            notifications: eggsec::config::NotificationConfig::default(),
+            paths: eggsec::config::PathsConfig {
+                custom_payloads_dir: None,
+                wordlists_dir: None,
+                export_dir: None,
+            },
+            profiles: rustc_hash::FxHashMap::default(),
+            recon: eggsec::config::ReconConfig::default(),
+            schedule: Vec::new(),
+            remote: eggsec::config::RemoteConfig::default(),
+            proxies: Vec::new(),
+            ai: None,
+            search: None,
+            alert_channels: eggsec::config::AlertChannelsConfig::default(),
+            execution_policy: eggsec::config::ExecutionPolicy::default(),
+            auto_save_interval_secs: 30,
+        };
+
+        // Load config into settings tab.
+        tab.load_config(&config);
+
+        // Verify scan fields were loaded.
+        assert_eq!(
+            tab.scan_inputs.fields[0].value, "123",
+            "default_concurrency should load"
+        );
+        assert_eq!(
+            tab.scan_inputs.fields[1].value, "500",
+            "rate_limit_per_second should load"
+        );
+        assert_eq!(
+            tab.scan_inputs.fields[2].value, "10",
+            "port_timeout_secs should load"
+        );
+        assert!(tab.stealth_mode.checked, "stealth_mode should load");
+
+        // Apply back to config.
+        let mut result_config = config.clone();
+        tab.apply_to_config(&mut result_config);
+
+        // Verify round-trip.
+        assert_eq!(result_config.scan.default_concurrency, 123);
+        assert_eq!(result_config.scan.rate_limit_per_second, Some(500));
+        assert_eq!(result_config.scan.port_timeout_secs, 10);
+        assert!(result_config.scan.stealth_mode);
+    }
+
+    #[test]
+    fn scan_fields_round_trip_none_rate_limit() {
+        use eggsec::config::{EggsecConfig, HttpConfig, ScanConfig};
+
+        let mut tab = SettingsTab::new();
+
+        let config = EggsecConfig {
+            http: HttpConfig {
+                timeout_secs: 30,
+                max_retries: 3,
+                follow_redirects: true,
+                verify_tls: true,
+                max_redirects: 10,
+                proxy: None,
+                proxy_auth: None,
+                default_headers: rustc_hash::FxHashMap::default(),
+                default_user_agent: None,
+                retry_delay_ms: 1000,
+            },
+            scan: ScanConfig {
+                default_concurrency: 50,
+                rate_limit_per_second: None,
+                jitter_ms: None,
+                stealth_mode: false,
+                exclude_ports: Vec::new(),
+                exclude_hosts: Vec::new(),
+                port_timeout_secs: 2,
+                save_session: false,
+                session_dir: None,
+            },
+            output: eggsec::config::OutputConfig::default(),
+            notifications: eggsec::config::NotificationConfig::default(),
+            paths: eggsec::config::PathsConfig {
+                custom_payloads_dir: None,
+                wordlists_dir: None,
+                export_dir: None,
+            },
+            profiles: rustc_hash::FxHashMap::default(),
+            recon: eggsec::config::ReconConfig::default(),
+            schedule: Vec::new(),
+            remote: eggsec::config::RemoteConfig::default(),
+            proxies: Vec::new(),
+            ai: None,
+            search: None,
+            alert_channels: eggsec::config::AlertChannelsConfig::default(),
+            execution_policy: eggsec::config::ExecutionPolicy::default(),
+            auto_save_interval_secs: 30,
+        };
+
+        tab.load_config(&config);
+
+        // None rate_limit should produce empty string.
+        assert_eq!(tab.scan_inputs.fields[1].value, "");
+
+        // Apply back.
+        let mut result_config = config.clone();
+        tab.apply_to_config(&mut result_config);
+
+        // Should round-trip as None.
+        assert_eq!(result_config.scan.rate_limit_per_second, None);
+    }
+
+    #[test]
+    fn theme_preview_uses_resolved_colors_not_thread_local() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::tabs::TabRender;
+        use crate::theme::palette::{ThemeColors, ThemeMode};
+        use ratatui::style::Color;
+
+        // Custom theme with distinctive colors that differ from any built-in.
+        let custom_colors = ThemeColors {
+            primary: Color::Magenta,
+            secondary: Color::Blue,
+            accent: Color::Cyan,
+            background: Color::Black,
+            foreground: Color::White,
+            surface: Color::DarkGray,
+            border: Color::Gray,
+            border_focused: Color::Yellow,
+            text: Color::Magenta,
+            text_dim: Color::DarkGray,
+            text_bright: Color::White,
+            success: Color::Green,
+            warning: Color::Yellow,
+            error: Color::Red,
+            info: Color::Cyan,
+            selected: Color::Blue,
+            selected_text: Color::White,
+            highlight: Color::Yellow,
+            mode_normal: Color::Green,
+            mode_insert: Color::Yellow,
+            tab_active: Color::Cyan,
+            tab_inactive: Color::Gray,
+            status_running: Color::Green,
+            status_idle: Color::Gray,
+            status_error: Color::Red,
+            focus_normal: Color::Green,
+            focus_input: Color::Yellow,
+            focus_results: Color::Cyan,
+            safe: Color::Green,
+            danger: Color::Red,
+            muted: Color::DarkGray,
+            active_task: Color::Green,
+            paused_task: Color::Yellow,
+            scope_match: Color::Green,
+            scope_miss: Color::Red,
+            policy_required: Color::Yellow,
+            policy_denied: Color::Red,
+        };
+
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        // Set the resolved theme colors so preview uses them.
+        tab.resolved_theme_colors = Some(custom_colors.clone());
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        // Find the preview area. The preview "Normal" text is rendered with
+        // `custom_colors.text` (Magenta). Scan the buffer for a cell with
+        // that foreground color in the expected preview region.
+        let mut found_custom_fg = false;
+        for cell in buffer.content() {
+            if cell.symbol() == "N"
+                && cell.fg == Color::Magenta
+            {
+                found_custom_fg = true;
+                break;
+            }
+        }
+        assert!(
+            found_custom_fg,
+            "Preview should render 'Normal' text with the custom theme's text color (Magenta), \
+             not the thread-local theme color"
+        );
     }
 }

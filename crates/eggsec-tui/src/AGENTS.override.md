@@ -510,6 +510,8 @@ Selector contract:
 - Esc closes without committing
 - Up/Down only move selection when open
 
+**Dropdown rendering**: `FormBuilder::collect_dropdowns(area, viewport_height)` returns `Vec<DropdownInfo>` for all open selectors. Each `DropdownInfo` contains the anchor area, items, selected index, and computed dropdown rect (position + height with viewport-aware clamping). Settings `render.rs` iterates these to render dropdown overlays on top of the form body. The `Selector` component's `render()` method draws the dropdown list when `is_open()` is true — never call `render()` on a selector without a render path or the dropdown will not appear.
+
 ## InputGroup Stale-Focus Guard
 
 `InputGroup` provides `valid_focused_index()` and `valid_focused_index_ref()` methods that return `Option<usize>` instead of raw `self.focused`. Always use these instead of direct `self.focused` indexing to protect against stale focus indices after fields are removed or the group is cleared:
@@ -1040,3 +1042,33 @@ pub fn scroll_to_bottom(&mut self) {
 - **Settings footer wording**: Changed `[Esc] Discard` to `[Esc] Back` to match actual behavior (Escape navigates back, does not discard unsaved edits).
 - **Theme loader warning dedup**: `luminance()` now uses `LazyLock<Mutex<FxHashSet>>` to warn once per unique unknown color name per process lifetime instead of per occurrence.
 - **Documentation drift fixed**: `AGENTS.override.md` module path corrected from `crates/eggsec/src/tui/` to `crates/eggsec-tui/src/`; tab count corrected from "30" to "33".
+
+## Settings & Selector Anti-patterns
+
+### Do not open an embedded selector without a render path
+
+Every `Selector` that can be opened must have a corresponding render path in its parent tab's `render()` method. If you add a new `Selector` field to a tab but forget to render it, the dropdown will open (state changes) but nothing will appear on screen. Verify that `render()` calls `selector.render()` (or `FormBuilder::collect_dropdowns()` for settings-style selectors) when `selector.is_open()`.
+
+### Do not let normal-mode shortcuts leak through embedded modal controls
+
+Embedded selectors (theme, proxy rotation, severity in Settings) are not overlays — `topmost_overlay()` returns `None` when only a selector is open. Without the `has_settings_selector_open()` guard in `decode_normal_mode_input`, normal-mode keys (`q`, `r`, `s`, `n`, `p`, `h/j/k/l`, `1-9`, etc.) fire their actions while the user navigates a dropdown. The guard returns `UiAction::Noop` for all normal-mode keys when any Settings selector is open. If you add a new embedded selector to a tab outside Settings, add a similar guard or route the selector through the overlay system.
+
+### Do not add Settings fields without load/validate/apply tests
+
+Every Settings input field must be covered by three test categories:
+1. **Load test**: Verifies the field value is read from the config struct into the input field on tab open (e.g., `scan_rate_limit_loads_from_config`).
+2. **Validate test**: Verifies the `validate()` method rejects invalid values (empty, zero, non-numeric) and accepts valid ones (e.g., `validate_zero_rate_limit_fails`, `validate_valid_rate_limit_passes`).
+3. **Apply test**: Verifies the field value is written back to the config struct on save (e.g., `save_config_writes_rate_limit_per_second`).
+
+Without all three, silent regressions can occur where the UI shows a value that doesn't match the actual config, or invalid values bypass validation.
+
+### Theme preview uses resolved_theme_colors, not thread-local
+
+The Settings theme preview renders preview swatches using `SettingsTab.resolved_theme_colors` (resolved from `ThemeManager`), not `tc!()`. The `tc!()` macro reads the thread-local *applied* theme, which may differ from the theme being previewed in the selector. The `fg` helper in `render.rs` falls back to `tc!(text)` only when `resolved_theme_colors` is `None`:
+```rust
+let c = self.resolved_theme_colors.as_ref();
+let fg = |get: fn(&ThemeColors) -> ratatui::style::Color| {
+    c.map(get).unwrap_or_else(|| tc!(text))
+};
+```
+Never read `tc!()` directly for Settings theme preview colors.

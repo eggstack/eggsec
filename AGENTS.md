@@ -239,7 +239,7 @@ Use these sections as the canonical reference points when updating guidance or s
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4144 (includes #[test] + #[tokio::test]) |
+| Tests | ~4164 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 865 (.rs files in crates/) |
 | Payload types | 40 |
@@ -629,6 +629,20 @@ cargo clippy --lib -p eggsec --features c2-mcp
 - **Theme preview uses selected theme colors**: SettingsTab gained `theme_contrast_cache: FxHashMap<String, Vec<String>>` (per-theme contrast warnings) and `resolved_theme_colors: Option<ThemeColors>` (for preview). Preview render uses resolved colors instead of `tc!()` thread-local. `handle_theme_install_report` computes contrast for all loaded themes and resolves the selected theme's colors. `update_settings_theme_selector` also resolves colors. 1 new per-theme contrast test.
 - **Theme metadata enrichment**: Theme render now shows status label (Loaded/adjusted/invalid/missing), loaded/invalid/fallback-adjusted counts, and per-theme contrast warnings from cache. Contrast validation expanded to 9 semantic pairs (text, selected_text, text_dim, warning, error, success, mode_normal, mode_insert, focus_input vs background).
 - **Reload notification enhanced**: Manual reload notification now includes loaded, invalid, and error counts with severity-aware styling.
+
+### Session Fixes (2026-06-18) - TUI Bugs Plan Execution
+
+- **Settings selector dropdown rendering fixed**: `FormBuilder::collect_dropdowns()` now computes anchor positions and returns `DropdownInfo` for open selectors. Settings render calls this for proxy rotation and severity selectors, and directly renders theme selector dropdown. Dropdowns overlay later content. 2 new tests.
+- **Embedded selector input containment**: `has_settings_selector_open()` helper on `App` checks theme/proxy_rotation/severity selectors. `decode_normal_mode_input()` returns `[Noop]` when any selector is open, blocking `q`, `r`, `s`, `n`, `p`, `h/j/k/l`, `1-9`, `e`, `d` from leaking. Global shortcuts (Enter, Esc, Up/Down, Ctrl+C) still work. 8 new tests.
+- **Theme escape restores applied selection**: Escape while theme selector open restores selector to `applied_theme_id` via `select_by_value()` and refreshes preview colors. 6 new tests for escape/enter/apply semantics.
+- **Quick-save after theme apply**: `handle_enter()` triggers best-effort `session_manager.save_quick()` after successful theme application.
+- **Context-aware footer hints**: Theme section footer shows `Enter:apply  Esc:cancel  Up/Down:preview` when selector open, `Enter:themes  r:reload  Ctrl+T:cycle` when closed.
+- **Theme contrast diagnostics improved**: `ThemeInfo` gained `contrast_warnings: Vec<String>` field. `mark_theme_fallback_adjusted()` now stores pre-adjustment warnings. Settings shows stored warnings for `FallbackAdjusted` themes. Updated doc comment: "loaded with contrast-safe fallback colors".
+- **Settings data parity**: `load_config()` now loads `rate_limit_per_second` and `port_timeout_secs`. `validate()` checks rate limit is valid u32 when non-empty. Fixed silent `.ok()` fallback. 5 new tests.
+- **Explicit theme rendering**: `Selector::render_with_theme()`, `FormBuilder::render_with_theme()`, `DropdownInfo::render_with_theme()`, `RadioGroup::render_with_theme()` added. Components delegate to theme-aware versions. Test verifies preview uses resolved colors not thread-local. 1 new test.
+- **Documentation updated**: `architecture/tui.md` updated with selector dropdown rendering, theme preview/apply/cancel semantics, settings data parity, embedded selector key containment. `AGENTS.override.md` updated with anti-patterns for selectors, shortcuts, settings fields, and theme preview.
+
+Total: 528 TUI tests, 1800 eggsec lib tests, all green.
 
 ## Planning Notes for Future Agents
 

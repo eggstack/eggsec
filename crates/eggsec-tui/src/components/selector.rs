@@ -1,4 +1,3 @@
-use crate::tc;
 use ratatui::prelude::Stylize;
 use ratatui::{
     layout::Rect,
@@ -20,11 +19,16 @@ pub struct DropdownInfo {
 
 impl DropdownInfo {
     pub fn render(&self, f: &mut Frame) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(f, &theme);
+    }
+
+    pub fn render_with_theme(&self, f: &mut Frame, theme: &crate::theme::Theme) {
         let fill: Vec<Line> = (0..self.area.height)
             .map(|_| Line::from(" ".repeat(self.area.width as usize)))
             .collect();
         let bg = Paragraph::new(fill)
-            .style(Style::default().bg(tc!(surface)))
+            .style(Style::default().bg(theme.colors.surface))
             .block(Block::default());
         f.render_widget(bg, self.area);
 
@@ -34,11 +38,11 @@ impl DropdownInfo {
             .map(|(_, label, is_selected)| {
                 let style = if *is_selected {
                     Style::default()
-                        .fg(tc!(selected_text))
-                        .bg(tc!(selected))
+                        .fg(theme.colors.selected_text)
+                        .bg(theme.colors.selected)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(tc!(text)).bg(tc!(surface))
+                    Style::default().fg(theme.colors.text).bg(theme.colors.surface)
                 };
                 ListItem::new(label.as_str()).style(style)
             })
@@ -47,8 +51,8 @@ impl DropdownInfo {
         let list = List::new(items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(tc!(border_focused)))
-                .bg(tc!(surface))
+                .border_style(Style::default().fg(theme.colors.border_focused))
+                .bg(theme.colors.surface)
                 .title(self.label.as_str()),
         );
 
@@ -483,10 +487,15 @@ impl RadioGroup {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(f, area, &theme);
+    }
+
+    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, theme: &crate::theme::Theme) {
         let label_style = if self.focused {
-            Style::default().fg(tc!(border_focused))
+            Style::default().fg(theme.colors.border_focused)
         } else {
-            Style::default().fg(tc!(border))
+            Style::default().fg(theme.colors.border)
         };
 
         let label_width = self.label.chars().count() + 2;
@@ -496,15 +505,15 @@ impl RadioGroup {
             let is_selected = Some(i) == self.selected;
             if is_selected {
                 if self.focused {
-                    Style::default().fg(tc!(accent))
+                    Style::default().fg(theme.colors.accent)
                 } else {
-                    Style::default().fg(tc!(selected))
+                    Style::default().fg(theme.colors.selected)
                 }
             } else {
                 if self.focused {
-                    Style::default().fg(tc!(border_focused))
+                    Style::default().fg(theme.colors.border_focused)
                 } else {
-                    Style::default().fg(tc!(border))
+                    Style::default().fg(theme.colors.border)
                 }
             }
         };

@@ -326,6 +326,11 @@ impl App {
                         ),
                         NotificationSeverity::Info,
                     ));
+                    // Best-effort quick-save so the theme choice persists
+                    // across restarts without requiring [s] Save.
+                    if let Err(e) = self.session_manager.save_quick(self) {
+                        tracing::debug!("Quick-save after theme apply failed: {}", e);
+                    }
                 } else {
                     tracing::warn!("Unknown theme selected: {}", theme_name);
                     self.overlay.notification = Some(Notification::new(
@@ -731,6 +736,7 @@ impl App {
             self.mode = InputMode::Normal;
         }
         self.dispatcher_mut().handle_escape();
+        self.maybe_refresh_theme_preview();
     }
 
     pub fn handle_char(&mut self, c: char) {
@@ -1300,6 +1306,17 @@ impl App {
     /// Check if any overlay is active (blocks tab content interaction)
     pub fn is_any_overlay_active(&self) -> bool {
         self.topmost_overlay().is_some()
+    }
+
+    /// Returns true if any Settings embedded selector is currently open.
+    /// Embedded selectors are not overlays (topmost_overlay returns None when
+    /// only a selector is open), so this guard prevents normal-mode shortcuts
+    /// from leaking into actions while the user is navigating a selector.
+    pub fn has_settings_selector_open(&self) -> bool {
+        self.current_tab == Tab::Settings
+            && (self.tabs.settings.theme_selector.is_open()
+                || self.tabs.settings.proxy_rotation_selector.is_open()
+                || self.tabs.settings.severity_selector.is_open())
     }
 
     // ---------------------------------------------------------------------

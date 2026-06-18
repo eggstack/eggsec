@@ -214,6 +214,16 @@ impl KeyHandler {
         app: &App,
         key: &crossterm::event::KeyEvent,
     ) -> Vec<UiAction> {
+        // Block normal-mode shortcuts when an embedded Settings selector is open.
+        // Selectors are not overlays (topmost_overlay returns None), so without
+        // this guard, keys like q, r, s, n, p, h/j/k/l, 1-9, etc. all fire
+        // their normal actions while the user is navigating a selector dropdown.
+        // Navigation keys (Up/Down/Enter/Esc/arrows) are handled by global
+        // shortcuts before we get here, so they still work in the selector.
+        if app.has_settings_selector_open() {
+            return vec![UiAction::Noop];
+        }
+
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Char('i')) => vec![UiAction::EnterInsertMode],
             (KeyModifiers::NONE, KeyCode::Char('q')) => {
@@ -762,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn test_r_in_settings_theme_with_selector_open_resets() {
+    fn test_r_in_settings_theme_with_selector_open_is_noop() {
         let mut app = create_test_app();
         let handler = KeyHandler::new();
         app.current_tab = Tab::Settings;
@@ -773,7 +783,131 @@ mod tests {
             &mut app,
             &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
         );
-        assert_eq!(actions, vec![UiAction::ResetCurrent]);
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_q_with_settings_selector_open_is_noop() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.theme_selector.open();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Noop]);
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn test_s_with_settings_selector_open_is_noop() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.theme_selector.open();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_n_with_settings_selector_open_is_noop() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.theme_selector.open();
+        let original_tab = app.current_tab;
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Noop]);
+        assert_eq!(app.current_tab, original_tab);
+    }
+
+    #[test]
+    fn test_proxy_rotation_selector_open_blocks_shortcuts() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Proxy;
+        app.tabs.settings.proxy_rotation_selector.open();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_severity_selector_open_blocks_shortcuts() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Notifications;
+        app.tabs.settings.severity_selector.open();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Noop]);
+    }
+
+    #[test]
+    fn test_global_shortcuts_still_work_with_selector_open() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.theme_selector.open();
+
+        // Enter should still be decoded (global shortcut)
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Enter]);
+
+        // Esc should still be decoded (global shortcut)
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Escape]);
+
+        // Up/Down should still be decoded (global shortcuts)
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Up, KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::MoveUp]);
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::MoveDown]);
+    }
+
+    #[test]
+    fn test_selector_not_on_settings_does_not_block() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        // On a non-Settings tab, selector open check should not trigger
+        app.current_tab = Tab::Recon;
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::Quit]);
     }
 
     #[test]

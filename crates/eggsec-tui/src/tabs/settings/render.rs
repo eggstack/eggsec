@@ -138,6 +138,9 @@ impl TabRender for super::SettingsTab {
                 }
                 builder = builder.add_selector(self.proxy_rotation_selector.clone());
                 builder.render(f, body, insert_mode);
+                for dropdown in builder.collect_dropdowns(body, area.height) {
+                    dropdown.render(f);
+                }
             }
             SettingsSection::Scope => {
                 let mut builder = FormBuilder::new("Scope Settings").row_height(3);
@@ -169,6 +172,9 @@ impl TabRender for super::SettingsTab {
                 builder = builder.add_checkbox(self.notify_on_findings.clone());
                 builder = builder.add_selector(self.severity_selector.clone());
                 builder.render(f, body, insert_mode);
+                for dropdown in builder.collect_dropdowns(body, area.height) {
+                    dropdown.render(f);
+                }
             }
             SettingsSection::Theme => {
                 // --- Theme details pane ---
@@ -392,19 +398,27 @@ impl TabRender for super::SettingsTab {
                     f.render_widget(Paragraph::new(preview_lines), preview_inner);
                 }
 
-                // Hint text below the preview.
+                // Hint text below the preview — context-aware for selector state.
                 let hint_y = preview_y + preview_height;
                 if hint_y < body.y + body.height {
-                    let hint = Paragraph::new(
-                        "Press [r] to reload themes   [Ctrl+T] to cycle",
-                    )
-                    .style(Style::default().fg(tc!(text_dim)));
+                    let hint_text = if self.theme_selector.is_open() {
+                        "Enter:apply  Esc:cancel  Up/Down:preview"
+                    } else {
+                        "Enter:themes  r:reload  Ctrl+T:cycle"
+                    };
+                    let hint = Paragraph::new(hint_text)
+                        .style(Style::default().fg(tc!(text_dim)));
                     let hint_area = Rect {
                         y: hint_y,
                         height: 1,
                         ..body
                     };
                     f.render_widget(hint, hint_area);
+                }
+
+                // Render theme selector dropdown overlay last so it overlays other content.
+                if let Some(dropdown) = self.theme_selector.dropdown_info(selector_area, area.height) {
+                    dropdown.render(f);
                 }
             }
         }

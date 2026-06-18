@@ -19,6 +19,8 @@ pub struct ThemeInfo {
     pub source: ThemeSource,
     /// Load status.
     pub status: ThemeLoadStatus,
+    /// Pre-adjustment contrast warnings (preserved for FallbackAdjusted themes).
+    pub contrast_warnings: Vec<String>,
 }
 
 /// Where a theme was loaded from.
@@ -37,7 +39,7 @@ pub enum ThemeSource {
 pub enum ThemeLoadStatus {
     /// Theme loaded successfully.
     Loaded,
-    /// Theme had parse errors but fallback was used.
+    /// Theme loaded with contrast-safe fallback colors applied.
     FallbackAdjusted,
     /// Theme file exists but couldn't be loaded.
     Invalid(String),
@@ -80,6 +82,7 @@ impl ThemeManager {
                     mode,
                     source: ThemeSource::BuiltIn,
                     status: ThemeLoadStatus::Loaded,
+                    contrast_warnings: Vec::new(),
                 },
             );
         }
@@ -174,6 +177,7 @@ impl ThemeManager {
                 mode,
                 source,
                 status: ThemeLoadStatus::Loaded,
+                contrast_warnings: Vec::new(),
             },
         );
     }
@@ -184,9 +188,10 @@ impl ThemeManager {
         }
     }
 
-    pub fn mark_theme_fallback_adjusted(&mut self, id: &str) {
+    pub fn mark_theme_fallback_adjusted(&mut self, id: &str, warnings: Vec<String>) {
         if let Some(info) = self.theme_info.get_mut(id) {
             info.status = ThemeLoadStatus::FallbackAdjusted;
+            info.contrast_warnings = warnings;
         }
     }
 
@@ -202,6 +207,7 @@ impl ThemeManager {
                 mode: crate::theme::ThemeMode::Dark,
                 source,
                 status: ThemeLoadStatus::Invalid(reason),
+                contrast_warnings: Vec::new(),
             },
         );
     }
@@ -550,9 +556,11 @@ mod tests {
     #[test]
     fn mark_theme_fallback_adjusted() {
         let mut manager = ThemeManager::new();
-        manager.mark_theme_fallback_adjusted("dark");
+        let warnings = vec!["text/background contrast ratio 2.5:1 is below 4.5:1 minimum".to_string()];
+        manager.mark_theme_fallback_adjusted("dark", warnings.clone());
         let info = manager.get_info("dark").unwrap();
         assert_eq!(info.status, ThemeLoadStatus::FallbackAdjusted);
+        assert_eq!(info.contrast_warnings, warnings);
     }
 
     #[test]

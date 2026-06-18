@@ -66,7 +66,10 @@ impl super::App {
                     self.theme_manager.register_theme_with_source(theme, source);
                     // Track contrast warnings on the registered theme.
                     if !record.contrast_warnings.is_empty() {
-                        self.theme_manager.mark_theme_fallback_adjusted(&theme_id);
+                        self.theme_manager.mark_theme_fallback_adjusted(
+                            &theme_id,
+                            record.contrast_warnings,
+                        );
                     }
                 }
                 Err(e) => {
@@ -158,14 +161,25 @@ impl super::App {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "~/.config/eggsec/themes".to_string());
 
-        // Compute contrast warnings for all loaded themes.
+        // Compute contrast warnings for all loaded and fallback-adjusted themes.
         let mut contrast_cache = rustc_hash::FxHashMap::default();
         for info in self.theme_manager.theme_info_list() {
-            if info.status == crate::theme::manager::ThemeLoadStatus::Loaded {
-                let warnings = self.theme_manager.validate_contrast(&info.id);
-                if !warnings.is_empty() {
-                    contrast_cache.insert(info.id.clone(), warnings);
+            match info.status {
+                crate::theme::manager::ThemeLoadStatus::Loaded => {
+                    let warnings = self.theme_manager.validate_contrast(&info.id);
+                    if !warnings.is_empty() {
+                        contrast_cache.insert(info.id.clone(), warnings);
+                    }
                 }
+                crate::theme::manager::ThemeLoadStatus::FallbackAdjusted => {
+                    // Use the pre-adjustment warnings preserved during loading
+                    // rather than re-validating the already-adjusted theme.
+                    if !info.contrast_warnings.is_empty() {
+                        contrast_cache
+                            .insert(info.id.clone(), info.contrast_warnings.clone());
+                    }
+                }
+                _ => {}
             }
         }
 

@@ -1,5 +1,4 @@
-use crate::components::selector::{Checkbox, RadioGroup, Selector};
-use crate::tc;
+use crate::components::selector::{Checkbox, DropdownInfo, RadioGroup, Selector};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -786,11 +785,59 @@ impl FormBuilder {
             .collect()
     }
 
+    pub fn collect_dropdowns(&self, area: Rect, viewport_height: u16) -> Vec<DropdownInfo> {
+        let theme = crate::theme::legacy::current_theme();
+        self.collect_dropdowns_with_theme(area, viewport_height, &theme)
+    }
+
+    pub fn collect_dropdowns_with_theme(&self, area: Rect, viewport_height: u16, theme: &crate::theme::Theme) -> Vec<DropdownInfo> {
+        self.fields
+            .iter()
+            .enumerate()
+            .filter_map(|(i, field)| {
+                if let FieldVariant::Selector(sel) = field {
+                    let constraints = self.calculate_constraints();
+                    let block = Block::default()
+                        .title(self.title.as_str())
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(theme.colors.border));
+                    let inner = block.inner(area);
+                    let mut anchor_y = inner.y;
+                    for j in 0..i {
+                        let h = match constraints.get(j) {
+                            Some(Constraint::Length(h)) => *h,
+                            _ => 3,
+                        };
+                        anchor_y = anchor_y.saturating_add(h);
+                    }
+                    let chunk_height = match constraints.get(i) {
+                        Some(Constraint::Length(h)) => *h,
+                        _ => 3,
+                    };
+                    let anchor = Rect {
+                        x: inner.x,
+                        y: anchor_y,
+                        width: inner.width,
+                        height: chunk_height,
+                    };
+                    sel.dropdown_info(anchor, viewport_height)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(f, area, insert_mode, &theme);
+    }
+
+    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, insert_mode: bool, theme: &crate::theme::Theme) {
         let block = Block::default()
             .title(self.title.as_str())
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(tc!(border)));
+            .border_style(Style::default().fg(theme.colors.border));
 
         let inner = block.inner(area);
         f.render_widget(block, area);
@@ -804,10 +851,10 @@ impl FormBuilder {
         for (i, field) in self.fields.iter().enumerate() {
             if let Some(chunk) = chunks.get(i) {
                 match field {
-                    FieldVariant::Input(input) => input.render(f, *chunk, insert_mode),
-                    FieldVariant::Checkbox(cb) => cb.render(f, *chunk),
-                    FieldVariant::Selector(sel) => sel.render(f, *chunk),
-                    FieldVariant::RadioGroup(rg) => rg.render(f, *chunk),
+                    FieldVariant::Input(input) => input.render_with_theme(f, *chunk, insert_mode, theme),
+                    FieldVariant::Checkbox(cb) => cb.render_with_theme(cb.focused, f, *chunk, theme),
+                    FieldVariant::Selector(sel) => sel.render_with_theme(f, *chunk, theme),
+                    FieldVariant::RadioGroup(rg) => rg.render_with_theme(f, *chunk, theme),
                 }
             }
         }

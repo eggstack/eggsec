@@ -297,6 +297,12 @@ impl TabInput for SettingsTab {
         }
         if self.theme_selector.is_open() {
             self.theme_selector.cancel();
+            // Restore selector to the applied theme so the dropdown
+            // reflects what's actually active, not whatever the user
+            // was previewing before they pressed Escape.
+            if let Some(ref applied_id) = self.applied_theme_id {
+                self.theme_selector.select_by_value(applied_id);
+            }
             self.needs_theme_preview_refresh = true;
             return;
         }
