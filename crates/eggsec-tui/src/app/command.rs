@@ -766,11 +766,11 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Recon;
         // Set target via tab input (first field)
-        if let Some(f) = app.tabs.recon.inputs.fields.first_mut() {
+        if let Some(f) = app.tabs.recon.core.inputs.fields.first_mut() {
             f.value = "example.com".to_string();
         }
         // Set non-default concurrency (second field)
-        if let Some(f) = app.tabs.recon.inputs.fields.get_mut(1) {
+        if let Some(f) = app.tabs.recon.core.inputs.fields.get_mut(1) {
             f.value = "50".to_string();
         }
         let cli = app.copy_cli_equivalent().unwrap();
@@ -784,10 +784,10 @@ mod tests {
     fn test_copy_cli_scan_ports_with_target_and_ports() {
         let mut app = create_test_app();
         app.current_tab = Tab::ScanPorts;
-        if let Some(f) = app.tabs.scan_ports.inputs.fields.first_mut() {
+        if let Some(f) = app.tabs.scan_ports.core.inputs.fields.first_mut() {
             f.value = "10.0.0.1".to_string();
         }
-        if let Some(f) = app.tabs.scan_ports.inputs.fields.get_mut(1) {
+        if let Some(f) = app.tabs.scan_ports.core.inputs.fields.get_mut(1) {
             f.value = "22,80,443".to_string();
         }
         let cli = app.copy_cli_equivalent().unwrap();
@@ -830,7 +830,7 @@ mod tests {
     fn test_copy_cli_appends_format_when_non_default() {
         let mut app = create_test_app();
         app.current_tab = Tab::Recon;
-        if let Some(f) = app.tabs.recon.inputs.fields.first_mut() {
+        if let Some(f) = app.tabs.recon.core.inputs.fields.first_mut() {
             f.value = "target".to_string();
         }
         app.export_format = eggsec::types::OutputFormat::Json;
@@ -866,7 +866,7 @@ mod tests {
     fn test_execute_command_copy_cli_executable_copies_or_fails_gracefully() {
         let mut app = create_test_app();
         app.current_tab = Tab::Recon;
-        if let Some(f) = app.tabs.recon.inputs.fields.first_mut() {
+        if let Some(f) = app.tabs.recon.core.inputs.fields.first_mut() {
             f.value = "safe-target".to_string();
         }
         app.execute_command("copy-cli");

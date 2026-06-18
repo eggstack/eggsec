@@ -2431,11 +2431,11 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Recon;
         app.mode = InputMode::Insert;
-        app.tabs.recon.inputs.focus(0);
+        app.tabs.recon.core.inputs.focus(0);
 
         app.handle_enter();
 
         assert_eq!(app.mode, InputMode::Normal);
-        assert!(!app.tabs.recon.inputs.is_focused());
+        assert!(!app.tabs.recon.core.inputs.is_focused());
     }
 }

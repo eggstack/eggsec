@@ -186,12 +186,12 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Dashboard;
         app.task_state.tab = Some(Tab::Recon);
-        app.tabs.recon.state = AppState::Running;
+        app.tabs.recon.core.state = AppState::Running;
 
         app.stop_with_message("Interrupted by user");
 
         assert!(
-            matches!(app.tabs.recon.state, AppState::Error(ref m) if m == "Interrupted by user")
+            matches!(app.tabs.recon.core.state, AppState::Error(ref m) if m == "Interrupted by user")
         );
         assert!(app.task_state.tab.is_none());
         assert!(!app.has_active_task());
@@ -202,11 +202,11 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Dashboard;
         app.task_state.tab = Some(Tab::Recon);
-        app.tabs.recon.state = AppState::Running;
+        app.tabs.recon.core.state = AppState::Running;
 
         app.stop();
 
-        assert!(matches!(app.tabs.recon.state, AppState::Idle));
+        assert!(matches!(app.tabs.recon.core.state, AppState::Idle));
         assert!(app.task_state.tab.is_none());
         assert!(!app.has_active_task());
     }

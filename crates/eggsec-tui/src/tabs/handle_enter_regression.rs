@@ -101,10 +101,10 @@ mod tests {
     fn recon_enter_inputs_focused_blurs() {
         let mut tab = ReconTab::new();
         tab.focus_area = ReconFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -170,10 +170,10 @@ mod tests {
     fn scan_ports_enter_inputs_focused_blurs() {
         let mut tab = ScanPortsTab::new();
         tab.focus_area = ScanPortsFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -574,10 +574,10 @@ mod tests {
         // Recon
         let mut recon = ReconTab::new();
         recon.focus_area = ReconFocusArea::Inputs;
-        recon.inputs.focus(0);
-        assert!(recon.inputs.is_focused());
+        recon.core.inputs.focus(0);
+        assert!(recon.core.inputs.is_focused());
         recon.handle_enter();
-        assert!(!recon.inputs.is_focused(), "Recon input should blur");
+        assert!(!recon.core.inputs.is_focused(), "Recon input should blur");
         assert!(!recon.is_running());
 
         // GraphQl
@@ -610,10 +610,10 @@ mod tests {
         // ScanPorts
         let mut sp = ScanPortsTab::new();
         sp.focus_area = ScanPortsFocusArea::Inputs;
-        sp.inputs.focus(0);
-        assert!(sp.inputs.is_focused());
+        sp.core.inputs.focus(0);
+        assert!(sp.core.inputs.is_focused());
         sp.handle_enter();
-        assert!(!sp.inputs.is_focused(), "ScanPorts input should blur");
+        assert!(!sp.core.inputs.is_focused(), "ScanPorts input should blur");
         assert!(!sp.is_running());
 
         // Stress

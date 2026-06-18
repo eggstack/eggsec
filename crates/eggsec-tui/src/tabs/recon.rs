@@ -1,9 +1,8 @@
 use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
-};
+use crate::components::{Checkbox, InputField, InputGroup};
+use crate::tabs::core::{render_results_area, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_input_boilerplate, tc};
 use eggsec::recon::FullReconResult;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -14,16 +13,12 @@ use ratatui::{
 };
 
 pub struct ReconTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub results: Option<FullReconResult>,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub options: ReconOptions,
     pub option_checkboxes: Vec<Checkbox>,
     pub focus_area: ReconFocusArea,
     pub focused_checkbox_index: usize,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,29 +77,22 @@ impl ReconTab {
         ];
 
         Self {
-            inputs,
+            core: TabCore::new("Running reconnaissance...", "Results").with_inputs(inputs),
             results: None,
-            progress: ProgressGauge::new("Running reconnaissance..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
             options: ReconOptions::default(),
             option_checkboxes,
             focus_area: ReconFocusArea::Inputs,
             focused_checkbox_index: 0,
-            error: None,
         }
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .and_then(|f| f.value.parse().ok())
@@ -202,130 +190,142 @@ impl ReconTab {
 
     pub fn set_results(&mut self, results: FullReconResult) {
         self.results = Some(results.clone());
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
 
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Reconnaissance Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(""));
 
         if let Some(ref domain) = results.domain {
-            self.results_view
+            self.core
+                .results_view
                 .add_line(Line::from(format!("Domain: {}", domain)));
         }
         if let Some(ref ip) = results.ip_address {
-            self.results_view
+            self.core
+                .results_view
                 .add_line(Line::from(format!("IP Address: {}", ip)));
         }
 
         if let Some(ref tech) = results.tech_stack {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "Tech Stack:",
                 Style::default().fg(tc!(accent)),
             )));
             if !tech.frameworks.is_empty() {
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(format!(
                     "  Frameworks: {}",
                     tech.frameworks.join(", ")
                 )));
             }
             if !tech.servers.is_empty() {
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(format!(
                     "  Servers: {}",
                     tech.servers.join(", ")
                 )));
             }
             if !tech.languages.is_empty() {
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(format!(
                     "  Languages: {}",
                     tech.languages.join(", ")
                 )));
             }
         } else if results.tech_error.is_some() {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "Tech Stack: Failed",
                 Style::default().fg(tc!(error)),
             )));
             if let Some(ref err) = results.tech_error {
-                self.results_view.add_line(Line::from(format!("  {}", err)));
+                self.core
+                    .results_view
+                    .add_line(Line::from(format!("  {}", err)));
             }
         }
 
         if let Some(ref geo) = results.geolocation {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "Geolocation:",
                 Style::default().fg(tc!(accent)),
             )));
             if let Some(ref country) = geo.country {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  Country: {}", country)));
             }
             if let Some(ref city) = geo.city {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  City: {}", city)));
             }
             if let Some(ref isp) = geo.isp {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  ISP: {}", isp)));
             }
         }
 
         if let Some(ref geo_err) = results.geoip_error {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "GeoIP Error:",
                 Style::default().fg(tc!(error)),
             )));
             for line in geo_err.lines().take(4) {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  {}", line)));
             }
         }
 
         if let Some(ref ssl) = results.ssl_analysis {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "SSL/TLS:",
                 Style::default().fg(tc!(accent)),
             )));
             if let Some(ref cert) = ssl.certificate {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  Subject: {}", cert.subject)));
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  Issuer: {}", cert.issuer)));
             }
         } else if results.ssl_error.is_some() {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "SSL/TLS: Failed",
                 Style::default().fg(tc!(error)),
             )));
             if let Some(ref err) = results.ssl_error {
-                self.results_view.add_line(Line::from(format!("  {}", err)));
+                self.core
+                    .results_view
+                    .add_line(Line::from(format!("  {}", err)));
             }
         }
 
         if let Some(ref subdomains) = results.subdomains {
             if !subdomains.subdomains.is_empty() {
-                self.results_view.add_line(Line::from(""));
-                self.results_view.add_line(Line::from(Span::styled(
+                self.core.results_view.add_line(Line::from(""));
+                self.core.results_view.add_line(Line::from(Span::styled(
                     format!("Subdomains ({}):", subdomains.subdomains.len()),
                     Style::default().fg(tc!(accent)),
                 )));
                 for sub in subdomains.subdomains.iter().take(5) {
-                    self.results_view.add_line(Line::from(format!(
+                    self.core.results_view.add_line(Line::from(format!(
                         "  - {} ({})",
                         sub.subdomain,
                         sub.ip_addresses.join(", ")
                     )));
                 }
                 if subdomains.subdomains.len() > 5 {
-                    self.results_view.add_line(Line::from(format!(
+                    self.core.results_view.add_line(Line::from(format!(
                         "  ... and {} more",
                         subdomains.subdomains.len() - 5
                     )));
@@ -336,28 +336,15 @@ impl ReconTab {
 
     pub fn start(&mut self) {
         if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
+            self.core.state = AppState::Running;
+            self.core.progress.current = 0;
             self.results = None;
-            self.results_view.clear();
+            self.core.results_view.clear();
         }
     }
 
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
     pub fn update_progress(&mut self, completed: u64, total: u64) {
-        self.progress.current = completed;
-        self.progress.total = total;
-    }
-
-    pub fn scroll_results_up(&mut self) {
-        self.results_view.scroll_up(1);
-    }
-
-    pub fn scroll_results_down(&mut self) {
-        self.results_view.scroll_down(1);
+        self.core.update_progress(completed, total);
     }
 
     fn options_row_count(&self) -> usize {
@@ -387,34 +374,24 @@ impl Default for ReconTab {
 
 impl TabState for ReconTab {
     fn state(&self) -> AppState {
-        self.state.clone()
+        self.core.state.clone()
     }
 
     fn progress(&self) -> f64 {
-        self.progress.percent() as f64
+        self.core.progress.percent() as f64
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results = None;
-        self.progress.current = 0;
-        self.progress.total = 0;
-        self.results_view.clear();
-        self.error = None;
+        self.core.reset_all();
         self.focus_area = ReconFocusArea::Inputs;
         self.focused_checkbox_index = 0;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
         for cb in &mut self.option_checkboxes {
             cb.checked = false;
         }
     }
 
     fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
-        self.progress.current = 0;
+        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -429,9 +406,7 @@ impl TabRender for ReconTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        // Dynamic layout based on terminal height
         let (input_height, results_min) = if area.height < 24 {
-            // Small terminal: use 75% for inputs, ensure some results area visible
             let h = ((area.height as f32 * 0.75) as u16).clamp(6, 16);
             (h, 2)
         } else {
@@ -449,22 +424,19 @@ impl TabRender for ReconTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let is_config_focused =
+            self.focus_area == ReconFocusArea::Inputs || self.focus_area == ReconFocusArea::Options;
         let config_block = Block::default()
             .borders(Borders::ALL)
             .title(" Configuration ")
-            .border_style(Style::default().fg(
-                if self.focus_area == ReconFocusArea::Inputs
-                    || self.focus_area == ReconFocusArea::Options
-                {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                },
-            ));
+            .border_style(Style::default().fg(if is_config_focused {
+                tc!(border_focused)
+            } else {
+                tc!(border)
+            }));
         let config_inner = config_block.inner(input_area);
         f.render_widget(config_block, input_area);
 
-        // Simple 3-row layout: 2 input rows + options row
         let row_height = (config_inner.height / 3).max(2);
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -475,7 +447,7 @@ impl TabRender for ReconTab {
             ])
             .split(config_inner);
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
+        for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
                 field.render(f, *chunk, insert_mode);
             }
@@ -528,48 +500,59 @@ impl TabRender for ReconTab {
             }
         }
 
-        if self.state == AppState::Running {
-            self.progress.render(f, results_area);
-        } else if let Some(ref err) = self.error {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Reconnaissance - Error"),
-                )
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_area);
-        } else if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, None);
-        } else {
-            let cli_example = "eggsec recon example.com --no-tech --no-whois";
-            let placeholder = empty_state_paragraph(
-                "Reconnaissance",
-                format!(
-                    "Enter target and press Enter to start recon\n\nCLI equivalent: {}",
-                    cli_example
-                ),
-            );
-            f.render_widget(placeholder, results_area);
-        }
+        render_results_area(
+            f,
+            results_area,
+            &self.core.state,
+            &self.core.error,
+            &self.core.results_view,
+            &self.core.progress,
+            "Reconnaissance",
+            "Enter target and press Enter to start recon\n\nCLI equivalent: eggsec recon example.com --no-tech --no-whois",
+        );
     }
 }
 
 impl TabInput for ReconTab {
+    tab_input_boilerplate!(
+        ReconTab,
+        core: core,
+        focus: focus_area,
+        Inputs: ReconFocusArea::Inputs,
+        Results: ReconFocusArea::Results
+    );
+
+    fn handle_char(&mut self, c: char) {
+        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
+            self.core.inputs.insert(c);
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
+            self.core.inputs.backspace();
+        }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
+            self.core.inputs.paste(text);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
         }
         self.focus_area = match self.focus_area {
             ReconFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 self.focused_checkbox_index = 0;
                 ReconFocusArea::Options
             }
             ReconFocusArea::Options => ReconFocusArea::Results,
             ReconFocusArea::Results => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 ReconFocusArea::Inputs
             }
         };
@@ -581,11 +564,11 @@ impl TabInput for ReconTab {
         }
         self.focus_area = match self.focus_area {
             ReconFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 ReconFocusArea::Results
             }
             ReconFocusArea::Options => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 ReconFocusArea::Inputs
             }
             ReconFocusArea::Results => {
@@ -595,85 +578,9 @@ impl TabInput for ReconTab {
         };
     }
 
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.backspace();
-        }
-    }
-
     fn handle_delete(&mut self) {
         if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.delete();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if !self.is_running() {
-            if self.focus_area == ReconFocusArea::Results {
-                return Some(self.results_view.get_content());
-            } else if self.focus_area == ReconFocusArea::Inputs {
-                return self.inputs.get_focused_value();
-            }
-        }
-        None
-    }
-
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_word_forward();
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == ReconFocusArea::Inputs {
-                self.inputs.move_home();
-            } else if self.focus_area == ReconFocusArea::Results {
-                self.results_view.scroll_to_top();
-            }
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == ReconFocusArea::Inputs {
-                self.inputs.move_end();
-            } else if self.focus_area == ReconFocusArea::Results {
-                self.results_view.scroll_to_bottom();
-            }
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if !self.is_running() {
-            self.inputs.blur();
-            self.focus_area = ReconFocusArea::Inputs;
-            self.inputs.focus(0);
-        }
-    }
-
-    fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.inputs.blur();
-            self.focus_area = ReconFocusArea::Results;
+            self.core.inputs.delete();
         }
     }
 
@@ -682,20 +589,23 @@ impl TabInput for ReconTab {
             return;
         }
 
-        if self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused() {
+        if self.focus_area == ReconFocusArea::Inputs && self.core.inputs.is_focused() {
             if self.is_running() {
-                self.stop();
+                self.core.stop();
                 return;
             }
-            self.inputs.blur();
+            self.core.inputs.blur();
             return;
         }
 
         if self.focus_area == ReconFocusArea::Options {
             if self.is_running() {
-                self.stop();
+                self.core.stop();
             } else {
-                if let Some(cb) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
+                if let Some(cb) = self
+                    .option_checkboxes
+                    .get_mut(self.focused_checkbox_index)
+                {
                     cb.toggle();
                 }
             }
@@ -703,7 +613,7 @@ impl TabInput for ReconTab {
         }
 
         if self.is_running() {
-            self.stop();
+            self.core.stop();
         } else {
             self.start();
         }
@@ -711,14 +621,14 @@ impl TabInput for ReconTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         match self.focus_area {
-            ReconFocusArea::Inputs => self.inputs.blur(),
+            ReconFocusArea::Inputs => self.core.inputs.blur(),
             ReconFocusArea::Options | ReconFocusArea::Results => {
                 self.focus_area = ReconFocusArea::Inputs;
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
             }
         }
     }
@@ -729,12 +639,13 @@ impl TabInput for ReconTab {
                 if self.focused_checkbox_index == 0 {
                     self.focused_checkbox_index = self.option_checkboxes.len() - 1;
                 } else {
-                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                    self.focused_checkbox_index =
+                        self.focused_checkbox_index.saturating_sub(1);
                 }
-            } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_up();
+            } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
+                self.core.scroll_results_up();
             } else {
-                self.inputs.focus_prev();
+                self.core.inputs.focus_prev();
             }
         }
     }
@@ -749,10 +660,10 @@ impl TabInput for ReconTab {
                 } else {
                     self.focused_checkbox_index += 1;
                 }
-            } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_down();
+            } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
+                self.core.scroll_results_down();
             } else {
-                self.inputs.focus_next();
+                self.core.inputs.focus_next();
             }
         }
     }
@@ -760,12 +671,13 @@ impl TabInput for ReconTab {
     fn handle_left(&mut self) -> bool {
         if !self.is_running() {
             if self.focus_area == ReconFocusArea::Inputs {
-                self.inputs.move_left()
+                self.core.inputs.move_left()
             } else if self.focus_area == ReconFocusArea::Options {
                 if self.focused_checkbox_index == 0 {
                     false
                 } else {
-                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                    self.focused_checkbox_index =
+                        self.focused_checkbox_index.saturating_sub(1);
                     true
                 }
             } else {
@@ -779,7 +691,7 @@ impl TabInput for ReconTab {
     fn handle_right(&mut self) -> bool {
         if !self.is_running() {
             if self.focus_area == ReconFocusArea::Inputs {
-                self.inputs.move_right()
+                self.core.inputs.move_right()
             } else if self.focus_area == ReconFocusArea::Options {
                 if self.option_checkboxes.is_empty()
                     || self.focused_checkbox_index >= self.option_checkboxes.len() - 1
@@ -799,11 +711,11 @@ impl TabInput for ReconTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.is_at_left_edge()
+            self.core.inputs.is_at_left_edge()
         } else if self.focus_area == ReconFocusArea::Options {
             self.option_checkboxes.is_empty() || self.focused_checkbox_index == 0
         } else if self.focus_area == ReconFocusArea::Results {
-            self.results_view.is_at_left_edge()
+            self.core.results_view.is_at_left_edge()
         } else {
             true
         }
@@ -811,41 +723,19 @@ impl TabInput for ReconTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.is_at_right_edge()
+            self.core.inputs.is_at_right_edge()
         } else if self.focus_area == ReconFocusArea::Options {
             self.option_checkboxes.is_empty()
                 || self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1)
         } else if self.focus_area == ReconFocusArea::Results {
-            self.results_view.is_at_right_edge()
+            self.core.results_view.is_at_right_edge()
         } else {
             true
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused()
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_down(page_size);
-    }
-
-    fn stop(&mut self) {
-        ReconTab::stop(self);
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
+        self.focus_area == ReconFocusArea::Inputs && self.core.inputs.is_focused()
     }
 }
 
@@ -1006,11 +896,11 @@ mod tests {
     #[test]
     fn test_enter_in_inputs_focused_blurs_does_not_start() {
         let mut tab = create_test_tab();
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         assert_eq!(tab.focus_area, ReconFocusArea::Inputs);
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -1048,11 +938,26 @@ mod tests {
 
         let buf = terminal.backend().buffer();
         let found = (0..buf.area.height).any(|y| {
-            (0..buf.area.width).any(|x| buf.cell((x, y)).is_some_and(|cell| cell.symbol() == "▶"))
+            (0..buf.area.width)
+                .any(|x| buf.cell((x, y)).is_some_and(|cell| cell.symbol() == "▶"))
         });
         assert!(
             found,
             "Focused checkbox marker should remain visible after cycling through a small viewport"
         );
+    }
+
+    #[test]
+    fn test_target_delegates_to_core() {
+        let tab = create_test_tab();
+        assert_eq!(tab.target(), "");
+    }
+
+    #[test]
+    fn test_stop_delegates_to_core() {
+        let mut tab = create_test_tab();
+        tab.core.state = AppState::Running;
+        tab.core.stop();
+        assert_eq!(tab.core.state, AppState::Idle);
     }
 }

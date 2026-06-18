@@ -1,3 +1,6 @@
+pub mod core;
+mod macros;
+
 mod auth;
 #[cfg(feature = "c2")]
 mod c2;

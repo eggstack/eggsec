@@ -453,13 +453,13 @@ mod tests {
         let mut handler = KeyHandler::new();
         app.current_tab = Tab::Recon;
         app.mode = InputMode::Normal;
-        app.tabs.recon.inputs.focus(0);
-        app.tabs.recon.inputs.fields[0].value = "abc".to_string();
-        app.tabs.recon.inputs.fields[0].cursor_pos = app.tabs.recon.inputs.fields[0].value.len();
+        app.tabs.recon.core.inputs.focus(0);
+        app.tabs.recon.core.inputs.fields[0].value = "abc".to_string();
+        app.tabs.recon.core.inputs.fields[0].cursor_pos = app.tabs.recon.core.inputs.fields[0].value.len();
 
         press(&mut handler, &mut app, KeyCode::Backspace);
 
-        assert_eq!(app.tabs.recon.inputs.fields[0].value, "abc");
+        assert_eq!(app.tabs.recon.core.inputs.fields[0].value, "abc");
     }
 
     #[test]
@@ -467,17 +467,17 @@ mod tests {
         let mut app = create_test_app();
         let mut handler = KeyHandler::new();
         app.current_tab = Tab::Recon;
-        app.tabs.recon.inputs.focus(0);
-        app.tabs.recon.inputs.fields[0].value = "abc".to_string();
-        app.tabs.recon.inputs.fields[0].cursor_pos = 1;
+        app.tabs.recon.core.inputs.focus(0);
+        app.tabs.recon.core.inputs.fields[0].value = "abc".to_string();
+        app.tabs.recon.core.inputs.fields[0].cursor_pos = 1;
 
         app.mode = InputMode::Normal;
         press(&mut handler, &mut app, KeyCode::Delete);
-        assert_eq!(app.tabs.recon.inputs.fields[0].value, "abc");
+        assert_eq!(app.tabs.recon.core.inputs.fields[0].value, "abc");
 
         app.mode = InputMode::Insert;
         press(&mut handler, &mut app, KeyCode::Delete);
-        assert_eq!(app.tabs.recon.inputs.fields[0].value, "ac");
+        assert_eq!(app.tabs.recon.core.inputs.fields[0].value, "ac");
     }
 
     #[test]
@@ -694,9 +694,9 @@ mod tests {
         let handler = KeyHandler::new();
         app.current_tab = Tab::Recon;
         app.mode = InputMode::Normal;
-        app.tabs.recon.inputs.focus(0);
-        app.tabs.recon.inputs.fields[0].value = "abc".to_string();
-        app.tabs.recon.inputs.fields[0].cursor_pos = app.tabs.recon.inputs.fields[0].value.len();
+        app.tabs.recon.core.inputs.focus(0);
+        app.tabs.recon.core.inputs.fields[0].value = "abc".to_string();
+        app.tabs.recon.core.inputs.fields[0].cursor_pos = app.tabs.recon.core.inputs.fields[0].value.len();
 
         // Backspace in normal -> empty actions (no edit)
         let actions = handler.decode_key_event(
@@ -712,7 +712,7 @@ mod tests {
         );
         assert!(actions.is_empty());
 
-        assert_eq!(app.tabs.recon.inputs.fields[0].value, "abc");
+        assert_eq!(app.tabs.recon.core.inputs.fields[0].value, "abc");
     }
 
     #[test]
