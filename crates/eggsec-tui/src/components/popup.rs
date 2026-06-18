@@ -294,66 +294,7 @@ pub fn help_popup_for_tab(tab: crate::tabs::Tab) -> Popup {
         "  q                - Quit (when idle)".to_string(),
         "".to_string(),
         "Current Tab:".to_string(),
-        match tab {
-            crate::tabs::Tab::Recon => "  Enter            - Start reconnaissance".to_string(),
-            crate::tabs::Tab::Load => "  Enter            - Start load test".to_string(),
-            crate::tabs::Tab::ScanPorts => "  Enter            - Start port scan".to_string(),
-            crate::tabs::Tab::ScanEndpoints => {
-                "  Enter            - Start endpoint scan".to_string()
-            }
-            crate::tabs::Tab::Fingerprint => {
-                "  Enter            - Start service fingerprinting".to_string()
-            }
-            crate::tabs::Tab::Fuzz => "  Enter            - Start fuzzing".to_string(),
-            crate::tabs::Tab::Waf => "  Enter            - Start WAF detection".to_string(),
-            crate::tabs::Tab::WafStress => "  Enter            - Start WAF stress test".to_string(),
-            crate::tabs::Tab::Scan => "  Enter            - Start pipeline scan".to_string(),
-            crate::tabs::Tab::Resume => "  Enter            - Load session file".to_string(),
-            crate::tabs::Tab::Proxy => "  Enter            - Execute action".to_string(),
-            crate::tabs::Tab::Packet => "  Enter            - Run packet tool".to_string(),
-            crate::tabs::Tab::GraphQl => {
-                "  Enter            - Start GraphQL security test".to_string()
-            }
-            crate::tabs::Tab::OAuth => {
-                "  Enter            - Start OAuth/OIDC security test".to_string()
-            }
-            crate::tabs::Tab::Auth => "  Enter            - Start authentication testing (defense-lab only)".to_string(),
-            #[cfg(feature = "c2")]
-            crate::tabs::Tab::C2 => "  Enter            - Start C2 simulation (defense-lab only)".to_string(),
-            #[cfg(not(feature = "c2"))]
-            crate::tabs::Tab::C2 => "  Enter            - C2 (feature not enabled)".to_string(),
-            crate::tabs::Tab::Cluster => "  Enter            - Start cluster operation".to_string(),
-            crate::tabs::Tab::Stress => "  Enter            - Start stress test".to_string(),
-            crate::tabs::Tab::Report => "  Enter            - Execute report action".to_string(),
-            crate::tabs::Tab::Nse => "  Enter            - Run NSE scripts".to_string(),
-            crate::tabs::Tab::Settings => "  s               - Save settings".to_string(),
-            crate::tabs::Tab::History => "  Up/Down         - Navigate entries".to_string(),
-            crate::tabs::Tab::Dashboard => "  j/k             - Scroll dashboard".to_string(),
-            crate::tabs::Tab::Hunt => "  Enter            - Start vulnerability hunt".to_string(),
-            crate::tabs::Tab::Browser => "  Enter            - Start browser scan".to_string(),
-            crate::tabs::Tab::Compliance => {
-                "  Enter            - Generate compliance report".to_string()
-            }
-            crate::tabs::Tab::Storage => {
-                "  Enter            - Execute database operation".to_string()
-            }
-            crate::tabs::Tab::Integrations => {
-                "  Enter            - Execute integration action".to_string()
-            }
-            crate::tabs::Tab::Workflow => {
-                "  Enter            - Execute workflow action".to_string()
-            }
-            crate::tabs::Tab::Vuln => "  Enter            - Run vulnerability analysis".to_string(),
-            #[cfg(feature = "wireless-advanced")]
-            crate::tabs::Tab::Wireless => "  Enter            - Scan / launch active attack (in active mode)".to_string(),
-            #[cfg(not(feature = "wireless-advanced"))]
-            crate::tabs::Tab::Wireless => "  Enter            - Scan wireless networks".to_string(),
-            crate::tabs::Tab::Intercept => "  Enter            - Start/stop interactive proxy intercept".to_string(),
-            #[cfg(feature = "db-pentest")]
-            crate::tabs::Tab::DbPentest => "  Enter            - Run db pentest (defense-lab; d=dry-run toggle, a=advanced)".to_string(),
-            #[cfg(not(feature = "db-pentest"))]
-            crate::tabs::Tab::DbPentest => "  Enter            - Db pentest (feature not enabled)".to_string(),
-        },
+        tab.help_entry().to_string(),
         "".to_string(),
         "=== INPUT MODES ===".to_string(),
         "  NORMAL (NOR)     - Navigation and commands".to_string(),

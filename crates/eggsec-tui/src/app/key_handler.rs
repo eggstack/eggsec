@@ -327,10 +327,6 @@ impl KeyHandler {
     }
 
     fn decode_topmost_overlay(&self, app: &App, key: &crossterm::event::KeyEvent) -> Vec<UiAction> {
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
-            // Ctrl-C is always allowed to bubble out of overlays (historical).
-            return vec![];
-        }
         if app.topmost_overlay().is_none() {
             return vec![];
         }

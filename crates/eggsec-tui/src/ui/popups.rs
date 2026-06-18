@@ -1,3 +1,4 @@
+use ratatui::layout::Rect;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
@@ -9,24 +10,20 @@ use crate::components::centered_rect;
 use crate::theme::Theme;
 use crate::App;
 
+/// Computes a popup area constrained to the viewport, clamping width and height
+/// to avoid overflow on small terminals. `margin` is the total horizontal/vertical
+/// space reserved outside the popup (e.g., 4 for 2px on each side).
+fn constrained_popup_area(area: Rect, width: u16, height: u16, margin: u16) -> Rect {
+    let w = area.width.saturating_sub(margin).min(width).max(16);
+    let h = area.height.saturating_sub(margin).min(height).max(4);
+    centered_rect(w, h, area)
+}
+
 pub fn draw_http_options_popup(f: &mut Frame, app: &App, theme: &Theme) {
     use ratatui::widgets::{Clear, Paragraph};
 
     let area = f.area();
-    // Phase 9: clamp popup to viewport so it never overflows on small terminals (<60 etc).
-    // centered_rect already clamps, but compute constrained min size for very small.
-    let popup_width = if area.width < 50 {
-        area.width.saturating_sub(4).max(20)
-    } else {
-        50
-    };
-    let popup_height = if area.height < 20 {
-        area.height.saturating_sub(4).max(6)
-    } else {
-        18
-    };
-
-    let popup_area = centered_rect(popup_width, popup_height, area);
+    let popup_area = constrained_popup_area(area, 50, 18, 4);
 
     f.render_widget(Clear, popup_area);
 
@@ -95,10 +92,7 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App, theme: &Theme) {
     };
     let area = f.area();
 
-    // Phase 9: clamp to viewport; on very small use short message path (avoid overflow).
-    let constrained_w = area.width.saturating_sub(2).min(60).max(20);
-    let constrained_h = area.height.saturating_sub(4).min(20).max(6);
-    let popup_area = centered_rect(constrained_w, constrained_h, area);
+    let popup_area = constrained_popup_area(area, 60, 20, 2);
 
     f.render_widget(Clear, popup_area);
 
@@ -205,19 +199,7 @@ pub fn draw_search_popup(f: &mut Frame, app: &App, theme: &Theme) {
     use ratatui::widgets::{Clear, Paragraph};
 
     let area = f.area();
-    // Phase 9: clamp to avoid overflow on small viewports.
-    let popup_width = if area.width < 60 {
-        area.width.saturating_sub(4).max(16)
-    } else {
-        60
-    };
-    let popup_height = if area.height < 8 {
-        area.height.saturating_sub(2).max(3)
-    } else {
-        5
-    };
-
-    let popup_area = centered_rect(popup_width, popup_height, area);
+    let popup_area = constrained_popup_area(area, 60, 5, 4);
 
     f.render_widget(Clear, popup_area);
 
@@ -249,19 +231,7 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
     let area = f.area();
-    // Phase 9: clamp to viewport; short path on very small.
-    let popup_width = if area.width < 60 {
-        area.width.saturating_sub(2).max(18)
-    } else {
-        60
-    };
-    let popup_height = if area.height < 20 {
-        area.height.saturating_sub(4).max(6)
-    } else {
-        18
-    };
-
-    let popup_area = centered_rect(popup_width, popup_height, area);
+    let popup_area = constrained_popup_area(area, 60, 18, 2);
 
     f.render_widget(Clear, popup_area);
 
@@ -361,4 +331,44 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
         )
         .style(Style::default().fg(theme.colors.text));
     f.render_widget(list, list_area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn constrained_popup_area_clamps_to_viewport() {
+        let area = Rect::new(0, 0, 80, 24);
+        let popup = constrained_popup_area(area, 200, 100, 4);
+        assert!(popup.width <= 80);
+        assert!(popup.height <= 24);
+    }
+
+    #[test]
+    fn constrained_popup_area_enforces_minimum_size() {
+        let area = Rect::new(0, 0, 40, 20);
+        let popup = constrained_popup_area(area, 60, 20, 4);
+        assert!(popup.width >= 16, "width {} should be >= 16", popup.width);
+        assert!(popup.height >= 4, "height {} should be >= 4", popup.height);
+    }
+
+    #[test]
+    fn constrained_popup_area_exact_fit() {
+        let area = Rect::new(0, 0, 80, 24);
+        let popup = constrained_popup_area(area, 50, 18, 4);
+        assert_eq!(popup.width, 50);
+        assert_eq!(popup.height, 18);
+    }
+
+    #[test]
+    fn constrained_popup_area_small_terminal() {
+        let area = Rect::new(0, 0, 40, 12);
+        let popup = constrained_popup_area(area, 60, 20, 4);
+        assert!(popup.width <= 36);
+        assert!(popup.height <= 8);
+        assert!(popup.width >= 16);
+        assert!(popup.height >= 4);
+    }
 }

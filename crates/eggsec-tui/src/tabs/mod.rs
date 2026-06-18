@@ -245,6 +245,54 @@ impl Tab {
         tab.visible_index().and(Some(tab))
     }
 
+    /// Returns the tab-specific help line shown in the help popup.
+    pub fn help_entry(&self) -> &'static str {
+        match self {
+            Tab::Recon => "  Enter            - Start reconnaissance",
+            Tab::Load => "  Enter            - Start load test",
+            Tab::ScanPorts => "  Enter            - Start port scan",
+            Tab::ScanEndpoints => "  Enter            - Start endpoint scan",
+            Tab::Fingerprint => "  Enter            - Start service fingerprinting",
+            Tab::Fuzz => "  Enter            - Start fuzzing",
+            Tab::Waf => "  Enter            - Start WAF detection",
+            Tab::WafStress => "  Enter            - Start WAF stress test",
+            Tab::Scan => "  Enter            - Start pipeline scan",
+            Tab::Resume => "  Enter            - Load session file",
+            Tab::Proxy => "  Enter            - Execute action",
+            Tab::Packet => "  Enter            - Run packet tool",
+            Tab::GraphQl => "  Enter            - Start GraphQL security test",
+            Tab::OAuth => "  Enter            - Start OAuth/OIDC security test",
+            Tab::Auth => "  Enter            - Start authentication testing (defense-lab only)",
+            #[cfg(feature = "c2")]
+            Tab::C2 => "  Enter            - Start C2 simulation (defense-lab only)",
+            #[cfg(not(feature = "c2"))]
+            Tab::C2 => "  Enter            - C2 (feature not enabled)",
+            Tab::Cluster => "  Enter            - Start cluster operation",
+            Tab::Stress => "  Enter            - Start stress test",
+            Tab::Report => "  Enter            - Execute report action",
+            Tab::Nse => "  Enter            - Run NSE scripts",
+            Tab::Settings => "  s               - Save settings",
+            Tab::History => "  Up/Down         - Navigate entries",
+            Tab::Dashboard => "  j/k             - Scroll dashboard",
+            Tab::Hunt => "  Enter            - Start vulnerability hunt",
+            Tab::Browser => "  Enter            - Start browser scan",
+            Tab::Compliance => "  Enter            - Generate compliance report",
+            Tab::Storage => "  Enter            - Execute database operation",
+            Tab::Integrations => "  Enter            - Execute integration action",
+            Tab::Workflow => "  Enter            - Execute workflow action",
+            Tab::Vuln => "  Enter            - Run vulnerability analysis",
+            #[cfg(feature = "wireless-advanced")]
+            Tab::Wireless => "  Enter            - Scan / launch active attack (in active mode)",
+            #[cfg(not(feature = "wireless-advanced"))]
+            Tab::Wireless => "  Enter            - Scan wireless networks",
+            Tab::Intercept => "  Enter            - Start/stop interactive proxy intercept",
+            #[cfg(feature = "db-pentest")]
+            Tab::DbPentest => "  Enter            - Run db pentest (defense-lab; d=dry-run toggle, a=advanced)",
+            #[cfg(not(feature = "db-pentest"))]
+            Tab::DbPentest => "  Enter            - Db pentest (feature not enabled)",
+        }
+    }
+
     pub fn next(&self) -> Tab {
         let all = Self::all();
         let idx = all.iter().position(|t| t == self).unwrap_or(0);
@@ -852,6 +900,31 @@ mod tests {
             assert!(!state.is_running(), "tab {:?} should not be running at init", tab);
             let render = tab.as_tab_render(&app);
             let _ = render.breadcrumb();
+        }
+    }
+
+    #[test]
+    fn help_entry_returns_nonempty_for_all_visible_tabs() {
+        for tab in Tab::all() {
+            let entry = tab.help_entry();
+            assert!(
+                !entry.is_empty(),
+                "help_entry() for {:?} should not be empty",
+                tab
+            );
+        }
+    }
+
+    #[test]
+    fn help_entry_starts_with_spaces_for_indentation() {
+        for tab in Tab::all() {
+            let entry = tab.help_entry();
+            assert!(
+                entry.starts_with("  "),
+                "help_entry() for {:?} should be indented with 2 spaces: {:?}",
+                tab,
+                entry
+            );
         }
     }
 }

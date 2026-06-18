@@ -333,19 +333,11 @@ impl Selector {
     }
 
     pub fn move_next(&mut self) {
-        if self.expanded && !self.items.is_empty() {
-            self.selected = (self.selected + 1) % self.items.len();
-        }
+        self.next();
     }
 
     pub fn move_prev(&mut self) {
-        if self.expanded && !self.items.is_empty() {
-            self.selected = if self.selected == 0 {
-                self.items.len() - 1
-            } else {
-                self.selected - 1
-            };
-        }
+        self.prev();
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
@@ -829,6 +821,47 @@ mod tests {
             selector.selected, 1,
             "move_prev should do nothing when closed"
         );
+    }
+
+    #[test]
+    fn selector_move_next_delegates_to_next() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.open();
+        // Verify move_next produces same result as next for all positions
+        for start in 0..3 {
+            // Test move_next
+            selector.selected = start;
+            selector.move_next();
+            let after_move = selector.selected;
+            // Test next
+            selector.selected = start;
+            selector.next();
+            let after_next = selector.selected;
+            assert_eq!(
+                after_move, after_next,
+                "move_next and next should produce same result from position {}",
+                start
+            );
+        }
+    }
+
+    #[test]
+    fn selector_move_prev_delegates_to_prev() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.open();
+        for start in 0..3 {
+            selector.selected = start;
+            selector.move_prev();
+            let after_move = selector.selected;
+            selector.selected = start;
+            selector.prev();
+            let after_prev = selector.selected;
+            assert_eq!(
+                after_move, after_prev,
+                "move_prev and prev should produce same result from position {}",
+                start
+            );
+        }
     }
 
     #[test]
