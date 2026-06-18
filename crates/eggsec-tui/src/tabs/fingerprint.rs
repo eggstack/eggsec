@@ -1,8 +1,7 @@
-use crate::app::tab_error::TabError;
 use crate::components::InputField;
-use crate::tabs::core::{render_results_area, TabCore};
+use crate::tabs::core::{field_as, field_str, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tc};
+use crate::{tab_input_2area, tab_state_boilerplate, tc};
 use eggsec::scanner::fingerprint::FingerprintResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -50,21 +49,11 @@ impl FingerprintTab {
     }
 
     pub fn ports(&self) -> &str {
-        self.core
-            .inputs
-            .fields
-            .get(1)
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        field_str(&self.core, 1)
     }
 
     pub fn timeout(&self) -> u64 {
-        self.core
-            .inputs
-            .fields
-            .get(2)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(5)
+        field_as(&self.core, 2, 5)
     }
 
     pub fn set_results(&mut self, results: FingerprintResults) {
@@ -145,12 +134,8 @@ impl FingerprintTab {
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.core.state = AppState::Running;
-            self.core.progress.current = 0;
+        if start_scan(&mut self.core) {
             self.results = None;
-            self.core.results_view.clear();
-            self.core.error = None;
         }
     }
 
@@ -166,13 +151,7 @@ impl Default for FingerprintTab {
 }
 
 impl TabState for FingerprintTab {
-    fn state(&self) -> AppState {
-        self.core.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.core.progress.percent() as f64
-    }
+    tab_state_boilerplate!(FingerprintTab, core: core);
 
     fn reset(&mut self) {
         self.core.reset_all();
@@ -185,10 +164,6 @@ impl TabState for FingerprintTab {
             field.cursor_pos = 1;
         }
         self.focus_area = FingerprintFocusArea::Inputs;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -257,66 +232,13 @@ impl TabRender for FingerprintTab {
 }
 
 impl TabInput for FingerprintTab {
-    tab_input_boilerplate!(
+    tab_input_2area!(
         FingerprintTab,
         core: core,
         focus: focus_area,
         Inputs: FingerprintFocusArea::Inputs,
         Results: FingerprintFocusArea::Results
     );
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.paste(text);
-        }
-    }
-
-    fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            FingerprintFocusArea::Inputs => {
-                self.core.inputs.blur();
-                self.focus_area = FingerprintFocusArea::Results;
-            }
-            FingerprintFocusArea::Results => {
-                self.focus_area = FingerprintFocusArea::Inputs;
-                if !self.core.inputs.fields.is_empty() {
-                    self.core.inputs.focus(0);
-                }
-            }
-        }
-    }
-
-    fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == FingerprintFocusArea::Results {
-            if !self.core.inputs.fields.is_empty() {
-                self.core
-                    .inputs
-                    .focus(self.core.inputs.fields.len() - 1);
-            }
-            self.focus_area = FingerprintFocusArea::Inputs;
-        } else {
-            self.core.inputs.blur();
-            self.focus_area = FingerprintFocusArea::Results;
-        }
-    }
 
     fn handle_enter(&mut self) {
         if self.focus_area == FingerprintFocusArea::Results {
@@ -345,78 +267,6 @@ impl TabInput for FingerprintTab {
             }
         }
     }
-
-    fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == FingerprintFocusArea::Results {
-            self.core.scroll_results_up();
-        } else if self.focus_area == FingerprintFocusArea::Inputs {
-            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-                self.core.scroll_results_up();
-            } else {
-                self.core.inputs.focus_prev();
-            }
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == FingerprintFocusArea::Results {
-            self.core.scroll_results_down();
-        } else if self.focus_area == FingerprintFocusArea::Inputs {
-            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-                self.core.scroll_results_down();
-            } else {
-                self.core.inputs.focus_next();
-            }
-        }
-    }
-
-    fn handle_left(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        if self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.move_left()
-        } else {
-            false
-        }
-    }
-
-    fn handle_right(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        if self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.move_right()
-        } else {
-            false
-        }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == FingerprintFocusArea::Inputs && self.core.inputs.is_focused()
-    }
-
-    fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.fields.is_empty() || self.core.inputs.is_at_left_edge()
-        } else {
-            true
-        }
-    }
-
-    fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == FingerprintFocusArea::Inputs {
-            self.core.inputs.fields.is_empty() || self.core.inputs.is_at_right_edge()
-        } else {
-            true
-        }
-    }
 }
 
 #[cfg(test)]
@@ -442,6 +292,117 @@ mod tests {
     fn test_enter_in_results_no_op() {
         let mut tab = create_test_tab();
         tab.focus_area = FingerprintFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_focus_cycle_2area() {
+        let mut tab = create_test_tab();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Results);
+
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert!(tab.core.inputs.is_focused());
+    }
+
+    #[test]
+    fn test_focus_prev_cycle_2area() {
+        let mut tab = create_test_tab();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Results);
+
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+    }
+
+    #[test]
+    fn test_escape_from_inputs_blurs() {
+        let mut tab = create_test_tab();
+        tab.core.inputs.focus(0);
+        tab.handle_escape();
+        assert!(!tab.core.inputs.is_focused());
+    }
+
+    #[test]
+    fn test_escape_from_results_goes_to_inputs() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FingerprintFocusArea::Results;
+        tab.handle_escape();
+        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert!(tab.core.inputs.is_focused());
+    }
+
+    #[test]
+    fn test_escape_when_running_stops() {
+        let mut tab = create_test_tab();
+        tab.core.state = AppState::Running;
+        tab.handle_escape();
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn test_handle_char_inputs_only() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FingerprintFocusArea::Inputs;
+        tab.core.inputs.focus(0);
+        tab.handle_char('x');
+        assert_eq!(tab.core.target(), "x");
+
+        tab.focus_area = FingerprintFocusArea::Results;
+        tab.handle_char('y');
+        assert_eq!(tab.core.target(), "x");
+    }
+
+    #[test]
+    fn test_field_accessors() {
+        let tab = create_test_tab();
+        assert_eq!(tab.target(), "");
+        assert_eq!(tab.ports(), "80,443,22,21,25,3306,5432,6379,27017");
+        assert_eq!(tab.timeout(), 5);
+    }
+
+    #[test]
+    fn test_is_input_focused() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FingerprintFocusArea::Inputs;
+        assert!(!tab.is_input_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.is_input_focused());
+        tab.focus_area = FingerprintFocusArea::Results;
+        assert!(!tab.is_input_focused());
+    }
+
+    #[test]
+    fn test_start_with_target() {
+        let mut tab = create_test_tab();
+        tab.core.inputs.focus(0);
+        tab.core.inputs.insert('a');
+        tab.core.inputs.insert('.');
+        tab.core.inputs.insert('c');
+        tab.core.inputs.insert('o');
+        tab.core.inputs.insert('m');
+        tab.core.inputs.blur();
+        tab.start();
+        assert!(tab.is_running());
+    }
+
+    #[test]
+    fn test_start_without_target() {
+        let mut tab = create_test_tab();
+        tab.start();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_stop() {
+        let mut tab = create_test_tab();
+        tab.core.state = AppState::Running;
         tab.handle_enter();
         assert!(!tab.is_running());
     }

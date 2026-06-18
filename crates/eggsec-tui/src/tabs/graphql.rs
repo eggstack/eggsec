@@ -1,8 +1,7 @@
-use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField};
 use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tc};
+use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -137,13 +136,7 @@ pub struct GraphQlResults {
 }
 
 impl TabState for GraphQlTab {
-    fn state(&self) -> AppState {
-        self.core.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.core.progress.percent() as f64
-    }
+    tab_state_boilerplate!(GraphQlTab, core: core);
 
     fn reset(&mut self) {
         self.core.reset_all();
@@ -160,14 +153,6 @@ impl TabState for GraphQlTab {
         self.introspection_checkbox.checked = true;
         self.depth_bypass_checkbox.checked = true;
         self.alias_overload_checkbox.checked = true;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        crate::tabs::core::tab_state_set_error(&mut self.core, error.clone());
-        self.core.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", error.message()),
-            Style::default().fg(tc!(error)),
-        )));
     }
 }
 

@@ -1,8 +1,7 @@
-use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup};
-use crate::tabs::core::{render_results_area, TabCore};
+use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tc};
+use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::recon::FullReconResult;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -91,12 +90,7 @@ impl ReconTab {
     }
 
     pub fn concurrency(&self) -> usize {
-        self.core
-            .inputs
-            .fields
-            .get(1)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(20)
+        field_as(&self.core, 1, 20)
     }
 
     pub fn get_options(&self) -> ReconOptions {
@@ -335,11 +329,8 @@ impl ReconTab {
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.core.state = AppState::Running;
-            self.core.progress.current = 0;
+        if start_scan(&mut self.core) {
             self.results = None;
-            self.core.results_view.clear();
         }
     }
 
@@ -373,13 +364,7 @@ impl Default for ReconTab {
 }
 
 impl TabState for ReconTab {
-    fn state(&self) -> AppState {
-        self.core.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.core.progress.percent() as f64
-    }
+    tab_state_boilerplate!(ReconTab, core: core);
 
     fn reset(&mut self) {
         self.core.reset_all();
@@ -388,10 +373,6 @@ impl TabState for ReconTab {
         for cb in &mut self.option_checkboxes {
             cb.checked = false;
         }
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 

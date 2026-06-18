@@ -1,3 +1,29 @@
+/// Macro to generate the common `TabState` implementation that delegates to `TabCore`.
+///
+/// Generates implementations for: `state`, `progress`, `set_error`.
+/// The `reset` method is NOT generated because each tab has custom reset logic.
+///
+/// Usage:
+/// ```ignore
+/// tab_state_boilerplate!(ReconTab, core: core);
+/// ```
+#[macro_export]
+macro_rules! tab_state_boilerplate {
+    ($tab:ty, core: $core:ident) => {
+        fn state(&self) -> $crate::tabs::AppState {
+            $crate::tabs::core::tab_state_state(&self.$core)
+        }
+
+        fn progress(&self) -> f64 {
+            $crate::tabs::core::tab_state_progress(&self.$core)
+        }
+
+        fn set_error(&mut self, error: $crate::app::tab_error::TabError) {
+            $crate::tabs::core::tab_state_set_error(&mut self.$core, error);
+        }
+    };
+}
+
 /// Macro to generate common `TabInput` methods that delegate to `TabCore`.
 ///
 /// Generates implementations for: `handle_copy`, `handle_word_forward`,
@@ -321,11 +347,13 @@ macro_rules! tab_input_2area {
         }
 
         fn handle_left(&mut self) -> bool {
-            $crate::tabs::core::handle_left_simple(&mut self.$core, self.is_running())
+            let running = self.is_running();
+            $crate::tabs::core::handle_left_simple(&mut self.$core, running)
         }
 
         fn handle_right(&mut self) -> bool {
-            $crate::tabs::core::handle_right_simple(&mut self.$core, self.is_running())
+            let running = self.is_running();
+            $crate::tabs::core::handle_right_simple(&mut self.$core, running)
         }
 
         fn is_input_focused(&self) -> bool {

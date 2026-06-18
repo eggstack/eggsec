@@ -193,6 +193,54 @@ pub struct TabWindow {
 - Don't use `Tab::all().len()` as visible count
 - Don't divide tab area by total tab count for mouse hit-testing
 
+### Tab Macros (Boilerplate Reduction)
+
+The `tabs/macros.rs` module provides macros to eliminate repetitive `TabInput`/`TabState` implementations:
+
+| Macro | Purpose | Generates |
+|-------|---------|-----------|
+| `tab_state_boilerplate!` | Common `TabState` delegation to `TabCore` | `state()`, `progress()`, `set_error()` |
+| `tab_input_boilerplate!` | Basic `TabInput` methods delegating to `TabCore` | `handle_copy`, `handle_word_*`, `handle_home/end`, `handle_top/bottom`, `page_up/down`, `stop`, `primary_target` (11 methods) |
+| `tab_input_2area!` | Extends boilerplate for 2-area tabs (Inputs/Results) | All of boilerplate + `handle_char`, `handle_backspace`, `handle_paste`, `handle_focus_next/prev`, `handle_up/down`, `handle_left/right`, `is_input_focused`, `is_at_left/right_edge` |
+| `tab_input_3area!` | Extends boilerplate for 3-area tabs (Inputs/Options/Results) | All of 2area with 3-area focus cycling |
+
+**Usage pattern for new tabs:**
+
+```rust
+use crate::{tab_input_3area, tab_state_boilerplate, tc};
+
+impl TabState for MyTab {
+    tab_state_boilerplate!(MyTab, core: core);
+    fn reset(&mut self) { /* custom reset logic */ }
+}
+
+impl TabInput for MyTab {
+    tab_input_3area!(
+        MyTab, core: core, focus: focus_area,
+        Inputs: MyFocusArea::Inputs,
+        Options: MyFocusArea::Options,
+        Results: MyFocusArea::Results
+    );
+    // Override only the methods that differ from the macro defaults:
+    fn handle_enter(&mut self) { /* custom enter logic */ }
+    fn handle_escape(&mut self) { /* custom escape logic */ }
+}
+```
+
+**When to use which macro:**
+
+- Use `tab_state_boilerplate!` for all tabs with `TabCore` (always saves 8 lines)
+- Use `tab_input_2area!` for tabs with only Inputs/Results (no Options area) and standard input handling (no validation in `handle_char`/`handle_backspace`/`handle_paste`)
+- Use `tab_input_3area!` for tabs with Inputs/Options/Results and standard input handling
+- Use `tab_input_boilerplate!` when tabs need custom `handle_char`/`handle_backspace`/`handle_paste` (e.g., validation), custom checkbox navigation in Options, or custom focus cycling with index reset
+
+**Helper functions in `core.rs`:**
+
+- `field_as<T>(core, index, default)` - Parse field at index as `T`, returning default on failure
+- `field_str(core, index)` - Return field value at index as `&str`
+- `start_scan(core)` - Set Running, clear results/error; returns `false` if target empty
+- `render_results_area(...)` - Standard 4-branch results rendering (Running/Error/Results/Empty)
+
 ### Feature-Gated Tab Helpers
 
 - `App::set_current_tab_if_available(tab: Tab) -> bool` - Set tab only if available for current feature set

@@ -1,8 +1,8 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup, ValidationResult};
-use crate::tabs::core::{render_results_area, TabCore};
+use crate::tabs::core::{field_as, field_str, render_results_area, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tc};
+use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::scanner::ports::PortScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -58,30 +58,15 @@ impl ScanPortsTab {
     }
 
     pub fn ports(&self) -> &str {
-        self.core
-            .inputs
-            .fields
-            .get(1)
-            .map(|f| f.value.as_str())
-            .unwrap_or("1-1024")
+        field_str(&self.core, 1)
     }
 
     pub fn concurrency(&self) -> usize {
-        self.core
-            .inputs
-            .fields
-            .get(2)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(100)
+        field_as(&self.core, 2, 100)
     }
 
     pub fn timeout(&self) -> u64 {
-        self.core
-            .inputs
-            .fields
-            .get(3)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(2)
+        field_as(&self.core, 3, 2)
     }
 
     pub fn udp(&self) -> bool {
@@ -235,13 +220,7 @@ impl Default for ScanPortsTab {
 }
 
 impl TabState for ScanPortsTab {
-    fn state(&self) -> AppState {
-        self.core.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.core.progress.percent() as f64
-    }
+    tab_state_boilerplate!(ScanPortsTab, core: core);
 
     fn reset(&mut self) {
         self.core.reset_all();
@@ -260,10 +239,6 @@ impl TabState for ScanPortsTab {
         }
         self.focus_area = ScanPortsFocusArea::Inputs;
         self.udp_checkbox.checked = false;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -347,6 +322,27 @@ impl TabInput for ScanPortsTab {
         Results: ScanPortsFocusArea::Results
     );
 
+    fn handle_char(&mut self, c: char) {
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
+            self.core.inputs.insert(c);
+            self.update_field_validation();
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
+            self.core.inputs.backspace();
+            self.update_field_validation();
+        }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
+            self.core.inputs.paste(text);
+            self.update_field_validation();
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
@@ -395,8 +391,6 @@ impl TabInput for ScanPortsTab {
             } else {
                 self.core.inputs.focus_prev();
             }
-        } else if self.focus_area == ScanPortsFocusArea::Options {
-            return;
         } else if self.focus_area == ScanPortsFocusArea::Results {
             self.core.scroll_results_up();
         }
@@ -412,31 +406,8 @@ impl TabInput for ScanPortsTab {
             } else {
                 self.core.inputs.focus_next();
             }
-        } else if self.focus_area == ScanPortsFocusArea::Options {
-            return;
         } else if self.focus_area == ScanPortsFocusArea::Results {
             self.core.scroll_results_down();
-        }
-    }
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
-            self.core.inputs.insert(c);
-            self.update_field_validation();
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
-            self.core.inputs.backspace();
-            self.update_field_validation();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
-            self.core.inputs.paste(text);
-            self.update_field_validation();
         }
     }
 

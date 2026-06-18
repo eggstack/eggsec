@@ -2,7 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField};
 use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tc};
+use crate::{tab_input_3area, tab_state_boilerplate, tc};
 use eggsec::scanner::endpoints::EndpointScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -206,13 +206,7 @@ impl Default for ScanEndpointsTab {
 }
 
 impl TabState for ScanEndpointsTab {
-    fn state(&self) -> AppState {
-        self.core.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.core.progress.percent() as f64
-    }
+    tab_state_boilerplate!(ScanEndpointsTab, core: core);
 
     fn reset(&mut self) {
         self.core.reset_all();
@@ -226,10 +220,6 @@ impl TabState for ScanEndpointsTab {
         }
         self.focus_area = ScanEndpointsFocusArea::Inputs;
         self.include_404_checkbox.checked = true;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -292,99 +282,14 @@ impl TabRender for ScanEndpointsTab {
 }
 
 impl TabInput for ScanEndpointsTab {
-    tab_input_boilerplate!(
+    tab_input_3area!(
         ScanEndpointsTab,
         core: core,
         focus: focus_area,
         Inputs: ScanEndpointsFocusArea::Inputs,
+        Options: ScanEndpointsFocusArea::Options,
         Results: ScanEndpointsFocusArea::Results
     );
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.core.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.core.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.core.inputs.paste(text);
-        }
-    }
-
-    fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = match self.focus_area {
-            ScanEndpointsFocusArea::Inputs => {
-                self.core.inputs.blur();
-                ScanEndpointsFocusArea::Options
-            }
-            ScanEndpointsFocusArea::Options => ScanEndpointsFocusArea::Results,
-            ScanEndpointsFocusArea::Results => {
-                self.core.inputs.focus(0);
-                ScanEndpointsFocusArea::Inputs
-            }
-        };
-    }
-
-    fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = match self.focus_area {
-            ScanEndpointsFocusArea::Inputs => {
-                self.core.inputs.blur();
-                ScanEndpointsFocusArea::Results
-            }
-            ScanEndpointsFocusArea::Options => {
-                self.core.inputs.focus(0);
-                ScanEndpointsFocusArea::Inputs
-            }
-            ScanEndpointsFocusArea::Results => ScanEndpointsFocusArea::Options,
-        };
-    }
-
-    fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-                self.core.scroll_results_up();
-            } else {
-                self.core.inputs.focus_prev();
-            }
-        } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            self.core.scroll_results_up();
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-                self.core.scroll_results_down();
-            } else {
-                self.core.inputs.focus_next();
-            }
-        } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            self.core.scroll_results_down();
-        }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == ScanEndpointsFocusArea::Inputs && self.core.inputs.is_focused()
-    }
 
     fn handle_enter(&mut self) {
         if self.focus_area == ScanEndpointsFocusArea::Results {
@@ -418,20 +323,141 @@ impl TabInput for ScanEndpointsTab {
             }
         }
     }
+}
 
-    fn handle_left(&mut self) -> bool {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.core.inputs.move_left()
-        } else {
-            false
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> ScanEndpointsTab {
+        ScanEndpointsTab::new()
     }
 
-    fn handle_right(&mut self) -> bool {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.core.inputs.move_right()
-        } else {
-            false
-        }
+    #[test]
+    fn test_enter_in_inputs_focused_blurs_does_not_start() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Inputs;
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
+        tab.handle_enter();
+        assert!(!tab.core.inputs.is_focused());
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_enter_in_options_toggles_checkbox() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Options;
+        assert!(tab.include_404_checkbox.checked);
+        tab.handle_enter();
+        assert!(!tab.include_404_checkbox.checked);
+        tab.handle_enter();
+        assert!(tab.include_404_checkbox.checked);
+    }
+
+    #[test]
+    fn test_enter_in_results_no_op() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_focus_cycle_3area() {
+        let mut tab = create_test_tab();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Options);
+
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Results);
+
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+    }
+
+    #[test]
+    fn test_focus_prev_cycle_3area() {
+        let mut tab = create_test_tab();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Results);
+
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Options);
+
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+    }
+
+    #[test]
+    fn test_escape_from_inputs_blurs() {
+        let mut tab = create_test_tab();
+        tab.core.inputs.focus(0);
+        tab.handle_escape();
+        assert!(!tab.core.inputs.is_focused());
+    }
+
+    #[test]
+    fn test_escape_from_options_goes_to_inputs() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Options;
+        tab.handle_escape();
+        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+        assert!(tab.core.inputs.is_focused());
+    }
+
+    #[test]
+    fn test_escape_when_running_stops() {
+        let mut tab = create_test_tab();
+        tab.core.state = AppState::Running;
+        tab.handle_escape();
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn test_handle_char_inputs_only() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Inputs;
+        tab.core.inputs.focus(0);
+        tab.handle_char('a');
+        assert_eq!(tab.core.target(), "a");
+
+        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.handle_char('b');
+        assert_eq!(tab.core.target(), "a");
+    }
+
+    #[test]
+    fn test_handle_up_down_scroll_results() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.core.results_view.add_line(ratatui::text::Line::from("line1"));
+        tab.core.results_view.add_line(ratatui::text::Line::from("line2"));
+
+        tab.handle_down();
+        tab.handle_up();
+    }
+
+    #[test]
+    fn test_is_input_focused() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ScanEndpointsFocusArea::Inputs;
+        assert!(!tab.is_input_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.is_input_focused());
+        tab.focus_area = ScanEndpointsFocusArea::Results;
+        assert!(!tab.is_input_focused());
+    }
+
+    #[test]
+    fn test_field_accessors() {
+        let tab = create_test_tab();
+        assert_eq!(tab.concurrency(), 20);
+        assert_eq!(tab.timeout(), 10);
+        assert!(tab.wordlist().is_none());
     }
 }
