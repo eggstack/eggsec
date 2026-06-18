@@ -741,6 +741,49 @@ pub fn handle_escape_3area<A: Copy + PartialEq>(
     }
 }
 
+// --- N-area helper macros (used by tab_input_narea!) ---
+
+/// Returns the first expression from a list. Used as `first_area!(A, B, C)` -> `A`.
+#[macro_export]
+macro_rules! first_area {
+    ($first:expr $(, $rest:expr)*) => { $first };
+}
+
+/// Returns the last expression from a list. Used as `last_area!(A, B, C)` -> `C`.
+#[macro_export]
+macro_rules! last_area {
+    ($last:expr) => { $last };
+    ($first:expr, $($rest:expr),+) => { last_area!($($rest),+) };
+}
+
+/// Creates a static slice reference from a list of expressions.
+/// Used by `tab_input_narea!` to build the areas slice for N-area helpers.
+#[macro_export]
+macro_rules! narea_slice {
+    ( $($area:expr),+ $(,)? ) => {
+        &[ $($area),+ ]
+    };
+}
+
+/// Generic `handle_escape` for N-area tabs. If running, stops. Otherwise returns
+/// to the first area (typically Inputs) and focuses the first field.
+pub fn handle_escape_to_first<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    first: A,
+) -> A {
+    if core.state == AppState::Running {
+        core.stop();
+        current
+    } else if current == first {
+        core.inputs.blur();
+        current
+    } else {
+        core.inputs.focus(0);
+        first
+    }
+}
+
 // --- Rendering helpers ---
 
 /// Renders the standard 4-branch results area: Running -> Error -> Results -> Empty.
@@ -794,6 +837,15 @@ pub fn render_config_block(
     let inner = block.inner(area);
     f.render_widget(block, area);
     inner
+}
+
+/// Renders an error block with the given title. Returns early pattern for render methods.
+/// Used by tabs that render a full-area error when in error state.
+pub fn render_error_block(f: &mut Frame, area: Rect, title: &str, error: &TabError) {
+    let error_text = Paragraph::new(format!("Error: {}", error.message()))
+        .block(Block::default().borders(Borders::ALL).title(format!(" {} ", title)))
+        .style(Style::default().fg(crate::tc!(error)));
+    f.render_widget(error_text, area);
 }
 
 impl fmt::Debug for TabCore {
@@ -1763,5 +1815,38 @@ mod tests {
         let mut core = TabCore::new("test", "Results");
         let result = handle_right_n(&mut core, NArea::Checkbox, NArea::Inputs);
         assert!(!result);
+    }
+
+    #[test]
+    fn handle_escape_to_first_while_running_stops() {
+        let mut core = TabCore::new("test", "Results");
+        core.state = AppState::Running;
+        let result = handle_escape_to_first(&mut core, NArea::Mode, NArea::Inputs);
+        assert_eq!(result, NArea::Mode);
+        assert_eq!(core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn handle_escape_to_first_in_first_area_blurs() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target").with_value("test")),
+        );
+        core.inputs.focus(0);
+        assert!(core.inputs.is_focused());
+        let result = handle_escape_to_first(&mut core, NArea::Inputs, NArea::Inputs);
+        assert_eq!(result, NArea::Inputs);
+        assert!(!core.inputs.is_focused());
+    }
+
+    #[test]
+    fn handle_escape_to_first_in_other_area_returns_to_first() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let result = handle_escape_to_first(&mut core, NArea::Results, NArea::Inputs);
+        assert_eq!(result, NArea::Inputs);
+        assert!(core.inputs.is_focused());
     }
 }

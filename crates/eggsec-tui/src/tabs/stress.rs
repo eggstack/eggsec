@@ -1,10 +1,9 @@
-use crate::app::tab_error::TabError;
 use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
+    empty_state_paragraph, InputField, InputGroup, Selector, SelectorItem,
 };
 use crate::tabs::core::{start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_state_boilerplate, tc};
+use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -199,15 +198,7 @@ impl TabState for StressTab {
 impl TabRender for StressTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         if let Some(ref err) = self.core.error {
-            use ratatui::widgets::Paragraph;
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Stress - Error"),
-                )
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, area);
+            crate::tabs::core::render_error_block(f, area, "Stress - Error", err);
             return;
         }
 
@@ -285,6 +276,14 @@ impl TabRender for StressTab {
 }
 
 impl TabInput for StressTab {
+    tab_input_boilerplate!(
+        StressTab,
+        core: core,
+        focus: focus_area,
+        Inputs: StressFocusArea::Inputs,
+        Results: StressFocusArea::Results
+    );
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
@@ -342,69 +341,6 @@ impl TabInput for StressTab {
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
             self.core.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == StressFocusArea::Inputs {
-            self.core.inputs.get_focused_value()
-        } else if self.focus_area == StressFocusArea::Results {
-            Some(self.core.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == StressFocusArea::Inputs {
-                self.core.inputs.move_word_forward();
-            }
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == StressFocusArea::Inputs {
-                self.core.inputs.move_word_backward();
-            }
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == StressFocusArea::Inputs {
-                self.core.inputs.move_home();
-            } else if self.focus_area == StressFocusArea::Results {
-                self.core.results_view.scroll_to_top();
-            }
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == StressFocusArea::Inputs {
-                self.core.inputs.move_end();
-            } else if self.focus_area == StressFocusArea::Results {
-                self.core.results_view.scroll_to_bottom();
-            }
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if !self.is_running() {
-            self.focus_area = StressFocusArea::Inputs;
-            self.core.inputs.focus(0);
-        }
-    }
-
-    fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.core.inputs.blur();
-            self.focus_area = StressFocusArea::Results;
         }
     }
 
@@ -533,24 +469,6 @@ impl TabInput for StressTab {
             }
             _ => true,
         }
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.core.results_view.scroll_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.core.results_view.scroll_down(page_size);
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
     }
 }
 

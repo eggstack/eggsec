@@ -517,15 +517,7 @@ impl TabRender for PacketTab {
 
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
         if let Some(ref err) = self.error {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Packet - Error"),
-                )
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, area);
+            crate::tabs::core::render_error_block(f, area, "Packet - Error", err);
             return;
         }
 

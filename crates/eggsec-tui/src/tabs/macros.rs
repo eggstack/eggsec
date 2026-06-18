@@ -426,3 +426,149 @@ macro_rules! tab_input_2area {
         }
     };
 }
+
+/// Macro for N-area tabs (3+ focus areas in sequence).
+///
+/// Generates all methods from `tab_input_boilerplate!` plus:
+/// `handle_char`, `handle_backspace`, `handle_paste`, `handle_focus_next`,
+/// `handle_focus_prev`, `handle_up`, `handle_down`, `handle_left`, `handle_right`,
+/// `is_input_focused`, `is_at_left_edge`, `is_at_right_edge`.
+///
+/// The first variant is treated as Inputs, the last as Results. Middle variants
+/// are selector/option areas with no vertical navigation (up/down are no-ops there).
+///
+/// Usage:
+/// ```ignore
+/// tab_input_narea!(
+///     StressTab,
+///     core: core,
+///     focus: focus_area,
+///     areas: [StressFocusArea::Inputs, StressFocusArea::TypeSelector, StressFocusArea::Results]
+/// );
+/// ```
+#[macro_export]
+macro_rules! tab_input_narea {
+    (
+        $tab:ty,
+        core: $core:ident,
+        focus: $focus:ident,
+        areas: [ $($area:expr),+ $(,)? ]
+    ) => {
+        $crate::tab_input_boilerplate!(
+            $tab,
+            core: $core,
+            focus: $focus,
+            Inputs: $crate::first_area!($($area),+),
+            Results: $crate::last_area!($($area),+)
+        );
+
+        fn handle_char(&mut self, c: char) {
+            let running = self.is_running();
+            let inputs = self.$focus == $crate::first_area!($($area),+);
+            $crate::tabs::core::tab_input_char(&mut self.$core, c, running, inputs);
+        }
+
+        fn handle_backspace(&mut self) {
+            let running = self.is_running();
+            let inputs = self.$focus == $crate::first_area!($($area),+);
+            $crate::tabs::core::tab_input_backspace(&mut self.$core, running, inputs);
+        }
+
+        fn handle_paste(&mut self, text: &str) {
+            let running = self.is_running();
+            let inputs = self.$focus == $crate::first_area!($($area),+);
+            $crate::tabs::core::tab_input_paste(&mut self.$core, text, running, inputs);
+        }
+
+        fn handle_focus_next(&mut self) {
+            if !self.is_running() {
+                let areas = $crate::narea_slice!($($area),+);
+                self.$focus = $crate::tabs::core::focus_next_n(
+                    &mut self.$core,
+                    self.$focus,
+                    areas,
+                );
+            }
+        }
+
+        fn handle_focus_prev(&mut self) {
+            if !self.is_running() {
+                let areas = $crate::narea_slice!($($area),+);
+                self.$focus = $crate::tabs::core::focus_prev_n(
+                    &mut self.$core,
+                    self.$focus,
+                    areas,
+                );
+            }
+        }
+
+        fn handle_up(&mut self) {
+            if !self.is_running() {
+                let areas = $crate::narea_slice!($($area),+);
+                $crate::tabs::core::handle_up_n(
+                    &mut self.$core,
+                    self.$focus,
+                    areas,
+                );
+            }
+        }
+
+        fn handle_down(&mut self) {
+            if !self.is_running() {
+                let areas = $crate::narea_slice!($($area),+);
+                $crate::tabs::core::handle_down_n(
+                    &mut self.$core,
+                    self.$focus,
+                    areas,
+                );
+            }
+        }
+
+        fn handle_left(&mut self) -> bool {
+            if self.is_running() {
+                return false;
+            }
+            $crate::tabs::core::handle_left_n(&mut self.$core, self.$focus, $crate::first_area!($($area),+))
+        }
+
+        fn handle_right(&mut self) -> bool {
+            if self.is_running() {
+                return false;
+            }
+            $crate::tabs::core::handle_right_n(&mut self.$core, self.$focus, $crate::first_area!($($area),+))
+        }
+
+        fn is_input_focused(&self) -> bool {
+            $crate::tabs::core::is_input_focused(self.$focus, $crate::first_area!($($area),+), &self.$core)
+        }
+
+        fn is_at_left_edge(&self) -> bool {
+            $crate::tabs::core::is_at_left_edge_simple(self.$focus, $crate::first_area!($($area),+), &self.$core)
+        }
+
+        fn is_at_right_edge(&self) -> bool {
+            $crate::tabs::core::is_at_right_edge_simple(self.$focus, $crate::first_area!($($area),+), &self.$core)
+        }
+    };
+}
+
+/// Macro to generate `handle_escape` for N-area tabs.
+///
+/// If running, stops. Otherwise returns to the first area (typically Inputs).
+///
+/// Usage:
+/// ```ignore
+/// tab_escape_to_first!(StressTab, core: core, focus: focus_area, StressFocusArea::Inputs);
+/// ```
+#[macro_export]
+macro_rules! tab_escape_to_first {
+    ($tab:ty, core: $core:ident, focus: $focus:ident, $first:expr) => {
+        fn handle_escape(&mut self) {
+            self.$focus = $crate::tabs::core::handle_escape_to_first(
+                &mut self.$core,
+                self.$focus,
+                $first,
+            );
+        }
+    };
+}

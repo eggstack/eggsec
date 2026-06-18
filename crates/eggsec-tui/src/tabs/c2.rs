@@ -103,10 +103,7 @@ impl TabRender for C2Tab {
         use crate::components::FormBuilder;
 
         if let Some(ref err) = self.error {
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(Block::default().borders(Borders::ALL).title("C2 - Error"))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, area);
+            crate::tabs::core::render_error_block(f, area, "C2 - Error", err);
             return;
         }
 

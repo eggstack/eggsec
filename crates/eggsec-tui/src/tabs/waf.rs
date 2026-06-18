@@ -1,4 +1,3 @@
-use crate::app::tab_error::TabError;
 use crate::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, RadioGroup, ScrollableText,
 };
@@ -300,11 +299,7 @@ impl TabRender for WafTab {
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         if let Some(ref err) = self.core.error {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(Block::default().borders(Borders::ALL).title("WAF - Error"))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, area);
+            crate::tabs::core::render_error_block(f, area, "WAF - Error", err);
             return;
         }
 
