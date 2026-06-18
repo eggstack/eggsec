@@ -29,6 +29,7 @@ Context-aware action hints replace the static help text in the status bar. The `
 - **luminance() warns on unknown names**: logs a `tracing::warn!` when a non-standard color name is encountered in a theme file (deduplicated per unique name).
 - **Theme selector placeholder improved**: `set_available_themes` early-returns on empty list (avoids silent stale state) and uses clearer placeholder prefix `[! id] (not installed)` to distinguish placeholders from real themes.
 - **Dead code removed**: 16 dead-code warnings → 0. Forward-compat fields and reserved enum variants now have `#[allow(dead_code)]` annotations with explanatory comments.
+- **Code health**: TUI crate has 0 clippy warnings (lib build). All tests pass.
 - **gg normal-mode sequence fixed**: `UiAction::BeginGgSequence` wires first `g` through decode→apply to set `pending_key`; second `g` correctly triggers `MoveTop`. 3 regression tests added.
 - **Ctrl-Space autocomplete fixed**: `UiAction::Autocomplete` wires Ctrl-Space in insert mode through decode→apply to call `handle_autocomplete()`. 2 tests added.
 - **Settings theme selector feedback**: Theme changes from Settings selector now show the same `Notification("Theme: ...")` as Ctrl+T; failed changes show a warning.
@@ -349,7 +350,9 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Theme reload** (Settings > Theme section): Normal-mode `r` in the Theme section (selector closed) emits `UiAction::ReloadThemes` directly, which calls `spawn_theme_loader_with_reason(ManualReload)`. This immediately shows a "Loading themes..." notification (via `ThemeLoadReason::ManualReload`) and spawns the background loader. The insert-mode `r` path via `pending_theme_reload` on `SettingsTab` still works for backward compatibility. The selector also shows a hint: `"Press [r] to reload themes   [Ctrl+T] to cycle"`.
 
-**Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying.
+**Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying. The preview uses the selected theme's resolved colors (from `ThemeManager`), not the thread-local applied theme from `tc!()`, so it accurately reflects what the selected theme will look like before the user commits.
+
+**Settings layout split** (Settings tab render): The Settings content area is split into `body`, optional `status`, and `footer` rows before rendering any section content. `FormBuilder` renders into `body` only. The status message uses severity-aware styling (error/warning/success) and prevents overlap with form content. Layout tests validate at 80x24, 60x20 (small terminal), and status-collision edge cases.
 
 **Contrast validation**: `theme/contrast.rs` implements WCAG 2.x relative luminance and contrast ratio. `check_contrast(fg, bg, min_ratio)` returns whether a color pair meets the minimum ratio (4.5:1 for normal text). Both `theme/loader.rs` (on theme parse) and `theme/manager.rs` (on registration) validate text/background and selected_text/selected contrast. `ThemeManager::validate_contrast(id)` returns per-theme contrast warnings for use in the Settings Theme details pane. Low contrast triggers fallback to the base theme with a warning (non-fatal). 7 unit tests cover luminance boundaries, ratio calculation, and pass/fail cases.
 
@@ -467,7 +470,7 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `Ctrl+Y` | Resume when paused, otherwise copy |
 | `Shift+E` | Export with format selection (shows "Export format: <format>" notification) |
 | `Space` | Toggle help |
-| `1-9` / `0` | Jump to tab by index (`1`=Recon, `2`=Load, ..., `0`=tab 10) |
+| `1-9` / `0` | Jump to tab by visible index (`1`=visible index 0=Recon, `2`=visible index 1=Load, ..., `9`=visible index 8; `0`=visible index 9=10th visible tab) |
 | `y` / `n` | Confirm/cancel in confirmation dialog (alongside Enter/Esc) |
 | `hjkl` / Arrows | Navigation |
 | `i` | Enter insert mode |

@@ -1,7 +1,6 @@
 use crate::app::notifications::NotificationSeverity;
 use crate::app::state::ThemeLoadReason;
 use crate::theme::install::ThemeInstallReport;
-use crate::theme::ThemeSource;
 
 impl super::App {
     pub fn spawn_theme_loader_with_reason(&mut self, reason: ThemeLoadReason) {
@@ -119,20 +118,30 @@ impl super::App {
             ));
             self.needs_redraw = true;
         } else if self.theme_load.reason == ThemeLoadReason::ManualReload {
-            // Show feedback for manual reload.
+            // Show feedback for manual reload with detailed counts.
             let new_themes = report.installed;
             let loaded = report.loaded;
-            let message = if new_themes > 0 {
-                format!(
-                    "Themes reloaded: {} new, {} total loaded.",
-                    new_themes, loaded
-                )
-            } else {
-                format!("Themes scanned: {} loaded, no new themes found.", loaded)
-            };
+            let errors = report.errors.len();
+            let invalid = self.theme_manager.invalid_count();
+            let mut parts = Vec::new();
+            if new_themes > 0 {
+                parts.push(format!("{} new", new_themes));
+            }
+            parts.push(format!("{} loaded", loaded));
+            if invalid > 0 {
+                parts.push(format!("{} invalid", invalid));
+            }
+            if errors > 0 {
+                parts.push(format!("{} error(s)", errors));
+            }
+            let message = format!("Themes reloaded: {}.", parts.join(", "));
             self.overlay.notification = Some(crate::app::notifications::Notification::new(
                 message,
-                NotificationSeverity::Info,
+                if errors > 0 {
+                    NotificationSeverity::Warning
+                } else {
+                    NotificationSeverity::Info
+                },
             ));
             self.needs_redraw = true;
         }
@@ -145,15 +154,36 @@ impl super::App {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "~/.config/eggsec/themes".to_string());
 
-        // Compute contrast warnings for the currently selected theme.
-        let current_theme_id = self.theme_manager.current_name().to_string();
-        let contrast_warnings = self.theme_manager.validate_contrast(&current_theme_id);
+        // Compute contrast warnings for all loaded themes.
+        let mut contrast_cache = rustc_hash::FxHashMap::default();
+        for info in self.theme_manager.theme_info_list() {
+            if info.status == crate::theme::manager::ThemeLoadStatus::Loaded {
+                let warnings = self.theme_manager.validate_contrast(&info.id);
+                if !warnings.is_empty() {
+                    contrast_cache.insert(info.id.clone(), warnings);
+                }
+            }
+        }
+
+        // Resolve the currently selected theme's colors for preview.
+        let selected_id = self
+            .tabs
+            .settings
+            .theme_selector
+            .selected_value()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.theme_manager.current_name().to_string());
+        let resolved_theme_colors = self
+            .theme_manager
+            .get_theme(&selected_id)
+            .map(|t| t.colors.clone());
 
         self.tabs.settings.update_theme_metadata(
             self.theme_manager.theme_info_list(),
             self.theme_manager.invalid_count(),
             dir_path,
-            contrast_warnings,
+            contrast_cache,
+            resolved_theme_colors,
         );
     }
 }

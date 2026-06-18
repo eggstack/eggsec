@@ -417,9 +417,15 @@ No remaining stub implementations.
 - **Theme action hints section-aware**: `settings_hints()` in `action_hints.rs` now takes `&app` and returns different hints based on `current_section` and `theme_selector.is_open()`
 - **Theme source attribution fixed**: `load_themes_from_dir()` now accepts a `packaged_ids: &FxHashSet<String>` parameter and sets `ThemeSource::Packaged` vs `ThemeSource::Custom` based on file stem membership. `ThemeInstallReport.loaded_themes` changed from `Vec<Result<Theme, ThemeLoadError>>` to `Vec<LoadedThemeRecord>`
 - **Invalid themes tracked**: `ThemeManager::register_theme_invalid()` method added. `handle_theme_install_report()` calls it for error records
-- **Contrast warnings per-theme**: `SettingsTab` gained `theme_contrast_warnings: Vec<String>` field. `update_theme_metadata()` now accepts contrast warnings. Render shows actual warnings
+- **Contrast warnings per-theme**: `SettingsTab` gained `theme_contrast_cache: FxHashMap<String, Vec<String>>` field (per-theme contrast warnings). `update_theme_metadata()` now computes and stores per-theme contrast warnings. Render shows actual warnings from cache
 - **Theme load reason**: `ThemeLoadReason` enum added to `ThemeLoadState`. `spawn_theme_loader_with_reason()` shows notifications for manual reload
 - **Task hints detection**: `get_action_hints()` uses `app.has_active_task()` instead of `app.task_state.handle.is_some()`
+- **Numeric tab jump off-by-one fixed**: `key_handler.rs` numeric decode now maps `'1'..='9'` to `digit - 1` for `Tab::from_visible_index()`, and `'0'` to index 9. 5 new tests
+- **Warning cleanup**: Removed unused `ThemeSource` import (`theme_runtime.rs`), unused `AppState` test import (`action_hints.rs`), unused `all_specs` re-export (`tabs/mod.rs`). Added `#[allow(dead_code)]` to test-only `TabSpec` fields (`supports_run`, `supports_export`, `supports_help`, `has_settings`) and methods (`can_start_task`, `shows_in_export`). TUI crate now has zero warnings in both lib and test builds
+- **Settings layout split**: `render.rs` now splits `inner` into `body`, optional `status`, and `footer` rows before rendering any section content. FormBuilder renders into `body` only. Status message uses severity-aware styling (error/warning/success). 3 new layout tests (80x24, status collision, 60x20 small terminal)
+- **Theme preview uses selected theme colors**: SettingsTab gained `theme_contrast_cache: FxHashMap<String, Vec<String>>` (per-theme contrast warnings) and `resolved_theme_colors: Option<ThemeColors>` (for preview). Preview render uses resolved colors instead of `tc!()` thread-local. `handle_theme_install_report` computes contrast for all loaded themes and resolves the selected theme's colors. `update_settings_theme_selector` also resolves colors. 1 new per-theme contrast test
+- **Theme metadata enrichment**: Theme render now shows status label (Loaded/adjusted/invalid/missing), loaded/invalid/fallback-adjusted counts, and per-theme contrast warnings from cache. Contrast validation expanded to 9 semantic pairs (text, selected_text, text_dim, warning, error, success, mode_normal, mode_insert, focus_input vs background)
+- **Reload notification enhanced**: Manual reload notification now includes loaded, invalid, and error counts with severity-aware styling
 
 ### Active Wireless Reporting Bridge (2026-06-12)
 
@@ -595,7 +601,7 @@ cargo test --lib -p eggsec --features c2-mcp
 cargo clippy --lib -p eggsec --features c2-mcp
 ```
 
-## Session Fixes (2026-06-18) - TUI Bugs Plan
+### Session Fixes (2026-06-18) - TUI Bugs Plan
 
 - **Settings validation** (`tabs/settings/main.rs`): Added `validate()` method returning `Result<(), Vec<String>>` for all numeric fields and report format. `save_config()` now validates before writing; invalid values produce error status message instead of silent fallback. 14 new unit tests.
 - **Theme named-color unification** (`theme/loader.rs`): New shared `named_color()` function with all 27 named colors. `parse_hex_color()` and `luminance()` now share one table. 5 new tests.
@@ -605,6 +611,15 @@ cargo clippy --lib -p eggsec --features c2-mcp
 - **Enter/Escape regression tests** (6 tab files): 18 new tests across recon, load, scan_ports, fingerprint, stress, packet tabs. Verify Enter in focused input blurs without starting, Options toggle without starting, Results no-op.
 - **Explicit theme render path** (`components/selector.rs`, `components/input.rs`): `render_with_theme()` methods for Selector, Checkbox, InputField. Existing `render()` delegates to theme-based version. 3 new tests.
 - **AGENTS.override.md**: Fixed stale "Ctrl+T cycles built-in trio" → "Ctrl+T cycles all registered themes alphabetically".
+
+### Session Fixes (2026-06-18) - TUI Bug Fixes (continued)
+
+- **Numeric tab jump off-by-one fixed**: `key_handler.rs` numeric decode now maps `'1'..='9'` to `digit - 1` for `Tab::from_visible_index()`, and `'0'` to index 9. 5 new tests.
+- **Warning cleanup**: Removed unused `ThemeSource` import (`theme_runtime.rs`), unused `AppState` test import (`action_hints.rs`), unused `all_specs` re-export (`tabs/mod.rs`). Added `#[allow(dead_code)]` to test-only `TabSpec` fields (`supports_run`, `supports_export`, `supports_help`, `has_settings`) and methods (`can_start_task`, `shows_in_export`). TUI crate now has zero warnings in both lib and test builds.
+- **Settings layout split**: `render.rs` now splits `inner` into `body`, optional `status`, and `footer` rows before rendering any section content. FormBuilder renders into `body` only. Status message uses severity-aware styling (error/warning/success). 3 new layout tests (80x24, status collision, 60x20 small terminal).
+- **Theme preview uses selected theme colors**: SettingsTab gained `theme_contrast_cache: FxHashMap<String, Vec<String>>` (per-theme contrast warnings) and `resolved_theme_colors: Option<ThemeColors>` (for preview). Preview render uses resolved colors instead of `tc!()` thread-local. `handle_theme_install_report` computes contrast for all loaded themes and resolves the selected theme's colors. `update_settings_theme_selector` also resolves colors. 1 new per-theme contrast test.
+- **Theme metadata enrichment**: Theme render now shows status label (Loaded/adjusted/invalid/missing), loaded/invalid/fallback-adjusted counts, and per-theme contrast warnings from cache. Contrast validation expanded to 9 semantic pairs (text, selected_text, text_dim, warning, error, success, mode_normal, mode_insert, focus_input vs background).
+- **Reload notification enhanced**: Manual reload notification now includes loaded, invalid, and error counts with severity-aware styling.
 
 ## Planning Notes for Future Agents
 

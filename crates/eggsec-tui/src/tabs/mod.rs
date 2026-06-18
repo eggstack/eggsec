@@ -54,7 +54,7 @@ pub(crate) use spec::{
 };
 
 #[cfg(test)]
-pub(crate) use spec::{all_specs, visible_tab_specs};
+pub(crate) use spec::visible_tab_specs;
 
 pub use auth::AuthTab;
 #[cfg(feature = "c2")]

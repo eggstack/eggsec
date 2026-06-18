@@ -48,13 +48,17 @@ pub struct TabSpec {
     pub breadcrumb_label: &'static str,
     pub operation: Option<&'static str>,
     pub direct_launch: bool,
-    /// Whether this tab supports the 'run' action (has inputs that can start a task)
+    /// Whether this tab supports the 'run' action (test-only metadata)
+    #[allow(dead_code)]
     pub supports_run: bool,
-    /// Whether this tab supports export
+    /// Whether this tab supports export (test-only metadata)
+    #[allow(dead_code)]
     pub supports_export: bool,
-    /// Whether this tab supports help
+    /// Whether this tab supports help (test-only metadata)
+    #[allow(dead_code)]
     pub supports_help: bool,
-    /// Whether this tab has configurable settings
+    /// Whether this tab has configurable settings (reserved for future use)
+    #[allow(dead_code)]
     pub has_settings: bool,
 }
 
@@ -636,12 +640,14 @@ pub fn spec_for(tab: Tab) -> Option<&'static TabSpec> {
 }
 
 impl TabSpec {
-    /// Whether this tab can start a scan/task
+    /// Whether this tab can start a scan/task (test-only metadata)
+    #[allow(dead_code)]
     pub fn can_start_task(&self) -> bool {
         self.supports_run && !self.direct_launch
     }
 
-    /// Whether this tab shows in the export menu
+    /// Whether this tab shows in the export menu (test-only metadata)
+    #[allow(dead_code)]
     pub fn shows_in_export(&self) -> bool {
         self.supports_export
     }

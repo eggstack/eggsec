@@ -205,7 +205,6 @@ mod tests {
     use super::*;
     use crate::app::{create_shared_history, App, PendingAction};
     use crate::tabs::Tab;
-    use crate::tabs::AppState;
 
     fn create_test_app() -> App {
         App::new_for_testing(create_shared_history())

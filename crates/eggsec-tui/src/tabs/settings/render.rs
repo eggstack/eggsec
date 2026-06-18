@@ -1,7 +1,7 @@
 use super::SettingsSection;
 use crate::tabs::TabRender;
 use crate::tc;
-use crate::theme::ThemeMode;
+use crate::theme::palette::{ThemeColors, ThemeMode};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -75,6 +75,35 @@ impl TabRender for super::SettingsTab {
         let inner = content_block.inner(content_area);
         f.render_widget(content_block, content_area);
 
+        // Reserve footer (1 row) and optional status (1 row) so they never
+        // overlap with section content.
+        let status_rows: u16 = if self.status_message.is_empty() { 0 } else { 1 };
+        let footer_rows: u16 = if inner.height >= 2 { 1 } else { 0 };
+        let reserved = status_rows + footer_rows;
+        let body_height = inner.height.saturating_sub(reserved);
+        let body = Rect {
+            height: body_height,
+            ..inner
+        };
+        let status_area = if status_rows > 0 {
+            Some(Rect {
+                y: inner.y + body_height,
+                height: 1,
+                ..inner
+            })
+        } else {
+            None
+        };
+        let footer_area = if footer_rows > 0 {
+            Some(Rect {
+                y: inner.y + body_height + status_rows,
+                height: 1,
+                ..inner
+            })
+        } else {
+            None
+        };
+
         use crate::components::FormBuilder;
 
         match self.current_section {
@@ -85,7 +114,7 @@ impl TabRender for super::SettingsTab {
                 }
                 builder = builder.add_checkbox(self.follow_redirects.clone());
                 builder = builder.add_checkbox(self.verify_tls.clone());
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Scan => {
                 let mut builder = FormBuilder::new("Scan Settings").row_height(3);
@@ -93,14 +122,14 @@ impl TabRender for super::SettingsTab {
                     builder = builder.add_input(field.clone());
                 }
                 builder = builder.add_checkbox(self.stealth_mode.clone());
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Session => {
                 let mut builder = FormBuilder::new("Session Settings").row_height(3);
                 for field in &self.session_inputs.fields {
                     builder = builder.add_input(field.clone());
                 }
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Proxy => {
                 let mut builder = FormBuilder::new("Proxy Settings").row_height(3);
@@ -108,28 +137,28 @@ impl TabRender for super::SettingsTab {
                     builder = builder.add_input(field.clone());
                 }
                 builder = builder.add_selector(self.proxy_rotation_selector.clone());
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Scope => {
                 let mut builder = FormBuilder::new("Scope Settings").row_height(3);
                 for field in &self.scope_inputs.fields {
                     builder = builder.add_input(field.clone());
                 }
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Report => {
                 let mut builder = FormBuilder::new("Report Conversion").row_height(3);
                 for field in &self.report_inputs.fields {
                     builder = builder.add_input(field.clone());
                 }
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Schedule => {
                 let mut builder = FormBuilder::new("Schedule Management").row_height(3);
                 for field in &self.schedule_inputs.fields {
                     builder = builder.add_input(field.clone());
                 }
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Notifications => {
                 let mut builder = FormBuilder::new("Notification Settings").row_height(3);
@@ -139,7 +168,7 @@ impl TabRender for super::SettingsTab {
                 builder = builder.add_checkbox(self.notify_on_complete.clone());
                 builder = builder.add_checkbox(self.notify_on_findings.clone());
                 builder = builder.add_selector(self.severity_selector.clone());
-                builder.render(f, inner, insert_mode);
+                builder.render(f, body, insert_mode);
             }
             SettingsSection::Theme => {
                 // --- Theme details pane ---
@@ -152,8 +181,8 @@ impl TabRender for super::SettingsTab {
                     .selected_value()
                     .unwrap_or("unknown");
 
-                // Determine source and mode from cached theme info.
-                let (source_label, mode_label) = self
+                // Determine source, mode, and status from cached theme info.
+                let (source_label, mode_label, status_label) = self
                     .theme_info_cache
                     .iter()
                     .find(|info| info.id == current_id)
@@ -167,13 +196,24 @@ impl TabRender for super::SettingsTab {
                             ThemeMode::Dark => "Dark",
                             ThemeMode::Light => "Light",
                         };
-                        (src, mode)
+                        let status = match info.status {
+                            crate::theme::manager::ThemeLoadStatus::Loaded => "",
+                            crate::theme::manager::ThemeLoadStatus::FallbackAdjusted => " (adjusted)",
+                            crate::theme::manager::ThemeLoadStatus::Invalid(_) => " (invalid)",
+                            crate::theme::manager::ThemeLoadStatus::Missing => " (missing)",
+                        };
+                        (src, mode, status)
                     })
-                    .unwrap_or(("Built-in", "Dark"));
+                    .unwrap_or(("Built-in", "Dark", ""));
 
-                // Contrast validation (from actual validation, not just invalid count).
-                let contrast_warnings = if !self.theme_contrast_warnings.is_empty() {
-                    format!("{} warning(s)", self.theme_contrast_warnings.len())
+                // Contrast validation (per-theme from cache).
+                let selected_contrast = self
+                    .theme_contrast_cache
+                    .get(current_id)
+                    .map(|w| w.len())
+                    .unwrap_or(0);
+                let contrast_warnings = if selected_contrast > 0 {
+                    format!("{} warning(s)", selected_contrast)
                 } else if self.theme_invalid_count > 0 {
                     format!("{} invalid", self.theme_invalid_count)
                 } else {
@@ -184,10 +224,36 @@ impl TabRender for super::SettingsTab {
                 let invalid = self.theme_invalid_count;
                 let dir = &self.theme_dir_path;
 
+                // Count fallback-adjusted themes.
+                let fallback_count = self
+                    .theme_info_cache
+                    .iter()
+                    .filter(|i| i.status == crate::theme::manager::ThemeLoadStatus::FallbackAdjusted)
+                    .count();
+
+                // Determine applied theme name for Selected vs Applied display.
+                let applied_name = self
+                    .theme_info_cache
+                    .iter()
+                    .find(|info| {
+                        info.id
+                            == *self
+                                .theme_selector
+                                .selected_value()
+                                .unwrap_or("unknown")
+                    })
+                    .map(|_| current_name);
+                // Check if selected differs from applied by looking at selector state.
+                // The applied theme is the one whose colors match resolved_theme_colors;
+                // we show "Applied" label only when the selector has moved.
+                let show_applied = self.theme_selector.is_open()
+                    || self.resolved_theme_colors.is_some()
+                        != self.theme_info_cache.iter().any(|i| i.id == current_id);
+
                 // Build metadata lines above the selector.
                 let mut meta_lines = Vec::new();
 
-                // Line 1: display name and source/mode badge.
+                // Line 1: display name, source/mode badge, and status.
                 meta_lines.push(Line::from(vec![
                     Span::styled(
                         format!("  {} ", current_name),
@@ -196,15 +262,16 @@ impl TabRender for super::SettingsTab {
                             .add_modifier(ratatui::style::Modifier::BOLD),
                     ),
                     Span::styled(
-                        format!("{} · {}", source_label, mode_label),
+                        format!("{} · {}{}", source_label, mode_label, status_label),
                         Style::default().fg(tc!(text_dim)),
                     ),
                 ]));
 
-                // Line 2: theme count, invalid count, contrast, dir.
+                // Line 2: theme counts (loaded, invalid, fallback), contrast, dir.
+                let loaded_count = theme_count.saturating_sub(invalid);
                 let mut stats_spans = vec![
                     Span::styled(
-                        format!("  {} themes", theme_count),
+                        format!("  {} loaded", loaded_count),
                         Style::default().fg(tc!(text_dim)),
                     ),
                 ];
@@ -212,6 +279,12 @@ impl TabRender for super::SettingsTab {
                     stats_spans.push(Span::styled(
                         format!("  {} invalid", invalid),
                         Style::default().fg(tc!(warning)),
+                    ));
+                }
+                if fallback_count > 0 {
+                    stats_spans.push(Span::styled(
+                        format!("  {} adjusted", fallback_count),
+                        Style::default().fg(tc!(info)),
                     ));
                 }
                 stats_spans.push(Span::styled(
@@ -233,19 +306,19 @@ impl TabRender for super::SettingsTab {
                 let meta_height = meta_lines.len() as u16;
                 let meta = Paragraph::new(meta_lines);
                 let meta_area = Rect {
-                    x: inner.x,
-                    y: inner.y,
-                    width: inner.width,
+                    x: body.x,
+                    y: body.y,
+                    width: body.width,
                     height: meta_height,
                 };
                 f.render_widget(meta, meta_area);
 
                 // Render the selector below the metadata.
-                let selector_y = inner.y + meta_height;
+                let selector_y = body.y + meta_height;
                 let selector_area = Rect {
                     y: selector_y,
                     height: 3,
-                    ..inner
+                    ..body
                 };
                 self.theme_selector.render(f, selector_area);
 
@@ -253,40 +326,47 @@ impl TabRender for super::SettingsTab {
                 let preview_y = selector_y + 3;
                 let preview_height: u16 = 3;
 
-                if preview_y + preview_height <= inner.y + inner.height {
+                if preview_y + preview_height <= body.y + body.height {
                     let preview_area = Rect {
                         y: preview_y,
                         height: preview_height,
-                        ..inner
+                        ..body
                     };
 
                     let mut preview_lines = Vec::new();
 
+                    // Use resolved theme colors for preview when available,
+                    // fall back to tc!() thread-local theme.
+                    let c = self.resolved_theme_colors.as_ref();
+                    let fg = |get: fn(&ThemeColors) -> ratatui::style::Color| {
+                        c.map(get).unwrap_or_else(|| tc!(text))
+                    };
+
                     // Line 1: Normal, Selected, Success, Warning, Error, Info text samples.
                     preview_lines.push(Line::from(vec![
-                        Span::styled("  Normal ", Style::default().fg(tc!(text))),
-                        Span::styled("Selected ", Style::default().fg(tc!(selected_text)).bg(tc!(selected))),
-                        Span::styled("Success ", Style::default().fg(tc!(success))),
-                        Span::styled("Warning ", Style::default().fg(tc!(warning))),
-                        Span::styled("Error ", Style::default().fg(tc!(error))),
-                        Span::styled("Info", Style::default().fg(tc!(info))),
+                        Span::styled("  Normal ", Style::default().fg(fg(|c| c.text))),
+                        Span::styled("Selected ", Style::default().fg(fg(|c| c.selected_text)).bg(fg(|c| c.selected))),
+                        Span::styled("Success ", Style::default().fg(fg(|c| c.success))),
+                        Span::styled("Warning ", Style::default().fg(fg(|c| c.warning))),
+                        Span::styled("Error ", Style::default().fg(fg(|c| c.error))),
+                        Span::styled("Info", Style::default().fg(fg(|c| c.info))),
                     ]));
 
                     // Line 2: Safe, Danger, Muted, Policy Required, Policy Denied.
                     preview_lines.push(Line::from(vec![
-                        Span::styled("  Safe ", Style::default().fg(tc!(safe))),
-                        Span::styled("Danger ", Style::default().fg(tc!(danger))),
-                        Span::styled("Muted ", Style::default().fg(tc!(muted))),
-                        Span::styled("Policy Required ", Style::default().fg(tc!(policy_required))),
-                        Span::styled("Policy Denied", Style::default().fg(tc!(policy_denied))),
+                        Span::styled("  Safe ", Style::default().fg(fg(|c| c.safe))),
+                        Span::styled("Danger ", Style::default().fg(fg(|c| c.danger))),
+                        Span::styled("Muted ", Style::default().fg(fg(|c| c.muted))),
+                        Span::styled("Policy Required ", Style::default().fg(fg(|c| c.policy_required))),
+                        Span::styled("Policy Denied", Style::default().fg(fg(|c| c.policy_denied))),
                     ]));
 
                     // Line 3: Active task, Paused task, Scope match, Scope miss.
                     preview_lines.push(Line::from(vec![
-                        Span::styled("  Active ", Style::default().fg(tc!(active_task))),
-                        Span::styled("Paused ", Style::default().fg(tc!(paused_task))),
-                        Span::styled("Scope Match ", Style::default().fg(tc!(scope_match))),
-                        Span::styled("Scope Miss", Style::default().fg(tc!(scope_miss))),
+                        Span::styled("  Active ", Style::default().fg(fg(|c| c.active_task))),
+                        Span::styled("Paused ", Style::default().fg(fg(|c| c.paused_task))),
+                        Span::styled("Scope Match ", Style::default().fg(fg(|c| c.scope_match))),
+                        Span::styled("Scope Miss", Style::default().fg(fg(|c| c.scope_miss))),
                     ]));
 
                     let preview_block = Block::default()
@@ -299,7 +379,7 @@ impl TabRender for super::SettingsTab {
 
                 // Hint text below the preview.
                 let hint_y = preview_y + preview_height;
-                if hint_y < inner.y + inner.height {
+                if hint_y < body.y + body.height {
                     let hint = Paragraph::new(
                         "Press [r] to reload themes   [Ctrl+T] to cycle",
                     )
@@ -307,40 +387,38 @@ impl TabRender for super::SettingsTab {
                     let hint_area = Rect {
                         y: hint_y,
                         height: 1,
-                        ..inner
+                        ..body
                     };
                     f.render_widget(hint, hint_area);
                 }
             }
         }
 
-        if !self.status_message.is_empty() {
-            let status = Paragraph::new(self.status_message.as_str())
-                .style(Style::default().fg(tc!(success)));
-            let status_area = Rect {
-                x: inner.x,
-                y: inner.y + inner.height.saturating_sub(2),
-                width: inner.width,
-                height: 1,
+        // Status message in reserved area.
+        if let Some(status_area) = status_area {
+            let status_style = if self.status_message.contains("error")
+                || self.status_message.contains("Error")
+                || self.status_message.contains("failed")
+            {
+                Style::default().fg(tc!(error))
+            } else if self.status_message.contains("warning")
+                || self.status_message.contains("Warning")
+            {
+                Style::default().fg(tc!(warning))
+            } else {
+                Style::default().fg(tc!(success))
             };
+            let status = Paragraph::new(self.status_message.as_str()).style(status_style);
             f.render_widget(status, status_area);
         }
 
-        // Persistent footer hint: tells the user about the save shortcut and
-        // section navigation. Rendered on the very last line of the section
-        // (1 line above the status bar) so it is always visible.
-        if inner.height >= 2 {
+        // Persistent footer hint in reserved area.
+        if let Some(footer_area) = footer_area {
             let hint = Paragraph::new(
                 "[s] Save   [Esc] Back   [Tab] Next field   [\u{2191}\u{2193}] Section",
             )
             .style(Style::default().fg(tc!(text_dim)));
-            let hint_area = Rect {
-                x: inner.x,
-                y: inner.y + inner.height.saturating_sub(1),
-                width: inner.width,
-                height: 1,
-            };
-            f.render_widget(hint, hint_area);
+            f.render_widget(hint, footer_area);
         }
     }
 }

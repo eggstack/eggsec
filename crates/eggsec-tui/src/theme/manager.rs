@@ -262,6 +262,13 @@ impl ThemeManager {
         let pairs = [
             ("text", "background", theme.colors.text, theme.colors.background),
             ("selected_text", "selected", theme.colors.selected_text, theme.colors.selected),
+            ("text_dim", "background", theme.colors.text_dim, theme.colors.background),
+            ("warning", "background", theme.colors.warning, theme.colors.background),
+            ("error", "background", theme.colors.error, theme.colors.background),
+            ("success", "background", theme.colors.success, theme.colors.background),
+            ("mode_normal", "background", theme.colors.mode_normal, theme.colors.background),
+            ("mode_insert", "background", theme.colors.mode_insert, theme.colors.background),
+            ("focus_input", "background", theme.colors.focus_input, theme.colors.background),
         ];
 
         for (fg_name, bg_name, fg, bg) in pairs {

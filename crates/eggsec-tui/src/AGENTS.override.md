@@ -198,6 +198,20 @@ pub struct TabWindow {
 - `App::set_current_tab_if_available(tab: Tab) -> bool` - Set tab only if available for current feature set
 - Use this helper for mouse selection, `select_tab()`, and session restore
 
+### Numeric Tab Shortcuts (1-based)
+
+Digit keys `1`-`9` and `0` provide direct tab jumping using 1-based visible indices:
+
+| Key | Visible index | Action |
+|-----|--------------|--------|
+| `1` | 0 | First tab |
+| `2` | 1 | Second tab |
+| ... | ... | ... |
+| `9` | 8 | Ninth tab |
+| `0` | 9 | Tenth tab |
+
+Implementation in `key_handler.rs:284-298`: `'1'..='9'` maps to `digit - 1` via `Tab::from_visible_index()`, `'0'` maps to index 9. Digits beyond available tab count are no-ops. Tests in `key_handler.rs:814-884` lock all mappings.
+
 ## Notification System
 
 `App` has a `notification: Option<Notification>` field for user-visible feedback.
@@ -261,6 +275,15 @@ For tab renderers and components that still use `tc!` macro:
 use crate::tc;
 let style = Style::default().fg(tc!(text));
 ```
+
+**Settings theme preview**: The Settings theme preview uses `resolved_theme_colors` from `SettingsTab` (not `tc!()`) to render preview swatches. `tc!()` reads the thread-local *applied* theme, which may differ from the theme being previewed in the selector. The `fg` helper in `render.rs:341-343` falls back to `tc!(text)` only when `resolved_theme_colors` is `None`:
+```rust
+let c = self.resolved_theme_colors.as_ref();
+let fg = |get: fn(&ThemeColors) -> ratatui::style::Color| {
+    c.map(get).unwrap_or_else(|| tc!(text))
+};
+```
+Always use this pattern for Settings preview rendering — never read `tc!()` directly for preview colors.
 
 **Semantic mapping:**
 | Old | Theme |
@@ -849,7 +872,7 @@ Theme names are canonicalized via `canonical_theme_id()` before lookup. The `dis
 
 **Invalid theme tracking**: `ThemeManager::register_theme_invalid(id, source, reason)` inserts metadata with `ThemeLoadStatus::Invalid(reason)` for themes that fail to load, so Settings shows them with `Invalid` status instead of silently omitting them.
 
-**Contrast validation**: `ThemeManager::validate_contrast(id)` returns per-theme `Vec<String>` of contrast warnings for use in the Settings Theme details pane. Called during theme load via `update_theme_metadata()` on the `SettingsTab`.
+**Contrast validation**: `ThemeManager::validate_contrast(id)` returns per-theme `Vec<String>` of contrast warnings. Per-theme warnings are stored in `SettingsTab.theme_contrast_cache: FxHashMap<String, Vec<String>>` (keyed by canonical theme ID). `update_theme_metadata()` computes and populates this cache; the Settings Theme details pane reads warnings directly from the cache for the selected theme.
 
 ### Theme Reload Pattern
 

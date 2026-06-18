@@ -47,7 +47,9 @@ pub fn display_theme_name(id: &str) -> String {
 }
 
 pub use legacy::sync_theme_to_thread_local;
-pub use manager::{ThemeManager, ThemeSource};
+pub use manager::ThemeManager;
+#[allow(unused_imports)] // ThemeSource used in app/test helpers via crate::theme::ThemeSource
+pub use manager::ThemeSource;
 #[allow(unused_imports)] // ThemeInfo/ThemeLoadStatus used via manager:: path in settings
 pub use manager::{ThemeInfo, ThemeLoadStatus};
 pub use palette::Theme;

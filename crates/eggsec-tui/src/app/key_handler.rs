@@ -281,17 +281,17 @@ impl KeyHandler {
                 }
             }
             (KeyModifiers::NONE, KeyCode::Char('e')) => vec![UiAction::ExportResults],
-            // Tab jump: 1-9 jumps to tabs 1-9; 0 jumps to tab 10 (if available)
+            // Tab jump: 1-9 maps to visible indices 0-8; 0 maps to visible index 9 (10th tab)
             (KeyModifiers::NONE, KeyCode::Char(c @ '1'..='9')) => {
-                let idx = c.to_digit(10).unwrap() as usize;
-                if let Some(tab) = Tab::from_index(idx) {
+                let idx = c.to_digit(10).unwrap() as usize - 1;
+                if let Some(tab) = Tab::from_visible_index(idx) {
                     vec![UiAction::SelectTab(tab)]
                 } else {
                     vec![]
                 }
             }
             (KeyModifiers::NONE, KeyCode::Char('0')) => {
-                if let Some(tab) = Tab::from_index(9) {
+                if let Some(tab) = Tab::from_visible_index(9) {
                     vec![UiAction::SelectTab(tab)]
                 } else {
                     vec![]
@@ -808,5 +808,78 @@ mod tests {
 
         app.apply_action(UiAction::ReloadThemes);
         assert!(!app.theme_load.is_running());
+    }
+
+    #[test]
+    fn test_numeric_tab_jump_1_selects_recon() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press(&mut handler, &mut app, KeyCode::Char('1'));
+
+        let all = Tab::all();
+        assert_eq!(app.current_tab, all[0]);
+    }
+
+    #[test]
+    fn test_numeric_tab_jump_2_selects_second_tab() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press(&mut handler, &mut app, KeyCode::Char('2'));
+
+        let all = Tab::all();
+        assert_eq!(app.current_tab, all[1]);
+    }
+
+    #[test]
+    fn test_numeric_tab_jump_0_selects_tenth_tab() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press(&mut handler, &mut app, KeyCode::Char('0'));
+
+        let all = Tab::all();
+        assert!(all.len() > 9, "need at least 10 tabs for 0-jump");
+        assert_eq!(app.current_tab, all[9]);
+    }
+
+    #[test]
+    fn test_numeric_tab_jump_all_digits_match_visible_indices() {
+        let all = Tab::all();
+        for digit in '1'..='9' {
+            let idx = digit.to_digit(10).unwrap() as usize - 1;
+            if let Some(expected) = all.get(idx) {
+                let mut app = create_test_app();
+                let mut handler = KeyHandler::new();
+                press(&mut handler, &mut app, KeyCode::Char(digit));
+                assert_eq!(
+                    app.current_tab, *expected,
+                    "digit '{digit}' should select visible index {idx}"
+                );
+            }
+        }
+        // Test '0' separately
+        if let Some(expected) = all.get(9) {
+            let mut app = create_test_app();
+            let mut handler = KeyHandler::new();
+            press(&mut handler, &mut app, KeyCode::Char('0'));
+            assert_eq!(app.current_tab, *expected);
+        }
+    }
+
+    #[test]
+    fn test_numeric_tab_jump_beyond_available_is_noop() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        let original = app.current_tab;
+
+        let all = Tab::all();
+        // If there are only 21 tabs (no features), pressing '9' (index 8) should work
+        // but pressing digits beyond the tab count should not change the tab
+        if all.len() < 10 {
+            press(&mut handler, &mut app, KeyCode::Char('0'));
+            assert_eq!(app.current_tab, original);
+        }
     }
 }

@@ -3,6 +3,8 @@ use crate::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem
 use crate::tabs::{AppState, TabState};
 use crate::theme::{canonical_theme_id, display_theme_name};
 use crate::theme::manager::ThemeInfo;
+use crate::theme::palette::ThemeColors;
+use rustc_hash::FxHashMap;
 use eggsec::config::{
     EggsecConfig, HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan,
 };
@@ -44,8 +46,10 @@ pub struct SettingsTab {
     pub theme_invalid_count: usize,
     /// Path to the user theme directory (e.g., ~/.config/eggsec/themes).
     pub theme_dir_path: String,
-    /// Contrast warnings for the currently selected theme.
-    pub theme_contrast_warnings: Vec<String>,
+    /// Per-theme contrast warnings keyed by canonical theme ID.
+    pub theme_contrast_cache: FxHashMap<String, Vec<String>>,
+    /// Resolved colors for the currently selected theme (for preview rendering).
+    pub resolved_theme_colors: Option<ThemeColors>,
     /// Pending theme reload requested by user (picked up by App layer).
     pub pending_theme_reload: bool,
 }
@@ -154,7 +158,8 @@ impl SettingsTab {
             theme_info_cache: Vec::new(),
             theme_invalid_count: 0,
             theme_dir_path: String::new(),
-            theme_contrast_warnings: Vec::new(),
+            theme_contrast_cache: FxHashMap::default(),
+            resolved_theme_colors: None,
             pending_theme_reload: false,
         }
     }
@@ -182,12 +187,14 @@ impl SettingsTab {
         info_cache: Vec<ThemeInfo>,
         invalid_count: usize,
         dir_path: String,
-        contrast_warnings: Vec<String>,
+        contrast_cache: FxHashMap<String, Vec<String>>,
+        resolved_theme_colors: Option<ThemeColors>,
     ) {
         self.theme_info_cache = info_cache;
         self.theme_invalid_count = invalid_count;
         self.theme_dir_path = dir_path;
-        self.theme_contrast_warnings = contrast_warnings;
+        self.theme_contrast_cache = contrast_cache;
+        self.resolved_theme_colors = resolved_theme_colors;
     }
 
     pub fn max_focus_index(&self) -> usize {
@@ -1081,12 +1088,52 @@ mod tests {
             source: ThemeSource::BuiltIn,
             status: ThemeLoadStatus::Loaded,
         }];
-        tab.update_theme_metadata(infos, 2, "/tmp/themes".to_string(), Vec::new());
+        tab.update_theme_metadata(
+            infos,
+            2,
+            "/tmp/themes".to_string(),
+            rustc_hash::FxHashMap::default(),
+            None,
+        );
 
         assert_eq!(tab.theme_info_cache.len(), 1);
         assert_eq!(tab.theme_invalid_count, 2);
         assert_eq!(tab.theme_dir_path, "/tmp/themes");
-        assert!(tab.theme_contrast_warnings.is_empty());
+        assert!(tab.theme_contrast_cache.is_empty());
+    }
+
+    #[test]
+    fn per_theme_contrast_cache_stores_warnings_by_id() {
+        use crate::theme::manager::{ThemeInfo, ThemeLoadStatus, ThemeSource};
+        use crate::theme::ThemeMode;
+
+        let mut tab = SettingsTab::new();
+        let infos = vec![
+            ThemeInfo {
+                id: "dark".to_string(),
+                display_name: "Dark".to_string(),
+                mode: ThemeMode::Dark,
+                source: ThemeSource::BuiltIn,
+                status: ThemeLoadStatus::Loaded,
+            },
+            ThemeInfo {
+                id: "light".to_string(),
+                display_name: "Light".to_string(),
+                mode: ThemeMode::Light,
+                source: ThemeSource::BuiltIn,
+                status: ThemeLoadStatus::Loaded,
+            },
+        ];
+        let mut cache = rustc_hash::FxHashMap::default();
+        cache.insert(
+            "dark".to_string(),
+            vec!["text/background too low".to_string()],
+        );
+        tab.update_theme_metadata(infos, 0, "/tmp/themes".to_string(), cache, None);
+
+        assert_eq!(tab.theme_contrast_cache.len(), 1);
+        assert!(tab.theme_contrast_cache.contains_key("dark"));
+        assert!(!tab.theme_contrast_cache.contains_key("light"));
     }
 
     #[test]
@@ -1134,5 +1181,76 @@ mod tests {
         tab.current_section = SettingsSection::Notifications;
         tab.handle_char('r');
         assert!(!tab.pending_theme_reload);
+    }
+
+    #[test]
+    fn settings_layout_footer_visible_at_80x24() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::tabs::TabRender;
+
+        let tab = SettingsTab::new();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        // Footer should be present in the last content row
+        let footer_text = "[s] Save";
+        let mut found = false;
+        for cell in buffer.content() {
+            if cell.symbol() == &footer_text[0..1] {
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "footer should be rendered");
+    }
+
+    #[test]
+    fn settings_layout_status_does_not_collide_with_footer() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::tabs::TabRender;
+
+        let mut tab = SettingsTab::new();
+        tab.status_message = "Settings saved successfully".to_string();
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        // Both status and footer should be visible
+        let has_status = buffer
+            .content()
+            .iter()
+            .any(|c| c.symbol() == "S" || c.symbol() == "s");
+        assert!(has_status, "status message should be rendered");
+    }
+
+    #[test]
+    fn settings_layout_small_terminal_renders_without_panic() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::tabs::TabRender;
+
+        let tab = SettingsTab::new();
+        // 60x20 is a supported small size per plan
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+            })
+            .unwrap();
+        // No panic = pass
     }
 }

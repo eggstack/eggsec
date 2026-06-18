@@ -1154,6 +1154,18 @@ impl App {
             .collect();
         let current = self.theme_manager.current_name().to_string();
         self.tabs.settings.set_available_themes(&themes, &current);
+        // Resolve the selected theme's colors for preview rendering.
+        let selected_id = self
+            .tabs
+            .settings
+            .theme_selector
+            .selected_value()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| current.clone());
+        self.tabs.settings.resolved_theme_colors = self
+            .theme_manager
+            .get_theme(&selected_id)
+            .map(|t| t.colors.clone());
     }
 
     pub fn current_theme(&self) -> &crate::theme::Theme {
