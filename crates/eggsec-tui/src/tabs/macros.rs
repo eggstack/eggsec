@@ -572,3 +572,122 @@ macro_rules! tab_escape_to_first {
         }
     };
 }
+
+/// Macro for tabs with a custom focus enum (Inputs variant + Results variant).
+///
+/// Generates all TabInput delegation methods. The tab must:
+/// - Embed `TabCore` as the named field `$core`
+/// - Have a focus enum field `$focus`
+/// - Have an Inputs variant that maps to the first InputGroup field
+/// - Have a Results variant that represents the results area
+///
+/// The tab must manually implement: `handle_focus_next`, `handle_focus_prev`,
+/// `handle_enter`, `handle_escape`, `handle_up`, `handle_down`.
+///
+/// Usage:
+/// ```ignore
+/// tab_input_custom!(
+///     AuthTab,
+///     core: core,
+///     focus: focus_area,
+///     Inputs: AuthFocusArea::Target,
+///     Results: AuthFocusArea::Results
+/// );
+/// ```
+#[macro_export]
+macro_rules! tab_input_custom {
+    (
+        $tab:ty,
+        core: $core:ident,
+        focus: $focus:ident,
+        Inputs: $inputs_variant:expr,
+        Results: $results_variant:expr
+    ) => {
+        fn handle_char(&mut self, c: char) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            $crate::tabs::core::tab_input_char(&mut self.$core, c, running, inputs);
+        }
+
+        fn handle_backspace(&mut self) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            $crate::tabs::core::tab_input_backspace(&mut self.$core, running, inputs);
+        }
+
+        fn handle_paste(&mut self, text: &str) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            $crate::tabs::core::tab_input_paste(&mut self.$core, text, running, inputs);
+        }
+
+        fn handle_word_forward(&mut self) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            $crate::tabs::core::tab_input_word_forward(&mut self.$core, running, inputs);
+        }
+
+        fn handle_word_backward(&mut self) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            $crate::tabs::core::tab_input_word_backward(&mut self.$core, running, inputs);
+        }
+
+        fn handle_home(&mut self) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            let results = self.$focus == $results_variant;
+            $crate::tabs::core::tab_input_home(&mut self.$core, running, inputs, results);
+        }
+
+        fn handle_end(&mut self) {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            let results = self.$focus == $results_variant;
+            $crate::tabs::core::tab_input_end(&mut self.$core, running, inputs, results);
+        }
+
+        fn page_up(&mut self, page_size: usize) {
+            let running = self.is_running();
+            $crate::tabs::core::tab_input_page_up(&mut self.$core, running, page_size);
+        }
+
+        fn page_down(&mut self, page_size: usize) {
+            let running = self.is_running();
+            $crate::tabs::core::tab_input_page_down(&mut self.$core, running, page_size);
+        }
+
+        fn primary_target(&self) -> Option<String> {
+            Some(self.$core.target().to_string())
+        }
+
+        fn handle_copy(&mut self) -> Option<String> {
+            let running = self.is_running();
+            let inputs = self.$focus == $inputs_variant;
+            let results = self.$focus == $results_variant;
+            $crate::tabs::core::tab_input_copy(&self.$core, running, inputs, results)
+        }
+
+        fn handle_left(&mut self) -> bool {
+            let running = self.is_running();
+            $crate::tabs::core::handle_left_simple(&mut self.$core, running)
+        }
+
+        fn handle_right(&mut self) -> bool {
+            let running = self.is_running();
+            $crate::tabs::core::handle_right_simple(&mut self.$core, running)
+        }
+
+        fn is_input_focused(&self) -> bool {
+            $crate::tabs::core::is_input_focused(self.$focus, $inputs_variant, &self.$core)
+        }
+
+        fn is_at_left_edge(&self) -> bool {
+            $crate::tabs::core::is_at_left_edge_simple(self.$focus, $inputs_variant, &self.$core)
+        }
+
+        fn is_at_right_edge(&self) -> bool {
+            $crate::tabs::core::is_at_right_edge_simple(self.$focus, $inputs_variant, &self.$core)
+        }
+    };
+}

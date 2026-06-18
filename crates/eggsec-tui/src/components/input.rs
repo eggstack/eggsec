@@ -703,6 +703,21 @@ impl InputGroup {
         }
     }
 
+    /// Synchronize per-field `focused` flags with the given index.
+    /// `None` blurs all fields; `Some(i)` focuses field `i` (if in bounds).
+    pub fn set_focus_for_index(&mut self, idx: Option<usize>) {
+        for (i, field) in self.fields.iter_mut().enumerate() {
+            field.focused = Some(i) == idx;
+        }
+    }
+
+    /// Clear every field's value and cursor position.
+    pub fn clear_all_fields(&mut self) {
+        for field in &mut self.fields {
+            field.clear();
+        }
+    }
+
     pub fn can_move_left(&self) -> bool {
         if let Some(idx) = self.valid_focused_index_ref() {
             self.fields[idx].cursor_pos > 0

@@ -443,8 +443,11 @@ impl super::App {
                 if report.findings.is_empty() {
                     display.push_str("No findings detected.\n");
                 }
-                self.tabs.auth.results = display;
-                self.tabs.auth.state = super::tabs::AppState::Completed;
+                self.tabs.auth.core.results_view.clear();
+                for line in display.lines() {
+                    self.tabs.auth.core.results_view.add_line(ratatui::text::Line::from(line.to_string()));
+                }
+                self.tabs.auth.core.state = super::tabs::AppState::Completed;
                 None
             }
             #[cfg(feature = "db-pentest")]
@@ -478,8 +481,11 @@ impl super::App {
                 for finding in &report.opsec_assessment.findings {
                     display.push_str(&format!("\n  [{:?}] {} - {:?}\n    {}\n", finding.severity, finding.description, finding.category, finding.recommendation));
                 }
-                self.tabs.c2.results = display;
-                self.tabs.c2.state = super::tabs::AppState::Completed;
+                self.tabs.c2.core.results_view.clear();
+                for line in display.lines() {
+                    self.tabs.c2.core.results_view.add_line(ratatui::text::Line::from(line.to_string()));
+                }
+                self.tabs.c2.core.state = super::tabs::AppState::Completed;
                 None
             }
             _ => Some(result),
