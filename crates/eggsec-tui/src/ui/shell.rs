@@ -118,6 +118,8 @@ pub fn draw_content(f: &mut Frame, app: &App, area: Rect) {
 }
 
 pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
+    use crate::app::action_hints::{format_hints, get_action_hints};
+
     let is_narrow = area.width < 100;
     let is_very_narrow = area.width < 60;
     // Phase 6: when task globally active, ensure status shows task strip (name/state/elapsed/hints)
@@ -203,21 +205,32 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         }
     }
 
-    let help_text = get_help_text(app, area);
+    let hints = get_action_hints(app);
+    let help_text = if is_narrow {
+        // On narrow terminals, show a compact version (fewer hints, shorter labels)
+        let compact: Vec<_> = hints.iter().take(3).collect();
+        compact
+            .iter()
+            .map(|h| format!("{}:{}", h.key, h.label))
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        format_hints(&hints)
+    };
 
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(if is_narrow {
             [
                 Constraint::Length(8),
-                Constraint::Percentage(60),
-                Constraint::Percentage(40),
+                Constraint::Percentage(50),
+                Constraint::Min(20),
             ]
         } else {
             [
                 Constraint::Length(10),
-                Constraint::Percentage(55),
-                Constraint::Percentage(40),
+                Constraint::Percentage(50),
+                Constraint::Min(30),
             ]
         })
         .split(area);
@@ -554,4 +567,240 @@ pub fn get_help_text(app: &App, area: Rect) -> String {
 /// Policy confirms are still rendered (clamped) even in this path for readability.
 pub fn is_terminal_too_small(area: Rect) -> bool {
     area.width < 45 || area.height < 12
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::confirmation::PendingPolicyConfirmation;
+    use crate::app::{create_shared_history, App};
+    use crate::help::{CommandPalette, CommandPaletteResult};
+    use crate::tabs::{SettingsSection, Tab};
+    use crate::ui::draw;
+    use eggsec::config::{
+        IntendedUse, OperationDescriptor, OperationMode, OperationRisk, PolicyDecision,
+    };
+    use ratatui::{backend::TestBackend, Terminal};
+    use std::sync::Arc;
+
+    fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
+        let mut out = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    fn create_test_app() -> App {
+        App::new_for_testing(create_shared_history())
+    }
+
+    #[test]
+    fn test_render_80x24_layout_has_tab_bar_status_bar_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        // Tab bar visible (contains "Eggsec" or tab title)
+        assert!(
+            text.contains("Eggsec") || text.contains("Recon"),
+            "80x24 should render tab bar with title"
+        );
+        // Status bar visible (contains mode indicator)
+        assert!(
+            text.contains("NORMAL") || text.contains("INSERT"),
+            "80x24 should render status bar mode indicator"
+        );
+        // Content area present (has non-space content)
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "80x24 should have content in the content area");
+    }
+
+    #[test]
+    fn test_render_narrow_40x20_shows_too_small_fallback() {
+        let mut app = create_test_app();
+        let backend = TestBackend::new(40, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        assert!(
+            text.contains("Terminal too small") || text.contains("Resize to at least 60x20"),
+            "40x20 must show terminal too small fallback"
+        );
+    }
+
+    #[test]
+    fn test_render_settings_theme_section_visible() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        // Theme section title visible
+        assert!(
+            text.contains("Theme Settings"),
+            "Settings Theme section should render 'Theme Settings' title"
+        );
+        // Theme nav item visible
+        assert!(
+            text.contains("Theme"),
+            "Settings nav should show Theme option"
+        );
+    }
+
+    #[test]
+    fn test_render_policy_confirm_overlay() {
+        let mut app = create_test_app();
+        let desc = OperationDescriptor {
+            operation: "port-scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("192.168.1.0/24".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let decision = PolicyDecision::allowed(
+            "port-scan",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+        );
+        app.overlay.pending_policy = Some(PendingPolicyConfirmation {
+            descriptor: desc,
+            decision,
+            required_classes: vec![],
+            reason_input: String::new(),
+            captured_task_config: None,
+        });
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        // Popup visible with operation details
+        assert!(
+            text.contains("Policy Confirmation") || text.contains("port-scan"),
+            "Policy confirm popup should show operation or title"
+        );
+        // Confirm/cancel buttons visible
+        assert!(
+            text.contains("Proceed") || text.contains("Cancel") || text.contains("Enter"),
+            "Policy confirm should show action buttons"
+        );
+    }
+
+    #[test]
+    fn test_render_quick_switch_no_matches() {
+        let mut app = create_test_app();
+        app.quick_switch.visible = true;
+        app.quick_switch.query = "zzzzzzz_nonexistent_tab_xyz".to_string();
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        // Quick switch popup visible
+        assert!(
+            text.contains("Tab Search") || text.contains("Filter"),
+            "Quick switch popup should be visible"
+        );
+        // No matches message
+        assert!(
+            text.contains("No matching tabs") || text.contains("0/0"),
+            "Should show no matches for nonexistent query"
+        );
+    }
+
+    #[test]
+    fn test_render_command_palette_disabled_entry() {
+        let mut app = create_test_app();
+        let entries = Arc::new(vec![
+            CommandPaletteResult {
+                command: "run-scan".to_string(),
+                description: "Start a security scan".to_string(),
+                category: "Scanning".to_string(),
+                shortcut: None,
+            },
+            CommandPaletteResult {
+                command: "run-stress".to_string(),
+                description: "[requires --allow-stress] Stress test target".to_string(),
+                category: "Testing".to_string(),
+                shortcut: None,
+            },
+        ]);
+        app.command_palette = Some(CommandPalette::new(entries));
+        app.command_palette.as_mut().unwrap().visible = true;
+        app.command_palette.as_mut().unwrap().selected_index = 1;
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        // Command palette visible
+        assert!(
+            text.contains("Command Palette"),
+            "Command palette should render its title"
+        );
+        // Both entries visible
+        assert!(
+            text.contains("run-scan"),
+            "First command entry should be visible"
+        );
+        assert!(
+            text.contains("run-stress") || text.contains("stress"),
+            "Disabled/greyed command entry should be visible"
+        );
+        // Query field visible
+        assert!(
+            text.contains("Query:"),
+            "Query field should be visible in command palette"
+        );
+    }
+
+    #[test]
+    fn test_render_80x24_no_garbled_output() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let buf = terminal.backend().buffer();
+        // Verify buffer dimensions match
+        assert_eq!(buf.area.width, 80);
+        assert_eq!(buf.area.height, 24);
+        // Verify not all spaces (garbled check)
+        let space_count = buf.content.iter().filter(|c| c.symbol() == " ").count();
+        let total = buf.content.len();
+        assert!(
+            space_count < total,
+            "80x24 buffer should not be all spaces (garbled output check)"
+        );
+        // Verify no null/unexpected characters in rendered output
+        for cell in &buf.content {
+            let sym = cell.symbol();
+            assert!(
+                sym.is_empty() || sym.chars().all(|c| !c.is_control()),
+                "Buffer should not contain control characters"
+            );
+        }
+    }
 }

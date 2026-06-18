@@ -1,4 +1,5 @@
 pub(crate) mod action;
+pub(crate) mod action_hints;
 pub(crate) mod bookmarks;
 pub(crate) mod command;
 pub(crate) mod confirmation;

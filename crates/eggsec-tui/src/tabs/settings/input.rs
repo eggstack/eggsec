@@ -51,7 +51,11 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.insert(c),
             SettingsSection::Schedule => self.schedule_inputs.insert(c),
             SettingsSection::Notifications => self.notify_inputs.insert(c),
-            SettingsSection::Theme => {}
+            SettingsSection::Theme => {
+                if c == 'r' && !self.theme_selector.is_open() {
+                    self.pending_theme_reload = true;
+                }
+            }
         }
     }
 

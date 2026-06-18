@@ -2,6 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem};
 use crate::tabs::{AppState, TabState};
 use crate::theme::{canonical_theme_id, display_theme_name};
+use crate::theme::manager::ThemeInfo;
 use eggsec::config::{
     EggsecConfig, HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan,
 };
@@ -37,6 +38,14 @@ pub struct SettingsTab {
     pub theme_selector: Selector,
     pub pending_theme_name: Option<String>,
     pub error: Option<TabError>,
+    /// Cached theme metadata from ThemeManager.
+    pub theme_info_cache: Vec<ThemeInfo>,
+    /// Number of themes with invalid/missing status.
+    pub theme_invalid_count: usize,
+    /// Path to the user theme directory (e.g., ~/.config/eggsec/themes).
+    pub theme_dir_path: String,
+    /// Pending theme reload requested by user (picked up by App layer).
+    pub pending_theme_reload: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -140,6 +149,10 @@ impl SettingsTab {
             theme_selector,
             pending_theme_name: None,
             error: None,
+            theme_info_cache: Vec::new(),
+            theme_invalid_count: 0,
+            theme_dir_path: String::new(),
+            pending_theme_reload: false,
         }
     }
 
@@ -149,6 +162,27 @@ impl SettingsTab {
 
     pub fn take_pending_theme(&mut self) -> Option<String> {
         self.pending_theme_name.take()
+    }
+
+    pub fn take_pending_theme_reload(&mut self) -> bool {
+        if self.pending_theme_reload {
+            self.pending_theme_reload = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Update cached theme metadata from the ThemeManager.
+    pub fn update_theme_metadata(
+        &mut self,
+        info_cache: Vec<ThemeInfo>,
+        invalid_count: usize,
+        dir_path: String,
+    ) {
+        self.theme_info_cache = info_cache;
+        self.theme_invalid_count = invalid_count;
+        self.theme_dir_path = dir_path;
     }
 
     pub fn max_focus_index(&self) -> usize {
@@ -870,6 +904,7 @@ impl TabState for SettingsTab {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tabs::TabInput;
 
     fn set_http_field(tab: &mut SettingsTab, idx: usize, val: &str) {
         if let Some(f) = tab.http_inputs.fields.get_mut(idx) {
@@ -1017,5 +1052,81 @@ mod tests {
         set_http_field(&mut tab, 0, "bad");
         tab.save_config();
         assert!(tab.status_message.contains("timeout_secs"));
+    }
+
+    #[test]
+    fn theme_metadata_fields_default_empty() {
+        let tab = SettingsTab::new();
+        assert!(tab.theme_info_cache.is_empty());
+        assert_eq!(tab.theme_invalid_count, 0);
+        assert!(tab.theme_dir_path.is_empty());
+        assert!(!tab.pending_theme_reload);
+    }
+
+    #[test]
+    fn update_theme_metadata_stores_values() {
+        use crate::theme::manager::{ThemeInfo, ThemeLoadStatus, ThemeSource};
+        use crate::theme::ThemeMode;
+
+        let mut tab = SettingsTab::new();
+        let infos = vec![ThemeInfo {
+            id: "cyber-red".to_string(),
+            display_name: "Cyber Red".to_string(),
+            mode: ThemeMode::Dark,
+            source: ThemeSource::BuiltIn,
+            status: ThemeLoadStatus::Loaded,
+        }];
+        tab.update_theme_metadata(infos, 2, "/tmp/themes".to_string());
+
+        assert_eq!(tab.theme_info_cache.len(), 1);
+        assert_eq!(tab.theme_invalid_count, 2);
+        assert_eq!(tab.theme_dir_path, "/tmp/themes");
+    }
+
+    #[test]
+    fn take_pending_theme_reload_returns_true_when_set() {
+        let mut tab = SettingsTab::new();
+        tab.pending_theme_reload = true;
+        assert!(tab.take_pending_theme_reload());
+        assert!(!tab.pending_theme_reload);
+    }
+
+    #[test]
+    fn take_pending_theme_reload_returns_false_when_not_set() {
+        let mut tab = SettingsTab::new();
+        assert!(!tab.take_pending_theme_reload());
+    }
+
+    #[test]
+    fn theme_reload_flag_set_on_r_in_theme_section() {
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        tab.handle_char('r');
+        assert!(tab.pending_theme_reload);
+    }
+
+    #[test]
+    fn theme_reload_flag_not_set_when_selector_open() {
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Theme;
+        tab.theme_selector.open();
+        tab.handle_char('r');
+        assert!(!tab.pending_theme_reload);
+    }
+
+    #[test]
+    fn theme_reload_flag_not_set_in_other_sections() {
+        let mut tab = SettingsTab::new();
+        tab.current_section = SettingsSection::Http;
+        tab.handle_char('r');
+        assert!(!tab.pending_theme_reload);
+
+        tab.current_section = SettingsSection::Scan;
+        tab.handle_char('r');
+        assert!(!tab.pending_theme_reload);
+
+        tab.current_section = SettingsSection::Notifications;
+        tab.handle_char('r');
+        assert!(!tab.pending_theme_reload);
     }
 }

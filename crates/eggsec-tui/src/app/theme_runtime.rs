@@ -1,5 +1,6 @@
 use crate::app::notifications::NotificationSeverity;
 use crate::theme::install::ThemeInstallReport;
+use crate::theme::ThemeSource;
 
 impl super::App {
     pub fn spawn_theme_loader(&mut self) {
@@ -34,9 +35,20 @@ impl super::App {
             report.skipped_existing,
             report.errors.len()
         );
+
+        let packaged_count = report.installed;
+        let mut loaded_from_packaged = packaged_count;
         for theme_result in report.loaded_themes {
             match theme_result {
-                Ok(theme) => self.theme_manager.register_theme(theme),
+                Ok(theme) => {
+                    let source = if loaded_from_packaged > 0 {
+                        loaded_from_packaged -= 1;
+                        ThemeSource::Packaged
+                    } else {
+                        ThemeSource::Custom
+                    };
+                    self.theme_manager.register_theme_with_source(theme, source);
+                }
                 Err(e) => tracing::warn!("Failed to load theme: {}", e),
             }
         }
@@ -79,5 +91,16 @@ impl super::App {
         }
 
         self.update_settings_theme_selector();
+
+        // Sync theme metadata to Settings tab for the detail pane.
+        let dir_path = report
+            .theme_dir
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "~/.config/eggsec/themes".to_string());
+        self.tabs.settings.update_theme_metadata(
+            self.theme_manager.theme_info_list(),
+            self.theme_manager.invalid_count(),
+            dir_path,
+        );
     }
 }

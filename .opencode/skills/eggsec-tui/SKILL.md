@@ -8,6 +8,7 @@ TUI module workflows and patterns for the terminal UI.
 crates/eggsec-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
+│   ├── action_hints.rs  # Context-aware status bar hints (ActionHint, get_action_hints, format_hints)
 │   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
 │   ├── tab_store.rs     # TabStore - owns all 33 tab instances
 │   ├── runner.rs        # Event loop, input handling
@@ -24,6 +25,7 @@ crates/eggsec-tui/src/
 │   └── ...
 ├── tabs/         # Individual tab implementations
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
+│   ├── spec.rs         # TabSpec registry (title, stable_id, category, risk, capabilities)
 │   ├── dashboard.rs    # Dashboard tab
 │   ├── fuzz.rs         # Fuzz tab
 │   └── ...
@@ -31,6 +33,7 @@ crates/eggsec-tui/src/
 │   ├── input.rs         # InputField with focus colors
 │   ├── selector.rs      # Selector dropdown
 │   ├── popup.rs         # Popup overlays
+│   ├── empty_state.rs   # empty_state_paragraph() for consistent empty/placeholder states
 │   └── ...
 ├── theme/        # Theme system
 │   ├── mod.rs          # Module re-exports
@@ -237,6 +240,102 @@ All 33 tabs now properly guard input handlers with `!self.is_running()`. This pr
 - **components/input.rs can_move bounds**: Fixed `input.rs:680-694` to add bounds checks in navigation helpers
 - **app/mod.rs unused import**: Removed unused `FxHashMap` import
 
+## Action Hints (Phase 1)
+
+The status bar displays context-aware action hints via `app/action_hints.rs`:
+
+```rust
+pub struct ActionHint {
+    pub key: &'static str,
+    pub label: &'static str,
+}
+```
+
+Priority order for hint resolution:
+1. **Running task** — `C:stop Z:pause` (or `C:stop Y:resume` if paused)
+2. **Overlay-specific** — PolicyConfirm (`Enter:confirm Esc:cancel`), ConfirmPopup (`y:yes n:no`), CommandPalette, QuickSwitch, Search, Help, HttpOptions
+3. **Insert mode** — `Esc:normal Tab:next Enter:confirm`
+4. **Tab-specific normal mode** — Settings (`s:save r:reset Tab:next`), History (`↑↓:nav d:delete r:clear`), Dashboard (`Enter:open n/p:tabs`)
+5. **Default normal** — `Enter:run n/p:tabs /:search` (or `Enter:focus` when no target is set)
+
+`format_hints()` joins into `"key:label"` pairs for status bar rendering. Overlays always override tab hints; tasks always override overlays.
+
+## TabSpec Capabilities (Phase 3)
+
+`TabSpec` in `tabs/spec.rs` is the single source of truth for tab metadata:
+
+```rust
+pub struct TabSpec {
+    pub tab: Tab,
+    pub stable_id: &'static str,
+    pub title: &'static str,
+    pub cli_command: &'static str,
+    pub description: &'static str,
+    pub category: TabCategory,      // Assessment, Traffic, Workflow, Reporting, Configuration, History, Dashboard
+    pub risk_group: TabRiskGroup,   // Passive, SafeActive, Intrusive, Administrative
+    pub feature: Option<&'static str>,
+    pub breadcrumb_label: &'static str,
+    pub operation: Option<&'static str>,
+    pub direct_launch: bool,
+    pub supports_run: bool,
+    pub supports_export: bool,
+    pub supports_help: bool,
+    pub has_settings: bool,
+}
+```
+
+- `tab_specs()` / `all_specs()` — static slice of all specs
+- `spec_for(tab)` — lookup by Tab variant
+- `visible_tab_specs()` — filters by feature gates, mirrors `Tab::all()` order
+- `risk_from_group()` — maps `TabRiskGroup` to `OperationRisk` for policy enforcement
+
+`direct_launch` tabs (stress, packet, cluster, wireless, etc.) start work inside their own `handle_enter` and get retroactively evaluated by the central `EnforcementContext::evaluate()` gate.
+
+## No-Result States (Phase 2)
+
+All tabs use `empty_state_paragraph()` from `components/empty_state.rs` for consistent empty states:
+
+```rust
+pub fn empty_state_paragraph(
+    title: &'static str,
+    text: impl Into<ratatui::text::Text<'static>>,
+) -> Paragraph<'static>
+```
+
+Renders a bordered block with dimmed text. Used across ~30 tabs for idle results areas, e.g.:
+```rust
+empty_state_paragraph("Results", "Results will appear here after running")
+empty_state_paragraph("Results", "No results yet. Run a test to see findings.")
+```
+
+## Theme Metadata (Phase 2)
+
+`ThemeInfo` in `theme/manager.rs` carries per-theme metadata:
+
+```rust
+pub struct ThemeInfo {
+    pub id: String,
+    pub display_name: String,
+    pub mode: ThemeMode,           // Dark/Light
+    pub source: ThemeSource,       // BuiltIn/Packaged/Custom
+    pub status: ThemeLoadStatus,   // Loaded/FallbackAdjusted/Invalid/Missing
+}
+```
+
+`ThemeManager` exposes `get_info(id)`, `theme_info_list()`, `get_all_info()`, and `theme_count()`. The Settings tab caches `theme_info_cache: Vec<ThemeInfo>` and renders a theme details pane showing mode, source, and load status for each installed theme.
+
+## Theme Reload (Phase 3)
+
+Press `r` in the Settings tab (when in the Theme section and selector is closed) to trigger a theme reload:
+
+1. `SettingsTab` sets `pending_theme_reload = true`
+2. `App::update()` checks `tabs.settings.take_pending_theme_reload()`
+3. If true, calls `spawn_theme_loader()` — re-scans packaged + custom themes in a background thread
+4. Loader sends results via `std::sync::mpsc`; `ThemeLoadState` tracks the receiver + join handle
+5. `App::update()` polls the channel and joins the handle once the final report arrives
+
+The `r` key hint appears in the theme section status line: `"Press [r] to reload themes   [Ctrl+T] to cycle"`.
+
 ## Key Patterns
 
 ### Tab System
@@ -327,11 +426,42 @@ mod tests {
 }
 ```
 
+### Visual Regression Tests (Phase 4)
+
+Use `TestBackend` for deterministic render verification:
+
+```rust
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+
+let backend = TestBackend::new(80, 24);
+let mut terminal = Terminal::new(backend).unwrap();
+terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+let buf = terminal.backend().buffer();
+
+// Check specific cells for expected content
+assert_eq!(buf.get_content((0, 0)), "expected text");
+```
+
+Key patterns from `ui/tests.rs`:
+- **Layout tests** at various sizes: 80x24 (standard), 120x40 (wide), 60x20 (compact), 40x12 (narrow), 30x10 (degradation)
+- **Overlay rendering**: command palette, quick switch, search popup, help popup, HTTP options
+- **Empty state tests**: command palette with no matches, quick switch with no matches, search with no results
+- **Status bar tests**: preflight indicators, mode indicators, action hints
+
+Component-level regression tests in `components/`:
+- `input.rs` — InputField focus colors, cursor rendering at various widths
+- `selector.rs` — dropdown rendering, open/closed states, overflow clamping
+- `popup.rs` — button rendering, scroll behavior
+
 ### Test Coverage
 - Tab focus navigation
 - Layout rendering at various terminal sizes
 - Event handling
 - State updates
+- Action hint generation per app state
+- Empty state rendering across tabs
+- Theme metadata and reload flag behavior
 
 ## Common Tasks
 
@@ -660,20 +790,6 @@ pub enum TabError {
 - `TabError::is_recoverable()` checks for Network/Auth/Resource errors
 - `TabError::message()` returns the error string for display
 - Error display happens in render() method: `error.message()`
-
-## Visual Regression Testing
-
-Use `TestBackend` for render tests:
-```rust
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-
-let backend = TestBackend::new(80, 24);
-let mut terminal = Terminal::new(backend).unwrap();
-terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
-let buf = terminal.backend().buffer();
-// Check buf.content for expected symbols
-```
 
 ## Settings Tab (tabs/settings/main.rs)
 

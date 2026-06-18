@@ -796,6 +796,171 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 - **Dead code warnings**: 16 TUI dead-code warnings reduced to 0 by adding `#[allow(dead_code)]` annotations with explanatory comments on forward-compat fields (HalloyBuffer/HalloyButtonStyle, PopupKind::Info/Warning/Error, TabSpec::category, theme constants, `decode_key_event`, etc.).
 - **9 new unit tests**: 3 for `graphql::handle_enter`, 3 for `oauth::handle_enter`, 4 for `popup::content` (including the overflow guard). All 311 TUI tests pass.
 
+## Phase 1-4 UI Patterns
+
+### Action Hints Pattern
+
+Status bar hints are context-aware via `get_action_hints()` in `app/action_hints.rs`. Priority order:
+1. Running task hints (stop/pause/resume)
+2. Overlay-specific hints (policy confirm, command palette, search, help, etc.)
+3. Insert-mode hints (Esc/Tab/Enter)
+4. Tab-specific normal-mode hints (varies by tab)
+
+New code should use this system instead of scattering hint strings:
+```rust
+use crate::app::action_hints::{get_action_hints, format_hints};
+
+// In draw_status_bar():
+let hints = get_action_hints(app);
+let hint_text = format_hints(&hints);
+```
+
+Tab-specific hint functions (`settings_hints`, `history_hints`, `dashboard_hints`) return static `Vec<ActionHint>`. The `default_normal_hints` function adapts based on whether the current tab has a target set (shows "run" vs "focus"). See `app/action_hints.rs:19` for the dispatch function.
+
+### Theme Metadata Pattern
+
+`ThemeManager` provides structured metadata via `ThemeInfo`, `ThemeSource`, and `ThemeLoadStatus`:
+
+```rust
+// Query metadata for a theme
+if let Some(info) = theme_manager.get_info("dark") {
+    println!("Source: {:?}", info.source);     // BuiltIn | Packaged | Custom
+    println!("Status: {:?}", info.status);     // Loaded | FallbackAdjusted | Invalid(..) | Missing
+    println!("Mode: {:?}", info.mode);         // Dark | Light
+}
+
+// List all theme metadata sorted by display name
+let all_info = theme_manager.get_all_info();
+
+// Counts
+theme_manager.theme_count();     // total registered
+theme_manager.loaded_count();    // Loaded status only
+theme_manager.invalid_count();   // Invalid status only
+```
+
+Theme names are canonicalized via `canonical_theme_id()` before lookup. The `display_theme_name()` function title-cases IDs for display (e.g., "catppuccin-mocha" → "Catppuccin Mocha"). Contrast validation (`validate_contrast`) returns warnings for RGB color pairs below 4.5:1 minimum.
+
+### Theme Reload Pattern
+
+In the Settings Theme section, pressing `r` (when the theme selector dropdown is closed) sets `pending_theme_reload = true` on `SettingsTab`. The event loop in `state_update.rs` polls this flag via `take_pending_theme_reload()` and triggers the background theme loader:
+
+```rust
+// tabs/settings/input.rs - Sets the flag on 'r' key
+SettingsSection::Theme => {
+    if c == 'r' && !self.theme_selector.is_open() {
+        self.pending_theme_reload = true;
+    }
+}
+
+// app/state_update.rs - Processes the flag
+if self.tabs.settings.take_pending_theme_reload() {
+    self.spawn_theme_loader();
+}
+```
+
+The `take_pending_theme_reload()` method atomically reads and clears the flag (returns `true` once, then `false` until next `r` press). This pattern avoids busy-watching and ensures exactly one reload per keypress.
+
+### No-Result State Pattern
+
+Empty states are rendered via `empty_state_paragraph()` from `components/empty_state.rs`:
+
+```rust
+use crate::components::empty_state_paragraph;
+
+// In tab render:
+let placeholder = empty_state_paragraph(
+    "Results",
+    "Results will appear here after running"
+);
+f.render_widget(placeholder, results_area);
+```
+
+The function creates a bordered `Paragraph` with `tc!(text_dim)` styling. All tabs use this pattern for their Results areas when no data is available. Overlays also show empty states:
+- Command palette: "No matching commands" when query filters to nothing
+- Quick switch: "No matching tabs"
+- Search: "No results for 'query'" after a search completes with no matches
+
+### TabSpec Capability Flags
+
+`TabSpec` (in `tabs/spec.rs`) has capability flags that control UI behavior:
+
+```rust
+pub struct TabSpec {
+    // ... metadata fields ...
+    pub supports_run: bool,      // Can start a task (has inputs → Enter action)
+    pub supports_export: bool,   // Shows in export menu
+    pub supports_help: bool,     // Has help content
+    pub has_settings: bool,      // Has configurable settings
+}
+```
+
+Helper methods:
+- `spec.can_start_task()` → `supports_run && !direct_launch` (tabs with direct_launch use retroactive policy eval, not the standard run path)
+- `spec.shows_in_export()` → delegates to `supports_export`
+
+Assessment-category tabs always have `supports_run: true`. Use these flags in palette and UI code to conditionally enable/disable actions rather than hardcoding tab checks.
+
+### Regression Test Pattern
+
+Tab `handle_enter()` regression tests live in `tabs/handle_enter_regression.rs`. Each tab has tests covering all focus areas to prevent fallthrough bugs:
+
+```rust
+#[test]
+fn graphql_enter_options_toggles_checkbox() {
+    let mut tab = GraphQlTab::new();
+    tab.focus_area = GraphQlFocusArea::Options;
+    let before = tab.introspection_checkbox.checked;
+    tab.handle_enter();
+    assert_eq!(tab.introspection_checkbox.checked, !before);
+    assert!(!tab.is_running());  // Must NOT start scan
+}
+
+#[test]
+fn graphql_enter_results_no_op() {
+    let mut tab = GraphQlTab::new();
+    tab.focus_area = GraphQlFocusArea::Results;
+    tab.handle_enter();
+    assert!(!tab.is_running());
+}
+
+#[test]
+fn graphql_enter_inputs_unfocused_starts_with_target() {
+    let mut tab = GraphQlTab::new();
+    tab.focus_area = GraphQlFocusArea::Inputs;
+    tab.inputs.blur();
+    tab.inputs.fields[0].value = "https://example.com/graphql".to_string();
+    tab.handle_enter();
+    assert!(tab.is_running());
+}
+```
+
+The pattern verifies: (1) Options toggles without starting, (2) Results is a no-op, (3) Inputs focused blurs without starting, (4) Inputs unfocused with target starts the scan. When adding a new tab or modifying `handle_enter()`, add corresponding regression tests here.
+
+### Popup Scroll Pattern
+
+`Popup` scroll helpers (`components/popup.rs:100-124`) guard against empty content, matching `ScrollableText`'s pattern:
+
+```rust
+pub fn scroll_down(&mut self, amount: usize) {
+    if self.content.is_empty() {
+        self.scroll_offset = 0;
+    } else {
+        let max_scroll = self.content.len() - 1;
+        self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
+    }
+}
+
+pub fn scroll_to_bottom(&mut self) {
+    if self.content.is_empty() {
+        self.scroll_offset = 0;
+    } else {
+        self.scroll_offset = self.content.len() - 1;
+    }
+}
+```
+
+`scroll_up` uses `saturating_sub` (safe on zero). Both `scroll_down` and `scroll_to_bottom` check `is_empty()` before computing `len() - 1` to avoid underflow. This is the canonical pattern for any scrollable component — always guard the `len() - 1` expression against empty collections.
+
 ## Session Fixes (2026-06-17) - TUI Bugs Plan
 
 - **gg normal-mode sequence fixed**: Added `UiAction::BeginGgSequence` to `action.rs`; `decode_normal_mode_input` returns it for first `g`; `apply_action` sets `pending_key = Some(KeyCode::Char('g'))`. Second `g` in `handle_key_event` now correctly triggers `MoveTop`. 3 new regression tests.

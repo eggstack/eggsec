@@ -213,3 +213,150 @@ fn render_policy_confirm_on_small_terminal_still_readable() {
         "policy confirm must still render readably on small terminal (clamped)"
     );
 }
+
+#[test]
+fn command_palette_empty_state_no_matches() {
+    use std::sync::Arc;
+
+    let mut app = App::new_for_testing(create_shared_history());
+    // Set up command palette directly (methods are pub(super), use from tests module)
+    app.command_palette = Some(crate::help::CommandPalette {
+        visible: true,
+        query: "zzzznonexistent".to_string(),
+        results: Arc::new(Vec::new()),
+        selected_index: 0,
+        scroll_offset: 0,
+        popup_width: 60,
+        popup_height: 20,
+        last_content_height: 15,
+    });
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+    let text = buffer_to_text(terminal.backend().buffer());
+    assert!(
+        text.contains("No matching commands"),
+        "command palette should show 'No matching commands' when query matches nothing, got:\n{}",
+        text
+    );
+}
+
+#[test]
+fn command_palette_empty_state_no_commands() {
+    use std::sync::Arc;
+
+    let mut app = App::new_for_testing(create_shared_history());
+    // Set up command palette with empty results
+    app.command_palette = Some(crate::help::CommandPalette {
+        visible: true,
+        query: String::new(),
+        results: Arc::new(Vec::new()),
+        selected_index: 0,
+        scroll_offset: 0,
+        popup_width: 60,
+        popup_height: 20,
+        last_content_height: 15,
+    });
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+    let text = buffer_to_text(terminal.backend().buffer());
+    assert!(
+        text.contains("No commands available"),
+        "command palette should show 'No commands available' when results list is empty, got:\n{}",
+        text
+    );
+}
+
+#[test]
+fn quick_switch_empty_state_no_matches() {
+    let mut app = App::new_for_testing(create_shared_history());
+    app.quick_switch.visible = true;
+    // Set a query that matches no tabs
+    app.quick_switch.query = "zzzznonexistent".to_string();
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+    let text = buffer_to_text(terminal.backend().buffer());
+    assert!(
+        text.contains("No matching tabs"),
+        "quick switch should show 'No matching tabs' when query matches nothing, got:\n{}",
+        text
+    );
+}
+
+#[test]
+fn search_empty_state_no_results() {
+    use crate::search::GlobalSearch;
+
+    let mut app = App::new_for_testing(create_shared_history());
+    app.overlay.show_search = true;
+    app.search.query = "zzzznonexistent".to_string();
+    // Simulate a search that returned no results
+    app.search.global_search = Some({
+        let mut gs = GlobalSearch::new();
+        gs.results.clear();
+        gs
+    });
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+    let text = buffer_to_text(terminal.backend().buffer());
+    assert!(
+        text.contains("No results for 'zzzznonexistent'"),
+        "search results should show 'No results for query' when no matches, got:\n{}",
+        text
+    );
+}
+
+#[test]
+fn search_empty_state_not_performed() {
+    let mut app = App::new_for_testing(create_shared_history());
+    app.overlay.show_search = true;
+    app.search.query.clear();
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+    let text = buffer_to_text(terminal.backend().buffer());
+    // When query is empty, the search popup shows "Type to search..."
+    // The search results panel is not rendered (only shown when query is non-empty)
+    assert!(
+        text.contains("Type to search..."),
+        "search popup should show 'Type to search...' when query is empty, got:\n{}",
+        text
+    );
+    // The search results panel should NOT be rendered when query is empty
+    assert!(
+        !text.contains("Search Results"),
+        "search results panel should not render when query is empty, got:\n{}",
+        text
+    );
+}
+
+#[test]
+fn search_popup_empty_state_placeholder() {
+    let mut app = App::new_for_testing(create_shared_history());
+    app.overlay.show_search = true;
+    app.search.query.clear();
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+    let text = buffer_to_text(terminal.backend().buffer());
+    assert!(
+        text.contains("Type to search..."),
+        "search popup should show 'Type to search...' when query is empty, got:\n{}",
+        text
+    );
+}

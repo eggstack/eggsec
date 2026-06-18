@@ -47,6 +47,8 @@ pub mod browser;
 pub mod workflow;
 
 mod spec;
+#[cfg(test)]
+mod handle_enter_regression;
 pub(crate) use spec::{
     risk_from_group, spec_for, tab_specs, TabRiskGroup,
 };
@@ -83,7 +85,7 @@ pub use resume::ResumeTab;
 pub use scan::{ScanTab, StageStatus};
 pub use scan_endpoints::ScanEndpointsTab;
 pub use scan_ports::ScanPortsTab;
-pub use settings::SettingsTab;
+pub use settings::{SettingsSection, SettingsTab};
 #[cfg(feature = "database")]
 pub use storage::StorageTab;
 pub use stress::StressTab;

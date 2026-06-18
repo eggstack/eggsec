@@ -100,11 +100,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     if app.overlay.show_search && !app.search.query.is_empty() {
-        if let Some(ref search) = app.search.global_search {
-            if !search.is_empty() {
-                crate::search::draw_search_results(f, app);
-            }
-        }
+        crate::search::draw_search_results(f, app);
     }
 
     if app.overlay.show_http_options {

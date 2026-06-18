@@ -152,6 +152,19 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App, theme: &Theme) {
         Paragraph::new(status_text.as_str()).style(Style::default().fg(theme.colors.text_dim));
     f.render_widget(status_paragraph, chunks.get(1).copied().unwrap_or(inner));
 
+    let list_area = chunks.get(2).copied().unwrap_or(inner);
+    if palette.results.is_empty() {
+        let msg = if palette.query.is_empty() {
+            "No commands available"
+        } else {
+            "No matching commands"
+        };
+        let empty = ratatui::widgets::Paragraph::new(msg)
+            .style(Style::default().fg(theme.colors.text_dim));
+        f.render_widget(empty, list_area);
+        return;
+    }
+
     let mut items: Vec<ListItem> = Vec::new();
     for global_idx in start..end {
         let result = &palette.results[global_idx];
@@ -185,7 +198,7 @@ pub fn draw_command_palette(f: &mut Frame, app: &mut App, theme: &Theme) {
                 .border_style(Style::default().fg(theme.colors.border)),
         )
         .style(Style::default().fg(theme.colors.text));
-    f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
+    f.render_widget(list, list_area);
 }
 
 pub fn draw_search_popup(f: &mut Frame, app: &App, theme: &Theme) {
@@ -223,7 +236,12 @@ pub fn draw_search_popup(f: &mut Frame, app: &App, theme: &Theme) {
         format!("Searching: {}", app.search.query)
     };
 
-    let paragraph = Paragraph::new(search_content).style(Style::default().fg(theme.colors.text));
+    let style = if app.search.query.is_empty() {
+        Style::default().fg(theme.colors.text_dim)
+    } else {
+        Style::default().fg(theme.colors.text)
+    };
+    let paragraph = Paragraph::new(search_content).style(style);
     f.render_widget(paragraph, inner);
 }
 
@@ -321,11 +339,17 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
         items.push(ListItem::new(item_text).style(style));
     }
 
+    let list_area = chunks.get(2).copied().unwrap_or(inner);
     if items.is_empty() {
-        items.push(
-            ListItem::new("(No matching tabs found)")
-                .style(Style::default().fg(theme.colors.text_dim)),
-        );
+        let msg = if app.quick_switch.query.is_empty() {
+            "No tabs available"
+        } else {
+            "No matching tabs"
+        };
+        let empty = ratatui::widgets::Paragraph::new(msg)
+            .style(Style::default().fg(theme.colors.text_dim));
+        f.render_widget(empty, list_area);
+        return;
     }
 
     let list = List::new(items)
@@ -336,5 +360,5 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
                 .border_style(Style::default().fg(theme.colors.border)),
         )
         .style(Style::default().fg(theme.colors.text));
-    f.render_widget(list, chunks.get(2).copied().unwrap_or(inner));
+    f.render_widget(list, list_area);
 }

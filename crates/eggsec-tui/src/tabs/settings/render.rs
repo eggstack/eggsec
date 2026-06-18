@@ -1,6 +1,7 @@
 use super::SettingsSection;
 use crate::tabs::TabRender;
 use crate::tc;
+use crate::theme::ThemeMode;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -141,25 +142,172 @@ impl TabRender for super::SettingsTab {
                 builder.render(f, inner, insert_mode);
             }
             SettingsSection::Theme => {
-                let mut builder = FormBuilder::new("Theme Settings").row_height(3);
-                builder = builder.add_selector(self.theme_selector.clone());
-                builder.render(f, inner, insert_mode);
+                // --- Theme details pane ---
+                let current_name = self
+                    .theme_selector
+                    .selected_label()
+                    .unwrap_or("Unknown");
+                let current_id = self
+                    .theme_selector
+                    .selected_value()
+                    .unwrap_or("unknown");
 
-                let form_height: u16 = 5;
-                let theme_hint = Paragraph::new(
-                    "Themes from ~/.config/eggsec/themes/ are loaded on startup; \
-                     bundled themes are installed when missing; \
-                     Cyber Red is always available as fallback. \
-                     Press Ctrl+T to cycle all themes.",
-                );
-                let hint_y = inner.y + form_height;
+                // Determine source and mode from cached theme info.
+                let (source_label, mode_label) = self
+                    .theme_info_cache
+                    .iter()
+                    .find(|info| info.id == current_id)
+                    .map(|info| {
+                        let src = match info.source {
+                            crate::theme::manager::ThemeSource::BuiltIn => "Built-in",
+                            crate::theme::manager::ThemeSource::Packaged => "Packaged",
+                            crate::theme::manager::ThemeSource::Custom => "Custom",
+                        };
+                        let mode = match info.mode {
+                            ThemeMode::Dark => "Dark",
+                            ThemeMode::Light => "Light",
+                        };
+                        (src, mode)
+                    })
+                    .unwrap_or(("Built-in", "Dark"));
+
+                // Contrast validation (from cached invalid count at load time).
+                let contrast_warnings = if self.theme_invalid_count > 0 {
+                    format!("{} invalid", self.theme_invalid_count)
+                } else {
+                    "OK".to_string()
+                };
+
+                let theme_count = self.theme_info_cache.len();
+                let invalid = self.theme_invalid_count;
+                let dir = &self.theme_dir_path;
+
+                // Build metadata lines above the selector.
+                let mut meta_lines = Vec::new();
+
+                // Line 1: display name and source/mode badge.
+                meta_lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("  {} ", current_name),
+                        Style::default()
+                            .fg(tc!(text))
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{} · {}", source_label, mode_label),
+                        Style::default().fg(tc!(text_dim)),
+                    ),
+                ]));
+
+                // Line 2: theme count, invalid count, contrast, dir.
+                let mut stats_spans = vec![
+                    Span::styled(
+                        format!("  {} themes", theme_count),
+                        Style::default().fg(tc!(text_dim)),
+                    ),
+                ];
+                if invalid > 0 {
+                    stats_spans.push(Span::styled(
+                        format!("  {} invalid", invalid),
+                        Style::default().fg(tc!(warning)),
+                    ));
+                }
+                stats_spans.push(Span::styled(
+                    format!("  Contrast: {}", contrast_warnings),
+                    Style::default().fg(if contrast_warnings == "OK" {
+                        tc!(safe)
+                    } else {
+                        tc!(warning)
+                    }),
+                ));
+                meta_lines.push(Line::from(stats_spans));
+
+                // Line 3: theme directory path.
+                meta_lines.push(Line::from(Span::styled(
+                    format!("  Dir: {}", dir),
+                    Style::default().fg(tc!(text_dim)),
+                )));
+
+                let meta_height = meta_lines.len() as u16;
+                let meta = Paragraph::new(meta_lines);
+                let meta_area = Rect {
+                    x: inner.x,
+                    y: inner.y,
+                    width: inner.width,
+                    height: meta_height,
+                };
+                f.render_widget(meta, meta_area);
+
+                // Render the selector below the metadata.
+                let selector_y = inner.y + meta_height;
+                let selector_area = Rect {
+                    y: selector_y,
+                    height: 3,
+                    ..inner
+                };
+                self.theme_selector.render(f, selector_area);
+
+                // --- Preview row below the selector ---
+                let preview_y = selector_y + 3;
+                let preview_height: u16 = 3;
+
+                if preview_y + preview_height <= inner.y + inner.height {
+                    let preview_area = Rect {
+                        y: preview_y,
+                        height: preview_height,
+                        ..inner
+                    };
+
+                    let mut preview_lines = Vec::new();
+
+                    // Line 1: Normal, Selected, Success, Warning, Error, Info text samples.
+                    preview_lines.push(Line::from(vec![
+                        Span::styled("  Normal ", Style::default().fg(tc!(text))),
+                        Span::styled("Selected ", Style::default().fg(tc!(selected_text)).bg(tc!(selected))),
+                        Span::styled("Success ", Style::default().fg(tc!(success))),
+                        Span::styled("Warning ", Style::default().fg(tc!(warning))),
+                        Span::styled("Error ", Style::default().fg(tc!(error))),
+                        Span::styled("Info", Style::default().fg(tc!(info))),
+                    ]));
+
+                    // Line 2: Safe, Danger, Muted, Policy Required, Policy Denied.
+                    preview_lines.push(Line::from(vec![
+                        Span::styled("  Safe ", Style::default().fg(tc!(safe))),
+                        Span::styled("Danger ", Style::default().fg(tc!(danger))),
+                        Span::styled("Muted ", Style::default().fg(tc!(muted))),
+                        Span::styled("Policy Required ", Style::default().fg(tc!(policy_required))),
+                        Span::styled("Policy Denied", Style::default().fg(tc!(policy_denied))),
+                    ]));
+
+                    // Line 3: Active task, Paused task, Scope match, Scope miss.
+                    preview_lines.push(Line::from(vec![
+                        Span::styled("  Active ", Style::default().fg(tc!(active_task))),
+                        Span::styled("Paused ", Style::default().fg(tc!(paused_task))),
+                        Span::styled("Scope Match ", Style::default().fg(tc!(scope_match))),
+                        Span::styled("Scope Miss", Style::default().fg(tc!(scope_miss))),
+                    ]));
+
+                    let preview_block = Block::default()
+                        .borders(Borders::TOP)
+                        .title("Preview");
+                    let preview_inner = preview_block.inner(preview_area);
+                    f.render_widget(preview_block, preview_area);
+                    f.render_widget(Paragraph::new(preview_lines), preview_inner);
+                }
+
+                // Hint text below the preview.
+                let hint_y = preview_y + preview_height;
                 if hint_y < inner.y + inner.height {
+                    let hint = Paragraph::new(
+                        "Press [r] to reload themes   [Ctrl+T] to cycle",
+                    )
+                    .style(Style::default().fg(tc!(text_dim)));
                     let hint_area = Rect {
                         y: hint_y,
                         height: 1,
                         ..inner
                     };
-                    f.render_widget(theme_hint, hint_area);
+                    f.render_widget(hint, hint_area);
                 }
             }
         }

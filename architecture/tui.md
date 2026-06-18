@@ -2,6 +2,17 @@
 
 Eggsec includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 33 different tabs.
 
+## Action Hints System (`app/action_hints.rs`)
+
+Context-aware action hints replace the static help text in the status bar. The `ActionHint` model contains a `key` and `label` pair (e.g. `"C:stop"`). Hints are computed by `get_action_hints(app)` with this priority order:
+
+1. **Running task hints** — `C:stop` + `Z:pause` (or `Y:resume` when paused)
+2. **Overlay-specific hints** — PolicyConfirm: `Enter:confirm Esc:cancel`, ConfirmPopup: `y:yes n:no`, CommandPalette: `Enter:run ↑↓:select Esc:close`, QuickSwitch: `Enter:go ↑↓:select Esc:close`, Search: `Enter:search Bksp:edit Esc:close`, Help: `Esc:close h/l:pane j/k:scroll`, HttpOptions: `h:close`
+3. **Insert-mode hints** — `Esc:normal Tab:next Enter:confirm`
+4. **Tab-specific normal-mode hints** — Settings: `s:save r:reset Tab:next`, History: `↑↓:nav d:delete r:clear`, Dashboard: `Enter:open n/p:tabs`, default (with target): `Enter:run n/p:tabs /:search`, default (no target): `Enter:focus n/p:tabs /:search`
+
+`format_hints()` renders the compact string (e.g. `"C:stop Z:pause"`). The status bar (`draw_status_bar` in `ui/shell.rs`) calls `get_action_hints` + `format_hints` instead of static help text. 16 unit tests cover task/overlay/insert/tab hints and priority precedence.
+
 ## Recent Improvements (2026-06-18)
 
 - **handle_enter() reachable in graphql/oauth**: The `start()` call was unreachable after an exhaustive match; refactored to follow the `fuzz.rs` pattern (Inputs with `is_focused() == false` triggers `start()` after tabbing past the last field). Users can now actually start GraphQL and OAuth scans from the TUI.
@@ -116,6 +127,19 @@ Execution flow (mirrors Auth/Stress/Packet):
 
 TabSpec (`tabs/spec.rs:427-439`) declares `direct_launch: true` and `risk_group: TabRiskGroup::SafeActive` (overridden at descriptor construction time to `Intrusive` for live attacks). 12 unit tests under `tabs/wireless::tests` (under `wireless-advanced`) cover mode toggling, dry-run flipping, config validation, task-config construction, `set_active_results`, and `handle_enter` flows. (See also resolution of `plans/wireless-active-tui-final-wiring-and-polish-plan.md` (2026-06-12) for E2E test addition and removed-artifact cleanup.)
 
+### TabSpec Capability Flags (`tabs/spec.rs`)
+
+`TabSpec` carries four capability booleans beyond the existing metadata (category, risk_group, feature, operation, direct_launch):
+
+| Flag | Meaning |
+|------|---------|
+| `supports_run` | Tab has inputs that can start a task (all Assessment tabs + Packet + Stress + Resume) |
+| `supports_export` | Tab appears in the export menu (Recon, Load, ScanPorts, ScanEndpoints, Fingerprint, Fuzz, Waf, WafStress, Scan, Hunt, History, DbPentest) |
+| `supports_help` | Tab has a help section (all 29 tabs) |
+| `has_settings` | Tab has configurable settings (shown in Settings tab or inline) |
+
+Helper methods: `can_start_task()` returns `supports_run && !direct_launch`, `shows_in_export()` returns `supports_export`. 10 unit tests verify registry integrity: all tabs have specs, all tabs have help, stable_id roundtrips, direct_launch categories match, `can_start_task`/`shows_in_export` consistency, assessment tabs support run, and tab count matches discriminant range.
+
 ### TabInput Interface (27 methods)
 
 All tabs implement the `TabInput` trait (`tabs/mod.rs:849-887`):
@@ -189,6 +213,20 @@ pub enum OverlayType {
 ```
 
 (See also the "TUI Architecture and Usability Pass (2026-06-11)" section at the end of this file for the 10-phase summary.)
+
+### No-Result States
+
+Empty-state messages are rendered by overlay and popup layers when no results are available:
+
+| Context | Message |
+|---------|---------|
+| Command palette (query matches nothing) | `"No matching commands"` |
+| Command palette (no commands available) | `"No commands available"` |
+| Quick switch (query matches nothing) | `"No matching tabs"` |
+| Search (query matches nothing) | `"No results for '{query}'"` |
+| Tab empty results | `"No results yet. Run a test to see findings."` (or similar) |
+
+These are rendered via `empty_state_paragraph()` in `components/empty_state.rs` and inline checks in `ui/popups.rs` and `search.rs`. 6 unit tests verify the empty-state text renders correctly for each overlay context.
 
 ### PendingAction Enum (`app/confirmation.rs:3-9`)
 
@@ -288,20 +326,28 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 |------|---------|
 | `palette.rs` | `ThemeMode`, `Theme` (with `name: String`), `ThemeColors` structs |
 | `builtin.rs` | `dark_theme()`, `light_theme()`, `cyber_red_theme()` factory functions |
-| `manager.rs` | `ThemeManager` - holds registered themes, private `current`, canonical ID lookup, theme switching |
+| `manager.rs` | `ThemeManager` - holds registered themes + metadata (`theme_info: FxHashMap<String, ThemeInfo>`), private `current`, canonical ID lookup, theme switching |
 | `style.rs` | Theme style methods for rendering: `border_style`, semantic helpers (`safe`, `danger`, `muted`, `active_task`, `paused_task`, `scope_match`, `scope_miss`, `policy_required`, `policy_denied`), composite helpers (`style_for_risk`, `style_for_policy_outcome`, `style_for_task_state`) |
 | `contrast.rs` | Theme contrast validation: `relative_luminance()`, `contrast_ratio()`, `check_contrast()` (min 4.5:1); low contrast triggers fallback with warning |
 | `legacy.rs` | Thread-local macros (`tc!`) for backward compatibility |
-| `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; shared `named_color()` for 27 named colors; missing fields use defaults from built-in themes |
+| `loader.rs` | Parses Halloy `.toml` themes into Eggsec `Theme` structs; shared `named_color()` for 27 named colors; missing fields use defaults from built-in themes; validates text/background and selected_text/selected contrast |
 | `install.rs` | Idempotent installer: writes packaged themes to `~/.config/eggsec/themes`, never overwrites existing files |
 | `archive.rs` | LZMA decode for packaged theme data |
 | `packaged.rs` | Auto-generated LZMA-compressed blob of 50 Halloy themes (regenerated via `scripts/package_themes.py`) |
 
 **Built-in themes**: `cyber-red` (default fallback, always available), `dark`, `light`.
 
+**Theme metadata tracking**: `ThemeManager` stores a `theme_info: FxHashMap<String, ThemeInfo>` alongside the theme data. `ThemeInfo` carries `id`, `display_name`, `mode` (Dark/Light), `source` (`ThemeSource::BuiltIn | Packaged | Custom`), and `status` (`ThemeLoadStatus::Loaded | FallbackAdjusted | Invalid(String) | Missing`). `register_theme_with_source()` records metadata at registration time; contrast validation can set `FallbackAdjusted` or `Invalid` status. Query methods: `get_info(id)`, `theme_info_list()`, `get_all_info()`, `themes_with_status(status)`, `invalid_themes()`.
+
 **Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`); the receiver, join handle, and deferred restore request live in `ThemeLoadState`, `App::update()` polls the channel, and the lifecycle helpers in `app/theme_runtime.rs` clean up the thread once the final report arrives or the loader disconnects. Failures are logged as warnings and do not block the UI.
 
 **Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles all themes alphabetically (`list_theme_ids_owned()`), wrapping at the end. Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
+
+**Theme reload** (Settings > Theme section): Pressing `r` in the Theme section sets `pending_theme_reload = true` on the `SettingsTab`, which the App layer picks up to re-run `load_and_install_themes()` and refresh the selector dropdown. The selector also shows a hint: `"Press [r] to reload themes   [Ctrl+T] to cycle"`.
+
+**Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying.
+
+**Contrast validation**: `theme/contrast.rs` implements WCAG 2.x relative luminance and contrast ratio. `check_contrast(fg, bg, min_ratio)` returns whether a color pair meets the minimum ratio (4.5:1 for normal text). Both `theme/loader.rs` (on theme parse) and `theme/manager.rs` (on registration) validate text/background and selected_text/selected contrast. Low contrast triggers fallback to the base theme with a warning (non-fatal). 7 unit tests cover luminance boundaries, ratio calculation, and pass/fail cases.
 
 `ThemeManager` holds registered themes with 28 color fields. `Theme.name` is the canonical stable ID for the theme, which keeps file-loaded themes and session restore aliases consistent.
 
@@ -336,6 +382,41 @@ Adding a new tab requires changes in **7-9 locations**. Each new tab must be add
 8. `help_config.rs` — static help section data
 
 This duplication is a known architectural debt. A future refactor should move these to trait-based dispatch (e.g., `TabState::is_running()` instead of the exhaustive match).
+
+## Testing
+
+### Regression Test Harness (`tabs/handle_enter_regression.rs`)
+
+A dedicated test module with 40 table-driven tests validates `handle_enter()` behavior across all focus areas for 12 tabs (GraphQl, OAuth, Recon, Load, ScanPorts, Stress, Packet, Waf, Cluster, Dashboard, Settings, History). Each test verifies that:
+- Focused input blurs without starting a task
+- Unfocused input with a valid target starts the task
+- Options toggle checkbox without starting
+- Results area is a no-op
+
+A combined cross-tab test (`all_tabs_blur_on_enter_when_focused`) validates all 12 tabs in a single test.
+
+### Visual Regression Tests (`ui/tests.rs`)
+
+`TestBackend`-based tests verify rendered output at specific terminal sizes and overlay states:
+
+| Test | Size | Verifies |
+|------|------|----------|
+| `render_at_60x20_is_usable_no_garble` | 60×20 | Core shell renders, no "Terminal too small" |
+| `render_at_40x12_shows_too_small_fallback` | 40×12 | Fallback message renders instead of garbled UI |
+| `render_at_120x40_unchanged_from_large` | 120×40 | Large viewport renders normally |
+| `render_policy_confirm_on_small_terminal_still_readable` | 40×12 | Policy confirm popup renders readably even on tiny terminal |
+| `command_palette_empty_state_no_matches` | 80×24 | "No matching commands" renders for empty query |
+| `command_palette_empty_state_no_commands` | 80×24 | "No commands available" renders when results empty |
+| `quick_switch_empty_state_no_matches` | 80×24 | "No matching tabs" renders for empty query |
+| `search_empty_state_no_results` | 80×24 | "No results for '...'" renders for empty search |
+| `quick_switch_renders_selected_tail_item_in_viewport` | 80×24 | Last quick-switch item visible in popup |
+| `render_status_bar_contains_preflight_indicators` | 100×24 | Mode/Scope indicators render in status bar |
+| `search_empty_state_not_performed` | 80×24 | "Type to search..." placeholder renders |
+| `search_popup_empty_state_placeholder` | 80×24 | Placeholder text renders for empty query |
+
+### Selector Dropdown Viewport Clamping (`components/selector.rs`)
+
+`dropdown_info(anchor_area, viewport_height)` computes dropdown position and height with viewport-aware clamping: fits below anchor when space is available, flips above when no room below, clamps height to viewport, never exceeds viewport bounds, never goes above y=0. 6 unit tests verify each behavior.
 
 ## Maintenance Notes
 
@@ -2048,7 +2129,7 @@ Comprehensive audit using 4 parallel subagents across all tabs and components.
  4. `fuzz.rs` had 6 orphaned tests outside `mod tests` — structurally misplaced, some using direct `fields[0]` access
 
 ### TUI Architecture and Usability Pass (2026-06-11)
-Completed the 10-phase plan in `docs/plans/tui-architecture-usability-pass.md` (using subagents for isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 301 tests green. Workspace/all-features run before handoff (pre-existing non-TUI errors in eggsec lib protobuf/codegen unrelated to this pass).
+Completed the 10-phase plan in `docs/plans/tui-architecture-usability-pass.md` (using subagents for isolation). Each phase compiles and passes `cargo test -p eggsec-tui` independently. Final TUI crate: 479 tests green. Workspace/all-features run before handoff (pre-existing non-TUI errors in eggsec lib protobuf/codegen unrelated to this pass).
 
 Key new modules / surfaces (per phase):
 - `app/action.rs`: `UiAction`, `CommandPaletteInput`, `QuickSwitchInput`. Decode in KeyHandler; `App::apply_action` is the mutation point for global UI actions.

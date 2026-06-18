@@ -103,8 +103,12 @@ impl Popup {
 
     #[allow(dead_code)]
     pub fn scroll_down(&mut self, amount: usize) {
-        let max_scroll = self.content.len().saturating_sub(1);
-        self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
+        if self.content.is_empty() {
+            self.scroll_offset = 0;
+        } else {
+            let max_scroll = self.content.len() - 1;
+            self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
+        }
     }
 
     #[allow(dead_code)]
@@ -114,7 +118,11 @@ impl Popup {
 
     #[allow(dead_code)]
     pub fn scroll_to_bottom(&mut self) {
-        self.scroll_offset = self.content.len().saturating_sub(1);
+        if self.content.is_empty() {
+            self.scroll_offset = 0;
+        } else {
+            self.scroll_offset = self.content.len() - 1;
+        }
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
@@ -155,10 +163,15 @@ impl Popup {
             .collect();
 
         if let Some(content_chunk) = chunks.first() {
+            let scroll_offset = if self.content.is_empty() {
+                0
+            } else {
+                self.scroll_offset.min(self.content.len() - 1)
+            };
             let paragraph = Paragraph::new(content_lines)
                 .style(Style::default().fg(tc!(text)))
                 .wrap(Wrap { trim: true })
-                .scroll((self.scroll_offset.min(u16::MAX as usize) as u16, 0));
+                .scroll((scroll_offset.min(u16::MAX as usize) as u16, 0));
             f.render_widget(paragraph, *content_chunk);
         }
 
@@ -410,5 +423,60 @@ mod tests {
         let lines: Vec<String> = (0..1000).map(|i| format!("line {i}")).collect();
         let popup = Popup::new("Test", PopupKind::Info).content(lines);
         assert_eq!(popup.height, 20);
+    }
+
+    #[test]
+    fn test_scroll_down_empty_content() {
+        let mut popup = Popup::new("Test", PopupKind::Info).content(Vec::new());
+        popup.scroll_down(10);
+        assert_eq!(popup.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_scroll_to_bottom_empty_content() {
+        let mut popup = Popup::new("Test", PopupKind::Info).content(Vec::new());
+        popup.scroll_to_bottom();
+        assert_eq!(popup.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_scroll_down_single_item() {
+        let mut popup = Popup::new("Test", PopupKind::Info).content(vec!["only".to_string()]);
+        popup.scroll_down(5);
+        assert_eq!(popup.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_scroll_to_bottom_single_item() {
+        let mut popup = Popup::new("Test", PopupKind::Info).content(vec!["only".to_string()]);
+        popup.scroll_to_bottom();
+        assert_eq!(popup.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_scroll_offset_large_value() {
+        let mut popup = Popup::new("Test", PopupKind::Info)
+            .content(vec!["a".to_string(), "b".to_string()]);
+        popup.scroll_offset = usize::MAX;
+        let max_scroll = popup.content.len() - 1;
+        assert_eq!(max_scroll, 1);
+        let clamped = popup.scroll_offset.min(max_scroll);
+        assert_eq!(clamped, 1);
+    }
+
+    #[test]
+    fn test_render_empty_content() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let popup = Popup::new("Test", PopupKind::Info).content(Vec::new());
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                popup.render(f, area);
+            })
+            .unwrap();
     }
 }

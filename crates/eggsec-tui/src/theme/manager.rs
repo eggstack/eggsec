@@ -2,10 +2,52 @@ use rustc_hash::FxHashMap;
 
 use super::builtin::{cyber_red_theme, dark_theme, light_theme};
 use super::canonical_theme_id;
-use super::palette::Theme;
+use super::contrast::{check_contrast, contrast_ratio};
+use super::display_theme_name;
+use super::palette::{Theme, ThemeMode};
+
+/// Metadata about a registered theme.
+#[derive(Debug, Clone)]
+pub struct ThemeInfo {
+    /// Canonical theme ID.
+    pub id: String,
+    /// Display name (title-cased from ID).
+    pub display_name: String,
+    /// Theme mode (Dark/Light).
+    pub mode: ThemeMode,
+    /// Source of the theme.
+    pub source: ThemeSource,
+    /// Load status.
+    pub status: ThemeLoadStatus,
+}
+
+/// Where a theme was loaded from.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ThemeSource {
+    /// Built-in hardcoded theme.
+    BuiltIn,
+    /// Installed from the packaged archive.
+    Packaged,
+    /// User-provided custom theme from ~/.config/eggsec/themes/.
+    Custom,
+}
+
+/// Result status of loading a theme.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ThemeLoadStatus {
+    /// Theme loaded successfully.
+    Loaded,
+    /// Theme had parse errors but fallback was used.
+    FallbackAdjusted,
+    /// Theme file exists but couldn't be loaded.
+    Invalid(String),
+    /// Theme referenced but file not found.
+    Missing,
+}
 
 pub struct ThemeManager {
     themes: FxHashMap<String, Theme>,
+    theme_info: FxHashMap<String, ThemeInfo>,
     current: Theme,
 }
 
@@ -18,12 +60,32 @@ impl Default for ThemeManager {
 impl ThemeManager {
     pub fn new() -> Self {
         let mut themes = FxHashMap::default();
-        themes.insert("cyber-red".to_string(), cyber_red_theme());
-        themes.insert("dark".to_string(), dark_theme());
-        themes.insert("light".to_string(), light_theme());
+        let mut theme_info = FxHashMap::default();
+
+        let builtins = [
+            ("cyber-red", cyber_red_theme()),
+            ("dark", dark_theme()),
+            ("light", light_theme()),
+        ];
+
+        for (id, theme) in builtins {
+            let mode = theme.mode;
+            themes.insert(id.to_string(), theme);
+            theme_info.insert(
+                id.to_string(),
+                ThemeInfo {
+                    id: id.to_string(),
+                    display_name: display_theme_name(id),
+                    mode,
+                    source: ThemeSource::BuiltIn,
+                    status: ThemeLoadStatus::Loaded,
+                },
+            );
+        }
 
         Self {
             themes,
+            theme_info,
             current: cyber_red_theme(),
         }
     }
@@ -88,17 +150,121 @@ impl ThemeManager {
     }
 
     pub fn register_theme(&mut self, theme: Theme) {
+        self.register_theme_with_source(theme, ThemeSource::Custom);
+    }
+
+    pub fn register_theme_with_source(&mut self, theme: Theme, source: ThemeSource) {
         let mut theme = theme;
         theme.name = canonical_theme_id(&theme.name);
         let name = theme.name.clone();
         if name == "cyber-red" && self.themes.contains_key("cyber-red") {
             return;
         }
-        self.themes.insert(name, theme);
+        let mode = theme.mode;
+        let display_name = display_theme_name(&theme.name);
+        self.themes.insert(name.clone(), theme);
+        self.theme_info.insert(
+            name.clone(),
+            ThemeInfo {
+                id: name,
+                display_name,
+                mode,
+                source,
+                status: ThemeLoadStatus::Loaded,
+            },
+        );
+    }
+
+    pub fn mark_theme_invalid(&mut self, id: &str, reason: String) {
+        if let Some(info) = self.theme_info.get_mut(id) {
+            info.status = ThemeLoadStatus::Invalid(reason);
+        }
+    }
+
+    pub fn mark_theme_fallback_adjusted(&mut self, id: &str) {
+        if let Some(info) = self.theme_info.get_mut(id) {
+            info.status = ThemeLoadStatus::FallbackAdjusted;
+        }
     }
 
     pub fn current_name(&self) -> &str {
         &self.current.name
+    }
+
+    /// Return metadata for a registered theme.
+    pub fn get_info(&self, id: &str) -> Option<&ThemeInfo> {
+        let canonical = canonical_theme_id(id);
+        self.theme_info.get(canonical.as_str())
+    }
+
+    /// Return metadata for all registered themes, sorted by ID.
+    pub fn theme_info_list(&self) -> Vec<ThemeInfo> {
+        let mut infos: Vec<ThemeInfo> = self.theme_info.values().cloned().collect();
+        infos.sort_by(|a, b| a.id.cmp(&b.id));
+        infos
+    }
+
+    /// Return metadata for all registered themes, sorted by display name.
+    pub fn get_all_info(&self) -> Vec<&ThemeInfo> {
+        let mut info: Vec<&ThemeInfo> = self.theme_info.values().collect();
+        info.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        info
+    }
+
+    /// Total number of registered themes.
+    pub fn theme_count(&self) -> usize {
+        self.themes.len()
+    }
+
+    /// Number of themes with Loaded status.
+    pub fn loaded_count(&self) -> usize {
+        self.theme_info
+            .values()
+            .filter(|i| i.status == ThemeLoadStatus::Loaded)
+            .count()
+    }
+
+    /// Number of themes with Invalid status.
+    pub fn invalid_count(&self) -> usize {
+        self.theme_info
+            .values()
+            .filter(|i| matches!(i.status, ThemeLoadStatus::Invalid(_)))
+            .count()
+    }
+
+    /// Validate WCAG contrast ratios for a theme, returning warnings for
+    /// any RGB color pair below the 4.5:1 minimum. Non-RGB colors (terminal
+    /// constants) are skipped since their effective contrast depends on the
+    /// terminal palette.
+    pub fn validate_contrast(&self, theme_id: &str) -> Vec<String> {
+        let canonical = canonical_theme_id(theme_id);
+        let Some(theme) = self.themes.get(canonical.as_str()) else {
+            return vec![format!("theme '{theme_id}' not found")];
+        };
+        let mut warnings = Vec::new();
+
+        let pairs = [
+            ("text", "background", theme.colors.text, theme.colors.background),
+            ("selected_text", "selected", theme.colors.selected_text, theme.colors.selected),
+        ];
+
+        for (fg_name, bg_name, fg, bg) in pairs {
+            // Only validate RGB colors; terminal palette colors are not measurable.
+            if !matches!(fg, ratatui::style::Color::Rgb(..))
+                || !matches!(bg, ratatui::style::Color::Rgb(..))
+            {
+                continue;
+            }
+            if !check_contrast(fg, bg, 4.5) {
+                let ratio = contrast_ratio(fg, bg);
+                warnings.push(format!(
+                    "{fg_name}/{bg_name} contrast ratio {:.2}:1 is below 4.5:1 minimum",
+                    ratio,
+                ));
+            }
+        }
+
+        warnings
     }
 }
 
@@ -284,5 +450,98 @@ mod tests {
         assert!(t.fg.is_some());
         let r = def.style_for_risk("intrusive");
         assert!(r.fg.is_some());
+    }
+
+    #[test]
+    fn builtin_themes_have_theme_info() {
+        let manager = ThemeManager::new();
+        for id in &["cyber-red", "dark", "light"] {
+            let info = manager.get_info(id).unwrap();
+            assert_eq!(info.id, *id);
+            assert_eq!(info.source, ThemeSource::BuiltIn);
+            assert_eq!(info.status, ThemeLoadStatus::Loaded);
+            assert!(!info.display_name.is_empty());
+        }
+    }
+
+    #[test]
+    fn get_info_returns_none_for_missing_theme() {
+        let manager = ThemeManager::new();
+        assert!(manager.get_info("nonexistent").is_none());
+    }
+
+    #[test]
+    fn get_all_info_sorted_by_display_name() {
+        let manager = ThemeManager::new();
+        let all = manager.get_all_info();
+        assert_eq!(all.len(), 3);
+        let names: Vec<&str> = all.iter().map(|i| i.display_name.as_str()).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted);
+    }
+
+    #[test]
+    fn theme_count_loaded_count_invalid_count() {
+        let mut manager = ThemeManager::new();
+        assert_eq!(manager.theme_count(), 3);
+        assert_eq!(manager.loaded_count(), 3);
+        assert_eq!(manager.invalid_count(), 0);
+
+        let custom = crate::theme::palette::Theme {
+            mode: crate::theme::ThemeMode::Dark,
+            name: "custom".to_string(),
+            colors: crate::theme::builtin::dark_theme().colors,
+        };
+        manager.register_theme(custom);
+        assert_eq!(manager.theme_count(), 4);
+        assert_eq!(manager.loaded_count(), 4);
+
+        manager.mark_theme_invalid("custom", "bad toml".to_string());
+        assert_eq!(manager.loaded_count(), 3);
+        assert_eq!(manager.invalid_count(), 1);
+    }
+
+    #[test]
+    fn register_theme_with_source_records_info() {
+        let mut manager = ThemeManager::new();
+        let custom = crate::theme::palette::Theme {
+            mode: crate::theme::ThemeMode::Light,
+            name: "my-theme".to_string(),
+            colors: crate::theme::builtin::light_theme().colors,
+        };
+        manager.register_theme_with_source(custom, ThemeSource::Packaged);
+        let info = manager.get_info("my-theme").unwrap();
+        assert_eq!(info.source, ThemeSource::Packaged);
+        assert_eq!(info.mode, ThemeMode::Light);
+        assert_eq!(info.display_name, "My Theme");
+    }
+
+    #[test]
+    fn mark_theme_fallback_adjusted() {
+        let mut manager = ThemeManager::new();
+        manager.mark_theme_fallback_adjusted("dark");
+        let info = manager.get_info("dark").unwrap();
+        assert_eq!(info.status, ThemeLoadStatus::FallbackAdjusted);
+    }
+
+    #[test]
+    fn validate_contrast_builtins_no_warnings() {
+        let manager = ThemeManager::new();
+        for id in &["cyber-red", "dark", "light"] {
+            let warnings = manager.validate_contrast(id);
+            assert!(
+                warnings.is_empty(),
+                "unexpected warnings for {id}: {warnings:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_contrast_missing_theme() {
+        let manager = ThemeManager::new();
+        let warnings = manager.validate_contrast("nonexistent");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("not found"));
     }
 }

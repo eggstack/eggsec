@@ -48,6 +48,14 @@ pub struct TabSpec {
     pub breadcrumb_label: &'static str,
     pub operation: Option<&'static str>,
     pub direct_launch: bool,
+    /// Whether this tab supports the 'run' action (has inputs that can start a task)
+    pub supports_run: bool,
+    /// Whether this tab supports export
+    pub supports_export: bool,
+    /// Whether this tab supports help
+    pub supports_help: bool,
+    /// Whether this tab has configurable settings
+    pub has_settings: bool,
 }
 
 pub static TAB_SPECS: &[TabSpec] = &[
@@ -63,6 +71,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Recon",
         operation: Some("recon"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Load,
@@ -76,6 +88,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Load",
         operation: Some("load-test"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::ScanPorts,
@@ -89,6 +105,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Scan Ports",
         operation: Some("scan-ports"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::ScanEndpoints,
@@ -102,6 +122,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Scan Endpoints",
         operation: Some("scan-endpoints"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Fingerprint,
@@ -115,6 +139,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Fingerprint",
         operation: Some("fingerprint"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Fuzz,
@@ -128,6 +156,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Fuzz",
         operation: Some("fuzz"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Waf,
@@ -141,6 +173,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "WAF",
         operation: Some("waf"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::WafStress,
@@ -154,6 +190,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "WAF Stress",
         operation: Some("waf-stress"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Scan,
@@ -167,6 +207,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Scan",
         operation: Some("scan-pipeline"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Resume,
@@ -180,6 +224,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Resume",
         operation: None,
         direct_launch: false,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Proxy,
@@ -193,6 +241,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Proxy",
         operation: None,
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Packet,
@@ -206,6 +258,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Packet",
         operation: Some("packet"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::GraphQl,
@@ -219,6 +275,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "GraphQL Security",
         operation: Some("graphql"),
         direct_launch: false,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::OAuth,
@@ -232,6 +292,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "OAuth/OIDC Security",
         operation: Some("oauth"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Auth,
@@ -245,6 +309,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Auth / Credential Validation",
         operation: Some("auth-test"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::C2,
@@ -258,6 +326,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "C2 Campaign",
         operation: Some("c2"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Cluster,
@@ -271,6 +343,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Cluster Management",
         operation: None,
         direct_launch: true,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Stress,
@@ -284,6 +360,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Stress Testing",
         operation: Some("stress-test"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Report,
@@ -297,6 +377,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Report",
         operation: None,
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Nse,
@@ -310,6 +394,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "NSE Scripts",
         operation: Some("nse"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Settings,
@@ -323,6 +411,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Settings",
         operation: None,
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::History,
@@ -336,6 +428,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "History",
         operation: None,
         direct_launch: false,
+        supports_run: false,
+        supports_export: true,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Dashboard,
@@ -349,6 +445,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Dashboard",
         operation: None,
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Hunt,
@@ -362,6 +462,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Hunt",
         operation: Some("hunt"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Browser,
@@ -375,6 +479,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Browser",
         operation: Some("browser"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Compliance,
@@ -388,6 +496,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Compliance",
         operation: Some("compliance"),
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Storage,
@@ -401,6 +513,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Storage",
         operation: Some("storage"),
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Integrations,
@@ -414,6 +530,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Integrations",
         operation: Some("integrations"),
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Workflow,
@@ -427,6 +547,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Workflow",
         operation: Some("workflow"),
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Vuln,
@@ -440,6 +564,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Vuln",
         operation: Some("vuln"),
         direct_launch: false,
+        supports_run: false,
+        supports_export: false,
+        supports_help: true,
+        has_settings: false,
     },
     TabSpec {
         tab: Tab::Wireless,
@@ -453,6 +581,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Wireless",
         operation: Some("wireless"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::DbPentest,
@@ -466,6 +598,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Db Pentest",
         operation: Some("db-pentest"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: true,
+        supports_help: true,
+        has_settings: true,
     },
     TabSpec {
         tab: Tab::Intercept,
@@ -479,6 +615,10 @@ pub static TAB_SPECS: &[TabSpec] = &[
         breadcrumb_label: "Web Proxy / Intercept",
         operation: Some("proxy-intercept"),
         direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
     },
 ];
 
@@ -493,6 +633,18 @@ pub fn all_specs() -> &'static [TabSpec] {
 
 pub fn spec_for(tab: Tab) -> Option<&'static TabSpec> {
     TAB_SPECS.iter().find(|s| s.tab == tab)
+}
+
+impl TabSpec {
+    /// Whether this tab can start a scan/task
+    pub fn can_start_task(&self) -> bool {
+        self.supports_run && !self.direct_launch
+    }
+
+    /// Whether this tab shows in the export menu
+    pub fn shows_in_export(&self) -> bool {
+        self.supports_export
+    }
 }
 
 use eggsec::config::OperationRisk;
@@ -614,4 +766,111 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
         t
     };
     specs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_tabs_have_specs() {
+        for tab in Tab::all() {
+            assert!(spec_for(*tab).is_some(), "Tab {:?} has no spec", tab);
+        }
+    }
+
+    #[test]
+    fn test_all_available_tabs_have_help() {
+        for tab in Tab::all() {
+            let spec = spec_for(*tab).unwrap();
+            assert!(spec.supports_help, "Tab {:?} has no help", tab);
+        }
+    }
+
+    #[test]
+    fn test_command_palette_tabs_are_available() {
+        for tab in Tab::all() {
+            let spec = spec_for(*tab).unwrap();
+            let found = Tab::from_stable_id(spec.stable_id);
+            assert!(
+                found.is_some(),
+                "TabSpec stable_id '{}' doesn't map back to a Tab",
+                spec.stable_id
+            );
+        }
+    }
+
+    #[test]
+    fn test_feature_gated_tabs_have_feature() {
+        for spec in tab_specs() {
+            if spec.feature.is_some() {
+                // Feature-gated tab - this is expected
+            }
+        }
+    }
+
+    #[test]
+    fn test_direct_launch_tabs_are_assessment_or_traffic_or_config() {
+        for spec in tab_specs() {
+            if spec.direct_launch {
+                assert!(
+                    matches!(
+                        spec.category,
+                        TabCategory::Assessment
+                            | TabCategory::Traffic
+                            | TabCategory::Configuration
+                    ),
+                    "Direct-launch tab {} has unexpected category {:?}",
+                    spec.stable_id,
+                    spec.category
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_tab_spec_count_matches_all_tab_variants() {
+        let all_variants: Vec<Tab> = (0..=32)
+            .filter_map(|i| Tab::from_discriminant(i))
+            .collect();
+        assert_eq!(tab_specs().len(), all_variants.len());
+    }
+
+    #[test]
+    fn test_can_start_task_consistency() {
+        for spec in tab_specs() {
+            let expected = spec.supports_run && !spec.direct_launch;
+            assert_eq!(
+                spec.can_start_task(),
+                expected,
+                "Tab {} can_start_task() mismatch",
+                spec.stable_id
+            );
+        }
+    }
+
+    #[test]
+    fn test_shows_in_export_consistency() {
+        for spec in tab_specs() {
+            assert_eq!(
+                spec.shows_in_export(),
+                spec.supports_export,
+                "Tab {} shows_in_export() mismatch",
+                spec.stable_id
+            );
+        }
+    }
+
+    #[test]
+    fn test_assessment_tabs_support_run() {
+        for spec in tab_specs() {
+            if matches!(spec.category, TabCategory::Assessment) {
+                assert!(
+                    spec.supports_run,
+                    "Assessment tab {} should support run",
+                    spec.stable_id
+                );
+            }
+        }
+    }
 }

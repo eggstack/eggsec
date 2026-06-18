@@ -117,11 +117,7 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
     };
 
     if search.is_empty() {
-        let msg = if app.search.query.is_empty() {
-            "Press Enter to search..."
-        } else {
-            "No results found"
-        };
+        let msg = format!("No results for '{}'", app.search.query);
         f.render_widget(
             Paragraph::new(msg).style(Style::default().fg(tc!(text_dim))),
             inner,
