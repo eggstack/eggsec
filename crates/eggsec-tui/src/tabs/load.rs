@@ -1,9 +1,9 @@
-use crate::app::tab_error::TabError;
 use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
+    empty_state_paragraph, InputField, InputGroup, Selector,
 };
+use crate::tabs::core::{start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_state_boilerplate, tc};
 use eggsec::loadtest::metrics::LoadTestResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -20,14 +20,10 @@ pub enum LoadFocusArea {
 }
 
 pub struct LoadTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub test_type_selector: Selector,
     pub results: Option<LoadTestResults>,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: LoadFocusArea,
-    pub error: Option<TabError>,
 }
 
 impl LoadTab {
@@ -54,14 +50,10 @@ impl LoadTab {
         let test_type_selector = Selector::new("Test Type").simple_items(vec!["HTTP Load"]);
 
         Self {
-            inputs,
+            core: TabCore::new("Load testing...", "Results").with_inputs(inputs),
             test_type_selector,
             results: None,
-            progress: ProgressGauge::new("Load testing..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
             focus_area: LoadFocusArea::Selector,
-            error: None,
         }
     }
 
@@ -90,15 +82,12 @@ impl LoadTab {
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn method(&self) -> &str {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .map(|f| f.value.as_str())
@@ -106,7 +95,8 @@ impl LoadTab {
     }
 
     pub fn requests(&self) -> u64 {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(2)
             .and_then(|f| f.value.parse().ok())
@@ -114,7 +104,8 @@ impl LoadTab {
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(3)
             .and_then(|f| f.value.parse().ok())
@@ -122,7 +113,8 @@ impl LoadTab {
     }
 
     pub fn timeout(&self) -> u64 {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(4)
             .and_then(|f| f.value.parse().ok())
@@ -131,6 +123,7 @@ impl LoadTab {
 
     pub fn body(&self) -> Option<&str> {
         let b = self
+            .core
             .inputs
             .fields
             .get(5)
@@ -144,7 +137,8 @@ impl LoadTab {
     }
 
     pub fn headers(&self) -> Vec<String> {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(6)
             .map(|f| {
@@ -163,7 +157,7 @@ impl LoadTab {
     pub fn set_results(&mut self, results: LoadTestResults) {
         self.update_results_view(&results);
         self.results = Some(results);
-        self.state = AppState::Completed;
+        self.core.state = AppState::Completed;
     }
 
     #[cfg(feature = "stress-testing")]
@@ -171,15 +165,17 @@ impl LoadTab {
         use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
-        self.results_view.clear();
+        self.core.results_view.clear();
 
-        self.results_view.add_line(Line::from(vec![Span::styled(
-            "Stress Test Results",
-            Style::default().fg(tc!(accent)),
-        )]));
-        self.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(vec![
+            Span::styled(
+                "Stress Test Results",
+                Style::default().fg(tc!(accent)),
+            ),
+        ]));
+        self.core.results_view.add_line(Line::from(""));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Target: ", Style::default().fg(tc!(info))),
             Span::raw(target),
         ]));
@@ -190,7 +186,7 @@ impl LoadTab {
             0
         };
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Packets: ", Style::default().fg(tc!(info))),
             Span::raw(format!(
                 "{} sent, {} errors",
@@ -198,29 +194,29 @@ impl LoadTab {
             )),
         ]));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Rate: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} pps", pps)),
         ]));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Duration: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} ms", stats.duration_ms)),
         ]));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Data Sent: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} bytes", stats.bytes_sent)),
         ]));
 
-        self.state = AppState::Completed;
+        self.core.state = AppState::Completed;
     }
 
     fn update_results_view(&mut self, results: &LoadTestResults) {
         use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
-        self.results_view.clear();
+        self.core.results_view.clear();
 
         let target_url = results.target_url.clone();
         let total_requests = results.total_requests;
@@ -235,13 +231,13 @@ impl LoadTab {
         let p95 = results.latency_p95_ms;
         let p99 = results.latency_p99_ms;
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Target: ", Style::default().fg(tc!(accent))),
             Span::raw(target_url),
         ]));
-        self.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(""));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Requests: ", Style::default().fg(tc!(info))),
             Span::raw(format!(
                 "{} total, {} success, {} failed",
@@ -249,14 +245,14 @@ impl LoadTab {
             )),
         ]));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("RPS: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{:.2} req/s", rps)),
         ]));
 
-        self.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(""));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Latency: ", Style::default().fg(tc!(success))),
             Span::raw(format!(
                 "min={:.2}ms, max={:.2}ms, mean={:.2}ms",
@@ -264,7 +260,7 @@ impl LoadTab {
             )),
         ]));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::raw("         "),
             Span::raw(format!(
                 "p50={:.2}ms, p90={:.2}ms, p95={:.2}ms, p99={:.2}ms",
@@ -274,11 +270,13 @@ impl LoadTab {
 
         let status_codes = results.status_codes.clone();
         if !status_codes.is_empty() {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
-                "Status Codes:",
-                Style::default().fg(tc!(accent)),
-            )));
+            self.core.results_view.add_line(Line::from(""));
+            self.core
+                .results_view
+                .add_line(Line::from(Span::styled(
+                    "Status Codes:",
+                    Style::default().fg(tc!(accent)),
+                )));
             let mut codes: Vec<_> = status_codes.iter().collect();
             codes.sort_by_key(|(k, _)| *k);
             for (code, count) in codes {
@@ -288,7 +286,7 @@ impl LoadTab {
                     400..=499 => tc!(warning),
                     _ => tc!(error),
                 };
-                self.results_view.add_line(Line::from(vec![
+                self.core.results_view.add_line(Line::from(vec![
                     Span::styled(format!("  {}:", code), Style::default().fg(color)),
                     Span::raw(format!(" {}", count)),
                 ]));
@@ -297,43 +295,40 @@ impl LoadTab {
 
         let errors = results.errors.clone();
         if !errors.is_empty() {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
-                "Errors:",
-                Style::default().fg(tc!(error)),
-            )));
+            self.core.results_view.add_line(Line::from(""));
+            self.core
+                .results_view
+                .add_line(Line::from(Span::styled(
+                    "Errors:",
+                    Style::default().fg(tc!(error)),
+                )));
             for error in &errors {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  - {}", error)));
             }
         }
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
-            self.results = None;
-            self.results_view.clear();
-            self.error = None;
-        }
+        start_scan(&mut self.core);
+        self.results = None;
     }
 
     pub fn stop(&mut self) {
-        self.state = AppState::Idle;
+        self.core.stop();
     }
 
     pub fn update_progress(&mut self, completed: u64, total: u64) {
-        self.progress.current = completed.min(total);
-        self.progress.total = total.max(1);
+        self.core.update_progress(completed, total);
     }
 
     pub fn scroll_results_up(&mut self) {
-        self.results_view.scroll_up(1);
+        self.core.scroll_results_up();
     }
 
     pub fn scroll_results_down(&mut self) {
-        self.results_view.scroll_down(1);
+        self.core.scroll_results_down();
     }
 }
 
@@ -344,58 +339,38 @@ impl Default for LoadTab {
 }
 
 impl TabState for LoadTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.progress.percent() as f64
-    }
+    tab_state_boilerplate!(LoadTab, core: core);
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results = None;
-        self.progress.current = 0;
-        self.progress.total = 0;
-        self.results_view.clear();
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
-        if self.inputs.fields.len() > 4 {
-            if let Some(field) = self.inputs.fields.get_mut(1) {
+        self.core.reset_all();
+        if self.core.inputs.fields.len() > 4 {
+            if let Some(field) = self.core.inputs.fields.get_mut(1) {
                 field.value = "GET".to_string();
                 field.cursor_pos = 3;
             }
-            if let Some(field) = self.inputs.fields.get_mut(2) {
+            if let Some(field) = self.core.inputs.fields.get_mut(2) {
                 field.value = "100".to_string();
                 field.cursor_pos = 3;
             }
-            if let Some(field) = self.inputs.fields.get_mut(3) {
+            if let Some(field) = self.core.inputs.fields.get_mut(3) {
                 field.value = "10".to_string();
                 field.cursor_pos = 2;
             }
-            if let Some(field) = self.inputs.fields.get_mut(4) {
+            if let Some(field) = self.core.inputs.fields.get_mut(4) {
                 field.value = "30".to_string();
                 field.cursor_pos = 2;
             }
-            if let Some(field) = self.inputs.fields.get_mut(5) {
+            if let Some(field) = self.core.inputs.fields.get_mut(5) {
                 field.value.clear();
             }
-            if let Some(field) = self.inputs.fields.get_mut(6) {
+            if let Some(field) = self.core.inputs.fields.get_mut(6) {
                 field.value.clear();
             }
         }
         self.test_type_selector.select(0);
         self.test_type_selector.blur();
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = LoadFocusArea::Selector;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
-        self.progress.current = 0;
     }
 }
 
@@ -444,7 +419,7 @@ impl TabRender for LoadTab {
             let input_inner = input_block.inner(*input_area);
             f.render_widget(input_block, *input_area);
 
-            let num_fields = self.inputs.fields.len().max(1);
+            let num_fields = self.core.inputs.fields.len().max(1);
             let field_height = (input_inner.height / num_fields as u16).max(2);
             let constraints: Vec<Constraint> = (0..num_fields)
                 .map(|_| Constraint::Length(field_height))
@@ -455,7 +430,7 @@ impl TabRender for LoadTab {
                 .constraints(constraints)
                 .split(input_inner);
 
-            for (i, field) in self.inputs.fields.iter().enumerate() {
+            for (i, field) in self.core.inputs.fields.iter().enumerate() {
                 if let Some(chunk) = input_chunks.get(i) {
                     field.render(f, *chunk, insert_mode);
                 }
@@ -476,14 +451,14 @@ impl TabRender for LoadTab {
             let results_inner = results_block.inner(*results_area);
             f.render_widget(results_block, *results_area);
 
-            if self.state == AppState::Running {
-                self.progress.render(f, results_inner);
-            } else if let Some(ref err) = self.error {
+            if self.core.state == AppState::Running {
+                self.core.progress.render(f, results_inner);
+            } else if let Some(ref err) = self.core.error {
                 let error_text = Paragraph::new(format!("Error: {}", err.message()))
                     .style(Style::default().fg(tc!(error)));
                 f.render_widget(error_text, results_inner);
-            } else if !self.results_view.is_empty() {
-                self.results_view.render(f, results_inner, None);
+            } else if !self.core.results_view.is_empty() {
+                self.core.results_view.render(f, results_inner, None);
             } else {
                 let placeholder =
                     empty_state_paragraph("Results", "Results will appear here after running");
@@ -524,11 +499,11 @@ impl TabInput for LoadTab {
         self.focus_area = match self.focus_area {
             LoadFocusArea::Selector => {
                 self.test_type_selector.blur();
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 LoadFocusArea::Inputs
             }
             LoadFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 LoadFocusArea::Results
             }
             LoadFocusArea::Results => {
@@ -548,12 +523,12 @@ impl TabInput for LoadTab {
                 LoadFocusArea::Results
             }
             LoadFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 self.test_type_selector.focus();
                 LoadFocusArea::Selector
             }
             LoadFocusArea::Results => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 LoadFocusArea::Inputs
             }
         };
@@ -564,7 +539,7 @@ impl TabInput for LoadTab {
             if self.focus_area == LoadFocusArea::Selector {
                 self.test_type_selector.handle_char(c);
             } else if self.focus_area == LoadFocusArea::Inputs {
-                self.inputs.insert(c);
+                self.core.inputs.insert(c);
             }
         }
     }
@@ -574,14 +549,14 @@ impl TabInput for LoadTab {
             if self.focus_area == LoadFocusArea::Selector {
                 self.test_type_selector.handle_backspace();
             } else if self.focus_area == LoadFocusArea::Inputs {
-                self.inputs.backspace();
+                self.core.inputs.backspace();
             }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == LoadFocusArea::Inputs {
-            self.inputs.paste(text);
+            self.core.inputs.paste(text);
         }
     }
 
@@ -590,7 +565,7 @@ impl TabInput for LoadTab {
             return;
         }
         if self.focus_area == LoadFocusArea::Inputs {
-            self.inputs.move_word_forward();
+            self.core.inputs.move_word_forward();
         }
     }
 
@@ -599,7 +574,7 @@ impl TabInput for LoadTab {
             return;
         }
         if self.focus_area == LoadFocusArea::Inputs {
-            self.inputs.move_word_backward();
+            self.core.inputs.move_word_backward();
         }
     }
 
@@ -608,9 +583,9 @@ impl TabInput for LoadTab {
             return;
         }
         if self.focus_area == LoadFocusArea::Inputs {
-            self.inputs.move_home();
+            self.core.inputs.move_home();
         } else if self.focus_area == LoadFocusArea::Results {
-            self.results_view.scroll_to_top();
+            self.core.results_view.scroll_to_top();
         }
     }
 
@@ -619,9 +594,9 @@ impl TabInput for LoadTab {
             return;
         }
         if self.focus_area == LoadFocusArea::Inputs {
-            self.inputs.move_end();
+            self.core.inputs.move_end();
         } else if self.focus_area == LoadFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+            self.core.results_view.scroll_to_bottom();
         }
     }
 
@@ -629,7 +604,7 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = LoadFocusArea::Selector;
         self.test_type_selector.focus();
     }
@@ -638,7 +613,7 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = LoadFocusArea::Results;
     }
 
@@ -661,8 +636,8 @@ impl TabInput for LoadTab {
             }
             return;
         }
-        if self.inputs.is_focused() {
-            self.inputs.blur();
+        if self.core.inputs.is_focused() {
+            self.core.inputs.blur();
         } else {
             self.start();
         }
@@ -680,7 +655,7 @@ impl TabInput for LoadTab {
         if self.test_type_selector.is_focused() {
             self.test_type_selector.blur();
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = LoadFocusArea::Selector;
     }
 
@@ -693,10 +668,10 @@ impl TabInput for LoadTab {
                 self.test_type_selector.move_prev();
             }
         } else if self.focus_area == LoadFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.scroll_results_up();
             } else {
-                self.inputs.focus_prev();
+                self.core.inputs.focus_prev();
             }
         } else if self.focus_area == LoadFocusArea::Results {
             self.scroll_results_up();
@@ -712,10 +687,10 @@ impl TabInput for LoadTab {
                 self.test_type_selector.move_next();
             }
         } else if self.focus_area == LoadFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.scroll_results_down();
             } else {
-                self.inputs.focus_next();
+                self.core.inputs.focus_next();
             }
         } else if self.focus_area == LoadFocusArea::Results {
             self.scroll_results_down();
@@ -733,8 +708,8 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != LoadFocusArea::Results && self.inputs.is_focused() {
-            self.inputs.move_left()
+        } else if self.focus_area != LoadFocusArea::Results && self.core.inputs.is_focused() {
+            self.core.inputs.move_left()
         } else {
             false
         }
@@ -751,15 +726,15 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != LoadFocusArea::Results && self.inputs.is_focused() {
-            self.inputs.move_right()
+        } else if self.focus_area != LoadFocusArea::Results && self.core.inputs.is_focused() {
+            self.core.inputs.move_right()
         } else {
             false
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.test_type_selector.is_focused() || self.inputs.is_focused()
+        self.test_type_selector.is_focused() || self.core.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
@@ -769,8 +744,8 @@ impl TabInput for LoadTab {
             } else {
                 true
             }
-        } else if self.inputs.is_focused() {
-            self.inputs.is_at_left_edge()
+        } else if self.core.inputs.is_focused() {
+            self.core.inputs.is_at_left_edge()
         } else {
             true
         }
@@ -785,8 +760,8 @@ impl TabInput for LoadTab {
             } else {
                 true
             }
-        } else if self.inputs.is_focused() {
-            self.inputs.is_at_right_edge()
+        } else if self.core.inputs.is_focused() {
+            self.core.inputs.is_at_right_edge()
         } else {
             true
         }
@@ -796,14 +771,14 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        self.results_view.page_up(page_size);
+        self.core.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
         if self.is_running() {
             return;
         }
-        self.results_view.page_down(page_size);
+        self.core.results_view.page_down(page_size);
     }
 
     fn handle_copy(&mut self) -> Option<String> {
@@ -811,8 +786,8 @@ impl TabInput for LoadTab {
             return None;
         }
         match self.focus_area {
-            LoadFocusArea::Inputs => self.inputs.get_focused_value(),
-            LoadFocusArea::Results => Some(self.results_view.get_content()),
+            LoadFocusArea::Inputs => self.core.inputs.get_focused_value(),
+            LoadFocusArea::Results => Some(self.core.results_view.get_content()),
             _ => None,
         }
     }
@@ -834,10 +809,10 @@ mod tests {
     fn test_enter_in_inputs_focused_blurs_does_not_start() {
         let mut tab = create_test_tab();
         tab.focus_area = LoadFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 

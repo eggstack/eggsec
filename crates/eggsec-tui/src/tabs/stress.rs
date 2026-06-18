@@ -1,10 +1,10 @@
 use crate::app::tab_error::TabError;
 use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
-    SelectorItem,
+    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
+use crate::tabs::core::{start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -23,13 +23,9 @@ pub enum StressType {
 }
 
 pub struct StressTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub type_selector: Selector,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: StressFocusArea,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,26 +58,19 @@ impl StressTab {
         ]);
 
         Self {
-            inputs,
+            core: TabCore::new("Stress testing...", "Stress Test Results").with_inputs(inputs),
             type_selector,
-            progress: ProgressGauge::new("Stress testing..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Stress Test Results"),
             focus_area: StressFocusArea::Inputs,
-            error: None,
         }
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn rate(&self) -> u64 {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .and_then(|f| f.value.parse().ok())
@@ -89,7 +78,8 @@ impl StressTab {
     }
 
     pub fn duration(&self) -> u64 {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(2)
             .and_then(|f| f.value.parse().ok())
@@ -97,7 +87,8 @@ impl StressTab {
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(3)
             .and_then(|f| f.value.parse().ok())
@@ -115,47 +106,51 @@ impl StressTab {
     }
 
     pub fn set_results(&mut self, results: StressResults) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
 
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Stress Test Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view
+        self.core.results_view.add_line(Line::from(""));
+        self.core
+            .results_view
             .add_line(Line::from(format!("Type: {}", results.stress_type)));
-        self.results_view
+        self.core
+            .results_view
             .add_line(Line::from(format!("Duration: {}ms", results.duration_ms)));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(Span::styled(
             "Statistics:",
             Style::default().fg(tc!(warning)),
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Packets Sent: {}",
             results.packets_sent
         )));
-        self.results_view
+        self.core
+            .results_view
             .add_line(Line::from(format!("  Bytes Sent: {}", results.bytes_sent)));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Packets/sec: {:.2}",
             results.packets_per_second
         )));
-        self.results_view
+        self.core
+            .results_view
             .add_line(Line::from(format!("  Errors: {}", results.errors)));
 
         if results.responses_received > 0 {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "Response Statistics:",
                 Style::default().fg(tc!(warning)),
             )));
-            self.results_view.add_line(Line::from(format!(
+            self.core.results_view.add_line(Line::from(format!(
                 "  Responses Received: {}",
                 results.responses_received
             )));
-            self.results_view.add_line(Line::from(format!(
+            self.core.results_view.add_line(Line::from(format!(
                 "  Avg Latency: {:.2}ms",
                 results.avg_latency_ms
             )));
@@ -177,52 +172,33 @@ pub struct StressResults {
 }
 
 impl TabState for StressTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.progress.percent() as f64
-    }
+    tab_state_boilerplate!(StressTab, core: core);
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results_view.clear();
-        self.progress.current = 0;
-        self.progress.total = 0;
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
-        if let Some(field) = self.inputs.fields.get_mut(1) {
+        self.core.reset_all();
+        if let Some(field) = self.core.inputs.fields.get_mut(1) {
             field.value = "100".to_string();
             field.cursor_pos = 3;
         }
-        if let Some(field) = self.inputs.fields.get_mut(2) {
+        if let Some(field) = self.core.inputs.fields.get_mut(2) {
             field.value = "30".to_string();
             field.cursor_pos = 2;
         }
-        if let Some(field) = self.inputs.fields.get_mut(3) {
+        if let Some(field) = self.core.inputs.fields.get_mut(3) {
             field.value = "10".to_string();
             field.cursor_pos = 2;
         }
         self.type_selector.select(0);
         self.type_selector.cancel();
         self.type_selector.blur();
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = StressFocusArea::Inputs;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.progress.current = 0;
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
     }
 }
 
 impl TabRender for StressTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err) = self.error {
+        if let Some(ref err) = self.core.error {
             use ratatui::widgets::Paragraph;
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
@@ -269,7 +245,7 @@ impl TabRender for StressTab {
             f.render_widget(input_block, *chunk);
         }
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
+        for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
                 field.render(f, *chunk, insert_mode);
             }
@@ -283,7 +259,7 @@ impl TabRender for StressTab {
         }
 
         // Results
-        if self.results_view.is_empty() {
+        if self.core.results_view.is_empty() {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
             if let Some(chunk) = chunks.get(2) {
@@ -291,19 +267,19 @@ impl TabRender for StressTab {
             }
         } else {
             if let Some(chunk) = chunks.get(2) {
-                self.results_view.render(f, *chunk, None);
+                self.core.results_view.render(f, *chunk, None);
             }
         }
 
         // Progress bar if running
-        if self.state == AppState::Running {
+        if self.core.state == AppState::Running {
             let progress_area = Rect {
                 x: area.x,
                 y: area.y + area.height - 1,
                 width: area.width,
                 height: 1,
             };
-            self.progress.render(f, progress_area);
+            self.core.progress.render(f, progress_area);
         }
     }
 }
@@ -315,7 +291,7 @@ impl TabInput for StressTab {
         }
         self.focus_area = match self.focus_area {
             StressFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 StressFocusArea::TypeSelector
             }
             StressFocusArea::TypeSelector => {
@@ -324,7 +300,7 @@ impl TabInput for StressTab {
                 StressFocusArea::Results
             }
             StressFocusArea::Results => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 StressFocusArea::Inputs
             }
         };
@@ -336,12 +312,12 @@ impl TabInput for StressTab {
         }
         self.focus_area = match self.focus_area {
             StressFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 StressFocusArea::Results
             }
             StressFocusArea::TypeSelector => {
                 self.type_selector.blur();
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 StressFocusArea::Inputs
             }
             StressFocusArea::Results => {
@@ -353,19 +329,19 @@ impl TabInput for StressTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
-            self.inputs.insert(c);
+            self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
         if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
-            self.inputs.backspace();
+            self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
-            self.inputs.paste(text);
+            self.core.inputs.paste(text);
         }
     }
 
@@ -374,9 +350,9 @@ impl TabInput for StressTab {
             return None;
         }
         if self.focus_area == StressFocusArea::Inputs {
-            self.inputs.get_focused_value()
+            self.core.inputs.get_focused_value()
         } else if self.focus_area == StressFocusArea::Results {
-            Some(self.results_view.get_content())
+            Some(self.core.results_view.get_content())
         } else {
             None
         }
@@ -385,7 +361,7 @@ impl TabInput for StressTab {
     fn handle_word_forward(&mut self) {
         if !self.is_running() {
             if self.focus_area == StressFocusArea::Inputs {
-                self.inputs.move_word_forward();
+                self.core.inputs.move_word_forward();
             }
         }
     }
@@ -393,7 +369,7 @@ impl TabInput for StressTab {
     fn handle_word_backward(&mut self) {
         if !self.is_running() {
             if self.focus_area == StressFocusArea::Inputs {
-                self.inputs.move_word_backward();
+                self.core.inputs.move_word_backward();
             }
         }
     }
@@ -401,9 +377,9 @@ impl TabInput for StressTab {
     fn handle_home(&mut self) {
         if !self.is_running() {
             if self.focus_area == StressFocusArea::Inputs {
-                self.inputs.move_home();
+                self.core.inputs.move_home();
             } else if self.focus_area == StressFocusArea::Results {
-                self.results_view.scroll_to_top();
+                self.core.results_view.scroll_to_top();
             }
         }
     }
@@ -411,9 +387,9 @@ impl TabInput for StressTab {
     fn handle_end(&mut self) {
         if !self.is_running() {
             if self.focus_area == StressFocusArea::Inputs {
-                self.inputs.move_end();
+                self.core.inputs.move_end();
             } else if self.focus_area == StressFocusArea::Results {
-                self.results_view.scroll_to_bottom();
+                self.core.results_view.scroll_to_bottom();
             }
         }
     }
@@ -421,13 +397,13 @@ impl TabInput for StressTab {
     fn handle_top(&mut self) {
         if !self.is_running() {
             self.focus_area = StressFocusArea::Inputs;
-            self.inputs.focus(0);
+            self.core.inputs.focus(0);
         }
     }
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.focus_area = StressFocusArea::Results;
         }
     }
@@ -443,7 +419,7 @@ impl TabInput for StressTab {
         }
         match self.focus_area {
             StressFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 self.focus_area = StressFocusArea::TypeSelector;
                 self.type_selector.open();
             }
@@ -472,7 +448,7 @@ impl TabInput for StressTab {
             self.type_selector.cancel();
             return;
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.type_selector.blur();
         self.focus_area = StressFocusArea::Inputs;
     }
@@ -483,13 +459,13 @@ impl TabInput for StressTab {
         }
         match self.focus_area {
             StressFocusArea::Inputs => {
-                self.inputs.focus_prev();
+                self.core.inputs.focus_prev();
             }
             StressFocusArea::TypeSelector => {
                 self.type_selector.handle_up();
             }
             StressFocusArea::Results => {
-                self.results_view.scroll_up(1);
+                self.core.results_view.scroll_up(1);
             }
         }
     }
@@ -500,13 +476,13 @@ impl TabInput for StressTab {
         }
         match self.focus_area {
             StressFocusArea::Inputs => {
-                self.inputs.focus_next();
+                self.core.inputs.focus_next();
             }
             StressFocusArea::TypeSelector => {
                 self.type_selector.handle_down();
             }
             StressFocusArea::Results => {
-                self.results_view.scroll_down(1);
+                self.core.results_view.scroll_down(1);
             }
         }
     }
@@ -514,7 +490,7 @@ impl TabInput for StressTab {
     fn handle_left(&mut self) -> bool {
         if !self.is_running() {
             match self.focus_area {
-                StressFocusArea::Inputs => self.inputs.move_left(),
+                StressFocusArea::Inputs => self.core.inputs.move_left(),
                 _ => false,
             }
         } else {
@@ -525,7 +501,7 @@ impl TabInput for StressTab {
     fn handle_right(&mut self) -> bool {
         if !self.is_running() {
             match self.focus_area {
-                StressFocusArea::Inputs => self.inputs.move_right(),
+                StressFocusArea::Inputs => self.core.inputs.move_right(),
                 _ => false,
             }
         } else {
@@ -534,12 +510,12 @@ impl TabInput for StressTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == StressFocusArea::Inputs && self.inputs.is_focused()
+        self.focus_area == StressFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            StressFocusArea::Inputs => self.inputs.is_at_left_edge(),
+            StressFocusArea::Inputs => self.core.inputs.is_at_left_edge(),
             StressFocusArea::TypeSelector => {
                 self.type_selector.items.is_empty() || self.type_selector.selected == 0
             }
@@ -549,7 +525,7 @@ impl TabInput for StressTab {
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            StressFocusArea::Inputs => self.inputs.is_at_right_edge(),
+            StressFocusArea::Inputs => self.core.inputs.is_at_right_edge(),
             StressFocusArea::TypeSelector => {
                 self.type_selector.items.is_empty()
                     || self.type_selector.selected
@@ -563,14 +539,14 @@ impl TabInput for StressTab {
         if self.is_running() {
             return;
         }
-        self.results_view.scroll_up(page_size);
+        self.core.results_view.scroll_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
         if self.is_running() {
             return;
         }
-        self.results_view.scroll_down(page_size);
+        self.core.results_view.scroll_down(page_size);
     }
 
     fn primary_target(&self) -> Option<String> {
@@ -580,16 +556,11 @@ impl TabInput for StressTab {
 
 impl StressTab {
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
-            self.results_view.clear();
-            self.error = None;
-        }
+        start_scan(&mut self.core);
     }
 
     pub fn stop(&mut self) {
-        self.state = AppState::Idle;
+        self.core.stop();
     }
 }
 
@@ -605,10 +576,10 @@ mod tests {
     fn test_enter_in_inputs_blurs_opens_selector() {
         let mut tab = create_test_tab();
         tab.focus_area = StressFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
         assert!(tab.type_selector.is_open());
     }

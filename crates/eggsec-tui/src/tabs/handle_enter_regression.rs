@@ -135,10 +135,10 @@ mod tests {
     fn load_enter_inputs_focused_blurs() {
         let mut tab = LoadTab::new();
         tab.focus_area = LoadFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -203,10 +203,10 @@ mod tests {
     fn stress_enter_inputs_blurs_and_opens_selector() {
         let mut tab = StressTab::new();
         tab.focus_area = StressFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
         assert!(tab.type_selector.is_open());
     }
@@ -262,10 +262,10 @@ mod tests {
     fn waf_enter_inputs_focused_blurs() {
         let mut tab = WafTab::new();
         tab.focus_area = WafFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -601,10 +601,10 @@ mod tests {
         // Load
         let mut load = LoadTab::new();
         load.focus_area = LoadFocusArea::Inputs;
-        load.inputs.focus(0);
-        assert!(load.inputs.is_focused());
+        load.core.inputs.focus(0);
+        assert!(load.core.inputs.is_focused());
         load.handle_enter();
-        assert!(!load.inputs.is_focused(), "Load input should blur");
+        assert!(!load.core.inputs.is_focused(), "Load input should blur");
         assert!(!load.is_running());
 
         // ScanPorts
@@ -619,10 +619,10 @@ mod tests {
         // Stress
         let mut stress = StressTab::new();
         stress.focus_area = StressFocusArea::Inputs;
-        stress.inputs.focus(0);
-        assert!(stress.inputs.is_focused());
+        stress.core.inputs.focus(0);
+        assert!(stress.core.inputs.is_focused());
         stress.handle_enter();
-        assert!(!stress.inputs.is_focused(), "Stress input should blur");
+        assert!(!stress.core.inputs.is_focused(), "Stress input should blur");
         assert!(!stress.is_running());
 
         // Packet
@@ -636,10 +636,10 @@ mod tests {
         // Waf
         let mut waf = WafTab::new();
         waf.focus_area = WafFocusArea::Inputs;
-        waf.inputs.focus(0);
-        assert!(waf.inputs.is_focused());
+        waf.core.inputs.focus(0);
+        assert!(waf.core.inputs.is_focused());
         waf.handle_enter();
-        assert!(!waf.inputs.is_focused(), "Waf input should blur");
+        assert!(!waf.core.inputs.is_focused(), "Waf input should blur");
         assert!(!waf.is_running());
     }
 }

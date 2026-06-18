@@ -1,10 +1,10 @@
 use crate::app::tab_error::TabError;
 use crate::components::{
-    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, RadioGroup,
-    ScrollableText,
+    empty_state_paragraph, Checkbox, InputField, InputGroup, RadioGroup, ScrollableText,
 };
+use crate::tabs::core::{start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_state_boilerplate, tc};
 use eggsec::waf::{BypassResult, WafDetectionResult};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -15,18 +15,15 @@ use ratatui::{
 };
 
 pub struct WafTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub mode_radio: RadioGroup,
     pub technique_checkboxes: Vec<Checkbox>,
     pub detection_result: Option<WafDetectionResult>,
     pub bypass_results: Vec<BypassResult>,
-    pub progress: ProgressGauge,
-    pub state: AppState,
     pub detection_view: ScrollableText,
     pub bypass_view: ScrollableText,
     pub focus_area: WafFocusArea,
     pub focused_checkbox_index: usize,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,18 +50,15 @@ impl WafTab {
         ];
 
         Self {
-            inputs,
+            core: TabCore::new("WAF Testing...", "Detection Result").with_inputs(inputs),
             mode_radio,
             technique_checkboxes,
             detection_result: None,
             bypass_results: Vec::new(),
-            progress: ProgressGauge::new("WAF Testing..."),
-            state: AppState::Idle,
             detection_view: ScrollableText::new("Detection Result"),
             bypass_view: ScrollableText::new("Bypass Results"),
             focus_area: WafFocusArea::Inputs,
             focused_checkbox_index: 0,
-            error: None,
         }
     }
 
@@ -81,11 +75,7 @@ impl WafTab {
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn is_bypass_mode(&self) -> bool {
@@ -104,14 +94,14 @@ impl WafTab {
         self.detection_result = Some(result.clone());
         self.update_detection_view(&result);
         if !self.is_bypass_mode() {
-            self.state = AppState::Completed;
+            self.core.state = AppState::Completed;
         }
     }
 
     pub fn set_bypass_results(&mut self, results: Vec<BypassResult>) {
         self.bypass_results = results.clone();
         self.update_bypass_view(&results);
-        self.state = AppState::Completed;
+        self.core.state = AppState::Completed;
     }
 
     fn update_detection_view(&mut self, result: &WafDetectionResult) {
@@ -233,9 +223,7 @@ impl WafTab {
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
+        if start_scan(&mut self.core) {
             self.detection_result = None;
             self.bypass_results.clear();
             self.detection_view.clear();
@@ -244,12 +232,11 @@ impl WafTab {
     }
 
     pub fn stop(&mut self) {
-        self.state = AppState::Idle;
+        self.core.stop();
     }
 
     pub fn update_progress(&mut self, completed: u64, total: u64) {
-        self.progress.current = completed;
-        self.progress.total = total;
+        self.core.update_progress(completed, total);
     }
 
     pub fn scroll_detection_up(&mut self) {
@@ -276,27 +263,15 @@ impl Default for WafTab {
 }
 
 impl TabState for WafTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.progress.percent() as f64
-    }
+    tab_state_boilerplate!(WafTab, core: core);
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
+        self.core.reset_all();
         self.detection_result = None;
         self.bypass_results.clear();
-        self.progress.current = 0;
-        self.progress.total = 0;
         self.detection_view.clear();
         self.bypass_view.clear();
-        self.error = None;
         self.focused_checkbox_index = 0;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
         for cb in &mut self.technique_checkboxes {
             cb.checked = false;
         }
@@ -307,14 +282,8 @@ impl TabState for WafTab {
             cb.checked = true;
         }
         self.mode_radio.select(0);
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = WafFocusArea::Inputs;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
-        self.progress.current = 0;
     }
 }
 
@@ -330,7 +299,7 @@ impl TabRender for WafTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err) = self.error {
+        if let Some(ref err) = self.core.error {
             use ratatui::widgets::{Block, Borders, Paragraph};
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(Block::default().borders(Borders::ALL).title("WAF - Error"))
@@ -351,7 +320,7 @@ impl TabRender for WafTab {
         let mut builder = FormBuilder::new(" WAF Configuration ").row_height(3);
 
         // Target URL
-        if let Some(field) = self.inputs.fields.first() {
+        if let Some(field) = self.core.inputs.fields.first() {
             builder = builder.add_input(field.clone());
         }
 
@@ -383,8 +352,8 @@ impl TabRender for WafTab {
         let results_inner = results_block.inner(results_area);
         f.render_widget(results_block, results_area);
 
-        if self.state == AppState::Running {
-            self.progress.render(f, results_inner);
+        if self.core.state == AppState::Running {
+            self.core.progress.render(f, results_inner);
         } else {
             let results_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -423,8 +392,8 @@ impl TabInput for WafTab {
         }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
-                if self.inputs.is_focused() {
-                    self.inputs.blur();
+                if self.core.inputs.is_focused() {
+                    self.core.inputs.blur();
                 }
                 WafFocusArea::ModeRadio
             }
@@ -434,7 +403,7 @@ impl TabInput for WafTab {
             }
             WafFocusArea::Techniques => WafFocusArea::Results,
             WafFocusArea::Results => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 WafFocusArea::Inputs
             }
         };
@@ -446,11 +415,11 @@ impl TabInput for WafTab {
         }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 WafFocusArea::Results
             }
             WafFocusArea::ModeRadio => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 WafFocusArea::Inputs
             }
             WafFocusArea::Techniques => WafFocusArea::ModeRadio,
@@ -463,19 +432,19 @@ impl TabInput for WafTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
-            self.inputs.insert(c);
+            self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
         if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
-            self.inputs.backspace();
+            self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
-            self.inputs.paste(text);
+            self.core.inputs.paste(text);
         }
     }
 
@@ -484,7 +453,7 @@ impl TabInput for WafTab {
             return None;
         }
         match self.focus_area {
-            WafFocusArea::Inputs => self.inputs.get_focused_value(),
+            WafFocusArea::Inputs => self.core.inputs.get_focused_value(),
             WafFocusArea::Results => {
                 let mut content = self.detection_view.get_content();
                 content.push_str("\n\n");
@@ -498,7 +467,7 @@ impl TabInput for WafTab {
     fn handle_word_forward(&mut self) {
         if !self.is_running() {
             if self.focus_area == WafFocusArea::Inputs {
-                self.inputs.move_word_forward();
+                self.core.inputs.move_word_forward();
             }
         }
     }
@@ -506,7 +475,7 @@ impl TabInput for WafTab {
     fn handle_word_backward(&mut self) {
         if !self.is_running() {
             if self.focus_area == WafFocusArea::Inputs {
-                self.inputs.move_word_backward();
+                self.core.inputs.move_word_backward();
             }
         }
     }
@@ -514,7 +483,7 @@ impl TabInput for WafTab {
     fn handle_home(&mut self) {
         if !self.is_running() {
             if self.focus_area == WafFocusArea::Inputs {
-                self.inputs.move_home();
+                self.core.inputs.move_home();
             } else if self.focus_area == WafFocusArea::Results {
                 self.detection_view.scroll_to_top();
                 self.bypass_view.scroll_to_top();
@@ -525,7 +494,7 @@ impl TabInput for WafTab {
     fn handle_end(&mut self) {
         if !self.is_running() {
             if self.focus_area == WafFocusArea::Inputs {
-                self.inputs.move_end();
+                self.core.inputs.move_end();
             } else if self.focus_area == WafFocusArea::Results {
                 self.detection_view.scroll_to_bottom();
                 self.bypass_view.scroll_to_bottom();
@@ -536,13 +505,13 @@ impl TabInput for WafTab {
     fn handle_top(&mut self) {
         if !self.is_running() {
             self.focus_area = WafFocusArea::Inputs;
-            self.inputs.focus(0);
+            self.core.inputs.focus(0);
         }
     }
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.focus_area = WafFocusArea::Results;
         }
     }
@@ -556,8 +525,8 @@ impl TabInput for WafTab {
             self.stop();
             return;
         }
-        if self.focus_area == WafFocusArea::Inputs && self.inputs.is_focused() {
-            self.inputs.blur();
+        if self.focus_area == WafFocusArea::Inputs && self.core.inputs.is_focused() {
+            self.core.inputs.blur();
             return;
         }
 
@@ -599,7 +568,7 @@ impl TabInput for WafTab {
             self.focused_checkbox_index = 0;
         }
         self.focus_area = WafFocusArea::Inputs;
-        self.inputs.blur();
+        self.core.inputs.blur();
     }
 
     fn handle_up(&mut self) {
@@ -618,7 +587,7 @@ impl TabInput for WafTab {
                 self.focused_checkbox_index -= 1;
             }
         } else if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.focus_prev();
+            self.core.inputs.focus_prev();
         } else if self.focus_area == WafFocusArea::Results {
             self.scroll_detection_up();
         }
@@ -639,7 +608,7 @@ impl TabInput for WafTab {
                 self.focused_checkbox_index += 1;
             }
         } else if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.focus_next();
+            self.core.inputs.focus_next();
         } else if self.focus_area == WafFocusArea::Results {
             self.scroll_detection_down();
         }
@@ -650,7 +619,7 @@ impl TabInput for WafTab {
             return false;
         }
         if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.move_left()
+            self.core.inputs.move_left()
         } else if self.focus_area == WafFocusArea::Techniques {
             if self.technique_checkboxes.is_empty() || self.focused_checkbox_index == 0 {
                 false
@@ -668,7 +637,7 @@ impl TabInput for WafTab {
             return false;
         }
         if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.move_right()
+            self.core.inputs.move_right()
         } else if self.focus_area == WafFocusArea::Techniques {
             if self.focused_checkbox_index >= self.technique_checkboxes.len().saturating_sub(1) {
                 false
@@ -683,7 +652,7 @@ impl TabInput for WafTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.is_at_left_edge()
+            self.core.inputs.is_at_left_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
             self.technique_checkboxes.is_empty() || self.focused_checkbox_index == 0
         } else {
@@ -693,7 +662,7 @@ impl TabInput for WafTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.is_at_right_edge()
+            self.core.inputs.is_at_right_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
             self.technique_checkboxes.is_empty()
                 || self.focused_checkbox_index >= self.technique_checkboxes.len().saturating_sub(1)
@@ -703,7 +672,7 @@ impl TabInput for WafTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == WafFocusArea::Inputs && self.inputs.is_focused()
+        self.focus_area == WafFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn page_up(&mut self, page_size: usize) {
