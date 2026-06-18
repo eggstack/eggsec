@@ -1,9 +1,8 @@
 use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
-};
+use crate::components::{Checkbox, InputField};
+use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_input_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -13,17 +12,13 @@ use ratatui::{
 };
 
 pub struct GraphQlTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub introspection_checkbox: Checkbox,
     pub inject_checkbox: Checkbox,
     pub depth_bypass_checkbox: Checkbox,
     pub alias_overload_checkbox: Checkbox,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: GraphQlFocusArea,
     pub checkbox_focus_index: usize,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,115 +36,88 @@ impl Default for GraphQlTab {
 
 impl GraphQlTab {
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
+        let inputs = crate::components::InputGroup::new()
             .add(InputField::new("GraphQL Endpoint URL"))
             .add(InputField::new("Concurrency").with_value("10"))
             .add(InputField::new("Timeout (s)").with_value("15"));
 
-        let introspection_checkbox = Checkbox::new("Introspection Tests").checked(true);
-        let inject_checkbox = Checkbox::new("Query Injection Tests").checked(true);
-        let depth_bypass_checkbox = Checkbox::new("Depth Limit Bypass").checked(true);
-        let alias_overload_checkbox = Checkbox::new("Alias Overload Tests").checked(true);
-
         Self {
-            inputs,
-            introspection_checkbox,
-            inject_checkbox,
-            depth_bypass_checkbox,
-            alias_overload_checkbox,
-            progress: ProgressGauge::new("Testing GraphQL..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
+            core: TabCore::new("Testing GraphQL...", "Results").with_inputs(inputs),
+            introspection_checkbox: Checkbox::new("Introspection Tests").checked(true),
+            inject_checkbox: Checkbox::new("Query Injection Tests").checked(true),
+            depth_bypass_checkbox: Checkbox::new("Depth Limit Bypass").checked(true),
+            alias_overload_checkbox: Checkbox::new("Alias Overload Tests").checked(true),
             focus_area: GraphQlFocusArea::Inputs,
             checkbox_focus_index: 0,
-            error: None,
         }
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
-            .fields
-            .get(1)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(10)
+        field_as(&self.core, 1, 10)
     }
 
     pub fn timeout(&self) -> u64 {
-        self.inputs
-            .fields
-            .get(2)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(15)
+        field_as(&self.core, 2, 15)
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
-            self.progress.total = 100;
-            self.results_view.clear();
+        if start_scan(&mut self.core) {
+            self.core.progress.total = 100;
         }
     }
 
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
     pub fn set_results(&mut self, results: GraphQlResults) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
 
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("GraphQL Security Test Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(Span::styled(
             "Findings:",
             Style::default().fg(tc!(warning)),
         )));
 
         if results.introspection_enabled {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "  [!] Introspection is ENABLED - Schema exposed",
                 Style::default().fg(tc!(error)),
             )));
         } else {
-            self.results_view
+            self.core
+                .results_view
                 .add_line(Line::from(Span::raw("  [+] Introspection is disabled")));
         }
 
         if results.depth_limit_bypassed {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "  [!] Depth limit bypass detected",
                 Style::default().fg(tc!(error)),
             )));
         }
 
         if results.alias_overload_vulnerable {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "  [!] Alias overload vulnerability detected",
                 Style::default().fg(tc!(error)),
             )));
         }
 
         if !results.injection_findings.is_empty() {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 format!("  Injection Findings: {}", results.injection_findings.len()),
                 Style::default().fg(tc!(warning)),
             )));
         }
 
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(format!(
             "Requests: {} | Errors: {} | Duration: {}ms",
             results.total_requests, results.errors, results.duration_ms
         )));
@@ -170,29 +138,22 @@ pub struct GraphQlResults {
 
 impl TabState for GraphQlTab {
     fn state(&self) -> AppState {
-        self.state.clone()
+        self.core.state.clone()
     }
 
     fn progress(&self) -> f64 {
-        self.progress.percent() as f64
+        self.core.progress.percent() as f64
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results_view.clear();
-        self.progress.current = 0;
-        self.progress.total = 100;
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
+        self.core.reset_all();
+        if self.core.inputs.fields.len() > 1 {
+            self.core.inputs.fields[1].value = "10".to_string();
         }
-        if self.inputs.fields.len() > 1 {
-            self.inputs.fields[1].value = "10".to_string();
+        if self.core.inputs.fields.len() > 2 {
+            self.core.inputs.fields[2].value = "15".to_string();
         }
-        if self.inputs.fields.len() > 2 {
-            self.inputs.fields[2].value = "15".to_string();
-        }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = GraphQlFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.inject_checkbox.checked = true;
@@ -202,9 +163,8 @@ impl TabState for GraphQlTab {
     }
 
     fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error.clone());
-        self.results_view.add_line(Line::from(Span::styled(
+        crate::tabs::core::tab_state_set_error(&mut self.core, error.clone());
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", error.message()),
             Style::default().fg(tc!(error)),
         )));
@@ -213,7 +173,7 @@ impl TabState for GraphQlTab {
 
 impl TabRender for GraphQlTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref error) = self.error {
+        if let Some(ref error) = self.core.error {
             let msg = error.message();
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -258,7 +218,7 @@ impl TabRender for GraphQlTab {
             );
         f.render_widget(input_block, chunks.first().copied().unwrap_or(area));
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
+        for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
                 field.render(f, *chunk, insert_mode);
             }
@@ -302,31 +262,43 @@ impl TabRender for GraphQlTab {
 
         // Results
         let results_area = chunks.get(2).copied().unwrap_or(area);
-        if self.results_view.is_empty() {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_area);
-        } else {
-            self.results_view.render(f, results_area, None);
-        }
-
-        // Progress bar if running
-        if self.state == AppState::Running {
-            let progress_area = Rect {
-                x: area.x,
-                y: area.y + area.height - 1,
-                width: area.width,
-                height: 1,
-            };
-            self.progress.render(f, progress_area);
-        }
+        render_results_area(
+            f,
+            results_area,
+            &self.core.state,
+            &self.core.error,
+            &self.core.results_view,
+            &self.core.progress,
+            "Results",
+            "Results will appear here after running",
+        );
     }
 }
 
 impl TabInput for GraphQlTab {
-    fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
+    tab_input_boilerplate!(
+        GraphQlTab,
+        core: core,
+        focus: focus_area,
+        Inputs: GraphQlFocusArea::Inputs,
+        Results: GraphQlFocusArea::Results
+    );
+
+    fn handle_char(&mut self, c: char) {
+        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
+            self.core.inputs.insert(c);
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
+            self.core.inputs.backspace();
+        }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
+            self.core.inputs.paste(text);
         }
     }
 
@@ -334,12 +306,12 @@ impl TabInput for GraphQlTab {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
                 GraphQlFocusArea::Inputs => {
-                    self.inputs.blur();
+                    self.core.inputs.blur();
                     GraphQlFocusArea::Options
                 }
                 GraphQlFocusArea::Options => GraphQlFocusArea::Results,
                 GraphQlFocusArea::Results => {
-                    self.inputs.focus(0);
+                    self.core.inputs.focus(0);
                     GraphQlFocusArea::Inputs
                 }
             };
@@ -350,11 +322,11 @@ impl TabInput for GraphQlTab {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
                 GraphQlFocusArea::Inputs => {
-                    self.inputs.blur();
+                    self.core.inputs.blur();
                     GraphQlFocusArea::Results
                 }
                 GraphQlFocusArea::Options => {
-                    self.inputs.focus(0);
+                    self.core.inputs.focus(0);
                     GraphQlFocusArea::Inputs
                 }
                 GraphQlFocusArea::Results => GraphQlFocusArea::Options,
@@ -362,117 +334,40 @@ impl TabInput for GraphQlTab {
         }
     }
 
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.insert(c);
+    fn handle_up(&mut self) {
+        if !self.is_running() {
+            match self.focus_area {
+                GraphQlFocusArea::Inputs => self.core.inputs.focus_prev(),
+                GraphQlFocusArea::Results => self.core.scroll_results_up(),
+                _ => {}
+            }
         }
     }
 
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.backspace();
+    fn handle_down(&mut self) {
+        if !self.is_running() {
+            match self.focus_area {
+                GraphQlFocusArea::Inputs => self.core.inputs.focus_next(),
+                GraphQlFocusArea::Results => self.core.scroll_results_down(),
+                _ => {}
+            }
         }
     }
 
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else if self.focus_area == GraphQlFocusArea::Results {
-            Some(self.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.move_word_forward();
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == GraphQlFocusArea::Results {
-            self.results_view.scroll_to_top();
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == GraphQlFocusArea::Results {
-            self.results_view.scroll_to_bottom();
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = GraphQlFocusArea::Inputs;
-        self.inputs.focus(0);
-    }
-
-    fn handle_bottom(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = GraphQlFocusArea::Results;
-        self.inputs.blur();
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.scroll_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.scroll_down(page_size);
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == GraphQlFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn handle_enter(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         if self.focus_area == GraphQlFocusArea::Results {
             return;
         }
-        if self.focus_area == GraphQlFocusArea::Inputs && self.inputs.is_focused() {
-            self.inputs.blur();
+        if self.focus_area == GraphQlFocusArea::Inputs && self.core.inputs.is_focused() {
+            self.core.inputs.blur();
             return;
         }
         if self.focus_area == GraphQlFocusArea::Options {
@@ -486,49 +381,17 @@ impl TabInput for GraphQlTab {
             checkboxes[idx].toggle();
             return;
         }
-        // focus_area is Inputs but inputs.is_focused() == false (user tabbed past last field).
-        // At this point is_running() is guaranteed false; start the scan.
         self.start();
     }
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = GraphQlFocusArea::Inputs;
         self.checkbox_focus_index = 0;
-    }
-
-    fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            GraphQlFocusArea::Inputs => {
-                self.inputs.focus_prev();
-            }
-            GraphQlFocusArea::Results => {
-                self.results_view.scroll_up(1);
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            GraphQlFocusArea::Inputs => {
-                self.inputs.focus_next();
-            }
-            GraphQlFocusArea::Results => {
-                self.results_view.scroll_down(1);
-            }
-            _ => {}
-        }
     }
 
     fn handle_left(&mut self) -> bool {
@@ -536,7 +399,7 @@ impl TabInput for GraphQlTab {
             return false;
         }
         match self.focus_area {
-            GraphQlFocusArea::Inputs => self.inputs.move_left(),
+            GraphQlFocusArea::Inputs => self.core.inputs.move_left(),
             GraphQlFocusArea::Options => {
                 if self.checkbox_focus_index > 0 {
                     self.checkbox_focus_index -= 1;
@@ -552,7 +415,7 @@ impl TabInput for GraphQlTab {
             return false;
         }
         match self.focus_area {
-            GraphQlFocusArea::Inputs => self.inputs.move_right(),
+            GraphQlFocusArea::Inputs => self.core.inputs.move_right(),
             GraphQlFocusArea::Options => {
                 let max_idx = 3;
                 if self.checkbox_focus_index < max_idx {
@@ -564,13 +427,9 @@ impl TabInput for GraphQlTab {
         }
     }
 
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == GraphQlFocusArea::Inputs && self.inputs.is_focused()
-    }
-
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            GraphQlFocusArea::Inputs => !self.inputs.can_move_left(),
+            GraphQlFocusArea::Inputs => !self.core.inputs.can_move_left(),
             GraphQlFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
@@ -578,14 +437,10 @@ impl TabInput for GraphQlTab {
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            GraphQlFocusArea::Inputs => !self.inputs.can_move_right(),
+            GraphQlFocusArea::Inputs => !self.core.inputs.can_move_right(),
             GraphQlFocusArea::Options => self.checkbox_focus_index >= 3,
             _ => true,
         }
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
     }
 }
 
@@ -601,7 +456,6 @@ mod tests {
     fn test_handle_enter_results_focus_no_op() {
         let mut tab = create_test_tab();
         tab.focus_area = GraphQlFocusArea::Results;
-        // Should not crash, should not start
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -613,7 +467,6 @@ mod tests {
         let before = tab.introspection_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.introspection_checkbox.checked, !before);
-        // Not running yet
         assert!(!tab.is_running());
     }
 
@@ -621,12 +474,10 @@ mod tests {
     fn test_handle_enter_inputs_focused_blurs() {
         let mut tab = create_test_tab();
         tab.focus_area = GraphQlFocusArea::Inputs;
-        tab.inputs.focus(0);
-        // Make sure focused
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        // Should blur, not start
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 }

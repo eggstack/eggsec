@@ -1,9 +1,8 @@
 use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
-};
+use crate::components::{Checkbox, InputField};
+use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_input_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -13,17 +12,13 @@ use ratatui::{
 };
 
 pub struct OAuthTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub redirect_test_checkbox: Checkbox,
     pub scope_test_checkbox: Checkbox,
     pub state_test_checkbox: Checkbox,
     pub grant_test_checkbox: Checkbox,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: OAuthFocusArea,
     pub checkbox_focus_index: usize,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,43 +36,31 @@ impl Default for OAuthTab {
 
 impl OAuthTab {
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
+        let inputs = crate::components::InputGroup::new()
             .add(InputField::new("OAuth Authorization Endpoint URL"))
             .add(InputField::new("Client ID (optional)"))
             .add(InputField::new("Redirect URI (optional)"))
             .add(InputField::new("Concurrency").with_value("10"))
             .add(InputField::new("Timeout (s)").with_value("15"));
 
-        let redirect_test_checkbox = Checkbox::new("Redirect URI Validation").checked(true);
-        let scope_test_checkbox = Checkbox::new("Scope Escalation Tests").checked(true);
-        let state_test_checkbox = Checkbox::new("State Parameter Tests").checked(true);
-        let grant_test_checkbox = Checkbox::new("Grant Type Tests").checked(true);
-
         Self {
-            inputs,
-            redirect_test_checkbox,
-            scope_test_checkbox,
-            state_test_checkbox,
-            grant_test_checkbox,
-            progress: ProgressGauge::new("Testing OAuth..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
+            core: TabCore::new("Testing OAuth...", "Results").with_inputs(inputs),
+            redirect_test_checkbox: Checkbox::new("Redirect URI Validation").checked(true),
+            scope_test_checkbox: Checkbox::new("Scope Escalation Tests").checked(true),
+            state_test_checkbox: Checkbox::new("State Parameter Tests").checked(true),
+            grant_test_checkbox: Checkbox::new("Grant Type Tests").checked(true),
             focus_area: OAuthFocusArea::Inputs,
             checkbox_focus_index: 0,
-            error: None,
         }
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn client_id(&self) -> Option<&str> {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .map(|f| f.value.as_str())
@@ -85,7 +68,8 @@ impl OAuthTab {
     }
 
     pub fn redirect_uri(&self) -> Option<&str> {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(2)
             .map(|f| f.value.as_str())
@@ -93,50 +77,35 @@ impl OAuthTab {
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
-            .fields
-            .get(3)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(10)
+        field_as(&self.core, 3, 10)
     }
 
     pub fn timeout(&self) -> u64 {
-        self.inputs
-            .fields
-            .get(4)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(15)
+        field_as(&self.core, 4, 15)
     }
 
     pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
-            self.progress.total = 100;
-            self.results_view.clear();
+        if start_scan(&mut self.core) {
+            self.core.progress.total = 100;
         }
     }
 
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
     pub fn set_results(&mut self, results: OAuthResults) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
 
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("OAuth/OIDC Security Test Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(Span::styled(
             "Findings:",
             Style::default().fg(tc!(warning)),
         )));
 
         if !results.redirect_vulnerabilities.is_empty() {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] Redirect URI Issues: {}",
                     results.redirect_vulnerabilities.len()
@@ -144,17 +113,18 @@ impl OAuthTab {
                 Style::default().fg(tc!(error)),
             )));
             for vuln in &results.redirect_vulnerabilities {
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("    - {}", vuln)));
             }
         } else {
-            self.results_view.add_line(Line::from(Span::raw(
+            self.core.results_view.add_line(Line::from(Span::raw(
                 "  [+] Redirect URI validation appears secure",
             )));
         }
 
         if !results.scope_vulnerabilities.is_empty() {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] Scope Escalation Issues: {}",
                     results.scope_vulnerabilities.len()
@@ -164,7 +134,7 @@ impl OAuthTab {
         }
 
         if !results.state_vulnerabilities.is_empty() {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] State Parameter Issues: {}",
                     results.state_vulnerabilities.len()
@@ -174,7 +144,7 @@ impl OAuthTab {
         }
 
         if !results.grant_vulnerabilities.is_empty() {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] Grant Type Issues: {}",
                     results.grant_vulnerabilities.len()
@@ -183,8 +153,8 @@ impl OAuthTab {
             )));
         }
 
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(format!(
             "Requests: {} | Errors: {} | Duration: {}ms",
             results.total_requests, results.errors, results.duration_ms
         )));
@@ -205,29 +175,22 @@ pub struct OAuthResults {
 
 impl TabState for OAuthTab {
     fn state(&self) -> AppState {
-        self.state.clone()
+        self.core.state.clone()
     }
 
     fn progress(&self) -> f64 {
-        self.progress.percent() as f64
+        self.core.progress.percent() as f64
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results_view.clear();
-        self.progress.current = 0;
-        self.progress.total = 100;
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
+        self.core.reset_all();
+        if self.core.inputs.fields.len() > 3 {
+            self.core.inputs.fields[3].value = "10".to_string();
         }
-        if self.inputs.fields.len() > 3 {
-            self.inputs.fields[3].value = "10".to_string();
+        if self.core.inputs.fields.len() > 4 {
+            self.core.inputs.fields[4].value = "15".to_string();
         }
-        if self.inputs.fields.len() > 4 {
-            self.inputs.fields[4].value = "15".to_string();
-        }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = OAuthFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.redirect_test_checkbox.checked = true;
@@ -237,9 +200,8 @@ impl TabState for OAuthTab {
     }
 
     fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error.clone());
-        self.results_view.add_line(Line::from(Span::styled(
+        crate::tabs::core::tab_state_set_error(&mut self.core, error.clone());
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", error.message()),
             Style::default().fg(tc!(error)),
         )));
@@ -248,7 +210,7 @@ impl TabState for OAuthTab {
 
 impl TabRender for OAuthTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref error) = self.error {
+        if let Some(ref error) = self.core.error {
             let msg = error.message();
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -263,7 +225,6 @@ impl TabRender for OAuthTab {
 
         // Dynamic layout based on terminal height
         let (input_height, options_height, results_min) = if area.height < 30 {
-            // Small terminal: use percentages
             let ih = ((area.height as f32 * 0.6) as u16).clamp(8, 16);
             let oh = ((area.height as f32 * 0.2) as u16).clamp(4, 6);
             (ih, oh, 2)
@@ -280,7 +241,7 @@ impl TabRender for OAuthTab {
             ])
             .split(area);
 
-        // Input fields - dynamic height based on available space
+        // Input fields
         let num_inputs = 5;
         let field_height =
             (chunks.first().copied().unwrap_or(area).height / num_inputs as u16).max(2);
@@ -305,7 +266,7 @@ impl TabRender for OAuthTab {
             );
         f.render_widget(input_block, input_area);
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
+        for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
                 field.render(f, *chunk, insert_mode);
             }
@@ -349,179 +310,112 @@ impl TabRender for OAuthTab {
 
         // Results
         let results_area = chunks.get(2).copied().unwrap_or(area);
-        if self.results_view.is_empty() {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_area);
-        } else {
-            self.results_view.render(f, results_area, None);
-        }
-
-        // Progress bar if running
-        if self.state == AppState::Running {
-            let progress_area = Rect {
-                x: area.x,
-                y: area.y + area.height - 1,
-                width: area.width,
-                height: 1,
-            };
-            self.progress.render(f, progress_area);
-        }
+        render_results_area(
+            f,
+            results_area,
+            &self.core.state,
+            &self.core.error,
+            &self.core.results_view,
+            &self.core.progress,
+            "Results",
+            "Results will appear here after running",
+        );
     }
 }
 
 impl TabInput for OAuthTab {
-    fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
-        }
-    }
-
-    fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = match self.focus_area {
-            OAuthFocusArea::Inputs => {
-                self.inputs.blur();
-                OAuthFocusArea::Options
-            }
-            OAuthFocusArea::Options => OAuthFocusArea::Results,
-            OAuthFocusArea::Results => {
-                self.inputs.focus(0);
-                OAuthFocusArea::Inputs
-            }
-        };
-    }
-
-    fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = match self.focus_area {
-            OAuthFocusArea::Inputs => {
-                self.inputs.blur();
-                OAuthFocusArea::Results
-            }
-            OAuthFocusArea::Options => {
-                self.inputs.focus(0);
-                OAuthFocusArea::Inputs
-            }
-            OAuthFocusArea::Results => OAuthFocusArea::Options,
-        };
-    }
+    tab_input_boilerplate!(
+        OAuthTab,
+        core: core,
+        focus: focus_area,
+        Inputs: OAuthFocusArea::Inputs,
+        Results: OAuthFocusArea::Results
+    );
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.insert(c);
+            self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
         if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.backspace();
+            self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.paste(text);
+            self.core.inputs.paste(text);
         }
     }
 
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else if self.focus_area == OAuthFocusArea::Results {
-            Some(self.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.move_word_forward();
+    fn handle_focus_next(&mut self) {
+        if !self.is_running() {
+            self.focus_area = match self.focus_area {
+                OAuthFocusArea::Inputs => {
+                    self.core.inputs.blur();
+                    OAuthFocusArea::Options
+                }
+                OAuthFocusArea::Options => OAuthFocusArea::Results,
+                OAuthFocusArea::Results => {
+                    self.core.inputs.focus(0);
+                    OAuthFocusArea::Inputs
+                }
+            };
         }
     }
 
-    fn handle_word_backward(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == OAuthFocusArea::Results {
-            self.results_view.scroll_to_top();
+    fn handle_focus_prev(&mut self) {
+        if !self.is_running() {
+            self.focus_area = match self.focus_area {
+                OAuthFocusArea::Inputs => {
+                    self.core.inputs.blur();
+                    OAuthFocusArea::Results
+                }
+                OAuthFocusArea::Options => {
+                    self.core.inputs.focus(0);
+                    OAuthFocusArea::Inputs
+                }
+                OAuthFocusArea::Results => OAuthFocusArea::Options,
+            };
         }
     }
 
-    fn handle_end(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == OAuthFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == OAuthFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+    fn handle_up(&mut self) {
+        if !self.is_running() {
+            match self.focus_area {
+                OAuthFocusArea::Inputs => self.core.inputs.focus_prev(),
+                OAuthFocusArea::Results => self.core.scroll_results_up(),
+                _ => {}
+            }
         }
     }
 
-    fn handle_top(&mut self) {
-        if self.is_running() {
-            return;
+    fn handle_down(&mut self) {
+        if !self.is_running() {
+            match self.focus_area {
+                OAuthFocusArea::Inputs => self.core.inputs.focus_next(),
+                OAuthFocusArea::Results => self.core.scroll_results_down(),
+                _ => {}
+            }
         }
-        self.focus_area = OAuthFocusArea::Inputs;
-        self.inputs.focus(0);
     }
 
-    fn handle_bottom(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.inputs.blur();
-        self.focus_area = OAuthFocusArea::Results;
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.scroll_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.scroll_down(page_size);
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == OAuthFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn handle_enter(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         if self.focus_area == OAuthFocusArea::Results {
             return;
         }
-        if self.focus_area == OAuthFocusArea::Inputs && self.inputs.is_focused() {
-            self.inputs.blur();
+        if self.focus_area == OAuthFocusArea::Inputs && self.core.inputs.is_focused() {
+            self.core.inputs.blur();
             return;
         }
         if self.focus_area == OAuthFocusArea::Options {
@@ -535,49 +429,17 @@ impl TabInput for OAuthTab {
             checkboxes[idx].toggle();
             return;
         }
-        // focus_area is Inputs but inputs.is_focused() == false (user tabbed past last field).
-        // At this point is_running() is guaranteed false; start the scan.
         self.start();
     }
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = OAuthFocusArea::Inputs;
         self.checkbox_focus_index = 0;
-    }
-
-    fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            OAuthFocusArea::Inputs => {
-                self.inputs.focus_prev();
-            }
-            OAuthFocusArea::Results => {
-                self.results_view.scroll_up(1);
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            OAuthFocusArea::Inputs => {
-                self.inputs.focus_next();
-            }
-            OAuthFocusArea::Results => {
-                self.results_view.scroll_down(1);
-            }
-            _ => {}
-        }
     }
 
     fn handle_left(&mut self) -> bool {
@@ -585,7 +447,7 @@ impl TabInput for OAuthTab {
             return false;
         }
         match self.focus_area {
-            OAuthFocusArea::Inputs => self.inputs.move_left(),
+            OAuthFocusArea::Inputs => self.core.inputs.move_left(),
             OAuthFocusArea::Options => {
                 if self.checkbox_focus_index > 0 {
                     self.checkbox_focus_index -= 1;
@@ -601,7 +463,7 @@ impl TabInput for OAuthTab {
             return false;
         }
         match self.focus_area {
-            OAuthFocusArea::Inputs => self.inputs.move_right(),
+            OAuthFocusArea::Inputs => self.core.inputs.move_right(),
             OAuthFocusArea::Options => {
                 let max_idx = 3;
                 if self.checkbox_focus_index < max_idx {
@@ -613,13 +475,9 @@ impl TabInput for OAuthTab {
         }
     }
 
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == OAuthFocusArea::Inputs && self.inputs.is_focused()
-    }
-
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            OAuthFocusArea::Inputs => !self.inputs.can_move_left(),
+            OAuthFocusArea::Inputs => !self.core.inputs.can_move_left(),
             OAuthFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
@@ -627,14 +485,10 @@ impl TabInput for OAuthTab {
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            OAuthFocusArea::Inputs => !self.inputs.can_move_right(),
+            OAuthFocusArea::Inputs => !self.core.inputs.can_move_right(),
             OAuthFocusArea::Options => self.checkbox_focus_index >= 3,
             _ => true,
         }
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
     }
 }
 
@@ -668,10 +522,10 @@ mod tests {
     fn test_handle_enter_inputs_focused_blurs() {
         let mut tab = create_test_tab();
         tab.focus_area = OAuthFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 }

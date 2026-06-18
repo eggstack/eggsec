@@ -24,10 +24,10 @@ mod tests {
     fn graphql_enter_inputs_focused_blurs() {
         let mut tab = GraphQlTab::new();
         tab.focus_area = GraphQlFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -35,9 +35,9 @@ mod tests {
     fn graphql_enter_inputs_unfocused_starts_with_target() {
         let mut tab = GraphQlTab::new();
         tab.focus_area = GraphQlFocusArea::Inputs;
-        tab.inputs.blur();
+        tab.core.inputs.blur();
         // With a target set, unfocused inputs + Enter starts the scan
-        tab.inputs.fields[0].value = "https://example.com/graphql".to_string();
+        tab.core.inputs.fields[0].value = "https://example.com/graphql".to_string();
         tab.handle_enter();
         assert!(tab.is_running());
     }
@@ -68,10 +68,10 @@ mod tests {
     fn oauth_enter_inputs_focused_blurs() {
         let mut tab = OAuthTab::new();
         tab.focus_area = OAuthFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.core.inputs.focus(0);
+        assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
-        assert!(!tab.inputs.is_focused());
+        assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
 
@@ -583,19 +583,19 @@ mod tests {
         // GraphQl
         let mut gql = GraphQlTab::new();
         gql.focus_area = GraphQlFocusArea::Inputs;
-        gql.inputs.focus(0);
-        assert!(gql.inputs.is_focused());
+        gql.core.inputs.focus(0);
+        assert!(gql.core.inputs.is_focused());
         gql.handle_enter();
-        assert!(!gql.inputs.is_focused(), "GraphQl input should blur");
+        assert!(!gql.core.inputs.is_focused(), "GraphQl input should blur");
         assert!(!gql.is_running());
 
         // OAuth
         let mut oauth = OAuthTab::new();
         oauth.focus_area = OAuthFocusArea::Inputs;
-        oauth.inputs.focus(0);
-        assert!(oauth.inputs.is_focused());
+        oauth.core.inputs.focus(0);
+        assert!(oauth.core.inputs.is_focused());
         oauth.handle_enter();
-        assert!(!oauth.inputs.is_focused(), "OAuth input should blur");
+        assert!(!oauth.core.inputs.is_focused(), "OAuth input should blur");
         assert!(!oauth.is_running());
 
         // Load

@@ -1,15 +1,14 @@
 use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
-};
+use crate::components::{Checkbox, InputField};
+use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_input_boilerplate, tc};
 use eggsec::scanner::endpoints::EndpointScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -21,33 +20,25 @@ pub enum ScanEndpointsFocusArea {
 }
 
 pub struct ScanEndpointsTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub results: Option<EndpointScanResults>,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub include_404_checkbox: Checkbox,
     pub focus_area: ScanEndpointsFocusArea,
-    pub error: Option<TabError>,
 }
 
 impl ScanEndpointsTab {
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
+        let inputs = crate::components::InputGroup::new()
             .add(InputField::new("Target URL"))
             .add(InputField::new("Concurrency").with_value("20"))
             .add(InputField::new("Timeout (s)").with_value("10"))
             .add(InputField::new("Wordlist (default: common)"));
 
         Self {
-            inputs,
+            core: TabCore::new("Scanning endpoints...", "Results").with_inputs(inputs),
             results: None,
-            progress: ProgressGauge::new("Scanning endpoints..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
             include_404_checkbox: Checkbox::new("Check for 404s").checked(true),
             focus_area: ScanEndpointsFocusArea::Inputs,
-            error: None,
         }
     }
 
@@ -56,52 +47,19 @@ impl ScanEndpointsTab {
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
-    }
-
-    pub fn targets(&self) -> Vec<String> {
-        let target = self.target();
-        if target.is_empty() {
-            return Vec::new();
-        }
-        target
-            .split([',', '\n', '\r'])
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
-    }
-
-    pub fn is_multi_target(&self) -> bool {
-        self.targets().len() > 1
+        self.core.target()
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
-            .fields
-            .get(1)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(20)
+        field_as(&self.core, 1, 20)
     }
 
     pub fn timeout(&self) -> u64 {
-        self.inputs
-            .fields
-            .get(2)
-            .and_then(|f| f.value.parse().ok())
-            .unwrap_or(10)
+        field_as(&self.core, 2, 10)
     }
 
     pub fn wordlist(&self) -> Option<&str> {
-        let w = self
-            .inputs
-            .fields
-            .get(3)
-            .map(|f| f.value.as_str())
-            .unwrap_or("");
+        let w = crate::tabs::core::field_str(&self.core, 3);
         if w.is_empty() {
             None
         } else {
@@ -113,16 +71,20 @@ impl ScanEndpointsTab {
         self.include_404_checkbox.checked
     }
 
+    pub fn update_progress(&mut self, completed: u64, total: u64) {
+        self.core.update_progress(completed, total);
+    }
+
     pub fn set_results(&mut self, results: EndpointScanResults) {
         self.update_results_view(&results);
         self.results = Some(results);
-        self.state = AppState::Completed;
+        self.core.state = AppState::Completed;
     }
 
     fn update_results_view(&mut self, results: &EndpointScanResults) {
         use ratatui::style::Modifier;
 
-        self.results_view.clear();
+        self.core.results_view.clear();
 
         let base_url = results.base_url.clone();
         let endpoints_scanned = results.endpoints_scanned;
@@ -142,12 +104,12 @@ impl ScanEndpointsTab {
             })
             .collect();
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("URL: ", Style::default().fg(tc!(accent))),
             Span::raw(base_url),
         ]));
 
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled("Scanned: ", Style::default().fg(tc!(secondary))),
             Span::raw(endpoints_scanned.to_string()),
             Span::raw(" | "),
@@ -158,8 +120,8 @@ impl ScanEndpointsTab {
             Span::raw(interesting_findings.to_string()),
         ]));
 
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(vec![
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(vec![
             Span::styled(format!("{:<40}", "PATH"), Style::default().fg(tc!(accent))),
             Span::styled(format!("{:<8}", "STATUS"), Style::default().fg(tc!(accent))),
             Span::styled(format!("{:<10}", "SIZE"), Style::default().fg(tc!(accent))),
@@ -191,7 +153,7 @@ impl ScanEndpointsTab {
                 path
             };
 
-            self.results_view.add_line(Line::from(vec![
+            self.core.results_view.add_line(Line::from(vec![
                 Span::styled(format!("{:<40}", path_display), style),
                 Span::styled(
                     format!("{:<8}", status_code),
@@ -204,8 +166,9 @@ impl ScanEndpointsTab {
 
     pub fn start(&mut self) {
         if self.target().is_empty() {
-            self.state = AppState::Error("Target cannot be empty".to_string());
-            self.error = Some(TabError::Target("Target cannot be empty".to_string()));
+            self.core.state = AppState::Error("Target cannot be empty".to_string());
+            self.core.error =
+                Some(TabError::Target("Target cannot be empty".to_string()));
             return;
         }
 
@@ -213,16 +176,18 @@ impl ScanEndpointsTab {
         if let Some(path_str) = wordlist_path {
             let path = std::path::Path::new(&path_str);
             if !path.exists() {
-                self.state = AppState::Error(format!("Wordlist file not found: {}", path_str));
-                self.error = Some(TabError::Config(format!(
+                self.core.state =
+                    AppState::Error(format!("Wordlist file not found: {}", path_str));
+                self.core.error = Some(TabError::Config(format!(
                     "Wordlist file not found: {}",
                     path_str
                 )));
                 return;
             }
             if !path.is_file() {
-                self.state = AppState::Error(format!("Wordlist path is not a file: {}", path_str));
-                self.error = Some(TabError::Config(format!(
+                self.core.state =
+                    AppState::Error(format!("Wordlist path is not a file: {}", path_str));
+                self.core.error = Some(TabError::Config(format!(
                     "Wordlist path is not a file: {}",
                     path_str
                 )));
@@ -230,28 +195,7 @@ impl ScanEndpointsTab {
             }
         }
 
-        self.state = AppState::Running;
-        self.progress.current = 0;
-        self.results = None;
-        self.results_view.clear();
-        self.error = None;
-    }
-
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
-    pub fn update_progress(&mut self, completed: u64, total: u64) {
-        self.progress.current = completed;
-        self.progress.total = total;
-    }
-
-    pub fn scroll_results_up(&mut self) {
-        self.results_view.scroll_up(1);
-    }
-
-    pub fn scroll_results_down(&mut self) {
-        self.results_view.scroll_down(1);
+        start_scan(&mut self.core);
     }
 }
 
@@ -263,47 +207,29 @@ impl Default for ScanEndpointsTab {
 
 impl TabState for ScanEndpointsTab {
     fn state(&self) -> AppState {
-        self.state.clone()
+        self.core.state.clone()
     }
 
     fn progress(&self) -> f64 {
-        self.progress.percent() as f64
+        self.core.progress.percent() as f64
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results = None;
-        self.progress.current = 0;
-        self.progress.total = 0;
-        self.results_view.clear();
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
-        if let Some(field) = self.inputs.fields.get_mut(1) {
+        self.core.reset_all();
+        if let Some(field) = self.core.inputs.fields.get_mut(1) {
             field.value = "20".to_string();
             field.cursor_pos = 2;
         }
-        if let Some(field) = self.inputs.fields.get_mut(2) {
+        if let Some(field) = self.core.inputs.fields.get_mut(2) {
             field.value = "10".to_string();
             field.cursor_pos = 2;
-        }
-        if let Some(field) = self.inputs.fields.get_mut(0) {
-            field.value = "".to_string();
-            field.cursor_pos = 0;
-        }
-        if let Some(field) = self.inputs.fields.get_mut(3) {
-            field.value = "".to_string();
-            field.cursor_pos = 0;
         }
         self.focus_area = ScanEndpointsFocusArea::Inputs;
         self.include_404_checkbox.checked = true;
     }
 
     fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
-        self.progress.current = 0;
+        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -341,7 +267,7 @@ impl TabRender for ScanEndpointsTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
+        for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
                 field.render(f, *chunk, insert_mode);
             }
@@ -352,173 +278,124 @@ impl TabRender for ScanEndpointsTab {
             include_404.render(f, *chunk);
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(Style::default().fg(
-                if self.focus_area == ScanEndpointsFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                },
-            ));
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
-
-        if self.state == AppState::Running {
-            self.progress.render(f, results_inner);
-        } else if let Some(ref err) = self.error {
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_inner);
-        } else if !self.results_view.is_empty() {
-            self.results_view
-                .render(f, results_inner, Some(tc!(success)));
-        } else {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_inner);
-        }
+        render_results_area(
+            f,
+            results_area,
+            &self.core.state,
+            &self.core.error,
+            &self.core.results_view,
+            &self.core.progress,
+            "Results",
+            "Results will appear here after running",
+        );
     }
 }
 
 impl TabInput for ScanEndpointsTab {
-    fn stop(&mut self) {
-        ScanEndpointsTab::stop(self);
+    tab_input_boilerplate!(
+        ScanEndpointsTab,
+        core: core,
+        focus: focus_area,
+        Inputs: ScanEndpointsFocusArea::Inputs,
+        Results: ScanEndpointsFocusArea::Results
+    );
+
+    fn handle_char(&mut self, c: char) {
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.core.inputs.insert(c);
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.core.inputs.backspace();
+        }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.core.inputs.paste(text);
+        }
     }
 
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
         }
-        match self.focus_area {
+        self.focus_area = match self.focus_area {
             ScanEndpointsFocusArea::Inputs => {
-                self.inputs.blur();
-                self.focus_area = ScanEndpointsFocusArea::Options;
+                self.core.inputs.blur();
+                ScanEndpointsFocusArea::Options
             }
-            ScanEndpointsFocusArea::Options => {
-                self.focus_area = ScanEndpointsFocusArea::Results;
-            }
+            ScanEndpointsFocusArea::Options => ScanEndpointsFocusArea::Results,
             ScanEndpointsFocusArea::Results => {
-                self.focus_area = ScanEndpointsFocusArea::Inputs;
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
+                ScanEndpointsFocusArea::Inputs
             }
-        }
+        };
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        match self.focus_area {
+        self.focus_area = match self.focus_area {
             ScanEndpointsFocusArea::Inputs => {
-                self.inputs.blur();
-                self.focus_area = ScanEndpointsFocusArea::Results;
+                self.core.inputs.blur();
+                ScanEndpointsFocusArea::Results
             }
             ScanEndpointsFocusArea::Options => {
-                self.inputs.focus(0);
-                self.focus_area = ScanEndpointsFocusArea::Inputs;
+                self.core.inputs.focus(0);
+                ScanEndpointsFocusArea::Inputs
             }
-            ScanEndpointsFocusArea::Results => {
-                self.focus_area = ScanEndpointsFocusArea::Options;
-            }
-        }
+            ScanEndpointsFocusArea::Results => ScanEndpointsFocusArea::Options,
+        };
     }
 
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.insert(c);
+    fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
         }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if !self.is_running() {
-            if self.focus_area == ScanEndpointsFocusArea::Inputs {
-                self.inputs.get_focused_value()
-            } else if self.focus_area == ScanEndpointsFocusArea::Results {
-                Some(self.results_view.get_content())
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
+                self.core.scroll_results_up();
             } else {
-                None
+                self.core.inputs.focus_prev();
             }
-        } else {
-            None
+        } else if self.focus_area == ScanEndpointsFocusArea::Results {
+            self.core.scroll_results_up();
         }
     }
 
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.move_word_forward();
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
+    fn handle_down(&mut self) {
         if self.is_running() {
             return;
         }
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.move_home();
+            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
+                self.core.scroll_results_down();
+            } else {
+                self.core.inputs.focus_next();
+            }
         } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            self.results_view.scroll_to_top();
+            self.core.scroll_results_down();
         }
     }
 
-    fn handle_end(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            self.results_view.scroll_to_bottom();
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.inputs.blur();
-        self.focus_area = ScanEndpointsFocusArea::Inputs;
-        self.inputs.focus(0);
-    }
-
-    fn handle_bottom(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.inputs.blur();
-        self.focus_area = ScanEndpointsFocusArea::Results;
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == ScanEndpointsFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn handle_enter(&mut self) {
         if self.focus_area == ScanEndpointsFocusArea::Results {
             return;
         }
-
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
-        if self.inputs.is_focused() {
-            self.inputs.blur();
+        if self.core.inputs.is_focused() {
+            self.core.inputs.blur();
             return;
         }
         if self.focus_area == ScanEndpointsFocusArea::Options {
@@ -530,109 +407,31 @@ impl TabInput for ScanEndpointsTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         match self.focus_area {
-            ScanEndpointsFocusArea::Inputs => self.inputs.blur(),
+            ScanEndpointsFocusArea::Inputs => self.core.inputs.blur(),
             ScanEndpointsFocusArea::Options | ScanEndpointsFocusArea::Results => {
                 self.focus_area = ScanEndpointsFocusArea::Inputs;
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
             }
-        }
-    }
-
-    fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_up();
-            } else {
-                self.inputs.focus_prev();
-            }
-        } else if self.focus_area == ScanEndpointsFocusArea::Options {
-            return;
-        } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            self.scroll_results_up();
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_down();
-            } else {
-                self.inputs.focus_next();
-            }
-        } else if self.focus_area == ScanEndpointsFocusArea::Options {
-            return;
-        } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            self.scroll_results_down();
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.move_left()
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.core.inputs.move_left()
         } else {
             false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.move_right()
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.core.inputs.move_right()
         } else {
             false
         }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == ScanEndpointsFocusArea::Inputs && self.inputs.is_focused()
-    }
-
-    fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.fields.is_empty() || self.inputs.is_at_left_edge()
-        } else {
-            true
-        }
-    }
-
-    fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.fields.is_empty() || self.inputs.is_at_right_edge()
-        } else {
-            true
-        }
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_down(page_size);
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
     }
 }

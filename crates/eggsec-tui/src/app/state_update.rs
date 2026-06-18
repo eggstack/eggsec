@@ -381,13 +381,14 @@ impl super::App {
             }
             #[cfg(feature = "vuln-management")]
             TaskResult::Vuln(ref assessment) => {
-                self.tabs.vuln.state = AppState::Completed;
-                self.tabs.vuln.results_view.clear();
+                self.tabs.vuln.core.state = AppState::Completed;
+                self.tabs.vuln.core.results_view.clear();
 
                 // Display summary lines (backward compat)
                 for line in &assessment.summary {
                     self.tabs
                         .vuln
+                        .core
                         .results_view
                         .add_line(ratatui::text::Line::from(line.clone()));
                 }

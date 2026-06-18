@@ -234,6 +234,287 @@ pub fn tab_input_page_down(core: &mut TabCore, is_running: bool, page_size: usiz
     }
 }
 
+/// Generic field accessor: parse field at `index` as `T`, returning `default` on failure.
+pub fn field_as<T: std::str::FromStr>(core: &TabCore, index: usize, default: T) -> T {
+    core.inputs
+        .fields
+        .get(index)
+        .and_then(|f| f.value.parse().ok())
+        .unwrap_or(default)
+}
+
+/// Generic field string accessor: return field value at `index` as `&str`.
+pub fn field_str(core: &TabCore, index: usize) -> &str {
+    core.inputs
+        .fields
+        .get(index)
+        .map(|f| f.value.as_str())
+        .unwrap_or("")
+}
+
+/// Starts a scan: sets state to Running, clears results and error.
+/// Returns true if target is non-empty (scan started), false otherwise.
+pub fn start_scan(core: &mut TabCore) -> bool {
+    if !core.target().is_empty() {
+        core.state = AppState::Running;
+        core.progress.current = 0;
+        core.results_view.clear();
+        core.error = None;
+        true
+    } else {
+        false
+    }
+}
+
+// --- Focus navigation helpers ---
+
+/// Focus area cycle for 3-area tabs (Inputs → Options → Results → Inputs).
+pub fn focus_next_3area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    options: A,
+    results: A,
+) -> A {
+    match current {
+        _ if current == inputs => {
+            core.inputs.blur();
+            options
+        }
+        _ if current == options => results,
+        _ if current == results => {
+            core.inputs.focus(0);
+            inputs
+        }
+        _ => current,
+    }
+}
+
+/// Focus area cycle for 3-area tabs (reverse: Inputs → Results → Options → Inputs).
+pub fn focus_prev_3area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    options: A,
+    results: A,
+) -> A {
+    match current {
+        _ if current == inputs => {
+            core.inputs.blur();
+            results
+        }
+        _ if current == options => {
+            core.inputs.focus(0);
+            inputs
+        }
+        _ if current == results => options,
+        _ => current,
+    }
+}
+
+/// Focus area cycle for 2-area tabs (Inputs → Results → Inputs).
+pub fn focus_next_2area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) -> A {
+    if current == inputs {
+        core.inputs.blur();
+        results
+    } else {
+        core.inputs.focus(0);
+        inputs
+    }
+}
+
+/// Focus area cycle for 2-area tabs (reverse: same as forward for 2-area).
+pub fn focus_prev_2area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) -> A {
+    if current == results {
+        core.inputs.focus(inputs_field_count(core));
+        inputs
+    } else {
+        core.inputs.blur();
+        results
+    }
+}
+
+fn inputs_field_count(core: &TabCore) -> usize {
+    core.inputs.fields.len().saturating_sub(1)
+}
+
+/// Common `handle_up` for 3-area tabs where Options area has no vertical navigation.
+pub fn handle_up_3area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) {
+    if current == inputs {
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_up();
+        } else {
+            core.inputs.focus_prev();
+        }
+    } else if current == results {
+        core.scroll_results_up();
+    }
+}
+
+/// Common `handle_down` for 3-area tabs where Options area has no vertical navigation.
+pub fn handle_down_3area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) {
+    if current == inputs {
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_down();
+        } else {
+            core.inputs.focus_next();
+        }
+    } else if current == results {
+        core.scroll_results_down();
+    }
+}
+
+/// Common `handle_up` for 2-area tabs.
+pub fn handle_up_2area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) {
+    if current == inputs {
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_up();
+        } else {
+            core.inputs.focus_prev();
+        }
+    } else if current == results {
+        core.scroll_results_up();
+    }
+}
+
+/// Common `handle_down` for 2-area tabs.
+pub fn handle_down_2area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) {
+    if current == inputs {
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_down();
+        } else {
+            core.inputs.focus_next();
+        }
+    } else if current == results {
+        core.scroll_results_down();
+    }
+}
+
+/// Common `handle_left` for simple tabs (Inputs area only).
+pub fn handle_left_simple(core: &mut TabCore, is_running: bool) -> bool {
+    if !is_running {
+        core.inputs.move_left()
+    } else {
+        false
+    }
+}
+
+/// Common `handle_right` for simple tabs (Inputs area only).
+pub fn handle_right_simple(core: &mut TabCore, is_running: bool) -> bool {
+    if !is_running {
+        core.inputs.move_right()
+    } else {
+        false
+    }
+}
+
+/// Common `is_input_focused` check.
+pub fn is_input_focused<A: Copy + PartialEq>(current: A, inputs: A, core: &TabCore) -> bool {
+    current == inputs && core.inputs.is_focused()
+}
+
+/// Common `is_at_left_edge` for Inputs/Results tabs.
+pub fn is_at_left_edge_simple<A: Copy + PartialEq>(current: A, inputs: A, core: &TabCore) -> bool {
+    if current == inputs {
+        core.inputs.is_at_left_edge()
+    } else {
+        true
+    }
+}
+
+/// Common `is_at_right_edge` for Inputs/Results tabs.
+pub fn is_at_right_edge_simple<A: Copy + PartialEq>(
+    current: A,
+    inputs: A,
+    core: &TabCore,
+) -> bool {
+    if current == inputs {
+        core.inputs.is_at_right_edge()
+    } else {
+        true
+    }
+}
+
+/// Common `handle_enter` guard pattern for simple tabs.
+/// Returns an enum indicating what action should be taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnterAction {
+    /// Results area: no-op
+    NoOp,
+    /// Running: stop
+    Stop,
+    /// Inputs focused: blur
+    BlurInputs,
+    /// Default: start the scan
+    Start,
+}
+
+/// Evaluates the common `handle_enter` guard pattern.
+pub fn evaluate_enter<A: Copy + PartialEq>(
+    current: A,
+    inputs: A,
+    results: A,
+    is_running: bool,
+    inputs_focused: bool,
+) -> EnterAction {
+    if current == results || is_running {
+        if is_running {
+            EnterAction::Stop
+        } else {
+            EnterAction::NoOp
+        }
+    } else if current == inputs && inputs_focused {
+        EnterAction::BlurInputs
+    } else {
+        EnterAction::Start
+    }
+}
+
+/// Common `handle_escape` for simple tabs: stop if running, else blur and reset focus.
+pub fn handle_escape_simple<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+) -> A {
+    if core.state == AppState::Running {
+        core.stop();
+        current
+    } else {
+        core.inputs.blur();
+        inputs
+    }
+}
+
 // --- Rendering helpers ---
 
 /// Renders the standard 4-branch results area: Running -> Error -> Results -> Empty.
@@ -521,5 +802,165 @@ mod tests {
                 );
             })
             .unwrap();
+    }
+
+    #[test]
+    fn field_as_returns_parsed_value() {
+        let core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("URL"))
+                .add(crate::components::InputField::new("Port").with_value("8080")),
+        );
+        assert_eq!(field_as::<usize>(&core, 1, 80), 8080);
+    }
+
+    #[test]
+    fn field_as_returns_default_on_empty() {
+        let core = TabCore::new("test", "Results");
+        assert_eq!(field_as::<usize>(&core, 0, 42), 42);
+    }
+
+    #[test]
+    fn field_as_returns_default_on_parse_error() {
+        let core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Port").with_value("not_a_number")),
+        );
+        assert_eq!(field_as::<u64>(&core, 0, 99), 99);
+    }
+
+    #[test]
+    fn field_str_returns_value() {
+        let core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target").with_value("example.com")),
+        );
+        assert_eq!(field_str(&core, 0), "example.com");
+    }
+
+    #[test]
+    fn field_str_returns_empty_on_missing() {
+        let core = TabCore::new("test", "Results");
+        assert_eq!(field_str(&core, 0), "");
+    }
+
+    #[test]
+    fn start_scan_with_target_succeeds() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target").with_value("example.com")),
+        );
+        assert!(start_scan(&mut core));
+        assert_eq!(core.state, AppState::Running);
+        assert_eq!(core.progress.current, 0);
+        assert!(core.results_view.is_empty());
+        assert!(core.error.is_none());
+    }
+
+    #[test]
+    fn start_scan_empty_target_fails() {
+        let mut core = TabCore::new("test", "Results");
+        assert!(!start_scan(&mut core));
+        assert_eq!(core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn focus_next_3area_cycles_correctly() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
+
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        // Inputs -> Options
+        let next = focus_next_3area(&mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results);
+        assert_eq!(next, Area::Options);
+
+        // Options -> Results
+        let next = focus_next_3area(&mut core, Area::Options, Area::Inputs, Area::Options, Area::Results);
+        assert_eq!(next, Area::Results);
+
+        // Results -> Inputs (focuses first field)
+        let next = focus_next_3area(&mut core, Area::Results, Area::Inputs, Area::Options, Area::Results);
+        assert_eq!(next, Area::Inputs);
+        assert!(core.inputs.is_focused());
+    }
+
+    #[test]
+    fn focus_prev_3area_cycles_correctly() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
+
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        // Inputs -> Results (blurs)
+        let prev = focus_prev_3area(&mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results);
+        assert_eq!(prev, Area::Results);
+
+        // Results -> Options
+        let prev = focus_prev_3area(&mut core, Area::Results, Area::Inputs, Area::Options, Area::Results);
+        assert_eq!(prev, Area::Options);
+
+        // Options -> Inputs (focuses first field)
+        let prev = focus_prev_3area(&mut core, Area::Options, Area::Inputs, Area::Options, Area::Results);
+        assert_eq!(prev, Area::Inputs);
+    }
+
+    #[test]
+    fn evaluate_enter_results_no_op() {
+        let action = evaluate_enter(1, 0, 1, false, false);
+        assert_eq!(action, EnterAction::NoOp);
+    }
+
+    #[test]
+    fn evaluate_enter_running_stops() {
+        let action = evaluate_enter(0, 0, 1, true, false);
+        assert_eq!(action, EnterAction::Stop);
+    }
+
+    #[test]
+    fn evaluate_enter_inputs_focused_blurs() {
+        let action = evaluate_enter(0, 0, 1, false, true);
+        assert_eq!(action, EnterAction::BlurInputs);
+    }
+
+    #[test]
+    fn evaluate_enter_inputs_unfocused_starts() {
+        let action = evaluate_enter(0, 0, 1, false, false);
+        assert_eq!(action, EnterAction::Start);
+    }
+
+    #[test]
+    fn handle_escape_simple_stops_when_running() {
+        let mut core = TabCore::new("test", "Results");
+        core.state = AppState::Running;
+        let result = handle_escape_simple(&mut core, 1, 0);
+        assert_eq!(result, 1); // Returns current area
+        assert_eq!(core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn handle_escape_simple_blurs_when_idle() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        core.inputs.focus(0);
+        let result = handle_escape_simple(&mut core, 1, 0);
+        assert_eq!(result, 0); // Returns inputs area
+        assert!(!core.inputs.is_focused());
     }
 }

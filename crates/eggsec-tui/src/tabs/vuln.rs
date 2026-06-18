@@ -1,7 +1,6 @@
 use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
-};
+use crate::components::{empty_state_paragraph, InputField, Selector, SelectorItem};
+use crate::tabs::core::TabCore;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use eggsec::vuln::{
@@ -16,13 +15,10 @@ use ratatui::{
 };
 
 pub struct VulnTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub mode_selector: Selector,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: VulnFocusArea,
     pub current_mode: VulnMode,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,7 +51,7 @@ impl VulnTab {
     }
 
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
+        let inputs = crate::components::InputGroup::new()
             .add(InputField::new("CVE ID / Finding ID"))
             .add(InputField::new("Title"))
             .add(InputField::new("Description"))
@@ -77,62 +73,35 @@ impl VulnTab {
         ]);
 
         Self {
-            inputs,
+            core: TabCore::new("Analyzing...", "Results").with_inputs(inputs),
             mode_selector,
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
             focus_area: VulnFocusArea::Mode,
             current_mode: VulnMode::CvssCalc,
-            error: None,
         }
     }
 
     pub fn cve_id(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        crate::tabs::core::field_str(&self.core, 0)
     }
 
     pub fn title(&self) -> &str {
-        self.inputs
-            .fields
-            .get(1)
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        crate::tabs::core::field_str(&self.core, 1)
     }
 
     pub fn description(&self) -> &str {
-        self.inputs
-            .fields
-            .get(2)
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        crate::tabs::core::field_str(&self.core, 2)
     }
 
     pub fn cvss_vector(&self) -> &str {
-        self.inputs
-            .fields
-            .get(3)
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        crate::tabs::core::field_str(&self.core, 3)
     }
 
     pub fn asset_type(&self) -> &str {
-        self.inputs
-            .fields
-            .get(4)
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        crate::tabs::core::field_str(&self.core, 4)
     }
 
     pub fn severity_str(&self) -> &str {
-        self.inputs
-            .fields
-            .get(5)
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        crate::tabs::core::field_str(&self.core, 5)
     }
 
     pub fn get_mode(&self) -> &str {
@@ -147,42 +116,39 @@ impl VulnTab {
     }
 
     pub fn start(&mut self) {
-        self.state = AppState::Running;
-        self.results_view.clear();
-    }
-
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
+        self.core.state = AppState::Running;
+        self.core.results_view.clear();
     }
 
     pub fn display_cvss(&mut self, vector: &str) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
 
         match CvssScore::from_vector(vector) {
             Ok(cvss) => {
-                self.results_view.add_line(Line::from(Span::styled(
+                self.core.results_view.add_line(Line::from(Span::styled(
                     "CVSS 3.1 Score",
                     Style::default().fg(tc!(accent)),
                 )));
-                self.results_view.add_line(Line::from(""));
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(""));
+                self.core.results_view.add_line(Line::from(format!(
                     "  Base Score:       {:.1}",
                     cvss.base_score
                 )));
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(format!(
                     "  Temporal Score:   {:.1}",
                     cvss.temporal_score
                 )));
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(format!(
                     "  Environmental:    {:.1}",
                     cvss.environmental_score
                 )));
-                self.results_view
+                self.core
+                    .results_view
                     .add_line(Line::from(format!("  Vector:           {}", cvss.vector)));
             }
             Err(e) => {
-                self.results_view.add_line(Line::from(Span::styled(
+                self.core.results_view.add_line(Line::from(Span::styled(
                     format!("Invalid CVSS vector: {}", e),
                     Style::default().fg(tc!(error)),
                 )));
@@ -191,30 +157,30 @@ impl VulnTab {
     }
 
     pub fn display_exploit_info(&mut self, cve_id: &str, info: ExploitInfo) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Exploitability: {}", cve_id),
             Style::default().fg(tc!(accent)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(format!(
             "  Public Exploit:    {}",
             if info.has_public_exploit { "Yes" } else { "No" }
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Exploit-DB:        {}",
             info.exploit_db_id.as_deref().unwrap_or("N/A")
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Metasploit:        {}",
             info.metasploit_module.as_deref().unwrap_or("N/A")
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  CISA KEV:          {}",
             if info.in_cisa_kev { "Yes" } else { "No" }
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Actively Exploited: {}",
             if info.is_actively_exploited {
                 "Yes"
@@ -222,52 +188,52 @@ impl VulnTab {
                 "No"
             }
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Exploit Score:     {:.1}",
             info.exploit_score
         )));
     }
 
     pub fn display_asset(&mut self, asset: AssetCriticality) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Asset Assessment: {}", asset.asset_id),
             Style::default().fg(tc!(accent)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(format!(
             "  Technology Score:  {:.1}",
             asset.technology_score
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Environment Score: {:.1}",
             asset.environment_score
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Data Sensitivity:  {:.1}",
             asset.data_sensitivity
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  User Base:         {:.1}",
             asset.user_base
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Overall Score:     {:.1}",
             asset.overall_score
         )));
     }
 
     pub fn display_prioritized(&mut self, findings: Vec<PrioritizedFinding>) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Prioritized Findings ({}):", findings.len()),
             Style::default().fg(tc!(accent)),
         )));
-        self.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(""));
         for f in &findings {
-            self.results_view.add_line(Line::from(format!(
+            self.core.results_view.add_line(Line::from(format!(
                 "  #{} [{}] {} - Risk: {:.1} ({:?})",
                 f.priority_rank,
                 f.severity,
@@ -279,58 +245,62 @@ impl VulnTab {
     }
 
     pub fn display_triage(&mut self, result: TriageResult) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Triage: {}", result.finding_id),
             Style::default().fg(tc!(accent)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(format!(
             "  Status:     {:?}",
             result.triage_status
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Confidence: {:.0}%",
             result.confidence * 100.0
         )));
-        self.results_view
+        self.core
+            .results_view
             .add_line(Line::from(format!("  Reason:     {}", result.reason)));
     }
 
     pub fn display_remediation(&mut self, remediation: Remediation) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
+        self.core.results_view.add_line(Line::from(Span::styled(
             format!("Remediation: {}", remediation.title),
             Style::default().fg(tc!(accent)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(format!(
             "  Priority:      {:?}",
             remediation.priority
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "  Effort:        {:.1} hours",
             remediation.effort_hours
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(Span::styled(
             "Steps:",
             Style::default().fg(tc!(info)),
         )));
         for (i, step) in remediation.steps.iter().enumerate() {
-            self.results_view
+            self.core
+                .results_view
                 .add_line(Line::from(format!("  {}. {}", i + 1, step)));
         }
         if !remediation.references.is_empty() {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(""));
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "References:",
                 Style::default().fg(tc!(info)),
             )));
             for r in &remediation.references {
-                self.results_view.add_line(Line::from(format!("  - {}", r)));
+                self.core
+                    .results_view
+                    .add_line(Line::from(format!("  - {}", r)));
             }
         }
     }
@@ -344,7 +314,7 @@ impl Default for VulnTab {
 
 impl TabState for VulnTab {
     fn state(&self) -> AppState {
-        self.state.clone()
+        self.core.state.clone()
     }
 
     fn progress(&self) -> f64 {
@@ -352,22 +322,16 @@ impl TabState for VulnTab {
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results_view.clear();
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
+        self.core.reset_all();
         self.mode_selector.select(0);
         self.mode_selector.blur();
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = VulnFocusArea::Mode;
         self.current_mode = VulnMode::CvssCalc;
     }
 
     fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
+        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -413,9 +377,9 @@ impl TabRender for VulnTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(config_block, input_area);
+        f.render_widget(config_block, *input_area);
 
-        let input_area = config_block.inner(input_area);
+        let input_area = config_block.inner(*input_area);
 
         let mut sel = self.mode_selector.clone();
         sel.focused = self.focus_area == VulnFocusArea::Mode;
@@ -443,9 +407,9 @@ impl TabRender for VulnTab {
                 .split(fields_area);
 
             for (i, &idx) in field_indices.iter().enumerate() {
-                if idx < self.inputs.fields.len() {
+                if idx < self.core.inputs.fields.len() {
                     if let Some(chunk) = field_chunks.get(i) {
-                        if let Some(field) = self.inputs.fields.get(idx) {
+                        if let Some(field) = self.core.inputs.fields.get(idx) {
                             field.render(f, *chunk, insert_mode);
                         }
                     }
@@ -453,7 +417,7 @@ impl TabRender for VulnTab {
             }
         }
 
-        if self.state == AppState::Running {
+        if self.core.state == AppState::Running {
             let gauge = ratatui::widgets::Gauge::default()
                 .block(
                     Block::default()
@@ -462,15 +426,15 @@ impl TabRender for VulnTab {
                 )
                 .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
-            f.render_widget(gauge, results_area);
-        } else if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, None);
+            f.render_widget(gauge, *results_area);
+        } else if !self.core.results_view.is_empty() {
+            self.core.results_view.render(f, *results_area, None);
         } else {
             let placeholder = empty_state_paragraph(
                 "Vulnerability Prioritization",
                 "Select mode and press Enter",
             );
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, *results_area);
         }
     }
 }
@@ -483,11 +447,11 @@ impl TabInput for VulnTab {
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
-                self.inputs.focus(self.first_visible_field());
+                self.core.inputs.focus(self.first_visible_field());
                 VulnFocusArea::Inputs
             }
             VulnFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 VulnFocusArea::Results
             }
             VulnFocusArea::Results => {
@@ -507,12 +471,12 @@ impl TabInput for VulnTab {
                 VulnFocusArea::Results
             }
             VulnFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 self.mode_selector.focus();
                 VulnFocusArea::Mode
             }
             VulnFocusArea::Results => {
-                self.inputs.focus(self.first_visible_field());
+                self.core.inputs.focus(self.first_visible_field());
                 VulnFocusArea::Inputs
             }
         };
@@ -520,19 +484,19 @@ impl TabInput for VulnTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.insert(c);
+            self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.backspace();
+            self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.paste(text);
+            self.core.inputs.paste(text);
         }
     }
 
@@ -541,9 +505,9 @@ impl TabInput for VulnTab {
             return None;
         }
         if self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.get_focused_value()
+            self.core.inputs.get_focused_value()
         } else if self.focus_area == VulnFocusArea::Results {
-            Some(self.results_view.get_content())
+            Some(self.core.results_view.get_content())
         } else {
             None
         }
@@ -551,22 +515,22 @@ impl TabInput for VulnTab {
 
     fn handle_word_forward(&mut self) {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.move_word_forward();
+            self.core.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.move_word_backward();
+            self.core.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
         if !self.is_running() {
             if self.focus_area == VulnFocusArea::Inputs {
-                self.inputs.move_home();
+                self.core.inputs.move_home();
             } else if self.focus_area == VulnFocusArea::Results {
-                self.results_view.scroll_to_top();
+                self.core.results_view.scroll_to_top();
             }
         }
     }
@@ -574,16 +538,16 @@ impl TabInput for VulnTab {
     fn handle_end(&mut self) {
         if !self.is_running() {
             if self.focus_area == VulnFocusArea::Inputs {
-                self.inputs.move_end();
+                self.core.inputs.move_end();
             } else if self.focus_area == VulnFocusArea::Results {
-                self.results_view.scroll_to_bottom();
+                self.core.results_view.scroll_to_bottom();
             }
         }
     }
 
     fn handle_top(&mut self) {
         if !self.is_running() {
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.focus_area = VulnFocusArea::Mode;
             self.mode_selector.focus();
         }
@@ -592,14 +556,14 @@ impl TabInput for VulnTab {
     fn handle_bottom(&mut self) {
         if !self.is_running() {
             self.mode_selector.blur();
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.focus_area = VulnFocusArea::Results;
         }
     }
 
     fn handle_enter(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         match self.focus_area {
@@ -619,7 +583,7 @@ impl TabInput for VulnTab {
                 };
             }
             VulnFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
             }
             VulnFocusArea::Results => {
                 return;
@@ -632,11 +596,11 @@ impl TabInput for VulnTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         self.mode_selector.blur();
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = VulnFocusArea::Mode;
     }
 
@@ -644,8 +608,8 @@ impl TabInput for VulnTab {
         if !self.is_running() {
             match self.focus_area {
                 VulnFocusArea::Mode => self.mode_selector.handle_up(),
-                VulnFocusArea::Inputs => self.inputs.focus_prev(),
-                VulnFocusArea::Results => self.results_view.scroll_up(1),
+                VulnFocusArea::Inputs => self.core.inputs.focus_prev(),
+                VulnFocusArea::Results => self.core.results_view.scroll_up(1),
             }
         }
     }
@@ -654,15 +618,15 @@ impl TabInput for VulnTab {
         if !self.is_running() {
             match self.focus_area {
                 VulnFocusArea::Mode => self.mode_selector.handle_down(),
-                VulnFocusArea::Inputs => self.inputs.focus_next(),
-                VulnFocusArea::Results => self.results_view.scroll_down(1),
+                VulnFocusArea::Inputs => self.core.inputs.focus_next(),
+                VulnFocusArea::Results => self.core.results_view.scroll_down(1),
             }
         }
     }
 
     fn handle_left(&mut self) -> bool {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.move_left()
+            self.core.inputs.move_left()
         } else {
             false
         }
@@ -670,7 +634,7 @@ impl TabInput for VulnTab {
 
     fn handle_right(&mut self) -> bool {
         if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.inputs.move_right()
+            self.core.inputs.move_right()
         } else {
             false
         }
@@ -682,8 +646,9 @@ impl TabInput for VulnTab {
                 self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
             }
             VulnFocusArea::Inputs => {
-                if let Some(idx) = self.inputs.focused {
-                    self.inputs
+                if let Some(idx) = self.core.inputs.focused {
+                    self.core
+                        .inputs
                         .fields
                         .get(idx)
                         .map(|f| f.cursor_pos == 0)
@@ -704,8 +669,9 @@ impl TabInput for VulnTab {
                         >= self.mode_selector.items.len().saturating_sub(1)
             }
             VulnFocusArea::Inputs => {
-                if let Some(idx) = self.inputs.focused {
-                    self.inputs
+                if let Some(idx) = self.core.inputs.focused {
+                    self.core
+                        .inputs
                         .fields
                         .get(idx)
                         .map(|f| f.cursor_pos >= f.value.len())
@@ -719,20 +685,20 @@ impl TabInput for VulnTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == VulnFocusArea::Inputs && self.inputs.is_focused()
+        self.focus_area == VulnFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn page_up(&mut self, page_size: usize) {
         if self.is_running() {
             return;
         }
-        self.results_view.page_up(page_size);
+        self.core.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
         if self.is_running() {
             return;
         }
-        self.results_view.page_down(page_size);
+        self.core.results_view.page_down(page_size);
     }
 }
