@@ -217,7 +217,7 @@ pub async fn inject_frames(
             } else {
                 warn!(
                     frame_idx = frame_idx,
-                    error = std::io::Error::last_os_error(),
+                    error = %std::io::Error::last_os_error(),
                     "Frame injection failed"
                 );
             }
