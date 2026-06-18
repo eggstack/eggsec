@@ -28,6 +28,31 @@ pub enum StandardFocusArea2 {
     Results,
 }
 
+/// Focus area for the Fuzz tab (6 areas: Inputs, Payload, Mode, Target, Checkbox, Results).
+/// Defined here so the N-area focus helpers can reference it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FuzzFocusArea {
+    Inputs,
+    PayloadSelector,
+    ModeSelector,
+    TargetSelector,
+    MutationCheckbox,
+    Results,
+}
+
+/// All focus areas for the Fuzz tab in tab-order.
+pub const FUZZ_AREAS: [FuzzFocusArea; 6] = [
+    FuzzFocusArea::Inputs,
+    FuzzFocusArea::PayloadSelector,
+    FuzzFocusArea::ModeSelector,
+    FuzzFocusArea::TargetSelector,
+    FuzzFocusArea::MutationCheckbox,
+    FuzzFocusArea::Results,
+];
+
+/// Number of focus areas for the Fuzz tab.
+pub const NUM_FUZZ_AREAS: usize = 6;
+
 /// Shared state fields common to most tabs.
 ///
 /// Tabs embed this struct and add their specific fields. This eliminates
@@ -473,6 +498,107 @@ pub fn is_at_right_edge_simple<A: Copy + PartialEq>(
         core.inputs.is_at_right_edge()
     } else {
         true
+    }
+}
+
+// --- N-area focus navigation helpers ---
+// These generalize the 2/3-area patterns to tabs with N focus areas (e.g. FuzzTab with 6).
+// The `areas` slice lists all focus variants in tab-order (first = Inputs, last = Results).
+// The first and last elements are treated as Inputs and Results respectively.
+
+/// Generic focus-next for N-area tabs. Cycles: areas[0] -> areas[1] -> ... -> areas[N-1] -> areas[0].
+/// When entering areas[0] (from the end), the first input field is focused.
+/// Does NOT blur on leaving areas[0] — that is handled by escape/focus_prev.
+pub fn focus_next_n<A: Copy + PartialEq>(core: &mut TabCore, current: A, areas: &[A]) -> A {
+    if areas.len() < 2 {
+        return current;
+    }
+    if let Some(idx) = areas.iter().position(|a| *a == current) {
+        let next_idx = (idx + 1) % areas.len();
+        if next_idx == 0 {
+            // Wrapping from last area back to Inputs: focus first field
+            core.inputs.focus(0);
+        }
+        areas[next_idx]
+    } else {
+        current
+    }
+}
+
+/// Generic focus-prev for N-area tabs. Reverse cycles through areas.
+pub fn focus_prev_n<A: Copy + PartialEq>(core: &mut TabCore, current: A, areas: &[A]) -> A {
+    if areas.len() < 2 {
+        return current;
+    }
+    if let Some(idx) = areas.iter().position(|a| *a == current) {
+        let prev_idx = if idx == 0 { areas.len() - 1 } else { idx - 1 };
+        if idx == 0 {
+            // Leaving Inputs backward: blur
+            core.inputs.blur();
+        }
+        if prev_idx == 0 {
+            // Entering Inputs: focus last field
+            let last = core.inputs.fields.len().saturating_sub(1);
+            core.inputs.focus(last);
+        }
+        areas[prev_idx]
+    } else {
+        current
+    }
+}
+
+/// Generic handle_up for N-area tabs. In Inputs area, navigates input fields.
+/// In Results area (last), scrolls results up. In selector areas, no-op (handled by tab).
+pub fn handle_up_n<A: Copy + PartialEq>(core: &mut TabCore, current: A, areas: &[A]) {
+    if areas.is_empty() {
+        return;
+    }
+    if current == areas[0] {
+        // Inputs area
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_up();
+        } else {
+            core.inputs.focus_prev();
+        }
+    } else if current == areas[areas.len() - 1] {
+        // Results area
+        core.scroll_results_up();
+    }
+}
+
+/// Generic handle_down for N-area tabs.
+pub fn handle_down_n<A: Copy + PartialEq>(core: &mut TabCore, current: A, areas: &[A]) {
+    if areas.is_empty() {
+        return;
+    }
+    if current == areas[0] {
+        // Inputs area
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_down();
+        } else {
+            core.inputs.focus_next();
+        }
+    } else if current == areas[areas.len() - 1] {
+        // Results area
+        core.scroll_results_down();
+    }
+}
+
+/// Generic handle_left for N-area tabs. Only moves cursor in Inputs area.
+pub fn handle_left_n<A: Copy + PartialEq>(core: &mut TabCore, current: A, inputs: A) -> bool {
+    if current == inputs {
+        core.inputs.move_left()
+    } else {
+        false
+    }
+}
+
+/// Generic handle_right for N-area tabs. Only moves cursor in Inputs area.
+pub fn handle_right_n<A: Copy + PartialEq>(core: &mut TabCore, current: A, inputs: A) -> bool {
+    if current == inputs {
+        core.inputs.move_right()
+    } else {
+        false
     }
 }
 
@@ -1445,5 +1571,197 @@ mod tests {
         let result = handle_escape_simple(&mut core, 0, 0);
         assert_eq!(result, 0);
         assert_eq!(core.state, AppState::Idle);
+    }
+
+    // --- N-area focus tests ---
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum NArea {
+        Inputs,
+        Payload,
+        Mode,
+        Target,
+        Checkbox,
+        Results,
+    }
+
+    const N_AREAS: &[NArea] = &[
+        NArea::Inputs,
+        NArea::Payload,
+        NArea::Mode,
+        NArea::Target,
+        NArea::Checkbox,
+        NArea::Results,
+    ];
+
+    #[test]
+    fn focus_next_n_cycles_through_all_areas() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        let mut current = NArea::Inputs;
+        let expected = [
+            NArea::Payload,
+            NArea::Mode,
+            NArea::Target,
+            NArea::Checkbox,
+            NArea::Results,
+            NArea::Inputs, // wraps around
+        ];
+
+        for (i, expected_area) in expected.iter().enumerate() {
+            current = focus_next_n(&mut core, current, N_AREAS);
+            assert_eq!(current, *expected_area, "step {}", i);
+        }
+    }
+
+    #[test]
+    fn test_focus_next_n_no_blur_on_leave_inputs() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        core.inputs.focus(0);
+        assert!(core.inputs.is_focused());
+
+        let next = focus_next_n(&mut core, NArea::Inputs, N_AREAS);
+        assert_eq!(next, NArea::Payload);
+        // focus_next_n does NOT blur — blur is handled by escape/focus_prev
+        assert!(core.inputs.is_focused(), "should not blur on forward navigation");
+    }
+
+    #[test]
+    fn focus_next_n_focuses_on_enter_inputs() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        let current = focus_next_n(&mut core, NArea::Results, N_AREAS);
+        assert_eq!(current, NArea::Inputs);
+        assert!(core.inputs.is_focused(), "should focus first field on enter Inputs");
+    }
+
+    #[test]
+    fn focus_prev_n_cycles_backwards() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        let mut current = NArea::Results;
+        let expected = [
+            NArea::Checkbox,
+            NArea::Target,
+            NArea::Mode,
+            NArea::Payload,
+            NArea::Inputs,
+            NArea::Results, // wraps around
+        ];
+
+        for (i, expected_area) in expected.iter().enumerate() {
+            current = focus_prev_n(&mut core, current, N_AREAS);
+            assert_eq!(current, *expected_area, "step {}", i);
+        }
+    }
+
+    #[test]
+    fn focus_prev_n_focuses_last_input_on_enter_inputs() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("A"))
+                .add(crate::components::InputField::new("B"))
+                .add(crate::components::InputField::new("C")),
+        );
+
+        let current = focus_prev_n(&mut core, NArea::Payload, N_AREAS);
+        assert_eq!(current, NArea::Inputs);
+        // Should focus the last field
+        assert_eq!(core.inputs.focused, Some(2));
+    }
+
+    #[test]
+    fn focus_next_n_single_area_returns_current() {
+        let mut core = TabCore::new("test", "Results");
+        let current = focus_next_n(&mut core, NArea::Inputs, &[NArea::Inputs]);
+        assert_eq!(current, NArea::Inputs);
+    }
+
+    #[test]
+    fn focus_prev_n_unknown_area_returns_current() {
+        let mut core = TabCore::new("test", "Results");
+        // Area not in the list should return current unchanged
+        let current = focus_prev_n(&mut core, NArea::Checkbox, &[NArea::Inputs, NArea::Results]);
+        assert_eq!(current, NArea::Checkbox);
+    }
+
+    #[test]
+    fn handle_up_n_scrolls_results_in_results_area() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        for i in 0..20 {
+            core.results_view.add_line(ratatui::text::Line::from(format!("line {}", i)));
+        }
+
+        handle_up_n(&mut core, NArea::Results, N_AREAS);
+        // Should not panic; results should scroll
+    }
+
+    #[test]
+    fn handle_down_n_in_middle_area_is_noop() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        // Middle area (not Inputs, not Results) should be a no-op
+        handle_down_n(&mut core, NArea::Mode, N_AREAS);
+        assert_eq!(core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn handle_left_n_in_inputs_moves_cursor() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target").with_value("test")),
+        );
+        core.inputs.focus(0);
+
+        let result = handle_left_n(&mut core, NArea::Inputs, NArea::Inputs);
+        assert!(result);
+    }
+
+    #[test]
+    fn handle_left_n_in_non_inputs_returns_false() {
+        let mut core = TabCore::new("test", "Results");
+        let result = handle_left_n(&mut core, NArea::Payload, NArea::Inputs);
+        assert!(!result);
+    }
+
+    #[test]
+    fn handle_right_n_in_inputs_moves_cursor() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target").with_value("test")),
+        );
+        core.inputs.focus(0);
+        // Move to beginning so right actually moves
+        if let Some(field) = core.inputs.fields.first_mut() {
+            field.cursor_pos = 0;
+        }
+
+        let result = handle_right_n(&mut core, NArea::Inputs, NArea::Inputs);
+        assert!(result);
+    }
+
+    #[test]
+    fn handle_right_n_in_non_inputs_returns_false() {
+        let mut core = TabCore::new("test", "Results");
+        let result = handle_right_n(&mut core, NArea::Checkbox, NArea::Inputs);
+        assert!(!result);
     }
 }

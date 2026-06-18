@@ -358,74 +358,55 @@ impl App {
 
         if is_running {
             if let Some(task_config) = self.build_current_task() {
-                // Central policy gate (TUI now shares the exact EnforcementContext + RequireConfirmation + ManualOverride model as CLI).
-                // Build a descriptor that matches CLI conventions for the current tab/action.
                 if let Some(desc) = self.build_current_operation_descriptor() {
-                    let outcome = self.enforcement.evaluate(&desc);
-                    match outcome {
-                        EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
-                            // Proceed normally (warnings already logged by evaluate if any).
-                            self.spawn_task(Some(task_config));
-                        }
-                        EnforcementOutcome::RequireConfirmation(decision) => {
-                            // Pause the tab running state so the UI doesn't look like it started.
-                            // Use the same pattern as stop_tab_state to stop the tab's internal running flag.
-                            {
-                                let mut tab = self.current_tab;
-                                tab.as_tab_input(self).stop();
-                            }
-                            // Capture for replay on manual override confirm.
-                            self.request_policy_confirmation(desc, decision, Some(task_config));
-                        }
-                        EnforcementOutcome::Deny(d) => {
-                            {
-                                let mut tab = self.current_tab;
-                                tab.as_tab_input(self).stop();
-                            }
-                            self.set_error_for_current_tab(
-                                crate::app::tab_error::TabError::Target(d.to_human_readable()),
-                            );
-                        }
-                    }
+                    self.evaluate_policy_and_dispatch(desc, Some(task_config));
                 } else {
-                    // No descriptor (non-target op or not yet mapped); proceed as before.
                     self.spawn_task(Some(task_config));
                 }
             }
         }
 
         // Post-dispatch retroactive policy gate for direct-launch tabs (packet, stress, auth, cluster, etc.)
-        // that perform their actual start inside the tab's handle_enter / run_* methods instead of (or in addition to)
-        // going through build_current_task + spawn_task.
-        // If such a tab just entered a running state for a target-bearing action, we evaluate here.
-        // On RequireConfirmation we stop it and open the policy popup (with no pre-built TaskConfig; on confirm we will re-dispatch).
-        // This brings the direct tabs in line with the shared EnforcementContext / RequireConfirmation / narrow manual override model.
         if self.is_direct_launch_tab(self.current_tab) {
             if self.current_tab.as_tab_state(self).is_running() {
                 if let Some(desc) = self.build_current_operation_descriptor() {
-                    let outcome = self.enforcement.evaluate(&desc);
-                    match outcome {
-                        EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
-                            // allowed; the tab already started its work
-                        }
-                        EnforcementOutcome::RequireConfirmation(decision) => {
-                            {
-                                let mut tab = self.current_tab;
-                                tab.as_tab_input(self).stop();
-                            }
-                            self.request_policy_confirmation(desc, decision, None);
-                        }
-                        EnforcementOutcome::Deny(d) => {
-                            {
-                                let mut tab = self.current_tab;
-                                tab.as_tab_input(self).stop();
-                            }
-                            self.set_error_for_current_tab(
-                                crate::app::tab_error::TabError::Target(d.to_human_readable()),
-                            );
-                        }
-                    }
+                    self.evaluate_policy_and_dispatch(desc, None);
                 }
+            }
+        }
+    }
+
+    /// Central policy evaluation + dispatch. Handles the Allow/Warn/RequireConfirmation/Deny
+    /// outcome from `EnforcementContext::evaluate()`, stopping the tab and requesting
+    /// confirmation or surfacing errors as needed.
+    fn evaluate_policy_and_dispatch(
+        &mut self,
+        desc: OperationDescriptor,
+        task_config: Option<crate::workers::TaskConfig>,
+    ) {
+        let outcome = self.enforcement.evaluate(&desc);
+        match outcome {
+            EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
+                if let Some(cfg) = task_config {
+                    self.spawn_task(Some(cfg));
+                }
+                // For direct-launch tabs, the tab already started; nothing more to do.
+            }
+            EnforcementOutcome::RequireConfirmation(decision) => {
+                {
+                    let mut tab = self.current_tab;
+                    tab.as_tab_input(self).stop();
+                }
+                self.request_policy_confirmation(desc, decision, task_config);
+            }
+            EnforcementOutcome::Deny(d) => {
+                {
+                    let mut tab = self.current_tab;
+                    tab.as_tab_input(self).stop();
+                }
+                self.set_error_for_current_tab(
+                    crate::app::tab_error::TabError::Target(d.to_human_readable()),
+                );
             }
         }
     }

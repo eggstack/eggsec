@@ -801,11 +801,11 @@ mod tests {
     fn test_copy_cli_intrusive_fuzz_produces_command() {
         let mut app = create_test_app();
         app.current_tab = Tab::Fuzz;
-        if let Some(f) = app.tabs.fuzz.inputs.fields.first_mut() {
+        if let Some(f) = app.tabs.fuzz.core.inputs.fields.first_mut() {
             f.value = "https://target.test".to_string();
         }
         // Non-default max payloads to trigger option
-        if let Some(f) = app.tabs.fuzz.inputs.fields.get_mut(3) {
+        if let Some(f) = app.tabs.fuzz.core.inputs.fields.get_mut(3) {
             f.value = "100".to_string();
         }
         let cli = app.copy_cli_equivalent().unwrap();
@@ -843,7 +843,7 @@ mod tests {
     fn test_copy_cli_omits_broad_policy_flags() {
         let mut app = create_test_app();
         app.current_tab = Tab::Fuzz;
-        if let Some(f) = app.tabs.fuzz.inputs.fields.first_mut() {
+        if let Some(f) = app.tabs.fuzz.core.inputs.fields.first_mut() {
             f.value = "https://x".to_string();
         }
         // Even if we had overrides in enforcement (TUI never puts them in CLI copy)

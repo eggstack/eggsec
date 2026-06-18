@@ -528,7 +528,7 @@ impl TabProgressUpdate for super::tabs::Tab {
                 app.tabs.scan_endpoints.update_progress(completed, total)
             }
             super::tabs::Tab::Fingerprint => app.tabs.fingerprint.update_progress(completed, total),
-            super::tabs::Tab::Fuzz => app.tabs.fuzz.update_progress(completed, total),
+            super::tabs::Tab::Fuzz => app.tabs.fuzz.core.update_progress(completed, total),
             super::tabs::Tab::Waf => app.tabs.waf.update_progress(completed, total),
             super::tabs::Tab::WafStress => app.tabs.waf_stress.update_progress(completed, total),
             super::tabs::Tab::Scan => {
