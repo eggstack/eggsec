@@ -404,7 +404,7 @@ impl TabRender for super::SettingsTab {
                 let hint_y = preview_y + preview_height;
                 if hint_y < body.y + body.height {
                     let hint_text = if self.theme_selector.is_open() {
-                        "Enter:apply  Esc:cancel  Up/Down:preview"
+                        "Enter:apply  Esc:cancel  Up/Down or j/k:preview"
                     } else {
                         "Enter:themes  r:reload  Ctrl+T:cycle"
                     };

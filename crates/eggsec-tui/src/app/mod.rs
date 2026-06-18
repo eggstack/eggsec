@@ -463,7 +463,8 @@ impl App {
         self.maybe_refresh_theme_preview();
     }
 
-    /// If the Settings tab's theme selector moved, refresh the preview colors.
+    /// If the Settings tab's theme selector moved, temporarily apply the
+    /// selected theme so every panel previews the same theme uniformly.
     fn maybe_refresh_theme_preview(&mut self) {
         if self.current_tab == Tab::Settings
             && self.tabs.settings.needs_theme_preview_refresh
@@ -476,10 +477,17 @@ impl App {
                 .selected_value()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| self.theme_manager.current_id().to_string());
-            self.tabs.settings.resolved_theme_colors = self
-                .theme_manager
-                .get_theme(&selected_id)
-                .map(|t| t.colors.clone());
+            if self.theme_manager.set_theme(&selected_id) {
+                crate::theme::sync_theme_to_thread_local(self.theme_manager.current());
+                self.tabs.settings.resolved_theme_colors =
+                    Some(self.theme_manager.current().colors.clone());
+                self.needs_redraw = true;
+            } else {
+                self.tabs.settings.resolved_theme_colors = self
+                    .theme_manager
+                    .get_theme(&selected_id)
+                    .map(|t| t.colors.clone());
+            }
         }
     }
 

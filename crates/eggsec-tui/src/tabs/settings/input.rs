@@ -6,6 +6,10 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
+        if self.theme_selector.is_open() {
+            self.theme_selector.cancel();
+            self.restore_theme_preview_selection();
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             self.focus_area = SettingsFocusArea::SectionDetail;
             self.detail_focus_index = 0;
@@ -24,6 +28,10 @@ impl TabInput for SettingsTab {
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
+        }
+        if self.theme_selector.is_open() {
+            self.theme_selector.cancel();
+            self.restore_theme_preview_selection();
         }
         if self.focus_area == SettingsFocusArea::SectionList {
             self.focus_area = SettingsFocusArea::SectionDetail;
@@ -182,6 +190,10 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
+        if self.theme_selector.is_open() {
+            self.theme_selector.cancel();
+            self.restore_theme_preview_selection();
+        }
         self.current_section = SettingsSection::Http;
         self.detail_focus_index = 0;
         self.sync_component_focus();
@@ -190,6 +202,10 @@ impl TabInput for SettingsTab {
     fn handle_bottom(&mut self) {
         if self.is_running() {
             return;
+        }
+        if self.theme_selector.is_open() {
+            self.theme_selector.cancel();
+            self.restore_theme_preview_selection();
         }
         self.current_section = SettingsSection::Theme;
         self.detail_focus_index = 0;
@@ -300,10 +316,7 @@ impl TabInput for SettingsTab {
             // Restore selector to the applied theme so the dropdown
             // reflects what's actually active, not whatever the user
             // was previewing before they pressed Escape.
-            if let Some(ref applied_id) = self.applied_theme_id {
-                self.theme_selector.select_by_value(applied_id);
-            }
-            self.needs_theme_preview_refresh = true;
+            self.restore_theme_preview_selection();
             return;
         }
         self.focus_area = SettingsFocusArea::SectionList;
@@ -433,6 +446,10 @@ impl TabInput for SettingsTab {
                     }
                 }
             } else {
+                if self.theme_selector.is_open() {
+                    self.theme_selector.cancel();
+                    self.restore_theme_preview_selection();
+                }
                 self.focus_area = SettingsFocusArea::SectionList;
                 self.sync_component_focus();
                 true

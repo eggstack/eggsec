@@ -220,8 +220,13 @@ impl KeyHandler {
         // their normal actions while the user is navigating a selector dropdown.
         // Navigation keys (Up/Down/Enter/Esc/arrows) are handled by global
         // shortcuts before we get here, so they still work in the selector.
+        // j/k are intentionally passed through for Vim-style selector navigation.
         if app.has_settings_selector_open() {
-            return vec![UiAction::Noop];
+            return match (key.modifiers, key.code) {
+                (KeyModifiers::NONE, KeyCode::Char('j')) => vec![UiAction::MoveDown],
+                (KeyModifiers::NONE, KeyCode::Char('k')) => vec![UiAction::MoveUp],
+                _ => vec![UiAction::Noop],
+            };
         }
 
         match (key.modifiers, key.code) {
@@ -884,6 +889,63 @@ mod tests {
             &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
         );
         assert_eq!(actions, vec![UiAction::MoveDown]);
+    }
+
+    #[test]
+    fn test_j_k_navigate_settings_selector() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.theme_selector.open();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::MoveDown]);
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::MoveUp]);
+    }
+
+    #[test]
+    fn test_theme_selector_j_previews_and_escape_reverts() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+        app.handle_focus_next();
+        app.tabs.settings.theme_selector.open();
+
+        assert_eq!(app.current_theme().name, "cyber-red");
+        assert_eq!(
+            app.tabs.settings.applied_theme_id.as_deref(),
+            Some("cyber-red")
+        );
+
+        handler.handle_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+        );
+
+        assert_eq!(app.tabs.settings.theme_selector.selected_value(), Some("dark"));
+        assert_eq!(app.current_theme().name, "dark");
+        assert_eq!(
+            app.tabs.settings.applied_theme_id.as_deref(),
+            Some("cyber-red"),
+            "Preview must not commit the applied theme"
+        );
+
+        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        assert_eq!(
+            app.tabs.settings.theme_selector.selected_value(),
+            Some("cyber-red")
+        );
+        assert_eq!(app.current_theme().name, "cyber-red");
     }
 
     #[test]

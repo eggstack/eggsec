@@ -133,7 +133,7 @@ fn settings_hints(app: &App) -> Vec<ActionHint> {
         SettingsSection::Theme if selector_open => {
             vec![
                 ActionHint { key: "Enter", label: "select" },
-                ActionHint { key: "↑↓", label: "theme" },
+                ActionHint { key: "↑↓/jk", label: "theme" },
                 ActionHint { key: "Esc", label: "cancel" },
             ]
         }
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(hints.len(), 3);
         assert_eq!(hints[0].key, "Enter");
         assert_eq!(hints[0].label, "select");
-        assert_eq!(hints[1].key, "↑↓");
+        assert_eq!(hints[1].key, "↑↓/jk");
         assert_eq!(hints[1].label, "theme");
         assert_eq!(hints[2].key, "Esc");
         assert_eq!(hints[2].label, "cancel");

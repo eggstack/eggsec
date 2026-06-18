@@ -187,6 +187,13 @@ impl SettingsTab {
         }
     }
 
+    pub(crate) fn restore_theme_preview_selection(&mut self) {
+        if let Some(ref applied_id) = self.applied_theme_id {
+            self.theme_selector.select_by_value(applied_id);
+        }
+        self.needs_theme_preview_refresh = true;
+    }
+
     /// Update cached theme metadata from the ThemeManager.
     pub fn update_theme_metadata(
         &mut self,
