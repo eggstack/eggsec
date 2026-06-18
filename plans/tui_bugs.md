@@ -4,181 +4,228 @@ Date: 2026-06-18
 
 ## Scope
 
-This plan covers the module described in `architecture/tui.md`, with primary code under `crates/eggsec-tui/src/`.
+This plan covers the TUI module described by `architecture/tui.md`, primarily `crates/eggsec-tui/src/`.
 
-The current TUI is functional and has several recent fixes already recorded in `architecture/tui.md` and `crates/eggsec-tui/src/AGENTS.override.md`: overlay precedence, `gg`, Ctrl-Space autocomplete, Settings save hints, GraphQL/OAuth `handle_enter`, theme display names, selector deduplication, deferred theme restore, and packaged theme loading. The plan below is therefore a follow-up hardening and refinement pass, not a rewrite.
+The deleted tracked version of this file listed several items that have since landed: action hints, no-result states, Settings theme metadata/preview, theme reload plumbing, `gg`, Ctrl-Space autocomplete, GraphQL/OAuth Enter fixes, selector deduplication, and theme display-name polish. This plan is a fresh follow-up based on the current code.
 
-## Findings From Interrogation
+## Current Findings
 
-1. `handle_enter` behavior is still duplicated across many tabs.
-   - Evidence: each tab hand-rolls focus blur, selector confirm, result guards, running guards, and `start()` transitions.
-   - Risk: regressions like the recently fixed GraphQL/OAuth unreachable-start and fallthrough bugs can reappear in other tabs or future tabs.
-   - Relevant files: `crates/eggsec-tui/src/tabs/*.rs`, `crates/eggsec-tui/src/app/mod.rs`, `crates/eggsec-tui/src/app/task_management.rs`.
+1. **Settings Theme reload is not reachable through the advertised normal-mode key.**
+   - Evidence: `tabs/settings/input.rs` sets `pending_theme_reload` from `SettingsTab::handle_char('r')`, but normal-mode `r` is decoded globally to `UiAction::ResetCurrent` in `app/key_handler.rs`, and `UiAction::ResetCurrent` requests `PendingAction::ResetTab` in `app/mod.rs`.
+   - Impact: Settings > Theme says `Press [r] to reload themes`, but pressing `r` in normal mode opens a reset confirmation instead. Reload is effectively hidden behind insert-mode character dispatch.
 
-2. Some component edge-case fixes are inconsistent.
-   - `ScrollableText` explicitly handles empty content before bottom/down scrolls.
-   - `Popup` uses safe arithmetic for content height but its scroll helpers still use a slightly different pattern.
-   - Risk is low today, but the two scrollable primitives should share the same empty-content and clamping semantics.
-   - Relevant files: `crates/eggsec-tui/src/components/scrollable.rs`, `crates/eggsec-tui/src/components/popup.rs`.
+2. **Settings action hints are stale for the Theme section.**
+   - Evidence: `app/action_hints.rs::settings_hints()` always returns `r:reset`, while Theme section rendering says `r` reloads themes.
+   - Impact: the footer/status bar can contradict the focused panel.
 
-3. The theme system has two rendering paths.
-   - Shell and popup layers increasingly pass explicit `&Theme`.
-   - Many tabs/components still use the `tc!` thread-local macro.
-   - Risk: missed synchronization bugs when changing themes, harder visual tests, and harder future removal of legacy global theme state.
-   - Relevant files: `crates/eggsec-tui/src/theme/legacy.rs`, `crates/eggsec-tui/src/ui/*.rs`, `crates/eggsec-tui/src/tabs/*.rs`, `crates/eggsec-tui/src/components/*.rs`.
+3. **Theme source metadata is inferred incorrectly.**
+   - Evidence: `app/theme_runtime.rs::handle_theme_install_report()` labels the first `report.installed` loaded themes as `Packaged` and everything else as `Custom`.
+   - Impact: on later launches/reloads where packaged themes already exist or the version marker short-circuits install (`installed == 0`), packaged themes can be shown as custom themes.
 
-4. Theme loading works, but user feedback is sparse.
-   - Errors produce a warning notification.
-   - Successful background loading silently expands the Settings selector.
-   - Users cannot reload themes from the TUI after editing files in `~/.config/eggsec/themes/`.
-   - Relevant files: `crates/eggsec-tui/src/app/theme_runtime.rs`, `crates/eggsec-tui/src/tabs/settings/*`, `crates/eggsec-tui/src/theme/install.rs`.
+4. **Invalid theme files are logged but not represented in Settings metadata.**
+   - Evidence: `theme/install.rs::load_themes_from_dir()` returns `Vec<Result<Theme, ThemeLoadError>>` without the file stem/path; `handle_theme_install_report()` logs `Err` results but cannot call `ThemeManager::mark_theme_invalid()` for the failed file.
+   - Impact: Settings can show `0 invalid` even when broken `.toml` files exist in the theme directory.
 
-5. Theme metadata is underpowered.
-   - Theme IDs and display names are available, but the selector has no mode/source/status metadata.
-   - Placeholders for missing current themes are clearer now, but there is no details pane explaining whether a theme is built-in, packaged, custom, loaded, invalid, or fallback-adjusted.
-   - Relevant files: `crates/eggsec-tui/src/theme/manager.rs`, `crates/eggsec-tui/src/theme/loader.rs`, `crates/eggsec-tui/src/tabs/settings/main.rs`, `crates/eggsec-tui/src/tabs/settings/render.rs`.
+5. **The Theme details pane does not report actual current-theme contrast warnings.**
+   - Evidence: `theme/manager.rs::validate_contrast()` exists, but `tabs/settings/render.rs` renders `Contrast: OK` based only on `theme_invalid_count == 0`.
+   - Impact: users can see `Contrast: OK` for a theme that has non-fatal contrast warnings or fallback-adjusted color pairs.
 
-6. The tab registry remains high-maintenance.
-   - `architecture/tui.md` documents 7-9 locations for a new tab.
-   - Risk: feature-gated tab availability, help text, command palette entries, export routing, and task construction can drift.
-   - Relevant files: `crates/eggsec-tui/src/tabs/mod.rs`, `crates/eggsec-tui/src/tabs/spec.rs`, `crates/eggsec-tui/src/app/tab_store.rs`, `crates/eggsec-tui/src/app/command.rs`, `crates/eggsec-tui/src/app/export.rs`, `crates/eggsec-tui/src/app/navigation.rs`.
+6. **Manual theme reload lacks success feedback and a distinct runtime reason.**
+   - Evidence: `handle_theme_install_report()` only surfaces notifications on errors. Manual reload and startup load share the same `ThemeLoadState`.
+   - Impact: after pressing reload, users may not know whether themes reloaded, no-op loaded, or were skipped because a loader was already running.
 
-7. Visual and input regression coverage exists but is uneven.
-   - Recent key handling tests are strong for overlays, `gg`, autocomplete, and several tab-specific `handle_enter` flows.
-   - Coverage should expand to small terminal layouts, theme selector states, policy confirmation reason input, and no-result quick switch/search behavior.
+7. **Running-task hints only check `task_state.handle`.**
+   - Evidence: `app/action_hints.rs::get_action_hints()` uses `app.task_state.handle.is_some()`, while `App::has_active_task()` also checks `tab`, `progress_rx`, and `result_rx`.
+   - Impact: edge states such as stopping, paused drain states, or direct-launch task transitions can show normal tab hints instead of stop/resume hints.
+
+8. **Launch semantics remain duplicated across tabs.**
+   - Evidence: many `tabs/*.rs` implementations hand-roll `handle_enter()` with similar blur/toggle/open/confirm/start behavior, and `App::handle_enter()` has a retroactive policy gate for direct-launch tabs.
+   - Impact: fixes like the recent GraphQL/OAuth Enter bug can reappear in future tabs. The retroactive direct-launch gate also briefly lets tab state enter `Running` before enforcement stops it for confirmation/denial.
+
+9. **There is still residual unchecked-index risk in dynamic render paths.**
+   - Evidence: production code still contains direct `fields[n]` or slice indexing in places like `tabs/fuzz.rs` render paths, `tabs/workflow.rs` field rendering, and `ui/shell.rs` visible title slicing.
+   - Impact: most are protected by current construction invariants, but future field-count changes can turn UI edits into panics.
+
+10. **Theme rendering is still split between explicit theme references and thread-local `tc!`.**
+    - Evidence: `rg` reports 604 `tc!` call sites in `crates/eggsec-tui/src`, with large clusters in `tabs/intercept.rs`, `tabs/wireless.rs`, and `tabs/settings/render.rs`.
+    - Impact: theme tests remain harder to localize, and runtime theme sync depends on the legacy thread-local bridge.
 
 ## Implementation Plan
 
-### Phase 1: Regression Harness and Bug Sweep
+### Phase 1: Fix Settings Theme Reload and Hints
 
-1. Add a table-driven `handle_enter` regression harness for representative tab patterns:
-   - simple input-only launch tabs;
-   - tabs with selector focus;
-   - tabs with option checkbox focus;
-   - direct-launch tabs;
-   - results-focused tabs.
+1. Add an explicit `UiAction::ReloadThemes` or a Settings-aware branch before `ResetCurrent`.
+   - When current tab is Settings, current section is Theme, no selector is open, and no task is active, normal-mode `r` should set `pending_theme_reload` instead of opening reset confirmation.
+   - Keep reset available outside Theme. If needed, expose a clear alternate reset command through the command palette.
 
-2. Add tests proving Enter never starts a task when it only blurred an input or confirmed/toggled a selector/checkbox.
+2. Update `get_action_hints()` so Settings hints are section-aware.
+   - Theme section, selector closed: `r:reload Enter:themes Tab:next`.
+   - Theme section, selector open: `Enter:select ↑↓:theme Esc:cancel`.
+   - Non-theme Settings sections: keep `s:save r:reset Tab:next`.
 
-3. Audit remaining direct field/checkbox indexing in production tab code. Convert risky production reads/writes to `.get()`, `.get_mut()`, `.first()`, or small helpers. Leave test-only direct indexing alone unless it obscures intent.
+3. Add regression tests:
+   - normal-mode `r` in Settings > Theme sets the reload flag and does not set `pending_action`;
+   - normal-mode `r` in Settings > HTTP still requests reset confirmation;
+   - Theme action hints show reload, not reset;
+   - open theme selector prevents reload and keeps selector navigation behavior.
 
-4. Normalize `Popup` scroll helpers to match `ScrollableText` empty-content behavior, then add explicit empty-content tests for `scroll_down`, `scroll_to_bottom`, and render with very large `scroll_offset`.
+### Phase 2: Make Theme Loading Metadata Correct
 
-5. Run:
-   - `cargo test -p eggsec-tui`
-   - `cargo check -p eggsec-tui`
+1. Replace `Vec<Result<Theme, ThemeLoadError>>` in `ThemeInstallReport` with structured records:
+   - `id` / file stem;
+   - path;
+   - source hint (`Packaged` or `Custom`);
+   - result;
+   - load warnings.
 
-### Phase 2: Input and Navigation Usability
+2. Stop inferring `ThemeSource` from `installed` count.
+   - Use a packaged theme ID/path set from generated packaged metadata, or include source while loading the directory.
+   - Ensure existing packaged themes remain `Packaged` after startup, reload, and version-marker short-circuit.
 
-1. Add a small action hint model per tab/focus area instead of scattering static hint strings in render methods.
+3. Represent invalid and missing themes in `ThemeManager`.
+   - Add or use a method that inserts `ThemeInfo { status: Invalid(reason), ... }` even when no `Theme` was registered.
+   - Add `Missing` metadata for a restored/current theme placeholder when the theme cannot be found.
 
-2. Make status-bar hints context-aware:
-   - input focused: edit, paste, autocomplete, blur;
-   - selector open: confirm/cancel/move;
-   - results focused: scroll/copy/export;
-   - task running: stop/pause/resume.
+4. Track fallback-adjusted themes.
+   - Have the loader return contrast/fallback warnings alongside the adjusted `Theme`, or expose a validation report so `ThemeManager` can set `ThemeLoadStatus::FallbackAdjusted`.
 
-3. Improve discoverability for direct-launch and policy-gated tabs:
-   - show dry-run/live status clearly;
-   - show whether Enter will edit, toggle, or launch;
-   - show pending policy confirmation reason affordance.
+5. Update Settings Theme details.
+   - Source/mode/status should come from the selected `ThemeInfo`.
+   - Placeholder themes should render as `Missing`, not default to `Built-in · Dark`.
+   - Invalid count should derive from actual invalid metadata, not just successful registrations.
 
-4. Add no-result states for command palette, quick switch, and search that are visually distinct from an empty list.
+6. Add tests for:
+   - invalid `.toml` appears in metadata and increments invalid count;
+   - existing packaged theme remains `Packaged` when no new themes are installed;
+   - fallback-adjusted status is visible;
+   - missing restored theme renders as a missing placeholder.
 
-5. Add visual regression tests with `TestBackend` for:
-   - 80x24 and narrow terminal layouts;
-   - Settings Theme section;
-   - policy confirmation overlay;
-   - quick switch with no matches;
-   - command palette with a disabled command selected.
+### Phase 3: Improve Theme Reload Feedback
 
-### Phase 3: Theme System Refinement
+1. Add a theme-load reason to `ThemeLoadState`, such as `Startup` vs `ManualReload`.
 
-1. Introduce `ThemeInfo` metadata in `ThemeManager`:
-   - canonical ID;
-   - display name;
-   - mode;
-   - source: built-in, packaged, custom, placeholder;
-   - load status: loaded, invalid, missing, fallback-adjusted.
+2. On manual reload:
+   - show `Loading themes...` immediately;
+   - on success, show loaded/invalid/skipped counts;
+   - on no-op, say no new themes were found but the directory was scanned;
+   - if a reload is already running, show a concise warning instead of silently ignoring it.
 
-2. Keep the existing `Theme` rendering API stable, but make Settings consume `ThemeInfo` instead of `(id, label)` tuples.
+3. Decide and document packaged-theme reinstall semantics.
+   - If deleted packaged themes should be restored on reload, bypass the version-marker short-circuit for manual reload.
+   - If deletion is considered user opt-out, expose that in the Settings details text and keep startup fast.
 
-3. Add a Settings Theme details pane:
-   - current theme display name and ID;
-   - source/mode;
-   - number of loaded themes;
-   - invalid theme count;
-   - theme directory path;
-   - contrast validation result.
+### Phase 4: Consolidate Enter/Launch Semantics
 
-4. Add a reload action for themes from Settings:
-   - key: `r` only when the Theme section is focused and no selector is open;
-   - call the existing background loader;
-   - show `Loading themes...`, then `Themes loaded: N` or warning details.
+1. Introduce a small return model for tab Enter handling, for example:
+   - `Consumed`;
+   - `InputBlurred`;
+   - `SelectorOpened`;
+   - `SelectorConfirmed`;
+   - `WantsRun`;
+   - `Noop`.
 
-5. Add a theme preview row rendered with semantic tokens:
-   - normal text;
-   - selected text;
-   - success/warning/error/info;
-   - safe/danger;
-   - policy required/denied.
+2. Migrate representative tabs first: Recon, Fuzz, GraphQL, OAuth, Packet, Settings, Wireless, DbPentest.
 
-6. Expand contrast validation:
-   - keep current text/background and selected pairs;
-   - add focus border/background, warning/background, error/background, success/background, and policy token checks;
-   - report warnings without rejecting otherwise usable custom themes unless core text contrast fails.
+3. Move policy evaluation before a tab transitions into running state for direct-launch tabs where practical.
 
-7. Start migrating renderers from `tc!` to explicit `&Theme`:
-   - first components (`InputField`, `Selector`, `ScrollableText`, `Popup`);
-   - then high-traffic shell-adjacent tabs (`Dashboard`, `Settings`, `History`);
-   - keep `tc!` available during migration but add a lint-style grep check in the plan notes for new code.
+4. Keep the current `handle_enter()` trait method during migration by wrapping old behavior, then tighten once enough tabs use the new model.
 
-### Phase 4: Registry and Command Palette Cleanup
+5. Extend the existing `tabs/handle_enter_regression.rs` harness for feature-gated direct-launch tabs where compile features allow it.
 
-1. Extend `TabSpec` so more tab metadata lives in one place:
-   - title;
-   - description;
-   - stable ID;
-   - category;
-   - risk group;
-   - direct-launch flag;
-   - default command/help/export capability flags.
+### Phase 5: Harden UI State Access
+
+1. Audit production direct indexing in `crates/eggsec-tui/src`.
+   - Convert dynamic field/render paths to `get()`, `get_mut()`, `first()`, or zipped iteration.
+   - Leave stable test setup indexing alone unless it hides production assumptions.
+
+2. Add invariant tests for `TabWindow` and `draw_tabs()` so `all_tabs[window.start..window.end]` cannot panic after future tab-count changes.
+
+3. Add render tests for shortened/malformed input groups on tabs that manually address fields by index.
+
+4. Normalize component scroll clamping.
+   - Ensure `Popup` and `ScrollableText` share empty-content and overlarge-offset semantics.
+   - Add explicit tests for empty content, huge content, and huge scroll offsets.
+
+### Phase 6: Refine Action Hints and Task Status
+
+1. Change running-task hint detection to use `App::has_active_task()` or `task_status_summary()` instead of only `task_state.handle`.
+
+2. Make hints reflect local widget state:
+   - closed selector: `Enter:open`;
+   - open selector: `Enter:select Esc:cancel`;
+   - results area: `↑↓:scroll y:copy e:export`;
+   - policy reason field: `Enter:confirm Bksp:edit Esc:cancel`;
+   - direct-launch dry-run/live tabs: show whether Enter launches dry-run or requires policy confirmation.
+
+3. Add status-bar rendering tests for paused, stopping, selector-open, and Settings Theme states.
+
+### Phase 7: Continue Theme API Migration
+
+1. Add explicit-theme render variants for reusable components:
+   - `InputField`;
+   - `InputGroup` / `FormBuilder`;
+   - `Selector`;
+   - `Checkbox` / `RadioGroup`;
+   - `ProgressGauge`;
+   - `ScrollableText`;
+   - `Popup`;
+   - `empty_state_paragraph`.
+
+2. Keep existing render methods as compatibility wrappers during migration.
+
+3. Convert call sites in this order:
+   - Settings, shell-adjacent UI, and tests;
+   - Dashboard/History;
+   - high-use scan/fuzz/recon tabs;
+   - large feature tabs such as Intercept and Wireless.
+
+4. Add a low-friction guard for new code.
+   - Start by failing only on new `tc!` usage in `components/` after component migration.
+   - Later expand to `ui/`, then selected tabs.
+
+### Phase 8: Registry and Documentation Cleanup
+
+1. Extend `TabSpec` as the canonical source for title, description, stable ID, command visibility, help visibility, export visibility, and launch capability where practical.
 
 2. Add consistency tests:
-   - every `Tab::all()` item has a `TabSpec`;
-   - every available tab has help;
-   - every command-palette tab jump points to an available tab;
-   - feature-gated tabs never restore into unavailable variants.
+   - every visible tab has a spec;
+   - every spec maps to a visible tab under the active feature set;
+   - command-palette tab jumps target available tabs;
+   - session restore never selects an unavailable feature-gated tab;
+   - every tab with `supports_run` has a launch test or an explicit exemption.
 
-3. Reduce exhaustive-match drift where practical without changing public behavior:
-   - keep `TabStore` ownership as-is initially;
-   - move command/help/export capability decisions to `TabSpec`;
-   - only defer deeper trait-object registry work if the first step becomes too invasive.
+3. Update `architecture/tui.md` and `crates/eggsec-tui/src/AGENTS.override.md` after implementation with:
+   - corrected Settings Theme reload behavior;
+   - theme metadata/reporting model;
+   - explicit-theme rendering migration rule;
+   - new tests and bug patterns.
 
-### Phase 5: Verification and Documentation
+## Verification Matrix
 
-1. Update `architecture/tui.md` after implementation with:
-   - new theme metadata flow;
-   - theme reload behavior;
-   - explicit-theme migration rule;
-   - any changed key bindings.
+Run after each implementation batch:
 
-2. Update `crates/eggsec-tui/src/AGENTS.override.md` with the new bug patterns and preferred helpers.
+```bash
+cargo check -p eggsec-tui
+cargo test -p eggsec-tui
+```
 
-3. Verification matrix:
-   - `cargo check -p eggsec-tui`
-   - `cargo test -p eggsec-tui`
-   - `cargo check -p eggsec --features wireless,wireless-advanced`
-   - `cargo check -p eggsec --features web-proxy`
-   - `cargo check -p eggsec --features db-pentest`
-   - `cargo check -p eggsec --features c2`
+Run before merging theme/feature-facing changes:
+
+```bash
+cargo check -p eggsec --features wireless,wireless-advanced
+cargo check -p eggsec --features web-proxy
+cargo check -p eggsec --features db-pentest
+cargo check -p eggsec --features c2
+```
 
 ## Acceptance Criteria
 
-- Enter key behavior is covered by table-driven tests for each major tab interaction pattern.
-- No production TUI tab relies on unchecked indexing for mutable input/selector/checkbox paths where a malformed or future-shortened collection could panic.
-- Settings Theme shows source, mode, loaded count, invalid count, theme directory, contrast status, and a semantic preview.
-- Users can reload themes from the TUI without restart.
-- Theme load success and failure both produce useful user-visible feedback.
-- New component rendering APIs accept explicit `&Theme`; `tc!` remains only as a compatibility bridge during migration.
-- Small terminal visual tests cover the main shell, Settings Theme, and top-priority overlays.
+- Pressing `r` in Settings > Theme reloads themes in normal mode and does not request a reset.
+- Settings hints match the focused section and widget state.
+- Theme source, invalid, missing, and fallback-adjusted statuses are accurate after startup and manual reload.
+- The Theme details pane reports actual selected-theme status and contrast warnings.
+- Manual theme reload produces clear start/success/error/no-op feedback.
+- Running/stopping/paused tasks always show task-appropriate hints.
+- Representative direct-launch tabs do not enter running state before policy gating where the app has enough data to decide first.
+- Production render paths no longer rely on unchecked dynamic field indexing.
+- New component rendering APIs accept explicit `&Theme`, with `tc!` reduced and contained as a compatibility bridge.

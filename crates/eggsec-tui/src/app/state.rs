@@ -98,6 +98,15 @@ impl Default for TaskState {
     }
 }
 
+/// Why a theme load was triggered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeLoadReason {
+    /// Initial load at startup.
+    Startup,
+    /// User pressed 'r' in Settings > Theme.
+    ManualReload,
+}
+
 /// Runtime state for best-effort packaged/user theme loading.
 /// The TUI must remain usable with built-in themes even if this loader fails.
 pub struct ThemeLoadState {
@@ -105,6 +114,8 @@ pub struct ThemeLoadState {
     pub handle: Option<JoinHandle<()>>,
     pub deferred_theme_name: Option<String>,
     pub changed_by_user: bool,
+    /// Why the current/last load was triggered.
+    pub reason: ThemeLoadReason,
 }
 
 impl Default for ThemeLoadState {
@@ -114,6 +125,7 @@ impl Default for ThemeLoadState {
             handle: None,
             deferred_theme_name: None,
             changed_by_user: false,
+            reason: ThemeLoadReason::Startup,
         }
     }
 }
@@ -200,6 +212,7 @@ mod tests {
             handle: None,
             deferred_theme_name: None,
             changed_by_user: false,
+            reason: ThemeLoadReason::Startup,
         };
         assert!(state.is_running());
 
@@ -209,6 +222,7 @@ mod tests {
             handle: Some(handle),
             deferred_theme_name: None,
             changed_by_user: false,
+            reason: ThemeLoadReason::Startup,
         };
         assert!(state.is_running());
         state.handle.take().unwrap().join().unwrap();

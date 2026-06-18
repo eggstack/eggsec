@@ -245,7 +245,7 @@ This ensures small terminals (< 24 rows) still show usable UI.
 
 `Theme.name` is the canonical stable ID for the theme, selector labels are derived separately for display, `Ctrl+T` cycles all registered themes alphabetically, and `ThemeManager.current` is private.
 
-Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, and deferred restore request together so startup stays non-blocking.
+Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, join handle, deferred restore request, and `ThemeLoadReason` (Startup or ManualReload) together so startup stays non-blocking. Manual reload (`ManualReload`) shows a "Loading themes..." notification immediately; `Startup` does not.
 
 **Contrast validation** (`theme/contrast.rs`): Loaded themes are validated for minimum contrast ratio (4.5:1) on text/background and selected_text/selected pairs. Low-contrast themes trigger a fallback to the base theme with a warning (non-fatal). The shared `named_color()` function in `loader.rs` maps all 27 named CSS colors for consistent parsing across `parse_hex_color()` and `luminance()`.
 
@@ -801,10 +801,15 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 ### Action Hints Pattern
 
 Status bar hints are context-aware via `get_action_hints()` in `app/action_hints.rs`. Priority order:
-1. Running task hints (stop/pause/resume)
+1. Running task hints (stop/pause/resume) — detected via `app.has_active_task()` (checks all task state fields, not just `task_state.handle`)
 2. Overlay-specific hints (policy confirm, command palette, search, help, etc.)
 3. Insert-mode hints (Esc/Tab/Enter)
 4. Tab-specific normal-mode hints (varies by tab)
+
+**Settings section-aware hints**: The Settings tab adapts hints based on the current section and theme selector state:
+- Theme section (selector closed): `r:reload Enter:themes Tab:next`
+- Theme section (selector open): `Enter:select ↑↓:theme Esc:cancel`
+- Other sections: `s:save r:reset Tab:next`
 
 New code should use this system instead of scattering hint strings:
 ```rust
@@ -815,7 +820,7 @@ let hints = get_action_hints(app);
 let hint_text = format_hints(&hints);
 ```
 
-Tab-specific hint functions (`settings_hints`, `history_hints`, `dashboard_hints`) return static `Vec<ActionHint>`. The `default_normal_hints` function adapts based on whether the current tab has a target set (shows "run" vs "focus"). See `app/action_hints.rs:19` for the dispatch function.
+Tab-specific hint functions (`settings_hints`, `history_hints`, `dashboard_hints`) return static `Vec<ActionHint>`. The `settings_hints` function checks `current_section` and `theme_selector.is_open()` to return context-appropriate hints. The `default_normal_hints` function adapts based on whether the current tab has a target set (shows "run" vs "focus"). See `app/action_hints.rs:19` for the dispatch function.
 
 ### Theme Metadata Pattern
 
@@ -838,27 +843,46 @@ theme_manager.loaded_count();    // Loaded status only
 theme_manager.invalid_count();   // Invalid status only
 ```
 
-Theme names are canonicalized via `canonical_theme_id()` before lookup. The `display_theme_name()` function title-cases IDs for display (e.g., "catppuccin-mocha" → "Catppuccin Mocha"). Contrast validation (`validate_contrast`) returns warnings for RGB color pairs below 4.5:1 minimum.
+Theme names are canonicalized via `canonical_theme_id()` before lookup. The `display_theme_name()` function title-cases IDs for display (e.g., "catppuccin-mocha" → "Catppuccin Mocha").
+
+**Source attribution**: `load_themes_from_dir()` in `theme/install.rs` accepts `packaged_ids: &FxHashSet<String>` (the set of canonical IDs from the archive) and determines `ThemeSource::Packaged` vs `ThemeSource::Custom` based on whether the file stem is in the packaged set. This correctly handles re-launches where packaged themes are already installed.
+
+**Invalid theme tracking**: `ThemeManager::register_theme_invalid(id, source, reason)` inserts metadata with `ThemeLoadStatus::Invalid(reason)` for themes that fail to load, so Settings shows them with `Invalid` status instead of silently omitting them.
+
+**Contrast validation**: `ThemeManager::validate_contrast(id)` returns per-theme `Vec<String>` of contrast warnings for use in the Settings Theme details pane. Called during theme load via `update_theme_metadata()` on the `SettingsTab`.
 
 ### Theme Reload Pattern
 
-In the Settings Theme section, pressing `r` (when the theme selector dropdown is closed) sets `pending_theme_reload = true` on `SettingsTab`. The event loop in `state_update.rs` polls this flag via `take_pending_theme_reload()` and triggers the background theme loader:
+Normal-mode `r` in the Settings Theme section (with the theme selector closed) emits `UiAction::ReloadThemes` directly, bypassing the `PendingAction` confirmation flow. `apply_action` in `app/mod.rs` calls `spawn_theme_loader_with_reason(ThemeLoadReason::ManualReload)`, which shows a "Loading themes..." notification immediately and spawns the background loader. The insert-mode `r` path via `pending_theme_reload` on `SettingsTab` still works for backward compatibility:
 
 ```rust
-// tabs/settings/input.rs - Sets the flag on 'r' key
-SettingsSection::Theme => {
-    if c == 'r' && !self.theme_selector.is_open() {
-        self.pending_theme_reload = true;
+// app/key_handler.rs - normal-mode 'r' in Settings > Theme
+(KeyModifiers::NONE, KeyCode::Char('r')) => {
+    if !app.has_active_task() {
+        if app.current_tab == Tab::Settings
+            && app.tabs.settings.current_section == SettingsSection::Theme
+            && !app.tabs.settings.theme_selector.is_open()
+        {
+            vec![UiAction::ReloadThemes]
+        } else {
+            vec![UiAction::ResetCurrent]
+        }
+    } else {
+        vec![]
     }
 }
 
-// app/state_update.rs - Processes the flag
-if self.tabs.settings.take_pending_theme_reload() {
-    self.spawn_theme_loader();
+// app/mod.rs - apply_action for ReloadThemes
+UiAction::ReloadThemes => {
+    if !self.has_active_task() && self.current_tab == Tab::Settings {
+        self.spawn_theme_loader_with_reason(
+            crate::app::state::ThemeLoadReason::ManualReload,
+        );
+    }
 }
 ```
 
-The `take_pending_theme_reload()` method atomically reads and clears the flag (returns `true` once, then `false` until next `r` press). This pattern avoids busy-watching and ensures exactly one reload per keypress.
+`ThemeLoadReason` (Startup vs ManualReload) is tracked in `ThemeLoadState` and controls whether a notification is shown on dispatch (ManualReload: yes, Startup: no). Manual reload shows "Loading themes..." immediately, then success/no-op feedback when the loader completes.
 
 ### No-Result State Pattern
 

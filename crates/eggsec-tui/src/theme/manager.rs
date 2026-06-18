@@ -187,6 +187,22 @@ impl ThemeManager {
         }
     }
 
+    /// Register metadata for a theme that failed to load, so it appears
+    /// in the Settings metadata even though no `Theme` was created.
+    pub fn register_theme_invalid(&mut self, id: &str, source: ThemeSource, reason: String) {
+        let canonical = canonical_theme_id(id);
+        self.theme_info.insert(
+            canonical.clone(),
+            ThemeInfo {
+                id: canonical,
+                display_name: display_theme_name(id),
+                mode: crate::theme::ThemeMode::Dark,
+                source,
+                status: ThemeLoadStatus::Invalid(reason),
+            },
+        );
+    }
+
     pub fn current_name(&self) -> &str {
         &self.current.name
     }

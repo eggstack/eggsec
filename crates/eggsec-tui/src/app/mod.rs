@@ -42,7 +42,7 @@ use crate::help::{CommandPalette, HelpContext, HelpManager};
 use crate::session::{SessionConfig, SessionManager};
 use crate::state::SharedHistory;
 use crate::tabs;
-use crate::tabs::{Tab, TabInput};
+use crate::tabs::{SettingsSection, Tab, TabInput};
 use crate::theme::{display_theme_name, ThemeManager};
 use crate::workers;
 use crossterm::event::KeyCode;
@@ -1534,6 +1534,19 @@ impl App {
                 }
             }
 
+            UiAction::ReloadThemes => {
+                if !self.has_active_task()
+                    && self.current_tab == Tab::Settings
+                    && self.tabs.settings.current_section == SettingsSection::Theme
+                    && !self.tabs.settings.theme_selector.is_open()
+                {
+                    self.spawn_theme_loader_with_reason(
+                        crate::app::state::ThemeLoadReason::ManualReload,
+                    );
+                    self.needs_redraw = true;
+                }
+            }
+
             UiAction::SaveSettings => {
                 if !self.has_active_task() && self.current_tab == Tab::Settings {
                     self.request_confirmation(PendingAction::SaveSettings);
@@ -1873,14 +1886,23 @@ mod tests {
         }
     }
 
+    fn make_theme_record(name: &str) -> crate::theme::install::LoadedThemeRecord {
+        crate::theme::install::LoadedThemeRecord {
+            result: Ok(make_theme(name)),
+            file_stem: name.to_string(),
+            source: crate::theme::ThemeSource::Custom,
+            contrast_warnings: Vec::new(),
+        }
+    }
+
     fn make_theme_install_report(
-        loaded_themes: Vec<Result<crate::theme::Theme, crate::theme::loader::ThemeLoadError>>,
+        loaded_themes: Vec<crate::theme::install::LoadedThemeRecord>,
     ) -> crate::theme::install::ThemeInstallReport {
         crate::theme::install::ThemeInstallReport {
             theme_dir: None,
             installed: 0,
             skipped_existing: 0,
-            loaded: loaded_themes.iter().filter(|result| result.is_ok()).count(),
+            loaded: loaded_themes.iter().filter(|r| r.result.is_ok()).count(),
             errors: Vec::new(),
             loaded_themes,
         }
@@ -1918,7 +1940,7 @@ mod tests {
         let mut app = create_test_app();
         app.theme_load.deferred_theme_name = Some("Catppuccin Mocha".to_string());
 
-        let report = make_theme_install_report(vec![Ok(make_theme("catppuccin-mocha"))]);
+        let report = make_theme_install_report(vec![make_theme_record("catppuccin-mocha")]);
         app.handle_theme_install_report(report);
 
         assert_eq!(app.current_theme().name, "catppuccin-mocha");
@@ -1937,7 +1959,7 @@ mod tests {
         app.theme_load.mark_user_changed();
         app.theme_load.deferred_theme_name = Some("catppuccin-mocha".to_string());
 
-        let report = make_theme_install_report(vec![Ok(make_theme("catppuccin-mocha"))]);
+        let report = make_theme_install_report(vec![make_theme_record("catppuccin-mocha")]);
         app.handle_theme_install_report(report);
 
         assert_eq!(app.current_theme().name, "dark");

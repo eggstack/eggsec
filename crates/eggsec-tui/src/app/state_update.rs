@@ -23,10 +23,12 @@ impl super::App {
             }
         }
 
-        // Handle theme reload request from Settings tab ('r' key).
+        // Handle theme reload request from Settings tab ('r' key in insert mode).
         if self.current_tab == super::tabs::Tab::Settings {
             if self.tabs.settings.take_pending_theme_reload() {
-                self.spawn_theme_loader();
+                self.spawn_theme_loader_with_reason(
+                    super::state::ThemeLoadReason::ManualReload,
+                );
             }
         }
 

@@ -171,8 +171,10 @@ impl TabRender for super::SettingsTab {
                     })
                     .unwrap_or(("Built-in", "Dark"));
 
-                // Contrast validation (from cached invalid count at load time).
-                let contrast_warnings = if self.theme_invalid_count > 0 {
+                // Contrast validation (from actual validation, not just invalid count).
+                let contrast_warnings = if !self.theme_contrast_warnings.is_empty() {
+                    format!("{} warning(s)", self.theme_contrast_warnings.len())
+                } else if self.theme_invalid_count > 0 {
                     format!("{} invalid", self.theme_invalid_count)
                 } else {
                     "OK".to_string()

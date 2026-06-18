@@ -119,6 +119,7 @@ pub enum UiAction {
 
     // Destructive / confirmation-gated actions (the *request* forms show popup)
     ResetCurrent,
+    ReloadThemes,
     SaveSettings,
     DeleteHistoryEntry,
 

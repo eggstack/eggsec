@@ -44,6 +44,8 @@ pub struct SettingsTab {
     pub theme_invalid_count: usize,
     /// Path to the user theme directory (e.g., ~/.config/eggsec/themes).
     pub theme_dir_path: String,
+    /// Contrast warnings for the currently selected theme.
+    pub theme_contrast_warnings: Vec<String>,
     /// Pending theme reload requested by user (picked up by App layer).
     pub pending_theme_reload: bool,
 }
@@ -152,6 +154,7 @@ impl SettingsTab {
             theme_info_cache: Vec::new(),
             theme_invalid_count: 0,
             theme_dir_path: String::new(),
+            theme_contrast_warnings: Vec::new(),
             pending_theme_reload: false,
         }
     }
@@ -179,10 +182,12 @@ impl SettingsTab {
         info_cache: Vec<ThemeInfo>,
         invalid_count: usize,
         dir_path: String,
+        contrast_warnings: Vec<String>,
     ) {
         self.theme_info_cache = info_cache;
         self.theme_invalid_count = invalid_count;
         self.theme_dir_path = dir_path;
+        self.theme_contrast_warnings = contrast_warnings;
     }
 
     pub fn max_focus_index(&self) -> usize {
@@ -1076,11 +1081,12 @@ mod tests {
             source: ThemeSource::BuiltIn,
             status: ThemeLoadStatus::Loaded,
         }];
-        tab.update_theme_metadata(infos, 2, "/tmp/themes".to_string());
+        tab.update_theme_metadata(infos, 2, "/tmp/themes".to_string(), Vec::new());
 
         assert_eq!(tab.theme_info_cache.len(), 1);
         assert_eq!(tab.theme_invalid_count, 2);
         assert_eq!(tab.theme_dir_path, "/tmp/themes");
+        assert!(tab.theme_contrast_warnings.is_empty());
     }
 
     #[test]

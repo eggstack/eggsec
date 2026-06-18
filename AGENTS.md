@@ -411,6 +411,16 @@ No remaining stub implementations.
 - **workers/security.rs silent HTTP error**: Compliance preflight request error silently discarded. Added `tracing::debug!`
 - **session.rs metadata error swallowing**: Double `.ok()` in tmp cleanup silently swallowed metadata errors. Changed to explicit `match` with logging
 
+### Session Fixes (2026-06-18) - TUI Bug Fixes
+
+- **Settings Theme reload path**: Normal-mode `r` in Settings > Theme now correctly triggers `UiAction::ReloadThemes` instead of `ResetCurrent`. The `ReloadThemes` action directly spawns the theme loader with `ManualReload` reason. Insert-mode `r` path via `pending_theme_reload` still works for backward compatibility
+- **Theme action hints section-aware**: `settings_hints()` in `action_hints.rs` now takes `&app` and returns different hints based on `current_section` and `theme_selector.is_open()`
+- **Theme source attribution fixed**: `load_themes_from_dir()` now accepts a `packaged_ids: &FxHashSet<String>` parameter and sets `ThemeSource::Packaged` vs `ThemeSource::Custom` based on file stem membership. `ThemeInstallReport.loaded_themes` changed from `Vec<Result<Theme, ThemeLoadError>>` to `Vec<LoadedThemeRecord>`
+- **Invalid themes tracked**: `ThemeManager::register_theme_invalid()` method added. `handle_theme_install_report()` calls it for error records
+- **Contrast warnings per-theme**: `SettingsTab` gained `theme_contrast_warnings: Vec<String>` field. `update_theme_metadata()` now accepts contrast warnings. Render shows actual warnings
+- **Theme load reason**: `ThemeLoadReason` enum added to `ThemeLoadState`. `spawn_theme_loader_with_reason()` shows notifications for manual reload
+- **Task hints detection**: `get_action_hints()` uses `app.has_active_task()` instead of `app.task_state.handle.is_some()`
+
 ### Active Wireless Reporting Bridge (2026-06-12)
 
 - **Bridge function**: `to_active_scan_report_data()` in `wireless/active/mod.rs` bridges `ActiveWirelessAttackResult` → `ScanReportData` with `wireless-active-*` finding categories (deauth, disassoc, etc.).

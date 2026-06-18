@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 
+use rustc_hash::FxHashSet;
 use tracing::{error, warn};
 
 use super::archive::decode_lzma_base64;
 use super::loader::{load_halloy_theme, ThemeLoadError};
+use super::manager::ThemeSource;
 use super::packaged::{PACKAGED_THEMES_LZMA_BASE64, PACKAGED_THEMES_VERSION};
 use super::palette::Theme;
 
@@ -17,6 +19,19 @@ pub enum ThemeInstallError {
     ArchiveError(#[from] super::archive::ThemeArchiveError),
 }
 
+/// A single loaded theme record with metadata for correct source attribution.
+#[derive(Debug)]
+pub struct LoadedThemeRecord {
+    /// The parsed theme (or error).
+    pub result: Result<Theme, ThemeLoadError>,
+    /// File stem (without .toml extension).
+    pub file_stem: String,
+    /// Inferred source based on whether the file stem is in the packaged set.
+    pub source: ThemeSource,
+    /// Contrast warnings produced during loading (empty if none).
+    pub contrast_warnings: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct ThemeInstallReport {
     pub theme_dir: Option<PathBuf>,
@@ -24,7 +39,7 @@ pub struct ThemeInstallReport {
     pub skipped_existing: usize,
     pub loaded: usize,
     pub errors: Vec<String>,
-    pub loaded_themes: Vec<Result<Theme, ThemeLoadError>>,
+    pub loaded_themes: Vec<LoadedThemeRecord>,
 }
 
 // ThemeLoadError contains non-Clone types (io::Error, toml::Error),
@@ -138,7 +153,10 @@ pub fn ensure_packaged_themes_installed(dir: &Path) -> ThemeInstallReport {
     report
 }
 
-pub fn load_themes_from_dir(dir: &Path) -> Vec<Result<Theme, ThemeLoadError>> {
+pub fn load_themes_from_dir(
+    dir: &Path,
+    packaged_ids: &FxHashSet<String>,
+) -> Vec<LoadedThemeRecord> {
     let mut results = Vec::new();
 
     let entries = match std::fs::read_dir(dir) {
@@ -158,18 +176,62 @@ pub fn load_themes_from_dir(dir: &Path) -> Vec<Result<Theme, ThemeLoadError>> {
         let file_stem = path
             .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
+            .unwrap_or("unknown")
+            .to_string();
+
+        let source = if packaged_ids.contains(&file_stem) {
+            ThemeSource::Packaged
+        } else {
+            ThemeSource::Custom
+        };
 
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(e) => {
                 warn!(path = %path.display(), error = %e, "failed to read theme file");
-                results.push(Err(ThemeLoadError::IoError(e)));
+                results.push(LoadedThemeRecord {
+                    result: Err(ThemeLoadError::IoError(e)),
+                    file_stem,
+                    source,
+                    contrast_warnings: Vec::new(),
+                });
                 continue;
             }
         };
 
-        results.push(load_halloy_theme(&content, file_stem));
+        let result = load_halloy_theme(&content, &file_stem);
+        let contrast_warnings = match &result {
+            Ok(theme) => {
+                // Collect contrast warnings for the loaded theme.
+                let mut warnings = Vec::new();
+                use super::contrast::{check_contrast, contrast_ratio};
+                let pairs = [
+                    ("text", "background", theme.colors.text, theme.colors.background),
+                    ("selected_text", "selected", theme.colors.selected_text, theme.colors.selected),
+                ];
+                for (fg_name, bg_name, fg, bg) in pairs {
+                    if matches!(fg, ratatui::style::Color::Rgb(..))
+                        && matches!(bg, ratatui::style::Color::Rgb(..))
+                        && !check_contrast(fg, bg, 4.5)
+                    {
+                        let ratio = contrast_ratio(fg, bg);
+                        warnings.push(format!(
+                            "{fg_name}/{bg_name} contrast ratio {:.2}:1 is below 4.5:1 minimum",
+                            ratio,
+                        ));
+                    }
+                }
+                warnings
+            }
+            Err(_) => Vec::new(),
+        };
+
+        results.push(LoadedThemeRecord {
+            result,
+            file_stem,
+            source,
+            contrast_warnings,
+        });
     }
 
     results
@@ -192,19 +254,32 @@ pub fn load_and_install_themes() -> ThemeInstallReport {
 
     let mut report = ensure_packaged_themes_installed(&dir);
 
-    let loaded_results = load_themes_from_dir(&dir);
-    let loaded_count = loaded_results.iter().filter(|r| r.is_ok()).count();
+    // Build set of packaged theme IDs for correct source attribution.
+    // This avoids the fragile "count installed" heuristic that breaks when
+    // packaged themes already exist on disk (installed == 0).
+    let packaged_ids = match decode_packaged_themes() {
+        Ok(files) => {
+            let mut ids = FxHashSet::default();
+            for file in &files {
+                if let Some(stem) = file.relative_path.file_stem().and_then(|s| s.to_str()) {
+                    ids.insert(stem.to_string());
+                }
+            }
+            ids
+        }
+        Err(_) => FxHashSet::default(),
+    };
+
+    let loaded_results = load_themes_from_dir(&dir, &packaged_ids);
+    let loaded_count = loaded_results.iter().filter(|r| r.result.is_ok()).count();
     report.loaded = loaded_count;
 
     let mut loaded_themes = Vec::new();
-    for result in loaded_results {
-        match &result {
-            Ok(_) => {}
-            Err(e) => {
-                report.errors.push(format!("load theme: {e}"));
-            }
+    for record in loaded_results {
+        if let Err(e) = &record.result {
+            report.errors.push(format!("load theme: {e}"));
         }
-        loaded_themes.push(result);
+        loaded_themes.push(record);
     }
     report.loaded_themes = loaded_themes;
 
@@ -272,13 +347,49 @@ mod tests {
         fs::write(dir.join("invalid.toml"), "{{bad toml").unwrap();
         fs::write(dir.join("not_a_theme.txt"), "ignored").unwrap();
 
-        let results = load_themes_from_dir(&dir);
+        let packaged_ids = FxHashSet::default();
+        let results = load_themes_from_dir(&dir, &packaged_ids);
         assert_eq!(results.len(), 2);
 
-        let ok_count = results.iter().filter(|r| r.is_ok()).count();
-        let err_count = results.iter().filter(|r| r.is_err()).count();
+        let ok_count = results.iter().filter(|r| r.result.is_ok()).count();
+        let err_count = results.iter().filter(|r| r.result.is_err()).count();
         assert_eq!(ok_count, 1);
         assert_eq!(err_count, 1);
+
+        // Verify source attribution: neither is packaged
+        for record in &results {
+            assert_eq!(record.source, ThemeSource::Custom);
+        }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_themes_from_dir_attributes_packaged_sources() {
+        let dir = temp_theme_dir("packaged_source");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("packaged_theme.toml"),
+            "[general]\nbackground = \"#000000\"",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("custom_theme.toml"),
+            "[general]\nbackground = \"#FFFFFF\"",
+        )
+        .unwrap();
+
+        let mut packaged_ids = FxHashSet::default();
+        packaged_ids.insert("packaged_theme".to_string());
+
+        let results = load_themes_from_dir(&dir, &packaged_ids);
+        assert_eq!(results.len(), 2);
+
+        let packaged = results.iter().find(|r| r.file_stem == "packaged_theme").unwrap();
+        assert_eq!(packaged.source, ThemeSource::Packaged);
+
+        let custom = results.iter().find(|r| r.file_stem == "custom_theme").unwrap();
+        assert_eq!(custom.source, ThemeSource::Custom);
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::app::InputMode;
 use crate::app::OverlayType;
+use crate::tabs::SettingsSection;
 use crate::tabs::Tab;
 
 /// A single action hint displayed in the status bar.
@@ -17,7 +18,9 @@ pub struct ActionHint {
 /// 3. Insert-mode (input focused) hints
 /// 4. Tab-specific normal-mode hints
 pub fn get_action_hints(app: &App) -> Vec<ActionHint> {
-    if app.task_state.handle.is_some() {
+    // Use has_active_task() which checks all task state fields (handle, tab,
+    // progress_rx, result_rx) instead of just task_state.handle.
+    if app.has_active_task() {
         return task_hints(app);
     }
 
@@ -115,19 +118,40 @@ fn insert_mode_hints() -> Vec<ActionHint> {
 
 fn get_tab_hints(app: &App) -> Vec<ActionHint> {
     match app.current_tab {
-        Tab::Settings => settings_hints(),
+        Tab::Settings => settings_hints(app),
         Tab::History => history_hints(),
         Tab::Dashboard => dashboard_hints(),
         _ => default_normal_hints(app),
     }
 }
 
-fn settings_hints() -> Vec<ActionHint> {
-    vec![
-        ActionHint { key: "s", label: "save" },
-        ActionHint { key: "r", label: "reset" },
-        ActionHint { key: "Tab", label: "next" },
-    ]
+fn settings_hints(app: &App) -> Vec<ActionHint> {
+    let section = app.tabs.settings.current_section;
+    let selector_open = app.tabs.settings.theme_selector.is_open();
+
+    match section {
+        SettingsSection::Theme if selector_open => {
+            vec![
+                ActionHint { key: "Enter", label: "select" },
+                ActionHint { key: "↑↓", label: "theme" },
+                ActionHint { key: "Esc", label: "cancel" },
+            ]
+        }
+        SettingsSection::Theme => {
+            vec![
+                ActionHint { key: "r", label: "reload" },
+                ActionHint { key: "Enter", label: "themes" },
+                ActionHint { key: "Tab", label: "next" },
+            ]
+        }
+        _ => {
+            vec![
+                ActionHint { key: "s", label: "save" },
+                ActionHint { key: "r", label: "reset" },
+                ActionHint { key: "Tab", label: "next" },
+            ]
+        }
+    }
 }
 
 fn history_hints() -> Vec<ActionHint> {
@@ -311,9 +335,10 @@ mod tests {
     }
 
     #[test]
-    fn settings_tab_hints() {
+    fn settings_tab_hints_non_theme_section() {
         let mut app = create_test_app();
         app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Http;
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 3);
         assert_eq!(hints[0].key, "s");
@@ -322,6 +347,37 @@ mod tests {
         assert_eq!(hints[1].label, "reset");
         assert_eq!(hints[2].key, "Tab");
         assert_eq!(hints[2].label, "next");
+    }
+
+    #[test]
+    fn settings_tab_hints_theme_section() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+        let hints = get_action_hints(&app);
+        assert_eq!(hints.len(), 3);
+        assert_eq!(hints[0].key, "r");
+        assert_eq!(hints[0].label, "reload");
+        assert_eq!(hints[1].key, "Enter");
+        assert_eq!(hints[1].label, "themes");
+        assert_eq!(hints[2].key, "Tab");
+        assert_eq!(hints[2].label, "next");
+    }
+
+    #[test]
+    fn settings_tab_hints_theme_selector_open() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+        app.tabs.settings.theme_selector.open();
+        let hints = get_action_hints(&app);
+        assert_eq!(hints.len(), 3);
+        assert_eq!(hints[0].key, "Enter");
+        assert_eq!(hints[0].label, "select");
+        assert_eq!(hints[1].key, "↑↓");
+        assert_eq!(hints[1].label, "theme");
+        assert_eq!(hints[2].key, "Esc");
+        assert_eq!(hints[2].label, "cancel");
     }
 
     #[test]

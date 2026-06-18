@@ -5,6 +5,7 @@ use super::InputMode;
 use super::OverlayController;
 use super::UiAction;
 use crate::tabs::Tab;
+use crate::tabs::SettingsSection;
 
 // Phase 1 (tui-architecture-usability-pass.md): KeyHandler now decodes to UiAction
 // and delegates mutation to App::apply_action / apply_actions. The public
@@ -248,10 +249,19 @@ impl KeyHandler {
             }
             (KeyModifiers::NONE, KeyCode::Char('r')) => {
                 if !app.has_active_task() {
-                    // The old handle_reset would request the appropriate PendingAction.
-                    // We emit the high-level ResetCurrent; apply_action maps it to the
-                    // correct request_confirmation based on current tab.
-                    vec![UiAction::ResetCurrent]
+                    // In Settings > Theme with selector closed, reload themes
+                    // instead of requesting a tab reset.
+                    if app.current_tab == Tab::Settings
+                        && app.tabs.settings.current_section == SettingsSection::Theme
+                        && !app.tabs.settings.theme_selector.is_open()
+                    {
+                        vec![UiAction::ReloadThemes]
+                    } else {
+                        // The old handle_reset would request the appropriate PendingAction.
+                        // We emit the high-level ResetCurrent; apply_action maps it to the
+                        // correct request_confirmation based on current tab.
+                        vec![UiAction::ResetCurrent]
+                    }
                 } else {
                     vec![]
                 }
@@ -720,5 +730,83 @@ mod tests {
         );
 
         assert!(app.needs_redraw);
+    }
+
+    #[test]
+    fn test_r_in_settings_theme_reloads_themes() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::ReloadThemes]);
+    }
+
+    #[test]
+    fn test_r_in_settings_non_theme_resets() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Http;
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::ResetCurrent]);
+    }
+
+    #[test]
+    fn test_r_in_settings_theme_with_selector_open_resets() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+        app.tabs.settings.theme_selector.open();
+
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::ResetCurrent]);
+    }
+
+    #[test]
+    fn test_apply_reload_themes_spawns_loader() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+
+        app.apply_action(UiAction::ReloadThemes);
+        // The loader should be spawned (handle + rx set) since we're not already loading.
+        assert!(app.theme_load.handle.is_some());
+        assert!(app.theme_load.rx.is_some());
+        // Clean up the thread.
+        app.theme_load.handle.take().unwrap().join().ok();
+    }
+
+    #[test]
+    fn test_apply_reload_themes_blocked_with_active_task() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+        app.task_state.tab = Some(Tab::Recon);
+
+        app.apply_action(UiAction::ReloadThemes);
+        assert!(!app.theme_load.is_running());
+    }
+
+    #[test]
+    fn test_apply_reload_themes_blocked_on_wrong_section() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Http;
+
+        app.apply_action(UiAction::ReloadThemes);
+        assert!(!app.theme_load.is_running());
     }
 }
