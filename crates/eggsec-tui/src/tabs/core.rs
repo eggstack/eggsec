@@ -10,10 +10,21 @@ use ratatui::{
 use std::fmt;
 
 /// Generic focus area for tabs with Inputs/Options/Results layout.
+/// Use this instead of defining a per-tab enum when the tab has exactly
+/// these three focus areas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandardFocusArea {
     Inputs,
     Options,
+    Results,
+}
+
+/// Generic focus area for tabs with Inputs/Results layout (2-area tabs).
+/// Use this instead of defining a per-tab enum when the tab has exactly
+/// these two focus areas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StandardFocusArea2 {
+    Inputs,
     Results,
 }
 

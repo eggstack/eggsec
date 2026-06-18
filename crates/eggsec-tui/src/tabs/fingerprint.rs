@@ -1,7 +1,7 @@
 use crate::components::InputField;
 use crate::tabs::core::{
     evaluate_enter, execute_enter_action, field_as, field_str, handle_escape_simple,
-    render_results_area, start_scan, TabCore,
+    render_config_block, render_results_area, start_scan, StandardFocusArea2, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_2area, tab_state_boilerplate, tc};
@@ -10,20 +10,13 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders},
     Frame,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum FingerprintFocusArea {
-    Inputs,
-    Results,
-}
 
 pub struct FingerprintTab {
     pub core: TabCore,
     pub results: Option<FingerprintResults>,
-    pub focus_area: FingerprintFocusArea,
+    pub focus_area: StandardFocusArea2,
 }
 
 impl FingerprintTab {
@@ -39,7 +32,7 @@ impl FingerprintTab {
         Self {
             core: TabCore::new("Fingerprinting...", "Results").with_inputs(inputs),
             results: None,
-            focus_area: FingerprintFocusArea::Inputs,
+            focus_area: StandardFocusArea2::Inputs,
         }
     }
 
@@ -166,7 +159,7 @@ impl TabState for FingerprintTab {
             field.value = "5".to_string();
             field.cursor_pos = 1;
         }
-        self.focus_area = FingerprintFocusArea::Inputs;
+        self.focus_area = StandardFocusArea2::Inputs;
     }
 }
 
@@ -180,18 +173,12 @@ impl TabRender for FingerprintTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
-        let input_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Fingerprint Configuration ")
-            .border_style(Style::default().fg(
-                if self.focus_area == FingerprintFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                },
-            ));
-        let input_inner = input_block.inner(input_area);
-        f.render_widget(input_block, input_area);
+        let input_inner = render_config_block(
+            f,
+            input_area,
+            "Fingerprint Configuration",
+            self.focus_area == StandardFocusArea2::Inputs,
+        );
 
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -208,18 +195,12 @@ impl TabRender for FingerprintTab {
             }
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(Style::default().fg(
-                if self.focus_area == FingerprintFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                },
-            ));
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
+        let results_inner = render_config_block(
+            f,
+            results_area,
+            "Results",
+            self.focus_area == StandardFocusArea2::Results,
+        );
 
         render_results_area(
             f,
@@ -239,8 +220,8 @@ impl TabInput for FingerprintTab {
         FingerprintTab,
         core: core,
         focus: focus_area,
-        Inputs: FingerprintFocusArea::Inputs,
-        Results: FingerprintFocusArea::Results
+        Inputs: StandardFocusArea2::Inputs,
+        Results: StandardFocusArea2::Results
     );
 
     fn handle_enter(&mut self) {
@@ -248,8 +229,8 @@ impl TabInput for FingerprintTab {
         let inputs_focused = self.core.inputs.is_focused();
         let action = evaluate_enter(
             self.focus_area,
-            FingerprintFocusArea::Inputs,
-            FingerprintFocusArea::Results,
+            StandardFocusArea2::Inputs,
+            StandardFocusArea2::Results,
             running,
             inputs_focused,
         );
@@ -263,7 +244,7 @@ impl TabInput for FingerprintTab {
         let new_area = handle_escape_simple(
             &mut self.core,
             self.focus_area,
-            FingerprintFocusArea::Inputs,
+            StandardFocusArea2::Inputs,
         );
         self.focus_area = new_area;
     }
@@ -280,7 +261,7 @@ mod tests {
     #[test]
     fn test_enter_in_inputs_focused_blurs_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = FingerprintFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea2::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -291,7 +272,7 @@ mod tests {
     #[test]
     fn test_enter_in_results_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = FingerprintFocusArea::Results;
+        tab.focus_area = StandardFocusArea2::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -299,26 +280,26 @@ mod tests {
     #[test]
     fn test_focus_cycle_2area() {
         let mut tab = create_test_tab();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
 
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Results);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Results);
 
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
         assert!(tab.core.inputs.is_focused());
     }
 
     #[test]
     fn test_focus_prev_cycle_2area() {
         let mut tab = create_test_tab();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
 
         tab.handle_focus_prev();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Results);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Results);
 
         tab.handle_focus_prev();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
     }
 
     #[test]
@@ -332,9 +313,9 @@ mod tests {
     #[test]
     fn test_escape_from_results_goes_to_inputs() {
         let mut tab = create_test_tab();
-        tab.focus_area = FingerprintFocusArea::Results;
+        tab.focus_area = StandardFocusArea2::Results;
         tab.handle_escape();
-        assert_eq!(tab.focus_area, FingerprintFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
         assert!(tab.core.inputs.is_focused());
     }
 
@@ -349,12 +330,12 @@ mod tests {
     #[test]
     fn test_handle_char_inputs_only() {
         let mut tab = create_test_tab();
-        tab.focus_area = FingerprintFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea2::Inputs;
         tab.core.inputs.focus(0);
         tab.handle_char('x');
         assert_eq!(tab.core.target(), "x");
 
-        tab.focus_area = FingerprintFocusArea::Results;
+        tab.focus_area = StandardFocusArea2::Results;
         tab.handle_char('y');
         assert_eq!(tab.core.target(), "x");
     }
@@ -370,11 +351,11 @@ mod tests {
     #[test]
     fn test_is_input_focused() {
         let mut tab = create_test_tab();
-        tab.focus_area = FingerprintFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea2::Inputs;
         assert!(!tab.is_input_focused());
         tab.core.inputs.focus(0);
         assert!(tab.is_input_focused());
-        tab.focus_area = FingerprintFocusArea::Results;
+        tab.focus_area = StandardFocusArea2::Results;
         assert!(!tab.is_input_focused());
     }
 

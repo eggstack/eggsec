@@ -1,28 +1,22 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup, ValidationResult};
-use crate::tabs::core::{field_as, field_str, render_results_area, TabCore};
+use crate::tabs::core::{
+    field_as, field_str, render_config_block, render_results_area, StandardFocusArea, TabCore,
+};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::scanner::ports::PortScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{Block, Borders},
     Frame,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ScanPortsFocusArea {
-    Inputs,
-    Options,
-    Results,
-}
 
 pub struct ScanPortsTab {
     pub core: TabCore,
     pub results: Option<PortScanResults>,
     pub udp_checkbox: Checkbox,
-    pub focus_area: ScanPortsFocusArea,
+    pub focus_area: StandardFocusArea,
 }
 
 impl ScanPortsTab {
@@ -37,7 +31,7 @@ impl ScanPortsTab {
             core: TabCore::new("Scanning ports...", "Results").with_inputs(inputs),
             results: None,
             udp_checkbox: Checkbox::new("Enable UDP (requires root/sudo)").checked(false),
-            focus_area: ScanPortsFocusArea::Inputs,
+            focus_area: StandardFocusArea::Inputs,
         }
     }
 
@@ -237,7 +231,7 @@ impl TabState for ScanPortsTab {
             field.value = "2".to_string();
             field.cursor_pos = 1;
         }
-        self.focus_area = ScanPortsFocusArea::Inputs;
+        self.focus_area = StandardFocusArea::Inputs;
         self.udp_checkbox.checked = false;
     }
 }
@@ -252,18 +246,12 @@ impl TabRender for ScanPortsTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
-        let input_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Port Scan Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ScanPortsFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let input_inner = input_block.inner(input_area);
-        f.render_widget(input_block, input_area);
+        let input_inner = render_config_block(
+            f,
+            input_area,
+            "Port Scan Configuration",
+            self.focus_area == StandardFocusArea::Inputs,
+        );
 
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -287,18 +275,12 @@ impl TabRender for ScanPortsTab {
             udp_cb.render(f, *chunk);
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ScanPortsFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
+        let results_inner = render_config_block(
+            f,
+            results_area,
+            "Results",
+            self.focus_area == StandardFocusArea::Results,
+        );
 
         render_results_area(
             f,
@@ -318,26 +300,26 @@ impl TabInput for ScanPortsTab {
         ScanPortsTab,
         core: core,
         focus: focus_area,
-        Inputs: ScanPortsFocusArea::Inputs,
-        Results: ScanPortsFocusArea::Results
+        Inputs: StandardFocusArea::Inputs,
+        Results: StandardFocusArea::Results
     );
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.insert(c);
             self.update_field_validation();
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.backspace();
             self.update_field_validation();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.paste(text);
             self.update_field_validation();
         }
@@ -348,15 +330,15 @@ impl TabInput for ScanPortsTab {
             return;
         }
         match self.focus_area {
-            ScanPortsFocusArea::Inputs => {
+            StandardFocusArea::Inputs => {
                 self.core.inputs.blur();
-                self.focus_area = ScanPortsFocusArea::Options;
+                self.focus_area = StandardFocusArea::Options;
             }
-            ScanPortsFocusArea::Options => {
-                self.focus_area = ScanPortsFocusArea::Results;
+            StandardFocusArea::Options => {
+                self.focus_area = StandardFocusArea::Results;
             }
-            ScanPortsFocusArea::Results => {
-                self.focus_area = ScanPortsFocusArea::Inputs;
+            StandardFocusArea::Results => {
+                self.focus_area = StandardFocusArea::Inputs;
                 self.core.inputs.focus(0);
             }
         }
@@ -367,16 +349,16 @@ impl TabInput for ScanPortsTab {
             return;
         }
         match self.focus_area {
-            ScanPortsFocusArea::Inputs => {
+            StandardFocusArea::Inputs => {
                 self.core.inputs.blur();
-                self.focus_area = ScanPortsFocusArea::Results;
+                self.focus_area = StandardFocusArea::Results;
             }
-            ScanPortsFocusArea::Options => {
+            StandardFocusArea::Options => {
                 self.core.inputs.focus(0);
-                self.focus_area = ScanPortsFocusArea::Inputs;
+                self.focus_area = StandardFocusArea::Inputs;
             }
-            ScanPortsFocusArea::Results => {
-                self.focus_area = ScanPortsFocusArea::Options;
+            StandardFocusArea::Results => {
+                self.focus_area = StandardFocusArea::Options;
             }
         }
     }
@@ -385,13 +367,13 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == ScanPortsFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.core.scroll_results_up();
             } else {
                 self.core.inputs.focus_prev();
             }
-        } else if self.focus_area == ScanPortsFocusArea::Results {
+        } else if self.focus_area == StandardFocusArea::Results {
             self.core.scroll_results_up();
         }
     }
@@ -400,13 +382,13 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == ScanPortsFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.core.scroll_results_down();
             } else {
                 self.core.inputs.focus_next();
             }
-        } else if self.focus_area == ScanPortsFocusArea::Results {
+        } else if self.focus_area == StandardFocusArea::Results {
             self.core.scroll_results_down();
         }
     }
@@ -417,14 +399,14 @@ impl TabInput for ScanPortsTab {
         crate::tabs::core::handle_enter_3area(
             &mut self.core,
             self.focus_area,
-            ScanPortsFocusArea::Inputs,
-            ScanPortsFocusArea::Options,
-            ScanPortsFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
             running,
             inputs_focused,
             |_core| false,
         );
-        if self.focus_area == ScanPortsFocusArea::Options && !self.is_running() {
+        if self.focus_area == StandardFocusArea::Options && !self.is_running() {
             self.udp_checkbox.checked = !self.udp_checkbox.checked;
         }
     }
@@ -433,9 +415,9 @@ impl TabInput for ScanPortsTab {
         let new_area = crate::tabs::core::handle_escape_3area(
             &mut self.core,
             self.focus_area,
-            ScanPortsFocusArea::Inputs,
-            ScanPortsFocusArea::Options,
-            ScanPortsFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
         );
         self.focus_area = new_area;
     }
@@ -444,7 +426,7 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == ScanPortsFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.move_left()
         } else {
             false
@@ -455,7 +437,7 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == ScanPortsFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.move_right()
         } else {
             false
@@ -463,11 +445,11 @@ impl TabInput for ScanPortsTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == ScanPortsFocusArea::Inputs && self.core.inputs.is_focused()
+        self.focus_area == StandardFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == ScanPortsFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.fields.is_empty() || self.core.inputs.is_at_left_edge()
         } else {
             true
@@ -475,7 +457,7 @@ impl TabInput for ScanPortsTab {
     }
 
     fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == ScanPortsFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.fields.is_empty() || self.core.inputs.is_at_right_edge()
         } else {
             true
@@ -494,7 +476,7 @@ mod tests {
     #[test]
     fn test_enter_in_inputs_focused_blurs_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanPortsFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -505,7 +487,7 @@ mod tests {
     #[test]
     fn test_enter_in_options_toggles_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanPortsFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         let before = tab.udp_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.udp_checkbox.checked, !before);
@@ -515,7 +497,7 @@ mod tests {
     #[test]
     fn test_enter_in_results_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanPortsFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }

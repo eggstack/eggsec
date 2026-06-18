@@ -1,5 +1,5 @@
 use crate::components::{Checkbox, InputField};
-use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
+use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
@@ -16,15 +16,8 @@ pub struct OAuthTab {
     pub scope_test_checkbox: Checkbox,
     pub state_test_checkbox: Checkbox,
     pub grant_test_checkbox: Checkbox,
-    pub focus_area: OAuthFocusArea,
+    pub focus_area: StandardFocusArea,
     pub checkbox_focus_index: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum OAuthFocusArea {
-    Inputs,
-    Options,
-    Results,
 }
 
 impl Default for OAuthTab {
@@ -48,7 +41,7 @@ impl OAuthTab {
             scope_test_checkbox: Checkbox::new("Scope Escalation Tests").checked(true),
             state_test_checkbox: Checkbox::new("State Parameter Tests").checked(true),
             grant_test_checkbox: Checkbox::new("Grant Type Tests").checked(true),
-            focus_area: OAuthFocusArea::Inputs,
+            focus_area: StandardFocusArea::Inputs,
             checkbox_focus_index: 0,
         }
     }
@@ -184,7 +177,7 @@ impl TabState for OAuthTab {
             self.core.inputs.fields[4].value = "15".to_string();
         }
         self.core.inputs.blur();
-        self.focus_area = OAuthFocusArea::Inputs;
+        self.focus_area = StandardFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.redirect_test_checkbox.checked = true;
         self.scope_test_checkbox.checked = true;
@@ -243,7 +236,7 @@ impl TabRender for OAuthTab {
             .title(" OAuth/OIDC Configuration ")
             .borders(Borders::ALL)
             .border_style(
-                Style::default().fg(if self.focus_area == OAuthFocusArea::Inputs {
+                Style::default().fg(if self.focus_area == StandardFocusArea::Inputs {
                     tc!(border_focused)
                 } else {
                     tc!(border)
@@ -262,7 +255,7 @@ impl TabRender for OAuthTab {
             .title(" Test Options ")
             .borders(Borders::ALL)
             .border_style(
-                Style::default().fg(if self.focus_area == OAuthFocusArea::Options {
+                Style::default().fg(if self.focus_area == StandardFocusArea::Options {
                     tc!(border_focused)
                 } else {
                     tc!(border)
@@ -313,24 +306,24 @@ impl TabInput for OAuthTab {
         OAuthTab,
         core: core,
         focus: focus_area,
-        Inputs: OAuthFocusArea::Inputs,
-        Results: OAuthFocusArea::Results
+        Inputs: StandardFocusArea::Inputs,
+        Results: StandardFocusArea::Results
     );
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.paste(text);
         }
     }
@@ -338,14 +331,14 @@ impl TabInput for OAuthTab {
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
-                OAuthFocusArea::Inputs => {
+                StandardFocusArea::Inputs => {
                     self.core.inputs.blur();
-                    OAuthFocusArea::Options
+                    StandardFocusArea::Options
                 }
-                OAuthFocusArea::Options => OAuthFocusArea::Results,
-                OAuthFocusArea::Results => {
+                StandardFocusArea::Options => StandardFocusArea::Results,
+                StandardFocusArea::Results => {
                     self.core.inputs.focus(0);
-                    OAuthFocusArea::Inputs
+                    StandardFocusArea::Inputs
                 }
             };
         }
@@ -354,15 +347,15 @@ impl TabInput for OAuthTab {
     fn handle_focus_prev(&mut self) {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
-                OAuthFocusArea::Inputs => {
+                StandardFocusArea::Inputs => {
                     self.core.inputs.blur();
-                    OAuthFocusArea::Results
+                    StandardFocusArea::Results
                 }
-                OAuthFocusArea::Options => {
+                StandardFocusArea::Options => {
                     self.core.inputs.focus(0);
-                    OAuthFocusArea::Inputs
+                    StandardFocusArea::Inputs
                 }
-                OAuthFocusArea::Results => OAuthFocusArea::Options,
+                StandardFocusArea::Results => StandardFocusArea::Options,
             };
         }
     }
@@ -370,8 +363,8 @@ impl TabInput for OAuthTab {
     fn handle_up(&mut self) {
         if !self.is_running() {
             match self.focus_area {
-                OAuthFocusArea::Inputs => self.core.inputs.focus_prev(),
-                OAuthFocusArea::Results => self.core.scroll_results_up(),
+                StandardFocusArea::Inputs => self.core.inputs.focus_prev(),
+                StandardFocusArea::Results => self.core.scroll_results_up(),
                 _ => {}
             }
         }
@@ -380,15 +373,15 @@ impl TabInput for OAuthTab {
     fn handle_down(&mut self) {
         if !self.is_running() {
             match self.focus_area {
-                OAuthFocusArea::Inputs => self.core.inputs.focus_next(),
-                OAuthFocusArea::Results => self.core.scroll_results_down(),
+                StandardFocusArea::Inputs => self.core.inputs.focus_next(),
+                StandardFocusArea::Results => self.core.scroll_results_down(),
                 _ => {}
             }
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == OAuthFocusArea::Inputs && self.core.inputs.is_focused()
+        self.focus_area == StandardFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn handle_enter(&mut self) {
@@ -397,14 +390,14 @@ impl TabInput for OAuthTab {
         crate::tabs::core::handle_enter_3area(
             &mut self.core,
             self.focus_area,
-            OAuthFocusArea::Inputs,
-            OAuthFocusArea::Options,
-            OAuthFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
             running,
             inputs_focused,
             |_core| false,
         );
-        if self.focus_area == OAuthFocusArea::Options && !self.is_running() {
+        if self.focus_area == StandardFocusArea::Options && !self.is_running() {
             let checkboxes = [
                 &mut self.redirect_test_checkbox,
                 &mut self.scope_test_checkbox,
@@ -420,9 +413,9 @@ impl TabInput for OAuthTab {
         let new_area = crate::tabs::core::handle_escape_3area(
             &mut self.core,
             self.focus_area,
-            OAuthFocusArea::Inputs,
-            OAuthFocusArea::Options,
-            OAuthFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
         );
         self.focus_area = new_area;
         self.checkbox_focus_index = 0;
@@ -433,8 +426,8 @@ impl TabInput for OAuthTab {
             return false;
         }
         match self.focus_area {
-            OAuthFocusArea::Inputs => self.core.inputs.move_left(),
-            OAuthFocusArea::Options => {
+            StandardFocusArea::Inputs => self.core.inputs.move_left(),
+            StandardFocusArea::Options => {
                 if self.checkbox_focus_index > 0 {
                     self.checkbox_focus_index -= 1;
                 }
@@ -449,8 +442,8 @@ impl TabInput for OAuthTab {
             return false;
         }
         match self.focus_area {
-            OAuthFocusArea::Inputs => self.core.inputs.move_right(),
-            OAuthFocusArea::Options => {
+            StandardFocusArea::Inputs => self.core.inputs.move_right(),
+            StandardFocusArea::Options => {
                 let max_idx = 3;
                 if self.checkbox_focus_index < max_idx {
                     self.checkbox_focus_index += 1;
@@ -463,16 +456,16 @@ impl TabInput for OAuthTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            OAuthFocusArea::Inputs => !self.core.inputs.can_move_left(),
-            OAuthFocusArea::Options => self.checkbox_focus_index == 0,
+            StandardFocusArea::Inputs => !self.core.inputs.can_move_left(),
+            StandardFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
     }
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            OAuthFocusArea::Inputs => !self.core.inputs.can_move_right(),
-            OAuthFocusArea::Options => self.checkbox_focus_index >= 3,
+            StandardFocusArea::Inputs => !self.core.inputs.can_move_right(),
+            StandardFocusArea::Options => self.checkbox_focus_index >= 3,
             _ => true,
         }
     }
@@ -489,7 +482,7 @@ mod tests {
     #[test]
     fn test_handle_enter_results_focus_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = OAuthFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -497,7 +490,7 @@ mod tests {
     #[test]
     fn test_handle_enter_options_toggles_checkbox() {
         let mut tab = create_test_tab();
-        tab.focus_area = OAuthFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         let before = tab.redirect_test_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.redirect_test_checkbox.checked, !before);
@@ -507,7 +500,7 @@ mod tests {
     #[test]
     fn test_handle_enter_inputs_focused_blurs() {
         let mut tab = create_test_tab();
-        tab.focus_area = OAuthFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();

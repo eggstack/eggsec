@@ -1,5 +1,5 @@
 use crate::components::{Checkbox, InputField, InputGroup};
-use crate::tabs::core::{field_as, render_results_area, TabCore};
+use crate::tabs::core::{field_as, render_results_area, StandardFocusArea, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::hunt::{HuntConfig, HuntReport};
@@ -17,14 +17,7 @@ pub struct HuntTab {
     pub config: HuntConfig,
     pub option_checkboxes: Vec<Checkbox>,
     pub focused_checkbox_index: usize,
-    pub focus_area: HuntFocusArea,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum HuntFocusArea {
-    Inputs,
-    Options,
-    Results,
+    pub focus_area: StandardFocusArea,
 }
 
 impl HuntTab {
@@ -48,7 +41,7 @@ impl HuntTab {
             config: HuntConfig::default(),
             option_checkboxes,
             focused_checkbox_index: 0,
-            focus_area: HuntFocusArea::Inputs,
+            focus_area: StandardFocusArea::Inputs,
         }
     }
 
@@ -214,7 +207,7 @@ impl TabState for HuntTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
-        self.focus_area = HuntFocusArea::Inputs;
+        self.focus_area = StandardFocusArea::Inputs;
         self.focused_checkbox_index = 0;
         for cb in &mut self.option_checkboxes {
             cb.checked = true;
@@ -225,9 +218,9 @@ impl TabState for HuntTab {
 impl TabRender for HuntTab {
     fn breadcrumb(&self) -> Option<Vec<&'static str>> {
         let focus = match self.focus_area {
-            HuntFocusArea::Inputs => "Inputs",
-            HuntFocusArea::Options => "Options",
-            HuntFocusArea::Results => "Results",
+            StandardFocusArea::Inputs => "Inputs",
+            StandardFocusArea::Options => "Options",
+            StandardFocusArea::Results => "Results",
         };
         Some(vec!["Hunt", focus])
     }
@@ -242,7 +235,7 @@ impl TabRender for HuntTab {
         let results_area = chunks[1];
 
         let is_config_focused =
-            self.focus_area == HuntFocusArea::Inputs || self.focus_area == HuntFocusArea::Options;
+            self.focus_area == StandardFocusArea::Inputs || self.focus_area == StandardFocusArea::Options;
         let config_block = Block::default()
             .borders(Borders::ALL)
             .title(" Configuration ")
@@ -291,7 +284,7 @@ impl TabRender for HuntTab {
         for (i, cb) in self.option_checkboxes.iter().enumerate().take(3) {
             let mut checkbox = cb.clone();
             checkbox.focused =
-                self.focus_area == HuntFocusArea::Options && i == self.focused_checkbox_index;
+                self.focus_area == StandardFocusArea::Options && i == self.focused_checkbox_index;
             if let Some(area) = left.get(i) {
                 checkbox.render(f, *area);
             }
@@ -300,7 +293,7 @@ impl TabRender for HuntTab {
         for (i, cb) in self.option_checkboxes.iter().enumerate().skip(3) {
             let mut checkbox = cb.clone();
             checkbox.focused =
-                self.focus_area == HuntFocusArea::Options && i == self.focused_checkbox_index;
+                self.focus_area == StandardFocusArea::Options && i == self.focused_checkbox_index;
             if let Some(area) = right.get(i.saturating_sub(3)) {
                 checkbox.render(f, *area);
             }
@@ -324,24 +317,24 @@ impl TabInput for HuntTab {
         HuntTab,
         core: core,
         focus: focus_area,
-        Inputs: HuntFocusArea::Inputs,
-        Results: HuntFocusArea::Results
+        Inputs: StandardFocusArea::Inputs,
+        Results: StandardFocusArea::Results
     );
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.paste(text);
         }
     }
@@ -351,15 +344,15 @@ impl TabInput for HuntTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            HuntFocusArea::Inputs => {
+            StandardFocusArea::Inputs => {
                 self.core.inputs.blur();
                 self.focused_checkbox_index = 0;
-                HuntFocusArea::Options
+                StandardFocusArea::Options
             }
-            HuntFocusArea::Options => HuntFocusArea::Results,
-            HuntFocusArea::Results => {
+            StandardFocusArea::Options => StandardFocusArea::Results,
+            StandardFocusArea::Results => {
                 self.core.inputs.focus(0);
-                HuntFocusArea::Inputs
+                StandardFocusArea::Inputs
             }
         };
     }
@@ -369,17 +362,17 @@ impl TabInput for HuntTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            HuntFocusArea::Inputs => {
+            StandardFocusArea::Inputs => {
                 self.core.inputs.blur();
-                HuntFocusArea::Results
+                StandardFocusArea::Results
             }
-            HuntFocusArea::Options => {
+            StandardFocusArea::Options => {
                 self.core.inputs.focus(0);
-                HuntFocusArea::Inputs
+                StandardFocusArea::Inputs
             }
-            HuntFocusArea::Results => {
+            StandardFocusArea::Results => {
                 self.focused_checkbox_index = 0;
-                HuntFocusArea::Options
+                StandardFocusArea::Options
             }
         };
     }
@@ -389,14 +382,14 @@ impl TabInput for HuntTab {
             self.core.stop();
             return;
         }
-        if self.focus_area == HuntFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             if self.core.inputs.is_focused() {
                 self.core.inputs.blur();
                 return;
             }
         }
 
-        if self.focus_area == HuntFocusArea::Options {
+        if self.focus_area == StandardFocusArea::Options {
             if let Some(checkbox) = self
                 .option_checkboxes
                 .get_mut(self.focused_checkbox_index)
@@ -406,7 +399,7 @@ impl TabInput for HuntTab {
             return;
         }
 
-        if self.focus_area == HuntFocusArea::Results {
+        if self.focus_area == StandardFocusArea::Results {
             return;
         }
 
@@ -420,14 +413,14 @@ impl TabInput for HuntTab {
         }
         self.core.inputs.blur();
         self.focused_checkbox_index = 0;
-        self.focus_area = HuntFocusArea::Inputs;
+        self.focus_area = StandardFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {
         if self.is_running() {
             return;
         }
-        if self.focus_area == HuntFocusArea::Options {
+        if self.focus_area == StandardFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return;
             }
@@ -447,7 +440,7 @@ impl TabInput for HuntTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == HuntFocusArea::Options {
+        if self.focus_area == StandardFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return;
             }
@@ -467,9 +460,9 @@ impl TabInput for HuntTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == HuntFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.move_left()
-        } else if self.focus_area == HuntFocusArea::Options {
+        } else if self.focus_area == StandardFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return false;
             }
@@ -488,9 +481,9 @@ impl TabInput for HuntTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == HuntFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.move_right()
-        } else if self.focus_area == HuntFocusArea::Options {
+        } else if self.focus_area == StandardFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return false;
             }
@@ -506,9 +499,9 @@ impl TabInput for HuntTab {
     }
 
     fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == HuntFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.is_at_left_edge()
-        } else if self.focus_area == HuntFocusArea::Options {
+        } else if self.focus_area == StandardFocusArea::Options {
             self.option_checkboxes.is_empty() || self.focused_checkbox_index == 0
         } else {
             true
@@ -516,9 +509,9 @@ impl TabInput for HuntTab {
     }
 
     fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == HuntFocusArea::Inputs {
+        if self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.is_at_right_edge()
-        } else if self.focus_area == HuntFocusArea::Options {
+        } else if self.focus_area == StandardFocusArea::Options {
             self.option_checkboxes.is_empty()
                 || self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1)
         } else {
@@ -527,6 +520,6 @@ impl TabInput for HuntTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == HuntFocusArea::Inputs && self.core.inputs.is_focused()
+        self.focus_area == StandardFocusArea::Inputs && self.core.inputs.is_focused()
     }
 }

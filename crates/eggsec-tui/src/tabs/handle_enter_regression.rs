@@ -3,11 +3,12 @@ mod tests {
     use crate::tabs::TabInput;
     use crate::tabs::TabState;
 
-    use super::super::graphql::{GraphQlFocusArea, GraphQlTab};
-    use super::super::oauth::{OAuthFocusArea, OAuthTab};
-    use super::super::recon::{ReconFocusArea, ReconTab};
+    use super::super::core::StandardFocusArea;
+    use super::super::graphql::GraphQlTab;
+    use super::super::oauth::OAuthTab;
+    use super::super::recon::ReconTab;
     use super::super::load::{LoadFocusArea, LoadTab};
-    use super::super::scan_ports::{ScanPortsFocusArea, ScanPortsTab};
+    use super::super::scan_ports::ScanPortsTab;
     use super::super::stress::{StressFocusArea, StressTab};
     use super::super::packet::PacketTab;
     use super::super::waf::{WafFocusArea, WafTab};
@@ -23,7 +24,7 @@ mod tests {
     #[test]
     fn graphql_enter_inputs_focused_blurs() {
         let mut tab = GraphQlTab::new();
-        tab.focus_area = GraphQlFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -34,7 +35,7 @@ mod tests {
     #[test]
     fn graphql_enter_inputs_unfocused_starts_with_target() {
         let mut tab = GraphQlTab::new();
-        tab.focus_area = GraphQlFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.blur();
         // With a target set, unfocused inputs + Enter starts the scan
         tab.core.inputs.fields[0].value = "https://example.com/graphql".to_string();
@@ -45,7 +46,7 @@ mod tests {
     #[test]
     fn graphql_enter_options_toggles_checkbox() {
         let mut tab = GraphQlTab::new();
-        tab.focus_area = GraphQlFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         let before = tab.introspection_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.introspection_checkbox.checked, !before);
@@ -55,7 +56,7 @@ mod tests {
     #[test]
     fn graphql_enter_results_no_op() {
         let mut tab = GraphQlTab::new();
-        tab.focus_area = GraphQlFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -67,7 +68,7 @@ mod tests {
     #[test]
     fn oauth_enter_inputs_focused_blurs() {
         let mut tab = OAuthTab::new();
-        tab.focus_area = OAuthFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -78,7 +79,7 @@ mod tests {
     #[test]
     fn oauth_enter_options_toggles_checkbox() {
         let mut tab = OAuthTab::new();
-        tab.focus_area = OAuthFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         let before = tab.redirect_test_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.redirect_test_checkbox.checked, !before);
@@ -88,7 +89,7 @@ mod tests {
     #[test]
     fn oauth_enter_results_no_op() {
         let mut tab = OAuthTab::new();
-        tab.focus_area = OAuthFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -100,7 +101,7 @@ mod tests {
     #[test]
     fn recon_enter_inputs_focused_blurs() {
         let mut tab = ReconTab::new();
-        tab.focus_area = ReconFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -111,7 +112,7 @@ mod tests {
     #[test]
     fn recon_enter_options_toggles_checkbox() {
         let mut tab = ReconTab::new();
-        tab.focus_area = ReconFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         tab.focused_checkbox_index = 0;
         assert!(!tab.option_checkboxes[0].checked);
         tab.handle_enter();
@@ -122,7 +123,7 @@ mod tests {
     #[test]
     fn recon_enter_results_no_op() {
         let mut tab = ReconTab::new();
-        tab.focus_area = ReconFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -169,7 +170,7 @@ mod tests {
     #[test]
     fn scan_ports_enter_inputs_focused_blurs() {
         let mut tab = ScanPortsTab::new();
-        tab.focus_area = ScanPortsFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -180,7 +181,7 @@ mod tests {
     #[test]
     fn scan_ports_enter_options_toggles_checkbox() {
         let mut tab = ScanPortsTab::new();
-        tab.focus_area = ScanPortsFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         let before = tab.udp_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.udp_checkbox.checked, !before);
@@ -190,7 +191,7 @@ mod tests {
     #[test]
     fn scan_ports_enter_results_no_op() {
         let mut tab = ScanPortsTab::new();
-        tab.focus_area = ScanPortsFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -452,19 +453,19 @@ mod tests {
     fn cross_tab_enter_results_never_starts() {
         // Recon
         let mut recon = ReconTab::new();
-        recon.focus_area = ReconFocusArea::Results;
+        recon.focus_area = StandardFocusArea::Results;
         recon.handle_enter();
         assert!(!recon.is_running(), "Recon Results should not start");
 
         // GraphQl
         let mut gql = GraphQlTab::new();
-        gql.focus_area = GraphQlFocusArea::Results;
+        gql.focus_area = StandardFocusArea::Results;
         gql.handle_enter();
         assert!(!gql.is_running(), "GraphQl Results should not start");
 
         // OAuth
         let mut oauth = OAuthTab::new();
-        oauth.focus_area = OAuthFocusArea::Results;
+        oauth.focus_area = StandardFocusArea::Results;
         oauth.handle_enter();
         assert!(!oauth.is_running(), "OAuth Results should not start");
 
@@ -476,7 +477,7 @@ mod tests {
 
         // ScanPorts
         let mut sp = ScanPortsTab::new();
-        sp.focus_area = ScanPortsFocusArea::Results;
+        sp.focus_area = StandardFocusArea::Results;
         sp.handle_enter();
         assert!(!sp.is_running(), "ScanPorts Results should not start");
 
@@ -504,7 +505,7 @@ mod tests {
     fn cross_tab_enter_options_only_toggles() {
         // GraphQl
         let mut gql = GraphQlTab::new();
-        gql.focus_area = GraphQlFocusArea::Options;
+        gql.focus_area = StandardFocusArea::Options;
         let gql_before = gql.introspection_checkbox.checked;
         gql.handle_enter();
         assert_eq!(
@@ -516,7 +517,7 @@ mod tests {
 
         // OAuth
         let mut oauth = OAuthTab::new();
-        oauth.focus_area = OAuthFocusArea::Options;
+        oauth.focus_area = StandardFocusArea::Options;
         let oauth_before = oauth.redirect_test_checkbox.checked;
         oauth.handle_enter();
         assert_eq!(
@@ -528,7 +529,7 @@ mod tests {
 
         // Recon
         let mut recon = ReconTab::new();
-        recon.focus_area = ReconFocusArea::Options;
+        recon.focus_area = StandardFocusArea::Options;
         recon.focused_checkbox_index = 0;
         let recon_before = recon.option_checkboxes[0].checked;
         recon.handle_enter();
@@ -541,7 +542,7 @@ mod tests {
 
         // ScanPorts
         let mut sp = ScanPortsTab::new();
-        sp.focus_area = ScanPortsFocusArea::Options;
+        sp.focus_area = StandardFocusArea::Options;
         let sp_before = sp.udp_checkbox.checked;
         sp.handle_enter();
         assert_eq!(
@@ -573,7 +574,7 @@ mod tests {
     fn cross_tab_enter_focused_input_only_blurs() {
         // Recon
         let mut recon = ReconTab::new();
-        recon.focus_area = ReconFocusArea::Inputs;
+        recon.focus_area = StandardFocusArea::Inputs;
         recon.core.inputs.focus(0);
         assert!(recon.core.inputs.is_focused());
         recon.handle_enter();
@@ -582,7 +583,7 @@ mod tests {
 
         // GraphQl
         let mut gql = GraphQlTab::new();
-        gql.focus_area = GraphQlFocusArea::Inputs;
+        gql.focus_area = StandardFocusArea::Inputs;
         gql.core.inputs.focus(0);
         assert!(gql.core.inputs.is_focused());
         gql.handle_enter();
@@ -591,7 +592,7 @@ mod tests {
 
         // OAuth
         let mut oauth = OAuthTab::new();
-        oauth.focus_area = OAuthFocusArea::Inputs;
+        oauth.focus_area = StandardFocusArea::Inputs;
         oauth.core.inputs.focus(0);
         assert!(oauth.core.inputs.is_focused());
         oauth.handle_enter();
@@ -609,7 +610,7 @@ mod tests {
 
         // ScanPorts
         let mut sp = ScanPortsTab::new();
-        sp.focus_area = ScanPortsFocusArea::Inputs;
+        sp.focus_area = StandardFocusArea::Inputs;
         sp.core.inputs.focus(0);
         assert!(sp.core.inputs.is_focused());
         sp.handle_enter();

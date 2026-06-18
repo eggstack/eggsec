@@ -1,6 +1,6 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField};
-use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
+use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_3area, tab_state_boilerplate, tc};
 use eggsec::scanner::endpoints::EndpointScanResults;
@@ -12,18 +12,11 @@ use ratatui::{
     Frame,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ScanEndpointsFocusArea {
-    Inputs,
-    Options,
-    Results,
-}
-
 pub struct ScanEndpointsTab {
     pub core: TabCore,
     pub results: Option<EndpointScanResults>,
     pub include_404_checkbox: Checkbox,
-    pub focus_area: ScanEndpointsFocusArea,
+    pub focus_area: StandardFocusArea,
 }
 
 impl ScanEndpointsTab {
@@ -38,7 +31,7 @@ impl ScanEndpointsTab {
             core: TabCore::new("Scanning endpoints...", "Results").with_inputs(inputs),
             results: None,
             include_404_checkbox: Checkbox::new("Check for 404s").checked(true),
-            focus_area: ScanEndpointsFocusArea::Inputs,
+            focus_area: StandardFocusArea::Inputs,
         }
     }
 
@@ -218,7 +211,7 @@ impl TabState for ScanEndpointsTab {
             field.value = "10".to_string();
             field.cursor_pos = 2;
         }
-        self.focus_area = ScanEndpointsFocusArea::Inputs;
+        self.focus_area = StandardFocusArea::Inputs;
         self.include_404_checkbox.checked = true;
     }
 }
@@ -237,7 +230,7 @@ impl TabRender for ScanEndpointsTab {
             .borders(Borders::ALL)
             .title(" Endpoint Scan Configuration ")
             .border_style(Style::default().fg(
-                if self.focus_area == ScanEndpointsFocusArea::Inputs {
+                if self.focus_area == StandardFocusArea::Inputs {
                     tc!(border_focused)
                 } else {
                     tc!(border)
@@ -286,9 +279,9 @@ impl TabInput for ScanEndpointsTab {
         ScanEndpointsTab,
         core: core,
         focus: focus_area,
-        Inputs: ScanEndpointsFocusArea::Inputs,
-        Options: ScanEndpointsFocusArea::Options,
-        Results: ScanEndpointsFocusArea::Results
+        Inputs: StandardFocusArea::Inputs,
+        Options: StandardFocusArea::Options,
+        Results: StandardFocusArea::Results
     );
 
     fn handle_enter(&mut self) {
@@ -297,14 +290,14 @@ impl TabInput for ScanEndpointsTab {
         crate::tabs::core::handle_enter_3area(
             &mut self.core,
             self.focus_area,
-            ScanEndpointsFocusArea::Inputs,
-            ScanEndpointsFocusArea::Options,
-            ScanEndpointsFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
             running,
             inputs_focused,
             |_core| false,
         );
-        if self.focus_area == ScanEndpointsFocusArea::Options && !self.is_running() {
+        if self.focus_area == StandardFocusArea::Options && !self.is_running() {
             self.include_404_checkbox.checked = !self.include_404_checkbox.checked;
         }
     }
@@ -313,9 +306,9 @@ impl TabInput for ScanEndpointsTab {
         let new_area = crate::tabs::core::handle_escape_3area(
             &mut self.core,
             self.focus_area,
-            ScanEndpointsFocusArea::Inputs,
-            ScanEndpointsFocusArea::Options,
-            ScanEndpointsFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
         );
         self.focus_area = new_area;
     }
@@ -332,7 +325,7 @@ mod tests {
     #[test]
     fn test_enter_in_inputs_focused_blurs_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -343,7 +336,7 @@ mod tests {
     #[test]
     fn test_enter_in_options_toggles_checkbox() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         assert!(tab.include_404_checkbox.checked);
         tab.handle_enter();
         assert!(!tab.include_404_checkbox.checked);
@@ -354,7 +347,7 @@ mod tests {
     #[test]
     fn test_enter_in_results_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -362,31 +355,31 @@ mod tests {
     #[test]
     fn test_focus_cycle_3area() {
         let mut tab = create_test_tab();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea::Inputs);
 
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Options);
+        assert_eq!(tab.focus_area, StandardFocusArea::Options);
 
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Results);
+        assert_eq!(tab.focus_area, StandardFocusArea::Results);
 
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea::Inputs);
     }
 
     #[test]
     fn test_focus_prev_cycle_3area() {
         let mut tab = create_test_tab();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea::Inputs);
 
         tab.handle_focus_prev();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Results);
+        assert_eq!(tab.focus_area, StandardFocusArea::Results);
 
         tab.handle_focus_prev();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Options);
+        assert_eq!(tab.focus_area, StandardFocusArea::Options);
 
         tab.handle_focus_prev();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea::Inputs);
     }
 
     #[test]
@@ -400,9 +393,9 @@ mod tests {
     #[test]
     fn test_escape_from_options_goes_to_inputs() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         tab.handle_escape();
-        assert_eq!(tab.focus_area, ScanEndpointsFocusArea::Inputs);
+        assert_eq!(tab.focus_area, StandardFocusArea::Inputs);
         assert!(tab.core.inputs.is_focused());
     }
 
@@ -417,12 +410,12 @@ mod tests {
     #[test]
     fn test_handle_char_inputs_only() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         tab.handle_char('a');
         assert_eq!(tab.core.target(), "a");
 
-        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_char('b');
         assert_eq!(tab.core.target(), "a");
     }
@@ -430,7 +423,7 @@ mod tests {
     #[test]
     fn test_handle_up_down_scroll_results() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.core.results_view.add_line(ratatui::text::Line::from("line1"));
         tab.core.results_view.add_line(ratatui::text::Line::from("line2"));
 
@@ -441,11 +434,11 @@ mod tests {
     #[test]
     fn test_is_input_focused() {
         let mut tab = create_test_tab();
-        tab.focus_area = ScanEndpointsFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         assert!(!tab.is_input_focused());
         tab.core.inputs.focus(0);
         assert!(tab.is_input_focused());
-        tab.focus_area = ScanEndpointsFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         assert!(!tab.is_input_focused());
     }
 

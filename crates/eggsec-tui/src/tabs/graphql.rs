@@ -1,5 +1,5 @@
 use crate::components::{Checkbox, InputField};
-use crate::tabs::core::{field_as, render_results_area, start_scan, TabCore};
+use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
@@ -16,15 +16,8 @@ pub struct GraphQlTab {
     pub inject_checkbox: Checkbox,
     pub depth_bypass_checkbox: Checkbox,
     pub alias_overload_checkbox: Checkbox,
-    pub focus_area: GraphQlFocusArea,
+    pub focus_area: StandardFocusArea,
     pub checkbox_focus_index: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum GraphQlFocusArea {
-    Inputs,
-    Options,
-    Results,
 }
 
 impl Default for GraphQlTab {
@@ -46,7 +39,7 @@ impl GraphQlTab {
             inject_checkbox: Checkbox::new("Query Injection Tests").checked(true),
             depth_bypass_checkbox: Checkbox::new("Depth Limit Bypass").checked(true),
             alias_overload_checkbox: Checkbox::new("Alias Overload Tests").checked(true),
-            focus_area: GraphQlFocusArea::Inputs,
+            focus_area: StandardFocusArea::Inputs,
             checkbox_focus_index: 0,
         }
     }
@@ -147,7 +140,7 @@ impl TabState for GraphQlTab {
             self.core.inputs.fields[2].value = "15".to_string();
         }
         self.core.inputs.blur();
-        self.focus_area = GraphQlFocusArea::Inputs;
+        self.focus_area = StandardFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.inject_checkbox.checked = true;
         self.introspection_checkbox.checked = true;
@@ -195,7 +188,7 @@ impl TabRender for GraphQlTab {
             .title(" GraphQL Configuration ")
             .borders(Borders::ALL)
             .border_style(
-                Style::default().fg(if self.focus_area == GraphQlFocusArea::Inputs {
+                Style::default().fg(if self.focus_area == StandardFocusArea::Inputs {
                     tc!(border_focused)
                 } else {
                     tc!(border)
@@ -214,7 +207,7 @@ impl TabRender for GraphQlTab {
             .title(" Test Options ")
             .borders(Borders::ALL)
             .border_style(
-                Style::default().fg(if self.focus_area == GraphQlFocusArea::Options {
+                Style::default().fg(if self.focus_area == StandardFocusArea::Options {
                     tc!(border_focused)
                 } else {
                     tc!(border)
@@ -265,24 +258,24 @@ impl TabInput for GraphQlTab {
         GraphQlTab,
         core: core,
         focus: focus_area,
-        Inputs: GraphQlFocusArea::Inputs,
-        Results: GraphQlFocusArea::Results
+        Inputs: StandardFocusArea::Inputs,
+        Results: StandardFocusArea::Results
     );
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
             self.core.inputs.paste(text);
         }
     }
@@ -290,14 +283,14 @@ impl TabInput for GraphQlTab {
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
-                GraphQlFocusArea::Inputs => {
+                StandardFocusArea::Inputs => {
                     self.core.inputs.blur();
-                    GraphQlFocusArea::Options
+                    StandardFocusArea::Options
                 }
-                GraphQlFocusArea::Options => GraphQlFocusArea::Results,
-                GraphQlFocusArea::Results => {
+                StandardFocusArea::Options => StandardFocusArea::Results,
+                StandardFocusArea::Results => {
                     self.core.inputs.focus(0);
-                    GraphQlFocusArea::Inputs
+                    StandardFocusArea::Inputs
                 }
             };
         }
@@ -306,15 +299,15 @@ impl TabInput for GraphQlTab {
     fn handle_focus_prev(&mut self) {
         if !self.is_running() {
             self.focus_area = match self.focus_area {
-                GraphQlFocusArea::Inputs => {
+                StandardFocusArea::Inputs => {
                     self.core.inputs.blur();
-                    GraphQlFocusArea::Results
+                    StandardFocusArea::Results
                 }
-                GraphQlFocusArea::Options => {
+                StandardFocusArea::Options => {
                     self.core.inputs.focus(0);
-                    GraphQlFocusArea::Inputs
+                    StandardFocusArea::Inputs
                 }
-                GraphQlFocusArea::Results => GraphQlFocusArea::Options,
+                StandardFocusArea::Results => StandardFocusArea::Options,
             };
         }
     }
@@ -322,8 +315,8 @@ impl TabInput for GraphQlTab {
     fn handle_up(&mut self) {
         if !self.is_running() {
             match self.focus_area {
-                GraphQlFocusArea::Inputs => self.core.inputs.focus_prev(),
-                GraphQlFocusArea::Results => self.core.scroll_results_up(),
+                StandardFocusArea::Inputs => self.core.inputs.focus_prev(),
+                StandardFocusArea::Results => self.core.scroll_results_up(),
                 _ => {}
             }
         }
@@ -332,15 +325,15 @@ impl TabInput for GraphQlTab {
     fn handle_down(&mut self) {
         if !self.is_running() {
             match self.focus_area {
-                GraphQlFocusArea::Inputs => self.core.inputs.focus_next(),
-                GraphQlFocusArea::Results => self.core.scroll_results_down(),
+                StandardFocusArea::Inputs => self.core.inputs.focus_next(),
+                StandardFocusArea::Results => self.core.scroll_results_down(),
                 _ => {}
             }
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == GraphQlFocusArea::Inputs && self.core.inputs.is_focused()
+        self.focus_area == StandardFocusArea::Inputs && self.core.inputs.is_focused()
     }
 
     fn handle_enter(&mut self) {
@@ -349,14 +342,14 @@ impl TabInput for GraphQlTab {
         crate::tabs::core::handle_enter_3area(
             &mut self.core,
             self.focus_area,
-            GraphQlFocusArea::Inputs,
-            GraphQlFocusArea::Options,
-            GraphQlFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
             running,
             inputs_focused,
             |_core| false,
         );
-        if self.focus_area == GraphQlFocusArea::Options && !self.is_running() {
+        if self.focus_area == StandardFocusArea::Options && !self.is_running() {
             let checkboxes = [
                 &mut self.introspection_checkbox,
                 &mut self.inject_checkbox,
@@ -372,9 +365,9 @@ impl TabInput for GraphQlTab {
         let new_area = crate::tabs::core::handle_escape_3area(
             &mut self.core,
             self.focus_area,
-            GraphQlFocusArea::Inputs,
-            GraphQlFocusArea::Options,
-            GraphQlFocusArea::Results,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
         );
         self.focus_area = new_area;
         self.checkbox_focus_index = 0;
@@ -385,8 +378,8 @@ impl TabInput for GraphQlTab {
             return false;
         }
         match self.focus_area {
-            GraphQlFocusArea::Inputs => self.core.inputs.move_left(),
-            GraphQlFocusArea::Options => {
+            StandardFocusArea::Inputs => self.core.inputs.move_left(),
+            StandardFocusArea::Options => {
                 if self.checkbox_focus_index > 0 {
                     self.checkbox_focus_index -= 1;
                 }
@@ -401,8 +394,8 @@ impl TabInput for GraphQlTab {
             return false;
         }
         match self.focus_area {
-            GraphQlFocusArea::Inputs => self.core.inputs.move_right(),
-            GraphQlFocusArea::Options => {
+            StandardFocusArea::Inputs => self.core.inputs.move_right(),
+            StandardFocusArea::Options => {
                 let max_idx = 3;
                 if self.checkbox_focus_index < max_idx {
                     self.checkbox_focus_index += 1;
@@ -415,16 +408,16 @@ impl TabInput for GraphQlTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            GraphQlFocusArea::Inputs => !self.core.inputs.can_move_left(),
-            GraphQlFocusArea::Options => self.checkbox_focus_index == 0,
+            StandardFocusArea::Inputs => !self.core.inputs.can_move_left(),
+            StandardFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
     }
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            GraphQlFocusArea::Inputs => !self.core.inputs.can_move_right(),
-            GraphQlFocusArea::Options => self.checkbox_focus_index >= 3,
+            StandardFocusArea::Inputs => !self.core.inputs.can_move_right(),
+            StandardFocusArea::Options => self.checkbox_focus_index >= 3,
             _ => true,
         }
     }
@@ -441,7 +434,7 @@ mod tests {
     #[test]
     fn test_handle_enter_results_focus_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = GraphQlFocusArea::Results;
+        tab.focus_area = StandardFocusArea::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -449,7 +442,7 @@ mod tests {
     #[test]
     fn test_handle_enter_options_toggles_checkbox() {
         let mut tab = create_test_tab();
-        tab.focus_area = GraphQlFocusArea::Options;
+        tab.focus_area = StandardFocusArea::Options;
         let before = tab.introspection_checkbox.checked;
         tab.handle_enter();
         assert_eq!(tab.introspection_checkbox.checked, !before);
@@ -459,7 +452,7 @@ mod tests {
     #[test]
     fn test_handle_enter_inputs_focused_blurs() {
         let mut tab = create_test_tab();
-        tab.focus_area = GraphQlFocusArea::Inputs;
+        tab.focus_area = StandardFocusArea::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();

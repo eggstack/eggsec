@@ -2,12 +2,13 @@ use crate::app::tab_error::TabError;
 use crate::components::{
     empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText,
 };
+use crate::tabs::core::render_config_block;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -169,18 +170,12 @@ impl TabRender for WafStressTab {
             None => return,
         };
 
-        let input_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" WAF Stress Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area == WafStressFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let input_inner = input_block.inner(input_area);
-        f.render_widget(input_block, input_area);
+        let input_inner = render_config_block(
+            f,
+            input_area,
+            "WAF Stress Configuration",
+            self.focus_area == WafStressFocusArea::Inputs,
+        );
 
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -198,18 +193,12 @@ impl TabRender for WafStressTab {
             }
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == WafStressFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
+        let results_inner = render_config_block(
+            f,
+            results_area,
+            "Results",
+            self.focus_area == WafStressFocusArea::Results,
+        );
 
         if self.state == AppState::Running {
             self.progress.render(f, results_inner);

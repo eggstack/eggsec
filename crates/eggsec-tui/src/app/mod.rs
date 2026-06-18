@@ -55,6 +55,21 @@ use eggsec::config::{
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
 
+/// Generates simple delegation methods on App that forward to the current tab's
+/// TabInput dispatcher, guarded by the help overlay check.
+macro_rules! app_delegate {
+    ($( pub fn $name:ident(&mut self) ; )*) => {
+        $(
+            pub fn $name(&mut self) {
+                if self.overlay.show_help {
+                    return;
+                }
+                self.dispatcher_mut().$name();
+            }
+        )*
+    };
+}
+
 pub struct App {
     pub current_tab: Tab,
     pub should_quit: bool,
@@ -435,18 +450,9 @@ impl App {
         self.dispatcher_mut().handle_char(c);
     }
 
-    pub fn handle_backspace(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_backspace();
-    }
-
-    pub fn handle_delete(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_delete();
+    app_delegate! {
+        pub fn handle_backspace(&mut self);
+        pub fn handle_delete(&mut self);
     }
 
     pub fn handle_autocomplete(&mut self) -> bool {
@@ -764,46 +770,13 @@ impl App {
         self.dispatcher_mut().page_down(PAGE_SIZE);
     }
 
-    pub fn handle_word_forward(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_word_forward();
-    }
-
-    pub fn handle_word_backward(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_word_backward();
-    }
-
-    pub fn handle_home(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_home();
-    }
-
-    pub fn handle_end(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_end();
-    }
-
-    pub fn handle_top(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_top();
-    }
-
-    pub fn handle_bottom(&mut self) {
-        if self.overlay.show_help {
-            return;
-        }
-        self.dispatcher_mut().handle_bottom();
+    app_delegate! {
+        pub fn handle_word_forward(&mut self);
+        pub fn handle_word_backward(&mut self);
+        pub fn handle_home(&mut self);
+        pub fn handle_end(&mut self);
+        pub fn handle_top(&mut self);
+        pub fn handle_bottom(&mut self);
     }
 
     pub fn toggle_bookmark(&mut self, tab: Tab) {
