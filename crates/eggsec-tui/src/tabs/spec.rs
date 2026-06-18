@@ -722,7 +722,8 @@ macro_rules! cfg_push {
 
 #[allow(dead_code)] // used in mod.rs tests; kept for forward compat
 pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
-    let specs = vec![
+    #[allow(unused_mut)]
+    let mut specs = vec![
         spec_for(Tab::Recon).unwrap(),
         spec_for(Tab::Load).unwrap(),
         spec_for(Tab::ScanPorts).unwrap(),

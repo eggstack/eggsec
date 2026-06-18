@@ -691,3 +691,122 @@ macro_rules! tab_input_custom {
         }
     };
 }
+
+#[macro_export]
+macro_rules! tab_input_indexed {
+    (
+        $tab:ty,
+        core: $core:ident,
+        focus: $focus:ident,
+        InputAreas: $input_areas:expr,
+        Results: $results_variant:expr
+    ) => {
+        fn handle_char(&mut self, c: char) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            $crate::tabs::core::tab_input_char(&mut self.$core, c, running, inputs);
+        }
+
+        fn handle_backspace(&mut self) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            $crate::tabs::core::tab_input_backspace(&mut self.$core, running, inputs);
+        }
+
+        fn handle_paste(&mut self, text: &str) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            $crate::tabs::core::tab_input_paste(&mut self.$core, text, running, inputs);
+        }
+
+        fn handle_word_forward(&mut self) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            $crate::tabs::core::tab_input_word_forward(&mut self.$core, running, inputs);
+        }
+
+        fn handle_word_backward(&mut self) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            $crate::tabs::core::tab_input_word_backward(&mut self.$core, running, inputs);
+        }
+
+        fn handle_home(&mut self) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            let results = self.$focus == $results_variant;
+            $crate::tabs::core::tab_input_home(&mut self.$core, running, inputs, results);
+        }
+
+        fn handle_end(&mut self) {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            let results = self.$focus == $results_variant;
+            $crate::tabs::core::tab_input_end(&mut self.$core, running, inputs, results);
+        }
+
+        fn page_up(&mut self, page_size: usize) {
+            let running = self.is_running();
+            $crate::tabs::core::tab_input_page_up(&mut self.$core, running, page_size);
+        }
+
+        fn page_down(&mut self, page_size: usize) {
+            let running = self.is_running();
+            $crate::tabs::core::tab_input_page_down(&mut self.$core, running, page_size);
+        }
+
+        fn primary_target(&self) -> Option<String> {
+            Some(self.$core.target().to_string())
+        }
+
+        fn handle_copy(&mut self) -> Option<String> {
+            let running = self.is_running();
+            let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);
+            let results = self.$focus == $results_variant;
+            $crate::tabs::core::tab_input_copy(&self.$core, running, inputs, results)
+        }
+
+        fn handle_left(&mut self) -> bool {
+            if self.is_running() {
+                return false;
+            }
+            if $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas) {
+                self.$core.inputs.move_left()
+            } else {
+                false
+            }
+        }
+
+        fn handle_right(&mut self) -> bool {
+            if self.is_running() {
+                return false;
+            }
+            if $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas) {
+                self.$core.inputs.move_right()
+            } else {
+                false
+            }
+        }
+
+        fn is_input_focused(&self) -> bool {
+            $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas)
+                && self.$core.inputs.is_focused()
+        }
+
+        fn is_at_left_edge(&self) -> bool {
+            if $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas) {
+                self.$core.inputs.is_at_left_edge()
+            } else {
+                true
+            }
+        }
+
+        fn is_at_right_edge(&self) -> bool {
+            if $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas) {
+                self.$core.inputs.is_at_right_edge()
+            } else {
+                true
+            }
+        }
+    };
+}

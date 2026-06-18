@@ -501,6 +501,60 @@ pub fn is_at_right_edge_simple<A: Copy + PartialEq>(
     }
 }
 
+pub fn indexed_input_area_index<A: Copy + PartialEq>(current: A, input_areas: &[A]) -> Option<usize> {
+    input_areas.iter().position(|area| *area == current)
+}
+
+pub fn is_indexed_input_area<A: Copy + PartialEq>(current: A, input_areas: &[A]) -> bool {
+    indexed_input_area_index(current, input_areas).is_some()
+}
+
+pub fn sync_indexed_input_focus<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    input_areas: &[A],
+) {
+    let focused = indexed_input_area_index(current, input_areas)
+        .filter(|idx| *idx < core.inputs.fields.len());
+    core.inputs.set_focus_for_index(focused);
+    core.inputs.focused = focused;
+}
+
+pub fn focus_next_indexed<A: Copy + PartialEq>(current: A, input_areas: &[A], results: A) -> A {
+    match indexed_input_area_index(current, input_areas) {
+        Some(idx) if idx + 1 < input_areas.len() => input_areas[idx + 1],
+        Some(_) => results,
+        None if current == results => input_areas.first().copied().unwrap_or(current),
+        None => current,
+    }
+}
+
+pub fn focus_prev_indexed<A: Copy + PartialEq>(current: A, input_areas: &[A], results: A) -> A {
+    match indexed_input_area_index(current, input_areas) {
+        Some(0) => results,
+        Some(idx) => input_areas[idx - 1],
+        None if current == results => input_areas.last().copied().unwrap_or(current),
+        None => current,
+    }
+}
+
+pub fn focus_up_indexed<A: Copy + PartialEq>(current: A, input_areas: &[A], results: A) -> A {
+    match indexed_input_area_index(current, input_areas) {
+        Some(0) => current,
+        Some(idx) => input_areas[idx - 1],
+        None if current == results => input_areas.last().copied().unwrap_or(current),
+        None => current,
+    }
+}
+
+pub fn focus_down_indexed<A: Copy + PartialEq>(current: A, input_areas: &[A], results: A) -> A {
+    match indexed_input_area_index(current, input_areas) {
+        Some(idx) if idx + 1 < input_areas.len() => input_areas[idx + 1],
+        Some(_) => results,
+        None => current,
+    }
+}
+
 // --- N-area focus navigation helpers ---
 // These generalize the 2/3-area patterns to tabs with N focus areas (e.g. FuzzTab with 6).
 // The `areas` slice lists all focus variants in tab-order (first = Inputs, last = Results).

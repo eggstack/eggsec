@@ -3,7 +3,7 @@ use crate::components::InputField;
 use crate::tabs::core::{render_results_area, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::workers::TaskConfig;
-use crate::{tab_input_custom, tab_state_boilerplate, tc};
+use crate::{tab_input_indexed, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -17,6 +17,8 @@ pub enum C2FocusArea {
     Campaign,
     Results,
 }
+
+const C2_INPUT_AREAS: &[C2FocusArea] = &[C2FocusArea::Target, C2FocusArea::Campaign];
 
 pub struct C2Tab {
     pub core: TabCore,
@@ -35,16 +37,12 @@ impl C2Tab {
         }
     }
 
-    fn current_input_index(&self) -> Option<usize> {
-        match self.focus_area {
-            C2FocusArea::Target if self.core.inputs.fields.len() > 0 => Some(0),
-            C2FocusArea::Campaign if self.core.inputs.fields.len() > 1 => Some(1),
-            _ => None,
-        }
-    }
-
     fn sync_input_focus(&mut self) {
-        self.core.inputs.set_focus_for_index(self.current_input_index());
+        crate::tabs::core::sync_indexed_input_focus(
+            &mut self.core,
+            self.focus_area,
+            C2_INPUT_AREAS,
+        );
     }
 
     pub fn target(&self) -> Option<&str> {
@@ -151,32 +149,32 @@ impl TabInput for C2Tab {
         self.core.stop();
     }
 
-    tab_input_custom!(
+    tab_input_indexed!(
         C2Tab,
         core: core,
         focus: focus_area,
-        Inputs: C2FocusArea::Target,
+        InputAreas: C2_INPUT_AREAS,
         Results: C2FocusArea::Results
     );
 
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
-            self.focus_area = match self.focus_area {
-                C2FocusArea::Target => C2FocusArea::Campaign,
-                C2FocusArea::Campaign => C2FocusArea::Results,
-                C2FocusArea::Results => C2FocusArea::Target,
-            };
+            self.focus_area = crate::tabs::core::focus_next_indexed(
+                self.focus_area,
+                C2_INPUT_AREAS,
+                C2FocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
 
     fn handle_focus_prev(&mut self) {
         if !self.is_running() {
-            self.focus_area = match self.focus_area {
-                C2FocusArea::Target => C2FocusArea::Results,
-                C2FocusArea::Campaign => C2FocusArea::Target,
-                C2FocusArea::Results => C2FocusArea::Campaign,
-            };
+            self.focus_area = crate::tabs::core::focus_prev_indexed(
+                self.focus_area,
+                C2_INPUT_AREAS,
+                C2FocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
@@ -217,40 +215,22 @@ impl TabInput for C2Tab {
 
     fn handle_up(&mut self) {
         if !self.is_running() {
-            match self.focus_area {
-                C2FocusArea::Results => {
-                    self.focus_area = C2FocusArea::Campaign;
-                    if self.core.inputs.fields.len() > 1 { self.core.inputs.focus(1); }
-                }
-                C2FocusArea::Campaign => {
-                    self.focus_area = C2FocusArea::Target;
-                    if self.core.inputs.fields.len() > 0 { self.core.inputs.focus(0); }
-                }
-                C2FocusArea::Target => {
-                    self.core.inputs.focus_prev();
-                    if !self.core.inputs.is_focused() {
-                        if self.core.inputs.fields.is_empty() { return; }
-                        self.core.inputs.focus(self.core.inputs.fields.len() - 1);
-                    }
-                }
-            }
+            self.focus_area = crate::tabs::core::focus_up_indexed(
+                self.focus_area,
+                C2_INPUT_AREAS,
+                C2FocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
 
     fn handle_down(&mut self) {
         if !self.is_running() {
-            match self.focus_area {
-                C2FocusArea::Target => {
-                    self.focus_area = C2FocusArea::Campaign;
-                    if self.core.inputs.fields.len() > 1 { self.core.inputs.focus(1); }
-                }
-                C2FocusArea::Campaign => {
-                    self.focus_area = C2FocusArea::Results;
-                    self.core.inputs.blur();
-                }
-                C2FocusArea::Results => {}
-            }
+            self.focus_area = crate::tabs::core::focus_down_indexed(
+                self.focus_area,
+                C2_INPUT_AREAS,
+                C2FocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
@@ -302,5 +282,24 @@ mod tests {
             }
             _ => panic!("Expected TaskConfig::C2"),
         }
+    }
+
+    #[test]
+    fn non_first_input_fields_are_editable() {
+        let mut tab = C2Tab::new();
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, C2FocusArea::Campaign);
+        assert!(tab.is_input_focused());
+
+        tab.core.inputs.fields[1].clear();
+        tab.handle_char('c');
+
+        assert_eq!(tab.core.inputs.fields[1].value, "c");
+    }
+
+    #[test]
+    fn input_labels_are_unique() {
+        let tab = C2Tab::new();
+        assert_eq!(tab.core.inputs.duplicate_label_names(), Vec::<String>::new());
     }
 }

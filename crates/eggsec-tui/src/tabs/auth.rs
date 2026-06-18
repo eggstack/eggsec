@@ -3,7 +3,7 @@ use crate::components::InputField;
 use crate::tabs::core::{render_results_area, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::workers::TaskConfig;
-use crate::{tab_input_custom, tab_state_boilerplate, tc};
+use crate::{tab_input_indexed, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -22,6 +22,16 @@ pub enum AuthFocusArea {
     Timeout,
     Results,
 }
+
+const AUTH_INPUT_AREAS: &[AuthFocusArea] = &[
+    AuthFocusArea::Target,
+    AuthFocusArea::Username,
+    AuthFocusArea::PasswordList,
+    AuthFocusArea::CredentialFile,
+    AuthFocusArea::MaxAttempts,
+    AuthFocusArea::Concurrency,
+    AuthFocusArea::Timeout,
+];
 
 pub struct AuthTab {
     pub core: TabCore,
@@ -46,21 +56,12 @@ impl AuthTab {
         }
     }
 
-    fn current_input_index(&self) -> Option<usize> {
-        match self.focus_area {
-            AuthFocusArea::Target if self.core.inputs.fields.len() > 0 => Some(0),
-            AuthFocusArea::Username if self.core.inputs.fields.len() > 1 => Some(1),
-            AuthFocusArea::PasswordList if self.core.inputs.fields.len() > 2 => Some(2),
-            AuthFocusArea::CredentialFile if self.core.inputs.fields.len() > 3 => Some(3),
-            AuthFocusArea::MaxAttempts if self.core.inputs.fields.len() > 4 => Some(4),
-            AuthFocusArea::Concurrency if self.core.inputs.fields.len() > 5 => Some(5),
-            AuthFocusArea::Timeout if self.core.inputs.fields.len() > 6 => Some(6),
-            _ => None,
-        }
-    }
-
     fn sync_input_focus(&mut self) {
-        self.core.inputs.set_focus_for_index(self.current_input_index());
+        crate::tabs::core::sync_indexed_input_focus(
+            &mut self.core,
+            self.focus_area,
+            AUTH_INPUT_AREAS,
+        );
     }
 
     pub fn target(&self) -> Option<&str> {
@@ -240,42 +241,32 @@ impl TabInput for AuthTab {
         self.core.stop();
     }
 
-    tab_input_custom!(
+    tab_input_indexed!(
         AuthTab,
         core: core,
         focus: focus_area,
-        Inputs: AuthFocusArea::Target,
+        InputAreas: AUTH_INPUT_AREAS,
         Results: AuthFocusArea::Results
     );
 
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
-            self.focus_area = match self.focus_area {
-                AuthFocusArea::Target => AuthFocusArea::Username,
-                AuthFocusArea::Username => AuthFocusArea::PasswordList,
-                AuthFocusArea::PasswordList => AuthFocusArea::CredentialFile,
-                AuthFocusArea::CredentialFile => AuthFocusArea::MaxAttempts,
-                AuthFocusArea::MaxAttempts => AuthFocusArea::Concurrency,
-                AuthFocusArea::Concurrency => AuthFocusArea::Timeout,
-                AuthFocusArea::Timeout => AuthFocusArea::Results,
-                AuthFocusArea::Results => AuthFocusArea::Target,
-            };
+            self.focus_area = crate::tabs::core::focus_next_indexed(
+                self.focus_area,
+                AUTH_INPUT_AREAS,
+                AuthFocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
 
     fn handle_focus_prev(&mut self) {
         if !self.is_running() {
-            self.focus_area = match self.focus_area {
-                AuthFocusArea::Target => AuthFocusArea::Results,
-                AuthFocusArea::Username => AuthFocusArea::Target,
-                AuthFocusArea::PasswordList => AuthFocusArea::Username,
-                AuthFocusArea::CredentialFile => AuthFocusArea::PasswordList,
-                AuthFocusArea::MaxAttempts => AuthFocusArea::CredentialFile,
-                AuthFocusArea::Concurrency => AuthFocusArea::MaxAttempts,
-                AuthFocusArea::Timeout => AuthFocusArea::Concurrency,
-                AuthFocusArea::Results => AuthFocusArea::Timeout,
-            };
+            self.focus_area = crate::tabs::core::focus_prev_indexed(
+                self.focus_area,
+                AUTH_INPUT_AREAS,
+                AuthFocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
@@ -316,80 +307,22 @@ impl TabInput for AuthTab {
 
     fn handle_up(&mut self) {
         if !self.is_running() {
-            match self.focus_area {
-                AuthFocusArea::Results => {
-                    self.focus_area = AuthFocusArea::Timeout;
-                    if self.core.inputs.fields.len() > 6 { self.core.inputs.focus(6); }
-                }
-                AuthFocusArea::Timeout => {
-                    self.focus_area = AuthFocusArea::Concurrency;
-                    if self.core.inputs.fields.len() > 5 { self.core.inputs.focus(5); }
-                }
-                AuthFocusArea::Concurrency => {
-                    self.focus_area = AuthFocusArea::MaxAttempts;
-                    if self.core.inputs.fields.len() > 4 { self.core.inputs.focus(4); }
-                }
-                AuthFocusArea::MaxAttempts => {
-                    self.focus_area = AuthFocusArea::CredentialFile;
-                    if self.core.inputs.fields.len() > 3 { self.core.inputs.focus(3); }
-                }
-                AuthFocusArea::CredentialFile => {
-                    self.focus_area = AuthFocusArea::PasswordList;
-                    if self.core.inputs.fields.len() > 2 { self.core.inputs.focus(2); }
-                }
-                AuthFocusArea::PasswordList => {
-                    self.focus_area = AuthFocusArea::Username;
-                    if self.core.inputs.fields.len() > 1 { self.core.inputs.focus(1); }
-                }
-                AuthFocusArea::Username => {
-                    self.focus_area = AuthFocusArea::Target;
-                    if self.core.inputs.fields.len() > 0 { self.core.inputs.focus(0); }
-                }
-                AuthFocusArea::Target => {
-                    self.core.inputs.focus_prev();
-                    if !self.core.inputs.is_focused() {
-                        if self.core.inputs.fields.is_empty() { return; }
-                        self.core.inputs.focus(self.core.inputs.fields.len() - 1);
-                    }
-                }
-            }
+            self.focus_area = crate::tabs::core::focus_up_indexed(
+                self.focus_area,
+                AUTH_INPUT_AREAS,
+                AuthFocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
 
     fn handle_down(&mut self) {
         if !self.is_running() {
-            match self.focus_area {
-                AuthFocusArea::Target => {
-                    self.focus_area = AuthFocusArea::Username;
-                    if self.core.inputs.fields.len() > 1 { self.core.inputs.focus(1); }
-                }
-                AuthFocusArea::Username => {
-                    self.focus_area = AuthFocusArea::PasswordList;
-                    if self.core.inputs.fields.len() > 2 { self.core.inputs.focus(2); }
-                }
-                AuthFocusArea::PasswordList => {
-                    self.focus_area = AuthFocusArea::CredentialFile;
-                    if self.core.inputs.fields.len() > 3 { self.core.inputs.focus(3); }
-                }
-                AuthFocusArea::CredentialFile => {
-                    self.focus_area = AuthFocusArea::MaxAttempts;
-                    if self.core.inputs.fields.len() > 4 { self.core.inputs.focus(4); }
-                }
-                AuthFocusArea::MaxAttempts => {
-                    self.focus_area = AuthFocusArea::Concurrency;
-                    if self.core.inputs.fields.len() > 5 { self.core.inputs.focus(5); }
-                }
-                AuthFocusArea::Concurrency => {
-                    self.focus_area = AuthFocusArea::Timeout;
-                    if self.core.inputs.fields.len() > 6 { self.core.inputs.focus(6); }
-                }
-                AuthFocusArea::Timeout => {
-                    self.focus_area = AuthFocusArea::Results;
-                    self.core.inputs.blur();
-                }
-                AuthFocusArea::Results => {}
-            }
+            self.focus_area = crate::tabs::core::focus_down_indexed(
+                self.focus_area,
+                AUTH_INPUT_AREAS,
+                AuthFocusArea::Results,
+            );
             self.sync_input_focus();
         }
     }
@@ -450,5 +383,24 @@ mod tests {
             }
             _ => panic!("Expected TaskConfig::Auth"),
         }
+    }
+
+    #[test]
+    fn non_first_input_fields_are_editable() {
+        let mut tab = AuthTab::new();
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, AuthFocusArea::Username);
+        assert!(tab.is_input_focused());
+
+        tab.core.inputs.fields[1].clear();
+        tab.handle_char('a');
+
+        assert_eq!(tab.core.inputs.fields[1].value, "a");
+    }
+
+    #[test]
+    fn input_labels_are_unique() {
+        let tab = AuthTab::new();
+        assert_eq!(tab.core.inputs.duplicate_label_names(), Vec::<String>::new());
     }
 }

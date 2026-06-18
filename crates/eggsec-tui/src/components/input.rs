@@ -728,6 +728,19 @@ impl InputGroup {
             false
         }
     }
+
+    pub fn duplicate_label_names(&self) -> Vec<String> {
+        let mut duplicates = Vec::new();
+        for (idx, field) in self.fields.iter().enumerate() {
+            let seen_before = self.fields[..idx]
+                .iter()
+                .any(|candidate| candidate.label == field.label);
+            if seen_before && !duplicates.contains(&field.label) {
+                duplicates.push(field.label.clone());
+            }
+        }
+        duplicates
+    }
 }
 
 impl Default for InputGroup {
@@ -1068,6 +1081,18 @@ mod tests {
         group.focus_prev();
         assert_eq!(group.focused, Some(1)); // recovered to last field
         assert!(group.fields[1].focused);
+    }
+
+    #[test]
+    fn duplicate_label_names_reports_each_duplicate_once() {
+        let group = InputGroup::new()
+            .add(InputField::new("Target"))
+            .add(InputField::new("Port"))
+            .add(InputField::new("Target"))
+            .add(InputField::new("Port"))
+            .add(InputField::new("Port"));
+
+        assert_eq!(group.duplicate_label_names(), vec!["Target", "Port"]);
     }
 
     #[test]
