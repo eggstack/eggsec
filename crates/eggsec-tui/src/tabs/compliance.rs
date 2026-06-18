@@ -244,6 +244,7 @@ impl TabRender for ComplianceTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(border)))
                         .title("Generating compliance report..."),
                 )
                 .gauge_style(Style::default().fg(tc!(warning)))

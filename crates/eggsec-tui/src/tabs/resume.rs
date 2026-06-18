@@ -1,5 +1,6 @@
 use crate::app::tab_error::TabError;
-use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText};
+use crate::components::{InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tabs::core::render_results_area;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use ratatui::{
@@ -20,6 +21,7 @@ pub struct ResumeTab {
     pub inputs: InputGroup,
     pub state: AppState,
     pub results_view: ScrollableText,
+    pub progress: ProgressGauge,
     pub focus_area: ResumeFocusArea,
     pub error: Option<TabError>,
 }
@@ -32,6 +34,7 @@ impl ResumeTab {
             inputs,
             state: AppState::Idle,
             results_view: ScrollableText::new("Session Info"),
+            progress: ProgressGauge::new("Loading..."),
             focus_area: ResumeFocusArea::Inputs,
             error: None,
         }
@@ -139,31 +142,16 @@ impl TabRender for ResumeTab {
             }
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Session Info ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ResumeFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
-
-        if !self.results_view.is_empty() {
-            self.results_view.render(f, results_inner, None);
-        } else {
-            let placeholder = empty_state_paragraph(
-                "Session Info",
-                "Enter session file path and press Enter to resume a previous scan.\n\n\
-                 Examples:\n\
-                    eggsec resume session.json\n\
-                    eggsec resume /path/to/session.json",
-            );
-            f.render_widget(placeholder, results_inner);
-        }
+        render_results_area(
+            f,
+            results_area,
+            &self.state,
+            &self.error,
+            &self.results_view,
+            &self.progress,
+            "Session Info",
+            "Session information will appear here",
+        );
     }
 }
 

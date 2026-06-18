@@ -840,6 +840,7 @@ impl TabRender for InterceptTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(error)))
                         .title("Intercept - Error"),
                 )
                 .style(Style::default().fg(tc!(error)));
@@ -865,7 +866,7 @@ impl TabRender for InterceptTab {
             let too_small = ratatui::widgets::Paragraph::new(
                 "Terminal too small for Intercept tab.\nNeed at least 60x15."
             )
-            .block(Block::default().borders(Borders::ALL).title(" Too Small "))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(error))).title(" Too Small "))
             .style(Style::default().fg(tc!(error)));
             f.render_widget(too_small, area);
             return;
@@ -904,7 +905,7 @@ impl TabRender for InterceptTab {
             }
         );
         let status = ratatui::widgets::Paragraph::new(Line::from(vec![posture_badge, Span::raw(status_text)]))
-        .block(Block::default().borders(Borders::ALL).title(" Status "))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))).title(" Status "))
         .style(Style::default().fg(if self.state == AppState::Running { tc!(success) } else { tc!(text) }));
         f.render_widget(status, status_area);
 

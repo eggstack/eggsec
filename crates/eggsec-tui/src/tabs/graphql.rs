@@ -167,13 +167,23 @@ impl TabRender for GraphQlTab {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(12),
+                Constraint::Length(14),
                 Constraint::Length(6),
                 Constraint::Min(5),
             ])
             .split(area);
 
         // Input fields
+        let input_block = Block::default()
+            .title(" GraphQL Configuration ")
+            .borders(Borders::ALL)
+            .border_style(crate::tabs::core::focus_border_style(
+                self.focus_area == StandardFocusArea::Inputs,
+            ));
+        let input_area = chunks.first().copied().unwrap_or(area);
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -182,15 +192,7 @@ impl TabRender for GraphQlTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(chunks.first().copied().unwrap_or(area));
-
-        let input_block = Block::default()
-            .title(" GraphQL Configuration ")
-            .borders(Borders::ALL)
-            .border_style(crate::tabs::core::focus_border_style(
-                self.focus_area == StandardFocusArea::Inputs,
-            ));
-        f.render_widget(input_block, chunks.first().copied().unwrap_or(area));
+            .split(input_inner);
 
         for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {

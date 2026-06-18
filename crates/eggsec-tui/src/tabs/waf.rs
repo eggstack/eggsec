@@ -9,7 +9,6 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders},
     Frame,
 };
 
@@ -334,44 +333,20 @@ impl TabRender for WafTab {
 
         builder.render(f, config_area, insert_mode);
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(crate::tabs::core::focus_border_style(
-                self.focus_area == WafFocusArea::Results,
-            ));
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
-
         if self.core.state == AppState::Running {
-            self.core.progress.render(f, results_inner);
-        } else {
+            self.core.progress.render(f, results_area);
+        } else if !self.detection_view.is_empty() || !self.bypass_view.is_empty() {
             let results_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-                .split(results_inner);
+                .split(results_area);
 
-            if let Some(results_chunks_0) = results_chunks.first().copied() {
-                if !self.detection_view.is_empty() {
-                    self.detection_view.render(f, results_chunks_0, None);
-                } else {
-                    let placeholder = empty_state_paragraph(
-                        "Detection Result",
-                        "Detection results will appear here",
-                    );
-                    f.render_widget(placeholder, results_chunks_0);
-                }
-            }
-
-            if let Some(results_chunks_1) = results_chunks.get(1).copied() {
-                if !self.bypass_view.is_empty() {
-                    self.bypass_view.render(f, results_chunks_1, None);
-                } else {
-                    let placeholder =
-                        empty_state_paragraph("Bypass Results", "Bypass results will appear here");
-                    f.render_widget(placeholder, results_chunks_1);
-                }
-            }
+            self.detection_view.render(f, results_chunks[0], None);
+            self.bypass_view.render(f, results_chunks[1], None);
+        } else {
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
+            f.render_widget(placeholder, results_area);
         }
     }
 }

@@ -269,6 +269,7 @@ impl TabRender for ReportTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(error)))
                         .title("Report - Error"),
                 )
                 .style(Style::default().fg(tc!(error)));
@@ -356,6 +357,7 @@ impl TabRender for ReportTab {
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
+                            .border_style(Style::default().fg(tc!(border)))
                             .title("Processing..."),
                     )
                     .gauge_style(Style::default().fg(tc!(warning)))

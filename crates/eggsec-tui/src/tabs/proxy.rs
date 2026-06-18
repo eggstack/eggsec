@@ -417,6 +417,7 @@ impl TabRender for ProxyTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(error)))
                         .title("Proxy - Error"),
                 )
                 .style(Style::default().fg(tc!(error)));

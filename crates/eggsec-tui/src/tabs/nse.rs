@@ -163,7 +163,7 @@ impl TabRender for NseTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         if let Some(ref error) = self.error {
             let error_text = Paragraph::new(format!("Error: {}", error.message()))
-                .block(Block::default().borders(Borders::ALL).title("NSE - Error"))
+                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(error))).title("NSE - Error"))
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, area);
             return;

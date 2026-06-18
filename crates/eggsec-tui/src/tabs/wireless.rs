@@ -534,32 +534,31 @@ impl TabRender for WirelessTab {
             }
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == WirelessFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
-
         if self.state == AppState::Running {
-            self.progress.render(f, results_inner);
+            self.progress.render(f, results_area);
         } else if let Some(ref err) = self.error {
+            let error_block = Block::default()
+                .borders(Borders::ALL)
+                .title(" Results ")
+                .border_style(
+                    Style::default().fg(if self.focus_area == WirelessFocusArea::Results {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    }),
+                );
+            let error_inner = error_block.inner(results_area);
+            f.render_widget(error_block, results_area);
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_inner);
+            f.render_widget(error_text, error_inner);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_inner, Some(tc!(success)));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after scanning");
-            f.render_widget(placeholder, results_inner);
+            f.render_widget(placeholder, results_area);
         }
     }
 }

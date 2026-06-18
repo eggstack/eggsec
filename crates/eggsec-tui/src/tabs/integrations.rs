@@ -419,6 +419,7 @@ impl TabRender for IntegrationsTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(border)))
                         .title("Processing..."),
                 )
                 .gauge_style(Style::default().fg(tc!(warning)))

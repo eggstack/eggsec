@@ -240,7 +240,7 @@ impl TabRender for ScanPortsTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(15), Constraint::Min(0)])
+            .constraints([Constraint::Length(17), Constraint::Min(0)])
             .split(area);
 
         let input_area = chunks[0];
@@ -275,16 +275,9 @@ impl TabRender for ScanPortsTab {
             udp_cb.render(f, *chunk);
         }
 
-        let results_inner = render_config_block(
-            f,
-            results_area,
-            "Results",
-            self.focus_area == StandardFocusArea::Results,
-        );
-
         render_results_area(
             f,
-            results_inner,
+            results_area,
             &self.core.state,
             &self.core.error,
             &self.core.results_view,

@@ -1,14 +1,11 @@
-use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, Selector,
-};
-use crate::tabs::core::{start_scan, TabCore};
+use crate::components::{InputField, InputGroup, Selector};
+use crate::tabs::core::{render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_state_boilerplate, tc};
 use eggsec::loadtest::metrics::LoadTestResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -376,17 +373,9 @@ impl TabState for LoadTab {
 
 impl TabRender for LoadTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        // Use dynamic height for input section based on terminal height
-        let input_height = if area.height <= 24 {
-            ((area.height as f32 * 0.6) as u16).clamp(6, 15)
-        } else {
-            15
-        };
-        let results_height = if area.height <= 24 {
-            ((area.height as f32 * 0.4) as u16).max(3)
-        } else {
-            (area.height / 4).max(8)
-        };
+        let num_fields = self.core.inputs.fields.len().max(1) as u16;
+        let input_height = (num_fields * 3 + 2).min(area.height.saturating_sub(8));
+        let results_height = area.height.saturating_sub(6).saturating_sub(input_height).max(3);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -416,9 +405,8 @@ impl TabRender for LoadTab {
             f.render_widget(input_block, *input_area);
 
             let num_fields = self.core.inputs.fields.len().max(1);
-            let field_height = (input_inner.height / num_fields as u16).max(2);
             let constraints: Vec<Constraint> = (0..num_fields)
-                .map(|_| Constraint::Length(field_height))
+                .map(|_| Constraint::Length(3))
                 .collect();
 
             let input_chunks = Layout::default()
@@ -434,28 +422,16 @@ impl TabRender for LoadTab {
         }
 
         if let Some(results_area) = chunks.get(2) {
-            let results_block = Block::default()
-                .borders(Borders::ALL)
-                .title(" Results ")
-                .border_style(crate::tabs::core::focus_border_style(
-                    self.focus_area == LoadFocusArea::Results,
-                ));
-            let results_inner = results_block.inner(*results_area);
-            f.render_widget(results_block, *results_area);
-
-            if self.core.state == AppState::Running {
-                self.core.progress.render(f, results_inner);
-            } else if let Some(ref err) = self.core.error {
-                let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                    .style(Style::default().fg(tc!(error)));
-                f.render_widget(error_text, results_inner);
-            } else if !self.core.results_view.is_empty() {
-                self.core.results_view.render(f, results_inner, None);
-            } else {
-                let placeholder =
-                    empty_state_paragraph("Results", "Results will appear here after running");
-                f.render_widget(placeholder, results_inner);
-            }
+            render_results_area(
+                f,
+                *results_area,
+                &self.core.state,
+                &self.core.error,
+                &self.core.results_view,
+                &self.core.progress,
+                "Results",
+                "Results will appear here after running",
+            );
         }
     }
 

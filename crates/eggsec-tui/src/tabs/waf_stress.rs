@@ -112,7 +112,6 @@ impl TabRender for WafStressTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(3),
-                Constraint::Length(3),
             ])
             .split(input_inner);
 
@@ -122,16 +121,9 @@ impl TabRender for WafStressTab {
             }
         }
 
-        let results_inner = render_config_block(
-            f,
-            results_area,
-            "Results",
-            self.focus_area == StandardFocusArea2::Results,
-        );
-
         render_results_area(
             f,
-            results_inner,
+            results_area,
             &self.core.state,
             &self.core.error,
             &self.core.results_view,

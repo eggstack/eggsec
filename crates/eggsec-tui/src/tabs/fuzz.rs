@@ -422,10 +422,10 @@ impl TabRender for FuzzTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        let config_height = if area.height <= 30 {
-            ((area.height as f32 * 0.8) as u16).clamp(10, 27)
+        let config_height = if area.height <= 40 {
+            ((area.height as f32 * 0.85) as u16).clamp(12, 38)
         } else {
-            27
+            38
         };
 
         let chunks = Layout::default()
@@ -444,9 +444,8 @@ impl TabRender for FuzzTab {
         );
 
         let num_fields = 12;
-        let field_height = (config_inner.height / num_fields).max(2);
         let config_constraints: Vec<Constraint> = (0..num_fields)
-            .map(|_| Constraint::Length(field_height))
+            .map(|_| Constraint::Length(3))
             .collect();
 
         let config_chunks = Layout::default()
@@ -511,7 +510,7 @@ impl TabRender for FuzzTab {
         };
         let status = Paragraph::new(status_text)
             .style(Style::default().fg(status_color))
-            .block(Block::default().borders(Borders::ALL).title("Status"));
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))).title("Status"));
         if let Some(status_chunk) = config_chunks.get(11) {
             f.render_widget(status, *status_chunk);
         }

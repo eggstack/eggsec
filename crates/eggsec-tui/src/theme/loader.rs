@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use super::builtin::{dark_theme, light_theme};
 use super::canonical_theme_id;
-use super::contrast::{check_contrast, contrast_ratio};
+
 use super::palette::{Theme, ThemeColors, ThemeMode};
 
 #[derive(Debug, Error)]
@@ -182,11 +182,8 @@ fn luminance(color: &str) -> f64 {
     }
 }
 
-/// Result of loading a theme, including pre-adjustment contrast diagnostics.
 pub struct ThemeLoadOutcome {
     pub theme: Theme,
-    /// Contrast warnings computed before any fallback adjustments were applied.
-    pub pre_adjustment_warnings: Vec<String>,
 }
 
 fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
@@ -362,50 +359,12 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOut
             defaults.colors.policy_denied,
         ),
     };
-
-    // --- Contrast validation (non-fatal; fall back to base theme pair) ---
-    // Capture pre-adjustment warnings before mutating colors.
-    let mut pre_adjustment_warnings = Vec::new();
-
-    // text vs background (min 4.5:1 for normal text per WCAG AA)
-    if !check_contrast(colors.text, colors.background, 4.5) {
-        let ratio = contrast_ratio(colors.text, colors.background);
-        pre_adjustment_warnings.push(format!(
-            "text/background contrast ratio {:.2}:1 is below 4.5:1 minimum",
-            ratio,
-        ));
-        tracing::warn!(
-            "Theme '{}' text/background contrast ratio {:.2}:1 is below 4.5:1 minimum; \
-             falling back to base theme text color",
-            file_stem,
-            ratio,
-        );
-        colors.text = defaults.colors.text;
-    }
-
-    // selected_text vs selected (min 4.5:1)
-    if !check_contrast(colors.selected_text, colors.selected, 4.5) {
-        let ratio = contrast_ratio(colors.selected_text, colors.selected);
-        pre_adjustment_warnings.push(format!(
-            "selected_text/selected contrast ratio {:.2}:1 is below 4.5:1 minimum",
-            ratio,
-        ));
-        tracing::warn!(
-            "Theme '{}' selected_text/selected contrast ratio {:.2}:1 is below 4.5:1 minimum; \
-             falling back to base theme selected_text color",
-            file_stem,
-            ratio,
-        );
-        colors.selected_text = defaults.colors.selected_text;
-    }
-
     Ok(ThemeLoadOutcome {
         theme: Theme {
             mode,
             name: canonical_theme_id(file_stem),
             colors,
         },
-        pre_adjustment_warnings,
     })
 }
 

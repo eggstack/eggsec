@@ -63,7 +63,7 @@ impl InterceptTab {
             ],
         )
         .header(header)
-        .block(Block::default().borders(Borders::ALL).title(format!(
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))).title(format!(
             " Flows ({}) ",
             self.flows.len()
         )))
@@ -184,6 +184,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(format!(" Rules ({:?}) ", self.selected_rule_view));
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -450,6 +451,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(format!(" {} ", protocol));
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -634,6 +636,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(" Stream Multiplexing ");
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -765,6 +768,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(" Correlation ");
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -800,6 +804,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(" Headers ");
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -857,6 +862,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(" Body ");
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -902,6 +908,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(format!(" Manipulations ({}) ", self.manipulation_history.len()));
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -1053,6 +1060,7 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(" Timeline ");
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
@@ -1086,7 +1094,8 @@ impl InterceptTab {
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Actions (←/→ navigate · Enter execute · D=Drop R=Replay F=Forward · Esc=back ");
+            .border_style(Style::default().fg(tc!(border)))
+            .title(" Actions (←/→ navigate · Enter execute · D-Drop R-Replay F-Forward · Esc-back ");
         let paragraph = ratatui::widgets::Paragraph::new(Line::from(spans)).block(block);
         f.render_widget(paragraph, area);
     }
@@ -1098,6 +1107,7 @@ impl InterceptTab {
         f.render_widget(
             Block::default()
                 .borders(Borders::ALL)
+                .border_style(Style::default().fg(tc!(border)))
                 .title(" Edit ")
                 .style(Style::default().bg(tc!(surface)).fg(tc!(text))),
             area,
@@ -1137,6 +1147,7 @@ impl InterceptTab {
         let edit_area = modal_layout[2];
         let edit_block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)))
             .title(" Edit Value (type to modify) ");
 
         let edit_content = if self.edit_modal.edit_buffer.is_empty() {
@@ -1165,7 +1176,7 @@ impl InterceptTab {
             .style(Style::default().fg(tc!(muted)));
         f.render_widget(reason_para, modal_layout[5]);
 
-        let help_text = "Enter=apply  Esc=cancel  Tab=switch focus";
+        let help_text = "Enter-apply  Esc-cancel  Tab-switch focus";
         let help_para = Paragraph::new(help_text)
             .style(Style::default().fg(tc!(muted)));
         f.render_widget(help_para, modal_layout[6]);

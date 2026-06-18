@@ -340,6 +340,7 @@ impl TabRender for HistoryTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(error)))
                         .title("History - Error"),
                 )
                 .style(Style::default().fg(tc!(error)));

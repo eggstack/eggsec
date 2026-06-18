@@ -296,7 +296,7 @@ impl TabRender for ScanTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(12), Constraint::Min(0)])
+            .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
         let config_area = chunks[0];
@@ -415,29 +415,28 @@ impl TabRender for ScanTab {
         );
         f.render_widget(stages_block, stages_area);
 
-        let output_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Output ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ScanFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let output_inner = output_block.inner(output_area);
-        f.render_widget(output_block, output_area);
+        let results_border = if self.focus_area == ScanFocusArea::Results {
+            tc!(border_focused)
+        } else {
+            tc!(border)
+        };
 
         if let Some(ref err) = self.error {
+            let error_block = Block::default()
+                .borders(Borders::ALL)
+                .title(" Output ")
+                .border_style(Style::default().fg(results_border));
+            let error_inner = error_block.inner(output_area);
+            f.render_widget(error_block, output_area);
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, output_inner);
+            f.render_widget(error_text, error_inner);
         } else if !self.results_view.is_empty() {
-            self.results_view.render(f, output_inner, None);
+            self.results_view.render(f, output_area, Some(results_border));
         } else {
             let placeholder =
                 empty_state_paragraph("Current Stage Output", "Stage output will appear here");
-            f.render_widget(placeholder, output_inner);
+            f.render_widget(placeholder, output_area);
         }
     }
 

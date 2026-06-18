@@ -203,11 +203,11 @@ impl TabRender for OAuthTab {
 
         // Dynamic layout based on terminal height
         let (input_height, options_height, results_min) = if area.height < 30 {
-            let ih = ((area.height as f32 * 0.6) as u16).clamp(8, 16);
+            let ih = ((area.height as f32 * 0.6) as u16).clamp(8, 17);
             let oh = ((area.height as f32 * 0.2) as u16).clamp(4, 6);
             (ih, oh, 2)
         } else {
-            (16, 6, 5)
+            (17, 6, 5)
         };
 
         let chunks = Layout::default()
@@ -220,18 +220,6 @@ impl TabRender for OAuthTab {
             .split(area);
 
         // Input fields
-        let num_inputs = 5;
-        let field_height =
-            (chunks.first().copied().unwrap_or(area).height / num_inputs as u16).max(2);
-        let constraints: Vec<Constraint> = (0..num_inputs)
-            .map(|_| Constraint::Length(field_height))
-            .collect();
-        let input_area = chunks.first().copied().unwrap_or(area);
-        let input_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints)
-            .split(input_area);
-
         let input_block = Block::default()
             .title(" OAuth/OIDC Configuration ")
             .borders(Borders::ALL)
@@ -242,7 +230,20 @@ impl TabRender for OAuthTab {
                     tc!(border)
                 }),
             );
+        let input_area = chunks.first().copied().unwrap_or(area);
+        let input_inner = input_block.inner(input_area);
         f.render_widget(input_block, input_area);
+
+        let input_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+            ])
+            .split(input_inner);
 
         for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {

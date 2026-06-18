@@ -417,6 +417,10 @@ impl App {
             self.overlay.show_help = false;
             return;
         }
+        if self.is_search_visible() {
+            self.toggle_search(false);
+            return;
+        }
         if self.mode == InputMode::Insert {
             self.mode = InputMode::Normal;
         }

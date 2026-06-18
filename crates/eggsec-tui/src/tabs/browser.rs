@@ -294,6 +294,7 @@ impl TabRender for BrowserTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(error)))
                         .title("Browser Scan - Error"),
                 )
                 .style(Style::default().fg(tc!(error)));

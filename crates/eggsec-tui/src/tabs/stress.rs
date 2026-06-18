@@ -1,7 +1,5 @@
-use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, Selector, SelectorItem,
-};
-use crate::tabs::core::{focus_border_style, start_scan, TabCore};
+use crate::components::{InputField, InputGroup, Selector, SelectorItem};
+use crate::tabs::core::{focus_border_style, render_results_area, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
@@ -212,6 +210,16 @@ impl TabRender for StressTab {
             .split(area);
 
         // Input fields
+        let input_block = Block::default()
+            .title(" Stress Test Configuration ")
+            .borders(Borders::ALL)
+            .border_style(focus_border_style(
+                self.focus_area == StressFocusArea::Inputs,
+            ));
+        let input_area = chunks.first().copied().unwrap_or(area);
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -220,17 +228,7 @@ impl TabRender for StressTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(chunks.first().copied().unwrap_or(area));
-
-        let input_block = Block::default()
-            .title(" Stress Test Configuration ")
-            .borders(Borders::ALL)
-            .border_style(focus_border_style(
-                self.focus_area == StressFocusArea::Inputs,
-            ));
-        if let Some(chunk) = chunks.first() {
-            f.render_widget(input_block, *chunk);
-        }
+            .split(input_inner);
 
         for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -245,28 +243,17 @@ impl TabRender for StressTab {
             selector.render(f, *chunk);
         }
 
-        // Results
-        if self.core.results_view.is_empty() {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            if let Some(chunk) = chunks.get(2) {
-                f.render_widget(placeholder, *chunk);
-            }
-        } else {
-            if let Some(chunk) = chunks.get(2) {
-                self.core.results_view.render(f, *chunk, None);
-            }
-        }
-
-        // Progress bar if running
-        if self.core.state == AppState::Running {
-            let progress_area = Rect {
-                x: area.x,
-                y: area.y + area.height - 1,
-                width: area.width,
-                height: 1,
-            };
-            self.core.progress.render(f, progress_area);
+        if let Some(results_area) = chunks.get(2) {
+            render_results_area(
+                f,
+                *results_area,
+                &self.core.state,
+                &self.core.error,
+                &self.core.results_view,
+                &self.core.progress,
+                "Results",
+                "Results will appear here after running",
+            );
         }
     }
 }

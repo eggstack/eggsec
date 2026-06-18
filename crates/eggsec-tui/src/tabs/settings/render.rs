@@ -17,6 +17,7 @@ impl TabRender for super::SettingsTab {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Style::default().fg(tc!(error)))
                         .title("Settings - Error"),
                 )
                 .style(Style::default().fg(tc!(error)));
@@ -55,12 +56,13 @@ impl TabRender for super::SettingsTab {
         }
 
         let nav = Paragraph::new(nav_lines)
-            .block(Block::default().borders(Borders::ALL).title("Settings"));
+            .block(Block::default().borders(Borders::ALL).title("Settings").border_style(Style::default().fg(tc!(border))));
         f.render_widget(nav, nav_area);
 
         let content_block =
             Block::default()
                 .borders(Borders::ALL)
+                .border_style(Style::default().fg(tc!(border)))
                 .title(match self.current_section {
                     SettingsSection::Http => "HTTP Settings",
                     SettingsSection::Scan => "Scan Settings",

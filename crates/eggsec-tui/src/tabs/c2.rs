@@ -123,7 +123,7 @@ impl TabRender for C2Tab {
         let Some(results_area) = layout.get(2) else { return; };
 
         let title = Paragraph::new("C2 Campaign Simulation — Defense-lab only | Beacons, Tasking, OPSEC, Attack Graph")
-            .block(Block::default().borders(Borders::ALL).title("\u{26a0} Defense Lab"))
+            .block(Block::default().borders(Borders::ALL).title("\u{26a0} Defense Lab").border_style(Style::default().fg(tc!(border))))
             .style(Style::default().fg(tc!(warning)));
         f.render_widget(title, *title_area);
 

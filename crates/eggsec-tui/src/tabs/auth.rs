@@ -212,7 +212,7 @@ impl TabRender for AuthTab {
         let Some(results_area) = layout.get(2) else { return; };
 
         let title = Paragraph::new("Authentication Testing — Defense-lab only | Brute-force, Credential Stuffing, Lockout, Rate-limit, MFA, Timing, Session, Policy")
-            .block(Block::default().borders(Borders::ALL).title("⚠ Defense Lab"))
+            .block(Block::default().borders(Borders::ALL).title("⚠ Defense Lab").border_style(Style::default().fg(tc!(border))))
             .style(Style::default().fg(tc!(warning)));
         f.render_widget(title, *title_area);
 

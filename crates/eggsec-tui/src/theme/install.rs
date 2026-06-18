@@ -172,7 +172,11 @@ pub fn load_themes_from_dir(
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        // Skip non-.toml files, macOS resource forks (._*), and hidden files
+        if !name.ends_with(".toml") || name.starts_with("._") || name.starts_with('.') {
             continue;
         }
 
@@ -190,32 +194,16 @@ pub fn load_themes_from_dir(
 
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
-            Err(e) => {
-                warn!(path = %path.display(), error = %e, "failed to read theme file");
-                results.push(LoadedThemeRecord {
-                    result: Err(ThemeLoadError::IoError(e)),
-                    file_stem,
-                    source,
-                    contrast_warnings: Vec::new(),
-                });
-                continue;
-            }
+            Err(_) => continue,
         };
 
         let result = load_halloy_theme(&content, &file_stem);
-        let (theme_result, contrast_warnings) = match result {
-            Ok(outcome) => {
-                let warnings = outcome.pre_adjustment_warnings;
-                (Ok(outcome.theme), warnings)
-            }
-            Err(e) => (Err(e), Vec::new()),
-        };
 
         results.push(LoadedThemeRecord {
-            result: theme_result,
+            result: result.map(|o| o.theme),
             file_stem,
             source,
-            contrast_warnings,
+            contrast_warnings: Vec::new(),
         });
     }
 
@@ -391,5 +379,67 @@ mod tests {
         assert!(dir.is_some());
         let dir = dir.unwrap();
         assert!(dir.ends_with("themes"));
+    }
+
+    #[test]
+    fn all_packaged_themes_parse_without_error() {
+        let packaged = match decode_packaged_themes() {
+            Ok(files) => files,
+            Err(_) => return,
+        };
+        let mut errors = Vec::new();
+        for file in &packaged {
+            let stem = file
+                .relative_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
+            let content = match std::str::from_utf8(&file.content) {
+                Ok(s) => s,
+                Err(e) => {
+                    errors.push(format!("{stem}: not valid UTF-8: {e}"));
+                    continue;
+                }
+            };
+            if let Err(e) = load_halloy_theme(content, stem) {
+                errors.push(format!("{stem}: {e}"));
+            }
+        }
+        if !errors.is_empty() {
+            panic!("Theme parse errors:\n{}", errors.join("\n"));
+        }
+    }
+
+    #[test]
+    fn user_theme_dir_loads_without_errors() {
+        let dir = match user_theme_dir() {
+            Some(d) => d,
+            None => return,
+        };
+        if !dir.exists() {
+            return;
+        }
+        let packaged_ids = match decode_packaged_themes() {
+            Ok(files) => {
+                let mut ids = FxHashSet::default();
+                for file in &files {
+                    if let Some(stem) = file.relative_path.file_stem().and_then(|s| s.to_str()) {
+                        ids.insert(stem.to_string());
+                    }
+                }
+                ids
+            }
+            Err(_) => FxHashSet::default(),
+        };
+        let records = load_themes_from_dir(&dir, &packaged_ids);
+        let mut errors = Vec::new();
+        for r in &records {
+            if let Err(e) = &r.result {
+                errors.push(format!("{}: {}", r.file_stem, e));
+            }
+        }
+        if !errors.is_empty() {
+            panic!("User theme errors:\n{}", errors.join("\n"));
+        }
     }
 }

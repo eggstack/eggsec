@@ -287,7 +287,7 @@ impl Tab {
             Tab::Wireless => "  Enter            - Scan wireless networks",
             Tab::Intercept => "  Enter            - Start/stop interactive proxy intercept",
             #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => "  Enter            - Run db pentest (defense-lab; d=dry-run toggle, a=advanced)",
+            Tab::DbPentest => "  Enter            - Run db pentest (defense-lab; d-dry-run toggle, a-advanced)",
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => "  Enter            - Db pentest (feature not enabled)",
         }

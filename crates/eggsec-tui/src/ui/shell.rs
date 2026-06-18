@@ -236,8 +236,8 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         .split(area);
 
     let mode_text = match app.mode {
-        InputMode::Normal => "NORMAL",
-        InputMode::Insert => "INSERT",
+        InputMode::Normal => "NOR",
+        InputMode::Insert => "INS",
     };
     let mode_color = match app.mode {
         InputMode::Normal => theme.colors.mode_normal,
@@ -255,7 +255,7 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
     );
 
     let status =
-        ratatui::widgets::Paragraph::new(status_text).style(Style::default().fg(status_color));
+        ratatui::widgets::Paragraph::new(format!(" {status_text}")).style(Style::default().fg(status_color));
     f.render_widget(status, chunks.get(1).copied().unwrap_or(area));
 
     let help = ratatui::widgets::Paragraph::new(help_text)
@@ -599,7 +599,7 @@ mod tests {
         );
         // Status bar visible (contains mode indicator)
         assert!(
-            text.contains("NORMAL") || text.contains("INSERT"),
+            text.contains("NOR") || text.contains("INS"),
             "80x24 should render status bar mode indicator"
         );
         // Content area present (has non-space content)
