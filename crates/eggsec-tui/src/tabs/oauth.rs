@@ -17,7 +17,7 @@ pub struct OAuthTab {
     pub state_test_checkbox: Checkbox,
     pub grant_test_checkbox: Checkbox,
     pub focus_area: StandardFocusArea,
-    pub checkbox_focus_index: usize,
+    pub focused_checkbox_index: usize,
 }
 
 impl Default for OAuthTab {
@@ -42,7 +42,7 @@ impl OAuthTab {
             state_test_checkbox: Checkbox::new("State Parameter Tests").checked(true),
             grant_test_checkbox: Checkbox::new("Grant Type Tests").checked(true),
             focus_area: StandardFocusArea::Inputs,
-            checkbox_focus_index: 0,
+            focused_checkbox_index: 0,
         }
     }
 
@@ -178,7 +178,7 @@ impl TabState for OAuthTab {
         }
         self.core.inputs.blur();
         self.focus_area = StandardFocusArea::Inputs;
-        self.checkbox_focus_index = 0;
+        self.focused_checkbox_index = 0;
         self.redirect_test_checkbox.checked = true;
         self.scope_test_checkbox.checked = true;
         self.state_test_checkbox.checked = true;
@@ -404,7 +404,7 @@ impl TabInput for OAuthTab {
                 &mut self.state_test_checkbox,
                 &mut self.grant_test_checkbox,
             ];
-            let idx = self.checkbox_focus_index % checkboxes.len();
+            let idx = self.focused_checkbox_index % checkboxes.len();
             checkboxes[idx].toggle();
         }
     }
@@ -418,7 +418,7 @@ impl TabInput for OAuthTab {
             StandardFocusArea::Results,
         );
         self.focus_area = new_area;
-        self.checkbox_focus_index = 0;
+        self.focused_checkbox_index = 0;
     }
 
     fn handle_left(&mut self) -> bool {
@@ -428,8 +428,8 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             StandardFocusArea::Inputs => self.core.inputs.move_left(),
             StandardFocusArea::Options => {
-                if self.checkbox_focus_index > 0 {
-                    self.checkbox_focus_index -= 1;
+                if self.focused_checkbox_index > 0 {
+                    self.focused_checkbox_index -= 1;
                 }
                 true
             }
@@ -445,8 +445,8 @@ impl TabInput for OAuthTab {
             StandardFocusArea::Inputs => self.core.inputs.move_right(),
             StandardFocusArea::Options => {
                 let max_idx = 3;
-                if self.checkbox_focus_index < max_idx {
-                    self.checkbox_focus_index += 1;
+                if self.focused_checkbox_index < max_idx {
+                    self.focused_checkbox_index += 1;
                 }
                 true
             }
@@ -457,7 +457,7 @@ impl TabInput for OAuthTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             StandardFocusArea::Inputs => !self.core.inputs.can_move_left(),
-            StandardFocusArea::Options => self.checkbox_focus_index == 0,
+            StandardFocusArea::Options => self.focused_checkbox_index == 0,
             _ => true,
         }
     }
@@ -465,7 +465,7 @@ impl TabInput for OAuthTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             StandardFocusArea::Inputs => !self.core.inputs.can_move_right(),
-            StandardFocusArea::Options => self.checkbox_focus_index >= 3,
+            StandardFocusArea::Options => self.focused_checkbox_index >= 3,
             _ => true,
         }
     }

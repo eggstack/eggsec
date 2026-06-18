@@ -92,7 +92,7 @@ impl super::App {
                 }
                 if !h.entries.is_empty() {
                     h.selected = Some(0);
-                    h.update_details_view();
+                    h.update_results_view();
                 }
             }
             self.overlay.show_search = false;
@@ -106,7 +106,7 @@ impl super::App {
                 {
                     h.entries = backup;
                     h.selected = Some(0);
-                    h.update_details_view();
+                    h.update_results_view();
                 }
             }
         }

@@ -29,7 +29,7 @@ pub enum DashboardFocusArea {
 }
 
 pub struct DashboardTab {
-    pub view: ScrollableText,
+    pub results_view: ScrollableText,
     pub state: AppState,
     pub focus_area: DashboardFocusArea,
     pub total_scans: usize,
@@ -47,7 +47,7 @@ pub struct DashboardTab {
 impl DashboardTab {
     pub fn new() -> Self {
         let mut tab = Self {
-            view: ScrollableText::new("Dashboard"),
+            results_view: ScrollableText::new("Dashboard"),
             state: AppState::Idle,
             focus_area: DashboardFocusArea::Main,
             total_scans: 0,
@@ -115,81 +115,81 @@ impl DashboardTab {
     }
 
     fn render_welcome(&mut self) {
-        self.view.clear();
-        self.view.add_line(Line::from(Span::styled(
+        self.results_view.clear();
+        self.results_view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
             Style::default().fg(tc!(info)),
         )));
-        self.view.add_line(Line::from(""));
-        self.view
+        self.results_view.add_line(Line::from(""));
+        self.results_view
             .add_line(Line::from("Run scans in any tab to see results here."));
-        self.view.add_line(Line::from(""));
-        self.view.add_line(Line::from("Available Scans:"));
-        self.view
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from("Available Scans:"));
+        self.results_view
             .add_line(Line::from("  Recon      - Domain/IP reconnaissance"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Load       - HTTP load testing"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Scan Ports - Port scanning"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Endpoints  - Endpoint discovery"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Fingerprint- Service fingerprinting"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Fuzz       - Security fuzzing"));
-        self.view
+        self.results_view
             .add_line(Line::from("  WAF        - WAF detection/bypass"));
-        self.view
+        self.results_view
             .add_line(Line::from("  WAF Stress - WAF stress testing"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Scan       - Pipeline scan"));
-        self.view.add_line(Line::from(""));
-        self.view.add_line(Line::styled(
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::styled(
             "Additional Tabs:",
             Style::default().fg(tc!(accent)),
         ));
-        self.view
+        self.results_view
             .add_line(Line::from("  Proxy      - Proxy management"));
-        self.view.add_line(Line::from(
+        self.results_view.add_line(Line::from(
             "  Packet     - Network tools (ICMP, Traceroute)",
         ));
-        self.view
+        self.results_view
             .add_line(Line::from("  GraphQL    - GraphQL security testing"));
-        self.view
+        self.results_view
             .add_line(Line::from("  OAuth      - OAuth/OIDC security testing"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Cluster    - Distributed scanning"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Stress     - Stress/load testing"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Report     - Report conversion & trends"));
-        self.view.add_line(Line::from(""));
-        self.view.add_line(Line::styled(
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::styled(
             "Available Services:",
             Style::default().fg(tc!(accent)),
         ));
-        self.view.add_line(Line::from(
+        self.results_view.add_line(Line::from(
             "  REST API Server : Use CLI 'eggsec serve' to start",
         ));
-        self.view.add_line(Line::from(
+        self.results_view.add_line(Line::from(
             "  MCP Server      : Use CLI 'eggsec mcp-serve' to start",
         ));
-        self.view.add_line(Line::from(
+        self.results_view.add_line(Line::from(
             "  Cluster         : Use CLI 'eggsec cluster' to manage",
         ));
-        self.view.add_line(Line::from(""));
-        self.view.add_line(Line::from("Keybindings:"));
-        self.view
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from("Keybindings:"));
+        self.results_view
             .add_line(Line::from("  n/p or Shift+H/L - Previous/Next tab"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Ctrl+X       - Quick switch tab"));
-        self.view
+        self.results_view
             .add_line(Line::from("  j/k          - Scroll up/down / Navigate"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Enter        - Select / Start scan"));
-        self.view
+        self.results_view
             .add_line(Line::from("  e            - Export results"));
-        self.view
+        self.results_view
             .add_line(Line::from("  Space        - Toggle help"));
     }
 
@@ -270,53 +270,53 @@ impl DashboardTab {
     }
 
     fn render_stats(&mut self) {
-        self.view.clear();
+        self.results_view.clear();
 
-        self.view.add_line(Line::from(Span::styled(
+        self.results_view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
             Style::default().fg(tc!(info)),
         )));
-        self.view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(""));
 
-        self.view.add_line(Line::from(Span::styled(
+        self.results_view.add_line(Line::from(Span::styled(
             "Session Statistics",
             Style::default().fg(tc!(accent)),
         )));
-        self.view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(""));
 
         let total_str = format!("  Total Scans:      {}", self.total_scans);
         let success_str = format!("  Successful:       {}", self.successful_scans);
         let failed_str = format!("  Failed:           {}", self.failed_scans);
 
-        self.view.add_line(Line::from(total_str));
-        self.view.add_line(Line::from(success_str));
-        self.view.add_line(Line::from(failed_str));
+        self.results_view.add_line(Line::from(total_str));
+        self.results_view.add_line(Line::from(success_str));
+        self.results_view.add_line(Line::from(failed_str));
 
         if self.total_scans > 0 {
             let success_rate =
                 (self.successful_scans as f64 / self.total_scans as f64 * 100.0) as usize;
-            self.view
+            self.results_view
                 .add_line(Line::from(format!("  Success Rate:    {}%", success_rate)));
         }
 
-        self.view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(""));
 
         if !self.sparkline_data.is_empty() {
-            self.view.add_line(Line::from(Span::styled(
+            self.results_view.add_line(Line::from(Span::styled(
                 "Activity Trend (last 7 scans)",
                 Style::default().fg(tc!(success)),
             )));
-            self.view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(""));
             let sparkline = Self::render_sparkline(&self.sparkline_data);
-            self.view.add_line(Line::from(sparkline));
-            self.view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(sparkline));
+            self.results_view.add_line(Line::from(""));
         }
 
-        self.view.add_line(Line::from(Span::styled(
+        self.results_view.add_line(Line::from(Span::styled(
             "Asset Health Summary",
             Style::default().fg(tc!(success)),
         )));
-        self.view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(""));
 
         let snapshot = Self::load_portfolio_snapshot(
             &directories::ProjectDirs::from("com", "eggsec", "eggsec")
@@ -328,23 +328,23 @@ impl DashboardTab {
 
         if let Some(snap) = snapshot {
             let health_pct = (snap.health_score * 100.0) as usize;
-            self.view
+            self.results_view
                 .add_line(Line::from(format!("  Portfolio Health: {}%", health_pct)));
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Total Scans:      {}",
                 snap.total_scans
             )));
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Unique Targets:   {}",
                 snap.unique_targets
             )));
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Critical Issues:  {}",
                 snap.critical_findings
             )));
 
             let total_findings: usize = snap.findings_by_severity.values().sum();
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Total Findings:   {}",
                 total_findings
             )));
@@ -356,11 +356,11 @@ impl DashboardTab {
             } else {
                 "No data"
             };
-            self.view
+            self.results_view
                 .add_line(Line::from(format!("  Status:           {}", health_status)));
 
             if !snap.findings_trend.is_empty() {
-                self.view.add_line(Line::from(""));
+                self.results_view.add_line(Line::from(""));
                 if let Some((_, last_count)) = snap.findings_trend.last() {
                     if let Some((_, prev_count)) = snap
                         .findings_trend
@@ -374,7 +374,7 @@ impl DashboardTab {
                         } else {
                             "→"
                         };
-                        self.view.add_line(Line::from(format!(
+                        self.results_view.add_line(Line::from(format!(
                             "  Monthly Trend:    {} ({}{})",
                             trend_icon,
                             if diff > 0 { "+" } else { "" },
@@ -384,15 +384,15 @@ impl DashboardTab {
                 }
             }
         } else {
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Unique Targets:  {}",
                 self.unique_targets
             )));
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Scans Today:     {}",
                 self.today_scans
             )));
-            self.view.add_line(Line::from(format!(
+            self.results_view.add_line(Line::from(format!(
                 "  Critical Issues: {}",
                 self.critical_findings
             )));
@@ -404,35 +404,35 @@ impl DashboardTab {
             } else {
                 "No data"
             };
-            self.view
+            self.results_view
                 .add_line(Line::from(format!("  Status:          {}", health_status)));
-            self.view
+            self.results_view
                 .add_line(Line::from("  (Session-only data - Agent not running)"));
         }
-        self.view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(""));
 
         if !self.last_scan_type.is_empty() {
-            self.view.add_line(Line::from(Span::styled(
+            self.results_view.add_line(Line::from(Span::styled(
                 "Last Scan",
                 Style::default().fg(tc!(accent)),
             )));
-            self.view.add_line(Line::from(""));
-            self.view
+            self.results_view.add_line(Line::from(""));
+            self.results_view
                 .add_line(Line::from(format!("  Type:   {}", self.last_scan_type)));
-            self.view
+            self.results_view
                 .add_line(Line::from(format!("  Target: {}", self.last_target)));
-            self.view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(""));
         }
 
-        self.view.add_line(Line::from(Span::styled(
+        self.results_view.add_line(Line::from(Span::styled(
             "Quick Actions",
             Style::default().fg(tc!(accent)),
         )));
-        self.view.add_line(Line::from(""));
-        self.view.add_line(Line::from("  [h/l]     Navigate tabs"));
-        self.view.add_line(Line::from("  [Enter]   Start new scan"));
-        self.view.add_line(Line::from("  [e]       Export results"));
-        self.view.add_line(Line::from("  [Space]   View help"));
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from("  [h/l]     Navigate tabs"));
+        self.results_view.add_line(Line::from("  [Enter]   Start new scan"));
+        self.results_view.add_line(Line::from("  [e]       Export results"));
+        self.results_view.add_line(Line::from("  [Space]   View help"));
     }
 }
 
@@ -491,7 +491,7 @@ impl TabRender for DashboardTab {
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, area);
         } else {
-            self.view.render(f, area, None);
+            self.results_view.render(f, area, None);
         }
     }
 }
@@ -516,13 +516,13 @@ impl TabInput for DashboardTab {
         if self.is_running() {
             return None;
         }
-        Some(self.view.get_content())
+        Some(self.results_view.get_content())
     }
 
     fn handle_word_forward(&mut self) {
         if !self.is_running() {
             for _ in 0..5 {
-                self.view.scroll_right(1);
+                self.results_view.scroll_right(1);
             }
         }
     }
@@ -530,32 +530,32 @@ impl TabInput for DashboardTab {
     fn handle_word_backward(&mut self) {
         if !self.is_running() {
             for _ in 0..5 {
-                self.view.scroll_left(1);
+                self.results_view.scroll_left(1);
             }
         }
     }
 
     fn handle_home(&mut self) {
         if !self.is_running() {
-            self.view.scroll_to_top();
+            self.results_view.scroll_to_top();
         }
     }
 
     fn handle_end(&mut self) {
         if !self.is_running() {
-            self.view.scroll_to_bottom();
+            self.results_view.scroll_to_bottom();
         }
     }
 
     fn handle_top(&mut self) {
         if !self.is_running() {
-            self.view.scroll_to_top();
+            self.results_view.scroll_to_top();
         }
     }
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
-            self.view.scroll_to_bottom();
+            self.results_view.scroll_to_bottom();
         }
     }
 
@@ -568,13 +568,13 @@ impl TabInput for DashboardTab {
 
     fn handle_up(&mut self) {
         if !self.is_running() {
-            self.view.scroll_up(1);
+            self.results_view.scroll_up(1);
         }
     }
 
     fn handle_down(&mut self) {
         if !self.is_running() {
-            self.view.scroll_down(1);
+            self.results_view.scroll_down(1);
         }
     }
 
@@ -587,11 +587,11 @@ impl TabInput for DashboardTab {
     }
 
     fn is_at_left_edge(&self) -> bool {
-        self.view.is_empty() || self.view.is_at_left_edge()
+        self.results_view.is_empty() || self.results_view.is_at_left_edge()
     }
 
     fn is_at_right_edge(&self) -> bool {
-        self.view.is_empty() || self.view.is_at_right_edge()
+        self.results_view.is_empty() || self.results_view.is_at_right_edge()
     }
 
     fn is_input_focused(&self) -> bool {
@@ -602,14 +602,14 @@ impl TabInput for DashboardTab {
         if self.is_running() {
             return;
         }
-        self.view.scroll_up(count);
+        self.results_view.scroll_up(count);
     }
 
     fn page_down(&mut self, count: usize) {
         if self.is_running() {
             return;
         }
-        self.view.scroll_down(count);
+        self.results_view.scroll_down(count);
     }
 }
 

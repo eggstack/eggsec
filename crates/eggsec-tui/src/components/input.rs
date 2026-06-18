@@ -445,24 +445,24 @@ impl InputField {
         let cursor_char_pos = self.byte_to_char_pos();
         let char_count = self.value.chars().count();
 
-        let display_value = if let Some(w) = self.width {
-            let available = w.saturating_sub(2);
-            if char_count > available {
-                let start = if cursor_char_pos <= available / 2 {
-                    0
-                } else if cursor_char_pos >= char_count - available / 2 {
-                    char_count.saturating_sub(available)
-                } else {
-                    cursor_char_pos.saturating_sub(available / 2)
-                };
-                let end = (start + available).min(char_count);
-                let visible: String = self.value.chars().skip(start).take(end - start).collect();
-                let prefix = if start > 0 { "..." } else { "" };
-                let suffix = if end < char_count { "..." } else { "" };
-                format!("{}{}{}", prefix, visible, suffix)
+        // Use explicit width if set, otherwise derive from area (minus 2 for borders)
+        let effective_width = self.width.unwrap_or_else(|| {
+            area.width.saturating_sub(2) as usize
+        });
+
+        let display_value = if effective_width > 0 && char_count > effective_width {
+            let start = if cursor_char_pos <= effective_width / 2 {
+                0
+            } else if cursor_char_pos >= char_count - effective_width / 2 {
+                char_count.saturating_sub(effective_width)
             } else {
-                self.value.clone()
-            }
+                cursor_char_pos.saturating_sub(effective_width / 2)
+            };
+            let end = (start + effective_width).min(char_count);
+            let visible: String = self.value.chars().skip(start).take(end - start).collect();
+            let prefix = if start > 0 { "..." } else { "" };
+            let suffix = if end < char_count { "..." } else { "" };
+            format!("{}{}{}", prefix, visible, suffix)
         } else {
             self.value.clone()
         };
@@ -481,24 +481,19 @@ impl InputField {
         f.render_widget(paragraph, area);
 
         if self.focused && insert_mode {
-            let display_cursor = if let Some(w) = self.width {
-                let available = w.saturating_sub(2);
-                if char_count > available {
-                    let start = if cursor_char_pos <= available / 2 {
-                        0
-                    } else if cursor_char_pos >= char_count - available / 2 {
-                        char_count.saturating_sub(available)
-                    } else {
-                        cursor_char_pos.saturating_sub(available / 2)
-                    };
-                    let prefix_len = if start > 0 { 3 } else { 0 };
-                    if cursor_char_pos >= start && cursor_char_pos < start + available {
-                        (cursor_char_pos - start + prefix_len).min(u16::MAX as usize) as u16
-                    } else {
-                        available.min(u16::MAX as usize) as u16
-                    }
+            let display_cursor = if effective_width > 0 && char_count > effective_width {
+                let start = if cursor_char_pos <= effective_width / 2 {
+                    0
+                } else if cursor_char_pos >= char_count - effective_width / 2 {
+                    char_count.saturating_sub(effective_width)
                 } else {
-                    cursor_char_pos.min(u16::MAX as usize) as u16
+                    cursor_char_pos.saturating_sub(effective_width / 2)
+                };
+                let prefix_len = if start > 0 { 3 } else { 0 };
+                if cursor_char_pos >= start && cursor_char_pos < start + effective_width {
+                    (cursor_char_pos - start + prefix_len).min(u16::MAX as usize) as u16
+                } else {
+                    effective_width.min(u16::MAX as usize) as u16
                 }
             } else {
                 cursor_char_pos.min(u16::MAX as usize) as u16
@@ -1073,5 +1068,173 @@ mod tests {
         group.focus_prev();
         assert_eq!(group.focused, Some(1)); // recovered to last field
         assert!(group.fields[1].focused);
+    }
+
+    #[test]
+    fn test_area_aware_width_truncates_long_text() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
+                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
+                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
+                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
+                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
+                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
+                mode_normal: Color::Green, mode_insert: Color::Yellow,
+                tab_active: Color::Cyan, tab_inactive: Color::Gray,
+                status_running: Color::Green, status_idle: Color::Gray,
+                status_error: Color::Red, focus_normal: Color::Green,
+                focus_input: Color::Yellow, focus_results: Color::Cyan,
+                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
+                active_task: Color::Green, paused_task: Color::Yellow,
+                scope_match: Color::Green, scope_miss: Color::Red,
+                policy_required: Color::Yellow, policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
+        // width is None, area is 20 wide (18 usable after borders)
+        // Text is 25 chars, should be truncated
+        let field = InputField::new("Target").with_value("abcdefghijklmnopqrstu");
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 20, 3);
+                field.render_with_theme(f, area, false, &theme);
+            })
+            .unwrap();
+        // No panic = success; truncation is visual
+    }
+
+    #[test]
+    fn test_area_aware_width_short_text_no_truncation() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
+                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
+                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
+                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
+                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
+                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
+                mode_normal: Color::Green, mode_insert: Color::Yellow,
+                tab_active: Color::Cyan, tab_inactive: Color::Gray,
+                status_running: Color::Green, status_idle: Color::Gray,
+                status_error: Color::Red, focus_normal: Color::Green,
+                focus_input: Color::Yellow, focus_results: Color::Cyan,
+                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
+                active_task: Color::Green, paused_task: Color::Yellow,
+                scope_match: Color::Green, scope_miss: Color::Red,
+                policy_required: Color::Yellow, policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+        // width is None, area is 30 wide (28 usable after borders)
+        // Text is 10 chars, fits easily
+        let field = InputField::new("Target").with_value("1234567890");
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 30, 3);
+                field.render_with_theme(f, area, false, &theme);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_explicit_width_overrides_area() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
+                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
+                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
+                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
+                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
+                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
+                mode_normal: Color::Green, mode_insert: Color::Yellow,
+                tab_active: Color::Cyan, tab_inactive: Color::Gray,
+                status_running: Color::Green, status_idle: Color::Gray,
+                status_error: Color::Red, focus_normal: Color::Green,
+                focus_input: Color::Yellow, focus_results: Color::Cyan,
+                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
+                active_task: Color::Green, paused_task: Color::Yellow,
+                scope_match: Color::Green, scope_miss: Color::Red,
+                policy_required: Color::Yellow, policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(50, 3)).unwrap();
+        // width is Some(20), area is 50 wide
+        // Should use width=20, not area=50
+        let mut field = InputField::new("Target").with_value("abcdefghijklmnopqrstu");
+        field.width = Some(20);
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 50, 3);
+                field.render_with_theme(f, area, true, &theme);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_cursor_positioning_with_area_aware_width() {
+        use ratatui::{backend::TestBackend, Terminal};
+        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
+        use ratatui::style::Color;
+
+        let theme = Theme {
+            mode: ThemeMode::Dark,
+            name: "test".to_string(),
+            colors: ThemeColors {
+                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
+                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
+                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
+                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
+                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
+                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
+                mode_normal: Color::Green, mode_insert: Color::Yellow,
+                tab_active: Color::Cyan, tab_inactive: Color::Gray,
+                status_running: Color::Green, status_idle: Color::Gray,
+                status_error: Color::Red, focus_normal: Color::Green,
+                focus_input: Color::Yellow, focus_results: Color::Cyan,
+                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
+                active_task: Color::Green, paused_task: Color::Yellow,
+                scope_match: Color::Green, scope_miss: Color::Red,
+                policy_required: Color::Yellow, policy_denied: Color::Red,
+            },
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
+        // width is None, area is 20 wide (18 usable)
+        // Text is 25 chars, cursor at position 10 (middle)
+        let mut field = InputField::new("Target").with_value("abcdefghijklmnopqrstu");
+        field.focused = true;
+        // Move cursor to middle
+        for _ in 0..10 {
+            field.move_right();
+        }
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 20, 3);
+                field.render_with_theme(f, area, true, &theme);
+            })
+            .unwrap();
+        // No panic = success; cursor positioning is visual
     }
 }

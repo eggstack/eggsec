@@ -34,7 +34,7 @@ pub enum HistoryFocusArea {
 pub struct HistoryTab {
     pub entries: VecDeque<HistoryEntry>,
     pub selected: Option<usize>,
-    pub details_view: ScrollableText,
+    pub results_view: ScrollableText,
     pub next_id: usize,
     pub focus_area: HistoryFocusArea,
     pub scroll_offset: usize,
@@ -67,7 +67,7 @@ impl HistoryTab {
         Self {
             entries: VecDeque::new(),
             selected: None,
-            details_view: ScrollableText::new("Details"),
+            results_view: ScrollableText::new("Details"),
             next_id: 1,
             focus_area: HistoryFocusArea::List,
             scroll_offset: 0,
@@ -113,7 +113,7 @@ impl HistoryTab {
         }
         if self.selected.is_none() {
             self.selected = Some(0);
-            self.update_details_view();
+            self.update_results_view();
         }
     }
 
@@ -122,11 +122,11 @@ impl HistoryTab {
             if idx < self.entries.len().saturating_sub(1) {
                 self.selected = Some(idx + 1);
                 self.ensure_visible();
-                self.update_details_view();
+                self.update_results_view();
             }
         } else if !self.entries.is_empty() {
             self.selected = Some(0);
-            self.update_details_view();
+            self.update_results_view();
         }
     }
 
@@ -135,7 +135,7 @@ impl HistoryTab {
             if idx > 0 {
                 self.selected = Some(idx - 1);
                 self.ensure_visible();
-                self.update_details_view();
+                self.update_results_view();
             }
         }
     }
@@ -147,10 +147,10 @@ impl HistoryTab {
             }
             if self.entries.is_empty() {
                 self.selected = None;
-                self.details_view.clear();
+                self.results_view.clear();
             } else {
                 self.selected = Some(idx.min(self.entries.len() - 1));
-                self.update_details_view();
+                self.update_results_view();
             }
         }
     }
@@ -158,7 +158,7 @@ impl HistoryTab {
     pub fn clear_all(&mut self) {
         self.entries.clear();
         self.selected = None;
-        self.details_view.clear();
+        self.results_view.clear();
         self.scroll_offset = 0;
     }
 
@@ -246,8 +246,8 @@ impl HistoryTab {
         types
     }
 
-    pub fn update_details_view(&mut self) {
-        self.details_view.clear();
+    pub fn update_results_view(&mut self) {
+        self.results_view.clear();
 
         let entry_data = self.selected.and_then(|idx| {
             self.entries.get(idx).map(|e| {
@@ -262,42 +262,42 @@ impl HistoryTab {
         });
 
         if let Some((scan_type, timestamp, target, summary, details)) = entry_data {
-            self.details_view.add_line(Line::from(vec![
+            self.results_view.add_line(Line::from(vec![
                 Span::styled("Type: ", Style::default().fg(tc!(accent))),
                 Span::raw(scan_type),
             ]));
-            self.details_view.add_line(Line::from(vec![
+            self.results_view.add_line(Line::from(vec![
                 Span::styled("Time: ", Style::default().fg(tc!(accent))),
                 Span::raw(timestamp),
             ]));
-            self.details_view.add_line(Line::from(vec![
+            self.results_view.add_line(Line::from(vec![
                 Span::styled("Target: ", Style::default().fg(tc!(accent))),
                 Span::raw(target),
             ]));
-            self.details_view.add_line(Line::from(vec![
+            self.results_view.add_line(Line::from(vec![
                 Span::styled("Summary: ", Style::default().fg(tc!(accent))),
                 Span::raw(summary),
             ]));
-            self.details_view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(""));
 
             if !details.is_empty() {
-                self.details_view.add_line(Line::from(Span::styled(
+                self.results_view.add_line(Line::from(Span::styled(
                     "Details:",
                     Style::default().fg(tc!(info)),
                 )));
                 for detail in &details {
-                    self.details_view.add_text(detail, None);
+                    self.results_view.add_text(detail, None);
                 }
             }
         }
     }
 
     pub fn scroll_details_up(&mut self) {
-        self.details_view.scroll_up(1);
+        self.results_view.scroll_up(1);
     }
 
     pub fn scroll_details_down(&mut self) {
-        self.details_view.scroll_down(1);
+        self.results_view.scroll_down(1);
     }
 }
 
@@ -467,8 +467,8 @@ impl TabRender for HistoryTab {
         );
         f.render_widget(list, list_area);
 
-        if !self.details_view.is_empty() {
-            self.details_view.render(f, details_area, None);
+        if !self.results_view.is_empty() {
+            self.results_view.render(f, details_area, None);
         } else {
             let placeholder = Paragraph::new("Select an entry to view details")
                 .block(
@@ -536,7 +536,7 @@ impl TabInput for HistoryTab {
             return None;
         }
         if self.focus_area == HistoryFocusArea::Details {
-            Some(self.details_view.get_content())
+            Some(self.results_view.get_content())
         } else if let Some(idx) = self.selected {
             if let Some(entry) = self.entries.get(idx) {
                 return Some(format!(
@@ -560,7 +560,7 @@ impl TabInput for HistoryTab {
             return;
         }
         if self.focus_area == HistoryFocusArea::Details {
-            self.details_view.scroll_right(5);
+            self.results_view.scroll_right(5);
         }
     }
 
@@ -569,7 +569,7 @@ impl TabInput for HistoryTab {
             return;
         }
         if self.focus_area == HistoryFocusArea::Details {
-            self.details_view.scroll_left(5);
+            self.results_view.scroll_left(5);
         }
     }
 
@@ -582,10 +582,10 @@ impl TabInput for HistoryTab {
                 if !self.entries.is_empty() {
                     self.selected = Some(0);
                     self.scroll_offset = 0;
-                    self.update_details_view();
+                    self.update_results_view();
                 }
             }
-            HistoryFocusArea::Details => self.details_view.scroll_to_top(),
+            HistoryFocusArea::Details => self.results_view.scroll_to_top(),
         }
     }
 
@@ -603,10 +603,10 @@ impl TabInput for HistoryTab {
                     } else {
                         0
                     };
-                    self.update_details_view();
+                    self.update_results_view();
                 }
             }
-            HistoryFocusArea::Details => self.details_view.scroll_to_bottom(),
+            HistoryFocusArea::Details => self.results_view.scroll_to_bottom(),
         }
     }
 
@@ -644,7 +644,7 @@ impl TabInput for HistoryTab {
         }
         match self.focus_area {
             HistoryFocusArea::List => self.select_prev(),
-            HistoryFocusArea::Details => self.details_view.scroll_up(1),
+            HistoryFocusArea::Details => self.results_view.scroll_up(1),
         }
     }
 
@@ -654,7 +654,7 @@ impl TabInput for HistoryTab {
         }
         match self.focus_area {
             HistoryFocusArea::List => self.select_next(),
-            HistoryFocusArea::Details => self.details_view.scroll_down(1),
+            HistoryFocusArea::Details => self.results_view.scroll_down(1),
         }
     }
 
@@ -663,7 +663,7 @@ impl TabInput for HistoryTab {
             return false;
         }
         if self.focus_area == HistoryFocusArea::Details {
-            self.details_view.scroll_left(5);
+            self.results_view.scroll_left(5);
             true
         } else {
             false
@@ -675,7 +675,7 @@ impl TabInput for HistoryTab {
             return false;
         }
         if self.focus_area == HistoryFocusArea::Details {
-            self.details_view.scroll_right(5);
+            self.results_view.scroll_right(5);
             true
         } else {
             false
@@ -684,10 +684,10 @@ impl TabInput for HistoryTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == HistoryFocusArea::Details {
-            if self.details_view.is_empty() {
+            if self.results_view.is_empty() {
                 return true;
             }
-            self.details_view.is_at_left_edge()
+            self.results_view.is_at_left_edge()
         } else {
             true
         }
@@ -695,10 +695,10 @@ impl TabInput for HistoryTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == HistoryFocusArea::Details {
-            if self.details_view.is_empty() {
+            if self.results_view.is_empty() {
                 return true;
             }
-            self.details_view.is_at_right_edge()
+            self.results_view.is_at_right_edge()
         } else {
             true
         }
@@ -716,7 +716,7 @@ impl TabInput for HistoryTab {
             HistoryFocusArea::List => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(page_size);
             }
-            HistoryFocusArea::Details => self.details_view.page_up(page_size),
+            HistoryFocusArea::Details => self.results_view.page_up(page_size),
         }
     }
 
@@ -729,7 +729,7 @@ impl TabInput for HistoryTab {
                 let max_offset = self.entries.len().saturating_sub(self.visible_rows);
                 self.scroll_offset = (self.scroll_offset + page_size).min(max_offset);
             }
-            HistoryFocusArea::Details => self.details_view.page_down(page_size),
+            HistoryFocusArea::Details => self.results_view.page_down(page_size),
         }
     }
 }

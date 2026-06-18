@@ -21,7 +21,7 @@ pub struct ScanTab {
     pub profile_selector: Selector,
     pub output_selector: Selector,
     pub stages: Vec<StageInfo>,
-    pub current_stage_output: ScrollableText,
+    pub results_view: ScrollableText,
     pub report: Option<PipelineReport>,
     pub progress: ProgressGauge,
     pub state: AppState,
@@ -84,7 +84,7 @@ impl ScanTab {
             profile_selector,
             output_selector,
             stages,
-            current_stage_output: ScrollableText::new("Current Stage Output"),
+            results_view: ScrollableText::new("Current Stage Output"),
             report: None,
             progress: ProgressGauge::new("Pipeline Progress"),
             state: AppState::Idle,
@@ -190,8 +190,8 @@ impl ScanTab {
     }
 
     pub fn add_stage_output(&mut self, line: &str) {
-        self.current_stage_output.add_text(line, None);
-        self.current_stage_output.scroll_to_end();
+        self.results_view.add_text(line, None);
+        self.results_view.scroll_to_end();
     }
 
     pub fn set_report(&mut self, report: PipelineReport) {
@@ -205,7 +205,7 @@ impl ScanTab {
             self.progress.current = 0;
             self.progress.total = self.stages.len() as u64;
             self.report = None;
-            self.current_stage_output.clear();
+            self.results_view.clear();
             for stage in &mut self.stages {
                 stage.status = StageStatus::Pending;
                 stage.duration_ms = 0;
@@ -229,15 +229,15 @@ impl ScanTab {
             stage.duration_ms = 0;
             stage.result_summary.clear();
         }
-        self.current_stage_output.clear();
+        self.results_view.clear();
     }
 
     pub fn scroll_output_up(&mut self) {
-        self.current_stage_output.scroll_up(1);
+        self.results_view.scroll_up(1);
     }
 
     pub fn scroll_output_down(&mut self) {
-        self.current_stage_output.scroll_down(1);
+        self.results_view.scroll_down(1);
     }
 }
 
@@ -282,7 +282,7 @@ impl TabState for ScanTab {
         self.profile_selector.cancel();
         self.output_selector.cancel();
         self.focus_area = ScanFocusArea::Inputs;
-        self.current_stage_output.clear();
+        self.results_view.clear();
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -432,8 +432,8 @@ impl TabRender for ScanTab {
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, output_inner);
-        } else if !self.current_stage_output.is_empty() {
-            self.current_stage_output.render(f, output_inner, None);
+        } else if !self.results_view.is_empty() {
+            self.results_view.render(f, output_inner, None);
         } else {
             let placeholder =
                 empty_state_paragraph("Current Stage Output", "Stage output will appear here");
@@ -557,7 +557,7 @@ impl TabInput for ScanTab {
             if self.focus_area == ScanFocusArea::Inputs {
                 self.inputs.get_focused_value()
             } else {
-                Some(self.current_stage_output.get_content())
+                Some(self.results_view.get_content())
             }
         } else {
             None
@@ -581,7 +581,7 @@ impl TabInput for ScanTab {
             if self.focus_area == ScanFocusArea::Inputs {
                 self.inputs.move_home();
             } else {
-                self.current_stage_output.scroll_to_top();
+                self.results_view.scroll_to_top();
             }
         }
     }
@@ -591,7 +591,7 @@ impl TabInput for ScanTab {
             if self.focus_area == ScanFocusArea::Inputs {
                 self.inputs.move_end();
             } else {
-                self.current_stage_output.scroll_to_bottom();
+                self.results_view.scroll_to_bottom();
             }
         }
     }
@@ -695,7 +695,7 @@ impl TabInput for ScanTab {
                 self.update_stages_for_profile();
             } else if self.output_selector.is_open() {
                 self.output_selector.move_prev();
-            } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
+            } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_output_up();
             } else if self.focus_area != ScanFocusArea::Inputs {
                 self.focus_area = ScanFocusArea::Inputs;
@@ -713,10 +713,10 @@ impl TabInput for ScanTab {
                 self.update_stages_for_profile();
             } else if self.output_selector.is_open() {
                 self.output_selector.move_next();
-            } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
+            } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_output_down();
             } else if self.focus_area == ScanFocusArea::Results
-                && self.current_stage_output.is_empty()
+                && self.results_view.is_empty()
             {
                 self.focus_area = ScanFocusArea::Inputs;
                 self.inputs.focus(0);
@@ -738,7 +738,7 @@ impl TabInput for ScanTab {
             if self.focus_area == ScanFocusArea::Inputs {
                 self.inputs.move_left()
             } else {
-                self.current_stage_output.scroll_left(5);
+                self.results_view.scroll_left(5);
                 true
             }
         } else {
@@ -751,7 +751,7 @@ impl TabInput for ScanTab {
             if self.focus_area == ScanFocusArea::Inputs {
                 self.inputs.move_right()
             } else {
-                self.current_stage_output.scroll_right(5);
+                self.results_view.scroll_right(5);
                 true
             }
         } else {
@@ -763,7 +763,7 @@ impl TabInput for ScanTab {
         if self.focus_area == ScanFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else {
-            self.current_stage_output.is_at_left_edge()
+            self.results_view.is_at_left_edge()
         }
     }
 
@@ -771,7 +771,7 @@ impl TabInput for ScanTab {
         if self.focus_area == ScanFocusArea::Inputs {
             self.inputs.is_at_right_edge()
         } else {
-            self.current_stage_output.is_at_right_edge()
+            self.results_view.is_at_right_edge()
         }
     }
 
@@ -783,14 +783,14 @@ impl TabInput for ScanTab {
         if self.is_running() {
             return;
         }
-        self.current_stage_output.page_up(page_size);
+        self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
         if self.is_running() {
             return;
         }
-        self.current_stage_output.page_down(page_size);
+        self.results_view.page_down(page_size);
     }
 
     fn primary_target(&self) -> Option<String> {
