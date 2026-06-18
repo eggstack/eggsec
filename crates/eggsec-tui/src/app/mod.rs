@@ -766,6 +766,7 @@ impl App {
             return;
         }
         self.dispatcher_mut().handle_up();
+        self.maybe_refresh_theme_preview();
     }
 
     pub fn handle_down(&mut self) {
@@ -773,6 +774,27 @@ impl App {
             return;
         }
         self.dispatcher_mut().handle_down();
+        self.maybe_refresh_theme_preview();
+    }
+
+    /// If the Settings tab's theme selector moved, refresh the preview colors.
+    fn maybe_refresh_theme_preview(&mut self) {
+        if self.current_tab == Tab::Settings
+            && self.tabs.settings.needs_theme_preview_refresh
+        {
+            self.tabs.settings.needs_theme_preview_refresh = false;
+            let selected_id = self
+                .tabs
+                .settings
+                .theme_selector
+                .selected_value()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| self.theme_manager.current_id().to_string());
+            self.tabs.settings.resolved_theme_colors = self
+                .theme_manager
+                .get_theme(&selected_id)
+                .map(|t| t.colors.clone());
+        }
     }
 
     pub fn handle_left(&mut self) {
@@ -1153,6 +1175,8 @@ impl App {
             .map(|id| (id.to_string(), display_theme_name(id)))
             .collect();
         let current = self.theme_manager.current_name().to_string();
+        let current_id = self.theme_manager.current_id().to_string();
+        self.tabs.settings.applied_theme_id = Some(current_id);
         self.tabs.settings.set_available_themes(&themes, &current);
         // Resolve the selected theme's colors for preview rendering.
         let selected_id = self
@@ -1910,11 +1934,13 @@ mod tests {
     fn make_theme_install_report(
         loaded_themes: Vec<crate::theme::install::LoadedThemeRecord>,
     ) -> crate::theme::install::ThemeInstallReport {
+        let adjusted = loaded_themes.iter().filter(|r| !r.contrast_warnings.is_empty()).count();
         crate::theme::install::ThemeInstallReport {
             theme_dir: None,
             installed: 0,
             skipped_existing: 0,
             loaded: loaded_themes.iter().filter(|r| r.result.is_ok()).count(),
+            adjusted,
             errors: Vec::new(),
             loaded_themes,
         }

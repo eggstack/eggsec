@@ -263,6 +263,12 @@ Theme loading runs in a background thread; `ThemeLoadState` keeps the receiver, 
 
 **Contrast validation** (`theme/contrast.rs`): Loaded themes are validated for minimum contrast ratio (4.5:1) on text/background and selected_text/selected pairs. Low-contrast themes trigger a fallback to the base theme with a warning (non-fatal). The shared `named_color()` function in `loader.rs` maps all 27 named CSS colors for consistent parsing across `parse_hex_color()` and `luminance()`.
 
+**Explicit theme passing / ThemeLoadOutcome**: The background theme loader returns a `ThemeLoadOutcome` that carries pre-adjustment contrast warnings captured during parsing. This allows `FallbackAdjusted` status to accurately reflect the contrast warnings that triggered the fallback, rather than re-validating after fallback (which would lose the original warnings). The `ThemeLoadOutcome` is consumed by `handle_theme_install_report()` to populate `SettingsTab.theme_contrast_cache` per theme.
+
+**SettingsTab.applied_theme_id**: `SettingsTab` tracks `applied_theme_id` (the theme active when Settings was opened) separately from the selector's current selection. This lets the preview show what the selected theme will look like while preserving the ability to revert on Escape. `ThemeManager.current_id()` provides the accessor for the currently active theme.
+
+**Live preview refresh**: The Settings theme preview refreshes as the selector moves — `update_settings_theme_selector()` resolves the newly selected theme's colors into `SettingsTab.resolved_theme_colors`, which the render path reads on each frame. Never read `tc!()` directly for preview colors.
+
 New rendering code should prefer explicit `&Theme` parameters:
 ```rust
 pub fn draw_widget(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
@@ -503,6 +509,22 @@ Selector contract:
 - Enter on open selector commits and closes
 - Esc closes without committing
 - Up/Down only move selection when open
+
+## InputGroup Stale-Focus Guard
+
+`InputGroup` provides `valid_focused_index()` and `valid_focused_index_ref()` methods that return `Option<usize>` instead of raw `self.focused`. Always use these instead of direct `self.focused` indexing to protect against stale focus indices after fields are removed or the group is cleared:
+
+```rust
+// WRONG - stale focus can panic
+let field = &mut self.fields[self.focused.unwrap()];
+
+// CORRECT - valid_focused_index guards against stale focus
+if let Some(idx) = self.valid_focused_index() {
+    let field = &mut self.fields[idx];
+}
+```
+
+This is especially important in `reset()` methods and focus transitions where the field count may change.
 
 ## Common Bug Patterns
 
@@ -833,6 +855,8 @@ Status bar hints are context-aware via `get_action_hints()` in `app/action_hints
 - Theme section (selector closed): `r:reload Enter:themes Tab:next`
 - Theme section (selector open): `Enter:select ↑↓:theme Esc:cancel`
 - Other sections: `s:save r:reset Tab:next`
+
+**Help overlay keybindings**: The help overlay uses `j/k` for scrolling up/down and `g/G` for jumping to top/bottom (not `h/l` for pane navigation). `b`/`B` move word-backward in input fields. See `help_config.rs` for the full mapping.
 
 New code should use this system instead of scattering hint strings:
 ```rust

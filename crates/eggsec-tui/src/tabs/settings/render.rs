@@ -232,31 +232,30 @@ impl TabRender for super::SettingsTab {
                     .count();
 
                 // Determine applied theme name for Selected vs Applied display.
-                let applied_name = self
-                    .theme_info_cache
-                    .iter()
-                    .find(|info| {
-                        info.id
-                            == *self
-                                .theme_selector
-                                .selected_value()
-                                .unwrap_or("unknown")
-                    })
-                    .map(|_| current_name);
-                // Check if selected differs from applied by looking at selector state.
-                // The applied theme is the one whose colors match resolved_theme_colors;
-                // we show "Applied" label only when the selector has moved.
-                let show_applied = self.theme_selector.is_open()
-                    || self.resolved_theme_colors.is_some()
-                        != self.theme_info_cache.iter().any(|i| i.id == current_id);
+                let selected_id = current_id;
+                let applied_matches = self
+                    .applied_theme_id
+                    .as_deref()
+                    .map(|aid| aid == selected_id)
+                    .unwrap_or(true);
+                let show_applied = self.theme_selector.is_open() || !applied_matches;
 
                 // Build metadata lines above the selector.
                 let mut meta_lines = Vec::new();
 
-                // Line 1: display name, source/mode badge, and status.
+                // Line 1: Selected/Applied label, display name, source/mode badge, and status.
+                let label = if show_applied {
+                    if applied_matches {
+                        "  Selected/Applied "
+                    } else {
+                        "  Selected "
+                    }
+                } else {
+                    "  "
+                };
                 meta_lines.push(Line::from(vec![
                     Span::styled(
-                        format!("  {} ", current_name),
+                        format!("{}{} ", label, current_name),
                         Style::default()
                             .fg(tc!(text))
                             .add_modifier(ratatui::style::Modifier::BOLD),
@@ -297,7 +296,23 @@ impl TabRender for super::SettingsTab {
                 ));
                 meta_lines.push(Line::from(stats_spans));
 
-                // Line 3: theme directory path.
+                // Line 3: Applied theme name when selected differs from applied.
+                if !applied_matches {
+                    if let Some(ref applied_id) = self.applied_theme_id {
+                        let applied_label = self
+                            .theme_info_cache
+                            .iter()
+                            .find(|info| info.id == *applied_id)
+                            .map(|info| info.display_name.as_str())
+                            .unwrap_or("Unknown");
+                        meta_lines.push(Line::from(Span::styled(
+                            format!("  Applied: {}", applied_label),
+                            Style::default().fg(tc!(text_dim)),
+                        )));
+                    }
+                }
+
+                // Line 4: theme directory path.
                 meta_lines.push(Line::from(Span::styled(
                     format!("  Dir: {}", dir),
                     Style::default().fg(tc!(text_dim)),

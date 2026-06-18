@@ -237,6 +237,7 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char('G')) => vec![UiAction::MoveBottom],
             (KeyModifiers::NONE, KeyCode::Char('g')) => vec![UiAction::BeginGgSequence],
             (KeyModifiers::NONE, KeyCode::Char('w')) => vec![UiAction::MoveWordForward],
+            (KeyModifiers::NONE, KeyCode::Char('b')) => vec![UiAction::MoveWordBackward],
             (KeyModifiers::SHIFT, KeyCode::Char('B')) => vec![UiAction::MoveWordBackward],
             (KeyModifiers::NONE, KeyCode::Char('n')) => vec![UiAction::NextTab],
             (KeyModifiers::NONE, KeyCode::Char('N')) => vec![UiAction::PrevTab],
@@ -881,5 +882,27 @@ mod tests {
             press(&mut handler, &mut app, KeyCode::Char('0'));
             assert_eq!(app.current_tab, original);
         }
+    }
+
+    #[test]
+    fn test_lowercase_b_decodes_move_word_backward() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE),
+        );
+        assert_eq!(actions, vec![UiAction::MoveWordBackward]);
+    }
+
+    #[test]
+    fn test_shifted_b_decodes_move_word_backward() {
+        let mut app = create_test_app();
+        let handler = KeyHandler::new();
+        let actions = handler.decode_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('B'), KeyModifiers::SHIFT),
+        );
+        assert_eq!(actions, vec![UiAction::MoveWordBackward]);
     }
 }

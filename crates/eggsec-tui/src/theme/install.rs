@@ -38,6 +38,8 @@ pub struct ThemeInstallReport {
     pub installed: usize,
     pub skipped_existing: usize,
     pub loaded: usize,
+    /// Number of themes that had low-contrast colors adjusted to fallback defaults.
+    pub adjusted: usize,
     pub errors: Vec<String>,
     pub loaded_themes: Vec<LoadedThemeRecord>,
 }
@@ -89,6 +91,7 @@ pub fn ensure_packaged_themes_installed(dir: &Path) -> ThemeInstallReport {
         installed: 0,
         skipped_existing: 0,
         loaded: 0,
+        adjusted: 0,
         errors: Vec::new(),
         loaded_themes: Vec::new(),
     };
@@ -200,34 +203,16 @@ pub fn load_themes_from_dir(
         };
 
         let result = load_halloy_theme(&content, &file_stem);
-        let contrast_warnings = match &result {
-            Ok(theme) => {
-                // Collect contrast warnings for the loaded theme.
-                let mut warnings = Vec::new();
-                use super::contrast::{check_contrast, contrast_ratio};
-                let pairs = [
-                    ("text", "background", theme.colors.text, theme.colors.background),
-                    ("selected_text", "selected", theme.colors.selected_text, theme.colors.selected),
-                ];
-                for (fg_name, bg_name, fg, bg) in pairs {
-                    if matches!(fg, ratatui::style::Color::Rgb(..))
-                        && matches!(bg, ratatui::style::Color::Rgb(..))
-                        && !check_contrast(fg, bg, 4.5)
-                    {
-                        let ratio = contrast_ratio(fg, bg);
-                        warnings.push(format!(
-                            "{fg_name}/{bg_name} contrast ratio {:.2}:1 is below 4.5:1 minimum",
-                            ratio,
-                        ));
-                    }
-                }
-                warnings
+        let (theme_result, contrast_warnings) = match result {
+            Ok(outcome) => {
+                let warnings = outcome.pre_adjustment_warnings;
+                (Ok(outcome.theme), warnings)
             }
-            Err(_) => Vec::new(),
+            Err(e) => (Err(e), Vec::new()),
         };
 
         results.push(LoadedThemeRecord {
-            result,
+            result: theme_result,
             file_stem,
             source,
             contrast_warnings,
@@ -246,6 +231,7 @@ pub fn load_and_install_themes() -> ThemeInstallReport {
                 installed: 0,
                 skipped_existing: 0,
                 loaded: 0,
+                adjusted: 0,
                 errors: vec!["could not determine user theme directory".to_string()],
                 loaded_themes: Vec::new(),
             };
@@ -272,7 +258,12 @@ pub fn load_and_install_themes() -> ThemeInstallReport {
 
     let loaded_results = load_themes_from_dir(&dir, &packaged_ids);
     let loaded_count = loaded_results.iter().filter(|r| r.result.is_ok()).count();
+    let adjusted_count = loaded_results
+        .iter()
+        .filter(|r| !r.contrast_warnings.is_empty())
+        .count();
     report.loaded = loaded_count;
+    report.adjusted = adjusted_count;
 
     let mut loaded_themes = Vec::new();
     for record in loaded_results {

@@ -612,6 +612,15 @@ cargo clippy --lib -p eggsec --features c2-mcp
 - **Explicit theme render path** (`components/selector.rs`, `components/input.rs`): `render_with_theme()` methods for Selector, Checkbox, InputField. Existing `render()` delegates to theme-based version. 3 new tests.
 - **AGENTS.override.md**: Fixed stale "Ctrl+T cycles built-in trio" → "Ctrl+T cycles all registered themes alphabetically".
 
+### Session Fixes (2026-06-18) - TUI Bug Fixes Plan
+
+- **Settings Theme dead selected/applied state fixed**: `tabs/settings/render.rs` now renders "Selected/Applied" labels using `SettingsTab.applied_theme_id` (set from `ThemeManager::current_id()`). Dead `applied_name`/`show_applied` locals removed. `ThemeManager` gained `current_id: String` field and `current_id()` accessor. 2 new tests.
+- **Settings Theme Preview stale while browsing fixed**: Added `needs_theme_preview_refresh` flag to `SettingsTab`, set when theme selector moves (Up/Down) or opens/cancels. `App::maybe_refresh_theme_preview()` checks the flag after dispatch and refreshes `resolved_theme_colors`. Preview now tracks highlighted theme in real time.
+- **Low-Contrast Theme FallbackAdjusted status fixed**: `halloy_to_theme()` now returns `ThemeLoadOutcome` with `pre_adjustment_warnings` captured before color mutation. `install.rs` uses these pre-adjustment warnings instead of recomputing on already-adjusted theme. `ThemeInstallReport` gained `adjusted: usize` field. Manual reload notification now includes adjusted count.
+- **InputGroup stale focus hardening**: Added `valid_focused_index()` (mutable, clears stale) and `valid_focused_index_ref()` (read-only) helpers. All `InputGroup` methods now use these instead of raw `self.fields[idx]` access. 6 new tests covering stale insert, blur, move_left, get_focused_value, focus_next recovery, focus_prev recovery.
+- **Word-backward 'b' binding matches help**: Added lowercase `b` → `MoveWordBackward` binding alongside shifted `B`. Help text and key handling now agree. 2 new decode tests.
+- **Help overlay hints fixed**: Changed from `h/l:pane` (non-existent) to `j/k:scroll g/G:top/end` (implemented actions). Updated `action_hints.rs`, `ui/shell.rs` status bar, and `help_config.rs`. 1 new test.
+
 ### Session Fixes (2026-06-18) - TUI Bug Fixes (continued)
 
 - **Numeric tab jump off-by-one fixed**: `key_handler.rs` numeric decode now maps `'1'..='9'` to `digit - 1` for `Tab::from_visible_index()`, and `'0'` to index 9. 5 new tests.

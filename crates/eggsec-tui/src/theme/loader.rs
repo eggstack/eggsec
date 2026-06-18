@@ -182,7 +182,14 @@ fn luminance(color: &str) -> f64 {
     }
 }
 
-fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, ThemeLoadError> {
+/// Result of loading a theme, including pre-adjustment contrast diagnostics.
+pub struct ThemeLoadOutcome {
+    pub theme: Theme,
+    /// Contrast warnings computed before any fallback adjustments were applied.
+    pub pre_adjustment_warnings: Vec<String>,
+}
+
+fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
     let bg_hex = halloy
         .general
         .as_ref()
@@ -357,10 +364,16 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
     };
 
     // --- Contrast validation (non-fatal; fall back to base theme pair) ---
+    // Capture pre-adjustment warnings before mutating colors.
+    let mut pre_adjustment_warnings = Vec::new();
 
     // text vs background (min 4.5:1 for normal text per WCAG AA)
     if !check_contrast(colors.text, colors.background, 4.5) {
         let ratio = contrast_ratio(colors.text, colors.background);
+        pre_adjustment_warnings.push(format!(
+            "text/background contrast ratio {:.2}:1 is below 4.5:1 minimum",
+            ratio,
+        ));
         tracing::warn!(
             "Theme '{}' text/background contrast ratio {:.2}:1 is below 4.5:1 minimum; \
              falling back to base theme text color",
@@ -373,6 +386,10 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
     // selected_text vs selected (min 4.5:1)
     if !check_contrast(colors.selected_text, colors.selected, 4.5) {
         let ratio = contrast_ratio(colors.selected_text, colors.selected);
+        pre_adjustment_warnings.push(format!(
+            "selected_text/selected contrast ratio {:.2}:1 is below 4.5:1 minimum",
+            ratio,
+        ));
         tracing::warn!(
             "Theme '{}' selected_text/selected contrast ratio {:.2}:1 is below 4.5:1 minimum; \
              falling back to base theme selected_text color",
@@ -382,20 +399,23 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<Theme, Theme
         colors.selected_text = defaults.colors.selected_text;
     }
 
-    Ok(Theme {
-        mode,
-        name: canonical_theme_id(file_stem),
-        colors,
+    Ok(ThemeLoadOutcome {
+        theme: Theme {
+            mode,
+            name: canonical_theme_id(file_stem),
+            colors,
+        },
+        pre_adjustment_warnings,
     })
 }
 
-pub fn load_halloy_theme(content: &str, file_stem: &str) -> Result<Theme, ThemeLoadError> {
+pub fn load_halloy_theme(content: &str, file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
     let halloy: HalloyTheme = toml::from_str(content)?;
     halloy_to_theme(&halloy, file_stem)
 }
 
 #[allow(dead_code)] // Used in #[cfg(test)] only
-pub fn load_halloy_theme_bytes(content: &[u8], file_stem: &str) -> Result<Theme, ThemeLoadError> {
+pub fn load_halloy_theme_bytes(content: &[u8], file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
     let s = std::str::from_utf8(content).map_err(|e| {
         use serde::de::Error;
         ThemeLoadError::ParseError(toml::de::Error::custom(e.to_string()))
@@ -416,11 +436,11 @@ background = "#2E3440"
 [text]
 primary = "#D8DEE9"
 "##;
-        let theme = load_halloy_theme(toml_content, "test-theme").unwrap();
-        assert_eq!(theme.name, "test-theme");
-        assert_eq!(theme.mode, ThemeMode::Dark);
-        assert_eq!(theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
-        assert_eq!(theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
+        let outcome = load_halloy_theme(toml_content, "test-theme").unwrap();
+        assert_eq!(outcome.theme.name, "test-theme");
+        assert_eq!(outcome.theme.mode, ThemeMode::Dark);
+        assert_eq!(outcome.theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
+        assert_eq!(outcome.theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
     }
 
     #[test]
@@ -429,8 +449,8 @@ primary = "#D8DEE9"
 [general]
 background = "#2E3440"
 "##;
-        let theme = load_halloy_theme(toml_content, "Cyber Red").unwrap();
-        assert_eq!(theme.name, "cyber-red");
+        let outcome = load_halloy_theme(toml_content, "Cyber Red").unwrap();
+        assert_eq!(outcome.theme.name, "cyber-red");
     }
 
     #[test]
@@ -477,8 +497,8 @@ background = "#2E3440"
 [general]
 background = "#000000"
 "##;
-        let theme = load_halloy_theme(toml_content, "dark-test").unwrap();
-        assert_eq!(theme.mode, ThemeMode::Dark);
+        let outcome = load_halloy_theme(toml_content, "dark-test").unwrap();
+        assert_eq!(outcome.theme.mode, ThemeMode::Dark);
     }
 
     #[test]
@@ -487,8 +507,8 @@ background = "#000000"
 [general]
 background = "#FFFFFF"
 "##;
-        let theme = load_halloy_theme(toml_content, "light-test").unwrap();
-        assert_eq!(theme.mode, ThemeMode::Light);
+        let outcome = load_halloy_theme(toml_content, "light-test").unwrap();
+        assert_eq!(outcome.theme.mode, ThemeMode::Light);
     }
 
     #[test]
@@ -534,24 +554,24 @@ background_hover = "#5A657D"
 background_selected = "#81A1C1"
 background_selected_hover = "#88C0D0"
 "##;
-        let theme = load_halloy_theme(toml_content, "nord").unwrap();
-        assert_eq!(theme.name, "nord");
-        assert_eq!(theme.mode, ThemeMode::Dark);
-        assert_eq!(theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
-        assert_eq!(theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
-        assert_eq!(theme.colors.border, Color::Rgb(0x4C, 0x56, 0x6A));
-        assert_eq!(theme.colors.border_focused, Color::Rgb(0x81, 0xA1, 0xC1));
-        assert_eq!(theme.colors.success, Color::Rgb(0xA3, 0xBE, 0x8C));
-        assert_eq!(theme.colors.error, Color::Rgb(0xBF, 0x61, 0x6A));
-        assert_eq!(theme.colors.warning, Color::Rgb(0x81, 0xA1, 0xC1));
-        assert_eq!(theme.colors.info, Color::Rgb(0xD0, 0x87, 0x70));
-        assert_eq!(theme.colors.selected, Color::Rgb(0x2E, 0x34, 0x40));
-        assert_eq!(theme.colors.selected_text, Color::Rgb(0x88, 0xC0, 0xD0));
-        assert_eq!(theme.colors.highlight, Color::Rgb(0x43, 0x4C, 0x5E));
-        assert_eq!(theme.colors.mode_normal, Color::Rgb(0x3B, 0x42, 0x52));
-        assert_eq!(theme.colors.mode_insert, Color::Rgb(0x4C, 0x56, 0x6A));
-        assert_eq!(theme.colors.tab_active, Color::Rgb(0x81, 0xA1, 0xC1));
-        assert_eq!(theme.colors.tab_inactive, Color::Rgb(0x4C, 0x56, 0x6A));
+        let outcome = load_halloy_theme(toml_content, "nord").unwrap();
+        assert_eq!(outcome.theme.name, "nord");
+        assert_eq!(outcome.theme.mode, ThemeMode::Dark);
+        assert_eq!(outcome.theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
+        assert_eq!(outcome.theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
+        assert_eq!(outcome.theme.colors.border, Color::Rgb(0x4C, 0x56, 0x6A));
+        assert_eq!(outcome.theme.colors.border_focused, Color::Rgb(0x81, 0xA1, 0xC1));
+        assert_eq!(outcome.theme.colors.success, Color::Rgb(0xA3, 0xBE, 0x8C));
+        assert_eq!(outcome.theme.colors.error, Color::Rgb(0xBF, 0x61, 0x6A));
+        assert_eq!(outcome.theme.colors.warning, Color::Rgb(0x81, 0xA1, 0xC1));
+        assert_eq!(outcome.theme.colors.info, Color::Rgb(0xD0, 0x87, 0x70));
+        assert_eq!(outcome.theme.colors.selected, Color::Rgb(0x2E, 0x34, 0x40));
+        assert_eq!(outcome.theme.colors.selected_text, Color::Rgb(0x88, 0xC0, 0xD0));
+        assert_eq!(outcome.theme.colors.highlight, Color::Rgb(0x43, 0x4C, 0x5E));
+        assert_eq!(outcome.theme.colors.mode_normal, Color::Rgb(0x3B, 0x42, 0x52));
+        assert_eq!(outcome.theme.colors.mode_insert, Color::Rgb(0x4C, 0x56, 0x6A));
+        assert_eq!(outcome.theme.colors.tab_active, Color::Rgb(0x81, 0xA1, 0xC1));
+        assert_eq!(outcome.theme.colors.tab_inactive, Color::Rgb(0x4C, 0x56, 0x6A));
     }
 
     #[test]
@@ -560,19 +580,19 @@ background_selected_hover = "#88C0D0"
 [general]
 background = "#1A1A2E"
 "##;
-        let theme = load_halloy_theme(toml_content, "minimal").unwrap();
+        let outcome = load_halloy_theme(toml_content, "minimal").unwrap();
         let defaults = dark_theme();
-        assert_eq!(theme.colors.success, defaults.colors.success);
-        assert_eq!(theme.colors.error, defaults.colors.error);
-        assert_eq!(theme.colors.status_running, defaults.colors.status_running);
+        assert_eq!(outcome.theme.colors.success, defaults.colors.success);
+        assert_eq!(outcome.theme.colors.error, defaults.colors.error);
+        assert_eq!(outcome.theme.colors.status_running, defaults.colors.status_running);
     }
 
     #[test]
     fn bytes_wrapper_works() {
         let content = b"[general]\nbackground = \"#000000\"";
-        let theme = load_halloy_theme_bytes(content, "bytes-test").unwrap();
-        assert_eq!(theme.name, "bytes-test");
-        assert_eq!(theme.mode, ThemeMode::Dark);
+        let outcome = load_halloy_theme_bytes(content, "bytes-test").unwrap();
+        assert_eq!(outcome.theme.name, "bytes-test");
+        assert_eq!(outcome.theme.mode, ThemeMode::Dark);
     }
 
     #[test]

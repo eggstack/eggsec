@@ -276,6 +276,7 @@ impl TabInput for SettingsTab {
                     }
                 } else {
                     self.theme_selector.open();
+                    self.needs_theme_preview_refresh = true;
                 }
             }
         }
@@ -296,6 +297,7 @@ impl TabInput for SettingsTab {
         }
         if self.theme_selector.is_open() {
             self.theme_selector.cancel();
+            self.needs_theme_preview_refresh = true;
             return;
         }
         self.focus_area = SettingsFocusArea::SectionList;
@@ -338,6 +340,7 @@ impl TabInput for SettingsTab {
             }
             if self.theme_selector.is_open() {
                 self.theme_selector.move_prev();
+                self.needs_theme_preview_refresh = true;
                 return;
             }
             // In detail view, up moves between fields
@@ -386,6 +389,7 @@ impl TabInput for SettingsTab {
             }
             if self.theme_selector.is_open() {
                 self.theme_selector.move_next();
+                self.needs_theme_preview_refresh = true;
                 return;
             }
             // In detail view, down moves between fields

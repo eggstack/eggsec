@@ -121,6 +121,7 @@ impl super::App {
             // Show feedback for manual reload with detailed counts.
             let new_themes = report.installed;
             let loaded = report.loaded;
+            let adjusted = report.adjusted;
             let errors = report.errors.len();
             let invalid = self.theme_manager.invalid_count();
             let mut parts = Vec::new();
@@ -128,6 +129,9 @@ impl super::App {
                 parts.push(format!("{} new", new_themes));
             }
             parts.push(format!("{} loaded", loaded));
+            if adjusted > 0 {
+                parts.push(format!("{} adjusted", adjusted));
+            }
             if invalid > 0 {
                 parts.push(format!("{} invalid", invalid));
             }

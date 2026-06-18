@@ -7,7 +7,7 @@ Eggsec includes a powerful real-time Terminal User Interface (TUI) built with th
 Context-aware action hints replace the static help text in the status bar. The `ActionHint` model contains a `key` and `label` pair (e.g. `"C:stop"`). Hints are computed by `get_action_hints(app)` with this priority order:
 
 1. **Running task hints** — `C:stop` + `Z:pause` (or `Y:resume` when paused); detected via `app.has_active_task()` (checks all task state fields, not just `task_state.handle`)
-2. **Overlay-specific hints** — PolicyConfirm: `Enter:confirm Esc:cancel`, ConfirmPopup: `y:yes n:no`, CommandPalette: `Enter:run ↑↓:select Esc:close`, QuickSwitch: `Enter:go ↑↓:select Esc:close`, Search: `Enter:search Bksp:edit Esc:close`, Help: `Esc:close h/l:pane j/k:scroll`, HttpOptions: `h:close`
+2. **Overlay-specific hints** — PolicyConfirm: `Enter:confirm Esc:cancel`, ConfirmPopup: `y:yes n:no`, CommandPalette: `Enter:run ↑↓:select Esc:close`, QuickSwitch: `Enter:go ↑↓:select Esc:close`, Search: `Enter:search Bksp:edit Esc:close`, Help: `Esc:close j/k:scroll g/G:top/end`, HttpOptions: `h:close`
 3. **Insert-mode hints** — `Esc:normal Tab:next Enter:confirm`
 4. **Tab-specific normal-mode hints** — History: `↑↓:nav d:delete r:clear`, Dashboard: `Enter:open n/p:tabs`, default (with target): `Enter:run n/p:tabs /:search`, default (no target): `Enter:focus n/p:tabs /:search`
 5. **Settings section-aware hints** — The Settings tab adapts hints based on the current section:
@@ -289,6 +289,17 @@ Reusable UI primitives (7 files):
 | `empty_state_paragraph` | `empty_state.rs` | Empty state placeholder widget |
 **Note**: `draw_http_options_popup`, `draw_command_palette`, `draw_search_popup`, and `draw_quick_switch` are in `ui/popups.rs`, not in separate `components/` files. Previous component files (`palette.rs`, `search_popup.rs`, `http_options.rs`, `notifications.rs`, `help_bar.rs`) were removed as dead code.
 
+**InputGroup stale-focus guard**: `InputGroup` provides `valid_focused_index()` and `valid_focused_index_ref()` methods that return `Option<usize>` instead of raw `self.focused`. Always use these instead of direct `self.focused` indexing to protect against stale focus indices after fields are removed or the group is cleared. Pattern:
+```rust
+// WRONG - stale focus can panic
+let field = &mut self.fields[self.focused.unwrap()];
+
+// CORRECT - valid_focused_index guards against stale focus
+if let Some(idx) = self.valid_focused_index() {
+    let field = &mut self.fields[idx];
+}
+```
+
 ### Workers (`workers/`)
 
 Background async tasks communicate via channels:
@@ -344,13 +355,19 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Theme metadata tracking**: `ThemeManager` stores a `theme_info: FxHashMap<String, ThemeInfo>` alongside the theme data. `ThemeInfo` carries `id`, `display_name`, `mode` (Dark/Light), `source` (`ThemeSource::BuiltIn | Packaged | Custom`), and `status` (`ThemeLoadStatus::Loaded | FallbackAdjusted | Invalid(String) | Missing`). Source attribution is determined by checking if the file stem is in the packaged theme set (from the archive), not by counting installed themes — this correctly labels re-launched packaged themes as `Packaged` instead of `Custom`. `register_theme_with_source()` records metadata at registration time; `register_theme_invalid()` inserts metadata for themes that fail to load so Settings shows them with `Invalid` status. Contrast validation can set `FallbackAdjusted` or `Invalid` status. Query methods: `get_info(id)`, `theme_info_list()`, `get_all_info()`, `themes_with_status(status)`, `invalid_themes()`.
 
+**Selected vs Applied theme distinction**: `SettingsTab.applied_theme_id` tracks the theme that was active when the Settings tab was opened (the "applied" theme). The theme selector's current selection represents the "selected" theme, which may differ from the applied theme until the user saves. This distinction lets the preview show what the selected theme will look like while preserving the ability to revert on Escape.
+
+**ThemeManager.current_id() accessor**: `ThemeManager` exposes a `current_id()` method returning the canonical ID of the currently active theme. This is used by `SettingsTab` to initialize `applied_theme_id` and by session persistence to save/restore the selected theme.
+
 **Packaged themes**: 50 Halloy-format `.toml` files are compiled into the binary via LZMA compression. On startup, `load_and_install_themes()` decodes the blob, installs any missing themes to the user's config directory, and loads all `.toml` files from that directory. Theme loading runs in a background thread (`std::thread::spawn`); the receiver, join handle, deferred restore request, and `ThemeLoadReason` (Startup or ManualReload) live in `ThemeLoadState`. `App::update()` polls the channel, and the lifecycle helpers in `app/theme_runtime.rs` clean up the thread once the final report arrives or the loader disconnects. Manual reload (`ThemeLoadReason::ManualReload`) shows a "Loading themes..." notification immediately on dispatch, then success/no-op feedback when the loader completes. Startup loads (`ThemeLoadReason::Startup`) do not show a notification. Failures are logged as warnings and do not block the UI.
+
+**ThemeLoadOutcome**: The background theme loader returns a `ThemeLoadOutcome` that carries pre-adjustment contrast warnings captured during parsing. This allows `FallbackAdjusted` status to accurately reflect the contrast warnings that triggered the fallback, rather than re-validating after fallback (which would lose the original warnings). The `ThemeLoadOutcome` is consumed by `handle_theme_install_report()` to populate `SettingsTab.theme_contrast_cache` per theme.
 
 **Theme selection**: The Settings tab has a theme selector dropdown instead of `dark_mode` checkbox and `accent_color` selector. Selector values are canonical theme IDs, labels are human-readable display names, and `Ctrl+T` cycles all themes alphabetically (`list_theme_ids_owned()`), wrapping at the end. Session persistence saves and restores the selected theme name, with deferred retry for packaged themes that are not yet loaded when the session starts.
 
 **Theme reload** (Settings > Theme section): Normal-mode `r` in the Theme section (selector closed) emits `UiAction::ReloadThemes` directly, which calls `spawn_theme_loader_with_reason(ManualReload)`. This immediately shows a "Loading themes..." notification (via `ThemeLoadReason::ManualReload`) and spawns the background loader. The insert-mode `r` path via `pending_theme_reload` on `SettingsTab` still works for backward compatibility. The selector also shows a hint: `"Press [r] to reload themes   [Ctrl+T] to cycle"`.
 
-**Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying. The preview uses the selected theme's resolved colors (from `ThemeManager`), not the thread-local applied theme from `tc!()`, so it accurately reflects what the selected theme will look like before the user commits.
+**Theme preview row** (Settings > Theme section): The Settings theme section renders a preview row using semantic tokens (safe/danger/muted/info/warning/accent) so users can see the selected theme's palette before applying. The preview uses the selected theme's resolved colors (from `ThemeManager`), not the thread-local applied theme from `tc!()`, so it accurately reflects what the selected theme will look like before the user commits. The preview refreshes live as the selector moves — `update_settings_theme_selector()` resolves the newly selected theme's colors and stores them in `SettingsTab.resolved_theme_colors`, which the render path reads on each frame.
 
 **Settings layout split** (Settings tab render): The Settings content area is split into `body`, optional `status`, and `footer` rows before rendering any section content. `FormBuilder` renders into `body` only. The status message uses severity-aware styling (error/warning/success) and prevents overlap with form content. Layout tests validate at 80x24, 60x20 (small terminal), and status-collision edge cases.
 
@@ -476,7 +493,8 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `i` | Enter insert mode |
 | `Esc` | Return to normal mode / close overlay |
 | `q` | Quit (when no active task) |
-| `g/G` | Go to top/bottom |
+| `b/B` | Word backward in input fields |
+| `g/G` | Go to top/bottom (also `g` in help overlay scrolls to top, `G` to bottom) |
 | `n/N` | Next/prev tab |
 | `p` | Previous tab |
 | `e` | Export results |

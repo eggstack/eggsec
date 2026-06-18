@@ -508,9 +508,9 @@ pub fn get_help_text(app: &App, area: Rect) -> String {
 
     if app.overlay.show_help {
         return if is_narrow {
-            "[Esc] Close | [h/l] Pane Nav".to_string()
+            "[Esc] Close | [j/k] Scroll".to_string()
         } else {
-            "[Esc] Close Help | [h/l] Pane Navigation".to_string()
+            "[Esc] Close Help | [j/k] Scroll [g/G] Top/End".to_string()
         };
     }
 

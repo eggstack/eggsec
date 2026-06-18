@@ -97,8 +97,8 @@ fn search_hints() -> Vec<ActionHint> {
 fn help_hints() -> Vec<ActionHint> {
     vec![
         ActionHint { key: "Esc", label: "close" },
-        ActionHint { key: "h/l", label: "pane" },
         ActionHint { key: "j/k", label: "scroll" },
+        ActionHint { key: "g/G", label: "top/end" },
     ]
 }
 
@@ -313,10 +313,10 @@ mod tests {
         assert_eq!(hints.len(), 3);
         assert_eq!(hints[0].key, "Esc");
         assert_eq!(hints[0].label, "close");
-        assert_eq!(hints[1].key, "h/l");
-        assert_eq!(hints[1].label, "pane");
-        assert_eq!(hints[2].key, "j/k");
-        assert_eq!(hints[2].label, "scroll");
+        assert_eq!(hints[1].key, "j/k");
+        assert_eq!(hints[1].label, "scroll");
+        assert_eq!(hints[2].key, "g/G");
+        assert_eq!(hints[2].label, "top/end");
     }
 
     #[test]
@@ -448,5 +448,19 @@ mod tests {
         let hints = get_action_hints(&app);
         assert_eq!(hints[0].key, "C");
         assert_eq!(hints[0].label, "stop");
+    }
+
+    #[test]
+    fn help_overlay_hints_use_implemented_actions() {
+        let mut app = create_test_app();
+        app.overlay.show_help = true;
+        let hints = get_action_hints(&app);
+        assert_eq!(hints.len(), 3);
+        assert_eq!(hints[0].key, "Esc");
+        assert_eq!(hints[0].label, "close");
+        assert_eq!(hints[1].key, "j/k");
+        assert_eq!(hints[1].label, "scroll");
+        assert_eq!(hints[2].key, "g/G");
+        assert_eq!(hints[2].label, "top/end");
     }
 }

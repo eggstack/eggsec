@@ -50,6 +50,10 @@ pub struct SettingsTab {
     pub theme_contrast_cache: FxHashMap<String, Vec<String>>,
     /// Resolved colors for the currently selected theme (for preview rendering).
     pub resolved_theme_colors: Option<ThemeColors>,
+    /// ID of the currently applied (active) theme, set from ThemeManager.
+    pub applied_theme_id: Option<String>,
+    /// Flag set when theme selector moves; App layer checks and refreshes preview.
+    pub needs_theme_preview_refresh: bool,
     /// Pending theme reload requested by user (picked up by App layer).
     pub pending_theme_reload: bool,
 }
@@ -160,6 +164,8 @@ impl SettingsTab {
             theme_dir_path: String::new(),
             theme_contrast_cache: FxHashMap::default(),
             resolved_theme_colors: None,
+            applied_theme_id: None,
+            needs_theme_preview_refresh: false,
             pending_theme_reload: false,
         }
     }
@@ -1252,5 +1258,18 @@ mod tests {
             })
             .unwrap();
         // No panic = pass
+    }
+
+    #[test]
+    fn applied_theme_id_initially_none() {
+        let tab = SettingsTab::new();
+        assert!(tab.applied_theme_id.is_none());
+    }
+
+    #[test]
+    fn applied_theme_id_tracks_applied_theme() {
+        let mut tab = SettingsTab::new();
+        tab.applied_theme_id = Some("cyber-red".to_string());
+        assert_eq!(tab.applied_theme_id.as_deref(), Some("cyber-red"));
     }
 }

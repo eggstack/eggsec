@@ -49,6 +49,7 @@ pub struct ThemeManager {
     themes: FxHashMap<String, Theme>,
     theme_info: FxHashMap<String, ThemeInfo>,
     current: Theme,
+    current_id: String,
 }
 
 impl Default for ThemeManager {
@@ -87,6 +88,7 @@ impl ThemeManager {
             themes,
             theme_info,
             current: cyber_red_theme(),
+            current_id: "cyber-red".to_string(),
         }
     }
 
@@ -103,6 +105,7 @@ impl ThemeManager {
         let canonical = canonical_theme_id(name);
         if let Some(theme) = self.themes.get(canonical.as_str()) {
             self.current = theme.clone();
+            self.current_id = canonical;
             true
         } else {
             tracing::debug!(name = %canonical, "theme not found in manager");
@@ -205,6 +208,10 @@ impl ThemeManager {
 
     pub fn current_name(&self) -> &str {
         &self.current.name
+    }
+
+    pub fn current_id(&self) -> &str {
+        &self.current_id
     }
 
     /// Return metadata for a registered theme.
