@@ -1,5 +1,8 @@
 use crate::components::InputField;
-use crate::tabs::core::{field_as, field_str, render_results_area, start_scan, TabCore};
+use crate::tabs::core::{
+    evaluate_enter, execute_enter_action, field_as, field_str, handle_escape_simple,
+    render_results_area, start_scan, TabCore,
+};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_2area, tab_state_boilerplate, tc};
 use eggsec::scanner::fingerprint::FingerprintResults;
@@ -241,31 +244,28 @@ impl TabInput for FingerprintTab {
     );
 
     fn handle_enter(&mut self) {
-        if self.focus_area == FingerprintFocusArea::Results {
-            return;
-        }
-
-        if self.is_running() {
-            self.core.stop();
-        } else if self.core.inputs.is_focused() {
-            self.core.inputs.blur();
-        } else {
-            self.start();
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        let action = evaluate_enter(
+            self.focus_area,
+            FingerprintFocusArea::Inputs,
+            FingerprintFocusArea::Results,
+            running,
+            inputs_focused,
+        );
+        execute_enter_action(&mut self.core, action);
+        if matches!(action, crate::tabs::core::EnterAction::Start) {
+            self.results = None;
         }
     }
 
     fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        match self.focus_area {
-            FingerprintFocusArea::Inputs => self.core.inputs.blur(),
-            FingerprintFocusArea::Results => {
-                self.focus_area = FingerprintFocusArea::Inputs;
-                self.core.inputs.focus(0);
-            }
-        }
+        let new_area = handle_escape_simple(
+            &mut self.core,
+            self.focus_area,
+            FingerprintFocusArea::Inputs,
+        );
+        self.focus_area = new_area;
     }
 }
 

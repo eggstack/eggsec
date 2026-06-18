@@ -292,36 +292,32 @@ impl TabInput for ScanEndpointsTab {
     );
 
     fn handle_enter(&mut self) {
-        if self.focus_area == ScanEndpointsFocusArea::Results {
-            return;
-        }
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        if self.core.inputs.is_focused() {
-            self.core.inputs.blur();
-            return;
-        }
-        if self.focus_area == ScanEndpointsFocusArea::Options {
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        crate::tabs::core::handle_enter_3area(
+            &mut self.core,
+            self.focus_area,
+            ScanEndpointsFocusArea::Inputs,
+            ScanEndpointsFocusArea::Options,
+            ScanEndpointsFocusArea::Results,
+            running,
+            inputs_focused,
+            |_core| false,
+        );
+        if self.focus_area == ScanEndpointsFocusArea::Options && !self.is_running() {
             self.include_404_checkbox.checked = !self.include_404_checkbox.checked;
-            return;
         }
-        self.start();
     }
 
     fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        match self.focus_area {
-            ScanEndpointsFocusArea::Inputs => self.core.inputs.blur(),
-            ScanEndpointsFocusArea::Options | ScanEndpointsFocusArea::Results => {
-                self.focus_area = ScanEndpointsFocusArea::Inputs;
-                self.core.inputs.focus(0);
-            }
-        }
+        let new_area = crate::tabs::core::handle_escape_3area(
+            &mut self.core,
+            self.focus_area,
+            ScanEndpointsFocusArea::Inputs,
+            ScanEndpointsFocusArea::Options,
+            ScanEndpointsFocusArea::Results,
+        );
+        self.focus_area = new_area;
     }
 }
 

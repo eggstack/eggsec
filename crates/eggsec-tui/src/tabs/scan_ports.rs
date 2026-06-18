@@ -412,37 +412,32 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.focus_area == ScanPortsFocusArea::Results {
-            return;
-        }
-
-        if !self.is_running() && self.core.inputs.is_focused() {
-            self.core.inputs.blur();
-            return;
-        }
-        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Options {
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        crate::tabs::core::handle_enter_3area(
+            &mut self.core,
+            self.focus_area,
+            ScanPortsFocusArea::Inputs,
+            ScanPortsFocusArea::Options,
+            ScanPortsFocusArea::Results,
+            running,
+            inputs_focused,
+            |_core| false,
+        );
+        if self.focus_area == ScanPortsFocusArea::Options && !self.is_running() {
             self.udp_checkbox.checked = !self.udp_checkbox.checked;
-            return;
-        }
-        if self.is_running() {
-            self.core.stop();
-        } else {
-            self.start();
         }
     }
 
     fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        match self.focus_area {
-            ScanPortsFocusArea::Inputs => self.core.inputs.blur(),
-            ScanPortsFocusArea::Options | ScanPortsFocusArea::Results => {
-                self.focus_area = ScanPortsFocusArea::Inputs;
-                self.core.inputs.focus(0);
-            }
-        }
+        let new_area = crate::tabs::core::handle_escape_3area(
+            &mut self.core,
+            self.focus_area,
+            ScanPortsFocusArea::Inputs,
+            ScanPortsFocusArea::Options,
+            ScanPortsFocusArea::Results,
+        );
+        self.focus_area = new_area;
     }
 
     fn handle_left(&mut self) -> bool {

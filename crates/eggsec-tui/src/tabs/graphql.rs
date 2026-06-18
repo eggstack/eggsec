@@ -344,18 +344,19 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Results {
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Inputs && self.core.inputs.is_focused() {
-            self.core.inputs.blur();
-            return;
-        }
-        if self.focus_area == GraphQlFocusArea::Options {
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        crate::tabs::core::handle_enter_3area(
+            &mut self.core,
+            self.focus_area,
+            GraphQlFocusArea::Inputs,
+            GraphQlFocusArea::Options,
+            GraphQlFocusArea::Results,
+            running,
+            inputs_focused,
+            |_core| false,
+        );
+        if self.focus_area == GraphQlFocusArea::Options && !self.is_running() {
             let checkboxes = [
                 &mut self.introspection_checkbox,
                 &mut self.inject_checkbox,
@@ -364,18 +365,18 @@ impl TabInput for GraphQlTab {
             ];
             let idx = self.checkbox_focus_index % checkboxes.len();
             checkboxes[idx].toggle();
-            return;
         }
-        self.start();
     }
 
     fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        self.core.inputs.blur();
-        self.focus_area = GraphQlFocusArea::Inputs;
+        let new_area = crate::tabs::core::handle_escape_3area(
+            &mut self.core,
+            self.focus_area,
+            GraphQlFocusArea::Inputs,
+            GraphQlFocusArea::Options,
+            GraphQlFocusArea::Results,
+        );
+        self.focus_area = new_area;
         self.checkbox_focus_index = 0;
     }
 

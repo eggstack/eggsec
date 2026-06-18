@@ -566,52 +566,37 @@ impl TabInput for ReconTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.focus_area == ReconFocusArea::Results {
-            return;
-        }
-
-        if self.focus_area == ReconFocusArea::Inputs && self.core.inputs.is_focused() {
-            if self.is_running() {
-                self.core.stop();
-                return;
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        crate::tabs::core::handle_enter_3area(
+            &mut self.core,
+            self.focus_area,
+            ReconFocusArea::Inputs,
+            ReconFocusArea::Options,
+            ReconFocusArea::Results,
+            running,
+            inputs_focused,
+            |_core| false,
+        );
+        if self.focus_area == ReconFocusArea::Options && !self.is_running() {
+            if let Some(cb) = self
+                .option_checkboxes
+                .get_mut(self.focused_checkbox_index)
+            {
+                cb.toggle();
             }
-            self.core.inputs.blur();
-            return;
-        }
-
-        if self.focus_area == ReconFocusArea::Options {
-            if self.is_running() {
-                self.core.stop();
-            } else {
-                if let Some(cb) = self
-                    .option_checkboxes
-                    .get_mut(self.focused_checkbox_index)
-                {
-                    cb.toggle();
-                }
-            }
-            return;
-        }
-
-        if self.is_running() {
-            self.core.stop();
-        } else {
-            self.start();
         }
     }
 
     fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        match self.focus_area {
-            ReconFocusArea::Inputs => self.core.inputs.blur(),
-            ReconFocusArea::Options | ReconFocusArea::Results => {
-                self.focus_area = ReconFocusArea::Inputs;
-                self.core.inputs.focus(0);
-            }
-        }
+        let new_area = crate::tabs::core::handle_escape_3area(
+            &mut self.core,
+            self.focus_area,
+            ReconFocusArea::Inputs,
+            ReconFocusArea::Options,
+            ReconFocusArea::Results,
+        );
+        self.focus_area = new_area;
     }
 
     fn handle_up(&mut self) {
