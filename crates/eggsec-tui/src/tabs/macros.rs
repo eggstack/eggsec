@@ -250,6 +250,63 @@ macro_rules! tab_input_3area {
     };
 }
 
+/// Macro to generate `handle_escape` for 2-area tabs (Inputs/Results).
+///
+/// Generates a standard escape handler that:
+/// - Stops if running
+/// - Blurs inputs if in Inputs area
+/// - Focuses inputs if in Results area
+///
+/// Usage:
+/// ```ignore
+/// tab_escape_2area!(MyTab, core: core, focus: focus_area, Inputs: MyFocusArea::Inputs);
+/// ```
+#[macro_export]
+macro_rules! tab_escape_2area {
+    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr) => {
+        fn handle_escape(&mut self) {
+            self.$focus = $crate::tabs::core::handle_escape_simple(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+            );
+        }
+    };
+}
+
+/// Macro to generate `handle_escape` for 3-area tabs (Inputs/Options/Results).
+///
+/// Generates a standard escape handler that:
+/// - Stops if running
+/// - Blurs inputs if in Inputs area
+/// - Focuses inputs if in Options or Results area
+///
+/// Usage:
+/// ```ignore
+/// tab_escape_3area!(
+///     MyTab,
+///     core: core,
+///     focus: focus_area,
+///     Inputs: MyFocusArea::Inputs,
+///     Options: MyFocusArea::Options,
+///     Results: MyFocusArea::Results
+/// );
+/// ```
+#[macro_export]
+macro_rules! tab_escape_3area {
+    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr, Options: $options_variant:expr, Results: $results_variant:expr) => {
+        fn handle_escape(&mut self) {
+            self.$focus = $crate::tabs::core::handle_escape_3area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $options_variant,
+                $results_variant,
+            );
+        }
+    };
+}
+
 /// Macro for tabs with 2 focus areas (Inputs/Results).
 ///
 /// Generates all methods from `tab_input_boilerplate!` plus:

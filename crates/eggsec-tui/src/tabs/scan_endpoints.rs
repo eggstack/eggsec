@@ -2,7 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField};
 use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_3area, tab_state_boilerplate, tc};
+use crate::{tab_escape_3area, tab_input_3area, tab_state_boilerplate, tc};
 use eggsec::scanner::endpoints::EndpointScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -302,16 +302,7 @@ impl TabInput for ScanEndpointsTab {
         }
     }
 
-    fn handle_escape(&mut self) {
-        let new_area = crate::tabs::core::handle_escape_3area(
-            &mut self.core,
-            self.focus_area,
-            StandardFocusArea::Inputs,
-            StandardFocusArea::Options,
-            StandardFocusArea::Results,
-        );
-        self.focus_area = new_area;
-    }
+    tab_escape_3area!(ScanEndpointsTab, core: core, focus: focus_area, Inputs: StandardFocusArea::Inputs, Options: StandardFocusArea::Options, Results: StandardFocusArea::Results);
 }
 
 #[cfg(test)]

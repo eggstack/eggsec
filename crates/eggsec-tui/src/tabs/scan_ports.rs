@@ -4,7 +4,7 @@ use crate::tabs::core::{
     field_as, field_str, render_config_block, render_results_area, StandardFocusArea, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
+use crate::{tab_escape_3area, tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::scanner::ports::PortScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -411,16 +411,7 @@ impl TabInput for ScanPortsTab {
         }
     }
 
-    fn handle_escape(&mut self) {
-        let new_area = crate::tabs::core::handle_escape_3area(
-            &mut self.core,
-            self.focus_area,
-            StandardFocusArea::Inputs,
-            StandardFocusArea::Options,
-            StandardFocusArea::Results,
-        );
-        self.focus_area = new_area;
-    }
+    tab_escape_3area!(ScanPortsTab, core: core, focus: focus_area, Inputs: StandardFocusArea::Inputs, Options: StandardFocusArea::Options, Results: StandardFocusArea::Results);
 
     fn handle_left(&mut self) -> bool {
         if self.is_running() {

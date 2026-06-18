@@ -1,74 +1,45 @@
-use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText,
-};
-use crate::tabs::core::render_config_block;
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::components::InputField;
+use crate::tabs::core::{render_config_block, render_results_area, StandardFocusArea2, TabCore};
+use crate::tabs::{TabInput, TabRender, TabState};
+use crate::{tab_escape_2area, tab_input_boilerplate, tab_state_boilerplate};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
-    widgets::Paragraph,
     Frame,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum WafStressFocusArea {
-    Inputs,
-    Results,
-}
-
 pub struct WafStressTab {
-    pub inputs: InputGroup,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
-    pub focus_area: WafStressFocusArea,
-    pub error: Option<TabError>,
+    pub core: TabCore,
+    pub focus_area: StandardFocusArea2,
 }
 
 impl WafStressTab {
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
+        let inputs = crate::components::InputGroup::new()
             .add(InputField::new("Target URL"))
             .add(InputField::new("Concurrency").with_value("20"))
             .add(InputField::new("Timeout (s)").with_value("10"));
 
         Self {
-            inputs,
-            progress: ProgressGauge::new("WAF Stress Testing..."),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
-            focus_area: WafStressFocusArea::Inputs,
-            error: None,
+            core: TabCore::new("WAF Stress Testing...", "Results").with_inputs(inputs),
+            focus_area: StandardFocusArea2::Inputs,
         }
     }
 
     pub fn get_results(&self) -> Option<String> {
-        if self.results_view.is_empty() {
+        if self.core.results_view.is_empty() {
             None
         } else {
-            Some(
-                self.results_view
-                    .lines
-                    .iter()
-                    .map(|l| l.to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            )
+            Some(self.core.results_view.get_content())
         }
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn concurrency(&self) -> usize {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .and_then(|f| f.value.parse().ok())
@@ -76,38 +47,16 @@ impl WafStressTab {
     }
 
     pub fn timeout(&self) -> u64 {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(2)
             .and_then(|f| f.value.parse().ok())
             .unwrap_or(10)
     }
 
-    pub fn start(&mut self) {
-        if !self.target().is_empty() {
-            self.state = AppState::Running;
-            self.progress.current = 0;
-            self.progress.total = 0;
-            self.error = None;
-            self.results_view.clear();
-        }
-    }
-
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
     pub fn update_progress(&mut self, completed: u64, total: u64) {
-        self.progress.current = completed;
-        self.progress.total = total;
-    }
-
-    pub fn scroll_results_up(&mut self) {
-        self.results_view.scroll_up(1);
-    }
-
-    pub fn scroll_results_down(&mut self) {
-        self.results_view.scroll_down(1);
+        self.core.update_progress(completed, total);
     }
 }
 
@@ -118,39 +67,19 @@ impl Default for WafStressTab {
 }
 
 impl TabState for WafStressTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
-    }
-
-    fn progress(&self) -> f64 {
-        self.progress.percent() as f64
-    }
+    tab_state_boilerplate!(WafStressTab, core: core);
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.progress.current = 0;
-        self.progress.total = 0;
-        self.results_view.clear();
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
-        if let Some(field) = self.inputs.fields.get_mut(1) {
+        self.core.reset_all();
+        if let Some(field) = self.core.inputs.fields.get_mut(1) {
             field.value = "20".to_string();
             field.cursor_pos = 2;
         }
-        if let Some(field) = self.inputs.fields.get_mut(2) {
+        if let Some(field) = self.core.inputs.fields.get_mut(2) {
             field.value = "10".to_string();
             field.cursor_pos = 2;
         }
-        self.focus_area = WafStressFocusArea::Inputs;
-        self.inputs.blur();
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
-        self.progress.current = 0;
+        self.focus_area = StandardFocusArea2::Inputs;
     }
 }
 
@@ -174,7 +103,7 @@ impl TabRender for WafStressTab {
             f,
             input_area,
             "WAF Stress Configuration",
-            self.focus_area == WafStressFocusArea::Inputs,
+            self.focus_area == StandardFocusArea2::Inputs,
         );
 
         let input_chunks = Layout::default()
@@ -187,7 +116,7 @@ impl TabRender for WafStressTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
+        for (i, field) in self.core.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
                 field.render(f, *chunk, insert_mode);
             }
@@ -197,172 +126,95 @@ impl TabRender for WafStressTab {
             f,
             results_area,
             "Results",
-            self.focus_area == WafStressFocusArea::Results,
+            self.focus_area == StandardFocusArea2::Results,
         );
 
-        if self.state == AppState::Running {
-            self.progress.render(f, results_inner);
-        } else if let Some(ref err) = self.error {
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_inner);
-        } else if !self.results_view.is_empty() {
-            self.results_view
-                .render(f, results_inner, Some(tc!(success)));
-        } else {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_inner);
-        }
+        render_results_area(
+            f,
+            results_inner,
+            &self.core.state,
+            &self.core.error,
+            &self.core.results_view,
+            &self.core.progress,
+            "Results",
+            "Results will appear here after running",
+        );
     }
 }
 
 impl TabInput for WafStressTab {
+    tab_input_boilerplate!(
+        WafStressTab,
+        core: core,
+        focus: focus_area,
+        Inputs: StandardFocusArea2::Inputs,
+        Results: StandardFocusArea2::Results
+    );
+    tab_escape_2area!(WafStressTab, core: core, focus: focus_area, Inputs: StandardFocusArea2::Inputs);
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            WafStressFocusArea::Inputs => {
-                self.inputs.blur();
-                WafStressFocusArea::Results
-            }
-            WafStressFocusArea::Results => {
-                self.inputs.focus(0);
-                WafStressFocusArea::Inputs
-            }
-        };
+        self.focus_area = crate::tabs::core::focus_next_2area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea2::Inputs,
+            StandardFocusArea2::Results,
+        );
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            WafStressFocusArea::Inputs => {
-                self.inputs.blur();
-                WafStressFocusArea::Results
-            }
-            WafStressFocusArea::Results => {
-                self.inputs.focus(0);
-                WafStressFocusArea::Inputs
-            }
-        };
+        self.focus_area = crate::tabs::core::focus_prev_2area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea2::Inputs,
+            StandardFocusArea2::Results,
+        );
     }
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.insert(c);
-        }
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea2::Inputs;
+        crate::tabs::core::tab_input_char(&mut self.core, c, running, inputs);
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.backspace();
-        }
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea2::Inputs;
+        crate::tabs::core::tab_input_backspace(&mut self.core, running, inputs);
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else if self.focus_area == WafStressFocusArea::Results {
-            Some(self.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == WafStressFocusArea::Inputs {
-                self.inputs.move_word_forward();
-            }
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == WafStressFocusArea::Inputs {
-                self.inputs.move_word_backward();
-            }
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == WafStressFocusArea::Inputs {
-                self.inputs.move_home();
-            } else if self.focus_area == WafStressFocusArea::Results {
-                self.results_view.scroll_to_top();
-            }
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == WafStressFocusArea::Inputs {
-                self.inputs.move_end();
-            } else if self.focus_area == WafStressFocusArea::Results {
-                self.results_view.scroll_to_bottom();
-            }
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if !self.is_running() {
-            self.focus_area = WafStressFocusArea::Inputs;
-            self.inputs.focus(0);
-        }
-    }
-
-    fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.inputs.blur();
-            self.focus_area = WafStressFocusArea::Results;
-        }
+        let running = self.is_running();
+        let inputs = self.focus_area == StandardFocusArea2::Inputs;
+        crate::tabs::core::tab_input_paste(&mut self.core, text, running, inputs);
     }
 
     fn handle_enter(&mut self) {
-        if self.focus_area == WafStressFocusArea::Results {
-            return;
-        }
-
-        if self.is_running() {
-            self.stop();
-            return;
-        }
-        if self.inputs.is_focused() {
-            self.inputs.blur();
-        } else {
-            self.start();
-        }
-    }
-
-    fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.stop();
-            return;
-        }
-        self.inputs.blur();
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        crate::tabs::core::handle_enter_2area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea2::Inputs,
+            StandardFocusArea2::Results,
+            running,
+            inputs_focused,
+        );
     }
 
     fn handle_up(&mut self) {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WafStressFocusArea::Results {
-            self.scroll_results_up();
-        } else if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.focus_prev();
+        if self.focus_area == StandardFocusArea2::Results {
+            self.core.scroll_results_up();
+        } else if self.focus_area == StandardFocusArea2::Inputs {
+            self.core.inputs.focus_prev();
         }
     }
 
@@ -370,10 +222,10 @@ impl TabInput for WafStressTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WafStressFocusArea::Results {
-            self.scroll_results_down();
-        } else if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.focus_next();
+        if self.focus_area == StandardFocusArea2::Results {
+            self.core.scroll_results_down();
+        } else if self.focus_area == StandardFocusArea2::Inputs {
+            self.core.inputs.focus_next();
         }
     }
 
@@ -381,10 +233,10 @@ impl TabInput for WafStressTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.move_left()
+        if self.focus_area == StandardFocusArea2::Inputs {
+            self.core.inputs.move_left()
         } else {
-            self.results_view.scroll_left(5);
+            self.core.results_view.scroll_left(5);
             true
         }
     }
@@ -393,49 +245,31 @@ impl TabInput for WafStressTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.move_right()
+        if self.focus_area == StandardFocusArea2::Inputs {
+            self.core.inputs.move_right()
         } else {
-            self.results_view.scroll_right(5);
+            self.core.results_view.scroll_right(5);
             true
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == WafStressFocusArea::Inputs && self.inputs.is_focused()
+        self.focus_area == StandardFocusArea2::Inputs && self.core.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.is_at_left_edge()
+        if self.focus_area == StandardFocusArea2::Inputs {
+            self.core.inputs.is_at_left_edge()
         } else {
-            self.results_view.is_at_left_edge()
+            self.core.results_view.is_at_left_edge()
         }
     }
 
     fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == WafStressFocusArea::Inputs {
-            self.inputs.is_at_right_edge()
+        if self.focus_area == StandardFocusArea2::Inputs {
+            self.core.inputs.is_at_right_edge()
         } else {
-            self.results_view.is_at_right_edge()
+            self.core.results_view.is_at_right_edge()
         }
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_down(page_size);
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
     }
 }
