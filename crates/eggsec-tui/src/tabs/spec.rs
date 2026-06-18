@@ -302,40 +302,6 @@ pub static TAB_SPECS: &[TabSpec] = &[
         has_settings: true,
     },
     TabSpec {
-        tab: Tab::Auth,
-        stable_id: "auth",
-        title: "Auth Test",
-        cli_command: "eggsec auth-test",
-        description: "Authentication control validation (brute-force, lockout, MFA, rate-limit, timing, credential stuffing — defense-lab only)",
-        category: TabCategory::Assessment,
-        risk_group: TabRiskGroup::Intrusive,
-        feature: None,
-        breadcrumb_label: "Auth / Credential Validation",
-        operation: Some("auth-test"),
-        direct_launch: true,
-        supports_run: true,
-        supports_export: false,
-        supports_help: true,
-        has_settings: true,
-    },
-    TabSpec {
-        tab: Tab::C2,
-        stable_id: "c2",
-        title: "C2",
-        cli_command: "eggsec c2",
-        description: "C2 campaign simulation (beacons, tasking, OPSEC, attack graph — defense-lab only)",
-        category: TabCategory::Assessment,
-        risk_group: TabRiskGroup::Intrusive,
-        feature: Some("c2"),
-        breadcrumb_label: "C2 Campaign",
-        operation: Some("c2"),
-        direct_launch: true,
-        supports_run: true,
-        supports_export: false,
-        supports_help: true,
-        has_settings: true,
-    },
-    TabSpec {
         tab: Tab::Cluster,
         stable_id: "cluster",
         title: "Cluster",
@@ -591,6 +557,23 @@ pub static TAB_SPECS: &[TabSpec] = &[
         has_settings: true,
     },
     TabSpec {
+        tab: Tab::Auth,
+        stable_id: "auth",
+        title: "Auth Test",
+        cli_command: "eggsec auth-test",
+        description: "Authentication control validation (brute-force, lockout, MFA, rate-limit, timing, credential stuffing — defense-lab only)",
+        category: TabCategory::Assessment,
+        risk_group: TabRiskGroup::Intrusive,
+        feature: None,
+        breadcrumb_label: "Auth / Credential Validation",
+        operation: Some("auth-test"),
+        direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
+    },
+    TabSpec {
         tab: Tab::DbPentest,
         stable_id: "db_pentest",
         title: "Db Pentest",
@@ -618,6 +601,23 @@ pub static TAB_SPECS: &[TabSpec] = &[
         feature: Some("web-proxy"),
         breadcrumb_label: "Web Proxy / Intercept",
         operation: Some("proxy-intercept"),
+        direct_launch: true,
+        supports_run: true,
+        supports_export: false,
+        supports_help: true,
+        has_settings: true,
+    },
+    TabSpec {
+        tab: Tab::C2,
+        stable_id: "c2",
+        title: "C2",
+        cli_command: "eggsec c2",
+        description: "C2 campaign simulation (beacons, tasking, OPSEC, attack graph — defense-lab only)",
+        category: TabCategory::Assessment,
+        risk_group: TabRiskGroup::Intrusive,
+        feature: Some("c2"),
+        breadcrumb_label: "C2 Campaign",
+        operation: Some("c2"),
         direct_launch: true,
         supports_run: true,
         supports_export: false,
@@ -674,6 +674,17 @@ impl Tab {
     }
 }
 
+/// Conditionally pushes items onto a `Vec`, gated by `#[cfg]` attributes.
+/// Each entry is wrapped in `{ }` to avoid parser ambiguity.
+macro_rules! cfg_push {
+    ( $vec:expr, [ $( $(#[$cfg:meta])* { $item:expr } ),* $(,)? ] ) => {{
+        $(
+            $(#[$cfg])*
+            { $vec.push($item); }
+        )*
+    }};
+}
+
 #[allow(dead_code)] // used in mod.rs tests; kept for forward compat
 pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
     let specs = vec![
@@ -699,78 +710,20 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
         spec_for(Tab::Dashboard).unwrap(),
         spec_for(Tab::Auth).unwrap(),
     ];
-    #[cfg(feature = "advanced-hunting")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Hunt).unwrap());
-        t
-    };
-    #[cfg(feature = "compliance")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Compliance).unwrap());
-        t
-    };
-    #[cfg(feature = "database")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Storage).unwrap());
-        t
-    };
-    #[cfg(feature = "external-integrations")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Integrations).unwrap());
-        t
-    };
-    #[cfg(feature = "finding-workflow")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Workflow).unwrap());
-        t
-    };
-    #[cfg(feature = "vuln-management")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Vuln).unwrap());
-        t
-    };
-    #[cfg(feature = "nse")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Nse).unwrap());
-        t
-    };
-    #[cfg(feature = "headless-browser")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Browser).unwrap());
-        t
-    };
-    #[cfg(feature = "wireless")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Wireless).unwrap());
-        t
-    };
-    #[cfg(feature = "db-pentest")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::DbPentest).unwrap());
-        t
-    };
-    #[cfg(feature = "c2")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::C2).unwrap());
-        t
-    };
-    #[cfg(feature = "web-proxy")]
-    let specs = {
-        let mut t = specs;
-        t.push(spec_for(Tab::Intercept).unwrap());
-        t
-    };
+    cfg_push!(specs, [
+        #[cfg(feature = "advanced-hunting")]     { spec_for(Tab::Hunt).unwrap() },
+        #[cfg(feature = "compliance")]           { spec_for(Tab::Compliance).unwrap() },
+        #[cfg(feature = "database")]             { spec_for(Tab::Storage).unwrap() },
+        #[cfg(feature = "external-integrations")] { spec_for(Tab::Integrations).unwrap() },
+        #[cfg(feature = "finding-workflow")]     { spec_for(Tab::Workflow).unwrap() },
+        #[cfg(feature = "vuln-management")]      { spec_for(Tab::Vuln).unwrap() },
+        #[cfg(feature = "nse")]                  { spec_for(Tab::Nse).unwrap() },
+        #[cfg(feature = "headless-browser")]     { spec_for(Tab::Browser).unwrap() },
+        #[cfg(feature = "wireless")]             { spec_for(Tab::Wireless).unwrap() },
+        #[cfg(feature = "db-pentest")]           { spec_for(Tab::DbPentest).unwrap() },
+        #[cfg(feature = "c2")]                   { spec_for(Tab::C2).unwrap() },
+        #[cfg(feature = "web-proxy")]            { spec_for(Tab::Intercept).unwrap() },
+    ]);
     specs
 }
 

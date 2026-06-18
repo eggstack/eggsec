@@ -109,6 +109,33 @@ use ratatui::{layout::Rect, Frame};
 
 use crate::app::tab_error::TabError;
 
+/// Builds a `Vec<Tab>` from a base list plus conditionally compiled gated entries.
+///
+/// Usage:
+/// ```ignore
+/// cfg_push_tabs! {
+///     base: [Tab::Recon, Tab::Load],
+///     gated: [
+///         #[cfg(feature = "wireless")] Tab::Wireless,
+///         #[cfg(feature = "c2")]       Tab::C2,
+///     ]
+/// }
+/// ```
+macro_rules! cfg_push_tabs {
+    ( base: [ $($base_tab:path),* $(,)? ], gated: [ $( $(#[$cfg:meta])? $tab:path ),* $(,)? ] ) => {{
+        let tabs = vec![ $($base_tab),* ];
+        $(
+            $(#[$cfg])?
+            let tabs = {
+                let mut t = tabs;
+                t.push($tab);
+                t
+            };
+        )*
+        tabs
+    }};
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tab {
     Recon = 0,
@@ -162,102 +189,30 @@ impl Tab {
     pub fn all() -> &'static [Tab] {
         use std::sync::LazyLock;
         static TABS: LazyLock<Vec<Tab>> = LazyLock::new(|| {
-            let tabs = vec![
-                Tab::Recon,
-                Tab::Load,
-                Tab::ScanPorts,
-                Tab::ScanEndpoints,
-                Tab::Fingerprint,
-                Tab::Fuzz,
-                Tab::Waf,
-                Tab::WafStress,
-                Tab::Scan,
-                Tab::Resume,
-                Tab::Proxy,
-                Tab::Packet,
-                Tab::GraphQl,
-                Tab::OAuth,
-                Tab::Cluster,
-                Tab::Stress,
-                Tab::Report,
-                Tab::Settings,
-                Tab::History,
-                Tab::Dashboard,
-                Tab::Auth,
-            ];
-            #[cfg(feature = "advanced-hunting")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Hunt);
-                t
-            };
-            #[cfg(feature = "compliance")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Compliance);
-                t
-            };
-            #[cfg(feature = "database")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Storage);
-                t
-            };
-            #[cfg(feature = "external-integrations")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Integrations);
-                t
-            };
-            #[cfg(feature = "finding-workflow")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Workflow);
-                t
-            };
-            #[cfg(feature = "vuln-management")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Vuln);
-                t
-            };
-            #[cfg(feature = "nse")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Nse);
-                t
-            };
-            #[cfg(feature = "headless-browser")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Browser);
-                t
-            };
-            #[cfg(feature = "wireless")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Wireless);
-                t
-            };
-            #[cfg(feature = "db-pentest")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::DbPentest);
-                t
-            };
-            #[cfg(feature = "c2")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::C2);
-                t
-            };
-            #[cfg(feature = "web-proxy")]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Intercept);
-                t
-            };
-            tabs
+            cfg_push_tabs! {
+                base: [
+                    Tab::Recon, Tab::Load, Tab::ScanPorts, Tab::ScanEndpoints,
+                    Tab::Fingerprint, Tab::Fuzz, Tab::Waf, Tab::WafStress,
+                    Tab::Scan, Tab::Resume, Tab::Proxy, Tab::Packet,
+                    Tab::GraphQl, Tab::OAuth, Tab::Cluster, Tab::Stress,
+                    Tab::Report, Tab::Settings, Tab::History, Tab::Dashboard,
+                    Tab::Auth,
+                ],
+                gated: [
+                    #[cfg(feature = "advanced-hunting")]     Tab::Hunt,
+                    #[cfg(feature = "compliance")]           Tab::Compliance,
+                    #[cfg(feature = "database")]             Tab::Storage,
+                    #[cfg(feature = "external-integrations")] Tab::Integrations,
+                    #[cfg(feature = "finding-workflow")]     Tab::Workflow,
+                    #[cfg(feature = "vuln-management")]      Tab::Vuln,
+                    #[cfg(feature = "nse")]                  Tab::Nse,
+                    #[cfg(feature = "headless-browser")]     Tab::Browser,
+                    #[cfg(feature = "wireless")]             Tab::Wireless,
+                    #[cfg(feature = "db-pentest")]           Tab::DbPentest,
+                    #[cfg(feature = "c2")]                   Tab::C2,
+                    #[cfg(feature = "web-proxy")]            Tab::Intercept,
+                ]
+            }
         });
         &TABS
     }
@@ -275,42 +230,7 @@ impl Tab {
     }
 
     pub fn from_discriminant(discriminant: usize) -> Option<Tab> {
-        match discriminant {
-            0 => Some(Tab::Recon),
-            1 => Some(Tab::Load),
-            2 => Some(Tab::ScanPorts),
-            3 => Some(Tab::ScanEndpoints),
-            4 => Some(Tab::Fingerprint),
-            5 => Some(Tab::Fuzz),
-            6 => Some(Tab::Waf),
-            7 => Some(Tab::WafStress),
-            8 => Some(Tab::Scan),
-            9 => Some(Tab::Resume),
-            10 => Some(Tab::Proxy),
-            11 => Some(Tab::Packet),
-            12 => Some(Tab::GraphQl),
-            13 => Some(Tab::OAuth),
-            14 => Some(Tab::Cluster),
-            15 => Some(Tab::Stress),
-            16 => Some(Tab::Report),
-            17 => Some(Tab::Nse),
-            18 => Some(Tab::Settings),
-            19 => Some(Tab::History),
-            20 => Some(Tab::Dashboard),
-            21 => Some(Tab::Hunt),
-            22 => Some(Tab::Browser),
-            23 => Some(Tab::Compliance),
-            24 => Some(Tab::Storage),
-            25 => Some(Tab::Integrations),
-            26 => Some(Tab::Workflow),
-            27 => Some(Tab::Vuln),
-            28 => Some(Tab::Wireless),
-            29 => Some(Tab::Auth),
-            30 => Some(Tab::DbPentest),
-            31 => Some(Tab::Intercept),
-            32 => Some(Tab::C2),
-            _ => None,
-        }
+        tab_specs().get(discriminant).map(|s| s.tab)
     }
 
     pub fn stable_id(&self) -> &'static str {
@@ -473,309 +393,98 @@ impl TabWindow {
     }
 }
 
-impl Tab {
-    pub fn as_tab_state<'a>(&self, app: &'a super::App) -> &'a dyn TabState {
-        match self {
-            Tab::Recon => &app.tabs.recon,
-            Tab::Load => &app.tabs.load,
-            Tab::ScanPorts => &app.tabs.scan_ports,
-            Tab::ScanEndpoints => &app.tabs.scan_endpoints,
-            Tab::Fingerprint => &app.tabs.fingerprint,
-            Tab::Fuzz => &app.tabs.fuzz,
-            Tab::Waf => &app.tabs.waf,
-            Tab::WafStress => &app.tabs.waf_stress,
-            Tab::Scan => &app.tabs.scan,
-            Tab::Resume => &app.tabs.resume,
-            Tab::Proxy => &app.tabs.proxy,
-            Tab::Packet => &app.tabs.packet,
-            Tab::GraphQl => &app.tabs.graphql,
-            Tab::OAuth => &app.tabs.oauth,
-            Tab::Cluster => &app.tabs.cluster,
-            Tab::Stress => &app.tabs.stress,
-            Tab::Report => &app.tabs.report,
-            #[cfg(feature = "nse")]
-            Tab::Nse => &app.tabs.nse,
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => &app.tabs.dashboard,
-            Tab::Settings => &app.tabs.settings,
-            Tab::History => &app.tabs.dashboard,
-            Tab::Dashboard => &app.tabs.dashboard,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => &app.tabs.hunt,
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => &app.tabs.dashboard,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => &app.tabs.browser,
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => &app.tabs.dashboard,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => &app.tabs.compliance,
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => &app.tabs.dashboard,
-            #[cfg(feature = "database")]
-            Tab::Storage => &app.tabs.storage,
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => &app.tabs.dashboard,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => &app.tabs.integrations,
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => &app.tabs.dashboard,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => &app.tabs.workflow,
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => &app.tabs.dashboard,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => &app.tabs.vuln,
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => &app.tabs.dashboard,
-            #[cfg(feature = "wireless")]
-            Tab::Wireless => &app.tabs.wireless,
-            #[cfg(not(feature = "wireless"))]
-            Tab::Wireless => &app.tabs.dashboard,
-            Tab::Auth => &app.tabs.auth,
-            #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => &app.tabs.db_pentest,
-            #[cfg(not(feature = "db-pentest"))]
-            Tab::DbPentest => &app.tabs.dashboard,
-            #[cfg(feature = "web-proxy")]
-            Tab::Intercept => &app.tabs.intercept,
-            #[cfg(not(feature = "web-proxy"))]
-            Tab::Intercept => &app.tabs.dashboard,
-            #[cfg(feature = "c2")]
-            Tab::C2 => &app.tabs.c2,
-            #[cfg(not(feature = "c2"))]
-            Tab::C2 => &app.tabs.dashboard,
-        }
-    }
+/// Generates the four Tab dispatch methods (`as_tab_state`, `as_tab_state_mut`,
+/// `as_tab_render`, `as_tab_input`) from a single tab-list declaration.
+///
+/// Each tab entry is `Tab::Variant => field_name`, optionally preceded by
+/// `#[cfg(...)]`. Feature-gated tabs use `#[cfg(feature = "...")]` on the
+/// positive arm and fall back to `dashboard` in the `#[cfg(not(...))]` arm.
+///
+/// Adding a new tab requires exactly one new entry here (plus the `Tab` enum
+/// variant, `TabSpec` in `spec.rs`, and `TabStore` field).
+macro_rules! tab_dispatch {
+    ( $( $(#[$cfg:meta])? $variant:path => $field:ident ),* $(,)? ) => {
+        impl Tab {
+            pub fn as_tab_state<'a>(&self, app: &'a super::App) -> &'a dyn TabState {
+                match self {
+                    $( $(#[$cfg])? $variant => &app.tabs.$field, )*
+                }
+            }
 
-    pub fn default_breadcrumb(&self) -> Vec<&'static str> {
-        let label = spec_for(*self)
-            .map(|s| s.breadcrumb_label)
-            .unwrap_or("Unknown");
-        vec![label]
-    }
+            pub fn default_breadcrumb(&self) -> Vec<&'static str> {
+                let label = spec_for(*self)
+                    .map(|s| s.breadcrumb_label)
+                    .unwrap_or("Unknown");
+                vec![label]
+            }
 
-    pub fn as_tab_state_mut<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabState {
-        match self {
-            Tab::Recon => &mut app.tabs.recon,
-            Tab::Load => &mut app.tabs.load,
-            Tab::ScanPorts => &mut app.tabs.scan_ports,
-            Tab::ScanEndpoints => &mut app.tabs.scan_endpoints,
-            Tab::Fingerprint => &mut app.tabs.fingerprint,
-            Tab::Fuzz => &mut app.tabs.fuzz,
-            Tab::Waf => &mut app.tabs.waf,
-            Tab::WafStress => &mut app.tabs.waf_stress,
-            Tab::Scan => &mut app.tabs.scan,
-            Tab::Resume => &mut app.tabs.resume,
-            Tab::Proxy => &mut app.tabs.proxy,
-            Tab::Packet => &mut app.tabs.packet,
-            Tab::GraphQl => &mut app.tabs.graphql,
-            Tab::OAuth => &mut app.tabs.oauth,
-            Tab::Cluster => &mut app.tabs.cluster,
-            Tab::Stress => &mut app.tabs.stress,
-            Tab::Report => &mut app.tabs.report,
-            #[cfg(feature = "nse")]
-            Tab::Nse => &mut app.tabs.nse,
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => &mut app.tabs.dashboard,
-            Tab::Settings => &mut app.tabs.settings,
-            Tab::History => &mut app.tabs.dashboard,
-            Tab::Dashboard => &mut app.tabs.dashboard,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => &mut app.tabs.hunt,
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => &mut app.tabs.dashboard,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => &mut app.tabs.browser,
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => &mut app.tabs.dashboard,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => &mut app.tabs.compliance,
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => &mut app.tabs.dashboard,
-            #[cfg(feature = "database")]
-            Tab::Storage => &mut app.tabs.storage,
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => &mut app.tabs.dashboard,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => &mut app.tabs.integrations,
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => &mut app.tabs.dashboard,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => &mut app.tabs.workflow,
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => &mut app.tabs.dashboard,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => &mut app.tabs.vuln,
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => &mut app.tabs.dashboard,
-            #[cfg(feature = "wireless")]
-            Tab::Wireless => &mut app.tabs.wireless,
-            #[cfg(not(feature = "wireless"))]
-            Tab::Wireless => &mut app.tabs.dashboard,
-            Tab::Auth => &mut app.tabs.auth,
-            #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => &mut app.tabs.db_pentest,
-            #[cfg(not(feature = "db-pentest"))]
-            Tab::DbPentest => &mut app.tabs.dashboard,
-            #[cfg(feature = "web-proxy")]
-            Tab::Intercept => &mut app.tabs.intercept,
-            #[cfg(not(feature = "web-proxy"))]
-            Tab::Intercept => &mut app.tabs.dashboard,
-            #[cfg(feature = "c2")]
-            Tab::C2 => &mut app.tabs.c2,
-            #[cfg(not(feature = "c2"))]
-            Tab::C2 => &mut app.tabs.dashboard,
-        }
-    }
+            pub fn as_tab_state_mut<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabState {
+                match self {
+                    $( $(#[$cfg])? $variant => &mut app.tabs.$field, )*
+                }
+            }
 
-    pub fn as_tab_render<'a>(&self, app: &'a super::App) -> &'a dyn TabRender {
-        match self {
-            Tab::Recon => &app.tabs.recon,
-            Tab::Load => &app.tabs.load,
-            Tab::ScanPorts => &app.tabs.scan_ports,
-            Tab::ScanEndpoints => &app.tabs.scan_endpoints,
-            Tab::Fingerprint => &app.tabs.fingerprint,
-            Tab::Fuzz => &app.tabs.fuzz,
-            Tab::Waf => &app.tabs.waf,
-            Tab::WafStress => &app.tabs.waf_stress,
-            Tab::Scan => &app.tabs.scan,
-            Tab::Resume => &app.tabs.resume,
-            Tab::Proxy => &app.tabs.proxy,
-            Tab::Packet => &app.tabs.packet,
-            Tab::GraphQl => &app.tabs.graphql,
-            Tab::OAuth => &app.tabs.oauth,
-            Tab::Cluster => &app.tabs.cluster,
-            Tab::Stress => &app.tabs.stress,
-            Tab::Report => &app.tabs.report,
-            #[cfg(feature = "nse")]
-            Tab::Nse => &app.tabs.nse,
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => &app.tabs.dashboard,
-            Tab::Settings => &app.tabs.settings,
-            Tab::History => &app.tabs.dashboard,
-            Tab::Dashboard => &app.tabs.dashboard,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => &app.tabs.hunt,
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => &app.tabs.dashboard,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => &app.tabs.browser,
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => &app.tabs.dashboard,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => &app.tabs.compliance,
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => &app.tabs.dashboard,
-            #[cfg(feature = "database")]
-            Tab::Storage => &app.tabs.storage,
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => &app.tabs.dashboard,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => &app.tabs.integrations,
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => &app.tabs.dashboard,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => &app.tabs.workflow,
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => &app.tabs.dashboard,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => &app.tabs.vuln,
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => &app.tabs.dashboard,
-            #[cfg(feature = "wireless")]
-            Tab::Wireless => &app.tabs.wireless,
-            #[cfg(not(feature = "wireless"))]
-            Tab::Wireless => &app.tabs.dashboard,
-            Tab::Auth => &app.tabs.auth,
-            #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => &app.tabs.db_pentest,
-            #[cfg(not(feature = "db-pentest"))]
-            Tab::DbPentest => &app.tabs.dashboard,
-            #[cfg(feature = "web-proxy")]
-            Tab::Intercept => &app.tabs.intercept,
-            #[cfg(not(feature = "web-proxy"))]
-            Tab::Intercept => &app.tabs.dashboard,
-            #[cfg(feature = "c2")]
-            Tab::C2 => &app.tabs.c2,
-            #[cfg(not(feature = "c2"))]
-            Tab::C2 => &app.tabs.dashboard,
-        }
-    }
+            pub fn as_tab_render<'a>(&self, app: &'a super::App) -> &'a dyn TabRender {
+                match self {
+                    $( $(#[$cfg])? $variant => &app.tabs.$field, )*
+                }
+            }
 
-    pub fn as_tab_input<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabInput {
-        match self {
-            Tab::Recon => &mut app.tabs.recon,
-            Tab::Load => &mut app.tabs.load,
-            Tab::ScanPorts => &mut app.tabs.scan_ports,
-            Tab::ScanEndpoints => &mut app.tabs.scan_endpoints,
-            Tab::Fingerprint => &mut app.tabs.fingerprint,
-            Tab::Fuzz => &mut app.tabs.fuzz,
-            Tab::Waf => &mut app.tabs.waf,
-            Tab::WafStress => &mut app.tabs.waf_stress,
-            Tab::Scan => &mut app.tabs.scan,
-            Tab::Resume => &mut app.tabs.resume,
-            Tab::Proxy => &mut app.tabs.proxy,
-            Tab::Packet => &mut app.tabs.packet,
-            Tab::GraphQl => &mut app.tabs.graphql,
-            Tab::OAuth => &mut app.tabs.oauth,
-            Tab::Cluster => &mut app.tabs.cluster,
-            Tab::Stress => &mut app.tabs.stress,
-            Tab::Report => &mut app.tabs.report,
-            #[cfg(feature = "nse")]
-            Tab::Nse => &mut app.tabs.nse,
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => &mut app.tabs.dashboard,
-            Tab::Settings => &mut app.tabs.settings,
-            Tab::History => &mut app.tabs.dashboard,
-            Tab::Dashboard => &mut app.tabs.dashboard,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => &mut app.tabs.hunt,
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => &mut app.tabs.dashboard,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => &mut app.tabs.browser,
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => &mut app.tabs.dashboard,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => &mut app.tabs.compliance,
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => &mut app.tabs.dashboard,
-            #[cfg(feature = "database")]
-            Tab::Storage => &mut app.tabs.storage,
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => &mut app.tabs.dashboard,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => &mut app.tabs.integrations,
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => &mut app.tabs.dashboard,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => &mut app.tabs.workflow,
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => &mut app.tabs.dashboard,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => &mut app.tabs.vuln,
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => &mut app.tabs.dashboard,
-            #[cfg(feature = "wireless")]
-            Tab::Wireless => &mut app.tabs.wireless,
-            #[cfg(not(feature = "wireless"))]
-            Tab::Wireless => &mut app.tabs.dashboard,
-            Tab::Auth => &mut app.tabs.auth,
-            #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => &mut app.tabs.db_pentest,
-            #[cfg(not(feature = "db-pentest"))]
-            Tab::DbPentest => &mut app.tabs.dashboard,
-            #[cfg(feature = "web-proxy")]
-            Tab::Intercept => &mut app.tabs.intercept,
-            #[cfg(not(feature = "web-proxy"))]
-            Tab::Intercept => &mut app.tabs.dashboard,
-            #[cfg(feature = "c2")]
-            Tab::C2 => &mut app.tabs.c2,
-            #[cfg(not(feature = "c2"))]
-            Tab::C2 => &mut app.tabs.dashboard,
+            pub fn as_tab_input<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabInput {
+                match self {
+                    $( $(#[$cfg])? $variant => &mut app.tabs.$field, )*
+                }
+            }
         }
-    }
+    };
+}
+
+tab_dispatch! {
+    Tab::Recon => recon,
+    Tab::Load => load,
+    Tab::ScanPorts => scan_ports,
+    Tab::ScanEndpoints => scan_endpoints,
+    Tab::Fingerprint => fingerprint,
+    Tab::Fuzz => fuzz,
+    Tab::Waf => waf,
+    Tab::WafStress => waf_stress,
+    Tab::Scan => scan,
+    Tab::Resume => resume,
+    Tab::Proxy => proxy,
+    Tab::Packet => packet,
+    Tab::GraphQl => graphql,
+    Tab::OAuth => oauth,
+    Tab::Cluster => cluster,
+    Tab::Stress => stress,
+    Tab::Report => report,
+    #[cfg(feature = "nse")]         Tab::Nse => nse,
+    #[cfg(not(feature = "nse"))]    Tab::Nse => dashboard,
+    Tab::Settings => settings,
+    Tab::History => dashboard,
+    Tab::Dashboard => dashboard,
+    #[cfg(feature = "advanced-hunting")]    Tab::Hunt => hunt,
+    #[cfg(not(feature = "advanced-hunting"))] Tab::Hunt => dashboard,
+    #[cfg(feature = "headless-browser")]    Tab::Browser => browser,
+    #[cfg(not(feature = "headless-browser"))] Tab::Browser => dashboard,
+    #[cfg(feature = "compliance")]    Tab::Compliance => compliance,
+    #[cfg(not(feature = "compliance"))] Tab::Compliance => dashboard,
+    #[cfg(feature = "database")]    Tab::Storage => storage,
+    #[cfg(not(feature = "database"))] Tab::Storage => dashboard,
+    #[cfg(feature = "external-integrations")]    Tab::Integrations => integrations,
+    #[cfg(not(feature = "external-integrations"))] Tab::Integrations => dashboard,
+    #[cfg(feature = "finding-workflow")]    Tab::Workflow => workflow,
+    #[cfg(not(feature = "finding-workflow"))] Tab::Workflow => dashboard,
+    #[cfg(feature = "vuln-management")]    Tab::Vuln => vuln,
+    #[cfg(not(feature = "vuln-management"))] Tab::Vuln => dashboard,
+    #[cfg(feature = "wireless")]    Tab::Wireless => wireless,
+    #[cfg(not(feature = "wireless"))] Tab::Wireless => dashboard,
+    Tab::Auth => auth,
+    #[cfg(feature = "db-pentest")]    Tab::DbPentest => db_pentest,
+    #[cfg(not(feature = "db-pentest"))] Tab::DbPentest => dashboard,
+    #[cfg(feature = "web-proxy")]    Tab::Intercept => intercept,
+    #[cfg(not(feature = "web-proxy"))] Tab::Intercept => dashboard,
+    #[cfg(feature = "c2")]    Tab::C2 => c2,
+    #[cfg(not(feature = "c2"))] Tab::C2 => dashboard,
 }
 
 impl std::fmt::Display for Tab {
@@ -1108,6 +817,41 @@ mod tests {
         for s in &specs {
             assert_eq!(s.title, s.tab.title());
             assert_eq!(s.stable_id, s.tab.stable_id());
+        }
+    }
+
+    #[test]
+    fn from_discriminant_covers_all_variants() {
+        for disc in 0..=32 {
+            let tab = Tab::from_discriminant(disc)
+                .unwrap_or_else(|| panic!("from_discriminant({}) returned None", disc));
+            assert_eq!(tab as usize, disc, "discriminant mismatch for {}", disc);
+        }
+        assert!(Tab::from_discriminant(33).is_none());
+        assert!(Tab::from_discriminant(100).is_none());
+    }
+
+    #[test]
+    fn tab_specs_order_matches_enum_discriminants() {
+        let specs = tab_specs();
+        assert_eq!(specs.len(), 33, "TAB_SPECS should have exactly 33 entries");
+        for (i, spec) in specs.iter().enumerate() {
+            assert_eq!(
+                spec.tab as usize, i,
+                "TAB_SPECS[{}] tab {:?} has discriminant {}, expected {}",
+                i, spec.tab, spec.tab as usize, i
+            );
+        }
+    }
+
+    #[test]
+    fn dispatch_methods_return_correct_state_for_all_variants() {
+        let app = crate::App::new_for_testing(crate::state::create_shared_history());
+        for tab in Tab::all() {
+            let state = tab.as_tab_state(&app);
+            assert!(!state.is_running(), "tab {:?} should not be running at init", tab);
+            let render = tab.as_tab_render(&app);
+            let _ = render.breadcrumb();
         }
     }
 }
