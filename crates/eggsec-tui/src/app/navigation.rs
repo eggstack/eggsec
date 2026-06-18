@@ -113,110 +113,16 @@ impl super::App {
     }
 
     pub(crate) fn get_current_help(&self) -> String {
-        match self.current_tab {
-            super::tabs::Tab::Recon => {
-                "Reconnaissance - Gather intelligence about target domain/IP.".to_string()
-            }
-            super::tabs::Tab::Load => {
-                "Load Testing - Send concurrent HTTP requests to test performance.".to_string()
-            }
-            super::tabs::Tab::ScanPorts => {
-                "Port Scanning - Discover open ports and services.".to_string()
-            }
-            super::tabs::Tab::ScanEndpoints => {
-                "Endpoint Discovery - Find hidden or sensitive endpoints.".to_string()
-            }
-            super::tabs::Tab::Fingerprint => {
-                "Service Fingerprinting - Identify services on open ports.".to_string()
-            }
-            super::tabs::Tab::Fuzz => {
-                "Fuzzing - Test for vulnerabilities using payloads.".to_string()
-            }
-            super::tabs::Tab::Waf => {
-                "WAF Detection - Detect and bypass Web Application Firewalls.".to_string()
-            }
-            super::tabs::Tab::WafStress => {
-                "WAF Stress Testing - Comprehensive WAF testing.".to_string()
-            }
-            super::tabs::Tab::Scan => {
-                "Pipeline Scanning - Run chained security assessment.".to_string()
-            }
-            super::tabs::Tab::Resume => {
-                "Session Resume - Continue previous scan from file.".to_string()
-            }
-            super::tabs::Tab::Proxy => "Proxy Management - Manage proxy pool.".to_string(),
-            super::tabs::Tab::Packet => {
-                "Packet Tools - Capture, send, and analyze network packets.".to_string()
-            }
-            super::tabs::Tab::GraphQl => "GraphQL Security - Test GraphQL endpoints.".to_string(),
-            super::tabs::Tab::OAuth => "OAuth/OIDC Security - Test OAuth endpoints.".to_string(),
-            super::tabs::Tab::Auth => {
-                "Auth Test - Validate authentication controls (defense-lab only).".to_string()
-            }
-            #[cfg(feature = "c2")]
-            super::tabs::Tab::C2 => {
-                "C2 - Campaign simulation with beacons, tasking, OPSEC (defense-lab only).".to_string()
-            }
-            #[cfg(not(feature = "c2"))]
-            super::tabs::Tab::C2 => {
-                "C2 - Campaign simulation (feature not enabled).".to_string()
-            }
-            #[cfg(feature = "db-pentest")]
-            super::tabs::Tab::DbPentest => {
-                "Db Pentest - Direct database pentesting (defense-lab only).".to_string()
-            }
-            #[cfg(not(feature = "db-pentest"))]
-            super::tabs::Tab::DbPentest => {
-                "Db Pentest - Direct database pentesting (feature not enabled).".to_string()
-            }
-            super::tabs::Tab::Intercept => {
-                "Intercept - Interactive web proxy traffic interception (defense-lab only).".to_string()
-            }
-            super::tabs::Tab::Cluster => {
-                "Cluster Management - Manage distributed scanning cluster.".to_string()
-            }
-            super::tabs::Tab::Stress => {
-                "Stress Testing - Run stress/load testing against target.".to_string()
-            }
-            super::tabs::Tab::Report => {
-                "Report - Convert and generate security scan reports.".to_string()
-            }
-            super::tabs::Tab::Nse => "NSE - Run Nmap NSE scripts.".to_string(),
-            super::tabs::Tab::Settings => "Settings - Configure application options.".to_string(),
-            super::tabs::Tab::History => "History - View previous scan results.".to_string(),
-            super::tabs::Tab::Dashboard => "Dashboard - View scan results at a glance.".to_string(),
-            super::tabs::Tab::Hunt => {
-                "Vulnerability Hunting - Intelligent vulnerability discovery.".to_string()
-            }
-            super::tabs::Tab::Browser => {
-                "Browser Testing - Headless browser security testing.".to_string()
-            }
-            super::tabs::Tab::Compliance => "Compliance - Generate compliance reports.".to_string(),
-            super::tabs::Tab::Storage => "Storage - Database integration.".to_string(),
-            super::tabs::Tab::Integrations => {
-                "Integrations - Issue tracker integration.".to_string()
-            }
-            super::tabs::Tab::Workflow => {
-                "Workflow - Finding management and SLA tracking.".to_string()
-            }
-            super::tabs::Tab::Vuln => {
-                "Vuln - Vulnerability prioritization and risk scoring.".to_string()
-            }
-            super::tabs::Tab::Wireless => {
-                "Wireless - Scan wireless networks for security issues.".to_string()
-            }
-        }
+        super::tabs::spec_for(self.current_tab)
+            .map(|s| s.help_text.to_string())
+            .unwrap_or_default()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{create_shared_history, App};
+    use super::super::create_test_app;
     use crate::tabs::Tab;
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     #[test]
     fn test_next_tab_cycles_forward() {
@@ -714,14 +620,9 @@ mod tests {
 mod render_tests {
     use ratatui::{backend::TestBackend, Terminal};
 
-    use crate::app::App;
-    use crate::state::create_shared_history;
+    use super::super::create_test_app;
     use crate::tabs::Tab;
     use crate::ui;
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     #[test]
     fn test_render_at_80x24_no_panic() {

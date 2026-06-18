@@ -1,6 +1,6 @@
 use super::draw;
 use super::shell::{get_normal_status, get_tab_status};
-use crate::app::{create_shared_history, App};
+use crate::app::{create_test_app, App};
 use crate::tabs::AppState;
 use crate::theme::Theme;
 use ratatui::{backend::TestBackend, Terminal};
@@ -18,7 +18,7 @@ fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
 
 #[test]
 fn quick_switch_renders_selected_tail_item_in_viewport() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     app.quick_switch.visible = true;
     app.quick_switch.query.clear();
     app.quick_switch.selected = app.get_quick_switch_results().len().saturating_sub(1);
@@ -57,7 +57,7 @@ fn get_tab_status_returns_theme_colors() {
 
 #[test]
 fn get_normal_status_returns_theme_colors() {
-    let app = App::new_for_testing(create_shared_history());
+    let app = create_test_app();
     let theme = Theme::default();
 
     let (msg, color) = get_normal_status(&app, &theme);
@@ -67,7 +67,7 @@ fn get_normal_status_returns_theme_colors() {
 
 #[test]
 fn render_with_overlays_does_not_panic() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     app.quick_switch.visible = true;
     app.quick_switch.query.clear();
     app.quick_switch.selected = 0;
@@ -84,7 +84,7 @@ fn render_with_overlays_does_not_panic() {
 // Simple contains checks (no snapshot requirement). Uses default test app (Recon, empty target).
 #[test]
 fn get_normal_status_for_target_tab_surfaces_mode_and_scope() {
-    let app = App::new_for_testing(create_shared_history());
+    let app = create_test_app();
     let theme = Theme::default();
 
     let (msg, color) = get_normal_status(&app, &theme);
@@ -105,7 +105,7 @@ fn get_normal_status_for_target_tab_surfaces_mode_and_scope() {
 
 #[test]
 fn render_status_bar_contains_preflight_indicators() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     // Start on a target-bearing tab (Recon has operation + primary_target delegation).
     app.current_tab = crate::tabs::Tab::Recon;
 
@@ -126,7 +126,7 @@ fn render_status_bar_contains_preflight_indicators() {
 // Use buffer text checks for "too small" or breadcrumb tab mode. No panic on render.
 #[test]
 fn render_at_60x20_is_usable_no_garble() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     let backend = TestBackend::new(60, 20);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|f| draw(f, &mut app)).unwrap();
@@ -141,7 +141,7 @@ fn render_at_60x20_is_usable_no_garble() {
 
 #[test]
 fn render_at_40x12_shows_too_small_fallback() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     let backend = TestBackend::new(40, 12);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|f| draw(f, &mut app)).unwrap();
@@ -154,7 +154,7 @@ fn render_at_40x12_shows_too_small_fallback() {
 
 #[test]
 fn render_at_120x40_unchanged_from_large() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     let backend = TestBackend::new(120, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|f| draw(f, &mut app)).unwrap();
@@ -166,7 +166,7 @@ fn render_at_120x40_unchanged_from_large() {
 
 #[test]
 fn render_policy_confirm_on_small_terminal_still_readable() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     // Force a pending policy confirm (simulates RequireConfirmation path; message() produces readable lines).
     use crate::app::confirmation::PendingPolicyConfirmation;
     use eggsec::config::{
@@ -218,7 +218,7 @@ fn render_policy_confirm_on_small_terminal_still_readable() {
 fn command_palette_empty_state_no_matches() {
     use std::sync::Arc;
 
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     // Set up command palette directly (methods are pub(super), use from tests module)
     app.command_palette = Some(crate::help::CommandPalette {
         visible: true,
@@ -247,7 +247,7 @@ fn command_palette_empty_state_no_matches() {
 fn command_palette_empty_state_no_commands() {
     use std::sync::Arc;
 
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     // Set up command palette with empty results
     app.command_palette = Some(crate::help::CommandPalette {
         visible: true,
@@ -274,7 +274,7 @@ fn command_palette_empty_state_no_commands() {
 
 #[test]
 fn quick_switch_empty_state_no_matches() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     app.quick_switch.visible = true;
     // Set a query that matches no tabs
     app.quick_switch.query = "zzzznonexistent".to_string();
@@ -295,7 +295,7 @@ fn quick_switch_empty_state_no_matches() {
 fn search_empty_state_no_results() {
     use crate::search::GlobalSearch;
 
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     app.overlay.show_search = true;
     app.search.query = "zzzznonexistent".to_string();
     // Simulate a search that returned no results
@@ -319,7 +319,7 @@ fn search_empty_state_no_results() {
 
 #[test]
 fn search_empty_state_not_performed() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     app.overlay.show_search = true;
     app.search.query.clear();
 
@@ -345,7 +345,7 @@ fn search_empty_state_not_performed() {
 
 #[test]
 fn search_popup_empty_state_placeholder() {
-    let mut app = App::new_for_testing(create_shared_history());
+    let mut app = create_test_app();
     app.overlay.show_search = true;
     app.search.query.clear();
 

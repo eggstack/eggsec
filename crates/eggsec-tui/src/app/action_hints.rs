@@ -203,12 +203,8 @@ pub fn format_hints(hints: &[ActionHint]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{create_shared_history, App, PendingAction};
+    use crate::app::{create_test_app, PendingAction};
     use crate::tabs::Tab;
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     #[tokio::test]
     async fn task_running_hints() {

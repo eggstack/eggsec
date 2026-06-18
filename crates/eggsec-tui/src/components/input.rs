@@ -240,12 +240,22 @@ impl InputField {
         self.value.clone()
     }
 
-    pub fn validate_url(&self) -> ValidationResult {
+    /// Return an error `ValidationResult` if the value is empty, using
+    /// `field_name` in the message (e.g. "URL", "Port").
+    fn require_non_empty(&self, field_name: &str) -> Option<ValidationResult> {
         if self.value.is_empty() {
-            return ValidationResult {
+            Some(ValidationResult {
                 valid: false,
-                message: "URL cannot be empty".to_string(),
-            };
+                message: format!("{} cannot be empty", field_name),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn validate_url(&self) -> ValidationResult {
+        if let Some(err) = self.require_non_empty("URL") {
+            return err;
         }
         if !self.value.starts_with("http://") && !self.value.starts_with("https://") {
             return ValidationResult {
@@ -260,11 +270,8 @@ impl InputField {
     }
 
     pub fn validate_ip(&self) -> ValidationResult {
-        if self.value.is_empty() {
-            return ValidationResult {
-                valid: false,
-                message: "IP address cannot be empty".to_string(),
-            };
+        if let Some(err) = self.require_non_empty("IP address") {
+            return err;
         }
         let parts: Vec<&str> = self.value.split('.').collect();
         if parts.len() != 4 {
@@ -291,11 +298,8 @@ impl InputField {
     }
 
     pub fn validate_port(&self) -> ValidationResult {
-        if self.value.is_empty() {
-            return ValidationResult {
-                valid: false,
-                message: "Port cannot be empty".to_string(),
-            };
+        if let Some(err) = self.require_non_empty("Port") {
+            return err;
         }
         match self.value.parse::<u16>() {
             Ok(port) => {
@@ -318,11 +322,8 @@ impl InputField {
     }
 
     pub fn validate_port_range(&self) -> ValidationResult {
-        if self.value.is_empty() {
-            return ValidationResult {
-                valid: false,
-                message: "Port range cannot be empty".to_string(),
-            };
+        if let Some(err) = self.require_non_empty("Port range") {
+            return err;
         }
         if self.value.contains('-') {
             let parts: Vec<&str> = self.value.split('-').collect();

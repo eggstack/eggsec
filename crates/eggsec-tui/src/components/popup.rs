@@ -1,4 +1,3 @@
-use crate::tc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -126,17 +125,21 @@ impl Popup {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
+        let theme = crate::theme::legacy::current_theme();
+        self.render_with_theme(f, area, &theme);
+    }
+
+    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, theme: &crate::theme::Theme) {
         let popup_area = centered_rect(self.width, self.height, area);
 
         f.render_widget(Clear, popup_area);
 
         let color = match self.kind {
-            PopupKind::Info => tc!(info),
-            PopupKind::Warning => tc!(warning),
-            PopupKind::Error => tc!(error),
-            PopupKind::Confirm => tc!(highlight),
-            PopupKind::Help => tc!(success),
-            PopupKind::Destructive => tc!(error),
+            PopupKind::Info => theme.colors.info,
+            PopupKind::Warning => theme.colors.warning,
+            PopupKind::Error | PopupKind::Destructive => theme.colors.error,
+            PopupKind::Confirm => theme.colors.highlight,
+            PopupKind::Help => theme.colors.success,
         };
 
         let block = Block::default()
@@ -169,7 +172,7 @@ impl Popup {
                 self.scroll_offset.min(self.content.len() - 1)
             };
             let paragraph = Paragraph::new(content_lines)
-                .style(Style::default().fg(tc!(text)))
+                .style(Style::default().fg(theme.colors.text))
                 .wrap(Wrap { trim: true })
                 .scroll((scroll_offset.min(u16::MAX as usize) as u16, 0));
             f.render_widget(paragraph, *content_chunk);
@@ -193,7 +196,7 @@ impl Popup {
                     let is_active = i == self.active_button;
                     let style = if is_active {
                         Style::default()
-                            .fg(tc!(selected_text))
+                            .fg(theme.colors.selected_text)
                             .bg(color)
                             .add_modifier(Modifier::BOLD)
                     } else {

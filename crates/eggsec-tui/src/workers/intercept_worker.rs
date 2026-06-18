@@ -1,5 +1,5 @@
 use super::TaskResult;
-use tracing;
+use crate::workers::{send_progress, send_result};
 
 pub async fn run_intercept_task(
     config: super::TaskConfig,
@@ -26,20 +26,13 @@ pub async fn run_intercept_task(
         max_flows
     );
 
-    if let Err(e) = progress_tx.send((0, 0)).await {
-        tracing::warn!("Failed to send intercept progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 0).await;
 
     let mut session = eggsec::proxy::intercept::types::InterceptSession::new(&listen_addr, dry_run);
     session.target = target;
 
-    if let Err(e) = progress_tx.send((1, 1)).await {
-        tracing::warn!("Failed to send intercept progress: {}", e);
-    }
-
-    if let Err(e) = result_tx.send(TaskResult::Intercept(session)).await {
-        tracing::error!("Failed to send intercept result: {}", e);
-    }
+    send_progress(&progress_tx, 1, 1).await;
+    send_result(&result_tx, TaskResult::Intercept(session)).await;
 
     Ok(())
 }

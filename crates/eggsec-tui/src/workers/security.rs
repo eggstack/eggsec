@@ -8,7 +8,7 @@
     feature = "headless-browser",
     feature = "wireless"
 ))]
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
 
 #[cfg(feature = "advanced-hunting")]
 pub async fn run_hunt_task(
@@ -19,9 +19,7 @@ pub async fn run_hunt_task(
 ) -> anyhow::Result<()> {
     use eggsec::hunt::run_hunt;
 
-    if let Err(e) = progress_tx.send((0, 5)).await {
-        tracing::warn!("Failed to send hunt progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 5).await;
     let report = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         run_hunt(&target, config),
@@ -32,12 +30,8 @@ pub async fn run_hunt_task(
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Hunt timed out after 60s")),
     };
-    if let Err(e) = progress_tx.send((5, 5)).await {
-        tracing::warn!("Failed to send hunt progress: {}", e);
-    }
-    if let Err(e) = result_tx.send(TaskResult::Hunt(report)).await {
-        tracing::warn!("Failed to send hunt result: {}", e);
-    }
+    send_progress(&progress_tx, 5, 5).await;
+    send_result(&result_tx, TaskResult::Hunt(report)).await;
     Ok(())
 }
 
@@ -50,9 +44,7 @@ pub async fn run_browser_task(
 ) -> anyhow::Result<()> {
     use eggsec::browser::run_browser_scan;
 
-    if let Err(e) = progress_tx.send((0, 3)).await {
-        tracing::warn!("Failed to send browser progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 3).await;
     let report = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         run_browser_scan(&target, config),
@@ -63,12 +55,8 @@ pub async fn run_browser_task(
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Browser scan timed out after 60s")),
     };
-    if let Err(e) = progress_tx.send((3, 3)).await {
-        tracing::warn!("Failed to send browser progress: {}", e);
-    }
-    if let Err(e) = result_tx.send(TaskResult::Browser(report)).await {
-        tracing::warn!("Failed to send browser result: {}", e);
-    }
+    send_progress(&progress_tx, 3, 3).await;
+    send_result(&result_tx, TaskResult::Browser(report)).await;
     Ok(())
 }
 
@@ -82,9 +70,7 @@ pub async fn run_compliance_task(
     use eggsec::compliance::generate_compliance_report;
     use eggsec::types::Severity;
 
-    if let Err(e) = progress_tx.send((0, 3)).await {
-        tracing::warn!("Failed to send compliance progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 3).await;
 
     let mut findings = Vec::new();
 
@@ -208,9 +194,7 @@ pub async fn run_compliance_task(
         findings.push(Severity::Info);
     }
 
-    if let Err(e) = progress_tx.send((2, 3)).await {
-        tracing::warn!("Failed to send compliance progress: {}", e);
-    }
+    send_progress(&progress_tx, 2, 3).await;
 
     let report = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
@@ -222,12 +206,8 @@ pub async fn run_compliance_task(
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Compliance report timed out after 60s")),
     };
-    if let Err(e) = progress_tx.send((3, 3)).await {
-        tracing::warn!("Failed to send compliance progress: {}", e);
-    }
-    if let Err(e) = result_tx.send(TaskResult::Compliance(report)).await {
-        tracing::warn!("Failed to send compliance result: {}", e);
-    }
+    send_progress(&progress_tx, 3, 3).await;
+    send_result(&result_tx, TaskResult::Compliance(report)).await;
     Ok(())
 }
 
@@ -249,39 +229,29 @@ pub async fn run_storage_task(
     match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         async move {
-    if let Err(e) = progress_tx.send((0, 3)).await {
-        tracing::warn!("Failed to send storage progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 3).await;
 
     let db = match init_storage(&config).await {
         Ok(db) => db,
         Err(e) => {
-            if let Err(e) = result_tx.send(TaskResult::Error(format!(
+            send_result(&result_tx, TaskResult::Error(format!(
                 "Storage connection failed: {}. Ensure the database is running and credentials are correct.",
                 e
-            ))).await {
-                tracing::warn!("Failed to send storage error: {}", e);
-            }
+            ))).await;
             return Ok(());
         }
     };
 
-    if let Err(e) = progress_tx.send((1, 3)).await {
-        tracing::warn!("Failed to send storage progress: {}", e);
-    }
+    send_progress(&progress_tx, 1, 3).await;
 
     let result_data = match mode.as_str() {
         "connect" => {
-            if let Err(e) = result_tx.send(TaskResult::Storage).await {
-                tracing::warn!("Failed to send storage result: {}", e);
-            }
+            send_result(&result_tx, TaskResult::Storage).await;
             None
         }
         "list_scans" => match db.list_scans(50).await {
             Ok(scans) => {
-                if let Err(e) = result_tx.send(TaskResult::StorageListScans { scans }).await {
-                    tracing::warn!("Failed to send storage scans: {}", e);
-                }
+                send_result(&result_tx, TaskResult::StorageListScans { scans }).await;
                 None
             }
             Err(e) => Some(format!("Failed to list scans: {}", e)),
@@ -304,12 +274,7 @@ pub async fn run_storage_task(
                     }
                 }
             };
-            if let Err(e) = result_tx
-                .send(TaskResult::StorageListFindings { findings })
-                .await
-            {
-                tracing::warn!("Failed to send storage findings: {}", e);
-            }
+            send_result(&result_tx, TaskResult::StorageListFindings { findings }).await;
             None
         }
         "search_cve" => {
@@ -346,45 +311,36 @@ pub async fn run_storage_task(
                     metadata: serde_json::Value::Null,
                 };
                 let stored = StoredFinding::new(finding, "");
-                if let Err(e) = result_tx
-                    .send(TaskResult::StorageListFindings {
+                send_result(
+                    &result_tx,
+                    TaskResult::StorageListFindings {
                         findings: vec![stored],
-                    })
-                    .await
-                {
-                    tracing::warn!("Failed to send CVE search result: {}", e);
-                }
+                    },
+                )
+                .await;
             } else {
-                if let Err(e) = result_tx
-                    .send(TaskResult::Error(
-                        "No CVE ID provided for search".to_string(),
-                    ))
-                    .await
-                {
-                    tracing::warn!("Failed to send CVE search error: {}", e);
-                }
+                send_result(
+                    &result_tx,
+                    TaskResult::Error("No CVE ID provided for search".to_string()),
+                )
+                .await;
             }
             None
         }
         _ => {
-            if let Err(e) = result_tx
-                .send(TaskResult::Error(format!("Unknown storage mode: {}", mode)))
-                .await
-            {
-                tracing::warn!("Failed to send unknown mode error: {}", e);
-            }
+            send_result(
+                &result_tx,
+                TaskResult::Error(format!("Unknown storage mode: {}", mode)),
+            )
+            .await;
             None
         }
     };
 
-    if let Err(e) = progress_tx.send((3, 3)).await {
-        tracing::warn!("Failed to send storage progress: {}", e);
-    }
+    send_progress(&progress_tx, 3, 3).await;
 
     if let Some(error) = result_data {
-        if let Err(e) = result_tx.send(TaskResult::Error(error)).await {
-            tracing::warn!("Failed to send storage error: {}", e);
-        }
+        send_result(&result_tx, TaskResult::Error(error)).await;
     }
 
     Ok(())
@@ -395,12 +351,7 @@ pub async fn run_storage_task(
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Storage task timed out after 60s");
-            if let Err(e) = result_tx_timeout
-                .send(TaskResult::Error("Storage task timed out".to_string()))
-                .await
-            {
-                tracing::warn!("Failed to send timeout error: {}", e);
-            }
+            send_result(&result_tx_timeout, TaskResult::Error("Storage task timed out".to_string())).await;
             Ok(())
         }
     }
@@ -422,9 +373,7 @@ pub async fn run_integrations_task(
 
     let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(std::time::Duration::from_secs(60), async move {
-        if let Err(e) = progress_tx.send((0, 3)).await {
-            tracing::warn!("Failed to send integrations progress: {}", e);
-        }
+        send_progress(&progress_tx, 0, 3).await;
 
         let tracker: Option<Box<dyn IssueTracker>> = if let Some(jira_config) = config.jira {
             Some(Box::new(eggsec::integrations::jira::JiraClient::new(
@@ -445,28 +394,23 @@ pub async fn run_integrations_task(
         let tracker = match tracker {
             Some(t) => t,
             None => {
-                if let Err(e) = result_tx
-                    .send(TaskResult::Error(
+                send_result(
+                    &result_tx,
+                    TaskResult::Error(
                         "No tracker configured. Set Jira, GitHub, or GitLab credentials."
                             .to_string(),
-                    ))
-                    .await
-                {
-                    tracing::warn!("Failed to send config error: {}", e);
-                }
+                    ),
+                )
+                .await;
                 return Ok(());
             }
         };
 
-        if let Err(e) = progress_tx.send((1, 3)).await {
-            tracing::warn!("Failed to send integrations progress: {}", e);
-        }
+        send_progress(&progress_tx, 1, 3).await;
 
         match mode.as_str() {
             "configure" => {
-                if let Err(e) = result_tx.send(TaskResult::Integrations).await {
-                    tracing::warn!("Failed to send integrations result: {}", e);
-                }
+                send_result(&result_tx, TaskResult::Integrations).await;
             }
             "create_issue" => match (&title, &description) {
                 (Some(t), Some(d)) if !t.is_empty() && !d.is_empty() => {
@@ -487,84 +431,56 @@ pub async fn run_integrations_task(
                                 id: Some(id.clone()),
                                 ..issue
                             };
-                            if let Err(e) = result_tx
-                                .send(TaskResult::IntegrationsCreateIssue { issue: created })
-                                .await
-                            {
-                                tracing::warn!("Failed to send issue creation result: {}", e);
-                            }
+                            send_result(&result_tx, TaskResult::IntegrationsCreateIssue { issue: created }).await;
                         }
                         Err(e) => {
                             tracing::warn!("Failed to create issue: {}", e);
-                            if let Err(send_err) = result_tx
-                                .send(TaskResult::Error(format!("Failed to create issue: {}", e)))
-                                .await
-                            {
-                                tracing::warn!("Failed to send issue error: {}", send_err);
-                            }
+                            send_result(&result_tx, TaskResult::Error(format!("Failed to create issue: {}", e))).await;
                         }
                     }
                 }
                 _ => {
-                    if let Err(e) = result_tx
-                        .send(TaskResult::Error(
+                    send_result(
+                        &result_tx,
+                        TaskResult::Error(
                             "Title and description required for creating an issue".to_string(),
-                        ))
-                        .await
-                    {
-                        tracing::warn!("Failed to send issue error: {}", e);
-                    }
+                        ),
+                    )
+                    .await;
                 }
             },
             "search_issues" => {
                 let query = search_query.as_deref().unwrap_or("");
                 if query.is_empty() {
-                    if let Err(e) = result_tx
-                        .send(TaskResult::Error(
+                    send_result(
+                        &result_tx,
+                        TaskResult::Error(
                             "Search query required (enter in Search Query field)".to_string(),
-                        ))
-                        .await
-                    {
-                        tracing::warn!("Failed to send search error: {}", e);
-                    }
+                        ),
+                    )
+                    .await;
                 } else {
                     match tracker.search_issues(query).await {
                         Ok(issues) => {
-                            if let Err(e) = result_tx
-                                .send(TaskResult::IntegrationsSearchIssues { issues })
-                                .await
-                            {
-                                tracing::warn!("Failed to send issue search result: {}", e);
-                            }
+                            send_result(&result_tx, TaskResult::IntegrationsSearchIssues { issues }).await;
                         }
                         Err(e) => {
                             tracing::warn!("Failed to search issues: {}", e);
-                            if let Err(send_err) = result_tx
-                                .send(TaskResult::Error(format!("Failed to search issues: {}", e)))
-                                .await
-                            {
-                                tracing::warn!("Failed to send search error: {}", send_err);
-                            }
+                            send_result(&result_tx, TaskResult::Error(format!("Failed to search issues: {}", e))).await;
                         }
                     }
                 }
             }
             _ => {
-                if let Err(e) = result_tx
-                    .send(TaskResult::Error(format!(
-                        "Unknown integrations mode: {}",
-                        mode
-                    )))
-                    .await
-                {
-                    tracing::warn!("Failed to send unknown mode error: {}", e);
-                }
+                send_result(
+                    &result_tx,
+                    TaskResult::Error(format!("Unknown integrations mode: {}", mode)),
+                )
+                .await;
             }
         }
 
-        if let Err(e) = progress_tx.send((3, 3)).await {
-            tracing::warn!("Failed to send integrations progress: {}", e);
-        }
+        send_progress(&progress_tx, 3, 3).await;
         Ok(())
     })
     .await
@@ -572,12 +488,7 @@ pub async fn run_integrations_task(
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Integrations task timed out after 60s");
-            if let Err(e) = result_tx_timeout
-                .send(TaskResult::Error("Integrations task timed out".to_string()))
-                .await
-            {
-                tracing::warn!("Failed to send timeout error: {}", e);
-            }
+            send_result(&result_tx_timeout, TaskResult::Error("Integrations task timed out".to_string())).await;
             Ok(())
         }
     }
@@ -593,23 +504,15 @@ pub async fn run_workflow_task(
 ) -> anyhow::Result<()> {
     use eggsec::workflow::WorkflowReport;
 
-    if let Err(e) = progress_tx.send((0, 3)).await {
-        tracing::warn!("Failed to send workflow progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 3).await;
 
     let mut report = WorkflowReport::new();
     report.total_findings = finding_ids.len();
     report.open_findings = finding_ids.len();
 
-    if let Err(e) = progress_tx.send((2, 3)).await {
-        tracing::warn!("Failed to send workflow progress: {}", e);
-    }
-    if let Err(e) = result_tx.send(TaskResult::Workflow(report)).await {
-        tracing::warn!("Failed to send workflow result: {}", e);
-    }
-    if let Err(e) = progress_tx.send((3, 3)).await {
-        tracing::warn!("Failed to send workflow progress: {}", e);
-    }
+    send_progress(&progress_tx, 2, 3).await;
+    send_result(&result_tx, TaskResult::Workflow(report)).await;
+    send_progress(&progress_tx, 3, 3).await;
     Ok(())
 }
 
@@ -634,9 +537,7 @@ pub async fn run_vuln_task(
 
     let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(std::time::Duration::from_secs(120), async move {
-        if let Err(e) = progress_tx.send((0, 3)).await {
-            tracing::warn!("Failed to send vuln progress: {}", e);
-        }
+        send_progress(&progress_tx, 0, 3).await;
 
         let mut assessment = VulnAssessment::new(&mode);
 
@@ -786,30 +687,19 @@ pub async fn run_vuln_task(
                 assessment.remediation_plans.push(rem);
             }
             _ => {
-                if let Err(e) = result_tx
-                    .send(TaskResult::Error(format!("Unknown vuln mode: {}", mode)))
-                    .await
-                {
-                    tracing::warn!("Failed to send unknown vuln mode error: {}", e);
-                }
-                if let Err(e) = progress_tx.send((3, 3)).await {
-                    tracing::warn!("Failed to send vuln progress: {}", e);
-                }
+                send_result(
+                    &result_tx,
+                    TaskResult::Error(format!("Unknown vuln mode: {}", mode)),
+                )
+                .await;
+                send_progress(&progress_tx, 3, 3).await;
                 return Ok(());
             }
         }
 
-        if let Err(e) = progress_tx.send((2, 3)).await {
-            tracing::warn!("Failed to send vuln progress: {}", e);
-        }
-
-        if let Err(e) = result_tx.send(TaskResult::Vuln(assessment)).await {
-            tracing::warn!("Failed to send vuln result: {}", e);
-        }
-
-        if let Err(e) = progress_tx.send((3, 3)).await {
-            tracing::warn!("Failed to send vuln progress: {}", e);
-        }
+        send_progress(&progress_tx, 2, 3).await;
+        send_result(&result_tx, TaskResult::Vuln(assessment)).await;
+        send_progress(&progress_tx, 3, 3).await;
         Ok(())
     })
     .await
@@ -817,12 +707,7 @@ pub async fn run_vuln_task(
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Vuln task timed out after 120s");
-            if let Err(e) = result_tx_timeout
-                .send(TaskResult::Error("Vuln task timed out".to_string()))
-                .await
-            {
-                tracing::warn!("Failed to send timeout error: {}", e);
-            }
+            send_result(&result_tx_timeout, TaskResult::Error("Vuln task timed out".to_string())).await;
             Ok(())
         }
     }
@@ -834,9 +719,7 @@ pub async fn run_wireless_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    if let Err(e) = progress_tx.send((0, 2)).await {
-        tracing::warn!("Failed to send wireless progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 2).await;
 
     let scanner = eggsec::wireless::WirelessScanner::new();
     let scanner = scanner.with_interface(interface);
@@ -845,20 +728,14 @@ pub async fn run_wireless_task(
         .map_err(|_| anyhow::anyhow!("Wireless scan timed out after 30s"))
         .and_then(|r| r.map_err(|e| anyhow::anyhow!("Wireless scan failed: {}", e)));
 
-    if let Err(e) = progress_tx.send((2, 2)).await {
-        tracing::warn!("Failed to send wireless progress: {}", e);
-    }
+    send_progress(&progress_tx, 2, 2).await;
 
     match scan_res {
         Ok(r) => {
-            if let Err(e) = result_tx.send(TaskResult::Wireless(r)).await {
-                tracing::warn!("Failed to send wireless result: {}", e);
-            }
+            send_result(&result_tx, TaskResult::Wireless(r)).await;
         }
         Err(e) => {
-            if let Err(send_err) = result_tx.send(TaskResult::Error(e.to_string())).await {
-                tracing::warn!("Failed to send wireless error result: {}", send_err);
-            }
+            send_result(&result_tx, TaskResult::Error(e.to_string())).await;
         }
     }
     Ok(())
@@ -879,9 +756,7 @@ pub async fn run_wireless_active_task(
     use eggsec::wireless::active::ActiveAttackConfig;
     use eggsec::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
 
-    if let Err(e) = progress_tx.send((0, 2)).await {
-        tracing::warn!("Failed to send wireless active progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 2).await;
 
     let parsed_bssid = bssid.as_deref().and_then(ActiveAttackConfig::parse_mac);
     let parsed_client = client.as_deref().and_then(ActiveAttackConfig::parse_mac);
@@ -911,29 +786,25 @@ pub async fn run_wireless_active_task(
         }
     };
 
-    if let Err(e) = progress_tx.send((2, 2)).await {
-        tracing::warn!("Failed to send wireless active progress: {}", e);
-    }
+    send_progress(&progress_tx, 2, 2).await;
 
     match result {
         Ok(Ok(attack_result)) => {
-            if let Err(e) = result_tx.send(super::runner::TaskResult::WirelessActive(attack_result)).await {
-                tracing::warn!("Failed to send wireless active result: {}", e);
-            }
+            send_result(&result_tx, super::runner::TaskResult::WirelessActive(attack_result)).await;
         }
         Ok(Err(e)) => {
-            if let Err(send_err) = result_tx.send(super::runner::TaskResult::Error(
-                format!("Active wireless attack failed: {e}")
-            )).await {
-                tracing::warn!("Failed to send wireless active error result: {}", send_err);
-            }
+            send_result(
+                &result_tx,
+                super::runner::TaskResult::Error(format!("Active wireless attack failed: {e}")),
+            )
+            .await;
         }
         Err(_) => {
-            if let Err(send_err) = result_tx.send(super::runner::TaskResult::Error(
-                "Active wireless attack timed out after 60s".to_string()
-            )).await {
-                tracing::warn!("Failed to send wireless active timeout result: {}", send_err);
-            }
+            send_result(
+                &result_tx,
+                super::runner::TaskResult::Error("Active wireless attack timed out after 60s".to_string()),
+            )
+            .await;
         }
     }
     Ok(())

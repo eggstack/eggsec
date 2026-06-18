@@ -1,4 +1,4 @@
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
 #[cfg(feature = "stress-testing")]
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -19,9 +19,7 @@ pub async fn run_load_test(
     let runner =
         LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
 
-    if let Err(e) = progress_tx.send((0, requests)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, requests).await;
 
     let batches = requests / concurrency.max(1) as u64;
     let estimated_secs = batches * timeout.as_secs();
@@ -38,12 +36,8 @@ pub async fn run_load_test(
         }
     };
 
-    if let Err(e) = result_tx.send(TaskResult::LoadTest(results)).await {
-        tracing::warn!("Failed to send load test results: {}", e);
-    }
-    if let Err(e) = progress_tx.send((requests, requests)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_result(&result_tx, TaskResult::LoadTest(results)).await;
+    send_progress(&progress_tx, requests, requests).await;
     Ok(())
 }
 
@@ -99,18 +93,15 @@ pub async fn run_stress_test(
         }
     };
 
-    if let Err(e) = result_tx
-        .send(TaskResult::StressTest {
+    send_result(
+        &result_tx,
+        TaskResult::StressTest {
             target: target.clone(),
             stats: stats.clone(),
-        })
-        .await
-    {
-        tracing::warn!("Failed to send stress test results: {}", e);
-    }
-    if let Err(e) = progress_tx.send((duration, duration)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+        },
+    )
+    .await;
+    send_progress(&progress_tx, duration, duration).await;
     Ok(())
 }
 
@@ -160,9 +151,7 @@ pub async fn run_packet_capture(
     let capture = builder.build();
 
     let mut captured = 0;
-    if let Err(e) = progress_tx.send((0, max_packets as u64)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, max_packets as u64).await;
 
     let mut capture = capture;
     let running = capture.running();
@@ -177,12 +166,7 @@ pub async fn run_packet_capture(
                 match packet {
                     Some(_packet) => {
                         captured += 1;
-                        if let Err(e) = progress_tx
-                            .send((captured as u64, max_packets as u64))
-                            .await
-                        {
-                            tracing::warn!("Failed to send packet capture progress: {}", e);
-                        }
+                        send_progress(&progress_tx, captured as u64, max_packets as u64).await;
                         if captured >= max_packets {
                             break;
                         }
@@ -219,15 +203,14 @@ pub async fn run_packet_capture(
         }
     }
 
-    if let Err(e) = result_tx
-        .send(TaskResult::PacketCapture {
+    send_result(
+        &result_tx,
+        TaskResult::PacketCapture {
             packets_captured: captured,
             output_file,
-        })
-        .await
-    {
-        tracing::warn!("Failed to send packet capture results: {}", e);
-    }
+        },
+    )
+    .await;
 
     Ok(())
 }
@@ -273,9 +256,7 @@ pub async fn run_packet_traceroute(
         max_concurrent_probes: 6,
     };
 
-    if let Err(e) = progress_tx.send((0, max_hops as u64)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, max_hops as u64).await;
 
     let traceroute = Traceroute::new(config);
     let result =
@@ -295,13 +276,8 @@ pub async fn run_packet_traceroute(
         })
         .collect();
 
-    if let Err(e) = progress_tx.send((max_hops as u64, max_hops as u64)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
-
-    if let Err(e) = result_tx.send(TaskResult::PacketTraceroute { hops }).await {
-        tracing::warn!("Failed to send traceroute results: {}", e);
-    }
+    send_progress(&progress_tx, max_hops as u64, max_hops as u64).await;
+    send_result(&result_tx, TaskResult::PacketTraceroute { hops }).await;
 
     Ok(())
 }
@@ -399,9 +375,7 @@ pub async fn run_packet_send(
 
     tracing::warn!("Packet sending is a stub - raw socket implementation required for actual packet transmission");
 
-    if let Err(e) = progress_tx.send((0, count as u64)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, count as u64).await;
 
     let mut sent = 0u32;
     let mut bytes = 0u64;
@@ -410,21 +384,18 @@ pub async fn run_packet_send(
         tokio::time::sleep(Duration::from_millis(10)).await;
         sent += 1;
         bytes += packet_size as u64;
-        if let Err(e) = progress_tx.send((sent as u64, count as u64)).await {
-            tracing::warn!("Failed to send packet send progress: {}", e);
-        }
+        send_progress(&progress_tx, sent as u64, count as u64).await;
         tracing::trace!("[STUB] Would send packet {} to {}:{}", i + 1, target, port);
     }
 
-    if let Err(e) = result_tx
-        .send(TaskResult::PacketSend {
+    send_result(
+        &result_tx,
+        TaskResult::PacketSend {
             packets_sent: sent,
             bytes_sent: bytes,
-        })
-        .await
-    {
-        tracing::warn!("Failed to send packet send results: {}", e);
-    }
+        },
+    )
+    .await;
 
     Ok(())
 }

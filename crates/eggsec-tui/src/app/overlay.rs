@@ -211,13 +211,9 @@ impl OverlayController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{create_shared_history, App, PendingAction};
+    use crate::app::{create_test_app, PendingAction};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use eggsec::config::{OperationDescriptor, OperationMode, OperationRisk, PolicyDecision};
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     #[test]
     fn test_ctrl_c_bubbles_through_overlays() {

@@ -982,15 +982,17 @@ pub enum OverlayType {
     Help,
 }
 
+/// Shared test helper: create a fresh `App` for unit tests.
+#[cfg(test)]
+pub(crate) fn create_test_app() -> App {
+    App::new_for_testing(create_shared_history())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tabs::Tab;
     use crossterm::event::KeyCode;
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     fn make_theme(name: &str) -> crate::theme::Theme {
         let colors = crate::theme::builtin::dark_theme().colors;

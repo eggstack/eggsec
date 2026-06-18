@@ -567,11 +567,7 @@ impl TabProgressUpdate for super::tabs::Tab {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{create_shared_history, App};
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
+    use super::super::create_test_app;
 
     #[test]
     fn test_update_does_not_panic_when_no_channels() {

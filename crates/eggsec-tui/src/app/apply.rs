@@ -253,6 +253,16 @@ impl App {
         }
     }
 
+    /// Copy current tab's copyable text to the system clipboard.
+    fn clipboard_copy_from_tab(&mut self) {
+        use crate::utils::Clipboard;
+        if let Some(text) = self.dispatcher_mut().handle_copy() {
+            if !Clipboard::set(&text) {
+                tracing::warn!("Clipboard write failed");
+            }
+        }
+    }
+
     pub(crate) fn apply_clipboard_action(&mut self, action: UiAction) {
         use crate::utils::Clipboard;
 
@@ -263,12 +273,8 @@ impl App {
                     self.needs_redraw = true;
                 }
             }
-            UiAction::Copy => {
-                if let Some(text) = self.dispatcher_mut().handle_copy() {
-                    if !Clipboard::set(&text) {
-                        tracing::warn!("Clipboard write failed");
-                    }
-                }
+            UiAction::Copy | UiAction::RequestCopy => {
+                self.clipboard_copy_from_tab();
                 self.needs_redraw = true;
             }
             UiAction::RequestPaste => {
@@ -280,14 +286,6 @@ impl App {
                     }
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::RequestCopy => {
-                if let Some(text) = self.dispatcher_mut().handle_copy() {
-                    if !Clipboard::set(&text) {
-                        tracing::warn!("Clipboard write failed");
-                    }
-                }
-                self.needs_redraw = true;
             }
             _ => {}
         }
@@ -566,6 +564,18 @@ impl App {
         self.needs_redraw = true;
     }
 
+    /// Scroll the help overlay by `delta` lines (negative = up).
+    fn scroll_help_overlay(&mut self, delta: isize) {
+        if self.is_help_visible() {
+            self.overlay.help_scroll_offset = if delta < 0 {
+                self.overlay.help_scroll_offset.saturating_sub(delta.unsigned_abs())
+            } else {
+                self.overlay.help_scroll_offset.saturating_add(delta as usize)
+            };
+            self.needs_redraw = true;
+        }
+    }
+
     pub(crate) fn apply_overlay_content_action(&mut self, action: UiAction) {
         match action {
             UiAction::SearchQueryChar(c) => {
@@ -592,20 +602,10 @@ impl App {
                     self.needs_redraw = true;
                 }
             }
-            UiAction::HelpScrollUp => {
-                if self.is_help_visible() {
-                    self.overlay.help_scroll_offset =
-                        self.overlay.help_scroll_offset.saturating_sub(1);
-                    self.needs_redraw = true;
-                }
-            }
-            UiAction::HelpScrollDown => {
-                if self.is_help_visible() {
-                    self.overlay.help_scroll_offset =
-                        self.overlay.help_scroll_offset.saturating_add(1);
-                    self.needs_redraw = true;
-                }
-            }
+            UiAction::HelpScrollUp => self.scroll_help_overlay(-1),
+            UiAction::HelpScrollDown => self.scroll_help_overlay(1),
+            UiAction::HelpScrollPageUp => self.scroll_help_overlay(-10),
+            UiAction::HelpScrollPageDown => self.scroll_help_overlay(10),
             UiAction::HelpScrollTop => {
                 if self.is_help_visible() {
                     self.overlay.help_scroll_offset = 0;
@@ -615,20 +615,6 @@ impl App {
             UiAction::HelpScrollBottom => {
                 if self.is_help_visible() {
                     self.overlay.help_scroll_offset = u16::MAX as usize;
-                    self.needs_redraw = true;
-                }
-            }
-            UiAction::HelpScrollPageUp => {
-                if self.is_help_visible() {
-                    self.overlay.help_scroll_offset =
-                        self.overlay.help_scroll_offset.saturating_sub(10);
-                    self.needs_redraw = true;
-                }
-            }
-            UiAction::HelpScrollPageDown => {
-                if self.is_help_visible() {
-                    self.overlay.help_scroll_offset =
-                        self.overlay.help_scroll_offset.saturating_add(10);
                     self.needs_redraw = true;
                 }
             }

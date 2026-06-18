@@ -174,12 +174,8 @@ impl super::App {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::{create_shared_history, App};
+    use crate::app::create_test_app;
     use crate::tabs::{AppState, Tab};
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     #[test]
     fn stop_with_message_targets_task_tab_when_current_tab_differs() {

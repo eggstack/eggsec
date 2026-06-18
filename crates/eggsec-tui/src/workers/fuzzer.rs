@@ -1,4 +1,4 @@
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_fuzz(
@@ -98,12 +98,8 @@ pub async fn run_fuzz(
         Err(_) => return Err(anyhow::anyhow!("Fuzz session timed out after 60s")),
     };
 
-    if let Err(e) = result_tx.send(TaskResult::Fuzz(session)).await {
-        tracing::warn!("Failed to send fuzz results: {}", e);
-    }
-    if let Err(e) = progress_tx.send((1, 1)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_result(&result_tx, TaskResult::Fuzz(session)).await;
+    send_progress(&progress_tx, 1, 1).await;
     Ok(())
 }
 
@@ -169,24 +165,19 @@ pub async fn run_waf(
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => return Err(anyhow::anyhow!("WAF bypass timed out after 60s")),
         };
-        if let Err(e) = result_tx
-            .send(TaskResult::WafBypass {
+        send_result(
+            &result_tx,
+            TaskResult::WafBypass {
                 detection,
                 bypasses,
-            })
-            .await
-        {
-            tracing::warn!("Failed to send WAF bypass results: {}", e);
-        }
+            },
+        )
+        .await;
     } else {
-        if let Err(e) = result_tx.send(TaskResult::WafDetection(detection)).await {
-            tracing::warn!("Failed to send WAF detection results: {}", e);
-        }
+        send_result(&result_tx, TaskResult::WafDetection(detection)).await;
     }
 
-    if let Err(e) = progress_tx.send((1, 1)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_progress(&progress_tx, 1, 1).await;
     Ok(())
 }
 
@@ -220,33 +211,22 @@ pub async fn run_waf_stress(
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
             tracing::warn!("WAF stress failed: {}", e);
-            if let Err(e) = progress_tx.send((1, 1)).await {
-                tracing::warn!("Failed to send progress: {}", e);
-            }
-            if let Err(send_err) = result_tx.send(TaskResult::Error(e.to_string())).await {
-                tracing::warn!("Failed to send WAF stress error: {}", send_err);
-            }
+            send_progress(&progress_tx, 1, 1).await;
+            send_result(&result_tx, TaskResult::Error(e.to_string())).await;
             return Err(e.into());
         }
         Err(_) => {
             tracing::warn!("WAF stress timed out after 60s");
-            if let Err(e) = progress_tx.send((1, 1)).await {
-                tracing::warn!("Failed to send progress: {}", e);
-            }
-            if let Err(send_err) = result_tx
-                .send(TaskResult::Error(
-                    "WAF stress timed out after 60s".to_string(),
-                ))
-                .await
-            {
-                tracing::warn!("Failed to send WAF stress timeout error: {}", send_err);
-            }
+            send_progress(&progress_tx, 1, 1).await;
+            send_result(
+                &result_tx,
+                TaskResult::Error("WAF stress timed out after 60s".to_string()),
+            )
+            .await;
             return Err(anyhow::anyhow!("WAF stress timed out after 60s"));
         }
     }
-    if let Err(e) = progress_tx.send((1, 1)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_progress(&progress_tx, 1, 1).await;
     tracing::debug!(
         "WAF stress completed (fuzzer_run_waf_stress returned no results, sending empty WafStress)"
     );
@@ -254,8 +234,6 @@ pub async fn run_waf_stress(
     // fuzzer_run_waf_stress function returns Result<(), Error> with no
     // result data. This is a known design limitation; downstream
     // consumers should treat WafStress(vec![]) as "completed with no findings".
-    if let Err(e) = result_tx.send(TaskResult::WafStress(vec![])).await {
-        tracing::warn!("Failed to send WAF stress results: {}", e);
-    }
+    send_result(&result_tx, TaskResult::WafStress(vec![])).await;
     Ok(())
 }

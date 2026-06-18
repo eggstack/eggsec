@@ -1,5 +1,5 @@
 use crate::tabs::recon::ReconOptions;
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
 use eggsec::cli::ScanProfile;
 
 pub async fn run_pipeline(
@@ -48,9 +48,7 @@ pub async fn run_pipeline(
     let pipeline = Pipeline::from_args_with_tui_mode(args, None, true);
     let stages_count = pipeline.get_stages().len() as u64;
 
-    if let Err(e) = progress_tx.send((0, stages_count.max(1))).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, stages_count.max(1)).await;
 
     let report =
         match tokio::time::timeout(std::time::Duration::from_secs(300), pipeline.run()).await {
@@ -59,12 +57,8 @@ pub async fn run_pipeline(
             Err(_) => return Err(anyhow::anyhow!("Pipeline timed out after 300s")),
         };
 
-    if let Err(e) = result_tx.send(TaskResult::Pipeline(report)).await {
-        tracing::warn!("Failed to send pipeline result: {}", e);
-    }
-    if let Err(e) = progress_tx.send((stages_count, stages_count.max(1))).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_result(&result_tx, TaskResult::Pipeline(report)).await;
+    send_progress(&progress_tx, stages_count, stages_count.max(1)).await;
     Ok(())
 }
 
@@ -79,9 +73,7 @@ pub async fn run_recon(
     use eggsec::config::EggsecConfig;
     use eggsec::recon::run_full_recon;
 
-    if let Err(e) = progress_tx.send((0, 100)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 100).await;
 
     let args = ReconArgs {
         target: target.clone(),
@@ -110,9 +102,7 @@ pub async fn run_recon(
 
     let config = EggsecConfig::default();
 
-    if let Err(e) = progress_tx.send((5, 100)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_progress(&progress_tx, 5, 100).await;
 
     let max_retries = eggsec_core::constants::DEFAULT_MAX_RETRIES;
     let base_delay_secs = 2u64;
@@ -120,53 +110,47 @@ pub async fn run_recon(
     for attempt in 1..=max_retries {
         let stage = std::sync::Arc::new(parking_lot::Mutex::new(String::new()));
         let (stage_tx, mut stage_rx) = tokio::sync::watch::channel("initial".to_string());
-        let ptx = progress_tx.clone();
-        let progress_tx_for_timeout = progress_tx.clone();
+                let ptx = progress_tx.clone();
+                let progress_tx_for_timeout = progress_tx.clone();
 
-        let progress_handle = tokio::spawn(async move {
-            let result = tokio::time::timeout(std::time::Duration::from_secs(300), async move {
-                let mut last_stage = stage_rx.borrow().clone();
-                let stages = ["resolving", "recon (parallel)", "takeover", "cve", "done"];
-                let total_stages = stages.len() as u64;
-                let mut stalled_count = 0u32;
-                while stage_rx.changed().await.is_ok() {
-                    let current = stage_rx.borrow().clone();
-                    if current != last_stage {
-                        last_stage.clone_from(&current);
-                        stalled_count = 0;
-                        let completed = stages
-                            .iter()
-                            .take_while(|&&s| {
-                                current.contains(s) || (s == "done" && current.is_empty())
-                            })
-                            .count() as u64;
-                        let total_stages = total_stages.max(1);
-                        let pct = (completed.min(total_stages) * 90) / total_stages + 5;
-                        if let Err(e) = ptx.send((pct, 100)).await {
-                            tracing::warn!("Failed to send progress: {}", e);
-                        }
-                    } else {
-                        stalled_count += 1;
-                        if stalled_count > 200 {
-                            if let Err(e) = ptx.send((95, 100)).await {
-                                tracing::warn!("Failed to send stalled progress: {}", e);
+                let progress_handle = tokio::spawn(async move {
+                    let result = tokio::time::timeout(std::time::Duration::from_secs(300), async move {
+                        let mut last_stage = stage_rx.borrow().clone();
+                        let stages = ["resolving", "recon (parallel)", "takeover", "cve", "done"];
+                        let total_stages = stages.len() as u64;
+                        let mut stalled_count = 0u32;
+                        while stage_rx.changed().await.is_ok() {
+                            let current = stage_rx.borrow().clone();
+                            if current != last_stage {
+                                last_stage.clone_from(&current);
+                                stalled_count = 0;
+                                let completed = stages
+                                    .iter()
+                                    .take_while(|&&s| {
+                                        current.contains(s) || (s == "done" && current.is_empty())
+                                    })
+                                    .count() as u64;
+                                let total_stages = total_stages.max(1);
+                                let pct = (completed.min(total_stages) * 90) / total_stages + 5;
+                                send_progress(&ptx, pct, 100).await;
+                            } else {
+                                stalled_count += 1;
+                                if stalled_count > 200 {
+                                    send_progress(&ptx, 95, 100).await;
+                                    break;
+                                }
                             }
-                            break;
+                            if current.is_empty() && !last_stage.is_empty() {
+                                break;
+                            }
                         }
+                    })
+                    .await;
+                    if result.is_err() {
+                        tracing::warn!("Progress monitor task timed out after 300s");
+                        send_progress(&progress_tx_for_timeout, 95, 100).await;
                     }
-                    if current.is_empty() && !last_stage.is_empty() {
-                        break;
-                    }
-                }
-            })
-            .await;
-            if result.is_err() {
-                tracing::warn!("Progress monitor task timed out after 300s");
-                if let Err(e) = progress_tx_for_timeout.send((95, 100)).await {
-                    tracing::warn!("Failed to send timeout progress: {}", e);
-                }
-            }
-        });
+                });
 
         let watch_sender = stage_tx.clone();
         let stage_for_thread = stage.clone();
@@ -205,12 +189,8 @@ pub async fn run_recon(
         match recon_result {
             Ok(Ok(r)) => {
                 progress_handle.abort();
-                if let Err(e) = progress_tx.send((100, 100)).await {
-                    tracing::warn!("Failed to send progress: {}", e);
-                }
-                if let Err(e) = result_tx.send(TaskResult::Recon(r)).await {
-                    tracing::warn!("Failed to send recon result: {}", e);
-                }
+                send_progress(&progress_tx, 100, 100).await;
+                send_result(&result_tx, TaskResult::Recon(r)).await;
                 if let Err(e) = progress_handle.await {
                     if e.is_panic() {
                         tracing::warn!("Progress tracking task panicked: {:?}", e);
@@ -235,9 +215,7 @@ pub async fn run_recon(
                         attempt,
                         delay
                     );
-                    if let Err(e) = progress_tx.send(((attempt as u64) * 20, 100)).await {
-                        tracing::warn!("Failed to send retry progress: {}", e);
-                    }
+                    send_progress(&progress_tx, (attempt as u64) * 20, 100).await;
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 } else {
                     tracing::error!("Recon failed after {} attempts: {:?}", max_retries, e);

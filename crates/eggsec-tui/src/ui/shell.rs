@@ -572,7 +572,7 @@ pub fn is_terminal_too_small(area: Rect) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::app::confirmation::PendingPolicyConfirmation;
-    use crate::app::{create_shared_history, App};
+    use crate::app::create_test_app;
     use crate::help::{CommandPalette, CommandPaletteResult};
     use crate::tabs::{SettingsSection, Tab};
     use crate::ui::draw;
@@ -591,10 +591,6 @@ mod tests {
             out.push('\n');
         }
         out
-    }
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
     }
 
     #[test]

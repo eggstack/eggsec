@@ -165,9 +165,15 @@ impl Selector {
         self.expanded = true;
     }
 
-    pub fn collapse(&mut self) {
+    /// Close the dropdown and clear list state. All close/collapse/cancel
+    /// paths delegate here to keep the teardown in one place.
+    pub fn close_dropdown(&mut self) {
         self.expanded = false;
         *self.dropdown_state.borrow_mut() = None;
+    }
+
+    pub fn collapse(&mut self) {
+        self.close_dropdown();
     }
 
     pub fn dropdown_info(&self, anchor_area: Rect, viewport_height: u16) -> Option<DropdownInfo> {
@@ -313,14 +319,12 @@ impl Selector {
     }
 
     pub fn close(&mut self) {
-        self.expanded = false;
-        *self.dropdown_state.borrow_mut() = None;
+        self.close_dropdown();
     }
 
     pub fn confirm(&mut self) -> Option<&SelectorItem> {
         if self.expanded {
-            self.expanded = false;
-            *self.dropdown_state.borrow_mut() = None;
+            self.close_dropdown();
             self.items.get(self.selected)
         } else {
             None
@@ -328,8 +332,7 @@ impl Selector {
     }
 
     pub fn cancel(&mut self) {
-        self.expanded = false;
-        *self.dropdown_state.borrow_mut() = None;
+        self.close_dropdown();
     }
 
     pub fn move_next(&mut self) {

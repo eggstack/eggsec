@@ -480,13 +480,9 @@ impl super::App {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{create_shared_history, App};
+    use super::super::create_test_app;
     use crate::tabs::Tab;
     use eggsec::types::OutputFormat;
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     #[test]
     fn test_get_export_extension_json() {

@@ -1,4 +1,21 @@
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
+
+fn empty_auth_report(target: String) -> eggsec::auth::AuthTestReport {
+    eggsec::auth::AuthTestReport {
+        target,
+        tests_run: Vec::new(),
+        brute_force: None,
+        credential_stuffing: None,
+        lockout_detection: None,
+        rate_limit: None,
+        mfa: None,
+        session: None,
+        timing: None,
+        password_policy: None,
+        total_attempts: 0,
+        findings: Vec::new(),
+    }
+}
 
 pub async fn run_auth_task(
     target: String,
@@ -13,18 +30,12 @@ pub async fn run_auth_task(
 ) -> anyhow::Result<()> {
     use eggsec::auth::AuthEngine;
 
-    if let Err(e) = progress_tx.send((0, 8)).await {
-        tracing::warn!("Failed to send auth progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 8).await;
 
     let mut engine = AuthEngine::new(max_attempts, concurrency, timeout, true)?;
 
-    let usernames = username
-        .into_iter()
-        .collect::<Vec<_>>();
-    let passwords = password_list
-        .map(|p| vec![p])
-        .unwrap_or_default();
+    let usernames = username.into_iter().collect::<Vec<_>>();
+    let passwords = password_list.map(|p| vec![p]).unwrap_or_default();
     engine.load_wordlists(usernames, passwords);
 
     let report = match tokio::time::timeout(
@@ -36,45 +47,15 @@ pub async fn run_auth_task(
         Ok(Ok(report)) => report,
         Ok(Err(e)) => {
             tracing::warn!("Auth test error: {}", e);
-            eggsec::auth::AuthTestReport {
-                target,
-                tests_run: Vec::new(),
-                brute_force: None,
-                credential_stuffing: None,
-                lockout_detection: None,
-                rate_limit: None,
-                mfa: None,
-                session: None,
-                timing: None,
-                password_policy: None,
-                total_attempts: 0,
-                findings: Vec::new(),
-            }
+            empty_auth_report(target)
         }
         Err(_) => {
             engine.stop();
-            eggsec::auth::AuthTestReport {
-                target,
-                tests_run: Vec::new(),
-                brute_force: None,
-                credential_stuffing: None,
-                lockout_detection: None,
-                rate_limit: None,
-                mfa: None,
-                session: None,
-                timing: None,
-                password_policy: None,
-                total_attempts: 0,
-                findings: Vec::new(),
-            }
+            empty_auth_report(target)
         }
     };
 
-    if let Err(e) = progress_tx.send((8, 8)).await {
-        tracing::warn!("Failed to send auth progress: {}", e);
-    }
-    if let Err(e) = result_tx.send(TaskResult::Auth(report)).await {
-        tracing::warn!("Failed to send auth result: {}", e);
-    }
+    send_progress(&progress_tx, 8, 8).await;
+    send_result(&result_tx, TaskResult::Auth(report)).await;
     Ok(())
 }

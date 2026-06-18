@@ -1,4 +1,4 @@
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
 
 pub async fn run_c2_task(
     target: String,
@@ -9,15 +9,11 @@ pub async fn run_c2_task(
 ) -> anyhow::Result<()> {
     use eggsec::c2::C2Scanner;
 
-    if let Err(e) = progress_tx.send((0, 4)).await {
-        tracing::warn!("Failed to send C2 progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 4).await;
 
     let scanner = C2Scanner::new(dry_run, &campaign);
 
-    if let Err(e) = progress_tx.send((1, 4)).await {
-        tracing::warn!("Failed to send C2 progress: {}", e);
-    }
+    send_progress(&progress_tx, 1, 4).await;
 
     let report = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
@@ -28,28 +24,16 @@ pub async fn run_c2_task(
         Ok(Ok(report)) => report,
         Ok(Err(e)) => {
             tracing::warn!("C2 simulation error: {}", e);
-            if let Err(send_err) = result_tx
-                .send(TaskResult::Error(format!("C2 simulation failed: {}", e)))
-                .await {
-                tracing::warn!("Failed to send C2 error result: {}", send_err);
-            }
+            send_result(&result_tx, TaskResult::Error(format!("C2 simulation failed: {}", e))).await;
             return Ok(());
         }
         Err(_) => {
-            if let Err(send_err) = result_tx
-                .send(TaskResult::Error("C2 simulation timed out".to_string()))
-                .await {
-                tracing::warn!("Failed to send C2 timeout result: {}", send_err);
-            }
+            send_result(&result_tx, TaskResult::Error("C2 simulation timed out".to_string())).await;
             return Ok(());
         }
     };
 
-    if let Err(e) = progress_tx.send((4, 4)).await {
-        tracing::warn!("Failed to send C2 progress: {}", e);
-    }
-    if let Err(e) = result_tx.send(TaskResult::C2(report)).await {
-        tracing::warn!("Failed to send C2 result: {}", e);
-    }
+    send_progress(&progress_tx, 4, 4).await;
+    send_result(&result_tx, TaskResult::C2(report)).await;
     Ok(())
 }

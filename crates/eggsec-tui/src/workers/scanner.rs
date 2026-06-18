@@ -1,4 +1,4 @@
-use crate::workers::TaskResult;
+use crate::workers::{send_progress, send_result, TaskResult};
 use eggsec::scanner::spoof::SpoofConfig;
 
 pub async fn run_port_scan(
@@ -11,16 +11,12 @@ pub async fn run_port_scan(
 ) -> anyhow::Result<()> {
     use eggsec::scanner::ports::scan_ports;
 
-    if let Err(e) = progress_tx.send((0, 100)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 100).await;
 
     let port_list = eggsec::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
-    if let Err(e) = progress_tx.send((10, 100)).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_progress(&progress_tx, 10, 100).await;
 
     let results = match tokio::time::timeout(
         std::time::Duration::from_secs(60),
@@ -45,12 +41,8 @@ pub async fn run_port_scan(
     };
 
     let total = results.ports_scanned as u64;
-    if let Err(e) = result_tx.send(TaskResult::PortScan(results)).await {
-        tracing::warn!("Failed to send port scan result: {}", e);
-    }
-    if let Err(e) = progress_tx.send((total.max(1), total_ports.max(1))).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_result(&result_tx, TaskResult::PortScan(results)).await;
+    send_progress(&progress_tx, total.max(1), total_ports.max(1)).await;
     Ok(())
 }
 
@@ -64,9 +56,7 @@ pub async fn run_endpoint_scan(
 ) -> anyhow::Result<()> {
     use eggsec::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
 
-    if let Err(e) = progress_tx.send((0, 100)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 100).await;
 
     let endpoints: Vec<String> = if let Some(ref wl) = wordlist {
         eggsec::scanner::wordlist::Wordlist::from_file(wl)
@@ -100,15 +90,8 @@ pub async fn run_endpoint_scan(
     };
 
     let total = results.endpoints_scanned as u64;
-    if let Err(e) = result_tx.send(TaskResult::EndpointScan(results)).await {
-        tracing::warn!("Failed to send endpoint scan result: {}", e);
-    }
-    if let Err(e) = progress_tx
-        .send((total.max(1), total_endpoints.max(1)))
-        .await
-    {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_result(&result_tx, TaskResult::EndpointScan(results)).await;
+    send_progress(&progress_tx, total.max(1), total_endpoints.max(1)).await;
     Ok(())
 }
 
@@ -121,9 +104,7 @@ pub async fn run_fingerprint(
 ) -> anyhow::Result<()> {
     use eggsec::scanner::fingerprint::fingerprint_services;
 
-    if let Err(e) = progress_tx.send((0, 100)).await {
-        tracing::warn!("Failed to send initial progress: {}", e);
-    }
+    send_progress(&progress_tx, 0, 100).await;
 
     let port_list = eggsec::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
@@ -148,11 +129,7 @@ pub async fn run_fingerprint(
     };
 
     let total = results.ports_scanned as u64;
-    if let Err(e) = result_tx.send(TaskResult::Fingerprint(results)).await {
-        tracing::warn!("Failed to send fingerprint result: {}", e);
-    }
-    if let Err(e) = progress_tx.send((total.max(1), total_ports.max(1))).await {
-        tracing::warn!("Failed to send progress: {}", e);
-    }
+    send_result(&result_tx, TaskResult::Fingerprint(results)).await;
+    send_progress(&progress_tx, total.max(1), total_ports.max(1)).await;
     Ok(())
 }

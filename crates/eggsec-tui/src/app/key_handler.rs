@@ -352,14 +352,8 @@ impl Default for KeyHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{
-        create_shared_history, App, PendingAction, QuickSwitchInput,
-    };
+    use crate::app::{create_test_app, PendingAction, QuickSwitchInput};
     use crossterm::event::KeyEvent;
-
-    fn create_test_app() -> App {
-        App::new_for_testing(create_shared_history())
-    }
 
     fn press(handler: &mut KeyHandler, app: &mut App, code: KeyCode) {
         handler.handle_key_event(app, &KeyEvent::new(code, KeyModifiers::NONE));
