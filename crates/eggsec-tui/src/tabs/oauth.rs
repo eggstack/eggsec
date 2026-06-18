@@ -507,4 +507,36 @@ mod tests {
         assert!(!tab.core.inputs.is_focused());
         assert!(!tab.is_running());
     }
+
+    #[test]
+    fn test_handle_escape_resets_checkbox_index() {
+        let mut tab = create_test_tab();
+        tab.focus_area = StandardFocusArea::Options;
+        tab.focused_checkbox_index = 2;
+        tab.handle_escape();
+        assert_eq!(tab.focus_area, StandardFocusArea::Inputs);
+        assert_eq!(tab.focused_checkbox_index, 0);
+    }
+
+    #[test]
+    fn test_handle_left_right_navigates_checkboxes() {
+        let mut tab = create_test_tab();
+        tab.focus_area = StandardFocusArea::Options;
+        tab.focused_checkbox_index = 0;
+
+        tab.handle_right();
+        assert_eq!(tab.focused_checkbox_index, 1);
+
+        tab.handle_right();
+        assert_eq!(tab.focused_checkbox_index, 2);
+
+        tab.handle_left();
+        assert_eq!(tab.focused_checkbox_index, 1);
+
+        tab.handle_left();
+        assert_eq!(tab.focused_checkbox_index, 0);
+
+        tab.handle_left();
+        assert_eq!(tab.focused_checkbox_index, 0);
+    }
 }

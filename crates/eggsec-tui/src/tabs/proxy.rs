@@ -25,24 +25,18 @@ pub struct ProxyTab {
     pub view_selector: Selector,
     pub inputs: InputGroup,
     pub proxies: Vec<ProxyConfigEntry>,
-    pub health_results: Vec<ProxyHealthResult>,
-    pub test_result: Option<ProxyTestResult>,
+    pub health_results: Vec<ProxyCheckResult>,
+    pub test_result: Option<ProxyCheckResult>,
     pub current_view: ProxyView,
     pub state: AppState,
     pub results_view: ScrollableText,
     pub error: Option<TabError>,
 }
 
+/// Unified result type for proxy health checks and individual proxy tests.
+/// Replaces the formerly duplicated `ProxyHealthResult` and `ProxyTestResult`.
 #[derive(Clone)]
-pub struct ProxyHealthResult {
-    pub url: String,
-    pub is_healthy: bool,
-    pub latency_ms: Option<u64>,
-    pub error: Option<String>,
-}
-
-#[derive(Clone)]
-pub struct ProxyTestResult {
+pub struct ProxyCheckResult {
     pub url: String,
     pub is_healthy: bool,
     pub latency_ms: Option<u64>,
@@ -73,12 +67,12 @@ impl ProxyTab {
         self.proxies = proxies;
     }
 
-    pub fn set_health_results(&mut self, results: Vec<ProxyHealthResult>) {
+    pub fn set_health_results(&mut self, results: Vec<ProxyCheckResult>) {
         self.health_results = results;
         self.update_health_view();
     }
 
-    pub fn set_test_result(&mut self, result: ProxyTestResult) {
+    pub fn set_test_result(&mut self, result: ProxyCheckResult) {
         self.test_result = Some(result);
         self.update_test_view();
     }
@@ -274,7 +268,7 @@ impl ProxyTab {
                 self.health_results = results
                     .results
                     .iter()
-                    .map(|r| ProxyHealthResult {
+                    .map(|r| ProxyCheckResult {
                         url: r.proxy_url.clone(),
                         is_healthy: r.is_healthy,
                         latency_ms: r.latency_ms,
@@ -355,7 +349,7 @@ impl ProxyTab {
         };
         let result = checker.check(&proxy_entry).await;
 
-        self.test_result = Some(ProxyTestResult {
+        self.test_result = Some(ProxyCheckResult {
             url: proxy_url.to_string(),
             is_healthy: result.is_healthy,
             latency_ms: result.latency_ms,
@@ -795,4 +789,48 @@ fn parse_proxy_url(
     };
 
     Ok((host, port, username, password))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_proxy_check_result_fields() {
+        let result = ProxyCheckResult {
+            url: "http://proxy:8080".to_string(),
+            is_healthy: true,
+            latency_ms: Some(42),
+            error: None,
+        };
+        assert!(result.is_healthy);
+        assert_eq!(result.latency_ms, Some(42));
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_proxy_check_result_unhealthy() {
+        let result = ProxyCheckResult {
+            url: "http://proxy:8080".to_string(),
+            is_healthy: false,
+            latency_ms: None,
+            error: Some("connection refused".to_string()),
+        };
+        assert!(!result.is_healthy);
+        assert!(result.latency_ms.is_none());
+        assert_eq!(result.error.as_deref(), Some("connection refused"));
+    }
+
+    #[test]
+    fn test_proxy_check_result_clone() {
+        let result = ProxyCheckResult {
+            url: "http://proxy:8080".to_string(),
+            is_healthy: true,
+            latency_ms: Some(10),
+            error: None,
+        };
+        let cloned = result.clone();
+        assert_eq!(cloned.url, result.url);
+        assert_eq!(cloned.is_healthy, result.is_healthy);
+    }
 }
