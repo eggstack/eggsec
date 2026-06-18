@@ -409,13 +409,9 @@ impl TabRender for LoadTab {
             let input_block = Block::default()
                 .borders(Borders::ALL)
                 .title(" Load Test Configuration ")
-                .border_style(
-                    Style::default().fg(if self.focus_area == LoadFocusArea::Inputs {
-                        tc!(border_focused)
-                    } else {
-                        tc!(border)
-                    }),
-                );
+                .border_style(crate::tabs::core::focus_border_style(
+                    self.focus_area == LoadFocusArea::Inputs,
+                ));
             let input_inner = input_block.inner(*input_area);
             f.render_widget(input_block, *input_area);
 
@@ -441,13 +437,9 @@ impl TabRender for LoadTab {
             let results_block = Block::default()
                 .borders(Borders::ALL)
                 .title(" Results ")
-                .border_style(
-                    Style::default().fg(if self.focus_area == LoadFocusArea::Results {
-                        tc!(border_focused)
-                    } else {
-                        tc!(border)
-                    }),
-                );
+                .border_style(crate::tabs::core::focus_border_style(
+                    self.focus_area == LoadFocusArea::Results,
+                ));
             let results_inner = results_block.inner(*results_area);
             f.render_widget(results_block, *results_area);
 

@@ -187,13 +187,9 @@ impl TabRender for GraphQlTab {
         let input_block = Block::default()
             .title(" GraphQL Configuration ")
             .borders(Borders::ALL)
-            .border_style(
-                Style::default().fg(if self.focus_area == StandardFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
+            .border_style(crate::tabs::core::focus_border_style(
+                self.focus_area == StandardFocusArea::Inputs,
+            ));
         f.render_widget(input_block, chunks.first().copied().unwrap_or(area));
 
         for (i, field) in self.core.inputs.fields.iter().enumerate() {
@@ -206,13 +202,9 @@ impl TabRender for GraphQlTab {
         let options_block = Block::default()
             .title(" Test Options ")
             .borders(Borders::ALL)
-            .border_style(
-                Style::default().fg(if self.focus_area == StandardFocusArea::Options {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
+            .border_style(crate::tabs::core::focus_border_style(
+                self.focus_area == StandardFocusArea::Options,
+            ));
 
         let options_area = chunks.get(1).copied().unwrap_or(area);
         let options_chunks = Layout::default()

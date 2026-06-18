@@ -1,7 +1,7 @@
 use crate::components::{
     empty_state_paragraph, InputField, InputGroup, Selector, SelectorItem,
 };
-use crate::tabs::core::{start_scan, TabCore};
+use crate::tabs::core::{focus_border_style, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
@@ -225,13 +225,9 @@ impl TabRender for StressTab {
         let input_block = Block::default()
             .title(" Stress Test Configuration ")
             .borders(Borders::ALL)
-            .border_style(
-                Style::default().fg(if self.focus_area == StressFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
+            .border_style(focus_border_style(
+                self.focus_area == StressFocusArea::Inputs,
+            ));
         if let Some(chunk) = chunks.first() {
             f.render_widget(input_block, *chunk);
         }

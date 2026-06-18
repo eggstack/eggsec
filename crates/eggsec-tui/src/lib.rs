@@ -10,5 +10,8 @@ pub mod ui;
 pub mod utils;
 mod workers;
 
+#[cfg(test)]
+pub(crate) mod test_utils;
+
 pub use app::*;
 pub use tabs::Tab;

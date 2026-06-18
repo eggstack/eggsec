@@ -337,13 +337,9 @@ impl TabRender for WafTab {
         let results_block = Block::default()
             .borders(Borders::ALL)
             .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == WafFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
+            .border_style(crate::tabs::core::focus_border_style(
+                self.focus_area == WafFocusArea::Results,
+            ));
         let results_inner = results_block.inner(results_area);
         f.render_widget(results_block, results_area);
 

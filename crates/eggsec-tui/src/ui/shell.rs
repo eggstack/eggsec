@@ -575,23 +575,13 @@ mod tests {
     use crate::app::create_test_app;
     use crate::help::{CommandPalette, CommandPaletteResult};
     use crate::tabs::{SettingsSection, Tab};
+    use crate::test_utils::buffer_to_text;
     use crate::ui::draw;
     use eggsec::config::{
         IntendedUse, OperationDescriptor, OperationMode, OperationRisk, PolicyDecision,
     };
     use ratatui::{backend::TestBackend, Terminal};
     use std::sync::Arc;
-
-    fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
-        let mut out = String::new();
-        for y in 0..buf.area.height {
-            for x in 0..buf.area.width {
-                out.push_str(buf[(x, y)].symbol());
-            }
-            out.push('\n');
-        }
-        out
-    }
 
     #[test]
     fn test_render_80x24_layout_has_tab_bar_status_bar_content() {

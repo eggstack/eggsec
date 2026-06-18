@@ -2,7 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputGroup, ProgressGauge, ScrollableText};
 use crate::tabs::AppState;
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -784,6 +784,19 @@ pub fn handle_escape_to_first<A: Copy + PartialEq>(
     }
 }
 
+// --- Focus-aware styling helpers ---
+
+/// Returns a border `Style` that uses `border_focused` when `focused` is true,
+/// or `border` otherwise. Replaces the 4-line pattern repeated across 30+ tab
+/// render methods.
+pub fn focus_border_style(focused: bool) -> Style {
+    Style::default().fg(if focused {
+        crate::tc!(border_focused)
+    } else {
+        crate::tc!(border)
+    })
+}
+
 // --- Rendering helpers ---
 
 /// Renders the standard 4-branch results area: Running -> Error -> Results -> Empty.
@@ -846,6 +859,143 @@ pub fn render_error_block(f: &mut Frame, area: Rect, title: &str, error: &TabErr
         .block(Block::default().borders(Borders::ALL).title(format!(" {} ", title)))
         .style(Style::default().fg(crate::tc!(error)));
     f.render_widget(error_text, area);
+}
+
+/// Configuration for a standard 2-area render layout (Inputs + Results).
+pub struct Render2AreaConfig<'a> {
+    pub title: &'a str,
+    pub input_constraints: Vec<Constraint>,
+    pub focus_area: StandardFocusArea2,
+    pub inputs_focused: StandardFocusArea2,
+    pub results_focused: StandardFocusArea2,
+    pub empty_title: &'static str,
+    pub empty_text: &'static str,
+}
+
+/// Renders a standard 2-area tab layout: a config block with input fields on
+/// top, and a results area below. Returns the split `Rect` pair so callers
+/// can render additional widgets if needed.
+pub fn render_standard_2area(
+    f: &mut Frame,
+    area: Rect,
+    core: &TabCore,
+    config: &Render2AreaConfig<'_>,
+) {
+    let input_height: u16 = config
+        .input_constraints
+        .iter()
+        .map(|c| match c {
+            Constraint::Length(n) => *n,
+            _ => 3,
+        })
+        .sum();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(input_height),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    let input_inner = render_config_block(
+        f,
+        chunks[0],
+        config.title,
+        config.focus_area == config.inputs_focused,
+    );
+
+    let input_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(config.input_constraints.as_slice())
+        .split(input_inner);
+
+    for (i, field) in core.inputs.fields.iter().enumerate() {
+        if let Some(chunk) = input_chunks.get(i) {
+            field.render(f, *chunk, true);
+        }
+    }
+
+    render_results_area(
+        f,
+        chunks[1],
+        &core.state,
+        &core.error,
+        &core.results_view,
+        &core.progress,
+        config.empty_title,
+        config.empty_text,
+    );
+}
+
+/// Configuration for a standard 3-area render layout (Inputs + Options + Results).
+pub struct Render3AreaConfig<'a> {
+    pub title: &'a str,
+    pub input_constraints: Vec<Constraint>,
+    pub focus_area: StandardFocusArea,
+    pub inputs_focused: StandardFocusArea,
+    pub options_focused: StandardFocusArea,
+    pub results_focused: StandardFocusArea,
+    pub render_options: Box<dyn FnOnce(&mut Frame, Rect, bool) + 'a>,
+    pub empty_title: &'static str,
+    pub empty_text: &'static str,
+}
+
+/// Renders a standard 3-area tab layout: a config block with input fields,
+/// an options area, and a results area. The `render_options` callback is
+/// called to render the options section (checkboxes, selectors, etc.).
+pub fn render_standard_3area(
+    f: &mut Frame,
+    area: Rect,
+    core: &TabCore,
+    config: Render3AreaConfig<'_>,
+) {
+    let input_height: u16 = config
+        .input_constraints
+        .iter()
+        .map(|c| match c {
+            Constraint::Length(n) => *n,
+            _ => 3,
+        })
+        .sum();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(input_height),
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    let input_inner = render_config_block(
+        f,
+        chunks[0],
+        config.title,
+        config.focus_area == config.inputs_focused,
+    );
+
+    let input_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(config.input_constraints.as_slice())
+        .split(input_inner);
+
+    for (i, field) in core.inputs.fields.iter().enumerate() {
+        if let Some(chunk) = input_chunks.get(i) {
+            field.render(f, *chunk, true);
+        }
+    }
+
+    (config.render_options)(f, chunks[1], config.focus_area == config.options_focused);
+
+    render_results_area(
+        f,
+        chunks[2],
+        &core.state,
+        &core.error,
+        &core.results_view,
+        &core.progress,
+        config.empty_title,
+        config.empty_text,
+    );
 }
 
 impl fmt::Debug for TabCore {
@@ -1848,5 +1998,77 @@ mod tests {
         let result = handle_escape_to_first(&mut core, NArea::Results, NArea::Inputs);
         assert_eq!(result, NArea::Inputs);
         assert!(core.inputs.is_focused());
+    }
+
+    // --- focus_border_style tests ---
+
+    #[test]
+    fn focus_border_style_focused_uses_border_focused_color() {
+        let style = focus_border_style(true);
+        // Should produce a non-default style (i.e., a foreground color is set)
+        assert!(style.fg.is_some(), "focused border should have a foreground color");
+    }
+
+    #[test]
+    fn focus_border_style_unfocused_uses_border_color() {
+        let style = focus_border_style(false);
+        assert!(style.fg.is_some(), "unfocused border should have a foreground color");
+    }
+
+    #[test]
+    fn focus_border_style_focused_and_unfocused_differ() {
+        let focused = focus_border_style(true);
+        let unfocused = focus_border_style(false);
+        assert_ne!(focused.fg, unfocused.fg, "focused and unfocused borders should use different colors");
+    }
+
+    // --- render_standard_2area tests ---
+
+    #[test]
+    fn render_standard_2area_runs_without_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let config = Render2AreaConfig {
+            title: "Test",
+            input_constraints: vec![Constraint::Length(3)],
+            focus_area: StandardFocusArea2::Inputs,
+            inputs_focused: StandardFocusArea2::Inputs,
+            results_focused: StandardFocusArea2::Results,
+            empty_title: "Results",
+            empty_text: "No results yet",
+        };
+        terminal
+            .draw(|f| render_standard_2area(f, Rect::new(0, 0, 80, 24), &core, &config))
+            .unwrap();
+    }
+
+    #[test]
+    fn render_standard_2area_with_results_focus() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let config = Render2AreaConfig {
+            title: "Test",
+            input_constraints: vec![Constraint::Length(3)],
+            focus_area: StandardFocusArea2::Results,
+            inputs_focused: StandardFocusArea2::Inputs,
+            results_focused: StandardFocusArea2::Results,
+            empty_title: "Results",
+            empty_text: "No results yet",
+        };
+        terminal
+            .draw(|f| render_standard_2area(f, Rect::new(0, 0, 80, 24), &core, &config))
+            .unwrap();
     }
 }

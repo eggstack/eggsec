@@ -3,18 +3,8 @@ use super::shell::{get_normal_status, get_tab_status};
 use crate::app::{create_test_app, App};
 use crate::tabs::AppState;
 use crate::theme::Theme;
+use crate::test_utils::buffer_to_text;
 use ratatui::{backend::TestBackend, Terminal};
-
-fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
-    let mut out = String::new();
-    for y in 0..buf.area.height {
-        for x in 0..buf.area.width {
-            out.push_str(buf[(x, y)].symbol());
-        }
-        out.push('\n');
-    }
-    out
-}
 
 #[test]
 fn quick_switch_renders_selected_tail_item_in_viewport() {

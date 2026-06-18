@@ -403,11 +403,7 @@ impl TabRender for ReconTab {
         let config_block = Block::default()
             .borders(Borders::ALL)
             .title(" Configuration ")
-            .border_style(Style::default().fg(if is_config_focused {
-                tc!(border_focused)
-            } else {
-                tc!(border)
-            }));
+            .border_style(crate::tabs::core::focus_border_style(is_config_focused));
         let config_inner = config_block.inner(input_area);
         f.render_widget(config_block, input_area);
 
