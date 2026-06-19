@@ -404,13 +404,12 @@ impl App {
                     let mut tab = self.current_tab;
                     tab.as_tab_input(self).stop();
                 }
-                self.set_error_for_current_tab(
-                    crate::app::tab_error::TabError::Target(d.to_human_readable()),
-                );
+                self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                    d.to_human_readable(),
+                ));
             }
         }
     }
-
 
     pub fn handle_escape(&mut self) {
         if self.overlay.show_help {
@@ -466,9 +465,7 @@ impl App {
     /// If the Settings tab's theme selector moved, temporarily apply the
     /// selected theme so every panel previews the same theme uniformly.
     fn maybe_refresh_theme_preview(&mut self) {
-        if self.current_tab == Tab::Settings
-            && self.tabs.settings.needs_theme_preview_refresh
-        {
+        if self.current_tab == Tab::Settings && self.tabs.settings.needs_theme_preview_refresh {
             self.tabs.settings.needs_theme_preview_refresh = false;
             let selected_id = self
                 .tabs
@@ -823,7 +820,10 @@ impl App {
         // Use the human-readable display name (e.g. "Catppuccin Mocha") rather
         // than the raw canonical ID (e.g. "catppuccin-mocha").
         self.overlay.notification = Some(Notification::new(
-            format!("Theme: {}", display_theme_name(&self.theme_manager.current().name)),
+            format!(
+                "Theme: {}",
+                display_theme_name(&self.theme_manager.current().name)
+            ),
             NotificationSeverity::Info,
         ));
     }
@@ -835,10 +835,11 @@ impl App {
             .iter()
             .map(|id| (id.to_string(), display_theme_name(id)))
             .collect();
-        let current = self.theme_manager.current_name().to_string();
         let current_id = self.theme_manager.current_id().to_string();
-        self.tabs.settings.applied_theme_id = Some(current_id);
-        self.tabs.settings.set_available_themes(&themes, &current);
+        self.tabs.settings.applied_theme_id = Some(current_id.clone());
+        self.tabs
+            .settings
+            .set_available_themes(&themes, &current_id);
         // Resolve the selected theme's colors for preview rendering.
         let selected_id = self
             .tabs
@@ -846,7 +847,7 @@ impl App {
             .theme_selector
             .selected_value()
             .map(|s| s.to_string())
-            .unwrap_or_else(|| current.clone());
+            .unwrap_or_else(|| current_id.clone());
         self.tabs.settings.resolved_theme_colors = self
             .theme_manager
             .get_theme(&selected_id)
@@ -977,7 +978,6 @@ impl App {
     // ---------------------------------------------------------------------
     // Phase 1: UiAction apply layer — moved to apply.rs
     // ---------------------------------------------------------------------
-
 }
 
 /// Represents the type of overlay currently shown
@@ -1027,7 +1027,10 @@ mod tests {
     fn make_theme_install_report(
         loaded_themes: Vec<crate::theme::install::LoadedThemeRecord>,
     ) -> crate::theme::install::ThemeInstallReport {
-        let adjusted = loaded_themes.iter().filter(|r| !r.contrast_warnings.is_empty()).count();
+        let adjusted = loaded_themes
+            .iter()
+            .filter(|r| !r.contrast_warnings.is_empty())
+            .count();
         crate::theme::install::ThemeInstallReport {
             theme_dir: None,
             installed: 0,

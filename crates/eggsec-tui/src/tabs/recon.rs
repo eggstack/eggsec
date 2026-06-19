@@ -398,8 +398,8 @@ impl TabRender for ReconTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
-        let is_config_focused =
-            self.focus_area == StandardFocusArea::Inputs || self.focus_area == StandardFocusArea::Options;
+        let is_config_focused = self.focus_area == StandardFocusArea::Inputs
+            || self.focus_area == StandardFocusArea::Options;
         let config_block = Block::default()
             .borders(Borders::ALL)
             .title(" Configuration ")
@@ -514,38 +514,32 @@ impl TabInput for ReconTab {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            StandardFocusArea::Inputs => {
-                self.core.inputs.blur();
-                self.focused_checkbox_index = 0;
-                StandardFocusArea::Options
-            }
-            StandardFocusArea::Options => StandardFocusArea::Results,
-            StandardFocusArea::Results => {
-                self.core.inputs.focus(0);
-                StandardFocusArea::Inputs
-            }
-        };
+        self.focus_area = crate::tabs::core::focus_next_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
+        if self.focus_area == StandardFocusArea::Options {
+            self.focused_checkbox_index = 0;
+        }
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            StandardFocusArea::Inputs => {
-                self.core.inputs.blur();
-                StandardFocusArea::Results
-            }
-            StandardFocusArea::Options => {
-                self.core.inputs.focus(0);
-                StandardFocusArea::Inputs
-            }
-            StandardFocusArea::Results => {
-                self.focused_checkbox_index = 0;
-                StandardFocusArea::Options
-            }
-        };
+        self.focus_area = crate::tabs::core::focus_prev_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
+        if self.focus_area == StandardFocusArea::Options {
+            self.focused_checkbox_index = 0;
+        }
     }
 
     fn handle_delete(&mut self) {
@@ -568,10 +562,7 @@ impl TabInput for ReconTab {
             |_core| false,
         );
         if self.focus_area == StandardFocusArea::Options && !self.is_running() {
-            if let Some(cb) = self
-                .option_checkboxes
-                .get_mut(self.focused_checkbox_index)
-            {
+            if let Some(cb) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
                 cb.toggle();
             }
         }
@@ -595,8 +586,7 @@ impl TabInput for ReconTab {
                 if self.focused_checkbox_index == 0 {
                     self.focused_checkbox_index = self.option_checkboxes.len() - 1;
                 } else {
-                    self.focused_checkbox_index =
-                        self.focused_checkbox_index.saturating_sub(1);
+                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
                 }
             } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.core.scroll_results_up();
@@ -632,8 +622,7 @@ impl TabInput for ReconTab {
                 if self.focused_checkbox_index == 0 {
                     false
                 } else {
-                    self.focused_checkbox_index =
-                        self.focused_checkbox_index.saturating_sub(1);
+                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
                     true
                 }
             } else {
@@ -894,8 +883,7 @@ mod tests {
 
         let buf = terminal.backend().buffer();
         let found = (0..buf.area.height).any(|y| {
-            (0..buf.area.width)
-                .any(|x| buf.cell((x, y)).is_some_and(|cell| cell.symbol() == "▶"))
+            (0..buf.area.width).any(|x| buf.cell((x, y)).is_some_and(|cell| cell.symbol() == "▶"))
         });
         assert!(
             found,

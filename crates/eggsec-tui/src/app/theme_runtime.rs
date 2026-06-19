@@ -66,10 +66,8 @@ impl super::App {
                     self.theme_manager.register_theme_with_source(theme, source);
                     // Track contrast warnings on the registered theme.
                     if !record.contrast_warnings.is_empty() {
-                        self.theme_manager.mark_theme_fallback_adjusted(
-                            &theme_id,
-                            record.contrast_warnings,
-                        );
+                        self.theme_manager
+                            .mark_theme_fallback_adjusted(&theme_id, record.contrast_warnings);
                     }
                 }
                 Err(e) => {
@@ -175,8 +173,7 @@ impl super::App {
                     // Use the pre-adjustment warnings preserved during loading
                     // rather than re-validating the already-adjusted theme.
                     if !info.contrast_warnings.is_empty() {
-                        contrast_cache
-                            .insert(info.id.clone(), info.contrast_warnings.clone());
+                        contrast_cache.insert(info.id.clone(), info.contrast_warnings.clone());
                     }
                 }
                 _ => {}
@@ -190,7 +187,7 @@ impl super::App {
             .theme_selector
             .selected_value()
             .map(|s| s.to_string())
-            .unwrap_or_else(|| self.theme_manager.current_name().to_string());
+            .unwrap_or_else(|| self.theme_manager.current_id().to_string());
         let resolved_theme_colors = self
             .theme_manager
             .get_theme(&selected_id)

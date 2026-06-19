@@ -117,7 +117,8 @@ impl ScanPortsTab {
     }
 
     pub fn start(&mut self) {
-        let target = self.target();        if target.is_empty() {
+        let target = self.target();
+        if target.is_empty() {
             self.core.state = AppState::Error("Target cannot be empty".to_string());
             self.core.error = Some(TabError::Target("Target cannot be empty".to_string()));
             return;
@@ -125,8 +126,7 @@ impl ScanPortsTab {
 
         if self.core.inputs.fields.len() < 2 {
             self.core.state = AppState::Error("Input fields not initialized".to_string());
-            self.core.error =
-                Some(TabError::Config("Input fields not initialized".to_string()));
+            self.core.error = Some(TabError::Config("Input fields not initialized".to_string()));
             return;
         }
 
@@ -270,9 +270,12 @@ impl TabRender for ScanPortsTab {
             }
         }
 
-        let udp_cb = self.udp_checkbox.clone();
         if let Some(chunk) = input_chunks.get(4) {
-            udp_cb.render(f, *chunk);
+            self.udp_checkbox.render_with_focus(
+                self.focus_area == StandardFocusArea::Options,
+                f,
+                *chunk,
+            );
         }
 
         render_results_area(
@@ -322,68 +325,50 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
-        match self.focus_area {
-            StandardFocusArea::Inputs => {
-                self.core.inputs.blur();
-                self.focus_area = StandardFocusArea::Options;
-            }
-            StandardFocusArea::Options => {
-                self.focus_area = StandardFocusArea::Results;
-            }
-            StandardFocusArea::Results => {
-                self.focus_area = StandardFocusArea::Inputs;
-                self.core.inputs.focus(0);
-            }
-        }
+        self.focus_area = crate::tabs::core::focus_next_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        match self.focus_area {
-            StandardFocusArea::Inputs => {
-                self.core.inputs.blur();
-                self.focus_area = StandardFocusArea::Results;
-            }
-            StandardFocusArea::Options => {
-                self.core.inputs.focus(0);
-                self.focus_area = StandardFocusArea::Inputs;
-            }
-            StandardFocusArea::Results => {
-                self.focus_area = StandardFocusArea::Options;
-            }
-        }
+        self.focus_area = crate::tabs::core::focus_prev_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_up(&mut self) {
         if self.is_running() {
             return;
         }
-        if self.focus_area == StandardFocusArea::Inputs {
-            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-                self.core.scroll_results_up();
-            } else {
-                self.core.inputs.focus_prev();
-            }
-        } else if self.focus_area == StandardFocusArea::Results {
-            self.core.scroll_results_up();
-        }
+        crate::tabs::core::handle_up_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_down(&mut self) {
         if self.is_running() {
             return;
         }
-        if self.focus_area == StandardFocusArea::Inputs {
-            if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-                self.core.scroll_results_down();
-            } else {
-                self.core.inputs.focus_next();
-            }
-        } else if self.focus_area == StandardFocusArea::Results {
-            self.core.scroll_results_down();
-        }
+        crate::tabs::core::handle_down_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_enter(&mut self) {

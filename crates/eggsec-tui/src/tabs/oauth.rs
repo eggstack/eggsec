@@ -275,17 +275,18 @@ impl TabRender for OAuthTab {
             .split(options_block.inner(options_area));
 
         f.render_widget(options_block, options_area);
-        if let (Some(c0), Some(c1), Some(c2), Some(c3)) = (
-            options_chunks.first(),
-            options_chunks.get(1),
-            options_chunks.get(2),
-            options_chunks.get(3),
-        ) {
-            self.redirect_test_checkbox.render(f, *c0);
-            self.scope_test_checkbox.render(f, *c1);
-            self.state_test_checkbox.render(f, *c2);
-            self.grant_test_checkbox.render(f, *c3);
-        }
+        crate::tabs::core::render_checkbox_row(
+            f,
+            &options_chunks,
+            &[
+                &self.redirect_test_checkbox,
+                &self.scope_test_checkbox,
+                &self.state_test_checkbox,
+                &self.grant_test_checkbox,
+            ],
+            self.focused_checkbox_index,
+            self.focus_area == StandardFocusArea::Options,
+        );
 
         // Results
         let results_area = chunks.get(2).copied().unwrap_or(area);
@@ -331,53 +332,47 @@ impl TabInput for OAuthTab {
 
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
-            self.focus_area = match self.focus_area {
-                StandardFocusArea::Inputs => {
-                    self.core.inputs.blur();
-                    StandardFocusArea::Options
-                }
-                StandardFocusArea::Options => StandardFocusArea::Results,
-                StandardFocusArea::Results => {
-                    self.core.inputs.focus(0);
-                    StandardFocusArea::Inputs
-                }
-            };
+            self.focus_area = crate::tabs::core::focus_next_3area(
+                &mut self.core,
+                self.focus_area,
+                StandardFocusArea::Inputs,
+                StandardFocusArea::Options,
+                StandardFocusArea::Results,
+            );
         }
     }
 
     fn handle_focus_prev(&mut self) {
         if !self.is_running() {
-            self.focus_area = match self.focus_area {
-                StandardFocusArea::Inputs => {
-                    self.core.inputs.blur();
-                    StandardFocusArea::Results
-                }
-                StandardFocusArea::Options => {
-                    self.core.inputs.focus(0);
-                    StandardFocusArea::Inputs
-                }
-                StandardFocusArea::Results => StandardFocusArea::Options,
-            };
+            self.focus_area = crate::tabs::core::focus_prev_3area(
+                &mut self.core,
+                self.focus_area,
+                StandardFocusArea::Inputs,
+                StandardFocusArea::Options,
+                StandardFocusArea::Results,
+            );
         }
     }
 
     fn handle_up(&mut self) {
         if !self.is_running() {
-            match self.focus_area {
-                StandardFocusArea::Inputs => self.core.inputs.focus_prev(),
-                StandardFocusArea::Results => self.core.scroll_results_up(),
-                _ => {}
-            }
+            crate::tabs::core::handle_up_3area(
+                &mut self.core,
+                self.focus_area,
+                StandardFocusArea::Inputs,
+                StandardFocusArea::Results,
+            );
         }
     }
 
     fn handle_down(&mut self) {
         if !self.is_running() {
-            match self.focus_area {
-                StandardFocusArea::Inputs => self.core.inputs.focus_next(),
-                StandardFocusArea::Results => self.core.scroll_results_down(),
-                _ => {}
-            }
+            crate::tabs::core::handle_down_3area(
+                &mut self.core,
+                self.focus_area,
+                StandardFocusArea::Inputs,
+                StandardFocusArea::Results,
+            );
         }
     }
 
@@ -399,14 +394,16 @@ impl TabInput for OAuthTab {
             |_core| false,
         );
         if self.focus_area == StandardFocusArea::Options && !self.is_running() {
-            let checkboxes = [
+            let mut checkboxes = [
                 &mut self.redirect_test_checkbox,
                 &mut self.scope_test_checkbox,
                 &mut self.state_test_checkbox,
                 &mut self.grant_test_checkbox,
             ];
-            let idx = self.focused_checkbox_index % checkboxes.len();
-            checkboxes[idx].toggle();
+            crate::tabs::core::toggle_focused_checkbox(
+                &mut checkboxes,
+                &mut self.focused_checkbox_index,
+            );
         }
     }
 
@@ -429,10 +426,7 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             StandardFocusArea::Inputs => self.core.inputs.move_left(),
             StandardFocusArea::Options => {
-                if self.focused_checkbox_index > 0 {
-                    self.focused_checkbox_index -= 1;
-                }
-                true
+                crate::tabs::core::move_checkbox_focus_left(&mut self.focused_checkbox_index, 4)
             }
             _ => false,
         }
@@ -445,11 +439,7 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             StandardFocusArea::Inputs => self.core.inputs.move_right(),
             StandardFocusArea::Options => {
-                let max_idx = 3;
-                if self.focused_checkbox_index < max_idx {
-                    self.focused_checkbox_index += 1;
-                }
-                true
+                crate::tabs::core::move_checkbox_focus_right(&mut self.focused_checkbox_index, 4)
             }
             _ => false,
         }
@@ -458,7 +448,9 @@ impl TabInput for OAuthTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             StandardFocusArea::Inputs => !self.core.inputs.can_move_left(),
-            StandardFocusArea::Options => self.focused_checkbox_index == 0,
+            StandardFocusArea::Options => {
+                crate::tabs::core::is_checkbox_focus_at_left_edge(self.focused_checkbox_index, 4)
+            }
             _ => true,
         }
     }
@@ -466,7 +458,9 @@ impl TabInput for OAuthTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             StandardFocusArea::Inputs => !self.core.inputs.can_move_right(),
-            StandardFocusArea::Options => self.focused_checkbox_index >= 3,
+            StandardFocusArea::Options => {
+                crate::tabs::core::is_checkbox_focus_at_right_edge(self.focused_checkbox_index, 4)
+            }
             _ => true,
         }
     }

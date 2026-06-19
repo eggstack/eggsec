@@ -1,5 +1,5 @@
 use crate::app::tab_error::TabError;
-use crate::components::{empty_state_paragraph, InputGroup, ProgressGauge, ScrollableText};
+use crate::components::{empty_state_paragraph, Checkbox, InputGroup, ProgressGauge, ScrollableText};
 use crate::tabs::AppState;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -499,6 +499,62 @@ pub fn is_at_right_edge_simple<A: Copy + PartialEq>(
     } else {
         true
     }
+}
+
+pub fn render_checkbox_row(
+    f: &mut Frame,
+    chunks: &[Rect],
+    checkboxes: &[&Checkbox],
+    focused_index: usize,
+    row_focused: bool,
+) {
+    for (idx, checkbox) in checkboxes.iter().enumerate() {
+        if let Some(chunk) = chunks.get(idx) {
+            checkbox.render_with_focus(row_focused && idx == focused_index, f, *chunk);
+        }
+    }
+}
+
+pub fn toggle_focused_checkbox(
+    checkboxes: &mut [&mut Checkbox],
+    focused_index: &mut usize,
+) -> bool {
+    if checkboxes.is_empty() {
+        return false;
+    }
+    *focused_index = (*focused_index).min(checkboxes.len() - 1);
+    checkboxes[*focused_index].toggle();
+    true
+}
+
+pub fn move_checkbox_focus_left(focused_index: &mut usize, checkbox_count: usize) -> bool {
+    if checkbox_count == 0 {
+        return false;
+    }
+    *focused_index = (*focused_index).min(checkbox_count - 1);
+    if *focused_index > 0 {
+        *focused_index -= 1;
+    }
+    true
+}
+
+pub fn move_checkbox_focus_right(focused_index: &mut usize, checkbox_count: usize) -> bool {
+    if checkbox_count == 0 {
+        return false;
+    }
+    *focused_index = (*focused_index).min(checkbox_count - 1);
+    if *focused_index + 1 < checkbox_count {
+        *focused_index += 1;
+    }
+    true
+}
+
+pub fn is_checkbox_focus_at_left_edge(focused_index: usize, checkbox_count: usize) -> bool {
+    checkbox_count == 0 || focused_index == 0
+}
+
+pub fn is_checkbox_focus_at_right_edge(focused_index: usize, checkbox_count: usize) -> bool {
+    checkbox_count == 0 || focused_index >= checkbox_count.saturating_sub(1)
 }
 
 pub fn indexed_input_area_index<A: Copy + PartialEq>(current: A, input_areas: &[A]) -> Option<usize> {
