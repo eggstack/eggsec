@@ -1003,7 +1003,7 @@ pub(crate) fn create_test_app() -> App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tabs::Tab;
+    use crate::tabs::{SettingsSection, Tab};
     use crossterm::event::KeyCode;
 
     fn make_theme(name: &str) -> crate::theme::Theme {
@@ -1099,6 +1099,37 @@ mod tests {
             Some("dark")
         );
         assert!(app.theme_load.deferred_theme_name.is_none());
+    }
+
+    #[test]
+    fn test_theme_preview_applies_and_focus_cancel_restores_applied_theme() {
+        let mut app = create_test_app();
+        assert_eq!(app.current_theme().name, "cyber-red");
+
+        app.current_tab = Tab::Settings;
+        app.tabs.settings.current_section = SettingsSection::Theme;
+
+        app.apply_action(UiAction::Enter);
+        app.apply_action(UiAction::Enter);
+        assert!(app.tabs.settings.theme_selector.is_open());
+
+        app.apply_action(UiAction::MoveDown);
+
+        assert_eq!(app.current_theme().name, "dark");
+        assert_eq!(
+            app.tabs.settings.applied_theme_id.as_deref(),
+            Some("cyber-red"),
+            "preview must not change the committed theme id"
+        );
+
+        app.apply_action(UiAction::FocusNext);
+
+        assert_eq!(app.current_theme().name, "cyber-red");
+        assert!(!app.tabs.settings.theme_selector.is_open());
+        assert_eq!(
+            app.tabs.settings.theme_selector.selected_value(),
+            Some("cyber-red")
+        );
     }
 
     #[test]

@@ -156,10 +156,12 @@ impl App {
         match action {
             UiAction::FocusNext => {
                 self.handle_focus_next();
+                self.maybe_refresh_theme_preview();
                 self.needs_redraw = true;
             }
             UiAction::FocusPrev => {
                 self.handle_focus_prev();
+                self.maybe_refresh_theme_preview();
                 self.needs_redraw = true;
             }
             UiAction::PageUp => {
@@ -180,18 +182,22 @@ impl App {
             }
             UiAction::MoveLeft => {
                 self.handle_left();
+                self.maybe_refresh_theme_preview();
                 self.needs_redraw = true;
             }
             UiAction::MoveRight => {
                 self.handle_right();
+                self.maybe_refresh_theme_preview();
                 self.needs_redraw = true;
             }
             UiAction::MoveTop => {
                 self.handle_top();
+                self.maybe_refresh_theme_preview();
                 self.needs_redraw = true;
             }
             UiAction::MoveBottom => {
                 self.handle_bottom();
+                self.maybe_refresh_theme_preview();
                 self.needs_redraw = true;
             }
             UiAction::BeginGgSequence => {

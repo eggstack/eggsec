@@ -416,6 +416,64 @@ mod tests {
     }
 
     #[test]
+    fn test_command_palette_j_k_navigate_like_arrows() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press_ctrl(&mut handler, &mut app, 'p');
+        assert!(app.is_command_palette_visible());
+
+        press(&mut handler, &mut app, KeyCode::Char('j'));
+        let after_j = app
+            .command_palette
+            .as_ref()
+            .expect("palette should exist")
+            .selected_index;
+        let expected = if app
+            .command_palette
+            .as_ref()
+            .expect("palette should exist")
+            .results
+            .len()
+            > 1
+        {
+            1
+        } else {
+            0
+        };
+        assert_eq!(after_j, expected);
+
+        press(&mut handler, &mut app, KeyCode::Char('k'));
+        assert_eq!(
+            app.command_palette
+                .as_ref()
+                .expect("palette should exist")
+                .selected_index,
+            0
+        );
+    }
+
+    #[test]
+    fn test_quick_switch_j_k_navigate_like_arrows() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press_ctrl(&mut handler, &mut app, 'x');
+        assert!(app.is_quick_switch_visible());
+
+        press(&mut handler, &mut app, KeyCode::Char('j'));
+        let expected = if app.get_quick_switch_results().len() > 1 {
+            1
+        } else {
+            0
+        };
+        assert_eq!(app.quick_switch.selected, expected);
+
+        press(&mut handler, &mut app, KeyCode::Char('k'));
+        assert_eq!(app.quick_switch.selected, 0);
+    }
+
+    #[test]
     fn test_search_ctrl_u_clears_query_instead_of_paging_content() {
         let mut app = create_test_app();
         let mut handler = KeyHandler::new();

@@ -99,10 +99,10 @@ impl OverlayController {
             (KeyModifiers::NONE, KeyCode::Enter) => {
                 vec![UiAction::CommandPaletteInput(CommandPaletteInput::Enter)]
             }
-            (KeyModifiers::NONE, KeyCode::Up) => {
+            (KeyModifiers::NONE, KeyCode::Up | KeyCode::Char('k')) => {
                 vec![UiAction::CommandPaletteInput(CommandPaletteInput::Up)]
             }
-            (KeyModifiers::NONE, KeyCode::Down) => {
+            (KeyModifiers::NONE, KeyCode::Down | KeyCode::Char('j')) => {
                 vec![UiAction::CommandPaletteInput(CommandPaletteInput::Down)]
             }
             (KeyModifiers::NONE, KeyCode::Backspace) => {
@@ -134,10 +134,10 @@ impl OverlayController {
             (KeyModifiers::NONE, KeyCode::Enter) => {
                 vec![UiAction::QuickSwitchInput(QuickSwitchInput::Enter)]
             }
-            (KeyModifiers::NONE, KeyCode::Up) => {
+            (KeyModifiers::NONE, KeyCode::Up | KeyCode::Char('k')) => {
                 vec![UiAction::QuickSwitchInput(QuickSwitchInput::Up)]
             }
-            (KeyModifiers::NONE, KeyCode::Down) => {
+            (KeyModifiers::NONE, KeyCode::Down | KeyCode::Char('j')) => {
                 vec![UiAction::QuickSwitchInput(QuickSwitchInput::Down)]
             }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) | (KeyModifiers::NONE, KeyCode::PageUp) => {
