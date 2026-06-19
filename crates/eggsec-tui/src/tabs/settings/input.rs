@@ -51,17 +51,14 @@ impl TabInput for SettingsTab {
             return;
         }
         match self.current_section {
-            SettingsSection::Http => self.http_inputs.insert(c),
-            SettingsSection::Scan => self.scan_inputs.insert(c),
-            SettingsSection::Session => self.session_inputs.insert(c),
-            SettingsSection::Proxy => self.proxy_inputs.insert(c),
-            SettingsSection::Scope => self.scope_inputs.insert(c),
-            SettingsSection::Report => self.report_inputs.insert(c),
-            SettingsSection::Schedule => self.schedule_inputs.insert(c),
-            SettingsSection::Notifications => self.notify_inputs.insert(c),
             SettingsSection::Theme => {
                 if c == 'r' && !self.theme_selector.is_open() {
                     self.pending_theme_reload = true;
+                }
+            }
+            _ => {
+                if let Some(inputs) = self.current_text_inputs_mut() {
+                    inputs.insert(c);
                 }
             }
         }
@@ -71,16 +68,8 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.backspace(),
-            SettingsSection::Scan => self.scan_inputs.backspace(),
-            SettingsSection::Session => self.session_inputs.backspace(),
-            SettingsSection::Proxy => self.proxy_inputs.backspace(),
-            SettingsSection::Scope => self.scope_inputs.backspace(),
-            SettingsSection::Report => self.report_inputs.backspace(),
-            SettingsSection::Schedule => self.schedule_inputs.backspace(),
-            SettingsSection::Notifications => self.notify_inputs.backspace(),
-            SettingsSection::Theme => {}
+        if let Some(inputs) = self.current_text_inputs_mut() {
+            inputs.backspace();
         }
     }
 
@@ -88,16 +77,8 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.paste(text),
-            SettingsSection::Scan => self.scan_inputs.paste(text),
-            SettingsSection::Session => self.session_inputs.paste(text),
-            SettingsSection::Proxy => self.proxy_inputs.paste(text),
-            SettingsSection::Scope => self.scope_inputs.paste(text),
-            SettingsSection::Report => self.report_inputs.paste(text),
-            SettingsSection::Schedule => self.schedule_inputs.paste(text),
-            SettingsSection::Notifications => self.notify_inputs.paste(text),
-            SettingsSection::Theme => {}
+        if let Some(inputs) = self.current_text_inputs_mut() {
+            inputs.paste(text);
         }
     }
 
@@ -105,33 +86,16 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return None;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.get_focused_value(),
-            SettingsSection::Scan => self.scan_inputs.get_focused_value(),
-            SettingsSection::Session => self.session_inputs.get_focused_value(),
-            SettingsSection::Proxy => self.proxy_inputs.get_focused_value(),
-            SettingsSection::Scope => self.scope_inputs.get_focused_value(),
-            SettingsSection::Report => self.report_inputs.get_focused_value(),
-            SettingsSection::Schedule => self.schedule_inputs.get_focused_value(),
-            SettingsSection::Notifications => self.notify_inputs.get_focused_value(),
-            SettingsSection::Theme => None,
-        }
+        self.current_text_inputs()
+            .and_then(|inputs| inputs.get_focused_value())
     }
 
     fn handle_word_forward(&mut self) {
         if self.is_running() {
             return;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.move_word_forward(),
-            SettingsSection::Scan => self.scan_inputs.move_word_forward(),
-            SettingsSection::Session => self.session_inputs.move_word_forward(),
-            SettingsSection::Proxy => self.proxy_inputs.move_word_forward(),
-            SettingsSection::Scope => self.scope_inputs.move_word_forward(),
-            SettingsSection::Report => self.report_inputs.move_word_forward(),
-            SettingsSection::Schedule => self.schedule_inputs.move_word_forward(),
-            SettingsSection::Notifications => self.notify_inputs.move_word_forward(),
-            SettingsSection::Theme => {}
+        if let Some(inputs) = self.current_text_inputs_mut() {
+            inputs.move_word_forward();
         }
     }
 
@@ -139,16 +103,8 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.move_word_backward(),
-            SettingsSection::Scan => self.scan_inputs.move_word_backward(),
-            SettingsSection::Session => self.session_inputs.move_word_backward(),
-            SettingsSection::Proxy => self.proxy_inputs.move_word_backward(),
-            SettingsSection::Scope => self.scope_inputs.move_word_backward(),
-            SettingsSection::Report => self.report_inputs.move_word_backward(),
-            SettingsSection::Schedule => self.schedule_inputs.move_word_backward(),
-            SettingsSection::Notifications => self.notify_inputs.move_word_backward(),
-            SettingsSection::Theme => {}
+        if let Some(inputs) = self.current_text_inputs_mut() {
+            inputs.move_word_backward();
         }
     }
 
@@ -156,16 +112,8 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.move_home(),
-            SettingsSection::Scan => self.scan_inputs.move_home(),
-            SettingsSection::Session => self.session_inputs.move_home(),
-            SettingsSection::Proxy => self.proxy_inputs.move_home(),
-            SettingsSection::Scope => self.scope_inputs.move_home(),
-            SettingsSection::Report => self.report_inputs.move_home(),
-            SettingsSection::Schedule => self.schedule_inputs.move_home(),
-            SettingsSection::Notifications => self.notify_inputs.move_home(),
-            SettingsSection::Theme => {}
+        if let Some(inputs) = self.current_text_inputs_mut() {
+            inputs.move_home();
         }
     }
 
@@ -173,16 +121,8 @@ impl TabInput for SettingsTab {
         if self.is_running() {
             return;
         }
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.move_end(),
-            SettingsSection::Scan => self.scan_inputs.move_end(),
-            SettingsSection::Session => self.session_inputs.move_end(),
-            SettingsSection::Proxy => self.proxy_inputs.move_end(),
-            SettingsSection::Scope => self.scope_inputs.move_end(),
-            SettingsSection::Report => self.report_inputs.move_end(),
-            SettingsSection::Schedule => self.schedule_inputs.move_end(),
-            SettingsSection::Notifications => self.notify_inputs.move_end(),
-            SettingsSection::Theme => {}
+        if let Some(inputs) = self.current_text_inputs_mut() {
+            inputs.move_end();
         }
     }
 
@@ -433,17 +373,9 @@ impl TabInput for SettingsTab {
                     self.sync_component_focus();
                     true
                 } else {
-                    match self.current_section {
-                        SettingsSection::Http => self.http_inputs.move_left(),
-                        SettingsSection::Scan => self.scan_inputs.move_left(),
-                        SettingsSection::Session => self.session_inputs.move_left(),
-                        SettingsSection::Proxy => self.proxy_inputs.move_left(),
-                        SettingsSection::Scope => self.scope_inputs.move_left(),
-                        SettingsSection::Report => self.report_inputs.move_left(),
-                        SettingsSection::Schedule => self.schedule_inputs.move_left(),
-                        SettingsSection::Notifications => self.notify_inputs.move_left(),
-                        _ => false,
-                    }
+                    self.current_text_inputs_mut()
+                        .map(|inputs| inputs.move_left())
+                        .unwrap_or(false)
                 }
             } else {
                 if self.theme_selector.is_open() {
@@ -468,17 +400,9 @@ impl TabInput for SettingsTab {
             self.sync_component_focus();
             true
         } else if self.is_input_focused() {
-            match self.current_section {
-                SettingsSection::Http => self.http_inputs.move_right(),
-                SettingsSection::Scan => self.scan_inputs.move_right(),
-                SettingsSection::Session => self.session_inputs.move_right(),
-                SettingsSection::Proxy => self.proxy_inputs.move_right(),
-                SettingsSection::Scope => self.scope_inputs.move_right(),
-                SettingsSection::Report => self.report_inputs.move_right(),
-                SettingsSection::Schedule => self.schedule_inputs.move_right(),
-                SettingsSection::Notifications => self.notify_inputs.move_right(),
-                _ => false,
-            }
+            self.current_text_inputs_mut()
+                .map(|inputs| inputs.move_right())
+                .unwrap_or(false)
         } else {
             false
         }
@@ -488,17 +412,9 @@ impl TabInput for SettingsTab {
         if self.focus_area == SettingsFocusArea::SectionList {
             true
         } else if self.is_input_focused() {
-            match self.current_section {
-                SettingsSection::Http => self.http_inputs.is_at_left_edge(),
-                SettingsSection::Scan => self.scan_inputs.is_at_left_edge(),
-                SettingsSection::Session => self.session_inputs.is_at_left_edge(),
-                SettingsSection::Proxy => self.proxy_inputs.is_at_left_edge(),
-                SettingsSection::Scope => self.scope_inputs.is_at_left_edge(),
-                SettingsSection::Report => self.report_inputs.is_at_left_edge(),
-                SettingsSection::Schedule => self.schedule_inputs.is_at_left_edge(),
-                SettingsSection::Notifications => self.notify_inputs.is_at_left_edge(),
-                _ => true,
-            }
+            self.current_text_inputs()
+                .map(|inputs| inputs.is_at_left_edge())
+                .unwrap_or(true)
         } else {
             true
         }
@@ -506,17 +422,9 @@ impl TabInput for SettingsTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == SettingsFocusArea::SectionDetail && self.is_input_focused() {
-            match self.current_section {
-                SettingsSection::Http => self.http_inputs.is_at_right_edge(),
-                SettingsSection::Scan => self.scan_inputs.is_at_right_edge(),
-                SettingsSection::Session => self.session_inputs.is_at_right_edge(),
-                SettingsSection::Proxy => self.proxy_inputs.is_at_right_edge(),
-                SettingsSection::Scope => self.scope_inputs.is_at_right_edge(),
-                SettingsSection::Report => self.report_inputs.is_at_right_edge(),
-                SettingsSection::Schedule => self.schedule_inputs.is_at_right_edge(),
-                SettingsSection::Notifications => self.notify_inputs.is_at_right_edge(),
-                _ => true,
-            }
+            self.current_text_inputs()
+                .map(|inputs| inputs.is_at_right_edge())
+                .unwrap_or(true)
         } else {
             true
         }

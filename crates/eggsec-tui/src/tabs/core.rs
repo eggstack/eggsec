@@ -517,7 +517,6 @@ pub fn sync_indexed_input_focus<A: Copy + PartialEq>(
     let focused = indexed_input_area_index(current, input_areas)
         .filter(|idx| *idx < core.inputs.fields.len());
     core.inputs.set_focus_for_index(focused);
-    core.inputs.focused = focused;
 }
 
 pub fn focus_next_indexed<A: Copy + PartialEq>(current: A, input_areas: &[A], results: A) -> A {

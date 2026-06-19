@@ -1,7 +1,10 @@
 use crate::commands::handlers::CommandContext;
 use anyhow::Result;
 
-pub async fn handle_packet(_ctx: &CommandContext, _args: crate::cli::PacketArgs) -> Result<()> {
+pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -> Result<()> {
+    #[cfg(not(feature = "packet-inspection"))]
+    let _ = (ctx, args);
+
     #[cfg(feature = "packet-inspection")]
     {
         use crate::cli::PacketSubcommand;

@@ -211,21 +211,61 @@ impl SettingsTab {
     }
 
     pub fn max_focus_index(&self) -> usize {
+        self.detail_item_count().saturating_sub(1)
+    }
+
+    pub(crate) fn current_text_inputs(&self) -> Option<&InputGroup> {
         match self.current_section {
-            SettingsSection::Http => 5,
-            SettingsSection::Scan => 3,
-            SettingsSection::Session => 0,
-            SettingsSection::Proxy => 2,
-            SettingsSection::Scope => 1,
-            SettingsSection::Report => 3,
-            SettingsSection::Schedule => 3,
-            SettingsSection::Notifications => 6,
-            SettingsSection::Theme => 0,
+            SettingsSection::Http => Some(&self.http_inputs),
+            SettingsSection::Scan => Some(&self.scan_inputs),
+            SettingsSection::Session => Some(&self.session_inputs),
+            SettingsSection::Proxy => Some(&self.proxy_inputs),
+            SettingsSection::Scope => Some(&self.scope_inputs),
+            SettingsSection::Report => Some(&self.report_inputs),
+            SettingsSection::Schedule => Some(&self.schedule_inputs),
+            SettingsSection::Notifications => Some(&self.notify_inputs),
+            SettingsSection::Theme => None,
+        }
+    }
+
+    pub(crate) fn current_text_inputs_mut(&mut self) -> Option<&mut InputGroup> {
+        match self.current_section {
+            SettingsSection::Http => Some(&mut self.http_inputs),
+            SettingsSection::Scan => Some(&mut self.scan_inputs),
+            SettingsSection::Session => Some(&mut self.session_inputs),
+            SettingsSection::Proxy => Some(&mut self.proxy_inputs),
+            SettingsSection::Scope => Some(&mut self.scope_inputs),
+            SettingsSection::Report => Some(&mut self.report_inputs),
+            SettingsSection::Schedule => Some(&mut self.schedule_inputs),
+            SettingsSection::Notifications => Some(&mut self.notify_inputs),
+            SettingsSection::Theme => None,
+        }
+    }
+
+    pub(crate) fn current_text_field_count(&self) -> usize {
+        self.current_text_inputs()
+            .map(|inputs| inputs.fields.len())
+            .unwrap_or(0)
+    }
+
+    fn detail_item_count(&self) -> usize {
+        let text_fields = self.current_text_field_count();
+        match self.current_section {
+            SettingsSection::Http => text_fields + 2,
+            SettingsSection::Scan => text_fields + 1,
+            SettingsSection::Session
+            | SettingsSection::Scope
+            | SettingsSection::Report
+            | SettingsSection::Schedule => text_fields,
+            SettingsSection::Proxy => text_fields + 1,
+            SettingsSection::Notifications => text_fields + 3,
+            SettingsSection::Theme => 1,
         }
     }
 
     pub fn sync_component_focus(&mut self) {
         let is_detail = self.focus_area == SettingsFocusArea::SectionDetail;
+        self.detail_focus_index = self.detail_focus_index.min(self.max_focus_index());
         let idx = self.detail_focus_index;
         let keep_proxy_rotation_open =
             is_detail && self.current_section == SettingsSection::Proxy && idx == 2;
@@ -266,16 +306,18 @@ impl SettingsTab {
 
         match self.current_section {
             SettingsSection::Http => {
-                if idx < 4 {
+                let input_count = self.http_inputs.fields.len();
+                if idx < input_count {
                     self.http_inputs.focus(idx);
-                } else if idx == 4 {
+                } else if idx == input_count {
                     self.follow_redirects.focused = true;
                 } else {
                     self.verify_tls.focused = true;
                 }
             }
             SettingsSection::Scan => {
-                if idx < 3 {
+                let input_count = self.scan_inputs.fields.len();
+                if idx < input_count {
                     self.scan_inputs.focus(idx);
                 } else {
                     self.stealth_mode.focused = true;
@@ -285,7 +327,8 @@ impl SettingsTab {
                 self.session_inputs.focus(idx);
             }
             SettingsSection::Proxy => {
-                if idx < 2 {
+                let input_count = self.proxy_inputs.fields.len();
+                if idx < input_count {
                     self.proxy_inputs.focus(idx);
                 } else {
                     self.proxy_rotation_selector.focused = true;
@@ -301,11 +344,12 @@ impl SettingsTab {
                 self.schedule_inputs.focus(idx);
             }
             SettingsSection::Notifications => {
-                if idx < 4 {
+                let input_count = self.notify_inputs.fields.len();
+                if idx < input_count {
                     self.notify_inputs.focus(idx);
-                } else if idx == 4 {
+                } else if idx == input_count {
                     self.notify_on_complete.focused = true;
-                } else if idx == 5 {
+                } else if idx == input_count + 1 {
                     self.notify_on_findings.focused = true;
                 } else {
                     self.severity_selector.focused = true;
@@ -918,17 +962,9 @@ impl SettingsTab {
     }
 
     pub fn is_input_focused(&self) -> bool {
-        match self.current_section {
-            SettingsSection::Http => self.http_inputs.is_focused(),
-            SettingsSection::Scan => self.scan_inputs.is_focused(),
-            SettingsSection::Session => self.session_inputs.is_focused(),
-            SettingsSection::Proxy => self.proxy_inputs.is_focused(),
-            SettingsSection::Scope => self.scope_inputs.is_focused(),
-            SettingsSection::Report => self.report_inputs.is_focused(),
-            SettingsSection::Schedule => self.schedule_inputs.is_focused(),
-            SettingsSection::Notifications => self.notify_inputs.is_focused(),
-            SettingsSection::Theme => false,
-        }
+        self.current_text_inputs()
+            .map(InputGroup::is_focused)
+            .unwrap_or(false)
     }
 }
 
@@ -1652,7 +1688,7 @@ mod tests {
     fn theme_preview_uses_resolved_colors_not_thread_local() {
         use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
-        use crate::theme::palette::{ThemeColors, ThemeMode};
+        use crate::theme::palette::ThemeColors;
         use ratatui::style::Color;
 
         // Custom theme with distinctive colors that differ from any built-in.

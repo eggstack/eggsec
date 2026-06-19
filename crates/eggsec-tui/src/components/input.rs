@@ -679,7 +679,7 @@ impl InputGroup {
     }
 
     pub fn is_focused(&self) -> bool {
-        self.focused.is_some()
+        self.valid_focused_index_ref().is_some()
     }
 
     pub fn is_at_left_edge(&self) -> bool {
@@ -701,9 +701,11 @@ impl InputGroup {
     /// Synchronize per-field `focused` flags with the given index.
     /// `None` blurs all fields; `Some(i)` focuses field `i` (if in bounds).
     pub fn set_focus_for_index(&mut self, idx: Option<usize>) {
+        let idx = idx.filter(|idx| *idx < self.fields.len());
         for (i, field) in self.fields.iter_mut().enumerate() {
             field.focused = Some(i) == idx;
         }
+        self.focused = idx;
     }
 
     /// Clear every field's value and cursor position.
@@ -740,6 +742,20 @@ impl InputGroup {
             }
         }
         duplicates
+    }
+
+    pub fn focus_state_is_consistent(&self) -> bool {
+        let focused_flags: Vec<usize> = self
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, field)| field.focused.then_some(idx))
+            .collect();
+
+        match self.valid_focused_index_ref() {
+            Some(idx) => focused_flags == [idx],
+            None => focused_flags.is_empty(),
+        }
     }
 }
 

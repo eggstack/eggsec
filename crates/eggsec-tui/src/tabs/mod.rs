@@ -52,6 +52,8 @@ pub mod workflow;
 mod spec;
 #[cfg(test)]
 mod handle_enter_regression;
+#[cfg(test)]
+mod input_accessibility;
 pub(crate) use spec::{
     risk_from_group, spec_for, tab_specs, TabRiskGroup,
 };

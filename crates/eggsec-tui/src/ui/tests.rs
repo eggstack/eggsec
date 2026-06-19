@@ -1,6 +1,6 @@
 use super::draw;
 use super::shell::{get_normal_status, get_tab_status};
-use crate::app::{create_test_app, App};
+use crate::app::create_test_app;
 use crate::tabs::AppState;
 use crate::theme::Theme;
 use crate::test_utils::buffer_to_text;

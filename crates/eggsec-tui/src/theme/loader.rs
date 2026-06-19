@@ -222,7 +222,7 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOut
     let buffer = halloy.buffer.as_ref();
     let buttons = halloy.buttons.as_ref();
 
-    let mut colors = ThemeColors {
+    let colors = ThemeColors {
         primary: parse_color_or(
             &text.and_then(|t| t.primary.clone()),
             defaults.colors.primary,
