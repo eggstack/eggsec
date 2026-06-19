@@ -12,3 +12,7 @@ pub fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
     }
     out
 }
+
+pub fn test_theme() -> crate::theme::Theme {
+    crate::theme::Theme::default()
+}

@@ -400,7 +400,13 @@ impl InputField {
         self.render_with_theme(f, area, insert_mode, &theme);
     }
 
-    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, insert_mode: bool, theme: &crate::theme::Theme) {
+    pub fn render_with_theme(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        insert_mode: bool,
+        theme: &crate::theme::Theme,
+    ) {
         let (border_style, title_style) = if self.focused {
             (
                 Style::default()
@@ -446,9 +452,9 @@ impl InputField {
         let char_count = self.value.chars().count();
 
         // Use explicit width if set, otherwise derive from area (minus 2 for borders)
-        let effective_width = self.width.unwrap_or_else(|| {
-            area.width.saturating_sub(2) as usize
-        });
+        let effective_width = self
+            .width
+            .unwrap_or_else(|| area.width.saturating_sub(2) as usize);
 
         let display_value = if effective_width > 0 && char_count > effective_width {
             let start = if cursor_char_pos <= effective_width / 2 {
@@ -522,8 +528,47 @@ impl InputGroup {
     }
 
     pub fn add(mut self, field: InputField) -> Self {
+        assert!(
+            !self.has_label(&field.label),
+            "duplicate input field label in group: {}",
+            field.label
+        );
         self.fields.push(field);
         self
+    }
+
+    fn label_key(label: &str) -> String {
+        label.trim().to_lowercase()
+    }
+
+    pub fn has_label(&self, label: &str) -> bool {
+        let label = Self::label_key(label);
+        self.fields
+            .iter()
+            .any(|field| Self::label_key(&field.label) == label)
+    }
+
+    pub fn field_value(&self, label: &str) -> Option<&str> {
+        let label = Self::label_key(label);
+        self.fields
+            .iter()
+            .find(|field| Self::label_key(&field.label) == label)
+            .map(|field| field.value.as_str())
+    }
+
+    pub fn set_field_value(&mut self, label: &str, value: impl Into<String>) -> bool {
+        let label = Self::label_key(label);
+        let Some(field) = self
+            .fields
+            .iter_mut()
+            .find(|field| Self::label_key(&field.label) == label)
+        else {
+            return false;
+        };
+        let value = value.into();
+        field.cursor_pos = value.len();
+        field.value = value;
+        true
     }
 
     /// Return the current focused index if it is valid, or clear stale state and return None.
@@ -675,7 +720,8 @@ impl InputGroup {
     }
 
     pub fn get_focused_value(&self) -> Option<String> {
-        self.valid_focused_index_ref().map(|idx| self.fields[idx].get_value())
+        self.valid_focused_index_ref()
+            .map(|idx| self.fields[idx].get_value())
     }
 
     pub fn is_focused(&self) -> bool {
@@ -732,13 +778,17 @@ impl InputGroup {
     }
 
     pub fn duplicate_label_names(&self) -> Vec<String> {
+        let mut seen = Vec::new();
+        let mut duplicate_keys = Vec::new();
         let mut duplicates = Vec::new();
-        for (idx, field) in self.fields.iter().enumerate() {
-            let seen_before = self.fields[..idx]
-                .iter()
-                .any(|candidate| candidate.label == field.label);
-            if seen_before && !duplicates.contains(&field.label) {
+        for field in &self.fields {
+            let key = Self::label_key(&field.label);
+            if seen.contains(&key) && !duplicate_keys.contains(&key) {
+                duplicate_keys.push(key.clone());
                 duplicates.push(field.label.clone());
+            }
+            if !seen.contains(&key) {
+                seen.push(key);
             }
         }
         duplicates
@@ -830,7 +880,12 @@ impl FormBuilder {
         self.collect_dropdowns_with_theme(area, viewport_height, &theme)
     }
 
-    pub fn collect_dropdowns_with_theme(&self, area: Rect, viewport_height: u16, theme: &crate::theme::Theme) -> Vec<DropdownInfo> {
+    pub fn collect_dropdowns_with_theme(
+        &self,
+        area: Rect,
+        viewport_height: u16,
+        theme: &crate::theme::Theme,
+    ) -> Vec<DropdownInfo> {
         self.fields
             .iter()
             .enumerate()
@@ -873,7 +928,13 @@ impl FormBuilder {
         self.render_with_theme(f, area, insert_mode, &theme);
     }
 
-    pub fn render_with_theme(&self, f: &mut Frame, area: Rect, insert_mode: bool, theme: &crate::theme::Theme) {
+    pub fn render_with_theme(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        insert_mode: bool,
+        theme: &crate::theme::Theme,
+    ) {
         let block = Block::default()
             .title(self.title.as_str())
             .borders(Borders::ALL)
@@ -891,8 +952,12 @@ impl FormBuilder {
         for (i, field) in self.fields.iter().enumerate() {
             if let Some(chunk) = chunks.get(i) {
                 match field {
-                    FieldVariant::Input(input) => input.render_with_theme(f, *chunk, insert_mode, theme),
-                    FieldVariant::Checkbox(cb) => cb.render_with_theme(cb.focused, f, *chunk, theme),
+                    FieldVariant::Input(input) => {
+                        input.render_with_theme(f, *chunk, insert_mode, theme)
+                    }
+                    FieldVariant::Checkbox(cb) => {
+                        cb.render_with_theme(cb.focused, f, *chunk, theme)
+                    }
                     FieldVariant::Selector(sel) => sel.render_with_theme(f, *chunk, theme),
                     FieldVariant::RadioGroup(rg) => rg.render_with_theme(f, *chunk, theme),
                 }
@@ -996,30 +1061,7 @@ mod tests {
     #[test]
     fn test_render_with_theme_does_not_panic() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
-                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
-                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
-                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
-                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
-                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
-                mode_normal: Color::Green, mode_insert: Color::Yellow,
-                tab_active: Color::Cyan, tab_inactive: Color::Gray,
-                status_running: Color::Green, status_idle: Color::Gray,
-                status_error: Color::Red, focus_normal: Color::Green,
-                focus_input: Color::Yellow, focus_results: Color::Cyan,
-                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
-                active_task: Color::Green, paused_task: Color::Yellow,
-                scope_match: Color::Green, scope_miss: Color::Red,
-                policy_required: Color::Yellow, policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(30, 5)).unwrap();
         let mut field = InputField::new("Target").with_value("192.168.1.1");
@@ -1042,8 +1084,7 @@ mod tests {
 
     #[test]
     fn stale_focus_insert_does_not_panic() {
-        let mut group = InputGroup::new()
-            .add(InputField::new("Field 1"));
+        let mut group = InputGroup::new().add(InputField::new("Field 1"));
         group.focused = Some(99); // stale index
         group.insert('a'); // should not panic
         assert!(group.focused.is_none()); // cleared by valid_focused_index
@@ -1051,8 +1092,7 @@ mod tests {
 
     #[test]
     fn stale_focus_blur_does_not_panic() {
-        let mut group = InputGroup::new()
-            .add(InputField::new("Field 1"));
+        let mut group = InputGroup::new().add(InputField::new("Field 1"));
         group.focused = Some(99);
         group.blur(); // should not panic
         assert!(group.focused.is_none());
@@ -1060,8 +1100,7 @@ mod tests {
 
     #[test]
     fn stale_focus_move_left_does_not_panic() {
-        let mut group = InputGroup::new()
-            .add(InputField::new("Field 1"));
+        let mut group = InputGroup::new().add(InputField::new("Field 1"));
         group.focused = Some(99);
         assert!(!group.move_left());
         assert!(group.focused.is_none());
@@ -1069,8 +1108,7 @@ mod tests {
 
     #[test]
     fn stale_focus_get_focused_value_returns_none() {
-        let mut group = InputGroup::new()
-            .add(InputField::new("Field 1"));
+        let mut group = InputGroup::new().add(InputField::new("Field 1"));
         group.focused = Some(99);
         assert!(group.get_focused_value().is_none());
         // Note: get_focused_value uses the read-only helper, so focused is not cleared.
@@ -1101,43 +1139,40 @@ mod tests {
 
     #[test]
     fn duplicate_label_names_reports_each_duplicate_once() {
-        let group = InputGroup::new()
+        let mut group = InputGroup::new()
             .add(InputField::new("Target"))
-            .add(InputField::new("Port"))
-            .add(InputField::new("Target"))
-            .add(InputField::new("Port"))
             .add(InputField::new("Port"));
+        group.fields.push(InputField::new(" target "));
+        group.fields.push(InputField::new("PORT"));
+        group.fields.push(InputField::new("Port"));
 
-        assert_eq!(group.duplicate_label_names(), vec!["Target", "Port"]);
+        assert_eq!(group.duplicate_label_names(), vec![" target ", "PORT"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate input field label in group: Target")]
+    fn add_rejects_duplicate_labels() {
+        let _group = InputGroup::new()
+            .add(InputField::new("Target"))
+            .add(InputField::new("Target"));
+    }
+
+    #[test]
+    fn set_field_value_updates_by_label_and_cursor() {
+        let mut group = InputGroup::new()
+            .add(InputField::new("Target"))
+            .add(InputField::new("Timeout"));
+
+        assert!(group.set_field_value(" timeout ", "éx"));
+        assert_eq!(group.field_value("TIMEOUT"), Some("éx"));
+        assert_eq!(group.fields[1].cursor_pos, "éx".len());
+        assert!(!group.set_field_value("missing", "value"));
     }
 
     #[test]
     fn test_area_aware_width_truncates_long_text() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
-                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
-                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
-                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
-                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
-                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
-                mode_normal: Color::Green, mode_insert: Color::Yellow,
-                tab_active: Color::Cyan, tab_inactive: Color::Gray,
-                status_running: Color::Green, status_idle: Color::Gray,
-                status_error: Color::Red, focus_normal: Color::Green,
-                focus_input: Color::Yellow, focus_results: Color::Cyan,
-                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
-                active_task: Color::Green, paused_task: Color::Yellow,
-                scope_match: Color::Green, scope_miss: Color::Red,
-                policy_required: Color::Yellow, policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
         // width is None, area is 20 wide (18 usable after borders)
@@ -1155,30 +1190,7 @@ mod tests {
     #[test]
     fn test_area_aware_width_short_text_no_truncation() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
-                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
-                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
-                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
-                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
-                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
-                mode_normal: Color::Green, mode_insert: Color::Yellow,
-                tab_active: Color::Cyan, tab_inactive: Color::Gray,
-                status_running: Color::Green, status_idle: Color::Gray,
-                status_error: Color::Red, focus_normal: Color::Green,
-                focus_input: Color::Yellow, focus_results: Color::Cyan,
-                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
-                active_task: Color::Green, paused_task: Color::Yellow,
-                scope_match: Color::Green, scope_miss: Color::Red,
-                policy_required: Color::Yellow, policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
         // width is None, area is 30 wide (28 usable after borders)
@@ -1195,30 +1207,7 @@ mod tests {
     #[test]
     fn test_explicit_width_overrides_area() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
-                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
-                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
-                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
-                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
-                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
-                mode_normal: Color::Green, mode_insert: Color::Yellow,
-                tab_active: Color::Cyan, tab_inactive: Color::Gray,
-                status_running: Color::Green, status_idle: Color::Gray,
-                status_error: Color::Red, focus_normal: Color::Green,
-                focus_input: Color::Yellow, focus_results: Color::Cyan,
-                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
-                active_task: Color::Green, paused_task: Color::Yellow,
-                scope_match: Color::Green, scope_miss: Color::Red,
-                policy_required: Color::Yellow, policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(50, 3)).unwrap();
         // width is Some(20), area is 50 wide
@@ -1236,30 +1225,7 @@ mod tests {
     #[test]
     fn test_cursor_positioning_with_area_aware_width() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
-                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
-                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
-                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
-                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
-                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
-                mode_normal: Color::Green, mode_insert: Color::Yellow,
-                tab_active: Color::Cyan, tab_inactive: Color::Gray,
-                status_running: Color::Green, status_idle: Color::Gray,
-                status_error: Color::Red, focus_normal: Color::Green,
-                focus_input: Color::Yellow, focus_results: Color::Cyan,
-                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
-                active_task: Color::Green, paused_task: Color::Yellow,
-                scope_match: Color::Green, scope_miss: Color::Red,
-                policy_required: Color::Yellow, policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
         // width is None, area is 20 wide (18 usable)

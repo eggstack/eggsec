@@ -170,12 +170,8 @@ impl TabState for OAuthTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
-        if self.core.inputs.fields.len() > 3 {
-            self.core.inputs.fields[3].value = "10".to_string();
-        }
-        if self.core.inputs.fields.len() > 4 {
-            self.core.inputs.fields[4].value = "15".to_string();
-        }
+        self.core.inputs.set_field_value("Concurrency", "10");
+        self.core.inputs.set_field_value("Timeout (s)", "15");
         self.core.inputs.blur();
         self.focus_area = StandardFocusArea::Inputs;
         self.focused_checkbox_index = 0;

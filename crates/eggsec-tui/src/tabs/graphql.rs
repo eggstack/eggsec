@@ -133,12 +133,8 @@ impl TabState for GraphQlTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
-        if self.core.inputs.fields.len() > 1 {
-            self.core.inputs.fields[1].value = "10".to_string();
-        }
-        if self.core.inputs.fields.len() > 2 {
-            self.core.inputs.fields[2].value = "15".to_string();
-        }
+        self.core.inputs.set_field_value("Concurrency", "10");
+        self.core.inputs.set_field_value("Timeout (s)", "15");
         self.core.inputs.blur();
         self.focus_area = StandardFocusArea::Inputs;
         self.focused_checkbox_index = 0;

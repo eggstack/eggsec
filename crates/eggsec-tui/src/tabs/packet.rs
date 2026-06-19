@@ -486,9 +486,8 @@ impl TabState for PacketTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 2 {
-            self.inputs.fields[2].value = "100".to_string();
-        }
+        self.inputs
+            .set_field_value("Max Packets (default: 100)", "100");
         self.inputs.blur();
         self.current_view = PacketView::Capture;
         self.view_selector.select(0);
@@ -600,7 +599,10 @@ impl TabRender for PacketTab {
             ])
             .split(area);
         let selector_area = chunks.first().copied().unwrap_or(area);
-        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area, f.area().height) {
+        if let Some(dropdown) = self
+            .view_selector
+            .dropdown_info(selector_area, f.area().height)
+        {
             dropdown.render(f);
         }
     }

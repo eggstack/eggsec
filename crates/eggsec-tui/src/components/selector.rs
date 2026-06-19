@@ -42,7 +42,9 @@ impl DropdownInfo {
                         .bg(theme.colors.selected)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(theme.colors.text).bg(theme.colors.surface)
+                    Style::default()
+                        .fg(theme.colors.text)
+                        .bg(theme.colors.surface)
                 };
                 ListItem::new(label.as_str()).style(style)
             })
@@ -186,7 +188,8 @@ impl Selector {
         }
 
         let max_height = 10u16;
-        let desired_height = (self.items.len().min(u16::MAX as usize - 2) + 2).min(max_height as usize) as u16;
+        let desired_height =
+            (self.items.len().min(u16::MAX as usize - 2) + 2).min(max_height as usize) as u16;
 
         let below_y = anchor_area.y.saturating_add(anchor_area.height);
         let below_fits = below_y.saturating_add(desired_height) <= viewport_height;
@@ -426,7 +429,13 @@ impl Checkbox {
         self.render_with_theme(focused, f, area, &theme);
     }
 
-    pub fn render_with_theme(&self, focused: bool, f: &mut Frame, area: Rect, theme: &crate::theme::Theme) {
+    pub fn render_with_theme(
+        &self,
+        focused: bool,
+        f: &mut Frame,
+        area: Rect,
+        theme: &crate::theme::Theme,
+    ) {
         let check = if self.checked { "[✓]" } else { "[ ]" };
         let prefix = if focused { "▶ " } else { "  " };
         let text = format!("{}{}{}", prefix, check, self.label);
@@ -906,9 +915,8 @@ mod tests {
 
     #[test]
     fn dropdown_info_never_exceeds_viewport() {
-        let mut selector = Selector::new("Test").simple_items(vec![
-            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
-        ]);
+        let mut selector = Selector::new("Test")
+            .simple_items(vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]);
         selector.expand();
         let anchor = Rect::new(0, 0, 20, 3);
         let info = selector.dropdown_info(anchor, 12).unwrap();
@@ -927,52 +935,7 @@ mod tests {
     #[test]
     fn selector_render_with_theme_does_not_panic() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test-theme".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red,
-                secondary: Color::Blue,
-                accent: Color::Cyan,
-                background: Color::Black,
-                foreground: Color::White,
-                surface: Color::DarkGray,
-                border: Color::Gray,
-                border_focused: Color::Yellow,
-                text: Color::White,
-                text_dim: Color::DarkGray,
-                text_bright: Color::White,
-                success: Color::Green,
-                warning: Color::Yellow,
-                error: Color::Red,
-                info: Color::Cyan,
-                selected: Color::Blue,
-                selected_text: Color::White,
-                highlight: Color::Yellow,
-                mode_normal: Color::Green,
-                mode_insert: Color::Yellow,
-                tab_active: Color::Cyan,
-                tab_inactive: Color::Gray,
-                status_running: Color::Green,
-                status_idle: Color::Gray,
-                status_error: Color::Red,
-                focus_normal: Color::Green,
-                focus_input: Color::Yellow,
-                focus_results: Color::Cyan,
-                safe: Color::Green,
-                danger: Color::Red,
-                muted: Color::DarkGray,
-                active_task: Color::Green,
-                paused_task: Color::Yellow,
-                scope_match: Color::Green,
-                scope_miss: Color::Red,
-                policy_required: Color::Yellow,
-                policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(30, 5)).unwrap();
         let selector = Selector::new("Test").simple_items(vec!["Alpha", "Beta", "Gamma"]);
@@ -996,30 +959,7 @@ mod tests {
     #[test]
     fn checkbox_render_with_theme_does_not_panic() {
         use ratatui::{backend::TestBackend, Terminal};
-        use crate::theme::palette::{Theme, ThemeMode, ThemeColors};
-        use ratatui::style::Color;
-
-        let theme = Theme {
-            mode: ThemeMode::Dark,
-            name: "test".to_string(),
-            colors: ThemeColors {
-                primary: Color::Red, secondary: Color::Blue, accent: Color::Cyan,
-                background: Color::Black, foreground: Color::White, surface: Color::DarkGray,
-                border: Color::Gray, border_focused: Color::Yellow, text: Color::White,
-                text_dim: Color::DarkGray, text_bright: Color::White, success: Color::Green,
-                warning: Color::Yellow, error: Color::Red, info: Color::Cyan,
-                selected: Color::Blue, selected_text: Color::White, highlight: Color::Yellow,
-                mode_normal: Color::Green, mode_insert: Color::Yellow,
-                tab_active: Color::Cyan, tab_inactive: Color::Gray,
-                status_running: Color::Green, status_idle: Color::Gray,
-                status_error: Color::Red, focus_normal: Color::Green,
-                focus_input: Color::Yellow, focus_results: Color::Cyan,
-                safe: Color::Green, danger: Color::Red, muted: Color::DarkGray,
-                active_task: Color::Green, paused_task: Color::Yellow,
-                scope_match: Color::Green, scope_miss: Color::Red,
-                policy_required: Color::Yellow, policy_denied: Color::Red,
-            },
-        };
+        let theme = crate::test_utils::test_theme();
 
         let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
         let cb = Checkbox::new("Enable feature").checked(true);
