@@ -813,7 +813,7 @@ impl GrpcStreamingState {
         // Update bytes in flight based on direction
         match frame.direction {
             ProxyFlowDirection::Request => {
-                self.bytes_in_flight += frame.size;
+                self.bytes_in_flight = self.bytes_in_flight.saturating_add(frame.size);
                 self.client_frames.push(frame);
             }
             ProxyFlowDirection::Response => {
@@ -830,12 +830,12 @@ impl GrpcStreamingState {
 
     /// Check if we can send more data without exceeding flow control window.
     pub fn can_send(&self, size: u64) -> bool {
-        self.bytes_in_flight + size <= self.flow_control_window as u64
+        size <= self.remaining_window()
     }
 
     /// Get remaining flow control window size.
     pub fn remaining_window(&self) -> u64 {
-        self.flow_control_window.saturating_sub(self.bytes_in_flight as u32) as u64
+        u64::from(self.flow_control_window).saturating_sub(self.bytes_in_flight)
     }
 
     /// Update flow control window (simulates WINDOW_UPDATE frame from peer).
@@ -882,9 +882,11 @@ impl GrpcStreamingState {
             });
         }
 
-        let mut frame = GrpcStreamFrame::new(stream_id, direction)
-            .with_payload(payload)
-            .with_end_stream();
+        let mut frame = GrpcStreamFrame::new(stream_id, direction).with_payload(payload);
+
+        if end_stream {
+            frame = frame.with_end_stream();
+        }
 
         if compressed {
             frame = frame.with_compressed();

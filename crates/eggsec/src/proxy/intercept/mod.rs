@@ -57,6 +57,7 @@ pub use plugins::{
 };
 
 use crate::error::{EggsecError, Result};
+#[cfg(feature = "web-proxy")]
 use bytes::Bytes;
 use parking_lot::RwLock;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};

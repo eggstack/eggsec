@@ -16,7 +16,6 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["David Bowman"]
-organization = "eggstack"
 repository = "https://github.com/eggstack/eggsec"
 homepage = "https://github.com/eggstack/eggsec"
 documentation = "https://github.com/eggstack/eggsec#readme"

@@ -2,9 +2,6 @@
 
 use eggsec::tool::registry::ToolRegistry;
 use eggsec::tool::traits::{SecurityTool, ToolCapability, ToolCategory};
-use std::sync::Arc;
-use std::time::Duration;
-
 struct MockTool {
     id: &'static str,
     name: &'static str,
@@ -18,24 +15,25 @@ impl MockTool {
         Self {
             id,
             name,
-            description: format!("Mock {} tool", name),
+            description: "Mock tool",
             category,
             capabilities: vec![],
         }
     }
 }
 
+#[async_trait::async_trait]
 impl SecurityTool for MockTool {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         self.id
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         self.name
     }
 
-    fn description(&self) -> &str {
-        self.description.as_str()
+    fn description(&self) -> &'static str {
+        self.description
     }
 
     fn category(&self) -> ToolCategory {
@@ -46,8 +44,15 @@ impl SecurityTool for MockTool {
         self.capabilities.clone()
     }
 
-    fn supported_protocols(&self) -> Vec<String> {
-        vec!["http".to_string(), "https".to_string()]
+    fn supported_protocols(&self) -> Vec<&'static str> {
+        vec!["http", "https"]
+    }
+
+    async fn execute(
+        &self,
+        _request: eggsec::tool::ToolRequest,
+    ) -> eggsec::tool::ToolResult<eggsec::tool::ToolResponse> {
+        unreachable!("mock registry tools are not executed")
     }
 }
 
@@ -64,7 +69,7 @@ fn test_registry_register() {
     let result = registry.register(MockTool::new(
         "test",
         "Test Tool",
-        ToolCategory::Reconnaissance,
+        ToolCategory::Recon,
     ));
     assert!(result.is_ok());
 }
@@ -76,10 +81,10 @@ fn test_registry_register_duplicate() {
         .register(MockTool::new(
             "test",
             "Test Tool",
-            ToolCategory::Reconnaissance,
+            ToolCategory::Recon,
         ))
         .unwrap();
-    let result = registry.register(MockTool::new("test", "Test Tool 2", ToolCategory::Scanner));
+    let result = registry.register(MockTool::new("test", "Test Tool 2", ToolCategory::Scanning));
     assert!(result.is_err());
 }
 
@@ -90,7 +95,7 @@ fn test_registry_unregister() {
         .register(MockTool::new(
             "test",
             "Test Tool",
-            ToolCategory::Reconnaissance,
+            ToolCategory::Recon,
         ))
         .unwrap();
     let removed = registry.unregister("test");
@@ -112,7 +117,7 @@ fn test_registry_get() {
         .register(MockTool::new(
             "test",
             "Test Tool",
-            ToolCategory::Reconnaissance,
+            ToolCategory::Recon,
         ))
         .unwrap();
     let tool = registry.get("test");
@@ -134,11 +139,11 @@ fn test_registry_list() {
         .register(MockTool::new(
             "test1",
             "Test Tool 1",
-            ToolCategory::Reconnaissance,
+            ToolCategory::Recon,
         ))
         .unwrap();
     registry
-        .register(MockTool::new("test2", "Test Tool 2", ToolCategory::Scanner))
+        .register(MockTool::new("test2", "Test Tool 2", ToolCategory::Scanning))
         .unwrap();
 
     let tools = registry.list();
@@ -152,14 +157,14 @@ fn test_registry_list_by_category() {
         .register(MockTool::new(
             "recon",
             "Recon",
-            ToolCategory::Reconnaissance,
+            ToolCategory::Recon,
         ))
         .unwrap();
     registry
-        .register(MockTool::new("scan", "Scanner", ToolCategory::Scanner))
+        .register(MockTool::new("scan", "Scanner", ToolCategory::Scanning))
         .unwrap();
 
-    let recon_tools = registry.list_by_category(ToolCategory::Reconnaissance);
+    let recon_tools = registry.list_by_category(ToolCategory::Recon);
     assert_eq!(recon_tools.len(), 1);
     assert_eq!(recon_tools[0].id, "recon");
 }
@@ -171,27 +176,27 @@ fn test_registry_categories() {
         .register(MockTool::new(
             "recon",
             "Recon",
-            ToolCategory::Reconnaissance,
+            ToolCategory::Recon,
         ))
         .unwrap();
     registry
-        .register(MockTool::new("scan", "Scanner", ToolCategory::Scanner))
+        .register(MockTool::new("scan", "Scanner", ToolCategory::Scanning))
         .unwrap();
     registry
-        .register(MockTool::new("fuzz", "Fuzzer", ToolCategory::Fuzzer))
+        .register(MockTool::new("fuzz", "Fuzzer", ToolCategory::Fuzzing))
         .unwrap();
 
     let categories = registry.categories();
-    assert!(categories.contains(&ToolCategory::Reconnaissance));
-    assert!(categories.contains(&ToolCategory::Scanner));
-    assert!(categories.contains(&ToolCategory::Fuzzer));
+    assert!(categories.contains(&ToolCategory::Recon));
+    assert!(categories.contains(&ToolCategory::Scanning));
+    assert!(categories.contains(&ToolCategory::Fuzzing));
 }
 
 #[test]
 fn test_registry_clone() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new("test", "Test", ToolCategory::Reconnaissance))
+        .register(MockTool::new("test", "Test", ToolCategory::Recon))
         .unwrap();
 
     let cloned = registry.clone();
@@ -205,15 +210,20 @@ async fn test_registry_concurrent_access() {
 
     let registry = Arc::new(ToolRegistry::new());
 
+    const IDS: [&str; 10] = [
+        "tool0", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8",
+        "tool9",
+    ];
+    const NAMES: [&str; 10] = [
+        "Tool 0", "Tool 1", "Tool 2", "Tool 3", "Tool 4", "Tool 5", "Tool 6", "Tool 7",
+        "Tool 8", "Tool 9",
+    ];
+
     let mut handles = Vec::new();
-    for i in 0..10 {
+    for (id, name) in IDS.into_iter().zip(NAMES) {
         let reg = registry.clone();
         let handle = task::spawn(async move {
-            reg.register(MockTool::new(
-                format!("tool{}", i),
-                format!("Tool {}", i),
-                ToolCategory::Reconnaissance,
-            ))
+            reg.register(MockTool::new(id, name, ToolCategory::Recon))
         });
         handles.push(handle);
     }

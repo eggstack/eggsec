@@ -5,8 +5,7 @@ use std::sync::{Arc, LazyLock};
 
 use crate::error::EggsecError;
 use crate::output::AgentSeverity;
-use crate::proxy::intercept::types::{BudgetUsage, ProxyFlow, WebProxySessionReport};
-use crate::tool::response::{Finding, FindingType, ResponseSeverity};
+use crate::proxy::intercept::types::{ProxyFlow, WebProxySessionReport};
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,
     ToolCategory,
@@ -129,11 +128,11 @@ impl SecurityTool for ProxyTool {
                     targets_scanned: 0,
                     findings_count: 0,
                 },
-                errors: vec![crate::tool::response::ToolError {
-                    error_type: crate::tool::response::ToolErrorType::ExecutionFailed,
-                    message: e.to_string(),
-                    recoverable: true,
-                }],
+                errors: vec![crate::tool::ToolError::new(
+                    "PROXY_EXECUTION_FAILED",
+                    e.to_string(),
+                )
+                .with_error_type(crate::tool::ToolErrorType::Internal)],
                 findings: vec![],
             }),
         }

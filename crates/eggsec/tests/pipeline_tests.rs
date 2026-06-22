@@ -105,6 +105,8 @@ fn test_pipeline_report_failure_helpers() {
         manifest: None,
         vuln_assessment: None,
         load_test_results: None,
+        #[cfg(feature = "web-proxy")]
+        web_proxy_report: None,
     };
 
     assert!(report.has_failures());

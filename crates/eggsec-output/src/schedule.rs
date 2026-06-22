@@ -481,7 +481,7 @@ mod tests {
                 wordlist: None,
             },
         };
-        queue.enqueue(scan);
+        queue.enqueue(scan).expect("scan should be queued");
         let started = queue.start_next().expect("should start");
         assert_eq!(started.id, "s1");
         assert!(queue.get_running().is_some());
@@ -507,7 +507,7 @@ mod tests {
                 wordlist: None,
             },
         };
-        queue.enqueue(scan);
+        queue.enqueue(scan).expect("scan should be queued");
         let _ = queue.start_next().expect("should start");
 
         queue.complete("s2", false);

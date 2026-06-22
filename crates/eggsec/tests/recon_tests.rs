@@ -1,4 +1,6 @@
-use eggsec::recon::{cloud::CloudDiscovery, threatintel::ThreatIntel};
+#[cfg(feature = "cloud")]
+use eggsec::recon::cloud::CloudDiscovery;
+use eggsec::recon::threatintel::ThreatIntel;
 
 #[test]
 fn test_threat_intel_empty() {
@@ -10,6 +12,7 @@ fn test_threat_intel_empty() {
 }
 
 #[test]
+#[cfg(feature = "cloud")]
 fn test_cloud_discovery_empty() {
     let discovery = CloudDiscovery::default();
     assert!(discovery.domain.is_empty());

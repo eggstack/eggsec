@@ -65,7 +65,7 @@ impl SecurityTool for C2Tool {
             .unwrap_or("default")
             .to_string();
 
-        let config = crate::config::load_config().map_err(|e| {
+        let config = crate::config::load_config(None).map_err(|e| {
             crate::error::EggsecError::Config(format!("Failed to load config: {}", e))
         })?;
 

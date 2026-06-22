@@ -1,3 +1,5 @@
+#![cfg(feature = "web-proxy")]
+
 #[cfg(test)]
 mod benchmarks {
     use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
@@ -7,7 +9,7 @@ mod benchmarks {
 
         for preset in ["T0", "T1", "T2", "T3", "T4", "T5"] {
             group.bench_with_input(BenchmarkId::from_parameter(preset), preset, |b, preset| {
-                b.iter(|| eggsec::scanner::timing::TimingPreset::from_str(black_box(preset)));
+                b.iter(|| eggsec::scanner::timing::TimingPreset::parse(black_box(preset)));
             });
         }
 
@@ -114,7 +116,7 @@ mod benchmarks {
 
     // ==================== Proxy Module Benchmarks ====================
 
-    use eggsec::proxy::intercept::rules::{
+    use eggsec::proxy::intercept::{
         EnhancedRule, EnhancedRuleSet, RuleAction, RuleCondition, RuleContext,
     };
 
@@ -190,7 +192,7 @@ mod benchmarks {
     }
 
     fn evidence_bundle_export_benchmark(c: &mut Criterion) {
-        use eggsec::proxy::intercept::bundle::EvidenceBundle;
+        use eggsec::proxy::intercept::EvidenceBundle;
         use eggsec::proxy::intercept::types::{ProxyFlow, WebProxySessionReport};
 
         let mut group = c.benchmark_group("evidence_bundle");

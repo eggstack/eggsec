@@ -116,7 +116,7 @@ mod tests {
             scan_type: "fuzz".to_string(),
             timestamp: chrono::Utc::now(),
             findings_count: 5,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: rustc_hash::FxHashMap::default(),
         };
 
         portfolio.add_scan_record("example.com", record);

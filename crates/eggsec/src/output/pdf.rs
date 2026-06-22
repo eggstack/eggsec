@@ -82,14 +82,6 @@ impl PdfGenerator {
         }
 
         let mut y_position = 220.0;
-        let severity_colors: &[(&str, Color)] = &[
-            ("Critical", Color::new(0.83, 0.18, 0.18)),
-            ("High", Color::new(0.97, 0.49, 0.0)),
-            ("Medium", Color::new(1.0, 0.6, 0.0)),
-            ("Low", Color::new(0.3, 0.69, 0.31)),
-            ("Info", Color::new(0.13, 0.59, 0.95)),
-        ];
-
         for finding in findings.iter().take(30) {
             if y_position < 30.0 {
                 break;

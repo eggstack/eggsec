@@ -1,5 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use eggsec::proxy::intercept::rules::{EnhancedRule, EnhancedRuleSet, RuleCondition, RuleContext, RuleAction};
+use eggsec::proxy::intercept::{
+    EnhancedRule, EnhancedRuleSet, RuleAction, RuleCondition, RuleContext,
+};
 use eggsec::proxy::intercept::types::{ProxyFlow, FlowBuffer, WebProxySessionReport};
 use std::collections::HashMap;
 

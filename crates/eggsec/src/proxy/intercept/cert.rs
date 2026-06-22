@@ -109,24 +109,21 @@ impl CertGenerator {
     }
 
     fn cache_cert(&self, host: &str, material: &CertMaterial) {
-        if let Some(mut cache) = self.cache.try_write() {
-            let now = unix_timestamp_secs();
+        let mut cache = self.cache.write();
+        let now = unix_timestamp_secs();
 
-            cache.insert(
-                host.to_string(),
-                CachedCert {
-                    der_bytes: material.cert_der.clone(),
-                    key_der_bytes: material.key_der.clone(),
-                    generated_at: now,
-                },
-            );
-        }
+        cache.insert(
+            host.to_string(),
+            CachedCert {
+                der_bytes: material.cert_der.clone(),
+                key_der_bytes: material.key_der.clone(),
+                generated_at: now,
+            },
+        );
     }
 
     pub fn clear_cache(&self) {
-        if let Some(mut cache) = self.cache.try_write() {
-            cache.clear();
-        }
+        self.cache.write().clear();
     }
 }
 

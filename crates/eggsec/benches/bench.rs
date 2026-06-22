@@ -1,9 +1,10 @@
 use eggsec::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
-use eggsec::scanner::ports::scan_ports_optimized;
+use eggsec::scanner::ports::{scan_ports, PortScanConfig};
 use eggsec::scanner::spoof::SpoofConfig;
 use eggsec::scanner::timing::{PortPriority, TimingConfig, TimingPreset};
 use eggsec::utils::client_pool::ClientPool;
 use std::env;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn print_header(title: &str) {
@@ -20,7 +21,7 @@ fn benchmark_timing_config() {
     for preset in presets {
         let start = Instant::now();
         for _ in 0..10000 {
-            let _ = TimingConfig::from_str(preset);
+            let _ = TimingConfig::from_preset(TimingPreset::parse(preset));
         }
         let elapsed = start.elapsed();
         println!(
@@ -82,8 +83,16 @@ async fn benchmark_port_scan(host: &str, ports: Vec<u16>, timing: TimingConfig, 
     );
 
     let start = Instant::now();
-    let result =
-        scan_ports_optimized(host, ports.clone(), timing, false, SpoofConfig::default()).await;
+    let result = scan_ports(
+        host,
+        PortScanConfig {
+            ports: ports.clone(),
+            concurrency: timing.max_parallelism,
+            timeout_duration: timing.timeout(),
+            ..PortScanConfig::default()
+        },
+    )
+    .await;
 
     match result {
         Ok(scan_result) => {
@@ -117,7 +126,7 @@ async fn benchmark_endpoint_scan(url: &str, concurrency: usize) {
         timeout_duration: Duration::from_secs(5),
         include_404: false,
         tui_mode: false,
-        spoof_config: SpoofConfig::default(),
+        spoof_config: Arc::new(SpoofConfig::default()),
         verify_tls: false,
         progress_tx: None,
         max_results: None,

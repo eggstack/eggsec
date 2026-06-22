@@ -6,7 +6,7 @@ use eggsec::scanner::templates::verify::{
 fn create_test_template() -> VulnerabilityTemplate {
     VulnerabilityTemplate {
         id: "test-template".to_string(),
-        info: crate::scanner::templates::models::TemplateInfo {
+        info: eggsec::scanner::templates::models::TemplateInfo {
             name: "Test Template".to_string(),
             author: "test".to_string(),
             severity: "high".to_string(),

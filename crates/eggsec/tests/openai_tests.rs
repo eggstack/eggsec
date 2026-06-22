@@ -70,14 +70,14 @@ mod tests {
     fn test_openai_router_function() {
         use eggsec::tool::protocol::openai;
         let registry = eggsec::tool::create_default_registry();
-        let _router = openai::router(registry);
+        let _router = openai::router(registry.into(), None, None);
     }
 
     #[test]
     fn test_openai_router_includes_models() {
         use eggsec::tool::protocol::openai;
         let registry = eggsec::tool::create_default_registry();
-        let router = openai::router(registry);
+        let router = openai::router(registry.into(), None, None);
         let _ = router;
     }
 

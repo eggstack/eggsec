@@ -8,7 +8,6 @@ mod integration_tests {
     use eggsec::proxy::intercept::protocols::*;
     use eggsec::proxy::intercept::types::*;
     use std::collections::HashMap;
-    use std::net::SocketAddr;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
     use tokio::time::{timeout, Duration};
@@ -59,13 +58,14 @@ mod integration_tests {
         headers.insert("connection".to_string(), "Upgrade".to_string());
         headers.insert("sec-websocket-key".to_string(), "dGhlIHNhbXBsZSBub25jZQ==".to_string());
 
-        // Test the WebSocket detection function
-        assert!(is_websocket_upgrade(&headers));
+        let detection = detect_protocol("GET", "/socket", &headers);
+        assert_eq!(detection.protocol, ProxyProtocol::WebSocket);
 
         // Test non-WebSocket headers
         let mut normal_headers = HashMap::new();
         normal_headers.insert("content-type".to_string(), "application/json".to_string());
-        assert!(!is_websocket_upgrade(&normal_headers));
+        let detection = detect_protocol("GET", "/socket", &normal_headers);
+        assert_ne!(detection.protocol, ProxyProtocol::WebSocket);
     }
 
     /// Test HTTP/2 stream multiplexing.
@@ -130,14 +130,28 @@ mod integration_tests {
         state.flow_control_window = 1000; // Small window for testing
 
         // Should succeed within window
-        let frame = state.create_frame(
-            1,
-            ProxyFlowDirection::Request,
-            vec![0u8; 500],
-            false,
-            false,
-        );
-        assert!(frame.is_ok());
+        let frame = state
+            .create_frame(
+                1,
+                ProxyFlowDirection::Request,
+                vec![0u8; 500],
+                false,
+                false,
+            )
+            .unwrap();
+        assert!(!frame.end_stream);
+        state.add_frame(frame);
+
+        let final_frame = state
+            .create_frame(
+                1,
+                ProxyFlowDirection::Request,
+                Vec::new(),
+                true,
+                false,
+            )
+            .unwrap();
+        assert!(final_frame.end_stream);
 
         // Should fail when exceeding window
         let frame = state.create_frame(
@@ -163,7 +177,7 @@ mod integration_tests {
         let mut state = GrpcStreamingState::new(GrpcMethodType::ServerStreaming);
 
         // Add some frames
-        for i in 0..5 {
+        for _ in 0..5 {
             state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request)
                 .with_payload(vec![0u8; 100]));
             state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response)

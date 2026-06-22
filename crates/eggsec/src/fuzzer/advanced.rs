@@ -13,6 +13,8 @@ pub use crate::fuzzer::payloads::websocket::{
     WebSocketFuzzer, WebSocketTestResult, WebSocketVulnerability,
 };
 use crate::fuzzer::payloads::{Payload, PayloadType};
+#[cfg(feature = "websocket")]
+use crate::types::Severity;
 use reqwest::Client;
 
 pub trait AdvancedFuzzer {

@@ -10,7 +10,6 @@ pub mod ssh;
 use crate::error::Result;
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_protocol_auth_tester_creation() {
-        let tester = ProtocolAuthTester::new(30);
+        let tester = ProtocolAuthTester::new(30).expect("tester should initialize");
         assert_eq!(tester.max_attempts, 100);
     }
 }

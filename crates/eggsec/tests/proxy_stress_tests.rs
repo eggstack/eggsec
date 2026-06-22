@@ -7,28 +7,28 @@
 mod stress_tests {
     use eggsec::proxy::intercept::protocols::*;
     use eggsec::proxy::intercept::types::*;
+    use futures::{stream, StreamExt};
     use std::collections::HashMap;
-    use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
-    use tokio::sync::Semaphore;
     use tokio::time::{timeout, Duration};
 
-    /// Stress test: 1000 concurrent TCP connections.
+    const STRESS_OPERATIONS: usize = 1000;
+    const STRESS_CONCURRENCY: usize = 100;
+
+    /// Stress test: 1000 TCP connections with bounded concurrency.
     #[tokio::test]
-    async fn test_stress_1000_concurrent_connections() {
+    async fn test_stress_1000_connections_bounded_concurrency() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let semaphore = Arc::new(Semaphore::new(1000));
 
-        // Echo server with concurrency limit
+        // Echo server. Client-side bounding keeps the test below common FD limits.
         tokio::spawn(async move {
             loop {
                 let (mut stream, _) = match listener.accept().await {
                     Ok(s) => s,
                     Err(_) => break,
                 };
-                let permit = semaphore.clone().acquire_owned().await.unwrap();
                 tokio::spawn(async move {
                     let mut buf = vec![0u8; 4096];
                     loop {
@@ -40,50 +40,45 @@ mod stress_tests {
                             Err(_) => break,
                         }
                     }
-                    drop(permit);
                 });
             }
         });
 
-        // Spawn 1000 concurrent clients
-        let mut handles = Vec::new();
-        for i in 0..1000 {
-            let addr = addr;
-            handles.push(tokio::spawn(async move {
-                let result = timeout(Duration::from_secs(10), async {
-                    let mut client = TcpStream::connect(addr).await.unwrap();
+        let outcomes = stream::iter(0..STRESS_OPERATIONS)
+            .map(|i| async move {
+                timeout(Duration::from_secs(10), async {
+                    let Ok(mut client) = TcpStream::connect(addr).await else {
+                        return false;
+                    };
                     let msg = format!("Message from client {}", i);
-                    let _ = client.write_all(msg.as_bytes()).await;
+                    if client.write_all(msg.as_bytes()).await.is_err() {
+                        return false;
+                    }
 
                     let mut response = vec![0u8; 4096];
-                    let n = client.read(&mut response).await.unwrap();
-                    let response_str = String::from_utf8_lossy(&response[..n]).to_string();
-                    assert_eq!(response_str, msg);
+                    let Ok(n) = client.read(&mut response).await else {
+                        return false;
+                    };
+                    response.get(..n) == Some(msg.as_bytes())
                 })
-                .await;
-                result.is_ok()
-            }));
-        }
-
-        // Wait for all clients to complete
-        let mut success_count = 0;
-        for handle in handles {
-            if handle.await.unwrap() {
-                success_count += 1;
-            }
-        }
+                .await
+                .unwrap_or(false)
+            })
+            .buffer_unordered(STRESS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
+        let success_count = outcomes.into_iter().filter(|success| *success).count();
 
         // At least 90% should succeed (some may timeout under extreme load)
         assert!(
-            success_count >= 900,
-            "Only {}/1000 clients succeeded",
-            success_count
+            success_count >= STRESS_OPERATIONS * 9 / 10,
+            "Only {success_count}/{STRESS_OPERATIONS} clients succeeded"
         );
     }
 
-    /// Stress test: 1000 concurrent HTTP/1.1 requests.
+    /// Stress test: 1000 HTTP/1.1 requests with bounded concurrency.
     #[tokio::test]
-    async fn test_stress_1000_http_requests() {
+    async fn test_stress_1000_http_requests_bounded_concurrency() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
@@ -96,7 +91,9 @@ mod stress_tests {
                 };
                 tokio::spawn(async move {
                     let mut buf = vec![0u8; 4096];
-                    let n = stream.read(&mut buf).await.unwrap();
+                    let Ok(n) = stream.read(&mut buf).await else {
+                        return;
+                    };
                     let request = String::from_utf8_lossy(&buf[..n]);
 
                     // Verify request is valid HTTP
@@ -108,42 +105,38 @@ mod stress_tests {
             }
         });
 
-        // Spawn 1000 concurrent HTTP clients
-        let mut handles = Vec::new();
-        for i in 0..1000 {
-            let addr = addr;
-            handles.push(tokio::spawn(async move {
-                let result = timeout(Duration::from_secs(10), async {
-                    let mut client = TcpStream::connect(addr).await.unwrap();
+        let outcomes = stream::iter(0..STRESS_OPERATIONS)
+            .map(|i| async move {
+                timeout(Duration::from_secs(10), async {
+                    let Ok(mut client) = TcpStream::connect(addr).await else {
+                        return false;
+                    };
                     let request = format!(
                         "GET /test/{} HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n",
                         i
                     );
-                    let _ = client.write_all(request.as_bytes()).await;
+                    if client.write_all(request.as_bytes()).await.is_err() {
+                        return false;
+                    }
 
                     let mut response = vec![0u8; 4096];
-                    let n = client.read(&mut response).await.unwrap();
-                    let response_str = String::from_utf8_lossy(&response[..n]).to_string();
-                    assert!(response_str.contains("HTTP/1.1 200 OK"));
+                    let Ok(n) = client.read(&mut response).await else {
+                        return false;
+                    };
+                    String::from_utf8_lossy(&response[..n]).contains("HTTP/1.1 200 OK")
                 })
-                .await;
-                result.is_ok()
-            }));
-        }
-
-        // Wait for all clients to complete
-        let mut success_count = 0;
-        for handle in handles {
-            if handle.await.unwrap() {
-                success_count += 1;
-            }
-        }
+                .await
+                .unwrap_or(false)
+            })
+            .buffer_unordered(STRESS_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
+        let success_count = outcomes.into_iter().filter(|success| *success).count();
 
         // At least 90% should succeed
         assert!(
-            success_count >= 900,
-            "Only {}/1000 HTTP clients succeeded",
-            success_count
+            success_count >= STRESS_OPERATIONS * 9 / 10,
+            "Only {success_count}/{STRESS_OPERATIONS} HTTP clients succeeded"
         );
     }
 
@@ -239,7 +232,9 @@ mod stress_tests {
     /// Stress test: Rule evaluation with 10,000 rules.
     #[tokio::test]
     async fn test_stress_10000_rules() {
-        use eggsec::proxy::intercept::rules::*;
+        use eggsec::proxy::intercept::{
+            EnhancedRule, EnhancedRuleSet, RuleAction, RuleCondition, RuleContext,
+        };
 
         let mut rule_set = EnhancedRuleSet::new();
 
@@ -326,7 +321,7 @@ mod stress_tests {
     /// Stress test: Evidence bundle with 1000 flows.
     #[tokio::test]
     async fn test_stress_evidence_bundle_1000_flows() {
-        use eggsec::proxy::intercept::bundle::EvidenceBundle;
+        use eggsec::proxy::intercept::EvidenceBundle;
 
         let mut report = WebProxySessionReport::new("127.0.0.1:8080", true);
 
@@ -356,7 +351,10 @@ mod stress_tests {
 
         // Create evidence bundle
         let bundle = EvidenceBundle::from_report(&report, None);
-        let json = bundle.to_json().unwrap();
-        assert!(!json.is_empty());
+        let encoded = bundle.to_bytes().unwrap();
+        assert!(!encoded.is_empty());
+
+        let decoded = EvidenceBundle::from_bytes(&encoded).unwrap();
+        assert_eq!(decoded.flows.len(), 1000);
     }
 }
