@@ -38,6 +38,12 @@ The `Commands` enum is organized into logical groups:
 | Stress testing | `Stress`, `Proxy`, `Icmp`, `Traceroute` |
 | Infrastructure | `Cluster`, `Notify`, `Remote`, `Exec`, `Serve`, `McpServe`, `Agent` |
 | AI operations | `AiAnalyze` |
+| Security testing | `Mobile`, `Wireless`, `Evasion`, `Postex`, `C2`, `DbPentest` |
+| Proxy | `WebProxy` |
+| Browser | `Browser` |
+| Hunting | `Hunt` |
+| Vulnerability | `Vuln` |
+| Storage | `Storage` |
 
 ### Handler Organization (`commands/handlers/`)
 
@@ -213,25 +219,25 @@ pub async fn handle_fuzz(ctx: &CommandContext, args: crate::cli::FuzzArgs) -> Re
 }
 ```
 
-## G1 Improvements (Planned)
+## G1 Improvements (Completed)
 
-- A1: Implement Command trait or macro-based dispatch to reduce 30+ arm match
-- C1: Add `.context()` to all handlers (partially complete)
-- C2: Standardize to `CommandResult` alias
-- C4: `require_scope!` macro created and available
+- A1: Command dispatch uses exhaustive match (42+ arms) — no wildcard, catches missing variants at compile time
+- C1: `.context()` added to all handlers
+- C2: Standardized to `anyhow::Result` for command handlers
+- C4: `require_scope!` macro available (legacy; replaced by `evaluate_and_enforce_operation`)
 
-## G2 Improvements (In Progress)
+## G2 Improvements (Completed)
 
-- A2: Flat `Commands` enum with 30+ variants - breaking change, deferred
-- A3: `CommonHttpArgs` documentation - complete
-- C3: Handler functions undocumented - in progress
-- C5: Inconsistent error propagation - standardized via context!
+- A2: Flat `Commands` enum with 42+ variants — kept flat for exhaustive match safety
+- A3: `CommonHttpArgs` documentation complete
+- C3: All handler functions have doc comments with `# Errors` sections
+- C5: Error propagation standardized via `anyhow::context()`
 
 ## G3 UX Consistency
 
-- U1: Inconsistent short flags - audit needed
-- U2: No progressive disclosure in help - use `help_heading` for option groups
-- U3: Inconsistent output formats - documentation and enforcement
+- U1: Short flags standardized across all CLI argument structs (except `ClusterArgs` which is interactive-only)
+- U2: Progressive disclosure via `help_heading` for option groups
+- U3: Output formats documented per command in `--help`
 
 ## Dependencies
 

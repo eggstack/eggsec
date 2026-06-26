@@ -9,7 +9,7 @@ Parse OpenAPI 3.x JSON/YAML:
 ```rust
 use eggsec::api_schema::parse_openapi;
 
-let schema = parse_openapi(openapi_content, false)?;
+let schema = parse_openapi(openapi_content)?;
 println!("Found {} endpoints", schema.endpoints.len());
 ```
 
@@ -24,6 +24,16 @@ let targets = generate_fuzz_targets(&schema);
 for target in &targets {
     println!("{} {} - {}", target.method, target.path, target.parameter);
 }
+```
+
+## CLI Usage
+
+```bash
+# Parse an OpenAPI schema and generate fuzz targets
+eggsec fuzz --target https://example.com --api-schema openapi.json
+
+# Scan with OpenAPI context
+eggsec scan endpoints --target https://example.com --api-schema openapi.json
 ```
 
 ## Supported Features

@@ -570,20 +570,20 @@ let csv = generate_csv(&report)?;
 let json = serde_json::to_string_pretty(&report)?;
 ```
 
-### SARIF Output (Internal)
+### SARIF Output (via eggsec-output crate)
 
 ```rust
-use eggsec::output::sarif::SarifBuilder;
+use eggsec_output::SarifBuilder;
 
 let sarif = SarifBuilder::new()
     .with_report(&report)
     .build();
 ```
 
-### JUnit XML Output (Internal)
+### JUnit XML Output (via eggsec-output crate)
 
 ```rust
-use eggsec::output::junit::JUnitBuilder;
+use eggsec_output::JUnitBuilder;
 
 let junit = JUnitBuilder::new("eggsec")
     .with_report(&report)
@@ -593,33 +593,7 @@ let xml = junit.to_xml()?;
 
 ## Error Handling
 
-Eggsec uses `anyhow` for application errors and `thiserror` for library errors:
-
-```rust
-use eggsec::{EggsecError, Result};
-
-pub enum EggsecError {
-    Config(String),
-    Network(String),
-    Scan(String),
-    Output(String),
-}
-
-impl std::error::Error for EggsecError {}
-
-impl std::fmt::Display for EggsecError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Config(msg) => write!(f, "Configuration error: {}", msg),
-            Self::Network(msg) => write!(f, "Network error: {}", msg),
-            Self::Scan(msg) => write!(f, "Scan error: {}", msg),
-            Self::Output(msg) => write!(f, "Output error: {}", msg),
-        }
-    }
-}
-```
-
-### Handling Errors
+Eggsec uses `anyhow` for application-level error handling and `thiserror` for library error types. The canonical error type is `EggsecError` in `error/mod.rs` with domain-specific variants.
 
 ```rust
 use anyhow::Result;
@@ -628,12 +602,34 @@ async fn run_scan() -> Result<()> {
     let config = load_config(None)?;
     let scope = load_scope(None)?;
     
-    // Check scope before scanning
-    if !scope.is_target_allowed(&target)? {
-        anyhow::bail!("Target not in allowed scope");
-    }
-    
     // Run scan
+    let results = scanner::ports::run_cli(args, &config).await?;
+    
+    Ok(())
+}
+```
+
+### Policy Enforcement
+
+All target-bearing operations must pass policy enforcement before execution:
+
+```rust
+use anyhow::Result;
+
+async fn run_scan() -> Result<()> {
+    let config = load_config(None)?;
+    let ctx = CommandContext::new(config)?;
+    
+    // Policy enforcement (mandatory for target-bearing operations)
+    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+        operation: "scan".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        target: Some(target),
+        // ...
+    })?;
+    
+    // Run scan after policy check passes
     let results = scanner::ports::run_cli(args, &config).await?;
     
     Ok(())

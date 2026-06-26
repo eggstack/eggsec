@@ -478,7 +478,7 @@ docker-compose --profile testing up -d dvwa
 docker-compose --profile testing run --rm eggsec fuzz http://dvwa.target.local/login -t xss
 ```
 
-See [DOCKER_COMPOSE.md](DOCKER_COMPOSE.md) for detailed Docker setup.
+See [docker-compose.yml](docker-compose.yml) for Docker configuration.
 
 ## Documentation
 

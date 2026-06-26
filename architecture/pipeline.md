@@ -40,6 +40,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 | `waf-regression` | PortScan → Fingerprint → Waf |
 | `protocol-edge` | PortScan → Fingerprint |
 | `nse-safe` | PortScan → Fingerprint → EndpointScan |
+| `web-proxy` | PortScan → Fingerprint → EndpointScan → Fuzz | (Web proxy interception via `Stage::WebProxy`; requires `web-proxy` feature) |
 | `db-regression` | `Stage::DbPentest` (when `db-pentest` feature enabled); falls back to `PortScan → Fingerprint → EndpointScan → Waf → Fuzz` when feature absent |
 
 **Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, and `jwt` are normalized into canonical stages via `Stage::from_string()`.

@@ -32,7 +32,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 ```
 nse = ["mlua", "mlua-luau-scheduler", "openssl", "des"]
 nse-ssh2 = ["nse", "dep:ssh2"]
-sandbox = []  # Enables SandboxConfig enforcement
+nse-sandbox = []  # Enables SandboxConfig enforcement
 ```
 
 ## Libraries (80+)

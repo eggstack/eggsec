@@ -327,7 +327,13 @@ Chained security assessment profiles:
 | **deep** | Mutation fuzzing enabled |
 | **vuln** | CVE-prioritized based on detected tech |
 | **auth** | JWT, OAuth, IDOR focused |
+| **defense-lab** | Baseline diff and defense validation |
+| **synvoid-local** | Localhost SYN scan testing |
+| **waf-regression** | WAF detection regression testing |
+| **protocol-edge** | Protocol edge case testing |
+| **nse-safe** | Safe NSE script execution |
 | **db-regression** | Database pentest regression (native `Stage::DbPentest` when `db-pentest` feature enabled) |
+| **web-proxy** | Web proxy interception (requires `web-proxy` feature) |
 
 - **Documentation**: [pipeline.md](pipeline.md)
 
@@ -622,7 +628,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: ~4080 (includes #[test] + #[tokio::test])
+- **Test count**: ~4470 (includes #[test] + #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---

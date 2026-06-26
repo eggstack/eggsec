@@ -6,10 +6,6 @@ Guidelines for AI agents working on this codebase.
 
 Eggsec is a Rust-based security testing toolkit organized as a workspace with 8 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, and `eggsec-agent`. See `README.md` for features and `architecture/overview.md` for design details.
 
-## Implementation Plan
-
-All implementation items are complete.
-
 ## Quick Reference
 
 ### Build & Test Commands
@@ -82,6 +78,8 @@ cargo test --lib -p eggsec --features c2-mcp
 
 #### Make Targets
 
+Requires `cargo-nextest` (`cargo install cargo-nextest`). Uses `cargo-nextest` instead of `cargo test`.
+
 ```bash
 make test          # unit tests only (default, fast)
 make test-ci       # full suite, no retries (CI-style)
@@ -93,6 +91,8 @@ make fmt           # format check
 make test-coverage # llvm-cov with rest-api,nse features
 make build         # release build
 ```
+
+> **Note**: CI uses `cargo-tarpaulin` for coverage, while the Makefile uses `cargo llvm-cov`. Both measure the same thing but with different tools.
 
 ### Module Override Files
 
@@ -122,6 +122,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `db_pentest/` | `crates/eggsec/src/db_pentest/AGENTS.override.md` |
 | `wireless/` | `crates/eggsec/src/wireless/AGENTS.override.md` |
 | `evasion/` | `crates/eggsec/src/evasion/AGENTS.override.md` |
+| `c2/` | `crates/eggsec/src/c2/AGENTS.override.md` |
+| `postex/` | `crates/eggsec/src/postex/AGENTS.override.md` |
 
 ### Architecture Index
 
@@ -198,18 +200,14 @@ Canonical reference points when updating guidance or skills:
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4164 (includes #[test] + #[tokio::test]) |
+| Tests | ~4470 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
-| Source files | 865 (.rs files in crates/) |
+| Source files | 878 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |
 | Pipeline profiles | 18 |
 | Output formats | 8 |
 | Themes | 50 packaged + 3 built-in |
 | CLI commands | 26 base, 45 total with all features |
-
-### Codebase Issues (Known Stub Implementations)
-
-No remaining stub implementations.
 
 ### Security Notes
 
@@ -249,6 +247,7 @@ Skills are located in `.opencode/skills/`:
 | `eggsec-cli/` | CLI parsing, command dispatch, handler patterns |
 | `eggsec-config/` | Config module workflows |
 | `eggsec-distributed/` | Distributed module workflows |
+| `eggsec-evasion/` | Evasion technique detection workflows |
 | `eggsec-fuzzer/` | Fuzzer module workflows |
 | `eggsec-hunt/` | Vulnerability hunting workflows |
 | `eggsec-loadtest/` | Loadtest module workflows |
@@ -273,3 +272,4 @@ Use the `skill` tool to load relevant skills when tackling tasks in their domain
 2. **Verify before implementing**: Always verify file paths, line numbers, and whether issues still exist before implementing.
 3. **Error pattern verification**: Some `let _ =` patterns are followed by proper error logging via `tracing::warn!`. Verify the full context before claiming silent suppression.
 4. **Wave plan verification**: Plans may contain stale assertions. Use subagents to check actual codebase state.
+5. **Orphan directories**: `crates/eggstack-tui/` and `crates/slapper/` are orphan directories not in the workspace. Do not reference or depend on them.
