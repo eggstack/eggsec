@@ -166,7 +166,7 @@ impl PluginSandbox {
         if self.granted.has(required) {
             Ok(())
         } else {
-            Err(SandboxViolation::CapabilityDenied(required.clone()))
+            Err(SandboxViolation::CapabilityDenied(*required))
         }
     }
 

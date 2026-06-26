@@ -1303,14 +1303,12 @@ pub fn detect_grpc_method_type(_path: &str, headers: &HashMap<String, String>) -
     let grpc_encoding = headers.get("grpc-encoding").map(|v| v.as_str()).unwrap_or("");
 
     // Check the request content-type for streaming hints
-    let is_trailers_only = headers.contains_key("grpc-status");
+    let _is_trailers_only = headers.contains_key("grpc-status");
 
     if te.contains("trailers") || grpc_encoding.contains("grpc") {
         // Could be server streaming or bidirectional
         // Without deep inspection, assume server streaming
         GrpcMethodType::ServerStreaming
-    } else if is_trailers_only && headers.get("content-length").is_none() {
-        GrpcMethodType::Unary
     } else {
         GrpcMethodType::Unary
     }

@@ -521,31 +521,35 @@ impl std::fmt::Display for ScanProfile {
     }
 }
 
-impl ScanProfile {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for ScanProfile {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "quick" => Some(ScanProfile::Quick),
-            "endpoint" => Some(ScanProfile::Endpoint),
-            "web" => Some(ScanProfile::Web),
-            "waf" => Some(ScanProfile::Waf),
-            "full" => Some(ScanProfile::Full),
-            "api" => Some(ScanProfile::Api),
-            "recon" => Some(ScanProfile::Recon),
-            "stealth" => Some(ScanProfile::Stealth),
-            "deep" => Some(ScanProfile::Deep),
-            "vuln" => Some(ScanProfile::Vuln),
-            "auth" => Some(ScanProfile::Auth),
-            "defense-lab" => Some(ScanProfile::DefenseLab),
-            "synvoid-local" => Some(ScanProfile::SynvoidLocal),
-            "waf-regression" => Some(ScanProfile::WafRegression),
-            "protocol-edge" => Some(ScanProfile::ProtocolEdge),
-            "nse-safe" => Some(ScanProfile::NseSafe),
-            "db-regression" | "db_regression" | "dbregression" => Some(ScanProfile::DbRegression),
-            "web-proxy" | "webproxy" | "proxy" => Some(ScanProfile::WebProxy),
-            _ => None,
+            "quick" => Ok(ScanProfile::Quick),
+            "endpoint" => Ok(ScanProfile::Endpoint),
+            "web" => Ok(ScanProfile::Web),
+            "waf" => Ok(ScanProfile::Waf),
+            "full" => Ok(ScanProfile::Full),
+            "api" => Ok(ScanProfile::Api),
+            "recon" => Ok(ScanProfile::Recon),
+            "stealth" => Ok(ScanProfile::Stealth),
+            "deep" => Ok(ScanProfile::Deep),
+            "vuln" => Ok(ScanProfile::Vuln),
+            "auth" => Ok(ScanProfile::Auth),
+            "defense-lab" => Ok(ScanProfile::DefenseLab),
+            "synvoid-local" => Ok(ScanProfile::SynvoidLocal),
+            "waf-regression" => Ok(ScanProfile::WafRegression),
+            "protocol-edge" => Ok(ScanProfile::ProtocolEdge),
+            "nse-safe" => Ok(ScanProfile::NseSafe),
+            "db-regression" | "db_regression" | "dbregression" => Ok(ScanProfile::DbRegression),
+            "web-proxy" | "webproxy" | "proxy" => Ok(ScanProfile::WebProxy),
+            _ => Err(format!("Unknown scan profile: {}", s)),
         }
     }
+}
 
+impl ScanProfile {
     /// Returns `true` if this profile is a defense-lab variant that requires
     /// local/private-scope targets only.
     pub fn requires_private_scope(&self) -> bool {

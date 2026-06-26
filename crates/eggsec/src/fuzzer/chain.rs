@@ -177,7 +177,17 @@ impl ChainExecutor {
                 }
             }
             ChainAction::Conditional(_) => {
-                unreachable!("Conditional should be handled in execute()")
+                // Conditional should be handled in execute(), not execute_single_action.
+                // If we reach here, it's a programming error - return an error result.
+                tracing::error!("Conditional action reached execute_single_action - this is a bug");
+                ChainResult {
+                    action_index: self.results.len(),
+                    success: false,
+                    status_code: None,
+                    response_time_ms: 0,
+                    extracted_vars: FxHashMap::default(),
+                    error: Some("Conditional action reached execute_single_action unexpectedly".into()),
+                }
             }
         }
     }

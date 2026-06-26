@@ -322,7 +322,7 @@ impl EnhancedRuleSet {
     /// This offloads regex-heavy condition evaluation to a blocking thread pool,
     /// preventing async tasks from blocking the event loop.
     pub async fn evaluate_async(&self, context: RuleContext) -> Vec<EnhancedRule> {
-        let rules: Vec<EnhancedRule> = self.rules.iter().cloned().collect();
+        let rules: Vec<EnhancedRule> = self.rules.to_vec();
 
         tokio::task::spawn_blocking(move || {
             rules
@@ -689,8 +689,7 @@ fn host_matches_pattern(host: &str, pattern: &str) -> bool {
     if pattern == "*" {
         return true;
     }
-    if pattern.starts_with("*.") {
-        let suffix = &pattern[2..];
+    if let Some(suffix) = pattern.strip_prefix("*.") {
         host.ends_with(suffix) || host == suffix
     } else {
         host == pattern

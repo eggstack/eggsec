@@ -104,7 +104,7 @@ impl Worker {
         self.receiver = Some(rx);
 
         self.start_heartbeat_loop().await;
-        self.start_task_request_loop().await;
+        self.start_task_request_loop().await?;
         self.start_task_processing_loop().await;
 
         Ok(())
@@ -183,21 +183,21 @@ impl Worker {
         self.heartbeat_handle = Some(handle);
     }
 
-    async fn start_task_request_loop(&mut self) {
+    async fn start_task_request_loop(&mut self) -> Result<()> {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let psk = self.psk.clone();
         let sender = self
             .sender
             .clone()
-            .expect("sender must be set before start");
+            .ok_or_else(|| EggsecError::Config("sender must be set before start".into()))?;
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         let (host, port) = match parse_coordinator_url(&coordinator_url) {
             Ok(hp) => hp,
             Err(e) => {
                 tracing::error!("Failed to parse coordinator URL for task requests: {}", e);
-                return;
+                return Ok(());
             }
         };
 
@@ -231,6 +231,7 @@ impl Worker {
             }
         });
         self.task_request_handle = Some(handle);
+        Ok(())
     }
 
     async fn start_task_processing_loop(&mut self) {

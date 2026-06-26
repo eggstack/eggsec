@@ -211,6 +211,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
 
 /// Try to parse native defense-lab JSON into ScanReportData via feature-gated bridges.
 /// Returns None if no bridge matches (caller should produce its own error).
+#[allow(unused_variables)]
 fn try_bridge_defense_lab(content: &str) -> Option<crate::output::convert::ScanReportData> {
     #[cfg(feature = "web-proxy")]
     {

@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
-use super::config::{ProxyEntry, ProxyType};
+use super::config::ProxyEntry;
 use super::ProxiedConnection;
 
 #[allow(dead_code)]
@@ -15,10 +15,6 @@ pub struct HttpConnectProxy {
     proxy_addr: SocketAddr,
     username: Option<SensitiveString>,
     password: Option<SensitiveString>,
-    #[deprecated(
-        note = "use_ssl is not implemented - HTTPS proxy type determines TLS in the caller"
-    )]
-    use_ssl: bool,
     timeout: Duration,
 }
 
@@ -29,7 +25,6 @@ impl HttpConnectProxy {
             proxy_addr,
             username: None,
             password: None,
-            use_ssl: false,
             timeout: Duration::from_secs(30),
         }
     }
@@ -37,11 +32,6 @@ impl HttpConnectProxy {
     pub fn with_auth(mut self, username: String, password: String) -> Self {
         self.username = Some(SensitiveString::new(username));
         self.password = Some(SensitiveString::new(password));
-        self
-    }
-
-    pub fn with_ssl(mut self, use_ssl: bool) -> Self {
-        self.use_ssl = use_ssl;
         self
     }
 
@@ -211,10 +201,8 @@ impl HttpConnectProxy {
 
 pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<ProxiedConnection> {
     let proxy_addr = proxy.socket_addr()?;
-    let use_ssl = proxy.proxy_type == ProxyType::Https;
 
     let http_proxy = HttpConnectProxy::new(proxy_addr)
-        .with_ssl(use_ssl)
         .with_timeout(Duration::from_millis(proxy.timeout_ms));
 
     let http_proxy = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
@@ -328,10 +316,8 @@ mod tests {
     fn test_builder_pattern() {
         let proxy = HttpConnectProxy::new("127.0.0.1:3128".parse().unwrap())
             .with_auth("admin".to_string(), "secret".to_string())
-            .with_ssl(true)
             .with_timeout(Duration::from_secs(10));
 
-        assert_eq!(proxy.use_ssl, true);
         assert_eq!(proxy.timeout, Duration::from_secs(10));
         assert!(proxy.username.is_some());
         assert!(proxy.password.is_some());

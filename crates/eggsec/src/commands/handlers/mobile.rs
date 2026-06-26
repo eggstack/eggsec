@@ -70,7 +70,7 @@ pub async fn handle_mobile(
             // Extract owned DynamicMobileArgs for the call (move out of the enum)
             let dyn_args_cli = match args.command.take() {
                 Some(crate::cli::MobileSubcommand::Dynamic(da)) => da,
-                _ => unreachable!(),
+                _ => anyhow::bail!("expected Dynamic subcommand in dynamic path"),
             };
             // Map CLI (clap) args to the internal dynamic API struct (two distinct types to keep clap concerns out of lib surface).
             let dyn_args = crate::mobile::DynamicMobileArgs {

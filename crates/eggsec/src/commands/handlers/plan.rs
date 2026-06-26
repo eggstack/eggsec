@@ -1,5 +1,6 @@
 use crate::cli::plan::PlanArgs;
 use crate::cli::ScanProfile;
+use std::str::FromStr;
 use crate::commands::handlers::CommandContext;
 use crate::config::{
     evaluate_operation_policy, load_scope, OperationDescriptor, OperationMode, OperationRisk,
@@ -218,7 +219,7 @@ fn profile_stages(profile: ScanProfile) -> Vec<PlannedStage> {
 }
 
 pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
-    let profile = ScanProfile::from_str(&args.profile).ok_or_else(|| {
+    let profile = ScanProfile::from_str(&args.profile).map_err(|_e| {
         let valid: Vec<&str> = vec![
             "quick",
             "endpoint",

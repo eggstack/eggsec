@@ -1,4 +1,5 @@
 use clap::Args;
+use std::str::FromStr;
 
 use crate::config::{evaluate_operation_policy, OperationDescriptor, PolicyDecision};
 
@@ -38,7 +39,7 @@ pub fn evaluate_policy_decision(
     use crate::cli::ScanProfile;
 
     let profile = profile_name
-        .and_then(ScanProfile::from_str)
+        .and_then(|s| ScanProfile::from_str(s).ok())
         .unwrap_or(ScanProfile::Quick);
 
     let mode = profile.operation_mode();

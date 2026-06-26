@@ -74,6 +74,7 @@ pub struct MobileStaticArgs {
     pub quiet: bool,
 }
 
+#[allow(dead_code)]
 pub(crate) const MOBILE_DYNAMIC_ABOUT: &str = r#"MODE: Defense Lab | Lab-only; authorized use only.
 
 Dynamic Android runtime testing (ADB + logcat analysis + Phase 3b Frida instrumentation) for defense validation and regression.

@@ -70,6 +70,11 @@ mod raw_udp {
     }
 
     fn calculate_ip_checksum(header: &[u8]) -> u16 {
+        debug_assert!(
+            header.len() % 2 == 0,
+            "IP checksum requires even-length header, got {}",
+            header.len()
+        );
         let mut sum: u32 = 0;
         for i in (0..header.len()).step_by(2) {
             let word = ((header[i] as u32) << 8) | (header[i + 1] as u32);
