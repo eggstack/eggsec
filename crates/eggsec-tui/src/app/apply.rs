@@ -16,6 +16,13 @@ impl App {
     /// Clipboard I/O and task spawning are performed here (side effects
     /// belong in apply, not in the pure-ish decode path).
     pub fn apply_action(&mut self, action: UiAction) {
+        // All actions except Noop and BeginGgSequence trigger a redraw.
+        // Individual arms that already set needs_redraw internally (e.g.
+        // ToggleTheme) are safe because setting it twice is idempotent.
+        if !matches!(action, UiAction::Noop | UiAction::BeginGgSequence) {
+            self.needs_redraw = true;
+        }
+
         match action {
             UiAction::Noop => {}
 
@@ -78,6 +85,7 @@ impl App {
             | UiAction::DeleteHistoryEntry
             | UiAction::ConfirmPendingAction
             | UiAction::CancelPendingAction
+            | UiAction::ConfirmButtonToggle
             | UiAction::ConfirmPolicyAction
             | UiAction::CancelPolicyAction
             | UiAction::PolicyReasonChar(_)
@@ -375,11 +383,19 @@ impl App {
                 }
             }
             UiAction::ConfirmPendingAction => {
-                self.confirm_action();
+                if self.overlay.confirm_button_index == 0 {
+                    self.confirm_action();
+                } else {
+                    self.cancel_action();
+                }
                 self.needs_redraw = true;
             }
             UiAction::CancelPendingAction => {
                 self.cancel_action();
+                self.needs_redraw = true;
+            }
+            UiAction::ConfirmButtonToggle => {
+                self.overlay.confirm_button_index ^= 1;
                 self.needs_redraw = true;
             }
             UiAction::ConfirmPolicyAction => {

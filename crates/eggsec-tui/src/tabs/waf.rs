@@ -90,16 +90,16 @@ impl WafTab {
 
     pub fn set_results(&mut self, result: WafDetectionResult) {
         self.detection_result = Some(result.clone());
-        self.update_detection_view(&result);
         if !self.is_bypass_mode() {
-            self.core.state = AppState::Completed;
+            let _view = self.core.prepare_results();
         }
+        self.update_detection_view(&result);
     }
 
     pub fn set_bypass_results(&mut self, results: Vec<BypassResult>) {
         self.bypass_results = results.clone();
+        let _view = self.core.prepare_results();
         self.update_bypass_view(&results);
-        self.core.state = AppState::Completed;
     }
 
     fn update_detection_view(&mut self, result: &WafDetectionResult) {
@@ -353,9 +353,6 @@ impl TabRender for WafTab {
 
 impl TabInput for WafTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
                 if self.core.inputs.is_focused() {
@@ -376,9 +373,6 @@ impl TabInput for WafTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
                 self.core.inputs.blur();
@@ -431,18 +425,14 @@ impl TabInput for WafTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == WafFocusArea::Inputs {
-                self.core.inputs.move_word_forward();
-            }
+        if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
+            self.core.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == WafFocusArea::Inputs {
-                self.core.inputs.move_word_backward();
-            }
+        if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
+            self.core.inputs.move_word_backward();
         }
     }
 
@@ -538,9 +528,6 @@ impl TabInput for WafTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == WafFocusArea::ModeRadio {
             let len = self.mode_radio.options.len();
             if len > 0 {
@@ -560,9 +547,6 @@ impl TabInput for WafTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == WafFocusArea::ModeRadio {
             let len = self.mode_radio.options.len();
             if len > 0 {

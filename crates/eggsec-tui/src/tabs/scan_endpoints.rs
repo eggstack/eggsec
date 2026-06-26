@@ -1,6 +1,8 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField};
-use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
+use crate::tabs::core::{
+    field_as, render_input_fields, render_results_area, start_scan, StandardFocusArea, TabCore,
+};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_escape_3area, tab_input_3area, tab_state_boilerplate, tc};
 use eggsec::scanner::endpoints::EndpointScanResults;
@@ -69,9 +71,9 @@ impl ScanEndpointsTab {
     }
 
     pub fn set_results(&mut self, results: EndpointScanResults) {
+        let _view = self.core.prepare_results();
         self.update_results_view(&results);
         self.results = Some(results);
-        self.core.state = AppState::Completed;
     }
 
     fn update_results_view(&mut self, results: &EndpointScanResults) {
@@ -250,11 +252,7 @@ impl TabRender for ScanEndpointsTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         let include_404 = self.include_404_checkbox.clone();
         if let Some(chunk) = input_chunks.get(4) {

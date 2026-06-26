@@ -72,6 +72,9 @@ impl OverlayController {
                 (KeyModifiers::NONE, KeyCode::Esc) => vec![UiAction::CancelPendingAction],
                 (KeyModifiers::NONE, KeyCode::Char('y')) => vec![UiAction::ConfirmPendingAction],
                 (KeyModifiers::NONE, KeyCode::Char('n')) => vec![UiAction::CancelPendingAction],
+                (KeyModifiers::NONE, KeyCode::Left | KeyCode::Right) => {
+                    vec![UiAction::ConfirmButtonToggle]
+                }
                 _ => vec![UiAction::Noop],
             },
             OverlayType::CommandPalette => self.decode_command_palette(key),

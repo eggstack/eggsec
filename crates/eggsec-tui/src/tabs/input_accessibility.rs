@@ -114,10 +114,10 @@ mod tests {
             "inputs",
             &mut super::super::packet::PacketTab::new().inputs,
         );
-        assert_tab_input_group(
+        assert_tab_core_inputs(
             "Proxy",
-            "inputs",
-            &mut super::super::proxy::ProxyTab::new().inputs,
+            "core",
+            &mut super::super::proxy::ProxyTab::new().core,
         );
         assert_tab_core_inputs(
             "Recon",
@@ -139,10 +139,10 @@ mod tests {
             "schedule",
             &mut super::super::report::ReportTab::new().schedule_inputs,
         );
-        assert_tab_input_group(
+        assert_tab_core_inputs(
             "Resume",
-            "inputs",
-            &mut super::super::resume::ResumeTab::new().inputs,
+            "core",
+            &mut super::super::resume::ResumeTab::new().core,
         );
         assert_tab_input_group(
             "Scan",
@@ -185,10 +185,10 @@ mod tests {
         #[cfg(feature = "c2")]
         assert_tab_core_inputs("C2", "core", &mut super::super::c2::C2Tab::new().core);
         #[cfg(feature = "compliance")]
-        assert_tab_input_group(
+        assert_tab_core_inputs(
             "Compliance",
-            "inputs",
-            &mut super::super::compliance::ComplianceTab::new().inputs,
+            "core",
+            &mut super::super::compliance::ComplianceTab::new().core,
         );
         #[cfg(feature = "database")]
         {
@@ -223,22 +223,22 @@ mod tests {
             );
         }
         #[cfg(feature = "finding-workflow")]
-        assert_tab_input_group(
+        assert_tab_core_inputs(
             "Workflow",
-            "inputs",
-            &mut super::super::workflow::WorkflowTab::new().inputs,
+            "core",
+            &mut super::super::workflow::WorkflowTab::new().core,
         );
         #[cfg(feature = "headless-browser")]
-        assert_tab_input_group(
+        assert_tab_core_inputs(
             "Browser",
-            "inputs",
-            &mut super::super::browser::BrowserTab::new().inputs,
+            "core",
+            &mut super::super::browser::BrowserTab::new().core,
         );
         #[cfg(feature = "nse")]
-        assert_tab_input_group(
+        assert_tab_core_inputs(
             "NSE",
-            "inputs",
-            &mut super::super::nse::NseTab::new().inputs,
+            "core",
+            &mut super::super::nse::NseTab::new().core,
         );
         #[cfg(feature = "vuln-management")]
         assert_tab_core_inputs("Vuln", "core", &mut super::super::vuln::VulnTab::new().core);

@@ -498,16 +498,8 @@ impl TabRender for DashboardTab {
 }
 
 impl TabInput for DashboardTab {
-    fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
-    }
-    fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
-    }
+    fn handle_focus_next(&mut self) {}
+    fn handle_focus_prev(&mut self) {}
     fn handle_char(&mut self, _c: char) {}
     fn handle_backspace(&mut self) {}
 
@@ -568,15 +560,11 @@ impl TabInput for DashboardTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            self.results_view.scroll_up(1);
-        }
+        self.results_view.scroll_up(1);
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            self.results_view.scroll_down(1);
-        }
+        self.results_view.scroll_down(1);
     }
 
     fn handle_left(&mut self) -> bool {

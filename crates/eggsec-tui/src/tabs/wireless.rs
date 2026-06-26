@@ -569,9 +569,6 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         match self.focus_area {
             WirelessFocusArea::Inputs => {
                 self.inputs.blur();
@@ -600,9 +597,6 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         match self.focus_area {
             WirelessFocusArea::Inputs => {
                 self.inputs.blur();
@@ -725,18 +719,12 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == WirelessFocusArea::Results {
             self.scroll_results_up();
         }
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == WirelessFocusArea::Results {
             self.scroll_results_down();
         }

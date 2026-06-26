@@ -1,5 +1,9 @@
 use crate::app::tab_error::TabError;
-#[cfg(any(feature = "database", feature = "external-integrations"))]
+#[cfg(any(
+    feature = "database",
+    feature = "external-integrations",
+    feature = "finding-workflow"
+))]
 use crate::tabs::AppState;
 use crate::workers::TaskResult;
 
@@ -376,7 +380,7 @@ impl super::App {
             #[cfg(feature = "finding-workflow")]
             TaskResult::Workflow(ref report) => {
                 self.tabs.workflow.report = Some(report.clone());
-                self.tabs.workflow.state = AppState::Completed;
+                self.tabs.workflow.core.state = AppState::Completed;
                 None
             }
             #[cfg(feature = "vuln-management")]

@@ -983,6 +983,12 @@ impl TabState for SettingsTab {
         0.0
     }
 
+    fn has_selector_open(&self) -> bool {
+        self.theme_selector.is_open()
+            || self.proxy_rotation_selector.is_open()
+            || self.severity_selector.is_open()
+    }
+
     fn reset(&mut self) {
         SettingsTab::reset(self);
     }
@@ -1697,7 +1703,6 @@ mod tests {
             secondary: Color::Blue,
             accent: Color::Cyan,
             background: Color::Black,
-            foreground: Color::White,
             surface: Color::DarkGray,
             border: Color::Gray,
             border_focused: Color::Yellow,
@@ -1718,7 +1723,6 @@ mod tests {
             status_running: Color::Green,
             status_idle: Color::Gray,
             status_error: Color::Red,
-            focus_normal: Color::Green,
             focus_input: Color::Yellow,
             focus_results: Color::Cyan,
             safe: Color::Green,

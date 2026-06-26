@@ -16,6 +16,7 @@ pub enum PopupKind {
     Error,
     Confirm,
     Help,
+    #[allow(dead_code)] // reserved for future destructive action popups
     Destructive,
 }
 
@@ -65,21 +66,14 @@ impl Popup {
         self
     }
 
-    #[allow(dead_code)]
-    pub fn destructive(title: impl Into<String>, content: Vec<String>) -> Self {
-        Self::new(title, PopupKind::Destructive)
-            .content(content)
-            .buttons(vec!["Cancel", "Confirm"])
-    }
-
-    #[allow(dead_code)]
+    #[allow(dead_code)] // public API for future popup types
     pub fn next_button(&mut self) {
         if !self.buttons.is_empty() {
             self.active_button = (self.active_button + 1) % self.buttons.len();
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // public API for future popup types
     pub fn prev_button(&mut self) {
         if !self.buttons.is_empty() {
             self.active_button = if self.active_button == 0 {
@@ -90,38 +84,9 @@ impl Popup {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // public API for future popup types
     pub fn selected_button(&self) -> Option<&str> {
         self.buttons.get(self.active_button).map(|s| s.as_str())
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_up(&mut self, amount: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(amount);
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_down(&mut self, amount: usize) {
-        if self.content.is_empty() {
-            self.scroll_offset = 0;
-        } else {
-            let max_scroll = self.content.len() - 1;
-            self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_to_top(&mut self) {
-        self.scroll_offset = 0;
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_to_bottom(&mut self) {
-        if self.content.is_empty() {
-            self.scroll_offset = 0;
-        } else {
-            self.scroll_offset = self.content.len() - 1;
-        }
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {

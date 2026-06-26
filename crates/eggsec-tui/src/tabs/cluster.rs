@@ -1,5 +1,6 @@
 use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
+use crate::tabs::core::render_input_fields;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use ratatui::{
@@ -211,6 +212,10 @@ impl TabState for ClusterTab {
         0.0
     }
 
+    fn has_selector_open(&self) -> bool {
+        self.view_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
@@ -318,11 +323,7 @@ impl TabRender for ClusterTab {
 
         f.render_widget(inputs_block, inputs_area);
 
-        for (i, field) in current_inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, current_inputs, insert_mode);
 
         // Results
         let results_area = chunks.get(2).copied().unwrap_or(area);
@@ -353,9 +354,6 @@ impl TabRender for ClusterTab {
 
 impl TabInput for ClusterTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -384,9 +382,6 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -601,47 +596,43 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                ClusterFocusArea::ViewSelector => {
-                    if self.view_selector.is_open() {
-                        self.view_selector.move_prev();
-                    }
+        match self.focus_area {
+            ClusterFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    self.view_selector.move_prev();
                 }
-                ClusterFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ClusterView::Worker => &mut self.worker_inputs,
-                        ClusterView::Coordinator => &mut self.coordinator_inputs,
-                        ClusterView::Status => &mut self.status_inputs,
-                    };
-                    current_inputs.focus_prev();
-                }
-                ClusterFocusArea::Results => {
-                    self.results_view.scroll_up(1);
-                }
+            }
+            ClusterFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &mut self.worker_inputs,
+                    ClusterView::Coordinator => &mut self.coordinator_inputs,
+                    ClusterView::Status => &mut self.status_inputs,
+                };
+                current_inputs.focus_prev();
+            }
+            ClusterFocusArea::Results => {
+                self.results_view.scroll_up(1);
             }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                ClusterFocusArea::ViewSelector => {
-                    if self.view_selector.is_open() {
-                        self.view_selector.move_next();
-                    }
+        match self.focus_area {
+            ClusterFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    self.view_selector.move_next();
                 }
-                ClusterFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ClusterView::Worker => &mut self.worker_inputs,
-                        ClusterView::Coordinator => &mut self.coordinator_inputs,
-                        ClusterView::Status => &mut self.status_inputs,
-                    };
-                    current_inputs.focus_next();
-                }
-                ClusterFocusArea::Results => {
-                    self.results_view.scroll_down(1);
-                }
+            }
+            ClusterFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &mut self.worker_inputs,
+                    ClusterView::Coordinator => &mut self.coordinator_inputs,
+                    ClusterView::Status => &mut self.status_inputs,
+                };
+                current_inputs.focus_next();
+            }
+            ClusterFocusArea::Results => {
+                self.results_view.scroll_down(1);
             }
         }
     }

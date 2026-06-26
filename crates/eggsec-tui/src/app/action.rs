@@ -126,6 +126,7 @@ pub enum UiAction {
     // Pending-action confirm/cancel (ConfirmPopup)
     ConfirmPendingAction,
     CancelPendingAction,
+    ConfirmButtonToggle,
 
     // Policy enforcement confirm/cancel (PolicyConfirm) + reason editing
     ConfirmPolicyAction,

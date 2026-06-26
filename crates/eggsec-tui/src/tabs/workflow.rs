@@ -1,9 +1,7 @@
-use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
-};
+use crate::components::{empty_state_paragraph, Selector, SelectorItem};
+use crate::tabs::core::{render_error_block, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_state_boilerplate, tc};
 use eggsec::workflow::finding::Finding;
 use eggsec::workflow::finding::FindingStatus;
 use eggsec::workflow::sla::calculate_sla;
@@ -17,17 +15,14 @@ use ratatui::{
 };
 
 pub struct WorkflowTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub report: Option<WorkflowReport>,
     pub findings: Vec<Finding>,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: WorkflowFocusArea,
     pub current_mode: WorkflowMode,
     pub mode_selector: Selector,
     pub severity_selector: Selector,
     pub status_selector: Selector,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,11 +43,11 @@ pub enum WorkflowMode {
 
 impl WorkflowTab {
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
-            .add(InputField::new("Finding Title"))
-            .add(InputField::new("Assignee"))
-            .add(InputField::new("Comment"))
-            .add(InputField::new("Finding ID"));
+        let inputs = crate::components::InputGroup::new()
+            .add(crate::components::InputField::new("Finding Title"))
+            .add(crate::components::InputField::new("Assignee"))
+            .add(crate::components::InputField::new("Comment"))
+            .add(crate::components::InputField::new("Finding ID"));
 
         let mode_selector = Selector::new("Mode").items(vec![
             SelectorItem::new("List Findings", "list"),
@@ -79,22 +74,20 @@ impl WorkflowTab {
         ]);
 
         Self {
-            inputs,
+            core: TabCore::new("Finding Management", "Results").with_inputs(inputs),
             report: None,
             findings: Vec::new(),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
             focus_area: WorkflowFocusArea::Mode,
             current_mode: WorkflowMode::ListFindings,
             mode_selector,
             severity_selector,
             status_selector,
-            error: None,
         }
     }
 
     pub fn title(&self) -> &str {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .first()
             .map(|f| f.value.as_str())
@@ -102,7 +95,8 @@ impl WorkflowTab {
     }
 
     pub fn assignee(&self) -> &str {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .map(|f| f.value.as_str())
@@ -110,7 +104,8 @@ impl WorkflowTab {
     }
 
     pub fn comment(&self) -> &str {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(2)
             .map(|f| f.value.as_str())
@@ -118,7 +113,8 @@ impl WorkflowTab {
     }
 
     pub fn finding_id(&self) -> &str {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(3)
             .map(|f| f.value.as_str())
@@ -156,29 +152,25 @@ impl WorkflowTab {
     }
 
     pub fn start(&mut self) {
-        self.state = AppState::Running;
-        self.results_view.clear();
-    }
-
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
+        self.core.state = AppState::Running;
+        self.core.results_view.clear();
     }
 
     pub fn set_findings(&mut self, findings: Vec<Finding>) {
         self.findings = findings.clone();
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        self.core.state = AppState::Completed;
+        self.core.results_view.clear();
 
         let mut report = WorkflowReport::new();
         report.findings = findings;
         report.calculate_metrics();
         self.report = Some(report.clone());
 
-        self.results_view.add_line(Line::from(Span::styled(
+        self.core.results_view.add_line(Line::from(Span::styled(
             "Workflow Summary",
             Style::default().fg(tc!(warning)),
         )));
-        self.results_view.add_line(Line::from(format!(
+        self.core.results_view.add_line(Line::from(format!(
             "Total: {} | Open: {} | In Progress: {} | Resolved: {} | SLA Violations: {}",
             report.total_findings,
             report.open_findings,
@@ -186,10 +178,10 @@ impl WorkflowTab {
             report.resolved_findings,
             report.sla_violations,
         )));
-        self.results_view.add_line(Line::from(""));
+        self.core.results_view.add_line(Line::from(""));
 
         if !report.findings.is_empty() {
-            self.results_view.add_line(Line::from(Span::styled(
+            self.core.results_view.add_line(Line::from(Span::styled(
                 "Findings:",
                 Style::default().fg(tc!(success)),
             )));
@@ -200,7 +192,7 @@ impl WorkflowTab {
                 } else {
                     format!("{}h remaining", sla.hours_remaining)
                 };
-                self.results_view.add_line(Line::from(format!(
+                self.core.results_view.add_line(Line::from(format!(
                     "  [{}] {} - {:?} (assigned: {}) - {}",
                     f.severity,
                     f.title,
@@ -220,37 +212,27 @@ impl Default for WorkflowTab {
 }
 
 impl TabState for WorkflowTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
-    }
+    tab_state_boilerplate!(WorkflowTab, core: core);
 
-    fn progress(&self) -> f64 {
-        0.0
+    fn has_selector_open(&self) -> bool {
+        self.mode_selector.is_open()
+            || self.severity_selector.is_open()
+            || self.status_selector.is_open()
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
+        self.core.reset_all();
         self.focus_area = WorkflowFocusArea::Mode;
         self.current_mode = WorkflowMode::ListFindings;
         self.findings.clear();
         self.report = None;
-        self.results_view.clear();
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
         self.mode_selector.select(0);
         self.mode_selector.blur();
         self.severity_selector.select(0);
         self.severity_selector.blur();
         self.status_selector.select(0);
         self.status_selector.blur();
-        self.inputs.blur();
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
+        self.core.inputs.blur();
     }
 }
 
@@ -295,18 +277,17 @@ impl TabRender for WorkflowTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(config_block, input_area);
-
-        let input_area = config_block.inner(input_area);
+        let inner_area = config_block.inner(*input_area);
+        f.render_widget(config_block, *input_area);
 
         let mut sel = self.mode_selector.clone();
         sel.focused = self.focus_area == WorkflowFocusArea::Mode;
-        sel.render(f, input_area);
+        sel.render(f, inner_area);
 
         let fields_area = Rect {
-            y: input_area.y + 3,
-            height: input_area.height.saturating_sub(3),
-            ..input_area
+            y: inner_area.y + 3,
+            height: inner_area.height.saturating_sub(3),
+            ..inner_area
         };
 
         let (fields, extra_slots) = match self.current_mode {
@@ -325,8 +306,8 @@ impl TabRender for WorkflowTab {
 
         for (i, &idx) in fields.iter().enumerate() {
             if let Some(chunk) = field_chunks.get(i) {
-                if idx < self.inputs.fields.len() {
-                    self.inputs.fields[idx].render(f, *chunk, insert_mode);
+                if idx < self.core.inputs.fields.len() {
+                    self.core.inputs.fields[idx].render(f, *chunk, insert_mode);
                 }
             }
         }
@@ -337,7 +318,6 @@ impl TabRender for WorkflowTab {
         ) {
             if let Some(chunk) = field_chunks.get(fields.len()) {
                 let mut sev = self.severity_selector.clone();
-                // These selectors are currently decorative only (no keyboard navigation)
                 sev.focused = false;
                 sev.render(f, *chunk);
             }
@@ -345,13 +325,12 @@ impl TabRender for WorkflowTab {
         if matches!(self.current_mode, WorkflowMode::ChangeStatus) {
             if let Some(chunk) = field_chunks.get(fields.len() + 1) {
                 let mut st = self.status_selector.clone();
-                // These selectors are currently decorative only (no keyboard navigation)
                 st.focused = false;
                 st.render(f, *chunk);
             }
         }
 
-        if self.state == AppState::Running {
+        if self.core.state == AppState::Running {
             let gauge = ratatui::widgets::Gauge::default()
                 .block(
                     Block::default()
@@ -361,34 +340,31 @@ impl TabRender for WorkflowTab {
                 )
                 .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
-            f.render_widget(gauge, results_area);
-        } else if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, None);
+            f.render_widget(gauge, *results_area);
+        } else if !self.core.results_view.is_empty() {
+            self.core.results_view.render(f, *results_area, None);
         } else {
             let placeholder =
                 empty_state_paragraph("Finding Management", "Select mode and press Enter");
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, *results_area);
         }
     }
 }
 
 impl TabInput for WorkflowTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
                 if self.current_mode == WorkflowMode::ListFindings {
                     WorkflowFocusArea::Results
                 } else {
-                    self.inputs.focus(0);
+                    self.core.inputs.focus(0);
                     WorkflowFocusArea::Inputs
                 }
             }
             WorkflowFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 WorkflowFocusArea::Results
             }
             WorkflowFocusArea::Results => {
@@ -399,16 +375,13 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
                 WorkflowFocusArea::Results
             }
             WorkflowFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 self.mode_selector.focus();
                 WorkflowFocusArea::Mode
             }
@@ -417,7 +390,7 @@ impl TabInput for WorkflowTab {
                     self.mode_selector.focus();
                     WorkflowFocusArea::Mode
                 } else {
-                    self.inputs.focus(0);
+                    self.core.inputs.focus(0);
                     WorkflowFocusArea::Inputs
                 }
             }
@@ -426,27 +399,27 @@ impl TabInput for WorkflowTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.insert(c);
+            self.core.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.backspace();
+            self.core.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.paste(text);
+            self.core.inputs.paste(text);
         }
     }
 
     fn handle_copy(&mut self) -> Option<String> {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.get_focused_value()
+            self.core.inputs.get_focused_value()
         } else if !self.is_running() && self.focus_area == WorkflowFocusArea::Results {
-            Some(self.results_view.get_content())
+            Some(self.core.results_view.get_content())
         } else {
             None
         }
@@ -454,22 +427,22 @@ impl TabInput for WorkflowTab {
 
     fn handle_word_forward(&mut self) {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.move_word_forward();
+            self.core.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.move_word_backward();
+            self.core.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
         if !self.is_running() {
             if self.focus_area == WorkflowFocusArea::Inputs {
-                self.inputs.move_home();
+                self.core.inputs.move_home();
             } else if self.focus_area == WorkflowFocusArea::Results {
-                self.results_view.scroll_to_top();
+                self.core.results_view.scroll_to_top();
             }
         }
     }
@@ -477,16 +450,16 @@ impl TabInput for WorkflowTab {
     fn handle_end(&mut self) {
         if !self.is_running() {
             if self.focus_area == WorkflowFocusArea::Inputs {
-                self.inputs.move_end();
+                self.core.inputs.move_end();
             } else if self.focus_area == WorkflowFocusArea::Results {
-                self.results_view.scroll_to_bottom();
+                self.core.results_view.scroll_to_bottom();
             }
         }
     }
 
     fn handle_top(&mut self) {
         if !self.is_running() {
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.focus_area = WorkflowFocusArea::Mode;
             self.mode_selector.focus();
         }
@@ -495,14 +468,14 @@ impl TabInput for WorkflowTab {
     fn handle_bottom(&mut self) {
         if !self.is_running() {
             self.mode_selector.blur();
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.focus_area = WorkflowFocusArea::Results;
         }
     }
 
     fn handle_enter(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         match self.focus_area {
@@ -521,7 +494,7 @@ impl TabInput for WorkflowTab {
                 };
             }
             WorkflowFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
             }
             WorkflowFocusArea::Results => {
                 return;
@@ -532,37 +505,33 @@ impl TabInput for WorkflowTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         self.mode_selector.blur();
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.focus_area = WorkflowFocusArea::Mode;
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                WorkflowFocusArea::Mode => self.mode_selector.handle_up(),
-                WorkflowFocusArea::Inputs => self.inputs.focus_prev(),
-                WorkflowFocusArea::Results => self.results_view.scroll_up(1),
-            }
+        match self.focus_area {
+            WorkflowFocusArea::Mode => self.mode_selector.handle_up(),
+            WorkflowFocusArea::Inputs => self.core.inputs.focus_prev(),
+            WorkflowFocusArea::Results => self.core.results_view.scroll_up(1),
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                WorkflowFocusArea::Mode => self.mode_selector.handle_down(),
-                WorkflowFocusArea::Inputs => self.inputs.focus_next(),
-                WorkflowFocusArea::Results => self.results_view.scroll_down(1),
-            }
+        match self.focus_area {
+            WorkflowFocusArea::Mode => self.mode_selector.handle_down(),
+            WorkflowFocusArea::Inputs => self.core.inputs.focus_next(),
+            WorkflowFocusArea::Results => self.core.results_view.scroll_down(1),
         }
     }
 
     fn handle_left(&mut self) -> bool {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.move_left()
+            self.core.inputs.move_left()
         } else {
             false
         }
@@ -570,7 +539,7 @@ impl TabInput for WorkflowTab {
 
     fn handle_right(&mut self) -> bool {
         if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.move_right()
+            self.core.inputs.move_right()
         } else {
             false
         }
@@ -581,7 +550,7 @@ impl TabInput for WorkflowTab {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
             }
-            WorkflowFocusArea::Inputs => self.inputs.is_at_left_edge(),
+            WorkflowFocusArea::Inputs => self.core.inputs.is_at_left_edge(),
             _ => true,
         }
     }
@@ -593,27 +562,25 @@ impl TabInput for WorkflowTab {
                     || self.mode_selector.selected
                         >= self.mode_selector.items.len().saturating_sub(1)
             }
-            WorkflowFocusArea::Inputs => self.inputs.is_at_right_edge(),
+            WorkflowFocusArea::Inputs => self.core.inputs.is_at_right_edge(),
             _ => true,
         }
     }
 
     fn is_input_focused(&self) -> bool {
         (self.focus_area == WorkflowFocusArea::Mode && self.mode_selector.is_focused())
-            || (self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused())
+            || (self.focus_area == WorkflowFocusArea::Inputs && self.core.inputs.is_focused())
     }
 
     fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
+        if !self.is_running() {
+            self.core.results_view.page_up(page_size);
         }
-        self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
+        if !self.is_running() {
+            self.core.results_view.page_down(page_size);
         }
-        self.results_view.page_down(page_size);
     }
 }

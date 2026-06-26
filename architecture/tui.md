@@ -379,7 +379,7 @@ The theme system supports 50+ packaged Halloy-format themes plus 3 built-in them
 
 **Contrast validation**: `theme/contrast.rs` implements WCAG 2.x relative luminance and contrast ratio. `check_contrast(fg, bg, min_ratio)` returns whether a color pair meets the minimum ratio (4.5:1 for normal text). Both `theme/loader.rs` (on theme parse) and `theme/manager.rs` (on registration) validate text/background and selected_text/selected contrast. `ThemeManager::validate_contrast(id)` returns per-theme contrast warnings for use in the Settings Theme details pane. Low contrast triggers fallback to the base theme with a warning (non-fatal). 7 unit tests cover luminance boundaries, ratio calculation, and pass/fail cases.
 
-`ThemeManager` holds registered themes with 28 color fields. `Theme.name` is the canonical stable ID for the theme, which keeps file-loaded themes and session restore aliases consistent.
+`ThemeManager` holds registered themes with 37 color fields. `Theme.name` is the canonical stable ID for the theme, which keeps file-loaded themes and session restore aliases consistent.
 
 The main shell and popup layers use explicit `&Theme` parameters. Tab renderers and components still use the `tc!` macro for theme colors:
 

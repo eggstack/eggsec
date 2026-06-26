@@ -1,26 +1,21 @@
-use crate::app::tab_error::TabError;
-use crate::components::{
-    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
-    SelectorItem,
+use crate::components::{empty_state_paragraph, Selector, SelectorItem};
+use crate::tabs::core::{
+    self, render_config_block, render_error_block, render_input_fields, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
     Frame,
 };
 
 pub struct NseTab {
-    pub inputs: InputGroup,
+    pub core: TabCore,
     pub script_selector: Selector,
-    pub progress: ProgressGauge,
-    pub state: AppState,
-    pub results_view: ScrollableText,
     pub focus_area: NseFocusArea,
-    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,10 +27,14 @@ pub enum NseFocusArea {
 
 impl NseTab {
     pub fn new() -> Self {
-        let inputs = InputGroup::new()
-            .add(InputField::new("Target Host / URL"))
-            .add(InputField::new("Script Arguments (key=value,comma-sep)"))
-            .add(InputField::new("Custom Script Path (optional)"));
+        let inputs = crate::components::InputGroup::new()
+            .add(crate::components::InputField::new("Target Host / URL"))
+            .add(crate::components::InputField::new(
+                "Script Arguments (key=value,comma-sep)",
+            ))
+            .add(crate::components::InputField::new(
+                "Custom Script Path (optional)",
+            ));
 
         let script_selector = Selector::new("NSE Script").items(vec![
             SelectorItem::new("Default Scripts", "default"),
@@ -48,26 +47,19 @@ impl NseTab {
         ]);
 
         Self {
-            inputs,
+            core: TabCore::new("NSE Scan", "NSE Results").with_inputs(inputs),
             script_selector,
-            progress: ProgressGauge::new("NSE Scan"),
-            state: AppState::Idle,
-            results_view: ScrollableText::new("NSE Results"),
             focus_area: NseFocusArea::Inputs,
-            error: None,
         }
     }
 
     pub fn target(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn script_args(&self) -> Option<&str> {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(1)
             .map(|f| f.value.as_str())
@@ -75,7 +67,8 @@ impl NseTab {
     }
 
     pub fn custom_script(&self) -> Option<&str> {
-        self.inputs
+        self.core
+            .inputs
             .fields
             .get(2)
             .map(|f| f.value.as_str())
@@ -87,36 +80,37 @@ impl NseTab {
     }
 
     pub fn set_results(&mut self, results: NseResults) {
-        self.state = AppState::Completed;
-        self.results_view.clear();
+        let view = &mut self.core.results_view;
+        self.core.state = AppState::Completed;
+        view.clear();
 
-        self.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("NSE Script Results: {}", results.script),
             Style::default().fg(tc!(success)),
         )));
-        self.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("Target: {}", results.target),
             Style::default().fg(tc!(warning)),
         )));
-        self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "Output:",
             Style::default().fg(tc!(info)),
         )));
-        self.results_view.add_line(Line::from(""));
+        view.add_line(Line::from(""));
 
         for line in results.output.lines() {
-            self.results_view.add_line(Line::from(line.to_string()));
+            view.add_line(Line::from(line.to_string()));
         }
 
         if !results.errors.is_empty() {
-            self.results_view.add_line(Line::from(""));
-            self.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(""));
+            view.add_line(Line::from(Span::styled(
                 "Errors:",
                 Style::default().fg(tc!(error)),
             )));
             for err in results.errors.lines() {
-                self.results_view.add_line(Line::from(err.to_string()));
+                view.add_line(Line::from(err.to_string()));
             }
         }
     }
@@ -131,41 +125,39 @@ pub struct NseResults {
     pub success: bool,
 }
 
-impl TabState for NseTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
+impl Default for NseTab {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    fn progress(&self) -> f64 {
-        self.progress.percent() as f64
+impl TabState for NseTab {
+    tab_state_boilerplate!(NseTab, core: core);
+
+    fn has_selector_open(&self) -> bool {
+        self.script_selector.is_open()
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
-        self.results_view.clear();
-        self.progress.current = 0;
-        self.progress.total = 0;
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
+        self.core.reset_all();
         self.script_selector.select(0);
         self.focus_area = NseFocusArea::Inputs;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
     }
 }
 
 impl TabRender for NseTab {
+    fn breadcrumb(&self) -> Option<Vec<&'static str>> {
+        let focus = match self.focus_area {
+            NseFocusArea::Inputs => "Inputs",
+            NseFocusArea::ScriptSelector => "Script",
+            NseFocusArea::Results => "Results",
+        };
+        Some(vec!["NSE", focus])
+    }
+
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref error) = self.error {
-            let error_text = Paragraph::new(format!("Error: {}", error.message()))
-                .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(error))).title("NSE - Error"))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, area);
+        if let Some(ref err) = self.core.error {
+            render_error_block(f, area, "NSE - Error", err);
             return;
         }
 
@@ -180,19 +172,13 @@ impl TabRender for NseTab {
 
         let input_area = chunks.first().copied().unwrap_or(area);
 
-        let input_block = Block::default()
-            .title(" NSE Configuration ")
-            .borders(Borders::ALL)
-            .border_style(
-                Style::default().fg(if self.focus_area == NseFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        f.render_widget(&input_block, input_area);
+        let input_inner = render_config_block(
+            f,
+            input_area,
+            "NSE Configuration",
+            self.focus_area == NseFocusArea::Inputs,
+        );
 
-        // Input fields
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -200,13 +186,9 @@ impl TabRender for NseTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(input_block.inner(input_area));
+            .split(input_inner);
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
-            if let Some(area) = input_chunks.get(i) {
-                field.render(f, *area, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         // Script selector
         let mut selector = self.script_selector.clone();
@@ -217,12 +199,12 @@ impl TabRender for NseTab {
 
         // Results
         if let Some(results_area) = chunks.get(2) {
-            if self.results_view.is_empty() {
+            if self.core.results_view.is_empty() {
                 let placeholder =
                     empty_state_paragraph("Results", "Results will appear here after running");
                 f.render_widget(placeholder, *results_area);
             } else {
-                self.results_view.render(f, *results_area, None);
+                self.core.results_view.render(f, *results_area, None);
             }
         }
     }
@@ -230,12 +212,9 @@ impl TabRender for NseTab {
 
 impl TabInput for NseTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 self.script_selector.focus();
                 NseFocusArea::ScriptSelector
             }
@@ -244,24 +223,21 @@ impl TabInput for NseTab {
                 NseFocusArea::Results
             }
             NseFocusArea::Results => {
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 NseFocusArea::Inputs
             }
         };
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => {
-                self.inputs.blur();
+                self.core.inputs.blur();
                 NseFocusArea::Results
             }
             NseFocusArea::ScriptSelector => {
                 self.script_selector.blur();
-                self.inputs.focus(0);
+                self.core.inputs.focus(0);
                 NseFocusArea::Inputs
             }
             NseFocusArea::Results => {
@@ -271,93 +247,15 @@ impl TabInput for NseTab {
         };
     }
 
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == NseFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else if self.focus_area == NseFocusArea::Results {
-            Some(self.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.inputs.move_word_forward();
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == NseFocusArea::Inputs {
-                self.inputs.move_home();
-            } else if self.focus_area == NseFocusArea::Results {
-                self.results_view.scroll_to_top();
-            }
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == NseFocusArea::Inputs {
-                self.inputs.move_end();
-            } else if self.focus_area == NseFocusArea::Results {
-                self.results_view.scroll_to_bottom();
-            }
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = NseFocusArea::Inputs;
-        self.inputs.focus(0);
-    }
-
-    fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.inputs.blur();
-            self.focus_area = NseFocusArea::Results;
-        }
-    }
-
     fn handle_enter(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
         match self.focus_area {
             NseFocusArea::Inputs => {
-                if self.inputs.is_focused() {
-                    self.inputs.blur();
+                if self.core.inputs.is_focused() {
+                    self.core.inputs.blur();
                     return;
                 }
             }
@@ -376,75 +274,45 @@ impl TabInput for NseTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
-            self.stop();
+            self.core.stop();
             return;
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.script_selector.blur();
         self.focus_area = NseFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                NseFocusArea::Inputs => {
-                    self.inputs.focus_prev();
-                }
-                NseFocusArea::ScriptSelector => {
-                    self.script_selector.handle_up();
-                }
-                NseFocusArea::Results => {
-                    self.results_view.scroll_up(1);
-                }
+        match self.focus_area {
+            NseFocusArea::Inputs => {
+                self.core.inputs.focus_prev();
+            }
+            NseFocusArea::ScriptSelector => {
+                self.script_selector.handle_up();
+            }
+            NseFocusArea::Results => {
+                self.core.results_view.scroll_up(1);
             }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                NseFocusArea::Inputs => {
-                    self.inputs.focus_next();
-                }
-                NseFocusArea::ScriptSelector => {
-                    self.script_selector.handle_down();
-                }
-                NseFocusArea::Results => {
-                    self.results_view.scroll_down(1);
-                }
+        match self.focus_area {
+            NseFocusArea::Inputs => {
+                self.core.inputs.focus_next();
+            }
+            NseFocusArea::ScriptSelector => {
+                self.script_selector.handle_down();
+            }
+            NseFocusArea::Results => {
+                self.core.results_view.scroll_down(1);
             }
         }
-    }
-
-    fn handle_left(&mut self) -> bool {
-        if !self.is_running() {
-            match self.focus_area {
-                NseFocusArea::Inputs => self.inputs.move_left(),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn handle_right(&mut self) -> bool {
-        if !self.is_running() {
-            match self.focus_area {
-                NseFocusArea::Inputs => self.inputs.move_right(),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == NseFocusArea::Inputs && self.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            NseFocusArea::Inputs => self.inputs.is_at_left_edge(),
+            NseFocusArea::Inputs => self.core.inputs.is_at_left_edge(),
             NseFocusArea::ScriptSelector => {
                 self.script_selector.items.is_empty() || self.script_selector.selected == 0
             }
@@ -454,7 +322,7 @@ impl TabInput for NseTab {
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            NseFocusArea::Inputs => self.inputs.is_at_right_edge(),
+            NseFocusArea::Inputs => self.core.inputs.is_at_right_edge(),
             NseFocusArea::ScriptSelector => {
                 self.script_selector.items.is_empty()
                     || self.script_selector.selected
@@ -464,22 +332,122 @@ impl TabInput for NseTab {
         }
     }
 
-    fn page_up(&mut self, page_size: usize) {
+    fn handle_char(&mut self, c: char) {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.insert(c);
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.backspace();
+        }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
+        if self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.get_focused_value()
+        } else if self.focus_area == NseFocusArea::Results {
+            Some(self.core.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if !self.is_running() {
+            if self.focus_area == NseFocusArea::Inputs {
+                self.core.inputs.move_home();
+            } else if self.focus_area == NseFocusArea::Results {
+                self.core.results_view.scroll_to_top();
+            }
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if !self.is_running() {
+            if self.focus_area == NseFocusArea::Inputs {
+                self.core.inputs.move_end();
+            } else if self.focus_area == NseFocusArea::Results {
+                self.core.results_view.scroll_to_bottom();
+            }
+        }
+    }
+
+    fn handle_top(&mut self) {
         if self.is_running() {
             return;
         }
-        self.results_view.page_up(page_size);
+        self.focus_area = NseFocusArea::Inputs;
+        self.core.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        if !self.is_running() {
+            self.core.inputs.blur();
+            self.focus_area = NseFocusArea::Results;
+        }
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        if !self.is_running() {
+            self.core.results_view.page_up(page_size);
+        }
     }
 
     fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
+        if !self.is_running() {
+            self.core.results_view.page_down(page_size);
         }
-        self.results_view.page_down(page_size);
+    }
+
+    fn stop(&mut self) {
+        self.core.stop();
     }
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+
+    fn handle_left(&mut self) -> bool {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.move_left()
+        } else {
+            false
+        }
+    }
+
+    fn handle_right(&mut self) -> bool {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.move_right()
+        } else {
+            false
+        }
+    }
+
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == NseFocusArea::Inputs && self.core.inputs.is_focused()
     }
 }
 
@@ -488,17 +456,10 @@ impl NseTab {
         if self.target().is_empty() {
             return;
         }
-        if self.state != AppState::Running {
-            self.progress.current = 0;
-            self.progress.total = 0;
-            // In a real implementation this would trigger an event/worker
-            self.state = AppState::Running;
-        }
-    }
-
-    pub fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
+        if self.core.state != AppState::Running {
+            self.core.progress.current = 0;
+            self.core.progress.total = 0;
+            self.core.state = AppState::Running;
         }
     }
 }

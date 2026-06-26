@@ -1,6 +1,8 @@
 use crate::components::{InputField, InputGroup, Selector};
-use crate::tabs::core::{render_results_area, start_scan, TabCore};
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
+use crate::tabs::core::{
+    render_input_fields, render_results_area, start_scan, StandardFocusAreaSelector, TabCore,
+};
+use crate::tabs::{TabInput, TabRender, TabState};
 use crate::{tab_state_boilerplate, tc};
 use eggsec::loadtest::metrics::LoadTestResults;
 use ratatui::{
@@ -9,18 +11,11 @@ use ratatui::{
     Frame,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum LoadFocusArea {
-    Selector,
-    Inputs,
-    Results,
-}
-
 pub struct LoadTab {
     pub core: TabCore,
     pub test_type_selector: Selector,
     pub results: Option<LoadTestResults>,
-    pub focus_area: LoadFocusArea,
+    pub focus_area: StandardFocusAreaSelector,
 }
 
 impl LoadTab {
@@ -50,7 +45,7 @@ impl LoadTab {
             core: TabCore::new("Load testing...", "Results").with_inputs(inputs),
             test_type_selector,
             results: None,
-            focus_area: LoadFocusArea::Selector,
+            focus_area: StandardFocusAreaSelector::Selector,
         }
     }
 
@@ -154,7 +149,6 @@ impl LoadTab {
     pub fn set_results(&mut self, results: LoadTestResults) {
         self.update_results_view(&results);
         self.results = Some(results);
-        self.core.state = AppState::Completed;
     }
 
     #[cfg(feature = "stress-testing")]
@@ -205,15 +199,13 @@ impl LoadTab {
             Span::styled("Data Sent: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} bytes", stats.bytes_sent)),
         ]));
-
-        self.core.state = AppState::Completed;
     }
 
     fn update_results_view(&mut self, results: &LoadTestResults) {
         use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
-        self.core.results_view.clear();
+        self.core.prepare_results();
 
         let target_url = results.target_url.clone();
         let total_requests = results.total_requests;
@@ -338,6 +330,10 @@ impl Default for LoadTab {
 impl TabState for LoadTab {
     tab_state_boilerplate!(LoadTab, core: core);
 
+    fn has_selector_open(&self) -> bool {
+        self.test_type_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.core.reset_all();
         if self.core.inputs.fields.len() > 4 {
@@ -367,7 +363,7 @@ impl TabState for LoadTab {
         self.test_type_selector.select(0);
         self.test_type_selector.blur();
         self.core.inputs.blur();
-        self.focus_area = LoadFocusArea::Selector;
+        self.focus_area = StandardFocusAreaSelector::Selector;
     }
 }
 
@@ -399,7 +395,7 @@ impl TabRender for LoadTab {
                 .borders(Borders::ALL)
                 .title(" Load Test Configuration ")
                 .border_style(crate::tabs::core::focus_border_style(
-                    self.focus_area == LoadFocusArea::Inputs,
+                    self.focus_area == StandardFocusAreaSelector::Inputs,
                 ));
             let input_inner = input_block.inner(*input_area);
             f.render_widget(input_block, *input_area);
@@ -414,11 +410,7 @@ impl TabRender for LoadTab {
                 .constraints(constraints)
                 .split(input_inner);
 
-            for (i, field) in self.core.inputs.fields.iter().enumerate() {
-                if let Some(chunk) = input_chunks.get(i) {
-                    field.render(f, *chunk, insert_mode);
-                }
-            }
+            render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
         }
 
         if let Some(results_area) = chunks.get(2) {
@@ -461,52 +453,46 @@ impl TabRender for LoadTab {
 
 impl TabInput for LoadTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
-            LoadFocusArea::Selector => {
+            StandardFocusAreaSelector::Selector => {
                 self.test_type_selector.blur();
                 self.core.inputs.focus(0);
-                LoadFocusArea::Inputs
+                StandardFocusAreaSelector::Inputs
             }
-            LoadFocusArea::Inputs => {
+            StandardFocusAreaSelector::Inputs => {
                 self.core.inputs.blur();
-                LoadFocusArea::Results
+                StandardFocusAreaSelector::Results
             }
-            LoadFocusArea::Results => {
+            StandardFocusAreaSelector::Results => {
                 self.test_type_selector.focus();
-                LoadFocusArea::Selector
+                StandardFocusAreaSelector::Selector
             }
         };
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
-            LoadFocusArea::Selector => {
+            StandardFocusAreaSelector::Selector => {
                 self.test_type_selector.blur();
-                LoadFocusArea::Results
+                StandardFocusAreaSelector::Results
             }
-            LoadFocusArea::Inputs => {
+            StandardFocusAreaSelector::Inputs => {
                 self.core.inputs.blur();
                 self.test_type_selector.focus();
-                LoadFocusArea::Selector
+                StandardFocusAreaSelector::Selector
             }
-            LoadFocusArea::Results => {
+            StandardFocusAreaSelector::Results => {
                 self.core.inputs.focus(0);
-                LoadFocusArea::Inputs
+                StandardFocusAreaSelector::Inputs
             }
         };
     }
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() {
-            if self.focus_area == LoadFocusArea::Selector {
+            if self.focus_area == StandardFocusAreaSelector::Selector {
                 self.test_type_selector.handle_char(c);
-            } else if self.focus_area == LoadFocusArea::Inputs {
+            } else if self.focus_area == StandardFocusAreaSelector::Inputs {
                 self.core.inputs.insert(c);
             }
         }
@@ -514,16 +500,16 @@ impl TabInput for LoadTab {
 
     fn handle_backspace(&mut self) {
         if !self.is_running() {
-            if self.focus_area == LoadFocusArea::Selector {
+            if self.focus_area == StandardFocusAreaSelector::Selector {
                 self.test_type_selector.handle_backspace();
-            } else if self.focus_area == LoadFocusArea::Inputs {
+            } else if self.focus_area == StandardFocusAreaSelector::Inputs {
                 self.core.inputs.backspace();
             }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == LoadFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StandardFocusAreaSelector::Inputs {
             self.core.inputs.paste(text);
         }
     }
@@ -532,7 +518,7 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == LoadFocusArea::Inputs {
+        if self.focus_area == StandardFocusAreaSelector::Inputs {
             self.core.inputs.move_word_forward();
         }
     }
@@ -541,7 +527,7 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == LoadFocusArea::Inputs {
+        if self.focus_area == StandardFocusAreaSelector::Inputs {
             self.core.inputs.move_word_backward();
         }
     }
@@ -550,9 +536,9 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == LoadFocusArea::Inputs {
+        if self.focus_area == StandardFocusAreaSelector::Inputs {
             self.core.inputs.move_home();
-        } else if self.focus_area == LoadFocusArea::Results {
+        } else if self.focus_area == StandardFocusAreaSelector::Results {
             self.core.results_view.scroll_to_top();
         }
     }
@@ -561,9 +547,9 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == LoadFocusArea::Inputs {
+        if self.focus_area == StandardFocusAreaSelector::Inputs {
             self.core.inputs.move_end();
-        } else if self.focus_area == LoadFocusArea::Results {
+        } else if self.focus_area == StandardFocusAreaSelector::Results {
             self.core.results_view.scroll_to_bottom();
         }
     }
@@ -573,7 +559,7 @@ impl TabInput for LoadTab {
             return;
         }
         self.core.inputs.blur();
-        self.focus_area = LoadFocusArea::Selector;
+        self.focus_area = StandardFocusAreaSelector::Selector;
         self.test_type_selector.focus();
     }
 
@@ -582,11 +568,11 @@ impl TabInput for LoadTab {
             return;
         }
         self.core.inputs.blur();
-        self.focus_area = LoadFocusArea::Results;
+        self.focus_area = StandardFocusAreaSelector::Results;
     }
 
     fn handle_enter(&mut self) {
-        if self.focus_area == LoadFocusArea::Results {
+        if self.focus_area == StandardFocusAreaSelector::Results {
             return;
         }
 
@@ -624,43 +610,37 @@ impl TabInput for LoadTab {
             self.test_type_selector.blur();
         }
         self.core.inputs.blur();
-        self.focus_area = LoadFocusArea::Selector;
+        self.focus_area = StandardFocusAreaSelector::Selector;
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == LoadFocusArea::Selector {
+        if self.focus_area == StandardFocusAreaSelector::Selector {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_prev();
             }
-        } else if self.focus_area == LoadFocusArea::Inputs {
+        } else if self.focus_area == StandardFocusAreaSelector::Inputs {
             if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.scroll_results_up();
             } else {
                 self.core.inputs.focus_prev();
             }
-        } else if self.focus_area == LoadFocusArea::Results {
+        } else if self.focus_area == StandardFocusAreaSelector::Results {
             self.scroll_results_up();
         }
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == LoadFocusArea::Selector {
+        if self.focus_area == StandardFocusAreaSelector::Selector {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_next();
             }
-        } else if self.focus_area == LoadFocusArea::Inputs {
+        } else if self.focus_area == StandardFocusAreaSelector::Inputs {
             if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.scroll_results_down();
             } else {
                 self.core.inputs.focus_next();
             }
-        } else if self.focus_area == LoadFocusArea::Results {
+        } else if self.focus_area == StandardFocusAreaSelector::Results {
             self.scroll_results_down();
         }
     }
@@ -676,7 +656,7 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != LoadFocusArea::Results && self.core.inputs.is_focused() {
+        } else if self.focus_area != StandardFocusAreaSelector::Results && self.core.inputs.is_focused() {
             self.core.inputs.move_left()
         } else {
             false
@@ -694,7 +674,7 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != LoadFocusArea::Results && self.core.inputs.is_focused() {
+        } else if self.focus_area != StandardFocusAreaSelector::Results && self.core.inputs.is_focused() {
             self.core.inputs.move_right()
         } else {
             false
@@ -754,8 +734,8 @@ impl TabInput for LoadTab {
             return None;
         }
         match self.focus_area {
-            LoadFocusArea::Inputs => self.core.inputs.get_focused_value(),
-            LoadFocusArea::Results => Some(self.core.results_view.get_content()),
+            StandardFocusAreaSelector::Inputs => self.core.inputs.get_focused_value(),
+            StandardFocusAreaSelector::Results => Some(self.core.results_view.get_content()),
             _ => None,
         }
     }
@@ -776,7 +756,7 @@ mod tests {
     #[test]
     fn test_enter_in_inputs_focused_blurs_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = LoadFocusArea::Inputs;
+        tab.focus_area = StandardFocusAreaSelector::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -787,7 +767,7 @@ mod tests {
     #[test]
     fn test_enter_in_selector_open_confirms_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = LoadFocusArea::Selector;
+        tab.focus_area = StandardFocusAreaSelector::Selector;
         tab.test_type_selector.focus();
         tab.test_type_selector.open();
         assert!(tab.test_type_selector.is_open());
@@ -799,7 +779,7 @@ mod tests {
     #[test]
     fn test_enter_in_results_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = LoadFocusArea::Results;
+        tab.focus_area = StandardFocusAreaSelector::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }

@@ -1,7 +1,8 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup, ValidationResult};
 use crate::tabs::core::{
-    field_as, field_str, render_config_block, render_results_area, StandardFocusArea, TabCore,
+    field_as, field_str, render_config_block, render_input_fields, render_results_area,
+    StandardFocusArea, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_escape_3area, tab_input_boilerplate, tab_state_boilerplate, tc};
@@ -68,9 +69,9 @@ impl ScanPortsTab {
     }
 
     pub fn set_results(&mut self, results: PortScanResults) {
+        let _view = self.core.prepare_results();
         self.update_results_view(&results);
         self.results = Some(results);
-        self.core.state = AppState::Completed;
     }
 
     fn update_results_view(&mut self, results: &PortScanResults) {
@@ -264,11 +265,7 @@ impl TabRender for ScanPortsTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         if let Some(chunk) = input_chunks.get(4) {
             self.udp_checkbox.render_with_focus(
@@ -322,9 +319,6 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = crate::tabs::core::focus_next_3area(
             &mut self.core,
             self.focus_area,
@@ -335,9 +329,6 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = crate::tabs::core::focus_prev_3area(
             &mut self.core,
             self.focus_area,
@@ -348,9 +339,6 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         crate::tabs::core::handle_up_3area(
             &mut self.core,
             self.focus_area,
@@ -360,9 +348,6 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         crate::tabs::core::handle_down_3area(
             &mut self.core,
             self.focus_area,

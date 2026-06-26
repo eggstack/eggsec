@@ -1,7 +1,10 @@
 use crate::components::{InputField, InputGroup, Selector, SelectorItem};
-use crate::tabs::core::{focus_border_style, render_results_area, start_scan, TabCore};
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
+use crate::tabs::core::{
+    focus_border_style, render_input_fields, render_results_area, start_scan,
+    StandardFocusAreaSelector, TabCore,
+};
+use crate::tabs::{TabInput, TabRender, TabState};
+use crate::{tab_input_areas, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -22,14 +25,7 @@ pub enum StressType {
 pub struct StressTab {
     pub core: TabCore,
     pub type_selector: Selector,
-    pub focus_area: StressFocusArea,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum StressFocusArea {
-    Inputs,
-    TypeSelector,
-    Results,
+    pub focus_area: StandardFocusAreaSelector,
 }
 
 impl Default for StressTab {
@@ -57,7 +53,7 @@ impl StressTab {
         Self {
             core: TabCore::new("Stress testing...", "Stress Test Results").with_inputs(inputs),
             type_selector,
-            focus_area: StressFocusArea::Inputs,
+            focus_area: StandardFocusAreaSelector::Inputs,
         }
     }
 
@@ -103,51 +99,42 @@ impl StressTab {
     }
 
     pub fn set_results(&mut self, results: StressResults) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
 
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("Stress Test Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core
-            .results_view
-            .add_line(Line::from(format!("Type: {}", results.stress_type)));
-        self.core
-            .results_view
-            .add_line(Line::from(format!("Duration: {}ms", results.duration_ms)));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!("Type: {}", results.stress_type)));
+        view.add_line(Line::from(format!("Duration: {}ms", results.duration_ms)));
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "Statistics:",
             Style::default().fg(tc!(warning)),
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Packets Sent: {}",
             results.packets_sent
         )));
-        self.core
-            .results_view
-            .add_line(Line::from(format!("  Bytes Sent: {}", results.bytes_sent)));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!("  Bytes Sent: {}", results.bytes_sent)));
+        view.add_line(Line::from(format!(
             "  Packets/sec: {:.2}",
             results.packets_per_second
         )));
-        self.core
-            .results_view
-            .add_line(Line::from(format!("  Errors: {}", results.errors)));
+        view.add_line(Line::from(format!("  Errors: {}", results.errors)));
 
         if results.responses_received > 0 {
-            self.core.results_view.add_line(Line::from(""));
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(""));
+            view.add_line(Line::from(Span::styled(
                 "Response Statistics:",
                 Style::default().fg(tc!(warning)),
             )));
-            self.core.results_view.add_line(Line::from(format!(
+            view.add_line(Line::from(format!(
                 "  Responses Received: {}",
                 results.responses_received
             )));
-            self.core.results_view.add_line(Line::from(format!(
+            view.add_line(Line::from(format!(
                 "  Avg Latency: {:.2}ms",
                 results.avg_latency_ms
             )));
@@ -171,6 +158,10 @@ pub struct StressResults {
 impl TabState for StressTab {
     tab_state_boilerplate!(StressTab, core: core);
 
+    fn has_selector_open(&self) -> bool {
+        self.type_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.core.reset_all();
         if let Some(field) = self.core.inputs.fields.get_mut(1) {
@@ -189,7 +180,7 @@ impl TabState for StressTab {
         self.type_selector.cancel();
         self.type_selector.blur();
         self.core.inputs.blur();
-        self.focus_area = StressFocusArea::Inputs;
+        self.focus_area = StandardFocusAreaSelector::Inputs;
     }
 }
 
@@ -214,7 +205,7 @@ impl TabRender for StressTab {
             .title(" Stress Test Configuration ")
             .borders(Borders::ALL)
             .border_style(focus_border_style(
-                self.focus_area == StressFocusArea::Inputs,
+                self.focus_area == StandardFocusAreaSelector::Inputs,
             ));
         let input_area = chunks.first().copied().unwrap_or(area);
         let input_inner = input_block.inner(input_area);
@@ -230,15 +221,11 @@ impl TabRender for StressTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         // Type selector
         let mut selector = self.type_selector.clone();
-        selector.focused = self.focus_area == StressFocusArea::TypeSelector;
+        selector.focused = self.focus_area == StandardFocusAreaSelector::Selector;
         if let Some(chunk) = chunks.get(1) {
             selector.render(f, *chunk);
         }
@@ -259,76 +246,17 @@ impl TabRender for StressTab {
 }
 
 impl TabInput for StressTab {
-    tab_input_boilerplate!(
+    tab_input_areas!(
         StressTab,
         core: core,
         focus: focus_area,
-        Inputs: StressFocusArea::Inputs,
-        Results: StressFocusArea::Results
+        Inputs: StandardFocusAreaSelector::Inputs,
+        Options: StandardFocusAreaSelector::Selector,
+        Results: StandardFocusAreaSelector::Results
     );
 
-    fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = match self.focus_area {
-            StressFocusArea::Inputs => {
-                self.core.inputs.blur();
-                StressFocusArea::TypeSelector
-            }
-            StressFocusArea::TypeSelector => {
-                self.type_selector.blur();
-                self.type_selector.cancel();
-                StressFocusArea::Results
-            }
-            StressFocusArea::Results => {
-                self.core.inputs.focus(0);
-                StressFocusArea::Inputs
-            }
-        };
-    }
-
-    fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = match self.focus_area {
-            StressFocusArea::Inputs => {
-                self.core.inputs.blur();
-                StressFocusArea::Results
-            }
-            StressFocusArea::TypeSelector => {
-                self.type_selector.blur();
-                self.core.inputs.focus(0);
-                StressFocusArea::Inputs
-            }
-            StressFocusArea::Results => {
-                self.type_selector.focus();
-                StressFocusArea::TypeSelector
-            }
-        };
-    }
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
-            self.core.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
-            self.core.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
-            self.core.inputs.paste(text);
-        }
-    }
-
     fn handle_enter(&mut self) {
-        if self.focus_area == StressFocusArea::Results {
+        if self.focus_area == StandardFocusAreaSelector::Results {
             return;
         }
 
@@ -337,12 +265,12 @@ impl TabInput for StressTab {
             return;
         }
         match self.focus_area {
-            StressFocusArea::Inputs => {
+            StandardFocusAreaSelector::Inputs => {
                 self.core.inputs.blur();
-                self.focus_area = StressFocusArea::TypeSelector;
+                self.focus_area = StandardFocusAreaSelector::Selector;
                 self.type_selector.open();
             }
-            StressFocusArea::TypeSelector => {
+            StandardFocusAreaSelector::Selector => {
                 if self.type_selector.is_open() {
                     if self.type_selector.confirm().is_some() {
                         self.type_selector.close();
@@ -354,7 +282,7 @@ impl TabInput for StressTab {
                     self.type_selector.open();
                 }
             }
-            StressFocusArea::Results => {}
+            StandardFocusAreaSelector::Results => {}
         }
     }
 
@@ -369,89 +297,7 @@ impl TabInput for StressTab {
         }
         self.core.inputs.blur();
         self.type_selector.blur();
-        self.focus_area = StressFocusArea::Inputs;
-    }
-
-    fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            StressFocusArea::Inputs => {
-                self.core.inputs.focus_prev();
-            }
-            StressFocusArea::TypeSelector => {
-                self.type_selector.handle_up();
-            }
-            StressFocusArea::Results => {
-                self.core.results_view.scroll_up(1);
-            }
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        match self.focus_area {
-            StressFocusArea::Inputs => {
-                self.core.inputs.focus_next();
-            }
-            StressFocusArea::TypeSelector => {
-                self.type_selector.handle_down();
-            }
-            StressFocusArea::Results => {
-                self.core.results_view.scroll_down(1);
-            }
-        }
-    }
-
-    fn handle_left(&mut self) -> bool {
-        if !self.is_running() {
-            match self.focus_area {
-                StressFocusArea::Inputs => self.core.inputs.move_left(),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn handle_right(&mut self) -> bool {
-        if !self.is_running() {
-            match self.focus_area {
-                StressFocusArea::Inputs => self.core.inputs.move_right(),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == StressFocusArea::Inputs && self.core.inputs.is_focused()
-    }
-
-    fn is_at_left_edge(&self) -> bool {
-        match self.focus_area {
-            StressFocusArea::Inputs => self.core.inputs.is_at_left_edge(),
-            StressFocusArea::TypeSelector => {
-                self.type_selector.items.is_empty() || self.type_selector.selected == 0
-            }
-            _ => true,
-        }
-    }
-
-    fn is_at_right_edge(&self) -> bool {
-        match self.focus_area {
-            StressFocusArea::Inputs => self.core.inputs.is_at_right_edge(),
-            StressFocusArea::TypeSelector => {
-                self.type_selector.items.is_empty()
-                    || self.type_selector.selected
-                        >= self.type_selector.items.len().saturating_sub(1)
-            }
-            _ => true,
-        }
+        self.focus_area = StandardFocusAreaSelector::Inputs;
     }
 }
 
@@ -476,7 +322,7 @@ mod tests {
     #[test]
     fn test_enter_in_inputs_blurs_opens_selector() {
         let mut tab = create_test_tab();
-        tab.focus_area = StressFocusArea::Inputs;
+        tab.focus_area = StandardFocusAreaSelector::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -488,7 +334,7 @@ mod tests {
     #[test]
     fn test_enter_in_type_selector_opens_does_not_start() {
         let mut tab = create_test_tab();
-        tab.focus_area = StressFocusArea::TypeSelector;
+        tab.focus_area = StandardFocusAreaSelector::Selector;
         tab.type_selector.open();
         assert!(tab.type_selector.is_open());
         tab.handle_enter();
@@ -498,7 +344,7 @@ mod tests {
     #[test]
     fn test_enter_in_results_no_op() {
         let mut tab = create_test_tab();
-        tab.focus_area = StressFocusArea::Results;
+        tab.focus_area = StandardFocusAreaSelector::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }

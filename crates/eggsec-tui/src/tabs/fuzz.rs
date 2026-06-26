@@ -104,50 +104,49 @@ impl FuzzTab {
 
     pub fn set_results(&mut self, session: FuzzSession) {
         self.session = Some(session.clone());
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
 
         let Some(s) = self.session.as_ref() else {
             tracing::warn!("set_results called but session is None");
             return;
         };
 
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("Fuzzing Complete: {}", s.target_url),
             Style::default().fg(tc!(success)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "Mode: {} | Payloads: {} | Duration: {}ms",
             s.mode, s.total_payloads, s.duration_ms
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "Findings Summary:",
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Requests: {} success / {} failed",
             s.successful_requests, s.failed_requests
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  WAF Bypasses: {} | Leaks: {} | Anomalies: {}",
             s.waf_bypasses, s.potential_leaks, s.time_anomalies
         )));
 
         if s.redos_suspected > 0 {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("  ReDoS Suspected: {}", s.redos_suspected),
                 Style::default().fg(tc!(error)),
             )));
         }
 
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "OWASP Summary:",
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  A03 Injection: {} | A10 SSRF: {}",
             s.owasp_summary.a03_injection, s.owasp_summary.a10_ssrf
         )));
@@ -160,8 +159,8 @@ impl FuzzTab {
             .collect();
 
         if !critical.is_empty() {
-            self.core.results_view.add_line(Line::from(""));
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(""));
+            view.add_line(Line::from(Span::styled(
                 "Critical Findings:",
                 Style::default().fg(tc!(error)),
             )));
@@ -175,7 +174,7 @@ impl FuzzTab {
                 } else {
                     "INFO"
                 };
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  [{}] {} (Status: {})",
                     severity, result.payload.description, result.status_code
                 )));
@@ -357,6 +356,12 @@ impl TabState for FuzzTab {
         self.core.progress.percent() as f64
     }
 
+    fn has_selector_open(&self) -> bool {
+        self.payload_selector.is_open()
+            || self.mode_selector.is_open()
+            || self.target_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.core.reset_all();
         self.core.inputs.blur();
@@ -535,9 +540,6 @@ impl TabRender for FuzzTab {
 
 impl TabInput for FuzzTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == FuzzFocusArea::Inputs {
             if self.core.inputs.is_focused() {
                 let at_last = self
@@ -561,9 +563,6 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == FuzzFocusArea::Inputs {
             if self.core.inputs.is_focused() {
                 let at_first = self.core.inputs.focused.map(|i| i == 0).unwrap_or(true);
@@ -688,9 +687,6 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if let Some(sel) = self.focused_selector_mut() {
             if sel.is_open() {
                 sel.move_prev();
@@ -701,9 +697,6 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if let Some(sel) = self.focused_selector_mut() {
             if sel.is_open() {
                 sel.move_next();

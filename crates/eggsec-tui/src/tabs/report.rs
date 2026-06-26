@@ -2,6 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
+use crate::tabs::core::render_input_fields;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use ratatui::{
@@ -231,6 +232,10 @@ impl TabState for ReportTab {
         0.0
     }
 
+    fn has_selector_open(&self) -> bool {
+        self.view_selector.is_open() || self.format_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
@@ -331,11 +336,7 @@ impl TabRender for ReportTab {
 
         f.render_widget(inputs_block, *inputs_area);
 
-        for (i, field) in current_inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, current_inputs, insert_mode);
 
         // Format selector for Convert view
         if self.current_view == ReportView::Convert {
@@ -376,9 +377,6 @@ impl TabRender for ReportTab {
 
 impl TabInput for ReportTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -406,9 +404,6 @@ impl TabInput for ReportTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -621,9 +616,6 @@ impl TabInput for ReportTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -645,9 +637,6 @@ impl TabInput for ReportTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -679,9 +668,9 @@ impl TabInput for ReportTab {
                     ReportView::Trend => &mut self.trend_inputs,
                     ReportView::Schedule => &mut self.schedule_inputs,
                 };
-                return current_inputs.move_left();
+                current_inputs.move_left()
             }
-            _ => return false,
+            _ => false,
         }
     }
 
@@ -696,9 +685,9 @@ impl TabInput for ReportTab {
                     ReportView::Trend => &mut self.trend_inputs,
                     ReportView::Schedule => &mut self.schedule_inputs,
                 };
-                return current_inputs.move_right();
+                current_inputs.move_right()
             }
-            _ => return false,
+            _ => false,
         }
     }
 

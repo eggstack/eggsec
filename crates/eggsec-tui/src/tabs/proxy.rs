@@ -1,7 +1,7 @@
-use crate::app::tab_error::TabError;
-use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
+use crate::components::{empty_state_paragraph, Selector};
+use crate::tabs::core::{render_error_block, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_state_boilerplate, tc};
 use eggsec::config::ProxyConfigEntry;
 use eggsec::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
 use eggsec::types::SensitiveString;
@@ -22,15 +22,12 @@ pub enum ProxyView {
 }
 
 pub struct ProxyTab {
+    pub core: TabCore,
     pub view_selector: Selector,
-    pub inputs: InputGroup,
     pub proxies: Vec<ProxyConfigEntry>,
     pub health_results: Vec<ProxyCheckResult>,
     pub test_result: Option<ProxyCheckResult>,
     pub current_view: ProxyView,
-    pub state: AppState,
-    pub results_view: ScrollableText,
-    pub error: Option<TabError>,
 }
 
 /// Unified result type for proxy health checks and individual proxy tests.
@@ -48,18 +45,16 @@ impl ProxyTab {
         let view_selector =
             Selector::new("View").simple_items(vec!["List", "Add", "Health Check", "Test"]);
 
-        let inputs = InputGroup::new().add(InputField::new("Proxy File Path"));
+        let inputs = crate::components::InputGroup::new()
+            .add(crate::components::InputField::new("Proxy File Path"));
 
         Self {
+            core: TabCore::new("Proxy", "Results").with_inputs(inputs),
             view_selector,
-            inputs,
             proxies: Vec::new(),
             health_results: Vec::new(),
             test_result: None,
             current_view: ProxyView::List,
-            state: AppState::Idle,
-            results_view: ScrollableText::new("Results"),
-            error: None,
         }
     }
 
@@ -78,23 +73,23 @@ impl ProxyTab {
     }
 
     fn update_health_view(&mut self) {
-        self.results_view.clear();
-        self.results_view.add_line(Line::from(vec![Span::styled(
+        let view = &mut self.core.results_view;
+        view.clear();
+        view.add_line(Line::from(vec![Span::styled(
             "Proxy Health Check Results",
             Style::default().fg(tc!(accent)),
         )]));
-        self.results_view.add_line(Line::from(""));
+        view.add_line(Line::from(""));
 
         let total = self.health_results.len();
         let healthy = self.health_results.iter().filter(|r| r.is_healthy).count();
         let unhealthy = total - healthy;
 
-        self.results_view
-            .add_line(Line::from(vec![Span::raw(format!(
-                "Total: {} | Healthy: {} | Unhealthy: {}",
-                total, healthy, unhealthy
-            ))]));
-        self.results_view.add_line(Line::from(""));
+        view.add_line(Line::from(vec![Span::raw(format!(
+            "Total: {} | Healthy: {} | Unhealthy: {}",
+            total, healthy, unhealthy
+        ))]));
+        view.add_line(Line::from(""));
 
         for result in &self.health_results {
             let status = if result.is_healthy { "✓" } else { "✗" };
@@ -103,7 +98,7 @@ impl ProxyTab {
                 .map(|ms| format!("{}ms", ms))
                 .unwrap_or_else(|| "N/A".to_string());
             let error = result.error.as_deref().unwrap_or("OK");
-            self.results_view.add_line(Line::from(vec![
+            view.add_line(Line::from(vec![
                 Span::styled(
                     format!("[{}] ", status),
                     if result.is_healthy {
@@ -118,13 +113,14 @@ impl ProxyTab {
     }
 
     fn update_test_view(&mut self) {
-        self.results_view.clear();
+        let view = &mut self.core.results_view;
+        view.clear();
         if let Some(ref result) = self.test_result {
-            self.results_view.add_line(Line::from(vec![Span::styled(
+            view.add_line(Line::from(vec![Span::styled(
                 "Proxy Test Result",
                 Style::default().fg(tc!(accent)),
             )]));
-            self.results_view.add_line(Line::from(""));
+            view.add_line(Line::from(""));
 
             let status = if result.is_healthy {
                 "✓ Healthy"
@@ -137,9 +133,8 @@ impl ProxyTab {
                 .unwrap_or_else(|| "N/A".to_string());
             let error = result.error.as_deref().unwrap_or("OK");
 
-            self.results_view
-                .add_line(Line::from(format!("Proxy: {}", result.url)));
-            self.results_view.add_line(Line::from(vec![
+            view.add_line(Line::from(format!("Proxy: {}", result.url)));
+            view.add_line(Line::from(vec![
                 Span::styled(
                     status,
                     if result.is_healthy {
@@ -152,7 +147,7 @@ impl ProxyTab {
             ]));
             if !result.is_healthy {
                 let error_msg = error.to_string();
-                self.results_view.add_line(Line::from(vec![
+                view.add_line(Line::from(vec![
                     Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw(error_msg),
                 ]));
@@ -161,22 +156,22 @@ impl ProxyTab {
     }
 
     pub fn update_list_view(&mut self) {
-        self.results_view.clear();
+        let view = &mut self.core.results_view;
+        view.clear();
         if self.proxies.is_empty() {
-            self.results_view.add_line(Line::from("No proxies loaded."));
-            self.results_view.add_line(Line::from(""));
-            self.results_view
-                .add_line(Line::from("Run 'Add' to load proxies from file."));
+            view.add_line(Line::from("No proxies loaded."));
+            view.add_line(Line::from(""));
+            view.add_line(Line::from("Run 'Add' to load proxies from file."));
         } else {
-            self.results_view.add_line(Line::from(vec![Span::styled(
+            view.add_line(Line::from(vec![Span::styled(
                 format!("Proxy Pool ({} proxies)", self.proxies.len()),
                 Style::default().fg(tc!(accent)),
             )]));
-            self.results_view.add_line(Line::from(""));
+            view.add_line(Line::from(""));
 
             for (i, proxy) in self.proxies.iter().enumerate() {
                 let status = if proxy.enabled { "enabled" } else { "disabled" };
-                self.results_view.add_line(Line::from(vec![
+                view.add_line(Line::from(vec![
                     Span::styled(format!("[{}] ", i + 1), Style::default().fg(tc!(info))),
                     Span::raw(format!(
                         "{}://{}:{} - {}",
@@ -188,15 +183,11 @@ impl ProxyTab {
     }
 
     pub fn proxy_file_path(&self) -> &str {
-        self.inputs
-            .fields
-            .first()
-            .map(|f| f.value.as_str())
-            .unwrap_or("")
+        self.core.target()
     }
 
     pub fn start_health_check(&mut self) {
-        self.state = AppState::Running;
+        self.core.state = AppState::Running;
     }
 
     pub fn load_proxies_from_file(&mut self, path: &str) -> Result<usize, String> {
@@ -223,9 +214,10 @@ impl ProxyTab {
     }
 
     pub async fn run_health_check(&mut self, test_url: &str) {
-        self.state = AppState::Running;
-        self.results_view.clear();
-        self.results_view
+        self.core.state = AppState::Running;
+        self.core.results_view.clear();
+        self.core
+            .results_view
             .add_line(Line::from("Running health checks..."));
 
         let proxy_entries: Vec<ProxyEntry> = self
@@ -258,7 +250,7 @@ impl ProxyTab {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("Failed to create health checker: {}", e);
-                self.state = AppState::Idle;
+                self.core.state = AppState::Idle;
                 return;
             }
         };
@@ -278,30 +270,31 @@ impl ProxyTab {
                 self.update_health_view();
             }
             Err(e) => {
-                self.results_view.add_line(Line::from(vec![
+                self.core.results_view.add_line(Line::from(vec![
                     Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw(e.to_string()),
                 ]));
             }
         }
 
-        self.state = AppState::Completed;
+        self.core.state = AppState::Completed;
     }
 
     pub async fn run_test(&mut self, proxy_url: &str, test_url: &str) {
-        self.state = AppState::Running;
-        self.results_view.clear();
-        self.results_view
+        self.core.state = AppState::Running;
+        self.core.results_view.clear();
+        self.core
+            .results_view
             .add_line(Line::from(format!("Testing proxy: {}", proxy_url)));
 
         let (address, port, username, password) = match parse_proxy_url(proxy_url) {
             Ok((a, p, u, pw)) => (a, p, u, pw),
             Err(e) => {
-                self.results_view.add_line(Line::from(vec![
+                self.core.results_view.add_line(Line::from(vec![
                     Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw(e.to_string()),
                 ]));
-                self.state = AppState::Error(e.to_string());
+                self.core.state = AppState::Error(e.to_string());
                 return;
             }
         };
@@ -343,7 +336,7 @@ impl ProxyTab {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("Failed to create health checker: {}", e);
-                self.state = AppState::Idle;
+                self.core.state = AppState::Idle;
                 return;
             }
         };
@@ -357,7 +350,7 @@ impl ProxyTab {
         });
 
         self.update_test_view();
-        self.state = AppState::Completed;
+        self.core.state = AppState::Completed;
     }
 }
 
@@ -368,34 +361,22 @@ impl Default for ProxyTab {
 }
 
 impl TabState for ProxyTab {
-    fn state(&self) -> AppState {
-        self.state.clone()
-    }
+    tab_state_boilerplate!(ProxyTab, core: core);
 
-    fn progress(&self) -> f64 {
-        0.0
+    fn has_selector_open(&self) -> bool {
+        self.view_selector.is_open()
     }
 
     fn reset(&mut self) {
-        self.state = AppState::Idle;
+        self.core.reset_all();
         self.health_results.clear();
         self.proxies.clear();
         self.test_result = None;
-        self.results_view.clear();
-        self.error = None;
-        for field in &mut self.inputs.fields {
-            field.clear();
-        }
-        self.inputs.blur();
+        self.core.inputs.blur();
         self.current_view = ProxyView::List;
         self.view_selector.select(0);
         self.view_selector.cancel();
         self.view_selector.blur();
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        self.state = AppState::Error(error.message());
-        self.error = Some(error);
     }
 }
 
@@ -411,17 +392,8 @@ impl TabRender for ProxyTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
-        if let Some(ref err) = self.error {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(tc!(error)))
-                        .title("Proxy - Error"),
-                )
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, area);
+        if let Some(ref err) = self.core.error {
+            render_error_block(f, area, "Proxy - Error", err);
             return;
         }
 
@@ -444,7 +416,7 @@ impl TabRender for ProxyTab {
             .borders(Borders::ALL)
             .title(" Configuration ")
             .border_style(Style::default().fg(
-                if self.view_selector.is_focused() || self.inputs.is_focused() {
+                if self.view_selector.is_focused() || self.core.inputs.is_focused() {
                     tc!(border_focused)
                 } else {
                     tc!(border)
@@ -457,13 +429,13 @@ impl TabRender for ProxyTab {
             self.current_view,
             ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
         ) {
-            if let Some(field) = self.inputs.fields.first() {
+            if let Some(field) = self.core.inputs.fields.first() {
                 field.render(f, config_inner, false);
             }
         }
 
-        if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, None);
+        if !self.core.results_view.is_empty() {
+            self.core.results_view.render(f, results_area, None);
         } else {
             let placeholder = empty_state_paragraph("Results", "Results will appear here");
             f.render_widget(placeholder, results_area);
@@ -488,49 +460,43 @@ impl TabRender for ProxyTab {
 
 impl TabInput for ProxyTab {
     fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
-        }
+        self.core.stop();
     }
 
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.blur();
-                if matches!(
-                    self.current_view,
-                    ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
-                ) {
-                    self.inputs.focus_next();
-                }
-            } else if self.inputs.is_focused() {
-                self.inputs.focus_next();
-                if self.inputs.is_focused() {
-                    self.inputs.blur();
-                    self.view_selector.focus();
-                }
-            } else {
+        if self.view_selector.is_focused() {
+            self.view_selector.blur();
+            if matches!(
+                self.current_view,
+                ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
+            ) {
+                self.core.inputs.focus_next();
+            }
+        } else if self.core.inputs.is_focused() {
+            self.core.inputs.focus_next();
+            if self.core.inputs.is_focused() {
+                self.core.inputs.blur();
                 self.view_selector.focus();
             }
+        } else {
+            self.view_selector.focus();
         }
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.blur();
-                if matches!(
-                    self.current_view,
-                    ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
-                ) {
-                    self.inputs.focus_prev();
-                }
-            } else if self.inputs.is_focused() {
-                self.inputs.blur();
-                self.view_selector.focus();
-            } else {
-                self.view_selector.focus();
+        if self.view_selector.is_focused() {
+            self.view_selector.blur();
+            if matches!(
+                self.current_view,
+                ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
+            ) {
+                self.core.inputs.focus_prev();
             }
+        } else if self.core.inputs.is_focused() {
+            self.core.inputs.blur();
+            self.view_selector.focus();
+        } else {
+            self.view_selector.focus();
         }
     }
 
@@ -538,8 +504,8 @@ impl TabInput for ProxyTab {
         if !self.is_running() {
             if self.view_selector.is_focused() {
                 self.view_selector.handle_char(c);
-            } else if self.inputs.is_focused() {
-                self.inputs.insert(c);
+            } else if self.core.inputs.is_focused() {
+                self.core.inputs.insert(c);
             }
         }
     }
@@ -548,15 +514,15 @@ impl TabInput for ProxyTab {
         if !self.is_running() {
             if self.view_selector.is_focused() {
                 self.view_selector.handle_backspace();
-            } else if self.inputs.is_focused() {
-                self.inputs.backspace();
+            } else if self.core.inputs.is_focused() {
+                self.core.inputs.backspace();
             }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && !self.view_selector.is_focused() && self.inputs.is_focused() {
-            self.inputs.paste(text);
+        if !self.is_running() && !self.view_selector.is_focused() && self.core.inputs.is_focused() {
+            self.core.inputs.paste(text);
         }
     }
 
@@ -564,10 +530,10 @@ impl TabInput for ProxyTab {
         if !self.is_running() {
             if self.view_selector.is_focused() {
                 None
-            } else if self.inputs.is_focused() {
-                self.inputs.get_focused_value()
+            } else if self.core.inputs.is_focused() {
+                self.core.inputs.get_focused_value()
             } else {
-                Some(self.results_view.get_content())
+                Some(self.core.results_view.get_content())
             }
         } else {
             None
@@ -575,40 +541,40 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if !self.is_running() && self.inputs.is_focused() {
-            self.inputs.move_word_forward();
+        if !self.is_running() && self.core.inputs.is_focused() {
+            self.core.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if !self.is_running() && self.inputs.is_focused() {
-            self.inputs.move_word_backward();
+        if !self.is_running() && self.core.inputs.is_focused() {
+            self.core.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
         if !self.is_running() {
-            if self.inputs.is_focused() {
-                self.inputs.move_home();
-            } else if !self.results_view.is_empty() {
-                self.results_view.scroll_to_top();
+            if self.core.inputs.is_focused() {
+                self.core.inputs.move_home();
+            } else if !self.core.results_view.is_empty() {
+                self.core.results_view.scroll_to_top();
             }
         }
     }
 
     fn handle_end(&mut self) {
         if !self.is_running() {
-            if self.inputs.is_focused() {
-                self.inputs.move_end();
-            } else if !self.results_view.is_empty() {
-                self.results_view.scroll_to_bottom();
+            if self.core.inputs.is_focused() {
+                self.core.inputs.move_end();
+            } else if !self.core.results_view.is_empty() {
+                self.core.results_view.scroll_to_bottom();
             }
         }
     }
 
     fn handle_top(&mut self) {
         if !self.is_running() {
-            self.inputs.blur();
+            self.core.inputs.blur();
             self.view_selector.focus();
         }
     }
@@ -616,7 +582,7 @@ impl TabInput for ProxyTab {
     fn handle_bottom(&mut self) {
         if !self.is_running() {
             self.view_selector.blur();
-            self.inputs.blur();
+            self.core.inputs.blur();
         }
     }
 
@@ -639,8 +605,8 @@ impl TabInput for ProxyTab {
                 } else {
                     self.view_selector.handle_enter();
                 }
-            } else if self.inputs.is_focused() {
-                self.inputs.blur();
+            } else if self.core.inputs.is_focused() {
+                self.core.inputs.blur();
             }
         }
     }
@@ -657,32 +623,26 @@ impl TabInput for ProxyTab {
         if self.view_selector.is_focused() {
             self.view_selector.blur();
         }
-        self.inputs.blur();
+        self.core.inputs.blur();
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.view_selector.is_focused() && self.view_selector.is_open() {
             self.view_selector.handle_up();
-        } else if !self.inputs.is_focused() {
-            self.results_view.scroll_up(1);
+        } else if !self.core.inputs.is_focused() {
+            self.core.results_view.scroll_up(1);
         } else {
-            self.inputs.focus_prev();
+            self.core.inputs.focus_prev();
         }
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.view_selector.is_focused() && self.view_selector.is_open() {
             self.view_selector.handle_down();
-        } else if !self.inputs.is_focused() {
-            self.results_view.scroll_down(1);
+        } else if !self.core.inputs.is_focused() {
+            self.core.results_view.scroll_down(1);
         } else {
-            self.inputs.focus_next();
+            self.core.inputs.focus_next();
         }
     }
 
@@ -696,7 +656,7 @@ impl TabInput for ProxyTab {
                     false
                 }
             } else {
-                self.inputs.move_left()
+                self.core.inputs.move_left()
             }
         } else {
             false
@@ -713,7 +673,7 @@ impl TabInput for ProxyTab {
                     false
                 }
             } else {
-                self.inputs.move_right()
+                self.core.inputs.move_right()
             }
         } else {
             false
@@ -721,7 +681,7 @@ impl TabInput for ProxyTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.view_selector.is_focused() || self.inputs.is_focused()
+        self.view_selector.is_focused() || self.core.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
@@ -731,8 +691,8 @@ impl TabInput for ProxyTab {
             } else {
                 true
             }
-        } else if self.inputs.is_focused() {
-            self.inputs.is_at_left_edge()
+        } else if self.core.inputs.is_focused() {
+            self.core.inputs.is_at_left_edge()
         } else {
             true
         }
@@ -747,8 +707,8 @@ impl TabInput for ProxyTab {
             } else {
                 true
             }
-        } else if self.inputs.is_focused() {
-            self.inputs.is_at_right_edge()
+        } else if self.core.inputs.is_focused() {
+            self.core.inputs.is_at_right_edge()
         } else {
             true
         }
@@ -756,13 +716,13 @@ impl TabInput for ProxyTab {
 
     fn page_up(&mut self, page_size: usize) {
         if !self.is_running() {
-            self.results_view.scroll_up(page_size);
+            self.core.results_view.scroll_up(page_size);
         }
     }
 
     fn page_down(&mut self, page_size: usize) {
         if !self.is_running() {
-            self.results_view.scroll_down(page_size);
+            self.core.results_view.scroll_down(page_size);
         }
     }
 }

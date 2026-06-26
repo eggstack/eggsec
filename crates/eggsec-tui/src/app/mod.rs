@@ -420,6 +420,10 @@ impl App {
             self.toggle_search(false);
             return;
         }
+        if self.overlay.show_http_options {
+            self.overlay.show_http_options = false;
+            return;
+        }
         if self.mode == InputMode::Insert {
             self.mode = InputMode::Normal;
         }
@@ -583,6 +587,7 @@ impl App {
     }
 
     pub fn request_confirmation(&mut self, action: PendingAction) {
+        self.overlay.confirm_button_index = 0;
         self.overlay.pending_action = Some(action);
     }
 
@@ -964,15 +969,13 @@ impl App {
         self.topmost_overlay().is_some()
     }
 
-    /// Returns true if any Settings embedded selector is currently open.
+    /// Returns true if any embedded selector is currently open on the active tab.
     /// Embedded selectors are not overlays (topmost_overlay returns None when
     /// only a selector is open), so this guard prevents normal-mode shortcuts
     /// from leaking into actions while the user is navigating a selector.
-    pub fn has_settings_selector_open(&self) -> bool {
-        self.current_tab == Tab::Settings
-            && (self.tabs.settings.theme_selector.is_open()
-                || self.tabs.settings.proxy_rotation_selector.is_open()
-                || self.tabs.settings.severity_selector.is_open())
+    /// j/k are intentionally passed through for Vim-style selector navigation.
+    pub fn has_any_tab_selector_open(&self) -> bool {
+        self.current_tab.as_tab_state(self).has_selector_open()
     }
 
     // ---------------------------------------------------------------------

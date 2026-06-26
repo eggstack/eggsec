@@ -214,14 +214,14 @@ impl KeyHandler {
         app: &App,
         key: &crossterm::event::KeyEvent,
     ) -> Vec<UiAction> {
-        // Block normal-mode shortcuts when an embedded Settings selector is open.
+        // Block normal-mode shortcuts when an embedded selector is open.
         // Selectors are not overlays (topmost_overlay returns None), so without
         // this guard, keys like q, r, s, n, p, h/j/k/l, 1-9, etc. all fire
         // their normal actions while the user is navigating a selector dropdown.
         // Navigation keys (Up/Down/Enter/Esc/arrows) are handled by global
         // shortcuts before we get here, so they still work in the selector.
         // j/k are intentionally passed through for Vim-style selector navigation.
-        if app.has_settings_selector_open() {
+        if app.has_any_tab_selector_open() {
             return match (key.modifiers, key.code) {
                 (KeyModifiers::NONE, KeyCode::Char('j')) => vec![UiAction::MoveDown],
                 (KeyModifiers::NONE, KeyCode::Char('k')) => vec![UiAction::MoveUp],

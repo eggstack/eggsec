@@ -492,18 +492,12 @@ impl TabRender for HistoryTab {
 
 impl TabInput for HistoryTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             HistoryFocusArea::List => HistoryFocusArea::Details,
             HistoryFocusArea::Details => HistoryFocusArea::List,
         };
     }
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             HistoryFocusArea::List => HistoryFocusArea::Details,
             HistoryFocusArea::Details => HistoryFocusArea::List,
@@ -640,9 +634,6 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         match self.focus_area {
             HistoryFocusArea::List => self.select_prev(),
             HistoryFocusArea::Details => self.results_view.scroll_up(1),
@@ -650,9 +641,6 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         match self.focus_area {
             HistoryFocusArea::List => self.select_next(),
             HistoryFocusArea::Details => self.results_view.scroll_down(1),

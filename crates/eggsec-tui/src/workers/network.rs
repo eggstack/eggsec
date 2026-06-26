@@ -23,7 +23,7 @@ pub async fn run_load_test(
 
     let batches = requests / concurrency.max(1) as u64;
     let estimated_secs = batches * timeout.as_secs();
-    let load_test_timeout = Duration::from_secs(estimated_secs.max(300).min(3600));
+    let load_test_timeout = Duration::from_secs(estimated_secs.clamp(300, 3600));
     let results = match tokio::time::timeout(load_test_timeout, runner.run()).await {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {

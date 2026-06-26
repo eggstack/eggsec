@@ -240,6 +240,7 @@ impl TabInput for MyTab {
 - `field_str(core, index)` - Return field value at index as `&str`
 - `start_scan(core)` - Set Running, clear results/error; returns `false` if target empty
 - `render_results_area(...)` - Standard 4-branch results rendering (Running/Error/Results/Empty)
+- `render_input_fields(f, chunks, inputs, insert_mode)` - Render InputGroup fields into layout chunks (replaces duplicated `for (i, field) in inputs.fields.iter()` loops)
 
 ### Feature-Gated Tab Helpers
 
@@ -1099,7 +1100,7 @@ Every `Selector` that can be opened must have a corresponding render path in its
 
 ### Do not let normal-mode shortcuts leak through embedded modal controls
 
-Embedded selectors (theme, proxy rotation, severity in Settings) are not overlays — `topmost_overlay()` returns `None` when only a selector is open. Without the `has_settings_selector_open()` guard in `decode_normal_mode_input`, normal-mode keys (`q`, `r`, `s`, `n`, `p`, `h/j/k/l`, `1-9`, etc.) fire their actions while the user navigates a dropdown. The guard returns `UiAction::Noop` for all normal-mode keys when any Settings selector is open. If you add a new embedded selector to a tab outside Settings, add a similar guard or route the selector through the overlay system.
+Embedded selectors are not overlays — `topmost_overlay()` returns `None` when only a selector is open. The `has_any_tab_selector_open()` guard in `decode_normal_mode_input` returns `UiAction::Noop` for all normal-mode keys when any selector is open, and passes `j`/`k` through for Vim-style navigation. If you add a new embedded selector to a tab, override `TabState::has_selector_open()` to return `true` when it is open.
 
 ### Do not add Settings fields without load/validate/apply tests
 

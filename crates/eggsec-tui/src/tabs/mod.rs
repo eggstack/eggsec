@@ -558,6 +558,9 @@ pub trait TabState {
     fn is_running(&self) -> bool {
         self.state() == AppState::Running
     }
+    fn has_selector_open(&self) -> bool {
+        false
+    }
     fn reset(&mut self) {}
     fn set_error(&mut self, _error: TabError) {}
 }

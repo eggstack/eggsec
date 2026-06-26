@@ -1,3 +1,66 @@
+/// Macro to generate a struct from checkbox values, mapping each checkbox to a named field.
+///
+/// This eliminates the verbose `get_options()` pattern where each checkbox is manually
+/// mapped by index to a struct field.
+///
+/// Usage:
+/// ```ignore
+/// checkbox_options_struct! {
+///     pub struct ReconOptions {
+///         no_tech: "Skip Tech Detection",
+///         no_dns: "Skip DNS Lookup",
+///         no_geo: "Skip Geolocation",
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! checkbox_options_struct {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $name:ident {
+            $( $field:ident : $label:literal ),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        $vis struct $name {
+            $( pub $field: bool, )*
+        }
+
+        impl $name {
+            /// Number of options in this struct.
+            pub const COUNT: usize = $crate::count_fields!( $( $field ),* );
+
+            /// Labels for each option, in order.
+            pub const LABELS: &'static [&'static str] = &[ $( $label ),* ];
+
+            /// Create from a slice of checkbox checked values.
+            /// Extra checkboxes are ignored; missing ones default to false.
+            pub fn from_checkboxes(checkboxes: &[bool]) -> Self {
+                let mut iter = checkboxes.iter();
+                Self {
+                    $(
+                        $field: iter.next().copied().unwrap_or(false),
+                    )*
+                }
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self { $( $field: false, )*
+                }
+            }
+        }
+    };
+}
+
+/// Helper macro to count the number of fields passed to `checkbox_options_struct!`.
+#[macro_export]
+macro_rules! count_fields {
+    () => { 0usize };
+    ($head:ident $(, $tail:ident)*) => { 1usize + $crate::count_fields!($($tail),*) };
+}
+
 /// Macro to generate the common `TabState` implementation that delegates to `TabCore`.
 ///
 /// Generates implementations for: `state`, `progress`, `set_error`.
@@ -110,6 +173,71 @@ macro_rules! tab_input_boilerplate {
     };
 }
 
+/// Unified macro for tabs with 2 or 3 focus areas.
+///
+/// Generates all `TabInput` methods except `handle_enter` and `handle_escape`.
+/// When called with 2 areas (Inputs/Results), behaves like `tab_input_2area!`.
+/// When called with 3 areas (Inputs/Options/Results), behaves like `tab_input_3area!`.
+///
+/// Usage:
+/// ```ignore
+/// // 2-area:
+/// tab_input_areas!(
+///     FingerprintTab,
+///     core: core,
+///     focus: focus_area,
+///     Inputs: FingerprintFocusArea::Inputs,
+///     Results: FingerprintFocusArea::Results
+/// );
+///
+/// // 3-area:
+/// tab_input_areas!(
+///     ReconTab,
+///     core: core,
+///     focus: focus_area,
+///     Inputs: ReconFocusArea::Inputs,
+///     Options: ReconFocusArea::Options,
+///     Results: ReconFocusArea::Results
+/// );
+/// ```
+#[macro_export]
+macro_rules! tab_input_areas {
+    // 2-area variant
+    (
+        $tab:ty,
+        core: $core:ident,
+        focus: $focus:ident,
+        Inputs: $inputs_variant:expr,
+        Results: $results_variant:expr
+    ) => {
+        $crate::tab_input_2area!(
+            $tab,
+            core: $core,
+            focus: $focus,
+            Inputs: $inputs_variant,
+            Results: $results_variant
+        );
+    };
+    // 3-area variant
+    (
+        $tab:ty,
+        core: $core:ident,
+        focus: $focus:ident,
+        Inputs: $inputs_variant:expr,
+        Options: $options_variant:expr,
+        Results: $results_variant:expr
+    ) => {
+        $crate::tab_input_3area!(
+            $tab,
+            core: $core,
+            focus: $focus,
+            Inputs: $inputs_variant,
+            Options: $options_variant,
+            Results: $results_variant
+        );
+    };
+}
+
 /// Extended macro for tabs with 3 focus areas (Inputs/Options/Results).
 ///
 /// Generates all methods from `tab_input_boilerplate!` plus:
@@ -169,49 +297,41 @@ macro_rules! tab_input_3area {
         }
 
         fn handle_focus_next(&mut self) {
-            if !self.is_running() {
-                self.$focus = $crate::tabs::core::focus_next_3area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $options_variant,
-                    $results_variant,
-                );
-            }
+            self.$focus = $crate::tabs::core::focus_next_3area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $options_variant,
+                $results_variant,
+            );
         }
 
         fn handle_focus_prev(&mut self) {
-            if !self.is_running() {
-                self.$focus = $crate::tabs::core::focus_prev_3area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $options_variant,
-                    $results_variant,
-                );
-            }
+            self.$focus = $crate::tabs::core::focus_prev_3area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $options_variant,
+                $results_variant,
+            );
         }
 
         fn handle_up(&mut self) {
-            if !self.is_running() {
-                $crate::tabs::core::handle_up_3area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $results_variant,
-                );
-            }
+            $crate::tabs::core::handle_up_3area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $results_variant,
+            );
         }
 
         fn handle_down(&mut self) {
-            if !self.is_running() {
-                $crate::tabs::core::handle_down_3area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $results_variant,
-                );
-            }
+            $crate::tabs::core::handle_down_3area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $results_variant,
+            );
         }
 
         fn handle_left(&mut self) -> bool {
@@ -250,20 +370,31 @@ macro_rules! tab_input_3area {
     };
 }
 
-/// Macro to generate `handle_escape` for 2-area tabs (Inputs/Results).
+/// Unified macro to generate `handle_escape` for tabs with any number of focus areas.
 ///
-/// Generates a standard escape handler that:
-/// - Stops if running
-/// - Blurs inputs if in Inputs area
-/// - Focuses inputs if in Results area
+/// Supports three strategies:
+/// - `simple`: 2-area tabs (Inputs/Results). Stops if running, blurs inputs, focuses inputs from Results.
+/// - `three_area`: 3-area tabs (Inputs/Options/Results). Stops if running, blurs/focuses as appropriate.
+/// - `to_first`: N-area tabs. Stops if running, returns to the first area.
 ///
 /// Usage:
 /// ```ignore
-/// tab_escape_2area!(MyTab, core: core, focus: focus_area, Inputs: MyFocusArea::Inputs);
+/// // 2-area:
+/// tab_escape!(MyTab, core: core, focus: focus_area,
+///     strategy: simple, Inputs: MyFocusArea::Inputs);
+///
+/// // 3-area:
+/// tab_escape!(MyTab, core: core, focus: focus_area,
+///     strategy: three_area, Inputs: A::Inputs, Options: A::Options, Results: A::Results);
+///
+/// // N-area (to first):
+/// tab_escape!(MyTab, core: core, focus: focus_area,
+///     strategy: to_first, First: MyFocusArea::Inputs);
 /// ```
 #[macro_export]
-macro_rules! tab_escape_2area {
-    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr) => {
+macro_rules! tab_escape {
+    ($tab:ty, core: $core:ident, focus: $focus:ident,
+     strategy: simple, Inputs: $inputs_variant:expr) => {
         fn handle_escape(&mut self) {
             self.$focus = $crate::tabs::core::handle_escape_simple(
                 &mut self.$core,
@@ -272,29 +403,8 @@ macro_rules! tab_escape_2area {
             );
         }
     };
-}
-
-/// Macro to generate `handle_escape` for 3-area tabs (Inputs/Options/Results).
-///
-/// Generates a standard escape handler that:
-/// - Stops if running
-/// - Blurs inputs if in Inputs area
-/// - Focuses inputs if in Options or Results area
-///
-/// Usage:
-/// ```ignore
-/// tab_escape_3area!(
-///     MyTab,
-///     core: core,
-///     focus: focus_area,
-///     Inputs: MyFocusArea::Inputs,
-///     Options: MyFocusArea::Options,
-///     Results: MyFocusArea::Results
-/// );
-/// ```
-#[macro_export]
-macro_rules! tab_escape_3area {
-    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr, Options: $options_variant:expr, Results: $results_variant:expr) => {
+    ($tab:ty, core: $core:ident, focus: $focus:ident,
+     strategy: three_area, Inputs: $inputs_variant:expr, Options: $options_variant:expr, Results: $results_variant:expr) => {
         fn handle_escape(&mut self) {
             self.$focus = $crate::tabs::core::handle_escape_3area(
                 &mut self.$core,
@@ -304,6 +414,40 @@ macro_rules! tab_escape_3area {
                 $results_variant,
             );
         }
+    };
+    ($tab:ty, core: $core:ident, focus: $focus:ident,
+     strategy: to_first, First: $first:expr) => {
+        fn handle_escape(&mut self) {
+            self.$focus = $crate::tabs::core::handle_escape_to_first(
+                &mut self.$core,
+                self.$focus,
+                $first,
+            );
+        }
+    };
+}
+
+/// Deprecated: Use `tab_escape!` with `strategy: simple` instead.
+#[macro_export]
+macro_rules! tab_escape_2area {
+    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr) => {
+        $crate::tab_escape!($tab, core: $core, focus: $focus, strategy: simple, Inputs: $inputs_variant);
+    };
+}
+
+/// Deprecated: Use `tab_escape!` with `strategy: three_area` instead.
+#[macro_export]
+macro_rules! tab_escape_3area {
+    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr, Options: $options_variant:expr, Results: $results_variant:expr) => {
+        $crate::tab_escape!($tab, core: $core, focus: $focus, strategy: three_area, Inputs: $inputs_variant, Options: $options_variant, Results: $results_variant);
+    };
+}
+
+/// Deprecated: Use `tab_escape!` with `strategy: to_first` instead.
+#[macro_export]
+macro_rules! tab_escape_to_first {
+    ($tab:ty, core: $core:ident, focus: $focus:ident, $first:expr) => {
+        $crate::tab_escape!($tab, core: $core, focus: $focus, strategy: to_first, First: $first);
     };
 }
 
@@ -360,47 +504,39 @@ macro_rules! tab_input_2area {
         }
 
         fn handle_focus_next(&mut self) {
-            if !self.is_running() {
-                self.$focus = $crate::tabs::core::focus_next_2area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $results_variant,
-                );
-            }
+            self.$focus = $crate::tabs::core::focus_next_2area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $results_variant,
+            );
         }
 
         fn handle_focus_prev(&mut self) {
-            if !self.is_running() {
-                self.$focus = $crate::tabs::core::focus_prev_2area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $results_variant,
-                );
-            }
+            self.$focus = $crate::tabs::core::focus_prev_2area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $results_variant,
+            );
         }
 
         fn handle_up(&mut self) {
-            if !self.is_running() {
-                $crate::tabs::core::handle_up_2area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $results_variant,
-                );
-            }
+            $crate::tabs::core::handle_up_2area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $results_variant,
+            );
         }
 
         fn handle_down(&mut self) {
-            if !self.is_running() {
-                $crate::tabs::core::handle_down_2area(
-                    &mut self.$core,
-                    self.$focus,
-                    $inputs_variant,
-                    $results_variant,
-                );
-            }
+            $crate::tabs::core::handle_down_2area(
+                &mut self.$core,
+                self.$focus,
+                $inputs_variant,
+                $results_variant,
+            );
         }
 
         fn handle_left(&mut self) -> bool {
@@ -481,47 +617,39 @@ macro_rules! tab_input_narea {
         }
 
         fn handle_focus_next(&mut self) {
-            if !self.is_running() {
-                let areas = $crate::narea_slice!($($area),+);
-                self.$focus = $crate::tabs::core::focus_next_n(
-                    &mut self.$core,
-                    self.$focus,
-                    areas,
-                );
-            }
+            let areas = $crate::narea_slice!($($area),+);
+            self.$focus = $crate::tabs::core::focus_next_n(
+                &mut self.$core,
+                self.$focus,
+                areas,
+            );
         }
 
         fn handle_focus_prev(&mut self) {
-            if !self.is_running() {
-                let areas = $crate::narea_slice!($($area),+);
-                self.$focus = $crate::tabs::core::focus_prev_n(
-                    &mut self.$core,
-                    self.$focus,
-                    areas,
-                );
-            }
+            let areas = $crate::narea_slice!($($area),+);
+            self.$focus = $crate::tabs::core::focus_prev_n(
+                &mut self.$core,
+                self.$focus,
+                areas,
+            );
         }
 
         fn handle_up(&mut self) {
-            if !self.is_running() {
-                let areas = $crate::narea_slice!($($area),+);
-                $crate::tabs::core::handle_up_n(
-                    &mut self.$core,
-                    self.$focus,
-                    areas,
-                );
-            }
+            let areas = $crate::narea_slice!($($area),+);
+            $crate::tabs::core::handle_up_n(
+                &mut self.$core,
+                self.$focus,
+                areas,
+            );
         }
 
         fn handle_down(&mut self) {
-            if !self.is_running() {
-                let areas = $crate::narea_slice!($($area),+);
-                $crate::tabs::core::handle_down_n(
-                    &mut self.$core,
-                    self.$focus,
-                    areas,
-                );
-            }
+            let areas = $crate::narea_slice!($($area),+);
+            $crate::tabs::core::handle_down_n(
+                &mut self.$core,
+                self.$focus,
+                areas,
+            );
         }
 
         fn handle_left(&mut self) -> bool {
@@ -548,27 +676,6 @@ macro_rules! tab_input_narea {
 
         fn is_at_right_edge(&self) -> bool {
             $crate::tabs::core::is_at_right_edge_simple(self.$focus, $crate::first_area!($($area),+), &self.$core)
-        }
-    };
-}
-
-/// Macro to generate `handle_escape` for N-area tabs.
-///
-/// If running, stops. Otherwise returns to the first area (typically Inputs).
-///
-/// Usage:
-/// ```ignore
-/// tab_escape_to_first!(StressTab, core: core, focus: focus_area, StressFocusArea::Inputs);
-/// ```
-#[macro_export]
-macro_rules! tab_escape_to_first {
-    ($tab:ty, core: $core:ident, focus: $focus:ident, $first:expr) => {
-        fn handle_escape(&mut self) {
-            self.$focus = $crate::tabs::core::handle_escape_to_first(
-                &mut self.$core,
-                self.$focus,
-                $first,
-            );
         }
     };
 }
@@ -809,4 +916,96 @@ macro_rules! tab_input_indexed {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    checkbox_options_struct! {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        struct TestOptions {
+            opt_a: "Option A",
+            opt_b: "Option B",
+            opt_c: "Option C",
+        }
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_count() {
+        assert_eq!(TestOptions::COUNT, 3);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_labels() {
+        assert_eq!(TestOptions::LABELS, &["Option A", "Option B", "Option C"]);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_from_checkboxes_all_true() {
+        let opts = TestOptions::from_checkboxes(&[true, true, true]);
+        assert!(opts.opt_a);
+        assert!(opts.opt_b);
+        assert!(opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_from_checkboxes_all_false() {
+        let opts = TestOptions::from_checkboxes(&[false, false, false]);
+        assert!(!opts.opt_a);
+        assert!(!opts.opt_b);
+        assert!(!opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_from_checkboxes_mixed() {
+        let opts = TestOptions::from_checkboxes(&[true, false, true]);
+        assert!(opts.opt_a);
+        assert!(!opts.opt_b);
+        assert!(opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_from_checkboxes_empty() {
+        let opts = TestOptions::from_checkboxes(&[]);
+        assert!(!opts.opt_a);
+        assert!(!opts.opt_b);
+        assert!(!opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_from_checkboxes_partial() {
+        let opts = TestOptions::from_checkboxes(&[true]);
+        assert!(opts.opt_a);
+        assert!(!opts.opt_b);
+        assert!(!opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_from_checkboxes_extra_ignored() {
+        let opts = TestOptions::from_checkboxes(&[true, false, true, true, false]);
+        assert!(opts.opt_a);
+        assert!(!opts.opt_b);
+        assert!(opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_default() {
+        let opts = TestOptions::default();
+        assert!(!opts.opt_a);
+        assert!(!opts.opt_b);
+        assert!(!opts.opt_c);
+    }
+
+    #[test]
+    fn test_checkbox_options_struct_labels_count_matches() {
+        assert_eq!(TestOptions::LABELS.len(), TestOptions::COUNT);
+    }
+
+    #[test]
+    fn test_recon_options_labels_match_checkbox_count() {
+        use super::super::recon::ReconOptions;
+        assert_eq!(ReconOptions::LABELS.len(), ReconOptions::COUNT);
+        assert_eq!(ReconOptions::COUNT, 16);
+    }
 }

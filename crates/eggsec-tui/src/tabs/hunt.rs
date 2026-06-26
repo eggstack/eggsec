@@ -1,5 +1,5 @@
 use crate::components::{Checkbox, InputField, InputGroup};
-use crate::tabs::core::{field_as, render_results_area, StandardFocusArea, TabCore};
+use crate::tabs::core::{field_as, render_input_fields, render_results_area, StandardFocusArea, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::hunt::{HuntConfig, HuntReport};
@@ -95,85 +95,84 @@ impl HuntTab {
 
     pub fn set_report(&mut self, report: HuntReport) {
         self.report = Some(report.clone());
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
 
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("Vulnerability Hunt Complete: {}", report.target),
             Style::default().fg(tc!(success)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             format!("Total findings: {}", report.total_findings),
             Style::default().fg(tc!(warning)),
         )));
-        self.core.results_view.add_line(Line::from(""));
+        view.add_line(Line::from(""));
 
         if !report.attack_chains.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("Attack Chains ({}):", report.attack_chains.len()),
                 Style::default().fg(tc!(error)),
             )));
             for chain in &report.attack_chains {
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  [{}] {} - {} steps",
                     chain.severity,
                     chain.name,
                     chain.steps.len()
                 )));
             }
-            self.core.results_view.add_line(Line::from(""));
+            view.add_line(Line::from(""));
         }
 
         if !report.business_logic.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("Business Logic Flaws ({}):", report.business_logic.len()),
                 Style::default().fg(tc!(error)),
             )));
             for flaw in &report.business_logic {
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  [{}] {:?} - {}",
                     flaw.severity, flaw.flaw_type, flaw.description
                 )));
             }
-            self.core.results_view.add_line(Line::from(""));
+            view.add_line(Line::from(""));
         }
 
         if !report.race_conditions.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("Race Conditions ({}):", report.race_conditions.len()),
                 Style::default().fg(tc!(error)),
             )));
             for race in &report.race_conditions {
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  [{}] {:?} - {}",
                     race.severity, race.race_type, race.description
                 )));
             }
-            self.core.results_view.add_line(Line::from(""));
+            view.add_line(Line::from(""));
         }
 
         if !report.authz_bypasses.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("AuthZ Bypasses ({}):", report.authz_bypasses.len()),
                 Style::default().fg(tc!(error)),
             )));
             for bypass in &report.authz_bypasses {
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  [{}] {:?} - {}",
                     bypass.severity, bypass.bypass_type, bypass.description
                 )));
             }
-            self.core.results_view.add_line(Line::from(""));
+            view.add_line(Line::from(""));
         }
 
         if !report.session_issues.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("Session Issues ({}):", report.session_issues.len()),
                 Style::default().fg(tc!(warning)),
             )));
             for issue in &report.session_issues {
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  [{}] {:?} - {}",
                     issue.severity, issue.issue_type, issue.description
                 )));
@@ -257,11 +256,7 @@ impl TabRender for HuntTab {
             ])
             .split(config_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         let Some(cb_area) = input_chunks.get(3) else {
             return;
@@ -343,116 +338,100 @@ impl TabInput for HuntTab {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            StandardFocusArea::Inputs => {
-                self.core.inputs.blur();
-                self.focused_checkbox_index = 0;
-                StandardFocusArea::Options
-            }
-            StandardFocusArea::Options => StandardFocusArea::Results,
-            StandardFocusArea::Results => {
-                self.core.inputs.focus(0);
-                StandardFocusArea::Inputs
-            }
-        };
+        self.focus_area = crate::tabs::core::focus_next_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
+        if self.focus_area == StandardFocusArea::Options {
+            self.focused_checkbox_index = 0;
+        }
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            StandardFocusArea::Inputs => {
-                self.core.inputs.blur();
-                StandardFocusArea::Results
-            }
-            StandardFocusArea::Options => {
-                self.core.inputs.focus(0);
-                StandardFocusArea::Inputs
-            }
-            StandardFocusArea::Results => {
-                self.focused_checkbox_index = 0;
-                StandardFocusArea::Options
-            }
-        };
+        self.focus_area = crate::tabs::core::focus_prev_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
+        if self.focus_area == StandardFocusArea::Options {
+            self.focused_checkbox_index = 0;
+        }
     }
 
     fn handle_enter(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
+        let running = self.is_running();
+        let inputs_focused = self.core.inputs.is_focused();
+        crate::tabs::core::handle_enter_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+            running,
+            inputs_focused,
+            |_core| false,
+        );
+        if self.focus_area == StandardFocusArea::Options && !self.is_running() {
+            crate::tabs::core::toggle_focused_checkbox_vec(
+                &mut self.option_checkboxes,
+                &mut self.focused_checkbox_index,
+            );
         }
-        if self.focus_area == StandardFocusArea::Inputs {
-            if self.core.inputs.is_focused() {
-                self.core.inputs.blur();
-                return;
-            }
-        }
-
-        if self.focus_area == StandardFocusArea::Options {
-            if let Some(checkbox) = self
-                .option_checkboxes
-                .get_mut(self.focused_checkbox_index)
-            {
-                checkbox.toggle();
-            }
-            return;
-        }
-
-        if self.focus_area == StandardFocusArea::Results {
-            return;
-        }
-
-        self.start();
     }
 
     fn handle_escape(&mut self) {
-        if self.is_running() {
-            self.core.stop();
-            return;
-        }
-        self.core.inputs.blur();
+        let new_area = crate::tabs::core::handle_escape_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
+        self.focus_area = new_area;
         self.focused_checkbox_index = 0;
-        self.focus_area = StandardFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == StandardFocusArea::Options {
-            if self.option_checkboxes.is_empty() {
-                return;
-            }
-            if self.focused_checkbox_index == 0 {
-                self.focused_checkbox_index = self.option_checkboxes.len().saturating_sub(1);
+        if !self.is_running() {
+            if self.focus_area == StandardFocusArea::Options {
+                crate::tabs::core::handle_options_up_wrapping(
+                    &mut self.focused_checkbox_index,
+                    self.option_checkboxes.len(),
+                );
             } else {
-                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                crate::tabs::core::handle_up_3area(
+                    &mut self.core,
+                    self.focus_area,
+                    StandardFocusArea::Inputs,
+                    StandardFocusArea::Results,
+                );
             }
-        } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-            self.core.results_view.scroll_up(1);
-        } else {
-            self.core.inputs.focus_prev();
         }
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        if self.focus_area == StandardFocusArea::Options {
-            if self.option_checkboxes.is_empty() {
-                return;
-            }
-            if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
-                self.focused_checkbox_index = 0;
+        if !self.is_running() {
+            if self.focus_area == StandardFocusArea::Options {
+                crate::tabs::core::handle_options_down_wrapping(
+                    &mut self.focused_checkbox_index,
+                    self.option_checkboxes.len(),
+                );
             } else {
-                self.focused_checkbox_index += 1;
+                crate::tabs::core::handle_down_3area(
+                    &mut self.core,
+                    self.focus_area,
+                    StandardFocusArea::Inputs,
+                    StandardFocusArea::Results,
+                );
             }
-        } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
-            self.core.results_view.scroll_down(1);
-        } else {
-            self.core.inputs.focus_next();
         }
     }
 
@@ -460,20 +439,13 @@ impl TabInput for HuntTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.move_left()
-        } else if self.focus_area == StandardFocusArea::Options {
-            if self.option_checkboxes.is_empty() {
-                return false;
-            }
-            if self.focused_checkbox_index == 0 {
-                false
-            } else {
-                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
-                true
-            }
+        if self.focus_area == StandardFocusArea::Options {
+            crate::tabs::core::move_checkbox_focus_left(
+                &mut self.focused_checkbox_index,
+                self.option_checkboxes.len(),
+            )
         } else {
-            true
+            crate::tabs::core::handle_left_simple(&mut self.core, false)
         }
     }
 
@@ -481,45 +453,51 @@ impl TabInput for HuntTab {
         if self.is_running() {
             return false;
         }
-        if self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.move_right()
-        } else if self.focus_area == StandardFocusArea::Options {
-            if self.option_checkboxes.is_empty() {
-                return false;
-            }
-            if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
-                false
-            } else {
-                self.focused_checkbox_index += 1;
-                true
-            }
+        if self.focus_area == StandardFocusArea::Options {
+            crate::tabs::core::move_checkbox_focus_right(
+                &mut self.focused_checkbox_index,
+                self.option_checkboxes.len(),
+            )
         } else {
-            true
+            crate::tabs::core::handle_right_simple(&mut self.core, false)
         }
     }
 
     fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.is_at_left_edge()
-        } else if self.focus_area == StandardFocusArea::Options {
-            self.option_checkboxes.is_empty() || self.focused_checkbox_index == 0
+        if self.focus_area == StandardFocusArea::Options {
+            crate::tabs::core::is_checkbox_focus_at_left_edge(
+                self.focused_checkbox_index,
+                self.option_checkboxes.len(),
+            )
         } else {
-            true
+            crate::tabs::core::is_at_left_edge_simple(
+                self.focus_area,
+                StandardFocusArea::Inputs,
+                &self.core,
+            )
         }
     }
 
     fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.is_at_right_edge()
-        } else if self.focus_area == StandardFocusArea::Options {
-            self.option_checkboxes.is_empty()
-                || self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1)
+        if self.focus_area == StandardFocusArea::Options {
+            crate::tabs::core::is_checkbox_focus_at_right_edge(
+                self.focused_checkbox_index,
+                self.option_checkboxes.len(),
+            )
         } else {
-            true
+            crate::tabs::core::is_at_right_edge_simple(
+                self.focus_area,
+                StandardFocusArea::Inputs,
+                &self.core,
+            )
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == StandardFocusArea::Inputs && self.core.inputs.is_focused()
+        crate::tabs::core::is_input_focused(
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            &self.core,
+        )
     }
 }

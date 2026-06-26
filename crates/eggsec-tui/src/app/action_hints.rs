@@ -73,7 +73,7 @@ fn confirm_popup_hints() -> Vec<ActionHint> {
 fn command_palette_hints() -> Vec<ActionHint> {
     vec![
         ActionHint { key: "Enter", label: "run" },
-        ActionHint { key: "↑↓", label: "select" },
+        ActionHint { key: "↑↓/jk", label: "select" },
         ActionHint { key: "Esc", label: "close" },
     ]
 }
@@ -81,7 +81,7 @@ fn command_palette_hints() -> Vec<ActionHint> {
 fn quick_switch_hints() -> Vec<ActionHint> {
     vec![
         ActionHint { key: "Enter", label: "go" },
-        ActionHint { key: "↑↓", label: "select" },
+        ActionHint { key: "↑↓/jk", label: "select" },
         ActionHint { key: "Esc", label: "close" },
     ]
 }
@@ -117,6 +117,9 @@ fn insert_mode_hints() -> Vec<ActionHint> {
 }
 
 fn get_tab_hints(app: &App) -> Vec<ActionHint> {
+    if app.has_any_tab_selector_open() {
+        return selector_hints(app);
+    }
     match app.current_tab {
         Tab::Settings => settings_hints(app),
         Tab::History => history_hints(),
@@ -125,18 +128,28 @@ fn get_tab_hints(app: &App) -> Vec<ActionHint> {
     }
 }
 
+fn selector_hints(app: &App) -> Vec<ActionHint> {
+    if app.current_tab == Tab::Settings
+        && app.tabs.settings.current_section == SettingsSection::Theme
+    {
+        vec![
+            ActionHint { key: "Enter", label: "apply" },
+            ActionHint { key: "↑↓/jk", label: "preview" },
+            ActionHint { key: "Esc", label: "cancel" },
+        ]
+    } else {
+        vec![
+            ActionHint { key: "Enter", label: "select" },
+            ActionHint { key: "↑↓/jk", label: "navigate" },
+            ActionHint { key: "Esc", label: "cancel" },
+        ]
+    }
+}
+
 fn settings_hints(app: &App) -> Vec<ActionHint> {
     let section = app.tabs.settings.current_section;
-    let selector_open = app.tabs.settings.theme_selector.is_open();
 
     match section {
-        SettingsSection::Theme if selector_open => {
-            vec![
-                ActionHint { key: "Enter", label: "select" },
-                ActionHint { key: "↑↓/jk", label: "theme" },
-                ActionHint { key: "Esc", label: "cancel" },
-            ]
-        }
         SettingsSection::Theme => {
             vec![
                 ActionHint { key: "r", label: "reload" },
@@ -285,7 +298,7 @@ mod tests {
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 3);
         assert_eq!(hints[0].key, "Enter");
-        assert_eq!(hints[1].key, "↑↓");
+        assert_eq!(hints[1].key, "↑↓/jk");
         assert_eq!(hints[2].key, "Esc");
     }
 
@@ -368,9 +381,9 @@ mod tests {
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 3);
         assert_eq!(hints[0].key, "Enter");
-        assert_eq!(hints[0].label, "select");
+        assert_eq!(hints[0].label, "apply");
         assert_eq!(hints[1].key, "↑↓/jk");
-        assert_eq!(hints[1].label, "theme");
+        assert_eq!(hints[1].label, "preview");
         assert_eq!(hints[2].key, "Esc");
         assert_eq!(hints[2].label, "cancel");
     }

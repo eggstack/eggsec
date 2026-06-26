@@ -4,12 +4,13 @@ mod tests {
     use crate::tabs::TabState;
 
     use super::super::core::StandardFocusArea;
+    use super::super::core::StandardFocusAreaSelector;
     use super::super::graphql::GraphQlTab;
     use super::super::oauth::OAuthTab;
     use super::super::recon::ReconTab;
-    use super::super::load::{LoadFocusArea, LoadTab};
+    use super::super::load::LoadTab;
     use super::super::scan_ports::ScanPortsTab;
-    use super::super::stress::{StressFocusArea, StressTab};
+    use super::super::stress::StressTab;
     use super::super::packet::PacketTab;
     use super::super::waf::{WafFocusArea, WafTab};
     use super::super::cluster::{ClusterFocusArea, ClusterTab};
@@ -135,7 +136,7 @@ mod tests {
     #[test]
     fn load_enter_inputs_focused_blurs() {
         let mut tab = LoadTab::new();
-        tab.focus_area = LoadFocusArea::Inputs;
+        tab.focus_area = StandardFocusAreaSelector::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -146,7 +147,7 @@ mod tests {
     #[test]
     fn load_enter_selector_open_confirms() {
         let mut tab = LoadTab::new();
-        tab.focus_area = LoadFocusArea::Selector;
+        tab.focus_area = StandardFocusAreaSelector::Selector;
         tab.test_type_selector.focus();
         tab.test_type_selector.open();
         assert!(tab.test_type_selector.is_open());
@@ -158,7 +159,7 @@ mod tests {
     #[test]
     fn load_enter_results_no_op() {
         let mut tab = LoadTab::new();
-        tab.focus_area = LoadFocusArea::Results;
+        tab.focus_area = StandardFocusAreaSelector::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -203,7 +204,7 @@ mod tests {
     #[test]
     fn stress_enter_inputs_blurs_and_opens_selector() {
         let mut tab = StressTab::new();
-        tab.focus_area = StressFocusArea::Inputs;
+        tab.focus_area = StandardFocusAreaSelector::Inputs;
         tab.core.inputs.focus(0);
         assert!(tab.core.inputs.is_focused());
         tab.handle_enter();
@@ -215,7 +216,7 @@ mod tests {
     #[test]
     fn stress_enter_type_selector_opens() {
         let mut tab = StressTab::new();
-        tab.focus_area = StressFocusArea::TypeSelector;
+        tab.focus_area = StandardFocusAreaSelector::Selector;
         tab.type_selector.open();
         assert!(tab.type_selector.is_open());
         tab.handle_enter();
@@ -225,7 +226,7 @@ mod tests {
     #[test]
     fn stress_enter_results_no_op() {
         let mut tab = StressTab::new();
-        tab.focus_area = StressFocusArea::Results;
+        tab.focus_area = StandardFocusAreaSelector::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
     }
@@ -471,7 +472,7 @@ mod tests {
 
         // Load
         let mut load = LoadTab::new();
-        load.focus_area = LoadFocusArea::Results;
+        load.focus_area = StandardFocusAreaSelector::Results;
         load.handle_enter();
         assert!(!load.is_running(), "Load Results should not start");
 
@@ -483,7 +484,7 @@ mod tests {
 
         // Stress
         let mut stress = StressTab::new();
-        stress.focus_area = StressFocusArea::Results;
+        stress.focus_area = StandardFocusAreaSelector::Results;
         stress.handle_enter();
         assert!(!stress.is_running(), "Stress Results should not start");
 
@@ -601,7 +602,7 @@ mod tests {
 
         // Load
         let mut load = LoadTab::new();
-        load.focus_area = LoadFocusArea::Inputs;
+        load.focus_area = StandardFocusAreaSelector::Inputs;
         load.core.inputs.focus(0);
         assert!(load.core.inputs.is_focused());
         load.handle_enter();
@@ -619,7 +620,7 @@ mod tests {
 
         // Stress
         let mut stress = StressTab::new();
-        stress.focus_area = StressFocusArea::Inputs;
+        stress.focus_area = StandardFocusAreaSelector::Inputs;
         stress.core.inputs.focus(0);
         assert!(stress.core.inputs.is_focused());
         stress.handle_enter();

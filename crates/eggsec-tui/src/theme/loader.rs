@@ -238,10 +238,6 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOut
             defaults.colors.accent,
         ),
         background: parse_color_or(&bg_hex, defaults.colors.background),
-        foreground: parse_color_or(
-            &text.and_then(|t| t.primary.clone()),
-            defaults.colors.foreground,
-        ),
         surface: parse_color_or(
             &buffer.and_then(|b| b.background.clone()),
             defaults.colors.surface,
@@ -307,7 +303,10 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOut
             &general.and_then(|g| g.border.clone()),
             defaults.colors.tab_inactive,
         ),
-        status_running: defaults.colors.status_running,
+        status_running: parse_color_or(
+            &text.and_then(|t| t.success.clone()),
+            defaults.colors.status_running,
+        ),
         status_idle: parse_color_or(
             &general.and_then(|g| g.border.clone()),
             defaults.colors.status_idle,
@@ -315,10 +314,6 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOut
         status_error: parse_color_or(
             &text.and_then(|t| t.error.clone()),
             defaults.colors.status_error,
-        ),
-        focus_normal: parse_color_or(
-            &buffer.and_then(|b| b.highlight.clone()),
-            defaults.colors.focus_normal,
         ),
         focus_input: parse_color_or(
             &buffer.and_then(|b| b.border_selected.clone()),

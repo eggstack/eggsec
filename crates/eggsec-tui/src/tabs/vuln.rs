@@ -121,34 +121,31 @@ impl VulnTab {
     }
 
     pub fn display_cvss(&mut self, vector: &str) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
 
         match CvssScore::from_vector(vector) {
             Ok(cvss) => {
-                self.core.results_view.add_line(Line::from(Span::styled(
+                view.add_line(Line::from(Span::styled(
                     "CVSS 3.1 Score",
                     Style::default().fg(tc!(accent)),
                 )));
-                self.core.results_view.add_line(Line::from(""));
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(""));
+                view.add_line(Line::from(format!(
                     "  Base Score:       {:.1}",
                     cvss.base_score
                 )));
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  Temporal Score:   {:.1}",
                     cvss.temporal_score
                 )));
-                self.core.results_view.add_line(Line::from(format!(
+                view.add_line(Line::from(format!(
                     "  Environmental:    {:.1}",
                     cvss.environmental_score
                 )));
-                self.core
-                    .results_view
-                    .add_line(Line::from(format!("  Vector:           {}", cvss.vector)));
+                view.add_line(Line::from(format!("  Vector:           {}", cvss.vector)));
             }
             Err(e) => {
-                self.core.results_view.add_line(Line::from(Span::styled(
+                view.add_line(Line::from(Span::styled(
                     format!("Invalid CVSS vector: {}", e),
                     Style::default().fg(tc!(error)),
                 )));
@@ -157,30 +154,29 @@ impl VulnTab {
     }
 
     pub fn display_exploit_info(&mut self, cve_id: &str, info: ExploitInfo) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
-        self.core.results_view.add_line(Line::from(Span::styled(
+        let view = self.core.prepare_results();
+        view.add_line(Line::from(Span::styled(
             format!("Exploitability: {}", cve_id),
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "  Public Exploit:    {}",
             if info.has_public_exploit { "Yes" } else { "No" }
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Exploit-DB:        {}",
             info.exploit_db_id.as_deref().unwrap_or("N/A")
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Metasploit:        {}",
             info.metasploit_module.as_deref().unwrap_or("N/A")
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  CISA KEV:          {}",
             if info.in_cisa_kev { "Yes" } else { "No" }
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Actively Exploited: {}",
             if info.is_actively_exploited {
                 "Yes"
@@ -188,52 +184,50 @@ impl VulnTab {
                 "No"
             }
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Exploit Score:     {:.1}",
             info.exploit_score
         )));
     }
 
     pub fn display_asset(&mut self, asset: AssetCriticality) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
-        self.core.results_view.add_line(Line::from(Span::styled(
+        let view = self.core.prepare_results();
+        view.add_line(Line::from(Span::styled(
             format!("Asset Assessment: {}", asset.asset_id),
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "  Technology Score:  {:.1}",
             asset.technology_score
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Environment Score: {:.1}",
             asset.environment_score
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Data Sensitivity:  {:.1}",
             asset.data_sensitivity
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  User Base:         {:.1}",
             asset.user_base
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Overall Score:     {:.1}",
             asset.overall_score
         )));
     }
 
     pub fn display_prioritized(&mut self, findings: Vec<PrioritizedFinding>) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
-        self.core.results_view.add_line(Line::from(Span::styled(
+        let view = self.core.prepare_results();
+        view.add_line(Line::from(Span::styled(
             format!("Prioritized Findings ({}):", findings.len()),
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(""));
+        view.add_line(Line::from(""));
         for f in &findings {
-            self.core.results_view.add_line(Line::from(format!(
+            view.add_line(Line::from(format!(
                 "  #{} [{}] {} - Risk: {:.1} ({:?})",
                 f.priority_rank,
                 f.severity,
@@ -245,62 +239,54 @@ impl VulnTab {
     }
 
     pub fn display_triage(&mut self, result: TriageResult) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
-        self.core.results_view.add_line(Line::from(Span::styled(
+        let view = self.core.prepare_results();
+        view.add_line(Line::from(Span::styled(
             format!("Triage: {}", result.finding_id),
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "  Status:     {:?}",
             result.triage_status
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Confidence: {:.0}%",
             result.confidence * 100.0
         )));
-        self.core
-            .results_view
-            .add_line(Line::from(format!("  Reason:     {}", result.reason)));
+        view.add_line(Line::from(format!("  Reason:     {}", result.reason)));
     }
 
     pub fn display_remediation(&mut self, remediation: Remediation) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
-        self.core.results_view.add_line(Line::from(Span::styled(
+        let view = self.core.prepare_results();
+        view.add_line(Line::from(Span::styled(
             format!("Remediation: {}", remediation.title),
             Style::default().fg(tc!(accent)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "  Priority:      {:?}",
             remediation.priority
         )));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(format!(
             "  Effort:        {:.1} hours",
             remediation.effort_hours
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "Steps:",
             Style::default().fg(tc!(info)),
         )));
         for (i, step) in remediation.steps.iter().enumerate() {
-            self.core
-                .results_view
-                .add_line(Line::from(format!("  {}. {}", i + 1, step)));
+            view.add_line(Line::from(format!("  {}. {}", i + 1, step)));
         }
         if !remediation.references.is_empty() {
-            self.core.results_view.add_line(Line::from(""));
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(""));
+            view.add_line(Line::from(Span::styled(
                 "References:",
                 Style::default().fg(tc!(info)),
             )));
             for r in &remediation.references {
-                self.core
-                    .results_view
-                    .add_line(Line::from(format!("  - {}", r)));
+                view.add_line(Line::from(format!("  - {}", r)));
             }
         }
     }
@@ -319,6 +305,10 @@ impl TabState for VulnTab {
 
     fn progress(&self) -> f64 {
         0.0
+    }
+
+    fn has_selector_open(&self) -> bool {
+        self.mode_selector.is_open()
     }
 
     fn reset(&mut self) {
@@ -442,9 +432,6 @@ impl TabRender for VulnTab {
 
 impl TabInput for VulnTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -463,9 +450,6 @@ impl TabInput for VulnTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -606,22 +590,18 @@ impl TabInput for VulnTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                VulnFocusArea::Mode => self.mode_selector.handle_up(),
-                VulnFocusArea::Inputs => self.core.inputs.focus_prev(),
-                VulnFocusArea::Results => self.core.results_view.scroll_up(1),
-            }
+        match self.focus_area {
+            VulnFocusArea::Mode => self.mode_selector.handle_up(),
+            VulnFocusArea::Inputs => self.core.inputs.focus_prev(),
+            VulnFocusArea::Results => self.core.results_view.scroll_up(1),
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                VulnFocusArea::Mode => self.mode_selector.handle_down(),
-                VulnFocusArea::Inputs => self.core.inputs.focus_next(),
-                VulnFocusArea::Results => self.core.results_view.scroll_down(1),
-            }
+        match self.focus_area {
+            VulnFocusArea::Mode => self.mode_selector.handle_down(),
+            VulnFocusArea::Inputs => self.core.inputs.focus_next(),
+            VulnFocusArea::Results => self.core.results_view.scroll_down(1),
         }
     }
 

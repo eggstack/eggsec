@@ -113,7 +113,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     if let Some(action) = app.overlay.pending_action {
         let (title, message) = action.message();
-        let popup = confirm_popup(&title, &message);
+        let mut popup = confirm_popup(&title, &message);
+        popup.active_button = app.overlay.confirm_button_index;
         popup.render(f, f.area());
     }
 

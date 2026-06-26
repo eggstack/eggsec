@@ -28,6 +28,17 @@ pub enum StandardFocusArea2 {
     Results,
 }
 
+/// Generic focus area for tabs with Selector/Inputs/Results layout (3-area tabs
+/// where the middle area is a Selector dropdown rather than checkboxes).
+/// Use this instead of defining a per-tab enum when the tab has exactly
+/// these three focus areas with a selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StandardFocusAreaSelector {
+    Selector,
+    Inputs,
+    Results,
+}
+
 /// Focus area for the Fuzz tab (6 areas: Inputs, Payload, Mode, Target, Checkbox, Results).
 /// Defined here so the N-area focus helpers can reference it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +136,24 @@ impl TabCore {
     /// Sets the tab to Idle state.
     pub fn stop(&mut self) {
         self.state = AppState::Idle;
+    }
+
+    /// Prepares the results view for new results: sets state to Completed,
+    /// clears the results view, and returns a mutable reference for formatting.
+    ///
+    /// This eliminates the repetitive preamble in every tab's `set_results()`:
+    /// ```ignore
+    /// pub fn set_results(&mut self, results: MyResults) {
+    ///     let view = self.core.prepare_results();
+    ///     view.add_line(Line::from(Span::styled(...)));
+    ///     // ... format results ...
+    ///     self.results = Some(results);
+    /// }
+    /// ```
+    pub fn prepare_results(&mut self) -> &mut ScrollableText {
+        self.state = AppState::Completed;
+        self.results_view.clear();
+        &mut self.results_view
     }
 
     /// Updates progress counters.
@@ -384,43 +413,10 @@ fn inputs_field_count(core: &TabCore) -> usize {
     core.inputs.fields.len().saturating_sub(1)
 }
 
-/// Common `handle_up` for 3-area tabs where Options area has no vertical navigation.
-pub fn handle_up_3area<A: Copy + PartialEq>(
-    core: &mut TabCore,
-    current: A,
-    inputs: A,
-    results: A,
-) {
-    if current == inputs {
-        if !core.inputs.is_focused() && !core.results_view.is_empty() {
-            core.scroll_results_up();
-        } else {
-            core.inputs.focus_prev();
-        }
-    } else if current == results {
-        core.scroll_results_up();
-    }
-}
-
-/// Common `handle_down` for 3-area tabs where Options area has no vertical navigation.
-pub fn handle_down_3area<A: Copy + PartialEq>(
-    core: &mut TabCore,
-    current: A,
-    inputs: A,
-    results: A,
-) {
-    if current == inputs {
-        if !core.inputs.is_focused() && !core.results_view.is_empty() {
-            core.scroll_results_down();
-        } else {
-            core.inputs.focus_next();
-        }
-    } else if current == results {
-        core.scroll_results_down();
-    }
-}
-
-/// Common `handle_up` for 2-area tabs.
+/// Common `handle_up` for 2-area (Inputs/Results) and 3-area (Inputs/Options/Results) tabs.
+/// In the Inputs area: navigates input fields (or scrolls results if unfocused).
+/// In the Results area: scrolls results up.
+/// The Options area is a no-op (callers handle selector-specific up/down).
 pub fn handle_up_2area<A: Copy + PartialEq>(
     core: &mut TabCore,
     current: A,
@@ -438,7 +434,10 @@ pub fn handle_up_2area<A: Copy + PartialEq>(
     }
 }
 
-/// Common `handle_down` for 2-area tabs.
+/// Common `handle_down` for 2-area (Inputs/Results) and 3-area (Inputs/Options/Results) tabs.
+/// In the Inputs area: navigates input fields (or scrolls results if unfocused).
+/// In the Results area: scrolls results down.
+/// The Options area is a no-op (callers handle selector-specific up/down).
 pub fn handle_down_2area<A: Copy + PartialEq>(
     core: &mut TabCore,
     current: A,
@@ -456,7 +455,30 @@ pub fn handle_down_2area<A: Copy + PartialEq>(
     }
 }
 
+/// Alias for `handle_up_2area`. The Options area is a no-op in vertical
+/// navigation, so 3-area tabs use the same logic as 2-area tabs.
+pub fn handle_up_3area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) {
+    handle_up_2area(core, current, inputs, results);
+}
+
+/// Alias for `handle_down_2area`. The Options area is a no-op in vertical
+/// navigation, so 3-area tabs use the same logic as 2-area tabs.
+pub fn handle_down_3area<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    inputs: A,
+    results: A,
+) {
+    handle_down_2area(core, current, inputs, results);
+}
+
 /// Common `handle_left` for simple tabs (Inputs area only).
+/// Delegates to `handle_left_n` with `inputs == current` for single-area tabs.
 pub fn handle_left_simple(core: &mut TabCore, is_running: bool) -> bool {
     if !is_running {
         core.inputs.move_left()
@@ -466,6 +488,7 @@ pub fn handle_left_simple(core: &mut TabCore, is_running: bool) -> bool {
 }
 
 /// Common `handle_right` for simple tabs (Inputs area only).
+/// Delegates to `handle_right_n` with `inputs == current` for single-area tabs.
 pub fn handle_right_simple(core: &mut TabCore, is_running: bool) -> bool {
     if !is_running {
         core.inputs.move_right()
@@ -527,6 +550,20 @@ pub fn toggle_focused_checkbox(
     true
 }
 
+/// Toggle the checkbox at `focused_index` within a `Vec<Checkbox>`.
+/// Clamps the index to valid range before toggling.
+pub fn toggle_focused_checkbox_vec(
+    checkboxes: &mut [Checkbox],
+    focused_index: &mut usize,
+) -> bool {
+    if checkboxes.is_empty() {
+        return false;
+    }
+    *focused_index = (*focused_index).min(checkboxes.len() - 1);
+    checkboxes[*focused_index].toggle();
+    true
+}
+
 pub fn move_checkbox_focus_left(focused_index: &mut usize, checkbox_count: usize) -> bool {
     if checkbox_count == 0 {
         return false;
@@ -555,6 +592,30 @@ pub fn is_checkbox_focus_at_left_edge(focused_index: usize, checkbox_count: usiz
 
 pub fn is_checkbox_focus_at_right_edge(focused_index: usize, checkbox_count: usize) -> bool {
     checkbox_count == 0 || focused_index >= checkbox_count.saturating_sub(1)
+}
+
+/// Cycles checkbox focus up in the Options area (wrapping: 0 -> last).
+pub fn handle_options_up_wrapping(focused_index: &mut usize, checkbox_count: usize) {
+    if checkbox_count == 0 {
+        return;
+    }
+    if *focused_index == 0 {
+        *focused_index = checkbox_count - 1;
+    } else {
+        *focused_index = focused_index.saturating_sub(1);
+    }
+}
+
+/// Cycles checkbox focus down in the Options area (wrapping: last -> 0).
+pub fn handle_options_down_wrapping(focused_index: &mut usize, checkbox_count: usize) {
+    if checkbox_count == 0 {
+        return;
+    }
+    if *focused_index >= checkbox_count - 1 {
+        *focused_index = 0;
+    } else {
+        *focused_index += 1;
+    }
 }
 
 pub fn indexed_input_area_index<A: Copy + PartialEq>(current: A, input_areas: &[A]) -> Option<usize> {
@@ -893,17 +954,98 @@ pub fn handle_escape_to_first<A: Copy + PartialEq>(
     }
 }
 
+// --- Selector-area focus navigation helpers ---
+// These are for tabs with Selector/Inputs/Results layout (e.g., LoadTab, StressTab).
+
+/// Focus-next for selector-area tabs: Selector → Inputs → Results → Selector.
+pub fn focus_next_selector<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    selector: A,
+    inputs: A,
+    results: A,
+) -> A {
+    if current == selector {
+        core.inputs.focus(0);
+        inputs
+    } else if current == inputs {
+        core.inputs.blur();
+        results
+    } else {
+        selector
+    }
+}
+
+/// Focus-prev for selector-area tabs: Selector → Results → Inputs → Selector.
+pub fn focus_prev_selector<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    selector: A,
+    inputs: A,
+    results: A,
+) -> A {
+    if current == selector {
+        results
+    } else if current == inputs {
+        selector
+    } else {
+        core.inputs.focus(0);
+        inputs
+    }
+}
+
+/// `handle_up` for selector-area tabs.
+/// In Selector: no-op (caller handles selector-specific up/down).
+/// In Inputs: navigate fields.
+/// In Results: scroll up.
+pub fn handle_up_selector<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    selector: A,
+    inputs: A,
+    results: A,
+) {
+    if current == selector {
+        // Selector up/down handled by caller
+    } else if current == inputs {
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_up();
+        } else {
+            core.inputs.focus_prev();
+        }
+    } else if current == results {
+        core.scroll_results_up();
+    }
+}
+
+/// `handle_down` for selector-area tabs.
+pub fn handle_down_selector<A: Copy + PartialEq>(
+    core: &mut TabCore,
+    current: A,
+    selector: A,
+    inputs: A,
+    results: A,
+) {
+    if current == selector {
+        // Selector up/down handled by caller
+    } else if current == inputs {
+        if !core.inputs.is_focused() && !core.results_view.is_empty() {
+            core.scroll_results_down();
+        } else {
+            core.inputs.focus_next();
+        }
+    } else if current == results {
+        core.scroll_results_down();
+    }
+}
+
 // --- Focus-aware styling helpers ---
 
 /// Returns a border `Style` that uses `border_focused` when `focused` is true,
-/// or `border` otherwise. Replaces the 4-line pattern repeated across 30+ tab
-/// render methods.
+/// or `border` otherwise. Uses the explicit theme for consistent theming.
 pub fn focus_border_style(focused: bool) -> Style {
-    Style::default().fg(if focused {
-        crate::tc!(border_focused)
-    } else {
-        crate::tc!(border)
-    })
+    let theme = crate::theme::legacy::current_theme();
+    theme.border_style(focused)
 }
 
 // --- Rendering helpers ---
@@ -919,6 +1061,7 @@ pub fn render_results_area(
     empty_title: &'static str,
     empty_text: &'static str,
 ) {
+    let theme = crate::theme::legacy::current_theme();
     match state {
         AppState::Running => {
             progress.render(f, area);
@@ -926,7 +1069,7 @@ pub fn render_results_area(
         AppState::Error(_) => {
             if let Some(ref err) = error {
                 let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                    .style(Style::default().fg(crate::tc!(error)));
+                    .style(theme.error());
                 f.render_widget(error_text, area);
             }
         }
@@ -942,20 +1085,18 @@ pub fn render_results_area(
 }
 
 /// Renders the standard configuration block with focused/unfocused border styling.
+/// Uses the explicit theme for consistent theming.
 pub fn render_config_block(
     f: &mut Frame,
     area: Rect,
     title: &str,
     is_config_focused: bool,
 ) -> Rect {
+    let theme = crate::theme::legacy::current_theme();
     let block = Block::default()
         .borders(Borders::ALL)
         .title(format!(" {} ", title))
-        .border_style(Style::default().fg(if is_config_focused {
-            crate::tc!(border_focused)
-        } else {
-            crate::tc!(border)
-        }));
+        .border_style(theme.border_style(is_config_focused));
     let inner = block.inner(area);
     f.render_widget(block, area);
     inner
@@ -964,10 +1105,40 @@ pub fn render_config_block(
 /// Renders an error block with the given title. Returns early pattern for render methods.
 /// Used by tabs that render a full-area error when in error state.
 pub fn render_error_block(f: &mut Frame, area: Rect, title: &str, error: &TabError) {
+    let theme = crate::theme::legacy::current_theme();
     let error_text = Paragraph::new(format!("Error: {}", error.message()))
         .block(Block::default().borders(Borders::ALL).title(format!(" {} ", title)))
-        .style(Style::default().fg(crate::tc!(error)));
+        .style(theme.error());
     f.render_widget(error_text, area);
+}
+
+/// Renders input fields from an `InputGroup` into pre-computed layout chunks.
+///
+/// This eliminates the duplicated loop pattern found across 15+ tab render methods:
+/// ```ignore
+/// for (i, field) in self.core.inputs.fields.iter().enumerate() {
+///     if let Some(chunk) = input_chunks.get(i) {
+///         field.render(f, *chunk, insert_mode);
+///     }
+/// }
+/// ```
+///
+/// # Arguments
+/// * `f` - The ratatui frame to render into
+/// * `input_chunks` - Layout chunks computed for the input area
+/// * `inputs` - The `InputGroup` containing fields to render
+/// * `insert_mode` - Whether the TUI is in insert mode (controls cursor display)
+pub fn render_input_fields(
+    f: &mut Frame,
+    input_chunks: &[Rect],
+    inputs: &InputGroup,
+    insert_mode: bool,
+) {
+    for (i, field) in inputs.fields.iter().enumerate() {
+        if let Some(chunk) = input_chunks.get(i) {
+            field.render(f, *chunk, insert_mode);
+        }
+    }
 }
 
 /// Configuration for a standard 2-area render layout (Inputs + Results).
@@ -1018,11 +1189,7 @@ pub fn render_standard_2area(
         .constraints(config.input_constraints.as_slice())
         .split(input_inner);
 
-    for (i, field) in core.inputs.fields.iter().enumerate() {
-        if let Some(chunk) = input_chunks.get(i) {
-            field.render(f, *chunk, true);
-        }
-    }
+    render_input_fields(f, &input_chunks, &core.inputs, true);
 
     render_results_area(
         f,
@@ -1087,11 +1254,7 @@ pub fn render_standard_3area(
         .constraints(config.input_constraints.as_slice())
         .split(input_inner);
 
-    for (i, field) in core.inputs.fields.iter().enumerate() {
-        if let Some(chunk) = input_chunks.get(i) {
-            field.render(f, *chunk, true);
-        }
-    }
+    render_input_fields(f, &input_chunks, &core.inputs, true);
 
     (config.render_options)(f, chunks[1], config.focus_area == config.options_focused);
 
@@ -1884,6 +2047,85 @@ mod tests {
         assert_eq!(core.state, AppState::Idle);
     }
 
+    // --- 3-area alias tests (verify aliases produce identical results to 2area) ---
+
+    #[test]
+    fn handle_up_3area_delegates_to_2area() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Area { Inputs, Options, Results }
+
+        let mut core3 = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let mut core2 = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        // Both should produce identical behavior in Inputs area
+        handle_up_3area(&mut core3, Area::Inputs, Area::Inputs, Area::Results);
+        handle_up_2area(&mut core2, Area::Inputs, Area::Inputs, Area::Results);
+        assert_eq!(core3.state, core2.state);
+
+        // Both should produce identical behavior in Results area
+        handle_up_3area(&mut core3, Area::Results, Area::Inputs, Area::Results);
+        handle_up_2area(&mut core2, Area::Results, Area::Inputs, Area::Results);
+        assert_eq!(core3.state, core2.state);
+    }
+
+    #[test]
+    fn handle_down_3area_delegates_to_2area() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Area { Inputs, Options, Results }
+
+        let mut core3 = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let mut core2 = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        handle_down_3area(&mut core3, Area::Inputs, Area::Inputs, Area::Results);
+        handle_down_2area(&mut core2, Area::Inputs, Area::Inputs, Area::Results);
+        assert_eq!(core3.state, core2.state);
+
+        handle_down_3area(&mut core3, Area::Results, Area::Inputs, Area::Results);
+        handle_down_2area(&mut core2, Area::Results, Area::Inputs, Area::Results);
+        assert_eq!(core3.state, core2.state);
+    }
+
+    #[test]
+    fn handle_up_3area_options_is_noop() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Area { Inputs, Options, Results }
+
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let state_before = core.state.clone();
+        // Options area should be a no-op
+        handle_up_3area(&mut core, Area::Options, Area::Inputs, Area::Results);
+        assert_eq!(core.state, state_before);
+    }
+
+    #[test]
+    fn handle_down_3area_options_is_noop() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Area { Inputs, Options, Results }
+
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+        let state_before = core.state.clone();
+        handle_down_3area(&mut core, Area::Options, Area::Inputs, Area::Results);
+        assert_eq!(core.state, state_before);
+    }
+
     // --- N-area focus tests ---
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2179,5 +2421,240 @@ mod tests {
         terminal
             .draw(|f| render_standard_2area(f, Rect::new(0, 0, 80, 24), &core, &config))
             .unwrap();
+    }
+
+    // --- prepare_results tests ---
+
+    #[test]
+    fn prepare_results_sets_completed_state() {
+        use ratatui::text::Line;
+
+        let mut core = TabCore::new("test", "Results");
+        core.state = AppState::Running;
+        core.results_view.add_line(Line::from("old data"));
+
+        {
+            let view = core.prepare_results();
+            view.add_line(Line::from("new data"));
+        }
+
+        assert_eq!(core.state, AppState::Completed);
+        assert!(!core.results_view.is_empty());
+    }
+
+    #[test]
+    fn prepare_results_clears_old_content() {
+        use ratatui::text::Line;
+
+        let mut core = TabCore::new("test", "Results");
+        core.results_view.add_line(Line::from("old data"));
+
+        let view = core.prepare_results();
+        view.add_line(Line::from("new data"));
+
+        // Old data should be gone
+        let content = core.results_view.get_content();
+        assert!(!content.contains("old data"));
+        assert!(content.contains("new data"));
+    }
+
+    // --- selector-area focus navigation tests ---
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum SelArea {
+        Selector,
+        Inputs,
+        Results,
+    }
+
+    #[test]
+    fn focus_next_selector_cycles_correctly() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        // Selector -> Inputs
+        let next = focus_next_selector(&mut core, SelArea::Selector, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        assert_eq!(next, SelArea::Inputs);
+        assert!(core.inputs.is_focused());
+
+        // Inputs -> Results
+        let next = focus_next_selector(&mut core, SelArea::Inputs, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        assert_eq!(next, SelArea::Results);
+
+        // Results -> Selector
+        let next = focus_next_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        assert_eq!(next, SelArea::Selector);
+    }
+
+    #[test]
+    fn focus_prev_selector_cycles_correctly() {
+        let mut core = TabCore::new("test", "Results").with_inputs(
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target")),
+        );
+
+        // Selector -> Results
+        let prev = focus_prev_selector(&mut core, SelArea::Selector, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        assert_eq!(prev, SelArea::Results);
+
+        // Results -> Inputs
+        let prev = focus_prev_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        assert_eq!(prev, SelArea::Inputs);
+        assert!(core.inputs.is_focused());
+
+        // Inputs -> Selector
+        let prev = focus_prev_selector(&mut core, SelArea::Inputs, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        assert_eq!(prev, SelArea::Selector);
+    }
+
+    #[test]
+    fn handle_up_selector_in_results_scrolls() {
+        use ratatui::text::Line;
+
+        let mut core = TabCore::new("test", "Results");
+        for _ in 0..10 {
+            core.results_view.add_line(Line::from("line"));
+        }
+        core.results_view.scroll_down(5);
+
+        handle_up_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        // Should not panic; scroll position changed
+    }
+
+    #[test]
+    fn handle_down_selector_in_results_scrolls() {
+        use ratatui::text::Line;
+
+        let mut core = TabCore::new("test", "Results");
+        for _ in 0..10 {
+            core.results_view.add_line(Line::from("line"));
+        }
+
+        handle_down_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        // Should not panic
+    }
+
+    #[test]
+    fn render_input_fields_renders_all_fields_without_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let inputs = InputGroup::new()
+            .add(crate::components::InputField::new("Target"))
+            .add(crate::components::InputField::new("Concurrency").with_value("20"))
+            .add(crate::components::InputField::new("Timeout").with_value("10"));
+
+        let chunks = [
+            Rect::new(0, 0, 80, 3),
+            Rect::new(0, 3, 80, 3),
+            Rect::new(0, 6, 80, 3),
+        ];
+
+        terminal
+            .draw(|f| {
+                render_input_fields(f, &chunks, &inputs, true);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn render_input_fields_handles_fewer_chunks_than_fields() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let inputs = InputGroup::new()
+            .add(crate::components::InputField::new("Target"))
+            .add(crate::components::InputField::new("Concurrency"))
+            .add(crate::components::InputField::new("Timeout"));
+
+        // Only 2 chunks for 3 fields - should not panic
+        let chunks = [
+            Rect::new(0, 0, 80, 3),
+            Rect::new(0, 3, 80, 3),
+        ];
+
+        terminal
+            .draw(|f| {
+                render_input_fields(f, &chunks, &inputs, false);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn render_input_fields_emptyInputGroup() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let inputs = InputGroup::new();
+        let chunks: [Rect; 0] = [];
+
+        terminal
+            .draw(|f| {
+                render_input_fields(f, &chunks, &inputs, true);
+            })
+            .unwrap();
+    }
+
+    // --- checkbox navigation helper tests ---
+
+    #[test]
+    fn handle_options_up_wrapping_cycles_from_first_to_last() {
+        let mut idx = 0usize;
+        handle_options_up_wrapping(&mut idx, 5);
+        assert_eq!(idx, 4);
+    }
+
+    #[test]
+    fn handle_options_up_wrapping_decrements_middle() {
+        let mut idx = 3usize;
+        handle_options_up_wrapping(&mut idx, 5);
+        assert_eq!(idx, 2);
+    }
+
+    #[test]
+    fn handle_options_up_wrapping_noop_when_empty() {
+        let mut idx = 0usize;
+        handle_options_up_wrapping(&mut idx, 0);
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn handle_options_down_wrapping_cycles_from_last_to_first() {
+        let mut idx = 4usize;
+        handle_options_down_wrapping(&mut idx, 5);
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn handle_options_down_wrapping_increments_middle() {
+        let mut idx = 2usize;
+        handle_options_down_wrapping(&mut idx, 5);
+        assert_eq!(idx, 3);
+    }
+
+    #[test]
+    fn handle_options_down_wrapping_noop_when_empty() {
+        let mut idx = 0usize;
+        handle_options_down_wrapping(&mut idx, 0);
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn handle_options_wrapping_roundtrip() {
+        let mut idx = 0usize;
+        let count = 5;
+        for _ in 0..count {
+            handle_options_down_wrapping(&mut idx, count);
+        }
+        assert_eq!(idx, 0, "wrapping down should return to start");
+        for _ in 0..count {
+            handle_options_up_wrapping(&mut idx, count);
+        }
+        assert_eq!(idx, 0, "wrapping up should return to start");
     }
 }

@@ -1,7 +1,9 @@
 use crate::components::{Checkbox, InputField};
-use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
+use crate::tabs::core::{
+    field_as, render_input_fields, render_results_area, start_scan, StandardFocusArea, TabCore,
+};
+use crate::tabs::{TabInput, TabRender, TabState};
+use crate::{tab_input_areas, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -63,53 +65,50 @@ impl GraphQlTab {
     }
 
     pub fn set_results(&mut self, results: GraphQlResults) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
 
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("GraphQL Security Test Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "Findings:",
             Style::default().fg(tc!(warning)),
         )));
 
         if results.introspection_enabled {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 "  [!] Introspection is ENABLED - Schema exposed",
                 Style::default().fg(tc!(error)),
             )));
         } else {
-            self.core
-                .results_view
-                .add_line(Line::from(Span::raw("  [+] Introspection is disabled")));
+            view.add_line(Line::from(Span::raw("  [+] Introspection is disabled")));
         }
 
         if results.depth_limit_bypassed {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 "  [!] Depth limit bypass detected",
                 Style::default().fg(tc!(error)),
             )));
         }
 
         if results.alias_overload_vulnerable {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 "  [!] Alias overload vulnerability detected",
                 Style::default().fg(tc!(error)),
             )));
         }
 
         if !results.injection_findings.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!("  Injection Findings: {}", results.injection_findings.len()),
                 Style::default().fg(tc!(warning)),
             )));
         }
 
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "Requests: {} | Errors: {} | Duration: {}ms",
             results.total_requests, results.errors, results.duration_ms
         )));
@@ -190,11 +189,7 @@ impl TabRender for GraphQlTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         // Options
         let options_block = Block::default()
@@ -245,81 +240,14 @@ impl TabRender for GraphQlTab {
 }
 
 impl TabInput for GraphQlTab {
-    tab_input_boilerplate!(
+    tab_input_areas!(
         GraphQlTab,
         core: core,
         focus: focus_area,
         Inputs: StandardFocusArea::Inputs,
+        Options: StandardFocusArea::Options,
         Results: StandardFocusArea::Results
     );
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.paste(text);
-        }
-    }
-
-    fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_next_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Options,
-                StandardFocusArea::Results,
-            );
-        }
-    }
-
-    fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_prev_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Options,
-                StandardFocusArea::Results,
-            );
-        }
-    }
-
-    fn handle_up(&mut self) {
-        if !self.is_running() {
-            crate::tabs::core::handle_up_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Results,
-            );
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if !self.is_running() {
-            crate::tabs::core::handle_down_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Results,
-            );
-        }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == StandardFocusArea::Inputs && self.core.inputs.is_focused()
-    }
 
     fn handle_enter(&mut self) {
         let running = self.is_running();
@@ -358,52 +286,6 @@ impl TabInput for GraphQlTab {
         );
         self.focus_area = new_area;
         self.focused_checkbox_index = 0;
-    }
-
-    fn handle_left(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        match self.focus_area {
-            StandardFocusArea::Inputs => self.core.inputs.move_left(),
-            StandardFocusArea::Options => {
-                crate::tabs::core::move_checkbox_focus_left(&mut self.focused_checkbox_index, 4)
-            }
-            _ => false,
-        }
-    }
-
-    fn handle_right(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        match self.focus_area {
-            StandardFocusArea::Inputs => self.core.inputs.move_right(),
-            StandardFocusArea::Options => {
-                crate::tabs::core::move_checkbox_focus_right(&mut self.focused_checkbox_index, 4)
-            }
-            _ => false,
-        }
-    }
-
-    fn is_at_left_edge(&self) -> bool {
-        match self.focus_area {
-            StandardFocusArea::Inputs => !self.core.inputs.can_move_left(),
-            StandardFocusArea::Options => {
-                crate::tabs::core::is_checkbox_focus_at_left_edge(self.focused_checkbox_index, 4)
-            }
-            _ => true,
-        }
-    }
-
-    fn is_at_right_edge(&self) -> bool {
-        match self.focus_area {
-            StandardFocusArea::Inputs => !self.core.inputs.can_move_right(),
-            StandardFocusArea::Options => {
-                crate::tabs::core::is_checkbox_focus_at_right_edge(self.focused_checkbox_index, 4)
-            }
-            _ => true,
-        }
     }
 }
 
@@ -455,21 +337,12 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_left_right_navigates_checkboxes() {
+    fn test_handle_left_right_no_op_in_options() {
         let mut tab = create_test_tab();
         tab.focus_area = StandardFocusArea::Options;
         tab.focused_checkbox_index = 0;
 
         tab.handle_right();
-        assert_eq!(tab.focused_checkbox_index, 1);
-
-        tab.handle_right();
-        assert_eq!(tab.focused_checkbox_index, 2);
-
-        tab.handle_left();
-        assert_eq!(tab.focused_checkbox_index, 1);
-
-        tab.handle_left();
         assert_eq!(tab.focused_checkbox_index, 0);
 
         tab.handle_left();

@@ -278,6 +278,10 @@ impl TabState for IntegrationsTab {
         0.0
     }
 
+    fn has_selector_open(&self) -> bool {
+        self.tracker_selector.is_open() || self.mode_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
@@ -439,9 +443,6 @@ impl TabRender for IntegrationsTab {
 
 impl TabInput for IntegrationsTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -474,9 +475,6 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -684,26 +682,22 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
-                IntegrationsFocusArea::Mode => self.mode_selector.handle_up(),
-                IntegrationsFocusArea::Config => self.config_inputs.focus_prev(),
-                IntegrationsFocusArea::Issue => self.issue_inputs.focus_prev(),
-                IntegrationsFocusArea::Results => self.results_view.scroll_up(1),
-            }
+        match self.focus_area {
+            IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
+            IntegrationsFocusArea::Mode => self.mode_selector.handle_up(),
+            IntegrationsFocusArea::Config => self.config_inputs.focus_prev(),
+            IntegrationsFocusArea::Issue => self.issue_inputs.focus_prev(),
+            IntegrationsFocusArea::Results => self.results_view.scroll_up(1),
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
-                IntegrationsFocusArea::Mode => self.mode_selector.handle_down(),
-                IntegrationsFocusArea::Config => self.config_inputs.focus_next(),
-                IntegrationsFocusArea::Issue => self.issue_inputs.focus_next(),
-                IntegrationsFocusArea::Results => self.results_view.scroll_down(1),
-            }
+        match self.focus_area {
+            IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
+            IntegrationsFocusArea::Mode => self.mode_selector.handle_down(),
+            IntegrationsFocusArea::Config => self.config_inputs.focus_next(),
+            IntegrationsFocusArea::Issue => self.issue_inputs.focus_next(),
+            IntegrationsFocusArea::Results => self.results_view.scroll_down(1),
         }
     }
 

@@ -20,6 +20,8 @@ pub struct OverlayState {
     pub pending_policy: Option<PendingPolicyConfirmation>,
     pub notification: Option<Notification>,
     pub help_scroll_offset: usize,
+    /// Active button index in confirm popup (0=Yes, 1=No).
+    pub confirm_button_index: usize,
 }
 
 impl Default for OverlayState {
@@ -33,6 +35,7 @@ impl Default for OverlayState {
             pending_policy: None,
             notification: None,
             help_scroll_offset: 0,
+            confirm_button_index: 0,
         }
     }
 }

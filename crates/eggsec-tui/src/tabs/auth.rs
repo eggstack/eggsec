@@ -152,11 +152,10 @@ impl AuthTab {
         } else {
             out.push_str("No significant findings.\n");
         }
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
         for line in out.lines() {
-            self.core.results_view.add_line(ratatui::text::Line::from(line.to_string()));
+            view.add_line(ratatui::text::Line::from(line.to_string()));
         }
-        self.core.state = AppState::Completed;
     }
 }
 
@@ -250,25 +249,21 @@ impl TabInput for AuthTab {
     );
 
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_next_indexed(
-                self.focus_area,
-                AUTH_INPUT_AREAS,
-                AuthFocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_next_indexed(
+            self.focus_area,
+            AUTH_INPUT_AREAS,
+            AuthFocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_prev_indexed(
-                self.focus_area,
-                AUTH_INPUT_AREAS,
-                AuthFocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_prev_indexed(
+            self.focus_area,
+            AUTH_INPUT_AREAS,
+            AuthFocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_enter(&mut self) {
@@ -306,25 +301,21 @@ impl TabInput for AuthTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_up_indexed(
-                self.focus_area,
-                AUTH_INPUT_AREAS,
-                AuthFocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_up_indexed(
+            self.focus_area,
+            AUTH_INPUT_AREAS,
+            AuthFocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_down_indexed(
-                self.focus_area,
-                AUTH_INPUT_AREAS,
-                AuthFocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_down_indexed(
+            self.focus_area,
+            AUTH_INPUT_AREAS,
+            AuthFocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_top(&mut self) {

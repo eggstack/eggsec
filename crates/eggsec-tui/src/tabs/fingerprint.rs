@@ -1,9 +1,9 @@
 use crate::components::InputField;
 use crate::tabs::core::{
-    evaluate_enter, execute_enter_action, field_as, field_str,
-    render_config_block, render_results_area, start_scan, StandardFocusArea2, TabCore,
+    evaluate_enter, execute_enter_action, field_as, field_str, render_config_block,
+    render_input_fields, render_results_area, start_scan, StandardFocusArea2, TabCore,
 };
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
+use crate::tabs::{TabInput, TabRender, TabState};
 use crate::{tab_escape_2area, tab_input_2area, tab_state_boilerplate, tc};
 use eggsec::scanner::fingerprint::FingerprintResults;
 use ratatui::{
@@ -53,9 +53,9 @@ impl FingerprintTab {
     }
 
     pub fn set_results(&mut self, results: FingerprintResults) {
+        let _view = self.core.prepare_results();
         self.update_results_view(&results);
         self.results = Some(results);
-        self.core.state = AppState::Completed;
     }
 
     fn update_results_view(&mut self, results: &FingerprintResults) {
@@ -189,11 +189,7 @@ impl TabRender for FingerprintTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         render_results_area(
             f,
@@ -239,6 +235,7 @@ impl TabInput for FingerprintTab {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tabs::AppState;
 
     fn create_test_tab() -> FingerprintTab {
         FingerprintTab::new()

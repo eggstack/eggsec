@@ -1,5 +1,7 @@
 use crate::components::InputField;
-use crate::tabs::core::{render_config_block, render_results_area, StandardFocusArea2, TabCore};
+use crate::tabs::core::{
+    render_config_block, render_input_fields, render_results_area, StandardFocusArea2, TabCore,
+};
 use crate::tabs::{TabInput, TabRender, TabState};
 use crate::{tab_escape_2area, tab_input_boilerplate, tab_state_boilerplate};
 use ratatui::{
@@ -115,11 +117,7 @@ impl TabRender for WafStressTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         render_results_area(
             f,
@@ -145,9 +143,6 @@ impl TabInput for WafStressTab {
     tab_escape_2area!(WafStressTab, core: core, focus: focus_area, Inputs: StandardFocusArea2::Inputs);
 
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = crate::tabs::core::focus_next_2area(
             &mut self.core,
             self.focus_area,
@@ -157,9 +152,6 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
-        }
         self.focus_area = crate::tabs::core::focus_prev_2area(
             &mut self.core,
             self.focus_area,
@@ -200,9 +192,6 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == StandardFocusArea2::Results {
             self.core.scroll_results_up();
         } else if self.focus_area == StandardFocusArea2::Inputs {
@@ -211,9 +200,6 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.focus_area == StandardFocusArea2::Results {
             self.core.scroll_results_down();
         } else if self.focus_area == StandardFocusArea2::Inputs {

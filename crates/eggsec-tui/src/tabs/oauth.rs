@@ -1,6 +1,8 @@
 use crate::components::{Checkbox, InputField};
-use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
-use crate::tabs::{AppState, TabInput, TabRender, TabState};
+use crate::tabs::core::{
+    field_as, render_input_fields, render_results_area, start_scan, StandardFocusArea, TabCore,
+};
+use crate::tabs::{TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -83,21 +85,20 @@ impl OAuthTab {
     }
 
     pub fn set_results(&mut self, results: OAuthResults) {
-        self.core.state = AppState::Completed;
-        self.core.results_view.clear();
+        let view = self.core.prepare_results();
 
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(Span::styled(
             format!("OAuth/OIDC Security Test Complete: {}", results.target),
             Style::default().fg(tc!(success)),
         )));
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(Span::styled(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(Span::styled(
             "Findings:",
             Style::default().fg(tc!(warning)),
         )));
 
         if !results.redirect_vulnerabilities.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] Redirect URI Issues: {}",
                     results.redirect_vulnerabilities.len()
@@ -105,18 +106,16 @@ impl OAuthTab {
                 Style::default().fg(tc!(error)),
             )));
             for vuln in &results.redirect_vulnerabilities {
-                self.core
-                    .results_view
-                    .add_line(Line::from(format!("    - {}", vuln)));
+                view.add_line(Line::from(format!("    - {}", vuln)));
             }
         } else {
-            self.core.results_view.add_line(Line::from(Span::raw(
+            view.add_line(Line::from(Span::raw(
                 "  [+] Redirect URI validation appears secure",
             )));
         }
 
         if !results.scope_vulnerabilities.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] Scope Escalation Issues: {}",
                     results.scope_vulnerabilities.len()
@@ -126,7 +125,7 @@ impl OAuthTab {
         }
 
         if !results.state_vulnerabilities.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] State Parameter Issues: {}",
                     results.state_vulnerabilities.len()
@@ -136,7 +135,7 @@ impl OAuthTab {
         }
 
         if !results.grant_vulnerabilities.is_empty() {
-            self.core.results_view.add_line(Line::from(Span::styled(
+            view.add_line(Line::from(Span::styled(
                 format!(
                     "  [!] Grant Type Issues: {}",
                     results.grant_vulnerabilities.len()
@@ -145,8 +144,8 @@ impl OAuthTab {
             )));
         }
 
-        self.core.results_view.add_line(Line::from(""));
-        self.core.results_view.add_line(Line::from(format!(
+        view.add_line(Line::from(""));
+        view.add_line(Line::from(format!(
             "Requests: {} | Errors: {} | Duration: {}ms",
             results.total_requests, results.errors, results.duration_ms
         )));
@@ -241,11 +240,7 @@ impl TabRender for OAuthTab {
             ])
             .split(input_inner);
 
-        for (i, field) in self.core.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.core.inputs, insert_mode);
 
         // Options
         let options_block = Block::default()
@@ -327,49 +322,41 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_next_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Options,
-                StandardFocusArea::Results,
-            );
-        }
+        self.focus_area = crate::tabs::core::focus_next_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_prev_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Options,
-                StandardFocusArea::Results,
-            );
-        }
+        self.focus_area = crate::tabs::core::focus_prev_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Options,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            crate::tabs::core::handle_up_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Results,
-            );
-        }
+        crate::tabs::core::handle_up_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Results,
+        );
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            crate::tabs::core::handle_down_3area(
-                &mut self.core,
-                self.focus_area,
-                StandardFocusArea::Inputs,
-                StandardFocusArea::Results,
-            );
-        }
+        crate::tabs::core::handle_down_3area(
+            &mut self.core,
+            self.focus_area,
+            StandardFocusArea::Inputs,
+            StandardFocusArea::Results,
+        );
     }
 
     fn is_input_focused(&self) -> bool {

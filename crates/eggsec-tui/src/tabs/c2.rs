@@ -158,25 +158,21 @@ impl TabInput for C2Tab {
     );
 
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_next_indexed(
-                self.focus_area,
-                C2_INPUT_AREAS,
-                C2FocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_next_indexed(
+            self.focus_area,
+            C2_INPUT_AREAS,
+            C2FocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_prev_indexed(
-                self.focus_area,
-                C2_INPUT_AREAS,
-                C2FocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_prev_indexed(
+            self.focus_area,
+            C2_INPUT_AREAS,
+            C2FocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_enter(&mut self) {
@@ -214,25 +210,21 @@ impl TabInput for C2Tab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_up_indexed(
-                self.focus_area,
-                C2_INPUT_AREAS,
-                C2FocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_up_indexed(
+            self.focus_area,
+            C2_INPUT_AREAS,
+            C2FocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            self.focus_area = crate::tabs::core::focus_down_indexed(
-                self.focus_area,
-                C2_INPUT_AREAS,
-                C2FocusArea::Results,
-            );
-            self.sync_input_focus();
-        }
+        self.focus_area = crate::tabs::core::focus_down_indexed(
+            self.focus_area,
+            C2_INPUT_AREAS,
+            C2FocusArea::Results,
+        );
+        self.sync_input_focus();
     }
 }
 

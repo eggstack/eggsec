@@ -2,6 +2,7 @@
 
 use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
+use crate::tabs::core::render_input_fields;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use ratatui::{
@@ -478,6 +479,10 @@ impl TabState for PacketTab {
         0.0
     }
 
+    fn has_selector_open(&self) -> bool {
+        self.view_selector.is_open()
+    }
+
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results.clear();
@@ -558,11 +563,7 @@ impl TabRender for PacketTab {
             ])
             .split(config_inner);
 
-        for (i, field) in self.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, false);
-            }
-        }
+        render_input_fields(f, &input_chunks, &self.inputs, false);
 
         if !self.is_root {
             let warning = Paragraph::new("Warning: Root privileges required for packet operations")
@@ -616,33 +617,29 @@ impl TabInput for PacketTab {
     }
 
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.blur();
-                self.inputs.focus_next();
-            } else if self.inputs.is_focused() {
-                self.inputs.focus_next();
-                if self.inputs.is_focused() {
-                    self.inputs.blur();
-                    self.view_selector.focus();
-                }
-            } else {
+        if self.view_selector.is_focused() {
+            self.view_selector.blur();
+            self.inputs.focus_next();
+        } else if self.inputs.is_focused() {
+            self.inputs.focus_next();
+            if self.inputs.is_focused() {
+                self.inputs.blur();
                 self.view_selector.focus();
             }
+        } else {
+            self.view_selector.focus();
         }
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.blur();
-                self.inputs.focus_prev();
-            } else if self.inputs.is_focused() {
-                self.inputs.blur();
-                self.view_selector.focus();
-            } else {
-                self.view_selector.focus();
-            }
+        if self.view_selector.is_focused() {
+            self.view_selector.blur();
+            self.inputs.focus_prev();
+        } else if self.inputs.is_focused() {
+            self.inputs.blur();
+            self.view_selector.focus();
+        } else {
+            self.view_selector.focus();
         }
     }
 
@@ -783,9 +780,6 @@ impl TabInput for PacketTab {
     }
 
     fn handle_up(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_prev();
@@ -798,9 +792,6 @@ impl TabInput for PacketTab {
     }
 
     fn handle_down(&mut self) {
-        if self.is_running() {
-            return;
-        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_next();
