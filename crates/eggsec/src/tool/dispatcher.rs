@@ -56,7 +56,7 @@ impl ToolDispatcher {
                 metadata: ResponseMetadata {
                     started_at,
                     completed_at,
-                    duration_ms: (completed_at - started_at).num_milliseconds() as u64,
+                    duration_ms: (completed_at - started_at).num_milliseconds().max(0) as u64,
                     targets_scanned: 0,
                     findings_count: 0,
                 },

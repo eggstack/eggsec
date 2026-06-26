@@ -102,7 +102,7 @@ pub async fn run_browser_scan(target: &str, config: BrowserConfig) -> Result<Bro
 
     let captured = capture_requests(&tab).await?;
     report.corpus = captured;
-    report.corpus.crawl_duration_ms = (Utc::now() - start_time).num_milliseconds() as u64;
+    report.corpus.crawl_duration_ms = (Utc::now() - start_time).num_milliseconds().max(0) as u64;
     report.corpus.pages_visited = 1 + report.spa_routes.len();
 
     Ok(report)

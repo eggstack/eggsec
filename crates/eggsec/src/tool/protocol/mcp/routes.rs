@@ -11,6 +11,7 @@ use axum::{
 };
 use futures::Stream;
 use serde::Deserialize;
+use tokio::io::AsyncWriteExt;
 
 use crate::tool::{ChainPlanner, ExecutionPlan, OpenApiGenerator, PlanRequest, ToolRegistry};
 
@@ -33,6 +34,61 @@ impl McpIncoming {
             McpIncoming::Batch(reqs) => reqs,
         }
     }
+}
+
+fn validate_batch_size(requests: &[McpRequest], max: usize) -> Result<(), McpResponse> {
+    if requests.len() > max {
+        return Err(McpResponse {
+            jsonrpc: "2.0".to_string(),
+            id: None,
+            result: None,
+            error: Some(McpError::invalid_request(&format!(
+                "Batch size exceeds limit of {}",
+                max
+            ))),
+        });
+    }
+    Ok(())
+}
+
+async fn process_batch(
+    server: &McpServer,
+    requests: Vec<McpRequest>,
+    max_batch_size: usize,
+) -> Vec<McpResponse> {
+    if let Err(error_response) = validate_batch_size(&requests, max_batch_size) {
+        return vec![error_response];
+    }
+
+    let mut responses = Vec::with_capacity(requests.len());
+    for req in requests {
+        if let Err(e) = server.validate_auth_params(&req.params) {
+            responses.push(req.error_response(e));
+            continue;
+        }
+        let response = match tokio::time::timeout(
+            Duration::from_secs(30),
+            server.handle_request(req),
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                tracing::warn!(error = %e, "MCP request handler timed out after 30s");
+                McpResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: None,
+                    result: None,
+                    error: Some(McpError::internal(&format!(
+                        "MCP request handler timed out: {}",
+                        e
+                    ))),
+                }
+            }
+        };
+        responses.push(response);
+    }
+    responses
 }
 
 struct AppState {
@@ -127,52 +183,37 @@ async fn handle_sse_stream(
 ) -> Sse<impl Stream<Item = Result<SseEvent, axum::Error>>> {
     let receiver = state.mcp_server.subscribe_to_stream();
 
-    let state = Arc::new(tokio::sync::Mutex::new(SseStreamState {
-        receiver,
-        request_id: request_id.clone(),
-    }));
-
     let stream = stream! {
+        let mut receiver = receiver;
         let mut tick_interval = tokio::time::interval(Duration::from_secs(30));
 
         loop {
-            let event = {
-                let mut s = state.lock().await;
-                s.receiver.recv().await
-            };
-
-            match event {
-                Ok(event) => {
-                    let current_request_id = {
-                        let s = state.lock().await;
-                        s.request_id.clone()
-                    };
-                    if event.request_id == current_request_id || event.request_id == "*" {
-                        yield Ok::<_, axum::Error>(SseEvent::default()
-                            .event(&event.event_type)
-                            .data(serde_json::to_string(&event.data).inspect_err(|e| {
-                                tracing::warn!(error = %e, "Failed to serialize SSE event data");
-                            }).unwrap_or_default()));
+            tokio::select! {
+                event = receiver.recv() => {
+                    match event {
+                        Ok(event) => {
+                            if event.request_id == request_id || event.request_id == "*" {
+                                yield Ok::<_, axum::Error>(SseEvent::default()
+                                    .event(&event.event_type)
+                                    .data(serde_json::to_string(&event.data).inspect_err(|e| {
+                                        tracing::warn!(error = %e, "Failed to serialize SSE event data");
+                                    }).unwrap_or_default()));
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            yield Ok::<_, axum::Error>(SseEvent::default()
+                                .event("lagged")
+                                .data(format!("{{\"lagged_events\": {}}}", n)));
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            break;
+                        }
                     }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    yield Ok::<_, axum::Error>(SseEvent::default()
-                        .event("lagged")
-                        .data(format!("{{\"lagged_events\": {}}}", n)));
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    break;
-                }
-            }
-
-            tokio::select! {
                 _ = tick_interval.tick() => {
                     yield Ok::<_, axum::Error>(SseEvent::default()
                         .event("heartbeat")
                         .data("{\"timestamp\": \"alive\"}"));
-                }
-                _ = tokio::time::sleep(Duration::from_millis(100)) => {
-                    // Small delay to prevent busy loop
                 }
             }
         }
@@ -186,35 +227,22 @@ async fn handle_mcp(
     State(state): State<Arc<AppState>>,
     headers: axum::http::HeaderMap,
     Json(incoming): Json<McpIncoming>,
-) -> impl IntoResponse {
+) -> (StatusCode, Json<Vec<McpResponse>>) {
     let requests = incoming.into_vec();
     let max_batch_size = state.mcp_server.policy.max_batch_size;
 
-    if requests.len() > max_batch_size {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(vec![McpResponse {
-                jsonrpc: "2.0".to_string(),
-                id: None,
-                result: None,
-                error: Some(McpError::invalid_request(&format!(
-                    "Batch size exceeds limit of {}",
-                    max_batch_size
-                ))),
-            }]),
-        );
+    if let Err(error_response) = validate_batch_size(&requests, max_batch_size) {
+        return (StatusCode::BAD_REQUEST, Json(vec![error_response]));
     }
 
-    let mut responses = Vec::new();
-
+    let mut responses = Vec::with_capacity(requests.len());
     for req in requests {
         if let Err(e) = state.mcp_server.validate_auth(&headers) {
             responses.push(req.error_response(e));
             continue;
         }
-
         let response = match tokio::time::timeout(
-            std::time::Duration::from_secs(30),
+            Duration::from_secs(30),
             state.mcp_server.handle_request(req),
         )
         .await
@@ -285,15 +313,31 @@ mod tests {
     }
 }
 
+async fn write_json_line(
+    writer: &mut tokio::io::BufWriter<tokio::io::Stdout>,
+    value: &impl serde::Serialize,
+) {
+    if let Ok(json) = serde_json::to_string(value) {
+        if let Err(e) = writer.write_all(json.as_bytes()).await {
+            tracing::warn!(error = %e, "Failed to write response");
+        }
+        if let Err(e) = writer.write_all(b"\n").await {
+            tracing::warn!(error = %e, "Failed to write newline");
+        }
+        if let Err(e) = writer.flush().await {
+            tracing::warn!(error = %e, "Failed to flush writer");
+        }
+    }
+}
+
 pub async fn run_stdio(
     registry: ToolRegistry,
     api_key: Option<String>,
     profile: McpProfile,
     enforcement: crate::config::EnforcementContext,
 ) {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
+    use tokio::io::{AsyncBufReadExt, BufReader, BufWriter};
 
-    // Use the production constructor that directly accepts EnforcementContext (no build-then-patch).
     let server = Arc::new(McpServer::with_enforcement(
         registry,
         api_key,
@@ -319,75 +363,8 @@ pub async fn run_stdio(
         match incoming {
             Ok(incoming) => {
                 let requests = incoming.into_vec();
-                let max_batch_size = server.policy.max_batch_size;
-
-                if requests.len() > max_batch_size {
-                    let error = McpError::invalid_request(&format!(
-                        "Batch size exceeds limit of {}",
-                        max_batch_size
-                    ));
-                    let response = McpResponse {
-                        jsonrpc: "2.0".to_string(),
-                        id: None,
-                        result: None,
-                        error: Some(error),
-                    };
-                    if let Ok(response_json) = serde_json::to_string(&response) {
-                        if let Err(e) = writer.write_all(response_json.as_bytes()).await {
-                            tracing::warn!(error = %e, "Failed to write batch size error response");
-                        }
-                        if let Err(e) = writer.write_all(b"\n").await {
-                            tracing::warn!(error = %e, "Failed to write newline");
-                        }
-                        if let Err(e) = writer.flush().await {
-                            tracing::warn!(error = %e, "Failed to flush writer");
-                        }
-                    }
-                    continue;
-                }
-
-                let mut responses = Vec::new();
-
-                for req in requests {
-                    if let Err(e) = server.validate_auth_params(&req.params) {
-                        responses.push(req.error_response(e));
-                        continue;
-                    }
-
-                    let response = match tokio::time::timeout(
-                        std::time::Duration::from_secs(30),
-                        server.handle_request(req),
-                    )
-                    .await
-                    {
-                        Ok(response) => response,
-                        Err(e) => {
-                            tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-                            McpResponse {
-                                jsonrpc: "2.0".to_string(),
-                                id: None,
-                                result: None,
-                                error: Some(McpError::internal(&format!(
-                                    "MCP request handler timed out: {}",
-                                    e
-                                ))),
-                            }
-                        }
-                    };
-                    responses.push(response);
-                }
-
-                if let Ok(response_json) = serde_json::to_string(&responses) {
-                    if let Err(e) = writer.write_all(response_json.as_bytes()).await {
-                        tracing::warn!(error = %e, "Failed to write responses");
-                    }
-                    if let Err(e) = writer.write_all(b"\n").await {
-                        tracing::warn!(error = %e, "Failed to write newline");
-                    }
-                    if let Err(e) = writer.flush().await {
-                        tracing::warn!(error = %e, "Failed to flush writer");
-                    }
-                }
+                let responses = process_batch(&server, requests, server.policy.max_batch_size).await;
+                write_json_line(&mut writer, &responses).await;
             }
             Err(e) => {
                 let error = McpError::parse_error(&format!("Invalid JSON: {}", e));
@@ -397,17 +374,7 @@ pub async fn run_stdio(
                     result: None,
                     error: Some(error),
                 };
-                if let Ok(response_json) = serde_json::to_string(&response) {
-                    if let Err(e) = writer.write_all(response_json.as_bytes()).await {
-                        tracing::warn!(error = %e, "Failed to write parse error response");
-                    }
-                    if let Err(e) = writer.write_all(b"\n").await {
-                        tracing::warn!(error = %e, "Failed to write newline");
-                    }
-                    if let Err(e) = writer.flush().await {
-                        tracing::warn!(error = %e, "Failed to flush writer");
-                    }
-                }
+                write_json_line(&mut writer, &response).await;
             }
         }
     }

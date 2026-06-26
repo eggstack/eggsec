@@ -1,5 +1,5 @@
 use crate::app::tab_error::TabError;
-use crate::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
+use crate::components::{InputField, InputGroup, ScrollableText, Selector};
 use crate::tabs::core::render_input_fields;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
@@ -7,7 +7,6 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -261,15 +260,7 @@ impl TabState for ClusterTab {
 impl TabRender for ClusterTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         if let Some(ref error) = self.error {
-            let msg = error.message();
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .title("Cluster - Error")
-                .border_style(Style::default().fg(tc!(error)));
-            let paragraph = Paragraph::new(msg)
-                .style(Style::default().fg(tc!(error)))
-                .block(block);
-            f.render_widget(paragraph, area);
+            crate::tabs::core::render_error_block(f, area, "Cluster - Error", error);
             return;
         }
 
@@ -290,20 +281,17 @@ impl TabRender for ClusterTab {
 
         // Inputs based on current view
         let inputs_area = chunks.get(1).copied().unwrap_or(area);
-        let inputs_block = Block::default()
-            .title(match self.current_view {
-                ClusterView::Worker => " Worker Configuration ",
-                ClusterView::Coordinator => " Coordinator Configuration ",
-                ClusterView::Status => " Status Query ",
-            })
-            .borders(Borders::ALL)
-            .border_style(
-                Style::default().fg(if self.focus_area == ClusterFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
+        let title = match self.current_view {
+            ClusterView::Worker => "Worker Configuration",
+            ClusterView::Coordinator => "Coordinator Configuration",
+            ClusterView::Status => "Status Query",
+        };
+        let input_inner = crate::tabs::core::render_config_block(
+            f,
+            inputs_area,
+            title,
+            self.focus_area == ClusterFocusArea::Inputs,
+        );
 
         let current_inputs = match self.current_view {
             ClusterView::Worker => &self.worker_inputs,
@@ -319,21 +307,22 @@ impl TabRender for ClusterTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(inputs_block.inner(inputs_area));
-
-        f.render_widget(inputs_block, inputs_area);
+            .split(input_inner);
 
         render_input_fields(f, &input_chunks, current_inputs, insert_mode);
 
         // Results
         let results_area = chunks.get(2).copied().unwrap_or(area);
-        if self.results_view.is_empty() {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_area);
-        } else {
-            self.results_view.render(f, results_area, None);
-        }
+        crate::tabs::core::render_results_area(
+            f,
+            results_area,
+            &self.state,
+            &self.error,
+            &self.results_view,
+            &crate::components::ProgressGauge::new("Cluster"),
+            "Results",
+            "Results will appear here after running",
+        );
     }
 
     fn render_overlays(&self, f: &mut Frame, area: Rect) {

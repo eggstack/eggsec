@@ -98,6 +98,12 @@ impl TabStore {
     }
 }
 
+impl Default for TabStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

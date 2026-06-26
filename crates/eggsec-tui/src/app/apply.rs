@@ -258,11 +258,10 @@ impl App {
                 self.handle_delete();
                 self.needs_redraw = true;
             }
-            UiAction::Autocomplete => {
-                if self.handle_autocomplete() {
+            UiAction::Autocomplete
+                if self.handle_autocomplete() => {
                     self.needs_redraw = true;
                 }
-            }
             _ => {}
         }
     }
@@ -281,18 +280,17 @@ impl App {
         use crate::utils::Clipboard;
 
         match action {
-            UiAction::Paste(text) => {
-                if !self.has_active_task() {
+            UiAction::Paste(text)
+                if !self.has_active_task() => {
                     self.dispatcher_mut().handle_paste(&text);
                     self.needs_redraw = true;
                 }
-            }
             UiAction::Copy | UiAction::RequestCopy => {
                 self.clipboard_copy_from_tab();
                 self.needs_redraw = true;
             }
-            UiAction::RequestPaste => {
-                if !self.has_active_task() {
+            UiAction::RequestPaste
+                if !self.has_active_task() => {
                     if let Some(text) = Clipboard::get() {
                         self.dispatcher_mut().handle_paste(&text);
                     } else {
@@ -300,7 +298,6 @@ impl App {
                     }
                     self.needs_redraw = true;
                 }
-            }
             _ => {}
         }
     }
@@ -348,8 +345,8 @@ impl App {
 
     pub(crate) fn apply_confirm_action(&mut self, action: UiAction) {
         match action {
-            UiAction::ResetCurrent => {
-                if !self.has_active_task() {
+            UiAction::ResetCurrent
+                if !self.has_active_task() => {
                     if self.current_tab == Tab::History {
                         self.request_confirmation(PendingAction::ClearHistory);
                     } else {
@@ -357,31 +354,27 @@ impl App {
                     }
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::ReloadThemes => {
+            UiAction::ReloadThemes
                 if !self.has_active_task()
                     && self.current_tab == Tab::Settings
                     && self.tabs.settings.current_section == crate::tabs::SettingsSection::Theme
                     && !self.tabs.settings.theme_selector.is_open()
-                {
+                => {
                     self.spawn_theme_loader_with_reason(
                         crate::app::state::ThemeLoadReason::ManualReload,
                     );
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::SaveSettings => {
-                if !self.has_active_task() && self.current_tab == Tab::Settings {
+            UiAction::SaveSettings
+                if !self.has_active_task() && self.current_tab == Tab::Settings => {
                     self.request_confirmation(PendingAction::SaveSettings);
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::DeleteHistoryEntry => {
-                if !self.has_active_task() && self.current_tab == Tab::History {
+            UiAction::DeleteHistoryEntry
+                if !self.has_active_task() && self.current_tab == Tab::History => {
                     self.request_confirmation(PendingAction::DeleteHistoryEntry);
                     self.needs_redraw = true;
                 }
-            }
             UiAction::ConfirmPendingAction => {
                 if self.overlay.confirm_button_index == 0 {
                     self.confirm_action();
@@ -600,52 +593,45 @@ impl App {
 
     pub(crate) fn apply_overlay_content_action(&mut self, action: UiAction) {
         match action {
-            UiAction::SearchQueryChar(c) => {
-                if self.is_search_visible() {
+            UiAction::SearchQueryChar(c)
+                if self.is_search_visible() => {
                     self.search.query.push(c);
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::SearchQueryBackspace => {
-                if self.is_search_visible() {
+            UiAction::SearchQueryBackspace
+                if self.is_search_visible() => {
                     self.search.query.pop();
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::SearchQueryClear => {
-                if self.is_search_visible() {
+            UiAction::SearchQueryClear
+                if self.is_search_visible() => {
                     self.search.query.clear();
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::SearchPerform => {
-                if self.is_search_visible() {
+            UiAction::SearchPerform
+                if self.is_search_visible() => {
                     self.perform_search();
                     self.needs_redraw = true;
                 }
-            }
             UiAction::HelpScrollUp => self.scroll_help_overlay(-1),
             UiAction::HelpScrollDown => self.scroll_help_overlay(1),
             UiAction::HelpScrollPageUp => self.scroll_help_overlay(-10),
             UiAction::HelpScrollPageDown => self.scroll_help_overlay(10),
-            UiAction::HelpScrollTop => {
-                if self.is_help_visible() {
+            UiAction::HelpScrollTop
+                if self.is_help_visible() => {
                     self.overlay.help_scroll_offset = 0;
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::HelpScrollBottom => {
-                if self.is_help_visible() {
+            UiAction::HelpScrollBottom
+                if self.is_help_visible() => {
                     self.overlay.help_scroll_offset = u16::MAX as usize;
                     self.needs_redraw = true;
                 }
-            }
-            UiAction::HttpOptionsClose => {
-                if self.is_http_options_visible() {
+            UiAction::HttpOptionsClose
+                if self.is_http_options_visible() => {
                     self.overlay.show_http_options = false;
                     self.needs_redraw = true;
                 }
-            }
             _ => {}
         }
     }

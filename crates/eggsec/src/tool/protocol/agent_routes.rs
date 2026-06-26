@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
     routing::delete,
     routing::get,
     routing::post,
@@ -9,9 +9,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
-use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
+use super::auth::validate_api_key;
 use crate::tool::agents::{
     AgentInfo, AgentRegistry, AgentStatus, ScheduledTask, TaskPriority, TaskScheduler, TaskStatus,
 };
@@ -238,6 +238,38 @@ fn sanitize_error_message(msg: &str) -> String {
         .collect()
 }
 
+fn priority_to_str(p: TaskPriority) -> &'static str {
+    match p {
+        TaskPriority::Critical => "critical",
+        TaskPriority::High => "high",
+        TaskPriority::Normal => "normal",
+        TaskPriority::Low => "low",
+    }
+}
+
+fn parse_priority(s: Option<&str>) -> TaskPriority {
+    match s {
+        Some("critical") => TaskPriority::Critical,
+        Some("high") => TaskPriority::High,
+        Some("low") => TaskPriority::Low,
+        _ => TaskPriority::Normal,
+    }
+}
+
+fn status_to_str(s: TaskStatus) -> &'static str {
+    match s {
+        TaskStatus::Pending => "pending",
+        TaskStatus::Leased => "leased",
+        TaskStatus::Completed => "completed",
+        TaskStatus::Failed => "failed",
+        TaskStatus::Cancelled => "cancelled",
+    }
+}
+
+fn require_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), String> {
+    validate_api_key(api_key, headers).map_err(|e| e.to_string())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RegisterAgentRequest {
     pub name: String,
@@ -335,20 +367,12 @@ async fn unregister_agent(
     State(state): State<AgentState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
+) -> Result<StatusCode, (StatusCode, String)> {
     if let Err(e) = require_auth(&state.api_key, &headers) {
         return Err((StatusCode::UNAUTHORIZED, e));
     }
     state.registry.unregister(id).await;
-    Ok(Response::builder()
-        .status(StatusCode::NO_CONTENT)
-        .body("".to_string())
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(StatusCode::NO_CONTENT)
-                .body("".to_string())
-                .unwrap()
-        }))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Debug, Serialize)]
@@ -408,12 +432,7 @@ async fn create_task(
     if let Err(e) = validate_payload_size(&req.payload, MAX_TASK_PAYLOAD_BYTES) {
         return Err((StatusCode::BAD_REQUEST, e));
     }
-    let priority = match req.priority.as_deref() {
-        Some("critical") => TaskPriority::Critical,
-        Some("high") => TaskPriority::High,
-        Some("low") => TaskPriority::Low,
-        _ => TaskPriority::Normal,
-    };
+    let priority = parse_priority(req.priority.as_deref());
 
     let scheduler = state.scheduler.clone();
     let mut task = scheduler.create_task(req.task_type.clone(), req.payload.clone());
@@ -422,12 +441,7 @@ async fn create_task(
         task.assigned_agent_id = Some(agent_id);
     }
     let task_id = task.id;
-    let priority_str = match task.priority {
-        TaskPriority::Critical => "critical",
-        TaskPriority::High => "high",
-        TaskPriority::Normal => "normal",
-        TaskPriority::Low => "low",
-    };
+    let priority_str = priority_to_str(task.priority);
     scheduler.schedule(task).await;
 
     Ok(Json(CreateTaskResponse {
@@ -465,29 +479,14 @@ async fn list_tasks(
     let tasks_raw = state.scheduler.list_all_tasks().await;
     let tasks: Vec<TaskInfo> = tasks_raw
         .iter()
-        .map(|t| {
-            let priority_str = match t.priority {
-                TaskPriority::Critical => "critical",
-                TaskPriority::High => "high",
-                TaskPriority::Normal => "normal",
-                TaskPriority::Low => "low",
-            };
-            let status_str = match t.status {
-                TaskStatus::Pending => "pending",
-                TaskStatus::Leased => "leased",
-                TaskStatus::Completed => "completed",
-                TaskStatus::Failed => "failed",
-                TaskStatus::Cancelled => "cancelled",
-            };
-            TaskInfo {
-                id: t.id,
-                task_type: t.task_type.clone(),
-                priority: priority_str.to_string(),
-                status: status_str.to_string(),
-                retry_count: t.retry_count,
-                created_at: t.created_at,
-                assigned_agent_id: t.assigned_agent_id,
-            }
+        .map(|t| TaskInfo {
+            id: t.id,
+            task_type: t.task_type.clone(),
+            priority: priority_to_str(t.priority).to_string(),
+            status: status_to_str(t.status).to_string(),
+            retry_count: t.retry_count,
+            created_at: t.created_at,
+            assigned_agent_id: t.assigned_agent_id,
         })
         .collect();
     let total = tasks.len();
@@ -513,25 +512,12 @@ pub struct TaskDetail {
 
 impl From<&ScheduledTask> for TaskDetail {
     fn from(t: &ScheduledTask) -> Self {
-        let priority_str = match t.priority {
-            TaskPriority::Critical => "critical",
-            TaskPriority::High => "high",
-            TaskPriority::Normal => "normal",
-            TaskPriority::Low => "low",
-        };
-        let status_str = match t.status {
-            TaskStatus::Pending => "pending",
-            TaskStatus::Leased => "leased",
-            TaskStatus::Completed => "completed",
-            TaskStatus::Failed => "failed",
-            TaskStatus::Cancelled => "cancelled",
-        };
         TaskDetail {
             id: t.id,
             task_type: t.task_type.clone(),
             payload: t.payload.clone(),
-            priority: priority_str.to_string(),
-            status: status_str.to_string(),
+            priority: priority_to_str(t.priority).to_string(),
+            status: status_to_str(t.status).to_string(),
             retry_count: t.retry_count,
             created_at: t.created_at,
             updated_at: t.updated_at,
@@ -746,33 +732,6 @@ pub struct AgentState {
     pub api_key: Option<String>,
 }
 
-fn extract_api_token(headers: &HeaderMap) -> Option<String> {
-    if let Some(val) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
-        return Some(val.to_string());
-    }
-    if let Some(val) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
-        let trimmed = val.trim();
-        if let Some(token) = trimmed.strip_prefix("Bearer ") {
-            let token = token.trim();
-            if !token.is_empty() {
-                return Some(token.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn require_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), String> {
-    if let Some(ref key) = api_key {
-        match extract_api_token(headers) {
-            Some(ref token) if bool::from(key.as_bytes().ct_eq(token.as_bytes())) => Ok(()),
-            _ => Err("Invalid or missing API key".to_string()),
-        }
-    } else {
-        Ok(())
-    }
-}
-
 pub fn router(
     registry: AgentRegistry,
     scheduler: TaskScheduler,
@@ -802,6 +761,7 @@ pub fn router(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::auth::extract_api_token;
 
     fn make_agent(name: &str, caps: Vec<String>) -> AgentInfo {
         AgentInfo {

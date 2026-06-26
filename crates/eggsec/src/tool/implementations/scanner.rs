@@ -242,7 +242,7 @@ impl SecurityTool for ScannerTool {
         let findings_count = findings.len();
 
         let completed_at = Utc::now();
-        let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
+        let duration_ms = (completed_at - started_at).num_milliseconds().max(0) as u64;
 
         Ok(ToolResponse {
             request_id: request.id,

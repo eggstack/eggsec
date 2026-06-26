@@ -9,6 +9,7 @@ use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 
 /// Overlay UI state (help, HTTP options, search, confirm popup, policy confirmation, notifications)
+#[derive(Default)]
 pub struct OverlayState {
     pub show_help: bool,
     pub help_tab: Option<Tab>,
@@ -22,22 +23,6 @@ pub struct OverlayState {
     pub help_scroll_offset: usize,
     /// Active button index in confirm popup (0=Yes, 1=No).
     pub confirm_button_index: usize,
-}
-
-impl Default for OverlayState {
-    fn default() -> Self {
-        Self {
-            show_help: false,
-            help_tab: None,
-            show_http_options: false,
-            show_search: false,
-            pending_action: None,
-            pending_policy: None,
-            notification: None,
-            help_scroll_offset: 0,
-            confirm_button_index: 0,
-        }
-    }
 }
 
 /// Search UI state
@@ -60,23 +45,15 @@ impl Default for SearchState {
 }
 
 /// Quick switch (Ctrl+X tab search) state
+#[derive(Default)]
 pub struct QuickSwitchState {
     pub visible: bool,
     pub query: String,
     pub selected: usize,
 }
 
-impl Default for QuickSwitchState {
-    fn default() -> Self {
-        Self {
-            visible: false,
-            query: String::new(),
-            selected: 0,
-        }
-    }
-}
-
 /// Task runtime state
+#[derive(Default)]
 pub struct TaskState {
     pub handle: Option<tokio::task::JoinHandle<()>>,
     pub inner_abort: Option<tokio::task::AbortHandle>,
@@ -85,20 +62,6 @@ pub struct TaskState {
     pub result_rx: Option<tokio::sync::mpsc::Receiver<crate::workers::TaskResult>>,
     pub paused: bool,
     pub started_at: Option<std::time::Instant>,
-}
-
-impl Default for TaskState {
-    fn default() -> Self {
-        Self {
-            handle: None,
-            inner_abort: None,
-            tab: None,
-            progress_rx: None,
-            result_rx: None,
-            paused: false,
-            started_at: None,
-        }
-    }
 }
 
 /// Why a theme load was triggered.

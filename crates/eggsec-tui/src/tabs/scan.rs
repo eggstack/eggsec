@@ -303,7 +303,7 @@ impl TabRender for ScanTab {
             .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
-        let Some(config_area) = chunks.get(0) else { return; };
+        let Some(config_area) = chunks.first() else { return; };
         let Some(main_area) = chunks.get(1) else { return; };
 
         let input_inner = crate::tabs::core::render_config_block(

@@ -2,6 +2,8 @@
 pub mod agent_routes;
 #[cfg(feature = "rest-api")]
 pub mod ai_routes;
+#[cfg(feature = "rest-api")]
+pub mod auth;
 #[cfg(feature = "grpc-api")]
 pub mod grpc;
 #[cfg(feature = "rest-api")]

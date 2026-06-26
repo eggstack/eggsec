@@ -2,13 +2,13 @@ use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputField, Selector, SelectorItem};
 use crate::tabs::core::TabCore;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::tc;
+use crate::{tab_input_custom, tab_state_boilerplate, tc};
 use eggsec::vuln::{
     AssetCriticality, CvssScore, ExploitInfo, PrioritizedFinding, Remediation, TriageResult,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -299,9 +299,7 @@ impl Default for VulnTab {
 }
 
 impl TabState for VulnTab {
-    fn state(&self) -> AppState {
-        self.core.state.clone()
-    }
+    tab_state_boilerplate!(VulnTab, core: core);
 
     fn progress(&self) -> f64 {
         0.0
@@ -318,10 +316,6 @@ impl TabState for VulnTab {
         self.core.inputs.blur();
         self.focus_area = VulnFocusArea::Mode;
         self.current_mode = VulnMode::CvssCalc;
-    }
-
-    fn set_error(&mut self, error: TabError) {
-        crate::tabs::core::tab_state_set_error(&mut self.core, error);
     }
 }
 
@@ -357,28 +351,21 @@ impl TabRender for VulnTab {
             return;
         };
 
-        let config_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area != VulnFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        f.render_widget(config_block, *input_area);
-
-        let input_area = config_block.inner(*input_area);
+        let input_inner = crate::tabs::core::render_config_block(
+            f,
+            *input_area,
+            "Configuration",
+            self.focus_area != VulnFocusArea::Results,
+        );
 
         let mut sel = self.mode_selector.clone();
         sel.focused = self.focus_area == VulnFocusArea::Mode;
-        sel.render(f, input_area);
+        sel.render(f, input_inner);
 
         let fields_area = Rect {
-            y: input_area.y + 3,
-            height: input_area.height.saturating_sub(3),
-            ..input_area
+            y: input_inner.y + 3,
+            height: input_inner.height.saturating_sub(3),
+            ..input_inner
         };
 
         let field_indices: Vec<usize> = match self.current_mode {
@@ -431,6 +418,14 @@ impl TabRender for VulnTab {
 }
 
 impl TabInput for VulnTab {
+    tab_input_custom!(
+        VulnTab,
+        core: core,
+        focus: focus_area,
+        Inputs: VulnFocusArea::Inputs,
+        Results: VulnFocusArea::Results
+    );
+
     fn handle_focus_next(&mut self) {
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
@@ -465,69 +460,6 @@ impl TabInput for VulnTab {
                 VulnFocusArea::Inputs
             }
         };
-    }
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.get_focused_value()
-        } else if self.focus_area == VulnFocusArea::Results {
-            Some(self.core.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.move_word_forward();
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == VulnFocusArea::Inputs {
-                self.core.inputs.move_home();
-            } else if self.focus_area == VulnFocusArea::Results {
-                self.core.results_view.scroll_to_top();
-            }
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == VulnFocusArea::Inputs {
-                self.core.inputs.move_end();
-            } else if self.focus_area == VulnFocusArea::Results {
-                self.core.results_view.scroll_to_bottom();
-            }
-        }
     }
 
     fn handle_top(&mut self) {
@@ -605,39 +537,12 @@ impl TabInput for VulnTab {
         }
     }
 
-    fn handle_left(&mut self) -> bool {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.move_left()
-        } else {
-            false
-        }
-    }
-
-    fn handle_right(&mut self) -> bool {
-        if !self.is_running() && self.focus_area == VulnFocusArea::Inputs {
-            self.core.inputs.move_right()
-        } else {
-            false
-        }
-    }
-
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
             }
-            VulnFocusArea::Inputs => {
-                if let Some(idx) = self.core.inputs.focused {
-                    self.core
-                        .inputs
-                        .fields
-                        .get(idx)
-                        .map(|f| f.cursor_pos == 0)
-                        .unwrap_or(true)
-                } else {
-                    true
-                }
-            }
+            VulnFocusArea::Inputs => self.core.inputs.is_at_left_edge(),
             _ => true,
         }
     }
@@ -649,37 +554,8 @@ impl TabInput for VulnTab {
                     || self.mode_selector.selected
                         >= self.mode_selector.items.len().saturating_sub(1)
             }
-            VulnFocusArea::Inputs => {
-                if let Some(idx) = self.core.inputs.focused {
-                    self.core
-                        .inputs
-                        .fields
-                        .get(idx)
-                        .map(|f| f.cursor_pos >= f.value.len())
-                        .unwrap_or(true)
-                } else {
-                    true
-                }
-            }
+            VulnFocusArea::Inputs => self.core.inputs.is_at_right_edge(),
             _ => true,
         }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == VulnFocusArea::Inputs && self.core.inputs.is_focused()
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.core.results_view.page_up(page_size);
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.core.results_view.page_down(page_size);
     }
 }

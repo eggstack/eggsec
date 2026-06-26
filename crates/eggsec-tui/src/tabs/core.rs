@@ -1039,6 +1039,37 @@ pub fn handle_down_selector<A: Copy + PartialEq>(
     }
 }
 
+// --- Dynamic layout helpers ---
+
+/// Computes a dynamic input height based on terminal size, using a ratio of the
+/// available height. Returns `(input_height, results_min_height)`.
+///
+/// Consolidates the repeated `if area.height < 24 { ... }` pattern found across
+/// multiple tab render methods.
+///
+/// # Arguments
+/// * `area_height` - The total available height
+/// * `ratio` - The fraction of `area_height` to allocate to inputs (0.0 - 1.0)
+/// * `min_input` - Minimum input height (clamped)
+/// * `max_input` - Maximum input height (clamped)
+/// * `default_input` - Default input height when terminal is tall enough
+/// * `min_results` - Minimum results area height
+pub fn dynamic_layout_height(
+    area_height: u16,
+    ratio: f32,
+    min_input: u16,
+    max_input: u16,
+    default_input: u16,
+    min_results: u16,
+) -> (u16, u16) {
+    if area_height < default_input + min_results + 4 {
+        let h = ((area_height as f32 * ratio) as u16).clamp(min_input, max_input);
+        (h, min_results)
+    } else {
+        (default_input, min_results)
+    }
+}
+
 // --- Focus-aware styling helpers ---
 
 /// Returns a border `Style` that uses `border_focused` when `focused` is true,
@@ -2052,6 +2083,7 @@ mod tests {
     #[test]
     fn handle_up_3area_delegates_to_2area() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[allow(dead_code)]
         enum Area { Inputs, Options, Results }
 
         let mut core3 = TabCore::new("test", "Results").with_inputs(
@@ -2077,6 +2109,7 @@ mod tests {
     #[test]
     fn handle_down_3area_delegates_to_2area() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[allow(dead_code)]
         enum Area { Inputs, Options, Results }
 
         let mut core3 = TabCore::new("test", "Results").with_inputs(
@@ -2585,7 +2618,7 @@ mod tests {
     }
 
     #[test]
-    fn render_input_fields_emptyInputGroup() {
+    fn render_input_fields_empty_input_group() {
         use ratatui::backend::TestBackend;
         use ratatui::Terminal;
 

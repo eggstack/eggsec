@@ -688,12 +688,13 @@ mod tests {
 
         app.request_confirmation(PendingAction::ResetTab);
 
+        // Right arrow IS bound in ConfirmPopup (toggles button), but does NOT
+        // navigate tabs or close the popup.
         let actions =
             handler.decode_key_event(&mut app, &KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-        // Confirm popup swallows nav keys as Noop (overlay handled)
-        assert_eq!(actions, vec![UiAction::Noop]);
+        assert_eq!(actions, vec![UiAction::ConfirmButtonToggle]);
 
-        // State should be unchanged
+        // State should be unchanged (no tab navigation, popup still visible)
         assert_eq!(app.current_tab, initial_tab);
         assert!(app.is_confirm_popup_visible());
     }

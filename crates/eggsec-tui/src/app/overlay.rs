@@ -430,8 +430,8 @@ mod tests {
         let mut app = create_test_app();
         app.request_confirmation(PendingAction::ResetTab);
 
-        // Right arrow is unbound for ConfirmPopup
-        let key = KeyEvent::new(KeyCode::Right, KeyModifiers::NONE);
+        // Tab is unbound for ConfirmPopup (Enter/Esc/y/n/Left/Right are bound)
+        let key = KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE);
         let actions = OverlayController::new().decode(&app, &key);
         assert_eq!(actions, vec![UiAction::Noop]);
     }

@@ -88,7 +88,7 @@ impl SecurityTool for LoadTestTool {
             .map_err(|e| crate::error::EggsecError::Runtime(format!("Load test failed: {}", e)))?;
 
         let completed_at = Utc::now();
-        let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
+        let duration_ms = (completed_at - started_at).num_milliseconds().max(0) as u64;
 
         let results_json = serde_json::to_value(&results)
             .unwrap_or_else(|e| {

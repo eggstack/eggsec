@@ -7,6 +7,7 @@ use crate::Tab;
 /// Context for help content rendering. Currently only `Normal` is used;
 /// reserved for future use (e.g. context-sensitive help for different modes).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum HelpContext {
     Normal,
 }
@@ -181,14 +182,12 @@ pub struct HelpContent {
 
 pub struct HelpManager {
     pub content: HelpContent,
-    pub current_context: HelpContext,
 }
 
 impl HelpManager {
     pub fn new() -> Self {
         Self {
             content: HelpContent::default(),
-            current_context: HelpContext::Normal,
         }
     }
 

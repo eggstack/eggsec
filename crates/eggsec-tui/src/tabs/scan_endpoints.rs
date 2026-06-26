@@ -4,7 +4,7 @@ use crate::tabs::core::{
     field_as, render_input_fields, render_results_area, start_scan, StandardFocusArea, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_escape_3area, tab_input_3area, tab_state_boilerplate, tc};
+use crate::{tab_escape, tab_input_3area, tab_state_boilerplate, tc};
 use eggsec::scanner::endpoints::EndpointScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -300,7 +300,7 @@ impl TabInput for ScanEndpointsTab {
         }
     }
 
-    tab_escape_3area!(ScanEndpointsTab, core: core, focus: focus_area, Inputs: StandardFocusArea::Inputs, Options: StandardFocusArea::Options, Results: StandardFocusArea::Results);
+    tab_escape!(ScanEndpointsTab, core: core, focus: focus_area, strategy: three_area, Inputs: StandardFocusArea::Inputs, Options: StandardFocusArea::Options, Results: StandardFocusArea::Results);
 }
 
 #[cfg(test)]

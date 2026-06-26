@@ -341,7 +341,7 @@ impl TabRender for WafTab {
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
                 .split(results_area);
 
-            self.detection_view.render(f, *results_chunks.get(0).unwrap_or(&results_area), None);
+            self.detection_view.render(f, *results_chunks.first().unwrap_or(&results_area), None);
             self.bypass_view.render(f, *results_chunks.get(1).unwrap_or(&results_area), None);
         } else {
             let placeholder =

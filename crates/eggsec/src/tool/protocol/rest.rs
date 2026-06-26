@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use subtle::ConstantTimeEq;
 use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 
+use super::auth::validate_api_key;
 use crate::config::Scope;
 use crate::distributed::TlsConfig;
 use crate::error::EggsecError;
@@ -293,21 +293,7 @@ pub fn create_router(
 }
 
 fn require_auth(state: &Arc<RestState>, headers: &HeaderMap) -> Result<(), EggsecError> {
-    if let Some(ref key) = state.api_key {
-        let auth = headers
-            .get("authorization")
-            .or_else(|| headers.get("x-api-key"))
-            .and_then(|v| v.to_str().ok());
-
-        match auth {
-            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
-            _ => Err(EggsecError::Config(
-                "Invalid or missing API key".to_string(),
-            )),
-        }
-    } else {
-        Ok(())
-    }
+    validate_api_key(&state.api_key, headers).map_err(|e| EggsecError::Config(e.to_string()))
 }
 
 pub fn generate_correlation_id() -> String {
@@ -328,7 +314,6 @@ fn validate_target(target: &str) -> Result<(), EggsecError> {
         && !target.starts_with("https://")
         && !target.contains('.')
         && !target.contains(':')
-        && !target.starts_with("http%3A")
     {
         return Err(EggsecError::Config(
             "Invalid target format. Expected URL, domain, IP, or CIDR".to_string(),
@@ -354,14 +339,9 @@ async fn health_check(
     State(state): State<Arc<RestState>>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EggsecError> {
-    if state.api_key.is_some() {
-        if let Err(e) = require_auth(&state, &headers) {
-            return Err(EggsecError::Config(e.to_string()));
-        }
+    if let Err(e) = require_auth(&state, &headers) {
+        return Err(e);
     }
-
-    let start = Instant::now();
-    state.metrics.record_request(start.elapsed(), false);
 
     Ok(Json(serde_json::json!({
         "status": "healthy",
@@ -374,16 +354,11 @@ async fn metrics_endpoint(
     State(state): State<Arc<RestState>>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, EggsecError> {
-    if state.api_key.is_some() {
-        if let Err(e) = require_auth(&state, &headers) {
-            return Err(EggsecError::Config(e.to_string()));
-        }
+    if let Err(e) = require_auth(&state, &headers) {
+        return Err(e);
     }
 
-    let start = Instant::now();
     let metrics = state.metrics.get_metrics();
-    state.metrics.record_request(start.elapsed(), false);
-
     Ok(Json(metrics))
 }
 
@@ -516,25 +491,31 @@ async fn get_tool(
         return Err(EggsecError::Config(e.to_string()));
     }
 
-    let tools = state.registry.list();
-    let info = tools.into_iter().find(|t| t.id == tool_id).ok_or_else(|| {
-        state.metrics.record_request(start.elapsed(), true);
-        EggsecError::Config(format!("Tool '{}' not found", tool_id))
-    })?;
+    let tool = state
+        .registry
+        .get(&tool_id)
+        .ok_or_else(|| {
+            state.metrics.record_request(start.elapsed(), true);
+            EggsecError::Config(format!("Tool '{}' not found", tool_id))
+        })?;
 
     state.metrics.record_request(start.elapsed(), false);
 
     Ok(Json(ToolDetailResponse {
-        id: info.id,
-        name: info.name,
-        category: info.category.to_string(),
-        description: info.description,
-        capabilities: info
-            .capabilities
+        id: tool_id,
+        name: tool.name().to_string(),
+        category: tool.category().to_string(),
+        description: tool.description().to_string(),
+        capabilities: tool
+            .capabilities()
             .iter()
             .map(|c| serde_json::to_value(c).unwrap_or_default())
             .collect(),
-        protocols: info.protocols,
+        protocols: tool
+            .supported_protocols()
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
     }))
 }
 

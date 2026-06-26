@@ -350,7 +350,7 @@ impl TabRender for ReconTab {
         if visible_rows > 0 {
             let row_offset = self.options_window_start(visible_rows);
             let row_constraints = vec![Constraint::Length(1); visible_rows];
-            let Some(left_chunk) = option_chunks.get(0) else { return; };
+            let Some(left_chunk) = option_chunks.first() else { return; };
             let Some(right_chunk) = option_chunks.get(1) else { return; };
             let left_options = Layout::default()
                 .direction(Direction::Vertical)

@@ -3,7 +3,7 @@ use crate::tabs::core::{
     render_config_block, render_input_fields, render_results_area, StandardFocusArea2, TabCore,
 };
 use crate::tabs::{TabInput, TabRender, TabState};
-use crate::{tab_escape_2area, tab_input_boilerplate, tab_state_boilerplate};
+use crate::{tab_escape, tab_input_2area, tab_state_boilerplate};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     Frame,
@@ -133,50 +133,14 @@ impl TabRender for WafStressTab {
 }
 
 impl TabInput for WafStressTab {
-    tab_input_boilerplate!(
+    tab_input_2area!(
         WafStressTab,
         core: core,
         focus: focus_area,
         Inputs: StandardFocusArea2::Inputs,
         Results: StandardFocusArea2::Results
     );
-    tab_escape_2area!(WafStressTab, core: core, focus: focus_area, Inputs: StandardFocusArea2::Inputs);
-
-    fn handle_focus_next(&mut self) {
-        self.focus_area = crate::tabs::core::focus_next_2area(
-            &mut self.core,
-            self.focus_area,
-            StandardFocusArea2::Inputs,
-            StandardFocusArea2::Results,
-        );
-    }
-
-    fn handle_focus_prev(&mut self) {
-        self.focus_area = crate::tabs::core::focus_prev_2area(
-            &mut self.core,
-            self.focus_area,
-            StandardFocusArea2::Inputs,
-            StandardFocusArea2::Results,
-        );
-    }
-
-    fn handle_char(&mut self, c: char) {
-        let running = self.is_running();
-        let inputs = self.focus_area == StandardFocusArea2::Inputs;
-        crate::tabs::core::tab_input_char(&mut self.core, c, running, inputs);
-    }
-
-    fn handle_backspace(&mut self) {
-        let running = self.is_running();
-        let inputs = self.focus_area == StandardFocusArea2::Inputs;
-        crate::tabs::core::tab_input_backspace(&mut self.core, running, inputs);
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        let running = self.is_running();
-        let inputs = self.focus_area == StandardFocusArea2::Inputs;
-        crate::tabs::core::tab_input_paste(&mut self.core, text, running, inputs);
-    }
+    tab_escape!(WafStressTab, core: core, focus: focus_area, strategy: simple, Inputs: StandardFocusArea2::Inputs);
 
     fn handle_enter(&mut self) {
         let running = self.is_running();
@@ -190,64 +154,120 @@ impl TabInput for WafStressTab {
             inputs_focused,
         );
     }
+}
 
-    fn handle_up(&mut self) {
-        if self.focus_area == StandardFocusArea2::Results {
-            self.core.scroll_results_up();
-        } else if self.focus_area == StandardFocusArea2::Inputs {
-            self.core.inputs.focus_prev();
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tabs::{AppState, TabInput, TabState};
+
+    #[test]
+    fn waf_stress_new_has_correct_fields() {
+        let tab = WafStressTab::new();
+        assert_eq!(tab.core.inputs.fields.len(), 3);
+        assert_eq!(tab.core.inputs.fields[0].label, "Target URL");
+        assert_eq!(tab.core.inputs.fields[1].label, "Concurrency");
+        assert_eq!(tab.core.inputs.fields[2].label, "Timeout (s)");
+        assert_eq!(tab.core.target(), "");
+        assert!(!tab.is_running());
     }
 
-    fn handle_down(&mut self) {
-        if self.focus_area == StandardFocusArea2::Results {
-            self.core.scroll_results_down();
-        } else if self.focus_area == StandardFocusArea2::Inputs {
-            self.core.inputs.focus_next();
-        }
+    #[test]
+    fn waf_stress_target_accessor() {
+        let mut tab = WafStressTab::new();
+        tab.core.inputs.fields[0].value = "https://example.com".to_string();
+        assert_eq!(tab.target(), "https://example.com");
     }
 
-    fn handle_left(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        if self.focus_area == StandardFocusArea2::Inputs {
-            self.core.inputs.move_left()
-        } else {
-            self.core.results_view.scroll_left(5);
-            true
-        }
+    #[test]
+    fn waf_stress_concurrency_parses() {
+        let tab = WafStressTab::new();
+        assert_eq!(tab.concurrency(), 20);
     }
 
-    fn handle_right(&mut self) -> bool {
-        if self.is_running() {
-            return false;
-        }
-        if self.focus_area == StandardFocusArea2::Inputs {
-            self.core.inputs.move_right()
-        } else {
-            self.core.results_view.scroll_right(5);
-            true
-        }
+    #[test]
+    fn waf_stress_timeout_parses() {
+        let tab = WafStressTab::new();
+        assert_eq!(tab.timeout(), 10);
     }
 
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == StandardFocusArea2::Inputs && self.core.inputs.is_focused()
+    #[test]
+    fn waf_stress_enter_starts_with_target() {
+        let mut tab = WafStressTab::new();
+        tab.core.inputs.fields[0].value = "https://example.com".to_string();
+        tab.handle_enter();
+        assert!(tab.is_running());
     }
 
-    fn is_at_left_edge(&self) -> bool {
-        if self.focus_area == StandardFocusArea2::Inputs {
-            self.core.inputs.is_at_left_edge()
-        } else {
-            self.core.results_view.is_at_left_edge()
-        }
+    #[test]
+    fn waf_stress_enter_no_start_without_target() {
+        let mut tab = WafStressTab::new();
+        tab.handle_enter();
+        assert!(!tab.is_running());
     }
 
-    fn is_at_right_edge(&self) -> bool {
-        if self.focus_area == StandardFocusArea2::Inputs {
-            self.core.inputs.is_at_right_edge()
-        } else {
-            self.core.results_view.is_at_right_edge()
-        }
+    #[test]
+    fn waf_stress_enter_results_no_op() {
+        let mut tab = WafStressTab::new();
+        tab.focus_area = StandardFocusArea2::Results;
+        tab.handle_enter();
+        assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn waf_stress_escape_returns_to_inputs() {
+        let mut tab = WafStressTab::new();
+        tab.focus_area = StandardFocusArea2::Results;
+        tab.handle_escape();
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
+    }
+
+    #[test]
+    fn waf_stress_focus_navigation() {
+        let mut tab = WafStressTab::new();
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, StandardFocusArea2::Results);
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, StandardFocusArea2::Results);
+    }
+
+    #[test]
+    fn waf_stress_reset_restores_defaults() {
+        let mut tab = WafStressTab::new();
+        tab.core.inputs.fields[0].value = "changed".to_string();
+        tab.core.state = AppState::Running;
+        tab.focus_area = StandardFocusArea2::Results;
+        tab.reset();
+        assert_eq!(tab.core.target(), "");
+        assert_eq!(tab.core.state, AppState::Idle);
+        assert_eq!(tab.focus_area, StandardFocusArea2::Inputs);
+        assert_eq!(tab.core.inputs.fields[1].value, "20");
+        assert_eq!(tab.core.inputs.fields[2].value, "10");
+    }
+
+    #[test]
+    fn waf_stress_primary_target() {
+        let mut tab = WafStressTab::new();
+        tab.core.inputs.fields[0].value = "https://example.com".to_string();
+        assert_eq!(tab.primary_target(), Some("https://example.com".to_string()));
+    }
+
+    #[test]
+    fn waf_stress_copy_results() {
+        let mut tab = WafStressTab::new();
+        tab.focus_area = StandardFocusArea2::Results;
+        // Empty results returns Some("") (macro default behavior)
+        let copied = tab.handle_copy();
+        assert!(copied.is_some());
+        assert!(copied.unwrap().is_empty());
+
+        // With content, copy returns the content
+        tab.core.results_view.add_line(ratatui::text::Line::from("test"));
+        let copied = tab.handle_copy();
+        assert!(copied.is_some());
+        assert!(copied.unwrap().contains("test"));
     }
 }

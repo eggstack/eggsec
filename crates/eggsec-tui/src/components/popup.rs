@@ -89,6 +89,33 @@ impl Popup {
         self.buttons.get(self.active_button).map(|s| s.as_str())
     }
 
+    #[allow(dead_code)] // used in tests
+    pub fn scroll_down(&mut self, amount: usize) {
+        if self.content.is_empty() {
+            return;
+        }
+        let max_scroll = self.content.len().saturating_sub(1);
+        self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
+    }
+
+    #[allow(dead_code)] // used in tests
+    pub fn scroll_up(&mut self, amount: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(amount);
+    }
+
+    #[allow(dead_code)] // used in tests
+    pub fn scroll_to_bottom(&mut self) {
+        if self.content.is_empty() {
+            return;
+        }
+        self.scroll_offset = self.content.len().saturating_sub(1);
+    }
+
+    #[allow(dead_code)] // used in tests
+    pub fn scroll_to_top(&mut self) {
+        self.scroll_offset = 0;
+    }
+
     pub fn render(&self, f: &mut Frame, area: Rect) {
         let theme = crate::theme::legacy::current_theme();
         self.render_with_theme(f, area, &theme);

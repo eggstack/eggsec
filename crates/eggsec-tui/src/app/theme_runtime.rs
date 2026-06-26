@@ -169,13 +169,12 @@ impl super::App {
                         contrast_cache.insert(info.id.clone(), warnings);
                     }
                 }
-                crate::theme::manager::ThemeLoadStatus::FallbackAdjusted => {
+                crate::theme::manager::ThemeLoadStatus::FallbackAdjusted
                     // Use the pre-adjustment warnings preserved during loading
                     // rather than re-validating the already-adjusted theme.
-                    if !info.contrast_warnings.is_empty() {
+                    if !info.contrast_warnings.is_empty() => {
                         contrast_cache.insert(info.id.clone(), info.contrast_warnings.clone());
                     }
-                }
                 _ => {}
             }
         }

@@ -169,7 +169,7 @@ impl ThreatIntelClient {
             .get("suspicious")
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
-        let score = (malicious * 10 + suspicious * 5).min(100).max(0) as i32;
+        let score = (malicious * 10 + suspicious * 5).clamp(0, 100) as i32;
 
         let mut threats = Vec::new();
         if let Some(categories) = data.get("categories").and_then(|c| c.as_object()) {
@@ -241,7 +241,7 @@ impl ThreatIntelClient {
             .get("suspicious")
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
-        let score = (malicious * 10 + suspicious * 5).min(100).max(0) as i32;
+        let score = (malicious * 10 + suspicious * 5).clamp(0, 100) as i32;
 
         let mut threats = Vec::new();
         if let Some(categories) = data.get("categories").and_then(|c| c.as_object()) {

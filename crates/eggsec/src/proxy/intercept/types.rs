@@ -205,7 +205,7 @@ impl WebProxySessionReport {
         let now = chrono::Utc::now();
         self.ended_at = now.to_rfc3339();
         if let Ok(start) = chrono::DateTime::parse_from_rfc3339(&self.started_at) {
-            self.duration_ms = (now - start.with_timezone(&chrono::Utc)).num_milliseconds() as u64;
+            self.duration_ms = (now - start.with_timezone(&chrono::Utc)).num_milliseconds().max(0) as u64;
         }
     }
 

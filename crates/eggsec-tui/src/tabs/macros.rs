@@ -427,30 +427,6 @@ macro_rules! tab_escape {
     };
 }
 
-/// Deprecated: Use `tab_escape!` with `strategy: simple` instead.
-#[macro_export]
-macro_rules! tab_escape_2area {
-    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr) => {
-        $crate::tab_escape!($tab, core: $core, focus: $focus, strategy: simple, Inputs: $inputs_variant);
-    };
-}
-
-/// Deprecated: Use `tab_escape!` with `strategy: three_area` instead.
-#[macro_export]
-macro_rules! tab_escape_3area {
-    ($tab:ty, core: $core:ident, focus: $focus:ident, Inputs: $inputs_variant:expr, Options: $options_variant:expr, Results: $results_variant:expr) => {
-        $crate::tab_escape!($tab, core: $core, focus: $focus, strategy: three_area, Inputs: $inputs_variant, Options: $options_variant, Results: $results_variant);
-    };
-}
-
-/// Deprecated: Use `tab_escape!` with `strategy: to_first` instead.
-#[macro_export]
-macro_rules! tab_escape_to_first {
-    ($tab:ty, core: $core:ident, focus: $focus:ident, $first:expr) => {
-        $crate::tab_escape!($tab, core: $core, focus: $focus, strategy: to_first, First: $first);
-    };
-}
-
 /// Macro for tabs with 2 focus areas (Inputs/Results).
 ///
 /// Generates all methods from `tab_input_boilerplate!` plus:
@@ -920,8 +896,6 @@ macro_rules! tab_input_indexed {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     checkbox_options_struct! {
         #[derive(Debug, Clone, PartialEq, Eq)]
         struct TestOptions {

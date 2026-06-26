@@ -4,7 +4,7 @@ use crate::tabs::core::{
     render_input_fields, render_results_area, start_scan, StandardFocusArea2, TabCore,
 };
 use crate::tabs::{TabInput, TabRender, TabState};
-use crate::{tab_escape_2area, tab_input_2area, tab_state_boilerplate, tc};
+use crate::{tab_escape, tab_input_2area, tab_state_boilerplate, tc};
 use eggsec::scanner::fingerprint::FingerprintResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -229,7 +229,7 @@ impl TabInput for FingerprintTab {
         }
     }
 
-    tab_escape_2area!(FingerprintTab, core: core, focus: focus_area, Inputs: StandardFocusArea2::Inputs);
+    tab_escape!(FingerprintTab, core: core, focus: focus_area, strategy: simple, Inputs: StandardFocusArea2::Inputs);
 }
 
 #[cfg(test)]

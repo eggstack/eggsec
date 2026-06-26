@@ -1,7 +1,8 @@
 use axum::{extract::State, http::HeaderMap, routing::get, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use subtle::ConstantTimeEq;
+
+use super::auth::validate_api_key;
 
 #[cfg(feature = "ai-integration")]
 use crate::ai::AiClient;
@@ -30,19 +31,23 @@ impl AiState {
 }
 
 fn require_auth(state: &Arc<AiState>, headers: &HeaderMap) -> Result<(), &'static str> {
-    if let Some(ref key) = state.api_key {
-        let auth = headers
-            .get("authorization")
-            .or_else(|| headers.get("x-api-key"))
-            .and_then(|v| v.to_str().ok());
+    validate_api_key(&state.api_key, headers)
+}
 
-        match auth {
-            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
-            _ => Err("Invalid or missing API key"),
-        }
-    } else {
-        Ok(())
-    }
+fn placeholder_sqli_payloads(vuln_type: &str) -> Vec<String> {
+    vec![
+        format!("' OR 1=1 -- (example {} payload)", vuln_type),
+        format!("\"; DROP TABLE users; -- (example {} payload)", vuln_type),
+        format!("<script>alert('xss')</script> (example {} payload)", vuln_type),
+    ]
+}
+
+fn placeholder_waf_bypass_suggestions(waf_name: &str) -> Vec<String> {
+    vec![
+        format!("Try encoding payload for {} bypass", waf_name),
+        format!("Try header manipulation technique for {}", waf_name),
+        format!("Try HTTP parameter pollution for {}", waf_name),
+    ]
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,41 +144,17 @@ async fn suggest_payloads(
     require_auth(&state, &headers)?;
 
     let context = req.context.unwrap_or_default();
-    let payloads = if let Some(ref client) = state.ai_client {
+    let (status, payloads) = if let Some(ref client) = state.ai_client {
         match client.suggest_payloads(&req.vuln_type, &context).await {
-            Ok(payloads) => payloads,
-            Err(_) => vec![
-                format!("' OR 1=1 -- (example {} payload)", req.vuln_type),
-                format!(
-                    "\"; DROP TABLE users; -- (example {} payload)",
-                    req.vuln_type
-                ),
-                format!(
-                    "<script>alert('xss')</script> (example {} payload)",
-                    req.vuln_type
-                ),
-            ],
+            Ok(payloads) => ("success".to_string(), payloads),
+            Err(_) => ("partial".to_string(), placeholder_sqli_payloads(&req.vuln_type)),
         }
     } else {
-        vec![
-            format!("' OR 1=1 -- (example {} payload)", req.vuln_type),
-            format!(
-                "\"; DROP TABLE users; -- (example {} payload)",
-                req.vuln_type
-            ),
-            format!(
-                "<script>alert('xss')</script> (example {} payload)",
-                req.vuln_type
-            ),
-        ]
+        ("placeholder".to_string(), placeholder_sqli_payloads(&req.vuln_type))
     };
 
     Ok(Json(SuggestPayloadsResponse {
-        status: if state.ai_client.is_some() {
-            "success".to_string()
-        } else {
-            "placeholder".to_string()
-        },
+        status,
         payloads,
         vuln_type: req.vuln_type,
     }))
@@ -188,17 +169,7 @@ async fn suggest_payloads(
     require_auth(&state, &headers)?;
     Ok(Json(SuggestPayloadsResponse {
         status: "placeholder".to_string(),
-        payloads: vec![
-            format!("' OR 1=1 -- (example {} payload)", req.vuln_type),
-            format!(
-                "\"; DROP TABLE users; -- (example {} payload)",
-                req.vuln_type
-            ),
-            format!(
-                "<script>alert('xss')</script> (example {} payload)",
-                req.vuln_type
-            ),
-        ],
+        payloads: placeholder_sqli_payloads(&req.vuln_type),
         vuln_type: req.vuln_type,
     }))
 }
@@ -224,32 +195,20 @@ async fn waf_bypass(
 ) -> Result<Json<WafBypassResponse>, &'static str> {
     require_auth(&state, &headers)?;
 
-    let bypasses = if let Some(ref client) = state.ai_client {
+    let (status, bypasses) = if let Some(ref client) = state.ai_client {
         match client
             .suggest_waf_bypass(&req.waf_name, &req.blocked_payload)
             .await
         {
-            Ok(bypasses) => bypasses,
-            Err(_) => vec![
-                format!("Try encoding payload for {} bypass", req.waf_name),
-                format!("Try header manipulation technique for {}", req.waf_name),
-                format!("Try HTTP parameter pollution for {}", req.waf_name),
-            ],
+            Ok(bypasses) => ("success".to_string(), bypasses),
+            Err(_) => ("partial".to_string(), placeholder_waf_bypass_suggestions(&req.waf_name)),
         }
     } else {
-        vec![
-            format!("Try encoding payload for {} bypass", req.waf_name),
-            format!("Try header manipulation technique for {}", req.waf_name),
-            format!("Try HTTP parameter pollution for {}", req.waf_name),
-        ]
+        ("placeholder".to_string(), placeholder_waf_bypass_suggestions(&req.waf_name))
     };
 
     Ok(Json(WafBypassResponse {
-        status: if state.ai_client.is_some() {
-            "success".to_string()
-        } else {
-            "placeholder".to_string()
-        },
+        status,
         bypass_suggestions: bypasses,
         waf_name: req.waf_name,
     }))
@@ -264,11 +223,7 @@ async fn waf_bypass(
     require_auth(&state, &headers)?;
     Ok(Json(WafBypassResponse {
         status: "placeholder".to_string(),
-        bypass_suggestions: vec![
-            format!("Try encoding payload for {} bypass", req.waf_name),
-            format!("Try header manipulation technique for {}", req.waf_name),
-            format!("Try HTTP parameter pollution for {}", req.waf_name),
-        ],
+        bypass_suggestions: placeholder_waf_bypass_suggestions(&req.waf_name),
         waf_name: req.waf_name,
     }))
 }

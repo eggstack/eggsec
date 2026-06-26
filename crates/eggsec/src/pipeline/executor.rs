@@ -748,7 +748,7 @@ impl Pipeline {
 
                     let body = resp.text().await.unwrap_or_default();
                     let completed_at = chrono::Utc::now();
-                    let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
+                    let duration_ms = (completed_at - started_at).num_milliseconds().max(0) as u64;
 
                     let parsed_url = url::Url::parse(&url).ok();
                     let host = parsed_url.as_ref().and_then(|u| u.host_str()).unwrap_or(&self.target).to_string();

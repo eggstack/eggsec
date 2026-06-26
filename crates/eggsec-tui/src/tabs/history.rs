@@ -516,13 +516,11 @@ impl TabInput for HistoryTab {
     }
     fn handle_backspace(&mut self) {
         if self.is_running() {
-            return;
         }
     }
 
     fn handle_paste(&mut self, _text: &str) {
         if self.is_running() {
-            return;
         }
     }
 
@@ -621,7 +619,6 @@ impl TabInput for HistoryTab {
 
     fn handle_enter(&mut self) {
         if self.is_running() {
-            return;
         }
     }
 

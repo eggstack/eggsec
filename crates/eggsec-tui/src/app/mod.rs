@@ -40,7 +40,7 @@ pub(crate) use overlay::OverlayController;
 pub(crate) mod notifications;
 
 use super::error::make_friendly_error;
-use crate::help::{CommandPalette, HelpContext, HelpManager};
+use crate::help::{CommandPalette, HelpManager};
 use crate::session::{SessionConfig, SessionManager};
 use crate::state::SharedHistory;
 use crate::tabs;
@@ -88,7 +88,6 @@ pub struct App {
     pub export_format: OutputFormat,
     pub help_manager: HelpManager,
     pub command_palette: Option<CommandPalette>,
-    pub help_context: HelpContext,
     pub needs_redraw: bool,
     pub tab_scroll_offset: u16,
     pub last_tab_area_width: u16,
@@ -100,8 +99,6 @@ pub struct App {
     pub enforcement: EnforcementContext,
     /// Captured scope provenance for enforcement (mirrors LoadedScope used by CLI handlers).
     pub loaded_scope: LoadedScope,
-    /// Original config path (if any) for rebuilds after settings changes.
-    pub config_path: Option<String>,
 }
 
 impl App {
@@ -131,7 +128,6 @@ impl App {
             export_format: OutputFormat::Json,
             help_manager: HelpManager::new(),
             command_palette: None,
-            help_context: HelpContext::Normal,
             needs_redraw: true,
             bookmarks: FxHashSet::default(),
             theme_load: ThemeLoadState::default(),
@@ -140,7 +136,6 @@ impl App {
                 LoadedScope::default_empty(),
             ),
             loaded_scope: LoadedScope::default_empty(),
-            config_path: None,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -215,7 +210,6 @@ impl App {
             export_format: OutputFormat::Json,
             help_manager: HelpManager::new(),
             command_palette: None,
-            help_context: HelpContext::Normal,
             needs_redraw: true,
             bookmarks: restored_bookmarks,
             theme_load: ThemeLoadState::default(),
@@ -224,7 +218,6 @@ impl App {
                 LoadedScope::default_empty(),
             ),
             loaded_scope: LoadedScope::default_empty(),
-            config_path: None,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -367,13 +360,12 @@ impl App {
         }
 
         // Post-dispatch retroactive policy gate for direct-launch tabs (packet, stress, auth, cluster, etc.)
-        if self.is_direct_launch_tab(self.current_tab) {
-            if self.current_tab.as_tab_state(self).is_running() {
+        if self.is_direct_launch_tab(self.current_tab)
+            && self.current_tab.as_tab_state(self).is_running() {
                 if let Some(desc) = self.build_current_operation_descriptor() {
                     self.evaluate_policy_and_dispatch(desc, None);
                 }
             }
-        }
     }
 
     /// Central policy evaluation + dispatch. Handles the Allow/Warn/RequireConfirmation/Deny
@@ -1058,6 +1050,18 @@ mod tests {
     }
 
     #[test]
+    fn test_app_struct_fields_are_consolidated() {
+        let app = create_test_app();
+        // Verify App no longer has config_path or help_context fields
+        // (these were dead code removed in favor of SettingsTab.config_path)
+        // SettingsTab.config_path has its own default and is the single source of truth.
+        assert_eq!(
+            app.tabs.settings.config_path.as_deref(),
+            Some("eggsec.toml")
+        );
+    }
+
+    #[test]
     fn test_new_for_testing_uses_cyber_red_and_display_labels() {
         let app = create_test_app();
         assert_eq!(app.current_theme().name, "cyber-red");
@@ -1409,12 +1413,6 @@ mod tests {
 
         app.overlay.show_http_options = false;
         assert!(!app.overlay.show_http_options);
-    }
-
-    #[test]
-    fn test_help_context_default() {
-        let app = create_test_app();
-        assert_eq!(app.help_context, crate::help::HelpContext::Normal);
     }
 
     #[test]
