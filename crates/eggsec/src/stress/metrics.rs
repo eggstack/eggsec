@@ -16,7 +16,9 @@ impl StressMetrics {
     }
 
     pub fn start(&self) {
-        let _ = self.start_time.set(Instant::now());
+        if self.start_time.set(Instant::now()).is_err() {
+            tracing::warn!("StressMetrics::start called more than once");
+        }
     }
 
     pub fn record_packet(&self, size: u64) {

@@ -56,7 +56,7 @@ impl AgentRegistry {
         if let Some(agent) = self.agents.write().await.get_mut(&id) {
             agent.last_heartbeat = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
         }
     }
@@ -105,7 +105,7 @@ impl AgentRegistry {
     pub async fn list_active(&self) -> Vec<AgentInfo> {
         let cutoff = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
             .saturating_sub(60);
         self.agents

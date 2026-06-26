@@ -58,7 +58,7 @@ pub enum MobileSubcommand {
     /// Dynamic Android runtime testing (ADB + logcat analysis). Requires feature mobile-dynamic.
     #[cfg(feature = "mobile-dynamic")]
     #[command(name = "dynamic", about = "Controlled dynamic run on lab Android device/emulator (install/launch/log/uninstall)")]
-    Dynamic(DynamicMobileArgs),
+    Dynamic(Box<DynamicMobileArgs>),
 }
 
 /// Static analysis args (used by 'mobile static <path>' and legacy direct path).

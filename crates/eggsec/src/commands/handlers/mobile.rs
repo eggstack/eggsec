@@ -2,6 +2,7 @@ use crate::commands::handlers::CommandContext;
 use crate::config::OperationDescriptor;
 use anyhow::Result;
 
+#[allow(unused_mut)]
 pub async fn handle_mobile(
     ctx: &CommandContext,
     mut args: crate::cli::MobileArgs,

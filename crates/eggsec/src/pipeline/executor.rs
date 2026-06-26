@@ -706,14 +706,11 @@ impl Pipeline {
 
         for path in common_paths {
             let url = format!("{}{}", base_url.trim_end_matches('/'), path);
-            match client.head(&url).send().await {
-                Ok(resp) => {
-                    let status = resp.status().as_u16();
-                    if status > 0 && status < 500 {
-                        endpoints.push(path.to_string());
-                    }
+            if let Ok(resp) = client.head(&url).send().await {
+                let status = resp.status().as_u16();
+                if status > 0 && status < 500 {
+                    endpoints.push(path.to_string());
                 }
-                Err(_) => {}
             }
         }
 
@@ -737,8 +734,7 @@ impl Pipeline {
             let url = format!("{}{}", base_url.trim_end_matches('/'), endpoint);
             let started_at = chrono::Utc::now();
 
-            match client.get(&url).send().await {
-                Ok(resp) => {
+            if let Ok(resp) = client.get(&url).send().await {
                     let status = resp.status().as_u16();
                     let headers: std::collections::HashMap<String, String> = resp
                         .headers()
@@ -778,8 +774,6 @@ impl Pipeline {
                         redaction_applied: None,
                         protocol: "http1".to_string(),
                     });
-                }
-                Err(_) => {}
             }
         }
 
@@ -798,17 +792,14 @@ impl Pipeline {
             // Check for security headers
             let has_strict_transport = flow
                 .response_headers
-                .get("strict-transport-security")
-                .is_some();
+                .contains_key("strict-transport-security");
             let has_content_security = flow
                 .response_headers
-                .get("content-security-policy")
-                .is_some();
-            let has_x_frame = flow.response_headers.get("x-frame-options").is_some();
+                .contains_key("content-security-policy");
+            let has_x_frame = flow.response_headers.contains_key("x-frame-options");
             let has_x_content = flow
                 .response_headers
-                .get("x-content-type-options")
-                .is_some();
+                .contains_key("x-content-type-options");
 
             if flow.is_https && !has_strict_transport {
                 findings.push(PipelineProxyFinding {

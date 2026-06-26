@@ -541,7 +541,7 @@ mod tests {
             status: AgentStatus::Idle,
             last_heartbeat: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             callback_url: None,
         };

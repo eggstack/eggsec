@@ -17,6 +17,7 @@ fn empty_auth_report(target: String) -> eggsec::auth::AuthTestReport {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_auth_task(
     target: String,
     username: Option<String>,

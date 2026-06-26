@@ -840,6 +840,7 @@ pub fn execute_enter_action(core: &mut TabCore, action: EnterAction) {
 /// area (e.g., to toggle a checkbox or confirm a selector).
 /// - For simple toggle-and-return: `options_action` returns `false` (no scan start).
 /// - For toggle-then-start (e.g., recon): `options_action` returns `true` to start.
+#[allow(clippy::too_many_arguments)]
 pub fn handle_enter_3area<A: Copy + PartialEq>(
     core: &mut TabCore,
     current: A,
@@ -1082,6 +1083,7 @@ pub fn focus_border_style(focused: bool) -> Style {
 // --- Rendering helpers ---
 
 /// Renders the standard 4-branch results area: Running -> Error -> Results -> Empty.
+#[allow(clippy::too_many_arguments)]
 pub fn render_results_area(
     f: &mut Frame,
     area: Rect,
@@ -1234,6 +1236,8 @@ pub fn render_standard_2area(
     );
 }
 
+type OptionsRenderFn<'a> = Box<dyn FnOnce(&mut Frame, Rect, bool) + 'a>;
+
 /// Configuration for a standard 3-area render layout (Inputs + Options + Results).
 pub struct Render3AreaConfig<'a> {
     pub title: &'a str,
@@ -1242,7 +1246,7 @@ pub struct Render3AreaConfig<'a> {
     pub inputs_focused: StandardFocusArea,
     pub options_focused: StandardFocusArea,
     pub results_focused: StandardFocusArea,
-    pub render_options: Box<dyn FnOnce(&mut Frame, Rect, bool) + 'a>,
+    pub render_options: OptionsRenderFn<'a>,
     pub empty_title: &'static str,
     pub empty_text: &'static str,
 }
