@@ -71,10 +71,17 @@ impl BruteForceTester {
                     let status = resp.status().as_u16();
                     let body = resp.text().await.unwrap_or_default();
 
+                    let body_lower = body.to_lowercase();
                     if (status == 302 || status == 200)
-                        && !body.contains("invalid")
-                        && !body.contains("error")
-                        && !body.contains("failed")
+                        && !body_lower.contains("invalid")
+                        && !body_lower.contains("incorrect")
+                        && !body_lower.contains("wrong")
+                        && !body_lower.contains("failed")
+                        && !body_lower.contains("denied")
+                        && !body.contains("class=\"error\"")
+                        && !body.contains("class='error'")
+                        && !body.contains("id=\"error\"")
+                        && !body.contains("id='error'")
                     {
                         result.successful_logins += 1;
                         result.weak_credentials.push(WeakCredential {

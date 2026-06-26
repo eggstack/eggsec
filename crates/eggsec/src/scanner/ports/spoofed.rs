@@ -577,6 +577,8 @@ mod tests {
         assert!(result.is_ok());
 
         // Clean up
-        let _ = std::fs::remove_file(&path);
+        if let Err(e) = std::fs::remove_file(&path) {
+            tracing::warn!("Failed to clean up temp file {}: {}", path.display(), e);
+        }
     }
 }

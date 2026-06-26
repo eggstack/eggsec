@@ -566,8 +566,12 @@ mod tests {
         assert_eq!(imported.correlations.len(), 1);
         assert_eq!(imported.rules.len(), 1);
 
-        let _ = std::fs::remove_file(path_str);
-        let _ = std::fs::remove_dir(&dir);
+        if let Err(e) = std::fs::remove_file(path_str) {
+            tracing::warn!("Failed to clean up temp file: {}", e);
+        }
+        if let Err(e) = std::fs::remove_dir(&dir) {
+            tracing::warn!("Failed to clean up temp dir: {}", e);
+        }
     }
 
     #[test]

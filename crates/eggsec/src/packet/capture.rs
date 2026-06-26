@@ -244,7 +244,9 @@ impl PacketCapture {
         self.stats.runtime_ms = start.elapsed().as_millis() as u64;
 
         if let Some(ref mut writer) = pcap_writer {
-            let _ = writer.flush();
+            if let Err(e) = writer.flush() {
+                tracing::warn!("PCAP writer flush failed: {}", e);
+            }
         }
 
         tracing::info!(

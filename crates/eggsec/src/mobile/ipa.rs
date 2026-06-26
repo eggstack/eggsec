@@ -131,7 +131,6 @@ struct InfoPlist {
     #[serde(rename = "CFBundleVersion")]
     cf_bundle_version: Option<String>,
     #[serde(rename = "MinimumOSVersion")]
-    #[allow(dead_code)]
     minimum_os_version: Option<String>,
     #[serde(rename = "NSAppTransportSecurity")]
     ns_app_transport_security: Option<AtsDict>,
@@ -142,7 +141,6 @@ struct InfoPlist {
     #[serde(rename = "CFBundleURLTypes")]
     cf_bundle_url_types: Option<Vec<BundleUrlType>>,
     #[serde(rename = "NSExtension")]
-    #[allow(dead_code)]
     ns_extension: Option<plist::Value>,
 }
 
@@ -269,10 +267,27 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
         (None, None) => {}
     }
 
-    // Extraction of MinimumOSVersion and NSExtension per requirements (Phase 1 records presence;
-    // richer enumeration of extension points can be added later without changing the API).
-    let _ = &info.minimum_os_version;
-    let _ = &info.ns_extension;
+    // Extraction of MinimumOSVersion and NSExtension
+    if let Some(ref min_os) = info.minimum_os_version {
+        report.findings.push(MobileFinding {
+            category: "mobile-ios-info".to_string(),
+            severity: Severity::Info,
+            title: "MinimumOSVersion declared".to_string(),
+            description: format!("App declares MinimumOSVersion: {}", min_os),
+            recommendation: "Ensure the minimum OS version is current and supported.".to_string(),
+            evidence: Some(min_os.clone()),
+        });
+    }
+    if info.ns_extension.is_some() {
+        report.findings.push(MobileFinding {
+            category: "mobile-ios-extension".to_string(),
+            severity: Severity::Info,
+            title: "NSExtension present".to_string(),
+            description: "App contains an NSExtension (app extension) declaration.".to_string(),
+            recommendation: "Review extension permissions and data sharing scope.".to_string(),
+            evidence: None,
+        });
+    }
 
     // 3. ATS / transport analysis
     if let Some(ref ats) = info.ns_app_transport_security {

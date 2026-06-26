@@ -285,10 +285,16 @@ async fn handle_websocket_interception(
         while let Some(msg) = client_source.next().await {
             match msg {
                 Ok(TungsteniteMessage::Text(text)) => {
-                    let _ = upstream_sink.send(TungsteniteMessage::Text(text)).await;
+                    if let Err(e) = upstream_sink.send(TungsteniteMessage::Text(text)).await {
+                        tracing::warn!("WebSocket client->upstream send failed: {}", e);
+                        break;
+                    }
                 }
                 Ok(TungsteniteMessage::Binary(data)) => {
-                    let _ = upstream_sink.send(TungsteniteMessage::Binary(data)).await;
+                    if let Err(e) = upstream_sink.send(TungsteniteMessage::Binary(data)).await {
+                        tracing::warn!("WebSocket client->upstream send failed: {}", e);
+                        break;
+                    }
                 }
                 Ok(TungsteniteMessage::Close(frame)) => {
                     let _ = upstream_sink.send(TungsteniteMessage::Close(frame)).await;
@@ -310,10 +316,16 @@ async fn handle_websocket_interception(
         while let Some(msg) = upstream_source.next().await {
             match msg {
                 Ok(TungsteniteMessage::Text(text)) => {
-                    let _ = client_sink.send(TungsteniteMessage::Text(text)).await;
+                    if let Err(e) = client_sink.send(TungsteniteMessage::Text(text)).await {
+                        tracing::warn!("WebSocket upstream->client send failed: {}", e);
+                        break;
+                    }
                 }
                 Ok(TungsteniteMessage::Binary(data)) => {
-                    let _ = client_sink.send(TungsteniteMessage::Binary(data)).await;
+                    if let Err(e) = client_sink.send(TungsteniteMessage::Binary(data)).await {
+                        tracing::warn!("WebSocket upstream->client send failed: {}", e);
+                        break;
+                    }
                 }
                 Ok(TungsteniteMessage::Close(frame)) => {
                     let _ = client_sink.send(TungsteniteMessage::Close(frame)).await;

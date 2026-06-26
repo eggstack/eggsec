@@ -81,6 +81,7 @@ pub struct StartTlsServerResult {
     pub hostname: String,
     pub port: u16,
     pub supports_starttls: bool,
+    pub tls_established: bool,
     pub certificate_valid: bool,
     pub tls_version: Option<String>,
 }
@@ -630,7 +631,7 @@ impl EmailSecurityAnalyzer {
 
         let supports_smtps = tested_servers
             .iter()
-            .any(|s| s.supports_starttls && s.port == 465);
+            .any(|s| s.tls_established && s.port == 465);
 
         StartTlsResult {
             tested_servers,
@@ -657,6 +658,7 @@ impl EmailSecurityAnalyzer {
                     hostname: hostname.to_string(),
                     port,
                     supports_starttls: false,
+                    tls_established: false,
                     certificate_valid: false,
                     tls_version: None,
                 };
@@ -673,6 +675,7 @@ impl EmailSecurityAnalyzer {
                 hostname: hostname.to_string(),
                 port,
                 supports_starttls: false,
+                tls_established: false,
                 certificate_valid: false,
                 tls_version: None,
             };
@@ -700,13 +703,78 @@ impl EmailSecurityAnalyzer {
             }
         }
 
+        // For port 465 (SMTPS), attempt implicit TLS since these servers
+        // don't advertise STARTTLS — the connection is encrypted from the start.
+        let mut tls_established = false;
+        let mut tls_version_str = None;
+        if port == 465 {
+            let tls_result = self.test_implicit_tls(hostname, port, timeout).await;
+            tls_established = tls_result.0;
+            tls_version_str = tls_result.1;
+        }
+
         StartTlsServerResult {
             hostname: hostname.to_string(),
             port,
             supports_starttls,
+            tls_established,
             certificate_valid: false,
-            tls_version: None,
+            tls_version: tls_version_str,
         }
+    }
+
+    /// Attempt an implicit TLS handshake (used for SMTPS on port 465).
+    /// Returns (tls_established, tls_version).
+    async fn test_implicit_tls(
+        &self,
+        hostname: &str,
+        port: u16,
+        timeout: std::time::Duration,
+    ) -> (bool, Option<String>) {
+        use rustls::pki_types::ServerName;
+        use tokio::io::AsyncReadExt;
+        use tokio::net::TcpStream;
+
+        let connect_result =
+            tokio::time::timeout(timeout, TcpStream::connect((hostname, port))).await;
+
+        let stream = match connect_result {
+            Ok(Ok(s)) => s,
+            _ => return (false, None),
+        };
+
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
+        let domain = match ServerName::try_from(hostname.to_string()) {
+            Ok(d) => d.to_owned(),
+            Err(_) => return (false, None),
+        };
+
+        let tls_stream = match tokio::time::timeout(
+            timeout,
+            connector.connect(domain, stream),
+        )
+        .await
+        {
+            Ok(Ok(ts)) => ts,
+            _ => return (false, None),
+        };
+
+        let (mut reader, _writer) = tokio::io::split(tls_stream);
+        let mut buf = vec![0u8; 1024];
+        let n = tokio::time::timeout(timeout, reader.read(&mut buf)).await;
+        let version = match n {
+            Ok(Ok(_)) => Some("TLS".to_string()),
+            _ => Some("TLS".to_string()),
+        };
+
+        (true, version)
     }
 
     async fn check_bimi(&self, domain: &str) -> BimiResult {

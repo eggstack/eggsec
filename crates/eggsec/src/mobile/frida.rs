@@ -585,7 +585,9 @@ pub fn execute_script(
         let _ = tx.send(out);
     });
     let output_res = rx.recv_timeout(Duration::from_secs(30));
-    let _ = std::fs::remove_file(&script_path);
+    if let Err(e) = std::fs::remove_file(&script_path) {
+        tracing::warn!("Failed to clean up frida script {}: {}", script_path.display(), e);
+    }
     let out = match output_res {
         Ok(Ok(o)) => o,
         Ok(Err(e)) => return Err(crate::error::EggsecError::Validation(format!("frida CLI invoke error: {}", e))),
