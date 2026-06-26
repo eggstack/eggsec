@@ -739,7 +739,7 @@ impl InterceptTab {
                         chrono::Utc::now().format("%Y%m%d_%H%M%S")
                     );
                     match serde_json::to_string_pretty(&har) {
-                        Ok(json) => match std::fs::write(&path, json) {
+                        Ok(json) => match tokio::fs::write(&path, json).await {
                             Ok(_) => {
                                 self.actions_log.push(format!(
                                     "[{}] HAR exported to {}",

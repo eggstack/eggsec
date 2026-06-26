@@ -64,8 +64,7 @@ impl PasswordPolicyTester {
                 result.requires_special = true;
             }
 
-            let re =
-                regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
+            let re = regex::Regex::new(r"(?:minimum|at least|must be|require)\s+(\d+)\s+characters?")
                     .expect("valid regex pattern");
             if let Some(caps) = re.captures(&lower) {
                 if let Some(m) = caps.get(1) {

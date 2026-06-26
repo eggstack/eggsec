@@ -44,7 +44,7 @@ pub async fn handle_packet_capture(
         }
 
         let config = CaptureConfig {
-            interface: args.interface.expect("checked for None above"),
+            interface: args.interface.expect("interface checked for None above"),
             filter: args.filter,
             promiscuous: args.promiscuous,
             snapshot_len: 65535,

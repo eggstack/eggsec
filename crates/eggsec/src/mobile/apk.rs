@@ -463,7 +463,12 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                 let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_string();
                 let attrs: HashMap<String, String> = e
                     .attributes()
-                    .filter_map(|a| a.ok())
+                    .filter_map(|a| {
+                        if let Err(ref e) = a {
+                            tracing::warn!("Malformed APK attribute: {}", e);
+                        }
+                        a.ok()
+                    })
                     .map(|a| {
                         let k = std::str::from_utf8(a.key.as_ref()).unwrap_or("").to_string();
                         let v = a.unescape_value().unwrap_or_default().to_string();
@@ -516,7 +521,12 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                 let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_string();
                 let attrs: HashMap<String, String> = e
                     .attributes()
-                    .filter_map(|a| a.ok())
+                    .filter_map(|a| {
+                        if let Err(ref e) = a {
+                            tracing::warn!("Malformed APK attribute: {}", e);
+                        }
+                        a.ok()
+                    })
                     .map(|a| {
                         let k = std::str::from_utf8(a.key.as_ref()).unwrap_or("").to_string();
                         let v = a.unescape_value().unwrap_or_default().to_string();

@@ -151,7 +151,10 @@ pub struct TrendAnalyzer {
 impl TrendAnalyzer {
     pub fn new() -> Self {
         Self {
-            results: LruCache::new(std::num::NonZeroUsize::new(DEFAULT_MAX_HISTORY).unwrap()),
+            results: LruCache::new(
+                std::num::NonZeroUsize::new(DEFAULT_MAX_HISTORY)
+                    .unwrap_or(std::num::NonZeroUsize::MIN),
+            ),
         }
     }
 

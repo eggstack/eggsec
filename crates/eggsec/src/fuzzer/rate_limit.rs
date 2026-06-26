@@ -186,9 +186,17 @@ impl RateLimiterTokenBucket {
 
         let to_add = (elapsed * self.refill_rate) as u64;
         if to_add > 0 {
-            let current = self.tokens.load(Ordering::SeqCst);
-            let new = (current + to_add).min(self.capacity);
-            self.tokens.store(new, Ordering::SeqCst);
+            loop {
+                let current = self.tokens.load(Ordering::SeqCst);
+                let new = (current + to_add).min(self.capacity);
+                if self
+                    .tokens
+                    .compare_exchange(current, new, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
+                    break;
+                }
+            }
             *last = now;
         }
     }

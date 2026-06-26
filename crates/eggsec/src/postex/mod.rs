@@ -92,18 +92,13 @@ pub struct PostexSummary {
 }
 
 /// Profile controlling which techniques are exercised.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum PostexProfile {
     Minimal,
+    #[default]
     Standard,
     Aggressive,
-}
-
-impl Default for PostexProfile {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 impl std::fmt::Display for PostexProfile {

@@ -182,7 +182,8 @@ impl RateLimiter {
     fn refill(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill);
-        let tokens_to_add = (elapsed.as_secs_f64() * self.requests_per_second as f64) as u32;
+        let raw_tokens = elapsed.as_secs_f64() * self.requests_per_second as f64;
+        let tokens_to_add = (raw_tokens.min(f64::from(u32::MAX)) as u32).min(self.burst_size);
 
         self.tokens = (self.tokens + tokens_to_add).min(self.burst_size);
         self.last_refill = now;

@@ -94,7 +94,9 @@ pub fn shutdown_packet_trace() {
     if let Some(file) = PACKET_TRACE_FILE.get() {
         let mut guard = file.lock();
         use std::io::Write;
-        let _ = guard.flush();
+        if let Err(e) = guard.flush() {
+            tracing::warn!("Failed to flush packet trace file: {}", e);
+        }
     }
 }
 

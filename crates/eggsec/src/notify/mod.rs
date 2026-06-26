@@ -21,7 +21,7 @@ impl NotifyManager {
             Ok(n) => n,
             Err(e) => {
                 tracing::warn!("Failed to create webhook notifier, using empty list: {}", e);
-                WebhookNotifier::new(vec![]).expect("empty webhook list")
+                WebhookNotifier::new(vec![]).expect("empty webhook list must succeed")
             }
         };
 

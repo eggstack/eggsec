@@ -67,7 +67,9 @@ pub fn connect(device: &str) -> crate::error::Result<FridaSession> {
     // Simulation path: treat common dry-run device markers or absence of real CLI as simulation.
     if is_frida_cli_available() {
         // Real path: validate reachability best-effort via frida-ps (non-fatal on probe failure for Phase 3a).
-        let _ = Command::new("frida-ps").arg("-U").arg("-D").arg(device).output();
+        if let Err(e) = Command::new("frida-ps").arg("-U").arg("-D").arg(device).output() {
+            tracing::warn!("frida-ps probe failed: {}", e);
+        }
         Ok(FridaSession { device_id: device.to_string(), is_simulation: false })
     } else {
         // No frida CLI: produce simulation session (dry-run semantics; real callers gate via allow + policy).

@@ -129,7 +129,17 @@ fn parse_operation(
     let parameters = operation
         .get("parameters")
         .and_then(|p| p.as_array())
-        .map(|arr| arr.iter().filter_map(|p| parse_parameter(p).ok()).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|p| match parse_parameter(p) {
+                    Ok(param) => Some(param),
+                    Err(e) => {
+                        tracing::warn!("Malformed OpenAPI parameter: {}", e);
+                        None
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     let request_body = operation

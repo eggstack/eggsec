@@ -88,7 +88,7 @@ impl DockerScanner {
         &self,
         dockerfile_path: &str,
     ) -> Result<Vec<DockerMisconfiguration>> {
-        let content = std::fs::read_to_string(dockerfile_path)?;
+        let content = tokio::fs::read_to_string(dockerfile_path).await?;
         Ok(self.analyze_dockerfile(&content))
     }
 

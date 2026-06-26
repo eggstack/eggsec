@@ -294,7 +294,9 @@ impl WirelessScanner {
             skipped_malformed += 1;
         }
 
-        let _ = skipped_malformed; // count silently; no exposure or warnings per plan
+        if skipped_malformed > 0 {
+            tracing::warn!("Skipped {} malformed wireless network entries", skipped_malformed);
+        }
 
         networks
     }

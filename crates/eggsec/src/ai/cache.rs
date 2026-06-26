@@ -281,7 +281,7 @@ impl AiCache {
     async fn persist(&self) {
         if let Some(ref path) = self.persist_path {
             if let Some(parent) = path.parent() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
+                if let Err(e) = tokio::fs::create_dir_all(parent).await {
                     tracing::warn!("Failed to create cache directory: {}", e);
                 }
             }

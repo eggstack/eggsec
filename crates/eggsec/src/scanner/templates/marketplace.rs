@@ -257,7 +257,7 @@ impl TemplateMarketplace {
                     let yaml = serde_yaml_neo::to_string(&template).map_err(|e| {
                         EggsecError::Config(format!("Failed to serialize template: {}", e))
                     })?;
-                    std::fs::write(&path, yaml).map_err(|e| {
+                    tokio::fs::write(&path, yaml).await.map_err(|e| {
                         EggsecError::Config(format!("Failed to write template: {}", e))
                     })?;
                     synced.push(marketplace_template.id.clone());

@@ -27,7 +27,7 @@ pub struct AuthContextEntry {
 }
 
 static ENV_VAR_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\$\{([^}:]+)(?::-([^}]*))?\}").unwrap());
+    LazyLock::new(|| Regex::new(r"\$\{([^}:]+)(?::-([^}]*))?\}").expect("valid env var regex"));
 
 /// Interpolate `${VAR}` and `${VAR:-default}` patterns with environment variables
 fn interpolate_env_vars(input: &str) -> String {

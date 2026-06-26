@@ -330,7 +330,7 @@ impl Worker {
 
 impl Drop for Worker {
     fn drop(&mut self) {
-        // Suppress warning in Drop — receivers may already be dropped during normal shutdown
+        // Receivers may already be dropped during normal shutdown; send failure is expected.
         let _ = self.shutdown_tx.send(true);
         if let Some(handle) = self.heartbeat_handle.take() {
             handle.abort();

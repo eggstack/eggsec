@@ -75,7 +75,8 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(target_url: String) -> Self {
         Self {
-            histogram: Histogram::new(3).expect("Failed to create hdrhistogram"),
+            histogram: Histogram::new(3).expect("precision 3 is valid for hdrhistogram"),
+
             successful: 0,
             failed: 0,
             status_codes: FxHashMap::default(),

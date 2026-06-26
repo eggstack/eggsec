@@ -13,6 +13,18 @@ use crate::utils::{create_http_client, create_insecure_http_client};
 use regex::RegexBuilder;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
+
+static WP_VERSION_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    let patterns = [
+        r#"<meta name="generator" content="WordPress (\d+\.\d+(?:\.\d+)?)"#,
+        r#"wordpressVersion\s*=\s*["'](\d+\.\d+(?:\.\d+)?)["']"#,
+    ];
+    patterns
+        .iter()
+        .filter_map(|p| RegexBuilder::new(p).size_limit(100_000).build().ok())
+        .collect()
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CmsTarget {
@@ -219,20 +231,10 @@ impl CmsScanner {
     }
 
     fn extract_wordpress_version(&self, html: &str) -> Option<String> {
-        let version_patterns = [
-            r#"<meta name="generator" content="WordPress (\d+\.\d+(?:\.\d+)?)"#,
-            r#"wordpressVersion\s*=\s*["'](\d+\.\d+(?:\.\d+)?)["']"#,
-        ];
-
-        for pattern in &version_patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                if let Some(caps) = re.captures(html) {
-                    if let Some(version) = caps.get(1) {
-                        return Some(version.as_str().to_string());
-                    }
+        for re in WP_VERSION_PATTERNS.iter() {
+            if let Some(caps) = re.captures(html) {
+                if let Some(version) = caps.get(1) {
+                    return Some(version.as_str().to_string());
                 }
             }
         }

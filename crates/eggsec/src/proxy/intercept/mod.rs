@@ -156,14 +156,11 @@ fn is_private_ip(ip: IpAddr) -> bool {
                 || (octets[0] == 172 && (16..=31).contains(&octets[1]))
                 || (octets[0] == 192 && octets[1] == 168)
                 || octets[0] == 127
-                || (octets[0] >= 224 && octets[0] <= 239)
-                || octets.iter().all(|&o| o == 255)
         }
         IpAddr::V6(ipv6) => {
             let segments = ipv6.segments();
             (segments[0] & 0xfe00) == 0xfc00
                 || ipv6.is_loopback()
-                || (segments[0] & 0xff00) == 0xff00
                 || ipv6.is_unspecified()
                 || (segments[0] & 0xffc0) == 0xfe80
         }
@@ -304,14 +301,20 @@ async fn handle_websocket_interception(
                     }
                 }
                 Ok(TungsteniteMessage::Close(frame)) => {
-                    let _ = upstream_sink.send(TungsteniteMessage::Close(frame)).await;
+                    if let Err(e) = upstream_sink.send(TungsteniteMessage::Close(frame)).await {
+                        tracing::warn!("WebSocket client->upstream close failed: {}", e);
+                    }
                     break;
                 }
                 Ok(TungsteniteMessage::Ping(data)) => {
-                    let _ = upstream_sink.send(TungsteniteMessage::Ping(data)).await;
+                    if let Err(e) = upstream_sink.send(TungsteniteMessage::Ping(data)).await {
+                        tracing::warn!("WebSocket client->upstream ping failed: {}", e);
+                    }
                 }
                 Ok(TungsteniteMessage::Pong(data)) => {
-                    let _ = upstream_sink.send(TungsteniteMessage::Pong(data)).await;
+                    if let Err(e) = upstream_sink.send(TungsteniteMessage::Pong(data)).await {
+                        tracing::warn!("WebSocket client->upstream pong failed: {}", e);
+                    }
                 }
                 Ok(TungsteniteMessage::Frame(_)) => {}
                 Err(_) => break,
@@ -335,14 +338,20 @@ async fn handle_websocket_interception(
                     }
                 }
                 Ok(TungsteniteMessage::Close(frame)) => {
-                    let _ = client_sink.send(TungsteniteMessage::Close(frame)).await;
+                    if let Err(e) = client_sink.send(TungsteniteMessage::Close(frame)).await {
+                        tracing::warn!("WebSocket upstream->client close failed: {}", e);
+                    }
                     break;
                 }
                 Ok(TungsteniteMessage::Ping(data)) => {
-                    let _ = client_sink.send(TungsteniteMessage::Ping(data)).await;
+                    if let Err(e) = client_sink.send(TungsteniteMessage::Ping(data)).await {
+                        tracing::warn!("WebSocket upstream->client ping failed: {}", e);
+                    }
                 }
                 Ok(TungsteniteMessage::Pong(data)) => {
-                    let _ = client_sink.send(TungsteniteMessage::Pong(data)).await;
+                    if let Err(e) = client_sink.send(TungsteniteMessage::Pong(data)).await {
+                        tracing::warn!("WebSocket upstream->client pong failed: {}", e);
+                    }
                 }
                 Ok(TungsteniteMessage::Frame(_)) => {}
                 Err(_) => break,
@@ -483,8 +492,8 @@ async fn handle_http2_interception(
                             }
                         }
 
-                        // Add host header if not present
-                        if !request_headers.contains_key("host") && !request_headers.contains_key("Host") {
+                        // Add host header if not present (case-insensitive check)
+                        if !request_headers.keys().any(|k| k.eq_ignore_ascii_case("host")) {
                             upstream_request = upstream_request.header(header::HOST, host);
                         }
 
