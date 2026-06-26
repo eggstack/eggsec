@@ -85,6 +85,7 @@ impl TabState for C2Tab {
     fn reset(&mut self) {
         self.core.reset_all();
         self.core.inputs.clear_all_fields();
+        self.core.inputs.blur();
         self.focus_area = C2FocusArea::Target;
     }
 }

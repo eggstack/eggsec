@@ -75,11 +75,11 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         eggsec::config::load_scope_with_source(Some(sp))
             .unwrap_or_else(|_| {
                 eggsec::config::load_scope_with_source(None)
-                    .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty().into())
+                    .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty())
             })
     } else {
         eggsec::config::load_scope_with_source(None)
-            .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty().into())
+            .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty())
     };
     let policy = loaded_config
         .as_ref()
@@ -88,7 +88,6 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     app.enforcement =
         eggsec::config::EnforcementContext::manual_permissive(policy, loaded_scope.clone());
     app.loaded_scope = loaded_scope;
-    app.config_path = config_path.clone();
     let res = run_app(&mut terminal, &mut app);
 
     if let Err(e) = app.session_manager.save_quick(&app) {

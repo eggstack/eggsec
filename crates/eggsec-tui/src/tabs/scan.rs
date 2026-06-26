@@ -303,21 +303,15 @@ impl TabRender for ScanTab {
             .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
-        let config_area = chunks[0];
-        let main_area = chunks[1];
+        let Some(config_area) = chunks.get(0) else { return; };
+        let Some(main_area) = chunks.get(1) else { return; };
 
-        let input_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ScanFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let input_inner = input_block.inner(config_area);
-        f.render_widget(input_block, config_area);
+        let input_inner = crate::tabs::core::render_config_block(
+            f,
+            *config_area,
+            "Configuration",
+            self.focus_area == ScanFocusArea::Inputs,
+        );
 
         let inner_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -353,10 +347,10 @@ impl TabRender for ScanTab {
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-            .split(main_area);
+            .split(*main_area);
 
-        let stages_area = main_chunks.first().copied().unwrap_or(main_area);
-        let output_area = main_chunks.get(1).copied().unwrap_or(main_area);
+        let stages_area = main_chunks.first().copied().unwrap_or(*main_area);
+        let output_area = main_chunks.get(1).copied().unwrap_or(*main_area);
 
         let mut stage_lines: Vec<Line> = Vec::new();
 
@@ -426,15 +420,7 @@ impl TabRender for ScanTab {
         };
 
         if let Some(ref err) = self.error {
-            let error_block = Block::default()
-                .borders(Borders::ALL)
-                .title(" Output ")
-                .border_style(Style::default().fg(results_border));
-            let error_inner = error_block.inner(output_area);
-            f.render_widget(error_block, output_area);
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, error_inner);
+            crate::tabs::core::render_error_block(f, output_area, "Output", err);
         } else if !self.results_view.is_empty() {
             self.results_view.render(f, output_area, Some(results_border));
         } else {

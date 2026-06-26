@@ -52,14 +52,17 @@ impl AdbMessage {
     async fn read_from<R: AsyncReadExt + Unpin>(r: &mut R) -> Result<Self> {
         let mut header = [0u8; 24];
         r.read_exact(&mut header).await.context("failed to read adb header")?;
-        let command = u32::from_le_bytes(header[0..4].try_into().unwrap());
-        let arg0 = u32::from_le_bytes(header[4..8].try_into().unwrap());
-        let arg1 = u32::from_le_bytes(header[8..12].try_into().unwrap());
-        let data_len = u32::from_le_bytes(header[12..16].try_into().unwrap()) as usize;
-        let _crc = u32::from_le_bytes(header[16..20].try_into().unwrap());
-        let magic = u32::from_le_bytes(header[20..24].try_into().unwrap());
+        let command = u32::from_le_bytes(header[0..4].try_into().expect("header slice is 4 bytes"));
+        let arg0 = u32::from_le_bytes(header[4..8].try_into().expect("header slice is 4 bytes"));
+        let arg1 = u32::from_le_bytes(header[8..12].try_into().expect("header slice is 4 bytes"));
+        let data_len = u32::from_le_bytes(header[12..16].try_into().expect("header slice is 4 bytes")) as usize;
+        let _crc = u32::from_le_bytes(header[16..20].try_into().expect("header slice is 4 bytes"));
+        let magic = u32::from_le_bytes(header[20..24].try_into().expect("header slice is 4 bytes"));
         if magic != command ^ 0xffffffff {
             return Err(anyhow!("adb bad magic 0x{:08x}", magic));
+        }
+        if data_len > ADB_MAX_PAYLOAD as usize {
+            return Err(anyhow!("adb data_len {} exceeds max payload {}", data_len, ADB_MAX_PAYLOAD));
         }
         let mut data = vec![0u8; data_len];
         if data_len > 0 {

@@ -700,54 +700,71 @@ impl SettingsTab {
         self.error = None;
         if let Some(field) = self.http_inputs.fields.get_mut(0) {
             field.value = "30".to_string();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.http_inputs.fields.get_mut(1) {
             field.value = "3".to_string();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.http_inputs.fields.get_mut(2) {
             field.value = "1000".to_string();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.http_inputs.fields.get_mut(3) {
             field.value = "10".to_string();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.scan_inputs.fields.get_mut(0) {
             field.value = "50".to_string();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.scan_inputs.fields.get_mut(1) {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.scan_inputs.fields.get_mut(2) {
             field.value = "2".to_string();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.proxy_inputs.fields.get_mut(0) {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         if let Some(field) = self.proxy_inputs.fields.get_mut(1) {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         for field in self.scope_inputs.fields.iter_mut() {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         for field in self.report_inputs.fields.iter_mut() {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         if let Some(f) = self.report_inputs.fields.get_mut(2) {
             f.value = "html".to_string();
+            f.cursor_pos = 0;
         }
         if let Some(f) = self.report_inputs.fields.get_mut(3) {
             f.value = "./exports".to_string();
+            f.cursor_pos = 0;
         }
         for field in self.schedule_inputs.fields.iter_mut() {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         if let Some(f) = self.schedule_inputs.fields.get_mut(2) {
             f.value = "quick".to_string();
+            f.cursor_pos = 0;
         }
         for field in self.notify_inputs.fields.iter_mut() {
             field.value.clear();
+            field.cursor_pos = 0;
         }
         if let Some(f) = self.session_inputs.fields.get_mut(0) {
             f.value = "30".to_string();
+            f.cursor_pos = 0;
         }
         self.follow_redirects.checked = true;
         self.verify_tls.checked = true;

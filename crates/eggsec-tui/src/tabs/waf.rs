@@ -1,7 +1,7 @@
 use crate::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, RadioGroup, ScrollableText,
 };
-use crate::tabs::core::{start_scan, TabCore};
+use crate::tabs::core::{move_checkbox_focus_left, move_checkbox_focus_right, start_scan, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_state_boilerplate, tc};
 use eggsec::waf::{BypassResult, WafDetectionResult};
@@ -341,8 +341,8 @@ impl TabRender for WafTab {
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
                 .split(results_area);
 
-            self.detection_view.render(f, results_chunks[0], None);
-            self.bypass_view.render(f, results_chunks[1], None);
+            self.detection_view.render(f, *results_chunks.get(0).unwrap_or(&results_area), None);
+            self.bypass_view.render(f, *results_chunks.get(1).unwrap_or(&results_area), None);
         } else {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
@@ -571,12 +571,10 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.core.inputs.move_left()
         } else if self.focus_area == WafFocusArea::Techniques {
-            if self.technique_checkboxes.is_empty() || self.focused_checkbox_index == 0 {
-                false
-            } else {
-                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
-                true
-            }
+            move_checkbox_focus_left(
+                &mut self.focused_checkbox_index,
+                self.technique_checkboxes.len(),
+            )
         } else {
             false
         }
@@ -589,12 +587,10 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.core.inputs.move_right()
         } else if self.focus_area == WafFocusArea::Techniques {
-            if self.focused_checkbox_index >= self.technique_checkboxes.len().saturating_sub(1) {
-                false
-            } else {
-                self.focused_checkbox_index += 1;
-                true
-            }
+            move_checkbox_focus_right(
+                &mut self.focused_checkbox_index,
+                self.technique_checkboxes.len(),
+            )
         } else {
             false
         }

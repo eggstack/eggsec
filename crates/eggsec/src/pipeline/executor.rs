@@ -646,7 +646,6 @@ impl Pipeline {
             format!("http://{}", self.target)
         };
 
-        let is_https = target_url.starts_with("https://");
         let discovered_endpoints = self.discover_target_endpoints(&target_url).await;
         report.actions_performed.push(format!(
             "target_discovery: {} endpoints found",
@@ -702,7 +701,6 @@ impl Pipeline {
         let mut endpoints = Vec::new();
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
-            .danger_accept_invalid_certs(true)
             .build()
             .unwrap_or_default();
 
@@ -732,7 +730,6 @@ impl Pipeline {
         let mut flows = Vec::new();
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
-            .danger_accept_invalid_certs(true)
             .build()
             .unwrap_or_default();
 

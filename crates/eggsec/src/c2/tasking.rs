@@ -205,7 +205,6 @@ async fn real_execute_task(target: &str, technique: &str, phase_name: &str) -> T
     let url = format!("http://{}/task/execute", target);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
-        .danger_accept_invalid_certs(true)
         .build();
 
     let client = match client {
@@ -259,7 +258,6 @@ async fn real_exfil_task(target: &str, technique: &str, _phase_name: &str) -> Ta
     let url = format!("http://{}/data/exfil", target);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
-        .danger_accept_invalid_certs(true)
         .build();
 
     let client = match client {
@@ -308,7 +306,6 @@ async fn real_evade_task(target: &str, technique: &str) -> TaskResult {
     let url = format!("http://{}/decoy/{}", target, technique.to_lowercase().replace('.', "-"));
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
-        .danger_accept_invalid_certs(true)
         .build();
 
     let client = match client {

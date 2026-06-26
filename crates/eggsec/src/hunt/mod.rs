@@ -49,7 +49,6 @@ impl HuntClient {
                 crate::constants::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
             ))
             .tcp_nodelay(true)
-            .danger_accept_invalid_certs(true)
             .build()
             .map_err(|e| crate::error::EggsecError::Http(e.to_string()))?;
 

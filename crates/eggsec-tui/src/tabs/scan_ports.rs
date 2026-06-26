@@ -5,7 +5,7 @@ use crate::tabs::core::{
     StandardFocusArea, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_escape_3area, tab_input_boilerplate, tab_state_boilerplate, tc};
+use crate::{tab_escape, tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::scanner::ports::PortScanResults;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -234,6 +234,7 @@ impl TabState for ScanPortsTab {
         }
         self.focus_area = StandardFocusArea::Inputs;
         self.udp_checkbox.checked = false;
+        self.udp_checkbox.focused = false;
     }
 }
 
@@ -374,7 +375,7 @@ impl TabInput for ScanPortsTab {
         }
     }
 
-    tab_escape_3area!(ScanPortsTab, core: core, focus: focus_area, Inputs: StandardFocusArea::Inputs, Options: StandardFocusArea::Options, Results: StandardFocusArea::Results);
+    tab_escape!(ScanPortsTab, core: core, focus: focus_area, strategy: three_area, Inputs: StandardFocusArea::Inputs, Options: StandardFocusArea::Options, Results: StandardFocusArea::Results);
 
     fn handle_left(&mut self) -> bool {
         if self.is_running() {

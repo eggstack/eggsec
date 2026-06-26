@@ -207,7 +207,7 @@ impl TabRender for AuthTab {
             ])
             .split(area);
 
-        let Some(title_area) = layout.get(0) else { return; };
+        let Some(title_area) = layout.first() else { return; };
         let Some(inputs_area) = layout.get(1) else { return; };
         let Some(results_area) = layout.get(2) else { return; };
 

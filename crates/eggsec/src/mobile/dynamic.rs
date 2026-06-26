@@ -1045,9 +1045,11 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     if let Some(ref mut fi) = frida_instr_for_report {
                         fi.regression_notes = reg.clone();
                     } else if !reg.is_empty() {
-                        let mut fi = crate::mobile::FridaInstrumentation::default();
-                        fi.note = "regression (baseline provided)".to_string();
-                        fi.regression_notes = reg.clone();
+                        let fi = crate::mobile::FridaInstrumentation {
+                            note: "regression (baseline provided)".to_string(),
+                            regression_notes: reg.clone(),
+                            ..Default::default()
+                        };
                         frida_instr_for_report = Some(fi);
                     }
                     for n in &reg {
@@ -1470,7 +1472,7 @@ pub fn correlate_findings(
         if dcat == "frida-crypto-observation" || dcat == "frida-method-trace" {
             let has_static_secret = static_findings.iter().any(|f| {
                 f.category == "secret" || f.title.to_ascii_lowercase().contains("secret") || f.title.to_ascii_lowercase().contains("hardcoded")
-                    || f.evidence.as_ref().map_or(false, |e| e.to_ascii_lowercase().contains("api_key") || e.to_ascii_lowercase().contains("sk_live"))
+                    || f.evidence.as_ref().is_some_and(|e| e.to_ascii_lowercase().contains("api_key") || e.to_ascii_lowercase().contains("sk_live"))
             });
             if has_static_secret {
                 let note = "Frida observed crypto on flow with static secret/cleartext marker".to_string();
@@ -1485,8 +1487,7 @@ pub fn correlate_findings(
                 });
             }
         }
-        if dcat == "frida-api-trace" {
-            if static_findings.iter().any(|f| f.category == "network-config" || f.category == "manifest") {
+        if dcat == "frida-api-trace" && static_findings.iter().any(|f| f.category == "network-config" || f.category == "manifest") {
                 let note = "Frida-observed call correlates with proxy traffic to domain".to_string();
                 df.static_correlation = Some(note.clone());
                 notes.push(CorrelatedFinding {
@@ -1497,7 +1498,6 @@ pub fn correlate_findings(
                     correlation_type: Some(CorrelationType::CrossLayer),
                     enrichment: Some("frida api trace + static network surface".into()),
                 });
-            }
         }
         if dcat == "frida-bypass-validation"
             && static_findings.iter().any(|f| f.category == "permission" && f.evidence.as_ref().is_some_and(|e| e.contains("debug") || e.contains("READ_LOGS")))

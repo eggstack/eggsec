@@ -58,7 +58,7 @@ impl ScrollableText {
         if self.lines.is_empty() {
             self.scroll_offset = 0;
         } else {
-            let max_scroll = self.lines.len() - 1;
+            let max_scroll = self.lines.len().saturating_sub(1);
             self.scroll_offset = self.scroll_offset.saturating_add(amount).min(max_scroll);
         }
     }

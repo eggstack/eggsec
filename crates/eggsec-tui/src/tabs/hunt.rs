@@ -266,15 +266,18 @@ impl TabRender for HuntTab {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(*cb_area);
 
+        let Some(left_chunk) = cb_chunks.get(0) else { return; };
+        let Some(right_chunk) = cb_chunks.get(1) else { return; };
+
         let left = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Length(2); 3])
-            .split(cb_chunks[0]);
+            .split(*left_chunk);
 
         let right = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Length(2); 2])
-            .split(cb_chunks[1]);
+            .split(*right_chunk);
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().take(3) {
             let mut checkbox = cb.clone();

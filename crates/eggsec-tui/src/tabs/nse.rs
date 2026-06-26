@@ -140,7 +140,9 @@ impl TabState for NseTab {
 
     fn reset(&mut self) {
         self.core.reset_all();
+        self.core.inputs.blur();
         self.script_selector.select(0);
+        self.script_selector.blur();
         self.focus_area = NseFocusArea::Inputs;
     }
 }
@@ -211,41 +213,14 @@ impl TabRender for NseTab {
 }
 
 impl TabInput for NseTab {
-    fn handle_focus_next(&mut self) {
-        self.focus_area = match self.focus_area {
-            NseFocusArea::Inputs => {
-                self.core.inputs.blur();
-                self.script_selector.focus();
-                NseFocusArea::ScriptSelector
-            }
-            NseFocusArea::ScriptSelector => {
-                self.script_selector.blur();
-                NseFocusArea::Results
-            }
-            NseFocusArea::Results => {
-                self.core.inputs.focus(0);
-                NseFocusArea::Inputs
-            }
-        };
-    }
-
-    fn handle_focus_prev(&mut self) {
-        self.focus_area = match self.focus_area {
-            NseFocusArea::Inputs => {
-                self.core.inputs.blur();
-                NseFocusArea::Results
-            }
-            NseFocusArea::ScriptSelector => {
-                self.script_selector.blur();
-                self.core.inputs.focus(0);
-                NseFocusArea::Inputs
-            }
-            NseFocusArea::Results => {
-                self.script_selector.focus();
-                NseFocusArea::ScriptSelector
-            }
-        };
-    }
+    tab_input_3area!(
+        NseTab,
+        core: core,
+        focus: focus_area,
+        Inputs: NseFocusArea::Inputs,
+        Options: NseFocusArea::ScriptSelector,
+        Results: NseFocusArea::Results
+    );
 
     fn handle_enter(&mut self) {
         if self.is_running() {
@@ -330,124 +305,6 @@ impl TabInput for NseTab {
             }
             _ => true,
         }
-    }
-
-    fn handle_char(&mut self, c: char) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.insert(c);
-        }
-    }
-
-    fn handle_backspace(&mut self) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.backspace();
-        }
-    }
-
-    fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.paste(text);
-        }
-    }
-
-    fn handle_copy(&mut self) -> Option<String> {
-        if self.is_running() {
-            return None;
-        }
-        if self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.get_focused_value()
-        } else if self.focus_area == NseFocusArea::Results {
-            Some(self.core.results_view.get_content())
-        } else {
-            None
-        }
-    }
-
-    fn handle_word_forward(&mut self) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.move_word_forward();
-        }
-    }
-
-    fn handle_word_backward(&mut self) {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.move_word_backward();
-        }
-    }
-
-    fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == NseFocusArea::Inputs {
-                self.core.inputs.move_home();
-            } else if self.focus_area == NseFocusArea::Results {
-                self.core.results_view.scroll_to_top();
-            }
-        }
-    }
-
-    fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == NseFocusArea::Inputs {
-                self.core.inputs.move_end();
-            } else if self.focus_area == NseFocusArea::Results {
-                self.core.results_view.scroll_to_bottom();
-            }
-        }
-    }
-
-    fn handle_top(&mut self) {
-        if self.is_running() {
-            return;
-        }
-        self.focus_area = NseFocusArea::Inputs;
-        self.core.inputs.focus(0);
-    }
-
-    fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.core.inputs.blur();
-            self.focus_area = NseFocusArea::Results;
-        }
-    }
-
-    fn page_up(&mut self, page_size: usize) {
-        if !self.is_running() {
-            self.core.results_view.page_up(page_size);
-        }
-    }
-
-    fn page_down(&mut self, page_size: usize) {
-        if !self.is_running() {
-            self.core.results_view.page_down(page_size);
-        }
-    }
-
-    fn stop(&mut self) {
-        self.core.stop();
-    }
-
-    fn primary_target(&self) -> Option<String> {
-        Some(self.target().to_string())
-    }
-
-    fn handle_left(&mut self) -> bool {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.move_left()
-        } else {
-            false
-        }
-    }
-
-    fn handle_right(&mut self) -> bool {
-        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
-            self.core.inputs.move_right()
-        } else {
-            false
-        }
-    }
-
-    fn is_input_focused(&self) -> bool {
-        self.focus_area == NseFocusArea::Inputs && self.core.inputs.is_focused()
     }
 }
 

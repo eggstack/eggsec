@@ -229,6 +229,7 @@ fn extract_ws_path(request_str: &str) -> &str {
 async fn read_http_headers(
     stream: &mut (impl tokio::io::AsyncRead + Unpin),
 ) -> Result<Vec<u8>> {
+    const MAX_HEADER_SIZE: usize = 8192;
     let mut request = Vec::with_capacity(1024);
     let mut buf = [0u8; 4096];
 
@@ -241,6 +242,12 @@ async fn read_http_headers(
             break;
         }
         request.extend_from_slice(&buf[..n]);
+        if request.len() > MAX_HEADER_SIZE {
+            return Err(EggsecError::Proxy(format!(
+                "HTTP headers exceeded maximum size of {} bytes",
+                MAX_HEADER_SIZE
+            )));
+        }
         if request.windows(4).any(|w| w == b"\r\n\r\n") {
             break;
         }

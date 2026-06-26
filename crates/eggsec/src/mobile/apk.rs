@@ -93,7 +93,8 @@ fn analyze_apk_blocking(path: &Path) -> Result<MobileScanReport> {
 
         if lower == "androidmanifest.xml" {
             let mut buf = Vec::new();
-            entry.read_to_end(&mut buf)?;
+            let mut limited = entry.take(MAX_SINGLE_CONTENT);
+            limited.read_to_end(&mut buf)?;
             total_extracted += buf.len() as u64;
             manifest_bytes = Some(buf);
         } else if lower.ends_with("network_security_config.xml") {
@@ -339,6 +340,14 @@ fn parse_string_pool_chunk(data: &[u8], chunk_start: usize) -> Result<Vec<String
     let flags = read_u32_at_mut(data, &mut p)?;
     let strings_start = read_u32_at_mut(data, &mut p)? as usize;
     let _styles_start = read_u32_at_mut(data, &mut p)?;
+
+    if string_count as usize > data.len() / 4 {
+        return Err(EggsecError::Parse(format!(
+            "string_count {} exceeds plausible limit for data size {}",
+            string_count,
+            data.len()
+        )));
+    }
 
     let is_utf8 = (flags & 0x100) != 0;
 

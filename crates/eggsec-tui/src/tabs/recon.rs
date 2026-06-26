@@ -1,7 +1,10 @@
 use crate::components::{Checkbox, InputField, InputGroup};
-use crate::tabs::core::{field_as, render_results_area, start_scan, StandardFocusArea, TabCore};
+use crate::tabs::core::{
+    field_as, handle_options_down_wrapping, handle_options_up_wrapping, move_checkbox_focus_left,
+    move_checkbox_focus_right, render_results_area, start_scan, StandardFocusArea, TabCore,
+};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
+use crate::{checkbox_options_struct, tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::recon::FullReconResult;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -23,24 +26,26 @@ pub struct ReconTab {
 const CHECKBOX_COLUMNS: usize = 2;
 const CHECKBOX_ROWS_PER_COLUMN: usize = 8;
 
-#[derive(Debug, Clone, Default)]
-pub struct ReconOptions {
-    pub no_tech: bool,
-    pub no_dns: bool,
-    pub no_geo: bool,
-    pub no_whois: bool,
-    pub no_subdomains: bool,
-    pub no_ssl: bool,
-    pub no_dns_records: bool,
-    pub no_js: bool,
-    pub no_content: bool,
-    pub no_cloud: bool,
-    pub no_wayback: bool,
-    pub no_cors: bool,
-    pub no_threat: bool,
-    pub no_cve: bool,
-    pub no_email: bool,
-    pub no_takeover: bool,
+checkbox_options_struct! {
+    #[derive(Debug, Clone)]
+    pub struct ReconOptions {
+        no_tech: "Skip Tech Detection",
+        no_dns: "Skip DNS Lookup",
+        no_geo: "Skip Geolocation",
+        no_whois: "Skip WHOIS",
+        no_subdomains: "Skip Subdomains",
+        no_ssl: "Skip SSL/TLS",
+        no_dns_records: "Skip DNS Records",
+        no_js: "Skip JS Analysis",
+        no_content: "Skip Content Discovery",
+        no_cloud: "Skip Cloud Assets",
+        no_wayback: "Skip Wayback",
+        no_cors: "Skip CORS",
+        no_threat: "Skip Threat Intel",
+        no_cve: "Skip CVE Mapping",
+        no_email: "Skip Email Discovery",
+        no_takeover: "Skip Takeover Detection",
+    }
 }
 
 impl ReconTab {
@@ -49,24 +54,10 @@ impl ReconTab {
             .add(InputField::new("Target (domain or URL)"))
             .add(InputField::new("Concurrency").with_value("20"));
 
-        let option_checkboxes = vec![
-            Checkbox::new("Skip Tech Detection").checked(false),
-            Checkbox::new("Skip DNS Lookup").checked(false),
-            Checkbox::new("Skip Geolocation").checked(false),
-            Checkbox::new("Skip WHOIS").checked(false),
-            Checkbox::new("Skip Subdomains").checked(false),
-            Checkbox::new("Skip SSL/TLS").checked(false),
-            Checkbox::new("Skip DNS Records").checked(false),
-            Checkbox::new("Skip JS Analysis").checked(false),
-            Checkbox::new("Skip Content Discovery").checked(false),
-            Checkbox::new("Skip Cloud Assets").checked(false),
-            Checkbox::new("Skip Wayback").checked(false),
-            Checkbox::new("Skip CORS").checked(false),
-            Checkbox::new("Skip Threat Intel").checked(false),
-            Checkbox::new("Skip CVE Mapping").checked(false),
-            Checkbox::new("Skip Email Discovery").checked(false),
-            Checkbox::new("Skip Takeover Detection").checked(false),
-        ];
+        let option_checkboxes = ReconOptions::LABELS
+            .iter()
+            .map(|label| Checkbox::new(*label).checked(false))
+            .collect();
 
         Self {
             core: TabCore::new("Running reconnaissance...", "Results").with_inputs(inputs),
@@ -87,88 +78,12 @@ impl ReconTab {
     }
 
     pub fn get_options(&self) -> ReconOptions {
-        ReconOptions {
-            no_tech: self
-                .option_checkboxes
-                .first()
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_dns: self
-                .option_checkboxes
-                .get(1)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_geo: self
-                .option_checkboxes
-                .get(2)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_whois: self
-                .option_checkboxes
-                .get(3)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_subdomains: self
-                .option_checkboxes
-                .get(4)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_ssl: self
-                .option_checkboxes
-                .get(5)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_dns_records: self
-                .option_checkboxes
-                .get(6)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_js: self
-                .option_checkboxes
-                .get(7)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_content: self
-                .option_checkboxes
-                .get(8)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_cloud: self
-                .option_checkboxes
-                .get(9)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_wayback: self
-                .option_checkboxes
-                .get(10)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_cors: self
-                .option_checkboxes
-                .get(11)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_threat: self
-                .option_checkboxes
-                .get(12)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_cve: self
-                .option_checkboxes
-                .get(13)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_email: self
-                .option_checkboxes
-                .get(14)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-            no_takeover: self
-                .option_checkboxes
-                .get(15)
-                .map(|cb| cb.checked)
-                .unwrap_or(false),
-        }
+        let checked: Vec<bool> = self
+            .option_checkboxes
+            .iter()
+            .map(|cb| cb.checked)
+            .collect();
+        ReconOptions::from_checkboxes(&checked)
     }
 
     pub fn get_results(&self) -> Option<&FullReconResult> {
@@ -435,15 +350,17 @@ impl TabRender for ReconTab {
         if visible_rows > 0 {
             let row_offset = self.options_window_start(visible_rows);
             let row_constraints = vec![Constraint::Length(1); visible_rows];
+            let Some(left_chunk) = option_chunks.get(0) else { return; };
+            let Some(right_chunk) = option_chunks.get(1) else { return; };
             let left_options = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(row_constraints.clone())
-                .split(option_chunks[0]);
+                .split(*left_chunk);
 
             let right_options = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(row_constraints)
-                .split(option_chunks[1]);
+                .split(*right_chunk);
 
             let is_options_focused = self.focus_area == StandardFocusArea::Options;
 
@@ -510,6 +427,12 @@ impl TabInput for ReconTab {
         }
     }
 
+    fn handle_delete(&mut self) {
+        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
+            self.core.inputs.delete();
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
@@ -539,12 +462,6 @@ impl TabInput for ReconTab {
         );
         if self.focus_area == StandardFocusArea::Options {
             self.focused_checkbox_index = 0;
-        }
-    }
-
-    fn handle_delete(&mut self) {
-        if !self.is_running() && self.focus_area == StandardFocusArea::Inputs {
-            self.core.inputs.delete();
         }
     }
 
@@ -583,11 +500,10 @@ impl TabInput for ReconTab {
     fn handle_up(&mut self) {
         if !self.is_running() {
             if self.focus_area == StandardFocusArea::Options && !self.option_checkboxes.is_empty() {
-                if self.focused_checkbox_index == 0 {
-                    self.focused_checkbox_index = self.option_checkboxes.len() - 1;
-                } else {
-                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
-                }
+                handle_options_up_wrapping(
+                    &mut self.focused_checkbox_index,
+                    self.option_checkboxes.len(),
+                );
             } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.core.scroll_results_up();
             } else {
@@ -598,14 +514,11 @@ impl TabInput for ReconTab {
 
     fn handle_down(&mut self) {
         if !self.is_running() {
-            if self.focus_area == StandardFocusArea::Options {
-                if self.option_checkboxes.is_empty()
-                    || self.focused_checkbox_index >= self.option_checkboxes.len() - 1
-                {
-                    self.focused_checkbox_index = 0;
-                } else {
-                    self.focused_checkbox_index += 1;
-                }
+            if self.focus_area == StandardFocusArea::Options && !self.option_checkboxes.is_empty() {
+                handle_options_down_wrapping(
+                    &mut self.focused_checkbox_index,
+                    self.option_checkboxes.len(),
+                );
             } else if !self.core.inputs.is_focused() && !self.core.results_view.is_empty() {
                 self.core.scroll_results_down();
             } else {
@@ -619,12 +532,10 @@ impl TabInput for ReconTab {
             if self.focus_area == StandardFocusArea::Inputs {
                 self.core.inputs.move_left()
             } else if self.focus_area == StandardFocusArea::Options {
-                if self.focused_checkbox_index == 0 {
-                    false
-                } else {
-                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
-                    true
-                }
+                move_checkbox_focus_left(
+                    &mut self.focused_checkbox_index,
+                    self.option_checkboxes.len(),
+                )
             } else {
                 false
             }
@@ -638,14 +549,10 @@ impl TabInput for ReconTab {
             if self.focus_area == StandardFocusArea::Inputs {
                 self.core.inputs.move_right()
             } else if self.focus_area == StandardFocusArea::Options {
-                if self.option_checkboxes.is_empty()
-                    || self.focused_checkbox_index >= self.option_checkboxes.len() - 1
-                {
-                    false
-                } else {
-                    self.focused_checkbox_index += 1;
-                    true
-                }
+                move_checkbox_focus_right(
+                    &mut self.focused_checkbox_index,
+                    self.option_checkboxes.len(),
+                )
             } else {
                 false
             }

@@ -197,7 +197,10 @@ impl Worker {
             Ok(hp) => hp,
             Err(e) => {
                 tracing::error!("Failed to parse coordinator URL for task requests: {}", e);
-                return Ok(());
+                return Err(EggsecError::Config(format!(
+                    "Invalid coordinator URL: {}",
+                    e
+                )));
             }
         };
 

@@ -151,7 +151,9 @@ fn generate_gzip_bomb(compressed_size: usize) -> String {
     let uncompressed_data: Vec<u8> = vec![b'A'; compressed_size * 100];
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-    encoder.write_all(&uncompressed_data).ok();
+    if let Err(e) = encoder.write_all(&uncompressed_data) {
+        tracing::warn!(error = %e, "Failed to write gzip bomb data");
+    }
     let compressed = encoder.finish().unwrap_or_default();
 
     format!(
@@ -169,7 +171,9 @@ pub fn generate_gzip_payload(size_multiplier: usize) -> Vec<u8> {
     let uncompressed_data: Vec<u8> = vec![b'X'; size_multiplier * 1024 * 1024];
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-    encoder.write_all(&uncompressed_data).ok();
+    if let Err(e) = encoder.write_all(&uncompressed_data) {
+        tracing::warn!(error = %e, "Failed to write gzip payload data");
+    }
     encoder.finish().unwrap_or_default()
 }
 
@@ -179,7 +183,9 @@ pub fn generate_deflate_payload(size_multiplier: usize) -> Vec<u8> {
     let uncompressed_data: Vec<u8> = vec![b'X'; size_multiplier * 1024 * 1024];
 
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::best());
-    encoder.write_all(&uncompressed_data).ok();
+    if let Err(e) = encoder.write_all(&uncompressed_data) {
+        tracing::warn!(error = %e, "Failed to write deflate payload data");
+    }
     encoder.finish().unwrap_or_default()
 }
 
