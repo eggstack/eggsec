@@ -436,7 +436,11 @@ pub fn build_fragmented_packets(
 
         ipv4_packet.set_version(4);
         ipv4_packet.set_header_length(5);
-        ipv4_packet.set_total_length((20 + chunk.len()) as u16);
+        ipv4_packet.set_total_length(
+            (20 + chunk.len())
+                .try_into()
+                .map_err(|_| EggsecError::Runtime("packet too large for u16".to_string()))?,
+        );
         ipv4_packet.set_ttl(ttl_val);
         ipv4_packet.set_identification(rand::thread_rng().r#gen());
 
@@ -447,7 +451,10 @@ pub fn build_fragmented_packets(
             ipv4_packet.set_flags(0);
         }
 
-        ipv4_packet.set_fragment_offset(i as u16);
+        ipv4_packet.set_fragment_offset(
+            i.try_into()
+                .map_err(|_| EggsecError::Runtime("fragment offset too large for u16".to_string()))?,
+        );
         ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
         ipv4_packet.set_source(src_ip);
         ipv4_packet.set_destination(dst_ip);

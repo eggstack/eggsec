@@ -533,7 +533,9 @@ async fn handle_http2_interception(
                             Ok((upstream_response, mut upstream_body)) => {
                                 // If there was a request body, send it
                                 if has_body {
-                                    let _ = upstream_body.send_data(Bytes::from(body_bytes), true);
+                                    if let Err(e) = upstream_body.send_data(Bytes::from(body_bytes), true) {
+                                        tracing::debug!("HTTP/2 upstream send_data error on stream {}: {}", stream_id, e);
+                                    }
                                 }
 
                                 // Read upstream response
@@ -616,13 +618,15 @@ async fn handle_http2_interception(
                             }
                             Err(e) => {
                                 tracing::debug!("HTTP/2 upstream send_request error on stream {}: {}", stream_id, e);
-                                let _ = client_respond.send_response(
+                                if let Err(send_err) = client_respond.send_response(
                                     http::Response::builder()
                                         .status(502)
                                         .body(())
                                         .unwrap(),
                                     true,
-                                );
+                                ) {
+                                    tracing::debug!("HTTP/2 client send_response error on stream {}: {}", stream_id, send_err);
+                                }
                             }
                         }
                     }

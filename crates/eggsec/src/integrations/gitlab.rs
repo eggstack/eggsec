@@ -72,8 +72,9 @@ impl GitLabClient {
 
         let created_at = json["created_at"].as_str().and_then(|s| {
             chrono::DateTime::parse_from_rfc3339(s)
-                .ok()
                 .map(|dt| dt.with_timezone(&chrono::Utc))
+                .map_err(|e| tracing::debug!("Failed to parse GitLab created_at: {}", e))
+                .ok()
         });
 
         Issue {

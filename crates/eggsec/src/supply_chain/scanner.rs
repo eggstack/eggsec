@@ -66,13 +66,16 @@ pub fn scan_repo(repo_path: &Path) -> anyhow::Result<SupplyChainScanResult> {
     // Walk the repo looking for known manifest files
     for entry in walkdir::WalkDir::new(repo_path)
         .into_iter()
-        .filter_map(|e| {
-            if let Err(ref e) = e {
-                if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    tracing::warn!("Permission denied walking supply chain: {}", e);
-                }
+        .filter_map(|e| match e {
+            Ok(entry) => Some(entry),
+            Err(ref e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                tracing::warn!("Permission denied walking supply chain: {}", e);
+                None
             }
-            e.ok()
+            Err(ref e) => {
+                tracing::debug!("Error walking supply chain path: {}", e);
+                None
+            }
         })
     {
         let path = entry.path();

@@ -247,7 +247,11 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
         )
     })?;
 
-    let scope = args.scope.as_deref().and_then(|s| load_scope(Some(s)).ok());
+    let scope = args.scope.as_deref().and_then(|s| {
+        load_scope(Some(s))
+            .map_err(|e| tracing::debug!("Failed to load scope: {}", e))
+            .ok()
+    });
 
     let mode = profile.operation_mode();
     let risk = profile.max_risk_budget().to_operation_risk();

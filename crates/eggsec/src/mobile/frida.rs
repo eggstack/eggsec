@@ -584,7 +584,9 @@ pub fn execute_script(
             .arg("--no-pause")
             .arg("-q")
             .output();
-        let _ = tx.send(out);
+        if let Err(e) = tx.send(out) {
+            tracing::warn!("frida: failed to send result to channel: {}", e);
+        }
     });
     let output_res = rx.recv_timeout(Duration::from_secs(30));
     if let Err(e) = std::fs::remove_file(&script_path) {

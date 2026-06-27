@@ -255,6 +255,9 @@ impl SessionManager {
     }
 
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
+        if session_id.contains('/') || session_id.contains('\\') || session_id.contains("..") {
+            return Err(anyhow::anyhow!("invalid session ID format"));
+        }
         let storage_path = self.storage_path.clone();
         let mut sessions = self.sessions.write().await;
         sessions.remove(session_id);

@@ -299,7 +299,9 @@ impl TransparentProxy {
 impl Drop for TransparentProxy {
     fn drop(&mut self) {
         if self.config.cleanup_on_drop && self.rules_active {
-            let _ = self.cleanup();
+            if let Err(e) = self.cleanup() {
+                tracing::warn!("transparent proxy cleanup failed: {}", e);
+            }
         }
     }
 }

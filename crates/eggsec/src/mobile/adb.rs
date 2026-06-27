@@ -224,7 +224,9 @@ impl AdbConnection {
 
     async fn close_service(&mut self, local_id: u32, remote_id: u32) -> Result<()> {
         let clse = AdbMessage::new(ADB_CLSE, remote_id, local_id, vec![]);
-        let _ = clse.write_to(&mut self.stream).await;
+        if let Err(e) = clse.write_to(&mut self.stream).await {
+            tracing::warn!("adb: failed to send CLSE: {}", e);
+        }
         // best effort, swallow read of peer CLSE
         let _ = timeout(Duration::from_millis(50), AdbMessage::read_from(&mut self.stream)).await;
         Ok(())
@@ -246,7 +248,10 @@ impl AdbConnection {
                 ADB_WRTE => {
                     output.extend_from_slice(&msg.data);
                     let okay = AdbMessage::new(ADB_OKAY, remote_id, local_id, vec![]);
-                    let _ = okay.write_to(&mut self.stream).await;
+                    if let Err(e) = okay.write_to(&mut self.stream).await {
+                        tracing::warn!("adb: failed to send OKAY: {}", e);
+                        return Err(e.into());
+                    }
                 }
                 ADB_CLSE => {
                     let _ = self.close_service(local_id, remote_id).await;
@@ -316,7 +321,9 @@ impl AdbConnection {
                 return Err(anyhow!("adb sync push failed: {}", reason));
             }
         }
-        let _ = self.close_service(local_id, remote_id).await;
+        if let Err(e) = self.close_service(local_id, remote_id).await {
+            tracing::warn!("adb: sync_push close_service failed: {}", e);
+        }
         if ok {
             Ok(())
         } else {
@@ -398,7 +405,9 @@ impl AdbConnection {
                     if msg.command == ADB_WRTE {
                         logs.extend_from_slice(&msg.data);
                         let ok = AdbMessage::new(ADB_OKAY, remote_id, local_id, vec![]);
-                        let _ = ok.write_to(&mut self.stream).await;
+                        if let Err(e) = ok.write_to(&mut self.stream).await {
+                            tracing::warn!("adb: logcat OKAY write failed: {}", e);
+                        }
                     } else if msg.command == ADB_CLSE {
                         break;
                     }
@@ -407,7 +416,9 @@ impl AdbConnection {
                 Err(_) => continue, // periodic tick to re-check elapsed
             }
         }
-        let _ = self.close_service(local_id, remote_id).await;
+        if let Err(e) = self.close_service(local_id, remote_id).await {
+            tracing::warn!("adb: logcat close_service failed: {}", e);
+        }
 
         let mut text = String::from_utf8_lossy(&logs).to_string();
         if let Some(p) = package_filter {

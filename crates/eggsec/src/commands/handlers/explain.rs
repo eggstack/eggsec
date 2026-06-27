@@ -8,7 +8,11 @@ use crate::config::{
 };
 
 pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs) -> Result<()> {
-    let scope = args.scope.as_deref().and_then(|s| load_scope(Some(s)).ok());
+    let scope = args.scope.as_deref().and_then(|s| {
+        load_scope(Some(s))
+            .map_err(|e| tracing::debug!("Failed to load scope: {}", e))
+            .ok()
+    });
     let decision = crate::cli::explain::evaluate_policy_decision(
         args.target.as_deref(),
         args.profile.as_deref(),
@@ -26,7 +30,11 @@ pub async fn handle_policy_explain(ctx: &CommandContext, args: PolicyExplainArgs
 }
 
 pub async fn handle_scope_explain(ctx: &CommandContext, args: ScopeExplainArgs) -> Result<()> {
-    let scope = args.scope.as_deref().and_then(|s| load_scope(Some(s)).ok());
+    let scope = args.scope.as_deref().and_then(|s| {
+        load_scope(Some(s))
+            .map_err(|e| tracing::debug!("Failed to load scope: {}", e))
+            .ok()
+    });
 
     let descriptor = OperationDescriptor {
         operation: "scope-explain".to_string(),
