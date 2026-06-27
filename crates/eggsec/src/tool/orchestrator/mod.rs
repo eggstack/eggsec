@@ -111,7 +111,9 @@ impl Orchestrator {
                 if deps_resolved {
                     visiting.insert(stage.name.clone());
                     resolved.push(stage.name.clone());
-                    *available.get_mut(&stage.name).unwrap() = true;
+                    if let Some(flag) = available.get_mut(&stage.name) {
+                        *flag = true;
+                    }
                     visiting.remove(&stage.name);
                     made_progress = true;
                 }

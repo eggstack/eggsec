@@ -209,7 +209,7 @@ pub async fn run_recon(
                     || error_str.contains("broken pipe");
 
                 if is_retryable && attempt < max_retries {
-                    let delay = base_delay_secs * 2u64.pow(attempt - 1);
+                    let delay = base_delay_secs.saturating_pow(attempt - 1).min(3600);
                     tracing::warn!(
                         "Recon attempt {} failed, retrying in {} seconds...",
                         attempt,

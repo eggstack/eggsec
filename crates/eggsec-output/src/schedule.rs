@@ -162,8 +162,8 @@ impl RateLimiter {
     pub fn new(requests_per_second: u32) -> Self {
         Self {
             requests_per_second,
-            burst_size: requests_per_second * 2,
-            tokens: requests_per_second * 2,
+            burst_size: requests_per_second.saturating_mul(2),
+            tokens: requests_per_second.saturating_mul(2),
             last_refill: Instant::now(),
         }
     }
@@ -185,7 +185,7 @@ impl RateLimiter {
         let raw_tokens = elapsed.as_secs_f64() * self.requests_per_second as f64;
         let tokens_to_add = (raw_tokens.min(f64::from(u32::MAX)) as u32).min(self.burst_size);
 
-        self.tokens = (self.tokens + tokens_to_add).min(self.burst_size);
+        self.tokens = self.tokens.saturating_add(tokens_to_add).min(self.burst_size);
         self.last_refill = now;
     }
 

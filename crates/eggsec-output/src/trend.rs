@@ -176,19 +176,19 @@ impl TrendAnalyzer {
         let mut sorted_results: Vec<_> = self.results.iter().collect();
         sorted_results.sort_by(|a, b| a.1.timestamp.cmp(&b.1.timestamp));
 
-        let critical_trend: Vec<i32> = sorted_results
+        let critical_trend: Vec<i64> = sorted_results
             .windows(2)
-            .map(|w| w[1].1.summary.critical as i32 - w[0].1.summary.critical as i32)
+            .map(|w| w[1].1.summary.critical as i64 - w[0].1.summary.critical as i64)
             .collect();
 
-        let high_trend: Vec<i32> = sorted_results
+        let high_trend: Vec<i64> = sorted_results
             .windows(2)
-            .map(|w| w[1].1.summary.high as i32 - w[0].1.summary.high as i32)
+            .map(|w| w[1].1.summary.high as i64 - w[0].1.summary.high as i64)
             .collect();
 
-        let medium_trend: Vec<i32> = sorted_results
+        let medium_trend: Vec<i64> = sorted_results
             .windows(2)
-            .map(|w| w[1].1.summary.medium as i32 - w[0].1.summary.medium as i32)
+            .map(|w| w[1].1.summary.medium as i64 - w[0].1.summary.medium as i64)
             .collect();
 
         let total_duration: u64 = sorted_results
@@ -241,9 +241,9 @@ impl TrendAnalyzer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrendAnalysis {
     pub direction: TrendDirection,
-    pub critical_trend: Vec<i32>,
-    pub high_trend: Vec<i32>,
-    pub medium_trend: Vec<i32>,
+    pub critical_trend: Vec<i64>,
+    pub high_trend: Vec<i64>,
+    pub medium_trend: Vec<i64>,
     pub average_scan_time_ms: u64,
 }
 

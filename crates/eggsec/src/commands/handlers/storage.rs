@@ -87,7 +87,7 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
             let findings = db.list_findings(scan_id, 0, 10000).await?;
             let json = serde_json::to_string_pretty(&findings)
                 .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
-            std::fs::write(output_path, &json)?;
+            tokio::fs::write(output_path, &json).await?;
             println!(
                 "Exported {} findings for scan {} to {}",
                 findings.len(),
@@ -99,7 +99,7 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
                 Some(finding) => {
                     let json = serde_json::to_string_pretty(&finding)
                         .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
-                    std::fs::write(output_path, &json)?;
+                    tokio::fs::write(output_path, &json).await?;
                     println!("Exported finding {} to {}", finding_id, output_path);
                 }
                 None => {
@@ -110,7 +110,7 @@ async fn handle_storage_export(args: crate::cli::storage::StorageExportArgs) -> 
             let findings = db.list_all_findings(0, 10000).await?;
             let json = serde_json::to_string_pretty(&findings)
                 .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
-            std::fs::write(output_path, &json)?;
+            tokio::fs::write(output_path, &json).await?;
             println!("Exported {} findings to {}", findings.len(), output_path);
         }
         Ok(())

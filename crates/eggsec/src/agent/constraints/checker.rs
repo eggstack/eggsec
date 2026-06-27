@@ -219,8 +219,8 @@ impl ConstraintChecker {
 
     pub fn evaluate_rate_limit(&self, key: &str) -> Result<(), ConstraintViolation> {
         if let Some(limit) = self.constraints.rate_limit_budget {
-            let mut request_counts = self.request_counts.lock().unwrap();
-            let mut last_reset = self.last_reset_at.lock().unwrap();
+            let mut request_counts = self.request_counts.lock().unwrap_or_else(|e| e.into_inner());
+            let mut last_reset = self.last_reset_at.lock().unwrap_or_else(|e| e.into_inner());
             if last_reset.elapsed() >= RATE_LIMIT_RESET_INTERVAL {
                 request_counts.clear();
                 *last_reset = Instant::now();
@@ -299,7 +299,7 @@ impl ConstraintChecker {
     }
 
     pub fn reset_rate_limits(&self) {
-        let mut request_counts = self.request_counts.lock().unwrap();
+        let mut request_counts = self.request_counts.lock().unwrap_or_else(|e| e.into_inner());
         request_counts.clear();
     }
 

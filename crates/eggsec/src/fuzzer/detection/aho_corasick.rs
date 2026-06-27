@@ -45,12 +45,15 @@ impl std::fmt::Display for LeakCategory {
 
 static PATTERNS: LazyLock<Vec<(String, LeakCategory, LeakSeverity)>> =
     LazyLock::new(get_all_patterns);
-static MATCHER: LazyLock<AhoCorasick> = LazyLock::new(|| {
+static MATCHER: LazyLock<Option<AhoCorasick>> = LazyLock::new(|| {
     let pattern_strings: Vec<&str> = PATTERNS.iter().map(|(p, _, _)| p.as_str()).collect();
+    if pattern_strings.is_empty() {
+        return None;
+    }
     AhoCorasickBuilder::new()
         .match_kind(MatchKind::LeftmostLongest)
         .build(&pattern_strings)
-        .expect("Failed to create Aho-Corasick matcher")
+        .ok()
 });
 
 #[derive(Clone)]
@@ -62,9 +65,14 @@ impl PatternMatcher {
     }
 
     pub fn scan(&self, text: &str) -> Vec<LeakMatch> {
+        let matcher = match MATCHER.as_ref() {
+            Some(m) => m,
+            None => return Vec::new(),
+        };
+
         let mut matches = Vec::with_capacity(8);
 
-        for mat in MATCHER.find_iter(text) {
+        for mat in matcher.find_iter(text) {
             let pattern_idx = mat.pattern().as_usize();
             if let Some((pattern, category, severity)) = PATTERNS.get(pattern_idx) {
                 let start = mat.start().saturating_sub(50);

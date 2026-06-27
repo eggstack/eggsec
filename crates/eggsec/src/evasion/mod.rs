@@ -358,7 +358,7 @@ impl EvasionScanner {
 
         if let EvasionTargetType::Process = target.target_type {
             if let Some(path) = &target.path {
-                if let Ok(bytes) = std::fs::read(path) {
+                if let Ok(bytes) = tokio::fs::read(path).await {
                     let syscall_patterns: &[&[u8]] = &[
                         b"syscall", b"NtCreateFile", b"NtWriteVirtualMemory", b"ZwCreateSection",
                     ];
@@ -403,7 +403,7 @@ impl EvasionScanner {
         let mut confidence = 0.0;
 
         if let Some(path) = &target.path {
-            if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(bytes) = tokio::fs::read(path).await {
                 match technique.id.as_str() {
                     "evasion-hook-001" => {
                         let patterns: &[&[u8]] = &[b"EtwpEventWrite", b"EventWrite", b"ntdll!Etwp"];
@@ -470,7 +470,7 @@ impl EvasionScanner {
         let mut confidence = 0.0;
 
         if let Some(path) = &target.path {
-            if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(bytes) = tokio::fs::read(path).await {
                 match technique.id.as_str() {
                     "evasion-obf-001" => {
                         let mut suspicious = 0;
@@ -530,7 +530,7 @@ impl EvasionScanner {
                     #[cfg(target_os = "linux")]
                     {
                         let maps_path = format!("/proc/{}/maps", pid);
-                        if let Ok(maps) = std::fs::read_to_string(&maps_path) {
+                        if let Ok(maps) = tokio::fs::read_to_string(&maps_path).await {
                             match technique.id.as_str() {
                                 "evasion-inj-001" => {
                                     let rwx_count = maps.lines().filter(|l| l.contains("rwxp") && !l.contains("/")).count();
@@ -556,7 +556,7 @@ impl EvasionScanner {
             }
             EvasionTargetType::File => {
                 if let Some(path) = &target.path {
-                    if let Ok(bytes) = std::fs::read(path) {
+                    if let Ok(bytes) = tokio::fs::read(path).await {
                         if technique.id == "evasion-inj-003" {
                             let patterns: &[&[u8]] = &[b"LoadLibraryA", b"GetProcAddress", b"VirtualAlloc"];
                             let mut found = 0;
@@ -601,7 +601,7 @@ impl EvasionScanner {
         let mut confidence = 0.0;
 
         if let Some(path) = &target.path {
-            if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(bytes) = tokio::fs::read(path).await {
                 match technique.id.as_str() {
                     "evasion-anti-001" => {
                         let patterns: &[&[u8]] = &[b"VMware", b"VirtualBox", b"VBOX", b"QEMU", b"Xen", b"Hyper-V", b"svm", b"kvm"];

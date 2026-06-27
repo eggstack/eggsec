@@ -30,7 +30,7 @@ static SEARCH_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock
         ))
         .tcp_nodelay(true)
         .build()
-        .expect("Failed to create search HTTP client")
+        .unwrap_or_else(|_| reqwest::Client::new())
 });
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

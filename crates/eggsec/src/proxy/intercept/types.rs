@@ -228,9 +228,8 @@ impl WebProxySessionReport {
 
     /// Merge flows from a previous session into this one (for session resume).
     pub fn merge_from_previous(&mut self, previous: &WebProxySessionReport) {
-        // Append flows from previous session with offset indices
         let offset = self.flows.len() as u64;
-        for mut flow in previous.flows.clone() {
+        for mut flow in previous.flows.iter().cloned() {
             flow.index += offset;
             self.add_flow(flow);
         }

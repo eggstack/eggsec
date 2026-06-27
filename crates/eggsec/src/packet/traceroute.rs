@@ -273,37 +273,45 @@ impl Traceroute {
                         .await
                         .map_err(|e| ProbeError::SocketError(e.to_string()))?;
                     let start = Instant::now();
-                    let socket = std::net::UdpSocket::bind("0.0.0.0:0")
-                        .map_err(|e| ProbeError::SocketError(e.to_string()))?;
-                    socket
-                        .set_read_timeout(Some(timeout))
-                        .map_err(|e| ProbeError::SocketError(e.to_string()))?;
-                    socket
-                        .set_ttl(ttl as u32)
-                        .map_err(|e| ProbeError::SocketError(e.to_string()))?;
-
-                    let packet = vec![0u8; packet_size];
                     let dst = SocketAddr::new(target, port);
+                    let timeout_copy = timeout;
+                    let ttl_copy = ttl;
+                    let packet_size_copy = packet_size;
+                    let target_copy = target;
+                    tokio::task::spawn_blocking(move || {
+                        let socket = std::net::UdpSocket::bind("0.0.0.0:0")
+                            .map_err(|e| ProbeError::SocketError(e.to_string()))?;
+                        socket
+                            .set_read_timeout(Some(timeout_copy))
+                            .map_err(|e| ProbeError::SocketError(e.to_string()))?;
+                        socket
+                            .set_ttl(ttl_copy as u32)
+                            .map_err(|e| ProbeError::SocketError(e.to_string()))?;
 
-                    socket
-                        .send_to(&packet, dst)
-                        .map_err(|e| ProbeError::SendError(e.to_string()))?;
+                        let packet = vec![0u8; packet_size_copy];
 
-                    let mut buf = [0u8; 1024];
-                    match socket.recv_from(&mut buf) {
-                        Ok((_, addr)) => {
-                            let rtt = start.elapsed();
-                            Ok((addr.ip(), rtt))
+                        socket
+                            .send_to(&packet, dst)
+                            .map_err(|e| ProbeError::SendError(e.to_string()))?;
+
+                        let mut buf = [0u8; 1024];
+                        match socket.recv_from(&mut buf) {
+                            Ok((_, addr)) => {
+                                let rtt = start.elapsed();
+                                Ok((addr.ip(), rtt))
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                                Err(ProbeError::Timeout)
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
+                                let rtt = start.elapsed();
+                                Ok((target_copy, rtt))
+                            }
+                            Err(e) => Err(ProbeError::ReceiveError(e.to_string())),
                         }
-                        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                            Err(ProbeError::Timeout)
-                        }
-                        Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
-                            let rtt = start.elapsed();
-                            Ok((target, rtt))
-                        }
-                        Err(e) => Err(ProbeError::ReceiveError(e.to_string())),
-                    }
+                    })
+                    .await
+                    .map_err(|e| ProbeError::SocketError(e.to_string()))?
                 })
             })
             .collect();

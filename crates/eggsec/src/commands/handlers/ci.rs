@@ -43,7 +43,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
 
     // Check baseline if provided
     if let Some(ref baseline_path) = args.baseline {
-        let baseline_data = std::fs::read_to_string(baseline_path)?;
+        let baseline_data = tokio::fs::read_to_string(baseline_path).await?;
         let baseline_findings: Vec<AgentFinding> = serde_json::from_str(&baseline_data)?;
         let comparison = BaselineComparison::compare(&findings, &baseline_findings);
 
@@ -90,7 +90,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
         Ok(crate::types::OutputFormat::Json) => {
             let output = serde_json::to_string_pretty(&findings)?;
             if let Some(ref output_path) = args.output {
-                std::fs::write(output_path, &output)?;
+                tokio::fs::write(output_path, &output).await?;
             } else {
                 println!("{}", output);
             }
@@ -108,7 +108,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
             let sarif = builder.build();
             let output = serde_json::to_string_pretty(&sarif)?;
             if let Some(ref output_path) = args.output {
-                std::fs::write(output_path, &output)?;
+                tokio::fs::write(output_path, &output).await?;
             } else {
                 println!("{}", output);
             }

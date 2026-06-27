@@ -472,7 +472,7 @@ pub async fn run_cli(
     if args.json {
         let json = serde_json::to_string_pretty(&report)?;
         if let Some(ref path) = args.output {
-            std::fs::write(path, &json)?;
+            tokio::fs::write(path, &json).await?;
             eprintln!("Report written to {}", path);
         } else {
             println!("{}", json);
@@ -480,7 +480,7 @@ pub async fn run_cli(
     } else {
         let human = report::format_human_report(&report);
         if let Some(ref path) = args.output {
-            std::fs::write(path, &human)?;
+            tokio::fs::write(path, &human).await?;
             eprintln!("Report written to {}", path);
         } else {
             print!("{}", human);

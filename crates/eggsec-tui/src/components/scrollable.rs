@@ -84,11 +84,7 @@ impl ScrollableText {
     }
 
     pub fn scroll_to_bottom(&mut self) {
-        if self.lines.is_empty() {
-            self.scroll_offset = 0;
-        } else {
-            self.scroll_offset = self.lines.len() - 1;
-        }
+        self.scroll_offset = self.lines.len().saturating_sub(1);
     }
 
     pub fn scroll_to_end(&mut self) {

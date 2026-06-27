@@ -1037,7 +1037,7 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             permission_state: perm_state_for_report.clone(),
             frida_instrumentation: frida_instr_for_report.clone(),
         };
-        match std::fs::read_to_string(bpath) {
+        match tokio::fs::read_to_string(bpath).await {
             Ok(content) => {
                 if let Ok(bl) = serde_json::from_str::<MobileBaseline>(&content) {
                     let reg = compare_to_baseline(&temp_for_compare, &bl);

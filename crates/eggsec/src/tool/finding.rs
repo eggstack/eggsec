@@ -108,7 +108,7 @@ impl From<crate::scanner::fingerprint::ServiceFingerprint> for Finding {
             .unwrap_or("unknown");
         let banner_snippet = fp.banner.as_ref().map(|b| {
             let trimmed = b.chars().take(200).collect::<String>();
-            if b.len() > 200 {
+            if trimmed.len() < b.len() {
                 format!("{}...", trimmed)
             } else {
                 trimmed
@@ -182,7 +182,7 @@ impl From<crate::scanner::udp_fingerprint::UdpServiceFingerprint> for Finding {
     fn from(fp: crate::scanner::udp_fingerprint::UdpServiceFingerprint) -> Self {
         let banner_snippet = fp.banner.as_ref().map(|b| {
             let trimmed = b.chars().take(200).collect::<String>();
-            if b.len() > 200 {
+            if trimmed.len() < b.len() {
                 format!("{}...", trimmed)
             } else {
                 trimmed
