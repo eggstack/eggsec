@@ -1032,7 +1032,9 @@ mod tests {
         assert!(app.theme_load.handle.is_some());
         assert!(app.theme_load.rx.is_some());
         // Clean up the thread.
-        app.theme_load.handle.take().unwrap().join().ok();
+        if let Err(e) = app.theme_load.handle.take().unwrap().join() {
+            tracing::warn!("Theme loader thread panicked: {:?}", e);
+        }
     }
 
     #[test]

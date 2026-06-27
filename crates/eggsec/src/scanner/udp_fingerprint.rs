@@ -148,7 +148,13 @@ pub async fn fingerprint_udp_services(
         let semaphore = semaphore.clone();
         let rate_limiter = rate_limiter.clone();
         let handle = tokio::spawn(async move {
-            let _permit = semaphore.acquire_owned().await.ok();
+            let _permit = match semaphore.acquire_owned().await {
+                Ok(p) => Some(p),
+                Err(_) => {
+                    tracing::warn!("UDP fingerprint semaphore closed while waiting for permit");
+                    None
+                }
+            };
             rate_limiter.acquire().await;
             let result = fingerprint_udp_port(ip, port, timeout_duration, Some(socket)).await;
             result

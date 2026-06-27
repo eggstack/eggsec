@@ -120,6 +120,39 @@ pub fn build_disassoc_frame(
     frame
 }
 
+#[cfg(target_os = "linux")]
+struct RawSocketFd {
+    fd: std::os::unix::io::RawFd,
+}
+
+#[cfg(target_os = "linux")]
+impl RawSocketFd {
+    fn open(domain: i32, type_: i32, protocol: i32) -> Result<Self> {
+        extern "C" {
+            fn socket(domain: i32, type_: i32, protocol: i32) -> std::os::unix::io::RawFd;
+        }
+        let fd = unsafe { socket(domain, type_, protocol) };
+        if fd < 0 {
+            anyhow::bail!("Failed to open raw socket. Requires root/CAP_NET_ADMIN.");
+        }
+        Ok(Self { fd })
+    }
+
+    fn fd(&self) -> std::os::unix::io::RawFd {
+        self.fd
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for RawSocketFd {
+    fn drop(&mut self) {
+        extern "C" {
+            fn close(fd: std::os::unix::io::RawFd) -> i32;
+        }
+        unsafe { close(self.fd) };
+    }
+}
+
 /// Inject raw frames on a monitor-mode interface via a raw socket.
 ///
 /// Uses AF_PACKET/SOCK_RAW with ETH_P_ALL for frame injection on Linux.
@@ -148,13 +181,9 @@ pub async fn inject_frames(
 
     #[cfg(target_os = "linux")]
     {
-        use std::os::unix::io::RawFd;
-
         extern "C" {
-            fn socket(domain: i32, type_: i32, protocol: i32) -> RawFd;
-            fn close(fd: RawFd) -> i32;
             fn sendto(
-                fd: RawFd,
+                fd: std::os::unix::io::RawFd,
                 buf: *const u8,
                 len: usize,
                 flags: i32,
@@ -173,13 +202,8 @@ pub async fn inject_frames(
         }
 
         // AF_PACKET=17, SOCK_RAW=3, ETH_P_ALL=0x0003
-        let fd = unsafe { socket(17, 3, 0x0003) };
-        if fd < 0 {
-            anyhow::bail!(
-                "Failed to open raw socket on {}. Requires root/CAP_NET_ADMIN.",
-                interface
-            );
-        }
+        let sock = RawSocketFd::open(17, 3, 0x0003)
+            .context("Failed to open raw socket. Requires root/CAP_NET_ADMIN.")?;
 
         // sockaddr_ll structure for AF_PACKET
         let mut sockaddr_ll = [0u8; 20];
@@ -203,7 +227,7 @@ pub async fn inject_frames(
             interval.tick().await;
             let result = unsafe {
                 sendto(
-                    fd,
+                    sock.fd(),
                     frame.as_ptr(),
                     frame.len(),
                     0,
@@ -224,7 +248,7 @@ pub async fn inject_frames(
             frame_idx += 1;
         }
 
-        unsafe { close(fd) };
+        // sock is dropped here, closing the fd via RAII
 
         info!(sent = sent, total = frame_count, "Frame injection complete");
         Ok(sent)

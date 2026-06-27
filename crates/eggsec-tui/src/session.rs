@@ -218,7 +218,18 @@ impl SessionManager {
                         continue;
                     }
                 };
-                if modified.elapsed().unwrap_or_default() > Duration::from_secs(3600) {
+                let elapsed = match modified.elapsed() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::debug!(
+                            path = %path.display(),
+                            error = %e,
+                            "failed to compute elapsed time for temp session file, skipping cleanup"
+                        );
+                        continue;
+                    }
+                };
+                if elapsed > Duration::from_secs(3600) {
                     if let Err(e) = fs::remove_file(&path) {
                         tracing::debug!(
                             path = %path.display(),
