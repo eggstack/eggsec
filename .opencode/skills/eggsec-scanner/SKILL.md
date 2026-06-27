@@ -1,3 +1,8 @@
+---
+name: eggsec-scanner
+description: "Port scanning and endpoint discovery - use when working with port scans, service fingerprinting, endpoint discovery, CMS detection, or template-based vulnerability matching."
+---
+
 # Eggsec Scanner Skill
 
 Port scanning and endpoint discovery module workflows and patterns.

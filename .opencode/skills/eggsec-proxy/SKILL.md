@@ -1,3 +1,8 @@
+---
+name: eggsec-proxy
+description: "Intercepting proxy for traffic inspection - use when working with HTTP/HTTPS/WebSocket/HTTP2/gRPC interception, MCP proxy tools, enhanced rules, evidence bundles, or session management."
+---
+
 # Eggsec Proxy Skill
 
 Intercepting proxy module workflows and patterns for traffic inspection.

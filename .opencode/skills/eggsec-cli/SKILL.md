@@ -1,3 +1,8 @@
+---
+name: eggsec-cli
+description: "CLI parsing, command dispatch, and handler patterns - use when adding CLI commands, working with argument parsing, handler dispatch, policy enforcement, or feature gating."
+---
+
 # Eggsec CLI Commands Skill
 
 CLI parsing, command dispatch, and handler patterns for Eggsec.

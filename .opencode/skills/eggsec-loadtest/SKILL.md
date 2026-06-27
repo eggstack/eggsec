@@ -1,3 +1,8 @@
+---
+name: eggsec-loadtest
+description: "HTTP load testing and performance benchmarking - use when working with LoadTestRunner, concurrent workers, latency percentiles, rate limiting, or hdrhistogram metrics."
+---
+
 # Eggsec Loadtest Skill
 
 HTTP load testing module workflows and patterns.

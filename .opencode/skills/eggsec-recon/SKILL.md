@@ -1,3 +1,8 @@
+---
+name: eggsec-recon
+description: "Reconnaissance module for information gathering - use when working with DNS, WHOIS, subdomain enumeration, technology detection, SSL analysis, threat intel, cloud detection, or email discovery."
+---
+
 # Eggsec Recon Skill
 
 Reconnaissance module workflows and patterns for information gathering.

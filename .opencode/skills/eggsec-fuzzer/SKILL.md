@@ -1,3 +1,8 @@
+---
+name: eggsec-fuzzer
+description: "Fuzzing engine and payload generation - use when working with FuzzEngine, PayloadType, response filters, chain executor, timing analysis, API schema fuzzing, or advanced fuzzers (GraphQL, JWT, OAuth, IDOR, SSTI)."
+---
+
 # Eggsec Fuzzer Skill
 
 Fuzzing engine module workflows and patterns for security testing.

@@ -1,3 +1,8 @@
+---
+name: eggsec-browser
+description: "Headless browser security testing - use when working with DOM XSS detection, SPA route discovery, client-side security checks, or browser-based vulnerability scanning."
+---
+
 # Eggsec Browser Skill
 
 Headless browser security testing module.

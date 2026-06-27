@@ -1,3 +1,8 @@
+---
+name: eggsec-tui
+description: "Terminal UI module workflows - use when working with TUI tabs, event loop, key handling, overlays, theming, notifications, tab rendering, or visual regression testing."
+---
+
 # Eggsec TUI Skill
 
 TUI module workflows and patterns for the terminal UI.

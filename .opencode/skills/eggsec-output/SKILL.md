@@ -1,3 +1,8 @@
+---
+name: eggsec-output
+description: "Report generation and export formats - use when working with JSON/HTML/SARIF/JUnit/Markdown/CSV/PDF output, trend analysis, baseline comparison, deduplication, or diff engine."
+---
+
 # Eggsec Output Skill
 
 Report generation module workflows and patterns for exporting scan results.

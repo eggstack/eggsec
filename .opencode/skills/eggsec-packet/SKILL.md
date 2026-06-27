@@ -1,3 +1,8 @@
+---
+name: eggsec-packet
+description: "Packet capture, crafting, and parsing - use when working with EthernetFrame, IP packets, TCP/UDP/ICMP headers, packet capture, packet builder, traceroute, or hexdump."
+---
+
 # Eggsec Packet Skill
 
 Packet capture, crafting, and parsing module workflows and patterns.

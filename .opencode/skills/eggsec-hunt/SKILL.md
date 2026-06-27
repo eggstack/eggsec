@@ -1,3 +1,8 @@
+---
+name: eggsec-hunt
+description: "Intelligent vulnerability hunting - use when working with business logic flaws, authorization bypass, attack chain detection, race conditions, or session issue detection."
+---
+
 # Eggsec Hunt Skill
 
 Intelligent vulnerability hunting module.

@@ -1,3 +1,8 @@
+---
+name: eggsec-security
+description: "Security testing skill for using Eggsec effectively - use when learning Eggsec capabilities, TUI navigation, CLI commands, configuration, output formats, scope rules, or feature flags."
+---
+
 # Eggsec Security Testing Skill
 
 ## Overview

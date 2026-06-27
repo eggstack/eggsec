@@ -1,3 +1,8 @@
+---
+name: eggsec-waf
+description: "WAF detection and bypass - use when working with WAF signatures, detection scoring, bypass techniques (evasion, headers, smuggling), or WAF profile caching."
+---
+
 # Eggsec WAF Skill
 
 WAF detection and bypass module workflows and patterns.

@@ -1,3 +1,8 @@
+---
+name: eggsec-auth
+description: "Authentication security testing - use when working with brute force testing, credential stuffing, lockout detection, MFA bypass, rate limiting, password policy, or session testing."
+---
+
 # Eggsec Auth Skill
 
 Authentication security testing module.

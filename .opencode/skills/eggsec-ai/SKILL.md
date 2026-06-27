@@ -1,3 +1,8 @@
+---
+name: eggsec-ai
+description: "AI/LLM integration for security testing - use when working with AI analysis, payload suggestions, WAF bypass suggestions, adaptive scanning, or AI client/circuit breaker patterns."
+---
+
 # Eggsec AI Skill
 
 AI/LLM integration module workflows and patterns for autonomous security testing.

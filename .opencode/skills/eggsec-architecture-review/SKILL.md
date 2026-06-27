@@ -1,3 +1,8 @@
+---
+name: eggsec-architecture-review
+description: "Architecture document review methodology - use when reviewing architecture/*.md files against implementation, verifying claims, or identifying bugs and discrepancies."
+---
+
 # Architecture Review Skill
 
 Guide for reviewing architecture documents against actual implementation.

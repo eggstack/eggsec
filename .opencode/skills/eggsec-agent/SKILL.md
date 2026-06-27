@@ -1,3 +1,8 @@
+---
+name: eggsec-agent
+description: "Agent-specific workflows for autonomous security testing - use when working with autonomous agents, agent observability, thread safety, or agent-driven security assessment pipelines."
+---
+
 # Eggsec Agent Skill
 
 Agent-specific workflows and patterns for autonomous security testing.

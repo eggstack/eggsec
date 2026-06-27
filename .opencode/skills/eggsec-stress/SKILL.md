@@ -1,3 +1,8 @@
+---
+name: eggsec-stress
+description: "Network stress testing and DoS simulation - use when working with SYN/UDP/HTTP/TCP/ICMP floods, IP spoofing, raw sockets, or stress authorization and scope enforcement."
+---
+
 # Eggsec Stress Skill
 
 Network stress testing and DoS simulation module workflows and patterns.

@@ -1,3 +1,8 @@
+---
+name: eggsec-config
+description: "Configuration module workflows - use when working with EggsecConfig, scope enforcement, execution profiles, EnforcementContext, SensitiveString, or config loading/validation."
+---
+
 # Eggsec Config Skill
 
 Configuration module workflows and patterns for managing Eggsec settings.

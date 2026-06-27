@@ -1,3 +1,8 @@
+---
+name: eggsec-tool
+description: "Tool abstraction layer for security tool integration - use when working with SecurityTool trait, ToolRegistry, MCP/REST/gRPC protocols, agent routes, task scheduling, or pipeline orchestrator."
+---
+
 # Eggsec Tool Skill
 
 Tool abstraction layer workflows and patterns for security tool integration.

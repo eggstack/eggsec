@@ -1,3 +1,8 @@
+---
+name: eggsec-distributed
+description: "Distributed computing module for cluster-based testing - use when working with worker configuration, coordinator/worker protocol, TLS streams, task queues, or remote command execution."
+---
+
 # Eggsec Distributed Skill
 
 Distributed computing module workflows and patterns for cluster-based testing.

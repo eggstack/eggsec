@@ -1,3 +1,8 @@
+---
+name: eggsec-pipeline
+description: "Security assessment pipeline orchestration - use when working with Stage enum, ScanProfile, PipelineContext, session persistence, pipeline execution flow, or stage dispatch."
+---
+
 # Eggsec Pipeline Skill
 
 Pipeline module workflows and patterns for orchestrating security assessments.
