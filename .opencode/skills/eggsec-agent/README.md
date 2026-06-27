@@ -1,3 +1,8 @@
+---
+name: eggsec-agent-index
+description: "Index of available Eggsec agent skills - use as a reference for finding specialized workflow files."
+---
+
 # Eggsec Agent Skills#
 
 These skills provide specialized workflows and domain knowledge for the Eggsec autonomous agent.

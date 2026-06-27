@@ -1,3 +1,8 @@
+---
+name: plan-improvement
+description: "Multi-wave improvement plans with parallel sub-agent execution - use when working with plan execution, wave-based parallelization, or subagent assignment."
+---
+
 ## Overview
 
 This skill guides AI agents through complex multi-wave improvement plans with parallel sub-agent execution.

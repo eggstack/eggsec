@@ -1,3 +1,8 @@
+---
+name: agent-observability
+description: "Agent observability, logging, and configuration hot-reload patterns - use when working with agent logging, monitoring, config watching, or stateful chained fuzzing."
+---
+
 # Agent Observability & Hot-Reload Skills
 
 ## Overview

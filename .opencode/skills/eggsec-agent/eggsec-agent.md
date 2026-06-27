@@ -1,3 +1,8 @@
+---
+name: eggsec-agent
+description: "Eggsec autonomous agent development - operational constraints, testable seams, event handling, scheduled scans, task scheduling, and lifecycle management."
+---
+
 # eggsec-agent Skill
 
 Eggsec autonomous agent development — operational constraints, testable seams, event handling, scheduled scans, task scheduling, lifecycle management. Triggers: agent, constraint, scan, schedule, trigger_event, dispatch, alert, portfolio, memory, task, lease, lifecycle.
