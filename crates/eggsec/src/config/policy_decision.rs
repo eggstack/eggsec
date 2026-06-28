@@ -2138,6 +2138,34 @@ mod tests {
     }
 
     #[test]
+    fn manual_yes_does_not_permit_high_risk() {
+        let mut mo = ManualOverride::default();
+        mo.assume_yes = true;
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::TrafficInterception));
+    }
+
+    #[test]
+    fn manual_specific_private_resolution_flag_permits_private_resolution_confirmation() {
+        let mut mo = ManualOverride::default();
+        mo.allow_private_resolution = true;
+        assert!(mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::OutOfScope));
+    }
+
+    #[test]
+    fn manual_specific_cross_host_redirect_flag_permits_redirect_confirmation() {
+        let mut mo = ManualOverride::default();
+        mo.allow_cross_host_redirect = true;
+        assert!(mo.permits(ConfirmationClass::CrossHostRedirect));
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::OutOfScope));
+    }
+
+    #[test]
     fn strict_profiles_treat_require_confirmation_as_deny() {
         for profile in &[
             ExecutionProfile::CiStrict,
