@@ -142,3 +142,24 @@ These invariants hold across all execution paths:
 **Scenario**: Operator triggers a high-risk action in TUI (e.g., WAF stress test).
 
 **Expected**: TUI preflight shows `RequireConfirmation` with class `high-risk`. Operator must pass `--allow-high-risk` flag with a reason. `--yes` does not suppress this prompt.
+
+## Phase 4 Regression Coverage
+
+Phase 4 added regression tests to protect manual CLI/TUI discretion from agent-grade strictness leaking into default operation. Tests cover:
+
+- **Policy-level outcomes** (`config::policy_decision::tests`): 48 tests verifying `evaluate_enforcement` produces correct outcomes (Allow/Warn/RequireConfirmation/Deny) for each profile, risk level, and scope configuration.
+- **CommandContext override wiring** (`commands::handlers::tests`): 48 tests verifying CLI flags map correctly to `ManualOverride`, error messages list exact flags needed, strict profiles ignore overrides, and audit fields are recorded.
+
+Key invariants locked by tests:
+
+| Invariant | Test Coverage |
+|-----------|--------------|
+| `--yes` only covers OutOfScope/TargetExpansion | `manual_override_permits_narrow_yes_for_outofscope_targetexpansion_only`, `yes_alone_does_not_permit_high_risk`, `yes_alone_does_not_permit_explicit_exclusion` |
+| High-risk requires dedicated flag | `allow_high_risk_permits_high_risk_without_explicit_exclusion`, `manual_permissive_high_risk_no_override_error_explains_yes_insufficient` |
+| Private/cross-host require dedicated flags | `allow_private_resolution_permits_private_resolution_class`, `allow_cross_host_redirect_permits_cross_host_class`, `allow_out_of_scope_does_not_permit_private_or_cross_host` |
+| Strict profiles ignore overrides | `manual_guarded_with_all_overrides_still_denies_require_confirmation`, `ci_strict_with_all_overrides_still_denies_require_confirmation`, `mcp_strict_via_command_context_ignores_overrides`, `agent_strict_via_command_context_ignores_overrides` |
+| TrafficInterception requires web-proxy flag | `manual_override_traffic_interception_permits_only_web_proxy` |
+| Error messages name exact flags | `command_context_error_messages_list_exact_dedicated_flags`, `manual_permissive_out_of_scope_no_override_error_suggests_allow_flag` |
+| Audit records use stable kebab strings | `successful_override_records_stable_kebab_case_classes_on_decision_no_debug_no_dups`, `successful_out_of_scope_override_records_audit_fields` |
+| Explicit exclusions hard-deny in non-permissive | `explicit_exclusion_denies_in_all_profiles`, `manual_permissive_does_not_downgrade_explicit_exclusion` |
+| Risk-policy/feature/capability denials stay hard-deny | `manual_permissive_does_not_downgrade_risk_policy_denial`, `manual_permissive_does_not_downgrade_feature_missing_denial`, `manual_permissive_does_not_downgrade_capability_denial` |

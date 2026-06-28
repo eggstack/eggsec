@@ -734,8 +734,7 @@ pub fn evaluate_enforcement(
                 // when the user did not declare positive scope rules (i.e. truly ambiguous/empty scope).
                 // If a scope with non-empty allowed_targets was provided and target missed it,
                 // treat as hard denial even in permissive (user intent was explicit).
-                let has_positive_scope_rules =
-                    scope.is_some_and(|s| !s.allowed_targets.is_empty());
+                let has_positive_scope_rules = scope.is_some_and(|s| !s.allowed_targets.is_empty());
                 let is_pure_out_of_scope_miss = classes
                     .iter()
                     .any(|c| matches!(c, DenialClass::TargetOutOfScope))
@@ -949,9 +948,10 @@ pub fn confirmation_classes_for(
     // Non-baseline capability required (and not already hard-denied)
     for cap in &descriptor.required_capabilities {
         if !super::baseline_allowed_capability(*cap)
-            && !classes.contains(&ConfirmationClass::NonBaselineCapability) {
-                classes.push(ConfirmationClass::NonBaselineCapability);
-            }
+            && !classes.contains(&ConfirmationClass::NonBaselineCapability)
+        {
+            classes.push(ConfirmationClass::NonBaselineCapability);
+        }
     }
 
     // Resolver/redirect signals (best-effort; only if not hard-denied above).
@@ -970,10 +970,9 @@ pub fn confirmation_classes_for(
         (rl.contains("private") || rl.contains("loopback"))
             && (rl.contains("resolv") || rl.contains("public") || rl.contains("rebind"))
     });
-    if has_private_resolution_signal
-        && !classes.contains(&ConfirmationClass::PrivateResolution) {
-            classes.push(ConfirmationClass::PrivateResolution);
-        }
+    if has_private_resolution_signal && !classes.contains(&ConfirmationClass::PrivateResolution) {
+        classes.push(ConfirmationClass::PrivateResolution);
+    }
     if (decision
         .warnings
         .iter()
@@ -982,18 +981,20 @@ pub fn confirmation_classes_for(
             .denied_reasons
             .iter()
             .any(|r| r.contains("redirect") || r.contains("host")))
-        && !classes.contains(&ConfirmationClass::CrossHostRedirect) {
-            classes.push(ConfirmationClass::CrossHostRedirect);
-        }
+        && !classes.contains(&ConfirmationClass::CrossHostRedirect)
+    {
+        classes.push(ConfirmationClass::CrossHostRedirect);
+    }
 
     // Target expansion discovered outside original input (placeholder)
     if decision
         .warnings
         .iter()
         .any(|w| w.contains("expansion") || w.contains("discovered"))
-        && !classes.contains(&ConfirmationClass::TargetExpansion) {
-            classes.push(ConfirmationClass::TargetExpansion);
-        }
+        && !classes.contains(&ConfirmationClass::TargetExpansion)
+    {
+        classes.push(ConfirmationClass::TargetExpansion);
+    }
 
     classes
 }
@@ -2032,5 +2033,137 @@ mod tests {
         assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
         assert!(!mo.permits(ConfirmationClass::HighRisk));
         assert!(!mo.permits(ConfirmationClass::ExplicitExclusion));
+    }
+
+    #[test]
+    fn manual_override_traffic_interception_permits_only_web_proxy() {
+        let mut mo = ManualOverride::default();
+        mo.allow_web_proxy = true;
+        assert!(mo.permits(ConfirmationClass::TrafficInterception));
+        assert!(!mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(ConfirmationClass::OutOfScope));
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
+        assert!(!mo.permits(ConfirmationClass::NonBaselineCapability));
+
+        let mut mo2 = ManualOverride::default();
+        mo2.allow_high_risk = true;
+        assert!(!mo2.permits(ConfirmationClass::TrafficInterception));
+    }
+
+    #[test]
+    fn manual_override_db_pentest_flag_permits_high_risk_class() {
+        let mut mo = ManualOverride::default();
+        mo.allow_db_pentest = true;
+        assert!(mo.permits(ConfirmationClass::HighRisk));
+        assert!(!mo.permits(ConfirmationClass::ExplicitExclusion));
+        assert!(!mo.permits(ConfirmationClass::OutOfScope));
+    }
+
+    #[test]
+    fn guarded_positive_scope_miss_with_explicit_rules_denies() {
+        use super::super::scope::{LoadedScope, ScopeRule};
+        let scope = super::super::Scope {
+            allowed_targets: vec![ScopeRule::new("127.0.0.1".to_string())],
+            ..Default::default()
+        };
+        let loaded = LoadedScope::explicit(scope, super::super::ScopeSource::ConfigFile, None);
+        let ctx = EnforcementContext {
+            execution_profile: ExecutionProfile::ManualGuarded,
+            execution_policy: ExecutionPolicy::default(),
+            loaded_scope: loaded,
+        };
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(
+            outcome.is_denied() || outcome.requires_confirmation(),
+            "ManualGuarded must deny or require confirmation for positive-scope miss, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn manual_permissive_allows_safe_passive_operation_with_warnings() {
+        let descriptor = OperationDescriptor {
+            operation: "recon".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Passive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let policy = ExecutionPolicy::default();
+        let outcome = evaluate_enforcement(
+            &descriptor,
+            &policy,
+            None,
+            ExecutionProfile::ManualPermissive,
+        );
+        assert!(
+            outcome.is_allowed(),
+            "ManualPermissive should allow safe passive with warnings, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn manual_yes_does_not_permit_private_resolution() {
+        let mut mo = ManualOverride::default();
+        mo.assume_yes = true;
+        assert!(!mo.permits(ConfirmationClass::PrivateResolution));
+        assert!(!mo.permits(ConfirmationClass::CrossHostRedirect));
+    }
+
+    #[test]
+    fn manual_yes_does_not_permit_nonbaseline_capability() {
+        let mut mo = ManualOverride::default();
+        mo.assume_yes = true;
+        assert!(!mo.permits(ConfirmationClass::NonBaselineCapability));
+    }
+
+    #[test]
+    fn strict_profiles_treat_require_confirmation_as_deny() {
+        for profile in &[
+            ExecutionProfile::CiStrict,
+            ExecutionProfile::McpStrict,
+            ExecutionProfile::AgentStrict,
+        ] {
+            let descriptor = OperationDescriptor {
+                operation: "scan".to_string(),
+                mode: OperationMode::StandardAssessment,
+                risk: OperationRisk::SafeActive,
+                intended_uses: vec![IntendedUse::WebAssessment],
+                target: Some("127.0.0.1".to_string()),
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: true,
+                required_capabilities: Vec::new(),
+            };
+            let policy = ExecutionPolicy::default();
+            let outcome = evaluate_enforcement(&descriptor, &policy, None, *profile);
+            assert!(
+                outcome.is_denied(),
+                "Profile {:?} must deny (not confirm) for missing scope, got: {:?}",
+                profile,
+                outcome
+            );
+        }
     }
 }

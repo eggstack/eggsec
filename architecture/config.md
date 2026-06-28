@@ -97,6 +97,8 @@ Under `ManualPermissive` (default CLI/TUI), `evaluate_enforcement` returns `Enfo
 
 This preserves hard denials for missing features, invalid targets, and all automated enforcement. See `docs/plans/2026-06-10-manual-discretion-mode-plan.md`.
 
+**Phase 4 regression coverage**: 96 tests across `config::policy_decision::tests` (48) and `commands::handlers::tests` (48) lock all manual-mode invariants. See `docs/ENFORCEMENT_MODES.md` Phase 4 section for the full invariant-to-test mapping.
+
 ### `EnforcementContext` (`policy_decision.rs`)
 
 `EnforcementContext` bundles `ExecutionProfile`, `ExecutionPolicy`, and `LoadedScope` into a single struct for shared enforcement across all execution paths. This eliminates the need to pass profile/policy/scope separately through the call stack. `EnforcementContext::evaluate(descriptor)` is the mandatory central boundary: it performs LoadedScope provenance checks (strict profiles deny `DefaultEmpty` for `requires_explicit_scope` target-bearing ops), applies `DenialClass` downgrade logic (ManualPermissive only for safe ScopeMissing/TargetOutOfScope when no positive rules declared and no exclusions/feature/risk/capability/hazard denials), performs positive-capability allow checks for strict profiles, and runs full risk/feature/policy enforcement. Per-scan re-evaluation occurs for agents in `execute_scan_with_depth`.

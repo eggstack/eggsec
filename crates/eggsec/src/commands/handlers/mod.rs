@@ -1,18 +1,28 @@
 pub mod auth_test;
 #[cfg(feature = "headless-browser")]
 pub mod browser;
+#[cfg(feature = "c2")]
+pub mod c2;
 pub mod ci;
 pub mod cluster;
 pub mod config;
+#[cfg(feature = "db-pentest")]
+pub mod db_pentest;
 pub mod doctor;
+#[cfg(feature = "evasion")]
+pub mod evasion;
 pub mod explain;
 pub mod fuzz;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
 pub mod load;
+#[cfg(feature = "mobile")]
+pub mod mobile;
 pub mod network;
 pub mod notify;
 pub mod plan;
+#[cfg(feature = "postex")]
+pub mod postex;
 pub mod recon;
 pub mod report;
 pub mod scan;
@@ -21,20 +31,10 @@ pub mod serve;
 pub mod storage;
 pub mod stress;
 pub mod vuln;
-#[cfg(feature = "wireless")]
-pub mod wireless;
-#[cfg(feature = "mobile")]
-pub mod mobile;
-#[cfg(feature = "db-pentest")]
-pub mod db_pentest;
-#[cfg(feature = "evasion")]
-pub mod evasion;
 #[cfg(feature = "web-proxy")]
 pub mod web_proxy;
-#[cfg(feature = "postex")]
-pub mod postex;
-#[cfg(feature = "c2")]
-pub mod c2;
+#[cfg(feature = "wireless")]
+pub mod wireless;
 pub use config::*;
 pub use doctor::*;
 pub use explain::*;
@@ -61,7 +61,17 @@ pub use agent::*;
 pub use auth_test::*;
 #[cfg(feature = "headless-browser")]
 pub use browser::*;
+#[cfg(feature = "c2")]
+pub use c2::*;
+#[cfg(feature = "db-pentest")]
+pub use db_pentest::*;
+#[cfg(feature = "evasion")]
+pub use evasion::*;
+#[cfg(feature = "mobile")]
+pub use mobile::*;
 pub use notify::*;
+#[cfg(feature = "postex")]
+pub use postex::*;
 pub use report::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
@@ -71,20 +81,10 @@ pub use storage::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 pub use vuln::*;
-#[cfg(feature = "wireless")]
-pub use wireless::*;
-#[cfg(feature = "mobile")]
-pub use mobile::*;
-#[cfg(feature = "db-pentest")]
-pub use db_pentest::*;
-#[cfg(feature = "evasion")]
-pub use evasion::*;
 #[cfg(feature = "web-proxy")]
 pub use web_proxy::*;
-#[cfg(feature = "postex")]
-pub use postex::*;
-#[cfg(feature = "c2")]
-pub use c2::*;
+#[cfg(feature = "wireless")]
+pub use wireless::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -443,9 +443,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         #[cfg(feature = "stress-testing")]
         Some(Commands::Stress(args)) => handle_stress(ctx, args).await,
         #[cfg(feature = "web-proxy")]
-        Some(Commands::ProxyIntercept(args)) => {
-            web_proxy::handle_proxy_intercept(ctx, args).await
-        }
+        Some(Commands::ProxyIntercept(args)) => web_proxy::handle_proxy_intercept(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Proxy(args)) => handle_proxy(ctx, args).await,
         Some(Commands::Cluster(args)) => handle_cluster(ctx, args).await,
@@ -1357,10 +1355,195 @@ mod tests {
     #[test]
     fn mobile_static_safe_active_allowed_by_default() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
-        let result = ctx.evaluate_and_enforce_operation(descriptor(
-            "mobile-static",
-            OperationRisk::SafeActive,
-        ));
+        let result = ctx
+            .evaluate_and_enforce_operation(descriptor("mobile-static", OperationRisk::SafeActive));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn manual_permissive_high_risk_with_both_yes_and_allow_flag_succeeds() {
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                assume_yes: true,
+                allow_high_risk: true,
+                ..Default::default()
+            },
+        );
+        let result =
+            ctx.evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive));
+        assert!(result.is_ok());
+        let decision = result.unwrap();
+        assert!(decision.manual_override_used);
+        assert!(
+            decision
+                .manual_override_classes
+                .contains(&"high-risk".to_string()),
+            "audit classes should contain high-risk: {:?}",
+            decision.manual_override_classes
+        );
+    }
+
+    #[test]
+    fn manual_permissive_out_of_scope_no_override_error_suggests_allow_flag() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false);
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let err = ctx.evaluate_and_enforce_operation(desc).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("--allow-out-of-scope"),
+            "error should suggest --allow-out-of-scope: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn manual_permissive_high_risk_no_override_error_explains_yes_insufficient() {
+        let policy = ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            ..Default::default()
+        };
+        let ctx = make_ctx(policy, localhost_scope(), false).with_manual_override(
+            crate::config::ManualOverride {
+                assume_yes: true,
+                ..Default::default()
+            },
+        );
+        let err = ctx
+            .evaluate_and_enforce_operation(descriptor("fuzz", OperationRisk::Intrusive))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("--yes alone does not permit"),
+            "error should explain --yes is insufficient: {}",
+            msg
+        );
+        assert!(
+            msg.contains("--allow-high-risk"),
+            "error should suggest --allow-high-risk: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn manual_guarded_all_overrides_cannot_override_scope_miss() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_execution_profile(ExecutionProfile::ManualGuarded)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                allow_high_risk: true,
+                assume_yes: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(
+            result.is_err(),
+            "ManualGuarded must deny regardless of overrides"
+        );
+    }
+
+    #[test]
+    fn agent_strict_overrides_ignored_and_deny_message_unconditional() {
+        let scope = localhost_scope();
+        let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
+            .with_execution_profile(ExecutionProfile::AgentStrict)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                allow_high_risk: true,
+                allow_private_resolution: true,
+                allow_cross_host_redirect: true,
+                assume_yes: true,
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let result = ctx.evaluate_and_enforce_operation(desc);
+        assert!(result.is_err(), "AgentStrict must deny unconditionally");
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            !msg.contains("--allow-"),
+            "AgentStrict denial should not suggest manual override flags: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn successful_out_of_scope_override_records_audit_fields() {
+        let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
+            .with_manual_override(crate::config::ManualOverride {
+                allow_out_of_scope: true,
+                reason: Some("authorized pentest".to_string()),
+                ..Default::default()
+            });
+        let desc = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let decision = ctx
+            .evaluate_and_enforce_operation(desc)
+            .expect("override should permit");
+        assert!(decision.manual_override_used);
+        assert_eq!(
+            decision.manual_override_reason.as_deref(),
+            Some("authorized pentest")
+        );
+        assert!(
+            !decision.manual_override_classes.is_empty(),
+            "audit classes should be non-empty"
+        );
+        assert!(
+            decision
+                .manual_override_classes
+                .contains(&"out-of-scope".to_string())
+                || decision
+                    .manual_override_classes
+                    .contains(&"target-expansion".to_string()),
+            "should record the appropriate class: {:?}",
+            decision.manual_override_classes
+        );
     }
 }

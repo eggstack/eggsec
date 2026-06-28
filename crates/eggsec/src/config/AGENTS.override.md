@@ -55,3 +55,18 @@ config.validate()?; // Returns ConfigError::Validation on failure
 - `ConfigError::Validation` - Validation failures (field out of range, etc.)
 
 Use `?` propagation instead of `unwrap_or_default()` to avoid silent failures.
+
+## Phase 4 Regression Tests
+
+Policy decision tests in `policy_decision.rs` (48 tests) lock manual-mode enforcement invariants:
+
+- `manual_override_permits_narrow_yes_for_outofscope_targetexpansion_only` - `--yes` is narrow
+- `manual_override_dedicated_flags_permit_only_their_class` - Each `--allow-*` flag covers only its class
+- `manual_override_traffic_interception_permits_only_web_proxy` - TrafficInterception requires web-proxy flag
+- `guarded_positive_scope_miss_with_explicit_rules_denies` - ManualGuarded denies positive scope misses
+- `strict_profiles_treat_require_confirmation_as_deny` - Strict profiles never honor overrides
+- `manual_yes_does_not_permit_private_resolution` / `manual_yes_does_not_permit_nonbaseline_capability` - `--yes` cannot cover dedicated classes
+- `explicit_exclusion_denies_in_all_profiles` - Explicit exclusions are never silently warnable
+- `manual_permissive_does_not_downgrade_risk_policy_denial` / `feature_missing_denial` / `capability_denial` - Hard deny classes stay hard
+
+See `docs/ENFORCEMENT_MODES.md` Phase 4 section for the full invariant-to-test mapping.
