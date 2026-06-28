@@ -176,6 +176,7 @@ Canonical reference points when updating guidance or skills:
 - `EnforcementContext` - Central policy evaluator (`config/policy_decision.rs`); constructors: `cli`, `mcp_strict`, `agent_strict`, `ci_strict`
 - `LoadedScope` - Scope with provenance (`DefaultEmpty`, `ConfigFile`, `CliScopeFile`, `GeneratedPreset`) in `config/scope.rs`
 - `ExecutionProfile` - Trust boundary enum: `ManualPermissive`, `ManualGuarded`, `McpStrict`, `AgentStrict`, `CiStrict`
+- `ExecutionSurface` - Caller-origin enum that derives `ExecutionProfile`; single source of truth for surface-to-profile mapping
 - `ConfirmationClass` - Kebab-case strings for policy confirmations; use `as_str()` for stable IDs
 - `TabError` - Structured error type with `is_recoverable()` in `eggsec-tui`
 - `PayloadType` - Enum of 40 payload categories; lives in `fuzzer/payloads/mod.rs`, NOT `types.rs`
@@ -192,6 +193,7 @@ Canonical reference points when updating guidance or skills:
 - **AI Cache Keys**: Always use `CacheKeyBuilder` for cache keys in AI module to avoid collisions
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
+- **ExecutionSurface**: Introduces caller-origin semantics; `ExecutionProfile` describes enforcement behavior, `ExecutionSurface` describes where it comes from. Use `EnforcementContext::for_surface()` for centralized construction.
 - **Shared Policy Evaluator**: Use `EnforcementContext::evaluate()` (central) in `config/policy_decision.rs` instead of building policy checks inline
 - **MCP/Agent Invariant**: For MCP/agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
 - **eggsec-output Re-exports**: Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity`

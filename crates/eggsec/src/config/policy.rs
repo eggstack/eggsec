@@ -300,6 +300,106 @@ pub struct OperationDescriptor {
     pub required_capabilities: Vec<Capability>,
 }
 
+/// Origin of an execution request.
+///
+/// Describes *where* an operation originates, then derives the correct
+/// [`ExecutionProfile`] and enforcement posture from that surface. This
+/// separates caller identity from enforcement behavior and prevents
+/// entrypoints from hand-rolling inconsistent profile selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionSurface {
+    /// CLI interactive session (default manual permissive).
+    CliManual,
+    /// TUI interactive session (default manual permissive).
+    TuiManual,
+    /// CLI with `--strict-scope` flag (manual guarded).
+    CliManualStrict,
+    /// TUI with strict-scope toggle (manual guarded, Phase 5).
+    TuiManualStrict,
+    /// MCP server entrypoint.
+    McpServer,
+    /// Autonomous security agent entrypoint.
+    SecurityAgent,
+    /// CI pipeline entrypoint.
+    Ci,
+    /// REST API server entrypoint (strict by default, pending Phase 7).
+    RestApi,
+}
+
+impl ExecutionSurface {
+    /// Derive the [`ExecutionProfile`] for this surface.
+    pub fn profile(self) -> ExecutionProfile {
+        match self {
+            Self::CliManual | Self::TuiManual => ExecutionProfile::ManualPermissive,
+            Self::CliManualStrict | Self::TuiManualStrict => ExecutionProfile::ManualGuarded,
+            Self::McpServer => ExecutionProfile::McpStrict,
+            Self::SecurityAgent => ExecutionProfile::AgentStrict,
+            Self::Ci => ExecutionProfile::CiStrict,
+            Self::RestApi => ExecutionProfile::McpStrict,
+        }
+    }
+
+    /// Returns `true` if this surface represents a manual (human) caller.
+    pub fn is_manual(self) -> bool {
+        matches!(
+            self,
+            Self::CliManual | Self::TuiManual | Self::CliManualStrict | Self::TuiManualStrict
+        )
+    }
+
+    /// Returns `true` if this surface is an automated (non-human) caller.
+    pub fn is_agent_controlled(self) -> bool {
+        matches!(
+            self,
+            Self::McpServer | Self::SecurityAgent | Self::Ci | Self::RestApi
+        )
+    }
+
+    /// Returns `true` if this surface honors manual override flags.
+    ///
+    /// Only permissive manual surfaces honor overrides. Strict and automated
+    /// surfaces never accept `--yes` or `--allow-*` flags.
+    pub fn honors_manual_override(self) -> bool {
+        matches!(self, Self::CliManual | Self::TuiManual)
+    }
+
+    /// Returns `true` if this surface requires an explicit scope manifest
+    /// for networked execution.
+    pub fn requires_explicit_manifest_for_networked(self) -> bool {
+        self.is_agent_controlled()
+    }
+
+    /// Human-readable label for logging and display.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::CliManual => "CLI manual",
+            Self::TuiManual => "TUI manual",
+            Self::CliManualStrict => "CLI manual strict",
+            Self::TuiManualStrict => "TUI manual strict",
+            Self::McpServer => "MCP server",
+            Self::SecurityAgent => "Security agent",
+            Self::Ci => "CI",
+            Self::RestApi => "REST API",
+        }
+    }
+}
+
+impl std::fmt::Display for ExecutionSurface {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CliManual => write!(f, "cli-manual"),
+            Self::TuiManual => write!(f, "tui-manual"),
+            Self::CliManualStrict => write!(f, "cli-manual-strict"),
+            Self::TuiManualStrict => write!(f, "tui-manual-strict"),
+            Self::McpServer => write!(f, "mcp-server"),
+            Self::SecurityAgent => write!(f, "security-agent"),
+            Self::Ci => write!(f, "ci"),
+            Self::RestApi => write!(f, "rest-api"),
+        }
+    }
+}
+
 /// Caller trust boundary for scope enforcement.
 ///
 /// Determines how strictly scope violations are treated. Manual CLI/TUI
@@ -706,6 +806,142 @@ mod tests {
             let json = serde_json::to_string(&variant).unwrap();
             let deserialized: DenialClass = serde_json::from_str(&json).unwrap();
             assert_eq!(variant, deserialized);
+        }
+    }
+
+    // --- ExecutionSurface tests ---
+
+    #[test]
+    fn execution_surface_profile_mapping() {
+        assert_eq!(
+            ExecutionSurface::CliManual.profile(),
+            ExecutionProfile::ManualPermissive
+        );
+        assert_eq!(
+            ExecutionSurface::TuiManual.profile(),
+            ExecutionProfile::ManualPermissive
+        );
+        assert_eq!(
+            ExecutionSurface::CliManualStrict.profile(),
+            ExecutionProfile::ManualGuarded
+        );
+        assert_eq!(
+            ExecutionSurface::TuiManualStrict.profile(),
+            ExecutionProfile::ManualGuarded
+        );
+        assert_eq!(
+            ExecutionSurface::McpServer.profile(),
+            ExecutionProfile::McpStrict
+        );
+        assert_eq!(
+            ExecutionSurface::SecurityAgent.profile(),
+            ExecutionProfile::AgentStrict
+        );
+        assert_eq!(
+            ExecutionSurface::Ci.profile(),
+            ExecutionProfile::CiStrict
+        );
+        assert!(ExecutionSurface::RestApi.profile().is_strict());
+    }
+
+    #[test]
+    fn execution_surface_is_manual() {
+        assert!(ExecutionSurface::CliManual.is_manual());
+        assert!(ExecutionSurface::TuiManual.is_manual());
+        assert!(ExecutionSurface::CliManualStrict.is_manual());
+        assert!(ExecutionSurface::TuiManualStrict.is_manual());
+        assert!(!ExecutionSurface::McpServer.is_manual());
+        assert!(!ExecutionSurface::SecurityAgent.is_manual());
+        assert!(!ExecutionSurface::Ci.is_manual());
+        assert!(!ExecutionSurface::RestApi.is_manual());
+    }
+
+    #[test]
+    fn execution_surface_is_agent_controlled() {
+        assert!(!ExecutionSurface::CliManual.is_agent_controlled());
+        assert!(!ExecutionSurface::TuiManual.is_agent_controlled());
+        assert!(ExecutionSurface::McpServer.is_agent_controlled());
+        assert!(ExecutionSurface::SecurityAgent.is_agent_controlled());
+        assert!(ExecutionSurface::Ci.is_agent_controlled());
+        assert!(ExecutionSurface::RestApi.is_agent_controlled());
+    }
+
+    #[test]
+    fn execution_surface_honors_manual_override() {
+        assert!(ExecutionSurface::CliManual.honors_manual_override());
+        assert!(ExecutionSurface::TuiManual.honors_manual_override());
+        assert!(!ExecutionSurface::CliManualStrict.honors_manual_override());
+        assert!(!ExecutionSurface::TuiManualStrict.honors_manual_override());
+        assert!(!ExecutionSurface::McpServer.honors_manual_override());
+        assert!(!ExecutionSurface::SecurityAgent.honors_manual_override());
+        assert!(!ExecutionSurface::Ci.honors_manual_override());
+        assert!(!ExecutionSurface::RestApi.honors_manual_override());
+    }
+
+    #[test]
+    fn execution_surface_requires_explicit_manifest_for_networked() {
+        assert!(!ExecutionSurface::CliManual.requires_explicit_manifest_for_networked());
+        assert!(!ExecutionSurface::TuiManual.requires_explicit_manifest_for_networked());
+        assert!(ExecutionSurface::McpServer.requires_explicit_manifest_for_networked());
+        assert!(ExecutionSurface::SecurityAgent.requires_explicit_manifest_for_networked());
+        assert!(ExecutionSurface::Ci.requires_explicit_manifest_for_networked());
+        assert!(ExecutionSurface::RestApi.requires_explicit_manifest_for_networked());
+    }
+
+    #[test]
+    fn execution_surface_display() {
+        assert_eq!(format!("{}", ExecutionSurface::CliManual), "cli-manual");
+        assert_eq!(format!("{}", ExecutionSurface::TuiManual), "tui-manual");
+        assert_eq!(
+            format!("{}", ExecutionSurface::CliManualStrict),
+            "cli-manual-strict"
+        );
+        assert_eq!(
+            format!("{}", ExecutionSurface::TuiManualStrict),
+            "tui-manual-strict"
+        );
+        assert_eq!(format!("{}", ExecutionSurface::McpServer), "mcp-server");
+        assert_eq!(
+            format!("{}", ExecutionSurface::SecurityAgent),
+            "security-agent"
+        );
+        assert_eq!(format!("{}", ExecutionSurface::Ci), "ci");
+        assert_eq!(format!("{}", ExecutionSurface::RestApi), "rest-api");
+    }
+
+    #[test]
+    fn execution_surface_label() {
+        assert_eq!(ExecutionSurface::CliManual.label(), "CLI manual");
+        assert_eq!(ExecutionSurface::TuiManual.label(), "TUI manual");
+        assert_eq!(
+            ExecutionSurface::CliManualStrict.label(),
+            "CLI manual strict"
+        );
+        assert_eq!(
+            ExecutionSurface::TuiManualStrict.label(),
+            "TUI manual strict"
+        );
+        assert_eq!(ExecutionSurface::McpServer.label(), "MCP server");
+        assert_eq!(ExecutionSurface::SecurityAgent.label(), "Security agent");
+        assert_eq!(ExecutionSurface::Ci.label(), "CI");
+        assert_eq!(ExecutionSurface::RestApi.label(), "REST API");
+    }
+
+    #[test]
+    fn execution_surface_serialization_roundtrip() {
+        for surface in [
+            ExecutionSurface::CliManual,
+            ExecutionSurface::TuiManual,
+            ExecutionSurface::CliManualStrict,
+            ExecutionSurface::TuiManualStrict,
+            ExecutionSurface::McpServer,
+            ExecutionSurface::SecurityAgent,
+            ExecutionSurface::Ci,
+            ExecutionSurface::RestApi,
+        ] {
+            let json = serde_json::to_string(&surface).unwrap();
+            let deserialized: ExecutionSurface = serde_json::from_str(&json).unwrap();
+            assert_eq!(surface, deserialized);
         }
     }
 }

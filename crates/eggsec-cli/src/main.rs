@@ -25,6 +25,37 @@ fn agent_log_dir(cli: &Cli) -> Option<PathBuf> {
     None
 }
 
+/// Derive the [`ExecutionSurface`] from the CLI command and flags.
+///
+/// Feature-gated command variants (MCP, agent, serve) are matched only when
+/// the `rest-api` feature is enabled. The `grpc-api` serve command also maps
+/// to `RestApi`.
+#[cfg(feature = "rest-api")]
+fn resolve_execution_surface(cli: &Cli) -> eggsec::config::ExecutionSurface {
+    use eggsec::cli::Commands;
+    match cli.command.as_ref() {
+        Some(Commands::Ci(_)) => eggsec::config::ExecutionSurface::Ci,
+        Some(Commands::Agent(_)) => eggsec::config::ExecutionSurface::SecurityAgent,
+        Some(Commands::McpServe(_)) | Some(Commands::CodeggMcp(_)) => {
+            eggsec::config::ExecutionSurface::McpServer
+        }
+        Some(Commands::Serve(_)) => eggsec::config::ExecutionSurface::RestApi,
+        _ if cli.strict_scope => eggsec::config::ExecutionSurface::CliManualStrict,
+        _ => eggsec::config::ExecutionSurface::CliManual,
+    }
+}
+
+#[cfg(not(feature = "rest-api"))]
+fn resolve_execution_surface(cli: &Cli) -> eggsec::config::ExecutionSurface {
+    if matches!(cli.command.as_ref(), Some(eggsec::cli::Commands::Ci(_))) {
+        eggsec::config::ExecutionSurface::Ci
+    } else if cli.strict_scope {
+        eggsec::config::ExecutionSurface::CliManualStrict
+    } else {
+        eggsec::config::ExecutionSurface::CliManual
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -57,18 +88,12 @@ async fn main() -> Result<()> {
     let config = eggsec::config::load_config(cli.config.as_deref())?;
     let loaded_scope = eggsec::config::load_scope_with_source(cli.scope.as_deref())?;
 
-    let execution_profile = if matches!(cli.command.as_ref(), Some(eggsec::cli::Commands::Ci(_))) {
-        eggsec::config::ExecutionProfile::CiStrict
-    } else if cli.strict_scope {
-        eggsec::config::ExecutionProfile::ManualGuarded
-    } else {
-        eggsec::config::ExecutionProfile::ManualPermissive
-    };
+    let execution_surface = resolve_execution_surface(&cli);
 
     let mut ctx =
         eggsec::commands::CommandContext::new(config, loaded_scope.scope.clone(), cli.json)
             .with_config_path(cli.config.clone())
-            .with_execution_profile(execution_profile)
+            .with_execution_surface(execution_surface)
             .with_loaded_scope(loaded_scope);
 
     // Populate manual override from CLI flags (only effective for ManualPermissive).

@@ -105,6 +105,23 @@ This preserves hard denials for missing features, invalid targets, and all autom
 
 **Baseline capabilities** for strict automated profiles: `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`. Non-baseline capabilities require explicit `allowed_capabilities`.
 
+### ExecutionSurface
+
+`ExecutionSurface` (defined in `config/policy.rs`) describes where an operation originates and derives the correct `ExecutionProfile`. Entry points should select an `ExecutionSurface` variant rather than hand-picking profiles.
+
+| Surface | Profile | Manual Override |
+|---------|---------|-----------------|
+| `CliManual` | `ManualPermissive` | Yes |
+| `TuiManual` | `ManualPermissive` | Yes |
+| `CliManualStrict` | `ManualGuarded` | No |
+| `TuiManualStrict` | `ManualGuarded` | No |
+| `McpServer` | `McpStrict` | No |
+| `SecurityAgent` | `AgentStrict` | No |
+| `Ci` | `CiStrict` | No |
+| `RestApi` | `McpStrict` (placeholder) | No |
+
+Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for centralized construction.
+
 **Preferred constructors:** `EnforcementContext::manual_permissive`, `manual_guarded`, `ci_strict`, `mcp_strict`, `agent_strict` (no `cli(...)` helper; callers construct the appropriate profile).
 
 **Construction per execution path:**

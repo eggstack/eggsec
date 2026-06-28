@@ -51,7 +51,7 @@ pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope, load_scope_with_source};
 pub use policy::{
     baseline_allowed_capability, Capability, DenialClass, ExecutionPolicy, ExecutionProfile,
-    IntendedUse, OperationDescriptor, OperationMode, OperationRisk,
+    ExecutionSurface, IntendedUse, OperationDescriptor, OperationMode, OperationRisk,
 };
 pub use policy_decision::{
     classify_denial_reasons, confirmation_class_strings, confirmation_classes_for,

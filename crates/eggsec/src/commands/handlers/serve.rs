@@ -65,7 +65,8 @@ pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeAr
         _ => McpProfile::OpsAgent,
     };
 
-    let enforcement = crate::config::EnforcementContext::mcp_strict(
+    let enforcement = crate::config::EnforcementContext::for_surface(
+        crate::config::ExecutionSurface::McpServer,
         ctx.config.execution_policy.clone(),
         ctx.enforcement.loaded_scope.clone(),
     );

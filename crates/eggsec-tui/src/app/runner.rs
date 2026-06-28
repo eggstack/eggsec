@@ -85,8 +85,9 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         .as_ref()
         .map(|c| c.execution_policy.clone())
         .unwrap_or_default();
+    let surface = eggsec::config::ExecutionSurface::TuiManual;
     app.enforcement =
-        eggsec::config::EnforcementContext::manual_permissive(policy, loaded_scope.clone());
+        eggsec::config::EnforcementContext::for_surface(surface, policy, loaded_scope.clone());
     app.loaded_scope = loaded_scope;
     let res = run_app(&mut terminal, &mut app);
 

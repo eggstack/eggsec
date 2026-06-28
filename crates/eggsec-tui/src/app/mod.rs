@@ -108,6 +108,7 @@ impl App {
 
     pub fn new_for_testing(history: SharedHistory) -> Self {
         let session_manager = SessionManager::new(SessionConfig::default());
+        let surface = eggsec::config::ExecutionSurface::TuiManual;
         let mut app = Self {
             current_tab: Tab::Recon,
             should_quit: false,
@@ -131,7 +132,8 @@ impl App {
             needs_redraw: true,
             bookmarks: FxHashSet::default(),
             theme_load: ThemeLoadState::default(),
-            enforcement: EnforcementContext::manual_permissive(
+            enforcement: eggsec::config::EnforcementContext::for_surface(
+                surface,
                 ExecutionPolicy::default(),
                 LoadedScope::default_empty(),
             ),
@@ -213,7 +215,8 @@ impl App {
             needs_redraw: true,
             bookmarks: restored_bookmarks,
             theme_load: ThemeLoadState::default(),
-            enforcement: EnforcementContext::manual_permissive(
+            enforcement: EnforcementContext::for_surface(
+                eggsec::config::ExecutionSurface::TuiManual,
                 ExecutionPolicy::default(),
                 LoadedScope::default_empty(),
             ),

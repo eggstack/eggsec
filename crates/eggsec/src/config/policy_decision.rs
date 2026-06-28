@@ -362,6 +362,24 @@ impl EnforcementContext {
         }
     }
 
+    /// Construct an [`EnforcementContext`] from an [`ExecutionSurface`].
+    ///
+    /// This is the canonical way to build enforcement from a caller-origin
+    /// identity. It delegates to the appropriate profile-specific constructor.
+    pub fn for_surface(
+        surface: super::ExecutionSurface,
+        policy: ExecutionPolicy,
+        loaded_scope: super::scope::LoadedScope,
+    ) -> Self {
+        match surface.profile() {
+            ExecutionProfile::ManualPermissive => Self::manual_permissive(policy, loaded_scope),
+            ExecutionProfile::ManualGuarded => Self::manual_guarded(policy, loaded_scope),
+            ExecutionProfile::CiStrict => Self::ci_strict(policy, loaded_scope),
+            ExecutionProfile::McpStrict => Self::mcp_strict(policy, loaded_scope),
+            ExecutionProfile::AgentStrict => Self::agent_strict(policy, loaded_scope),
+        }
+    }
+
     /// Returns `true` if the profile requires an explicit scope manifest for networked tools.
     pub fn require_explicit_scope_for_networked(&self) -> bool {
         self.execution_profile.is_automated()

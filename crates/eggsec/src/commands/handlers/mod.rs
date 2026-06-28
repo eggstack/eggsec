@@ -98,7 +98,7 @@ pub use ai_analyze::*;
 use crate::cli::Cli;
 use crate::cli::Commands;
 use crate::config::OperationDescriptor;
-use crate::config::{EggsecConfig, ExecutionProfile, Scope};
+use crate::config::{EggsecConfig, ExecutionProfile, ExecutionSurface, Scope};
 use crate::error::Result as ErrorResult;
 use anyhow::Result;
 
@@ -109,6 +109,9 @@ pub struct CommandContext {
     config_path: Option<String>,
     pub notify_manager: crate::notify::NotifyManager,
     pub execution_profile: ExecutionProfile,
+    /// Origin of this execution request. Derives `execution_profile` and
+    /// determines whether manual overrides are honored.
+    pub execution_surface: ExecutionSurface,
     pub enforcement: crate::config::EnforcementContext,
     /// Manual-only override flags. Honored exclusively for ManualPermissive.
     /// Strict profiles, CI, MCP, and agent ignore or reject overrides.
@@ -126,7 +129,9 @@ impl CommandContext {
             crate::config::ScopeSource::CliScopeFile
         };
         let loaded_scope = crate::config::LoadedScope::explicit(scope.clone(), source, None);
-        let enforcement = crate::config::EnforcementContext::manual_permissive(
+        let execution_surface = ExecutionSurface::CliManual;
+        let enforcement = crate::config::EnforcementContext::for_surface(
+            execution_surface,
             config.execution_policy.clone(),
             loaded_scope,
         );
@@ -136,7 +141,8 @@ impl CommandContext {
             json,
             config_path: None,
             notify_manager,
-            execution_profile: ExecutionProfile::ManualPermissive,
+            execution_profile: execution_surface.profile(),
+            execution_surface,
             enforcement,
             manual_override: crate::config::ManualOverride::default(),
         }
@@ -147,6 +153,8 @@ impl CommandContext {
         self
     }
 
+    /// Set execution profile directly. Transitional — prefer [`Self::with_execution_surface`]
+    /// for new call sites so that the surface-to-profile derivation is centralized.
     pub fn with_execution_profile(mut self, profile: ExecutionProfile) -> Self {
         self.execution_profile = profile;
         self.enforcement = match profile {
@@ -176,36 +184,30 @@ impl CommandContext {
         self
     }
 
+    /// Set execution surface, deriving both the profile and enforcement context
+    /// from the surface. This is the preferred way to configure entrypoint semantics.
+    pub fn with_execution_surface(mut self, surface: ExecutionSurface) -> Self {
+        self.execution_surface = surface;
+        self.execution_profile = surface.profile();
+        self.enforcement = crate::config::EnforcementContext::for_surface(
+            surface,
+            self.config.execution_policy.clone(),
+            self.enforcement.loaded_scope.clone(),
+        );
+        self
+    }
+
     pub fn config_path(&self) -> Option<&str> {
         self.config_path.as_deref()
     }
 
     pub fn with_loaded_scope(mut self, loaded_scope: crate::config::LoadedScope) -> Self {
         self.scope = loaded_scope.scope.clone();
-        self.enforcement = match self.execution_profile {
-            ExecutionProfile::ManualPermissive => {
-                crate::config::EnforcementContext::manual_permissive(
-                    self.config.execution_policy.clone(),
-                    loaded_scope,
-                )
-            }
-            ExecutionProfile::ManualGuarded => crate::config::EnforcementContext::manual_guarded(
-                self.config.execution_policy.clone(),
-                loaded_scope,
-            ),
-            ExecutionProfile::CiStrict => crate::config::EnforcementContext::ci_strict(
-                self.config.execution_policy.clone(),
-                loaded_scope,
-            ),
-            ExecutionProfile::McpStrict => crate::config::EnforcementContext::mcp_strict(
-                self.config.execution_policy.clone(),
-                loaded_scope,
-            ),
-            ExecutionProfile::AgentStrict => crate::config::EnforcementContext::agent_strict(
-                self.config.execution_policy.clone(),
-                loaded_scope,
-            ),
-        };
+        self.enforcement = crate::config::EnforcementContext::for_surface(
+            self.execution_surface,
+            self.config.execution_policy.clone(),
+            loaded_scope,
+        );
         self
     }
 
