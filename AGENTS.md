@@ -193,7 +193,7 @@ Canonical reference points when updating guidance or skills:
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **Shared Policy Evaluator**: Use `EnforcementContext::evaluate()` (central) in `config/policy_decision.rs` instead of building policy checks inline
-- **MCP/Agent Invariant**: For MCP/agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`.
+- **MCP/Agent Invariant**: For MCP/agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
 - **eggsec-output Re-exports**: Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity`
 
 ### Codebase Health

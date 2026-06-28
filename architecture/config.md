@@ -2,6 +2,8 @@
 
 The configuration system handles loading settings from files, environment variables, and defaults, while also enforcing scanning scopes to prevent accidental testing of out-of-scope targets.
 
+> See [../../docs/ENFORCEMENT_MODES.md](../../docs/ENFORCEMENT_MODES.md) for the canonical dual-mode enforcement contract.
+
 ## Core Components (`src/config/`)
 
 ### `EggsecConfig` (`settings.rs`)

@@ -120,7 +120,7 @@ eggsec codegg-mcp --stdio --scope scope.toml
 eggsec agent run --scope scope.toml --portfolio portfolio.json
 ```
 
-See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation.
+See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation. See [docs/ENFORCEMENT_MODES.md](docs/ENFORCEMENT_MODES.md) for the canonical dual-mode enforcement contract defining manual vs. automated posture semantics.
 
 ## Quick Start
 
@@ -483,6 +483,7 @@ See [docker-compose.yml](docker-compose.yml) for Docker configuration.
 ## Documentation
 
 - [Safety and Scope Enforcement](docs/SAFETY.md) - Authorization, risk tiers, scope rules
+- [Enforcement Modes](docs/ENFORCEMENT_MODES.md) - Dual-mode enforcement contract, manual vs. automated postures
 - [Canonical Findings Schema](docs/FINDINGS_SCHEMA.md) - Finding structure, fingerprinting, redaction
 - [Auth Context Configuration](docs/AUTH_CONTEXT.md) - Multi-role testing, env interpolation
 - [Baselines and Differential Scans](docs/BASELINES_AND_DIFFS.md) - Comparing scan results over time

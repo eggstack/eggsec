@@ -2,6 +2,8 @@
 
 Eggsec is a security testing toolkit designed for **authorized testing only**.
 
+> See [ENFORCEMENT_MODES.md](ENFORCEMENT_MODES.md) for the canonical dual-mode enforcement contract defining manual vs. automated posture semantics, outcome semantics, and confirmation classes.
+
 ## Scope Enforcement
 
 All target-bearing operations go through scope validation:
