@@ -106,7 +106,7 @@ Eggsec implements the **Model Context Protocol (MCP)**, allowing it to be used a
 
 The MCP server uses profiles to control tool availability, safety policies, and output schemas.
 
-> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution. Baseline strict-automated capabilities are `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`; non-baseline require explicit `allowed_capabilities`. Manual permissive can downgrade only safe scope-selection misses; explicit exclusions, feature gates, risk gates, and capability denials remain hard denials.
+> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution. Agent execution defensively rebuilds `AgentStrict` in the handler and validates it at runtime. Baseline strict-automated capabilities are `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`; non-baseline require explicit `allowed_capabilities`. Manual permissive can downgrade only safe scope-selection misses; explicit exclusions, feature gates, risk gates, and capability denials remain hard denials.
 
 ```rust
 pub enum McpProfile {

@@ -127,7 +127,7 @@ Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for central
 **Construction per execution path:**
 - CLI commands: `EnforcementContext::manual_permissive(...)` (default) or `manual_guarded(...)` (when `--strict-scope` is used)
 - MCP server: Forces `McpStrict` profile; preferred production constructor is `McpServer::with_enforcement(registry, api_key, profile, enforcement)` (passes pre-built `EnforcementContext`)
-- Agent: Forces `AgentStrict` profile; `EnforcementContext::agent_strict` is passed to `AgentConfig`
+- Agent: Forces `AgentStrict` profile; `EnforcementContext::agent_strict` is passed to `AgentConfig`. Handler defensively rebuilds `AgentStrict` from policy/scope (defense-in-depth). `Agent::new()` validates profile at runtime.
 - CI mode: Uses `CiStrict` profile when detected
 
 **Key methods:**
@@ -138,7 +138,7 @@ Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for central
 
 **Security enforcement:**
 - MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; `EnforcementContext` is the sole policy/scope authority. Legacy helpers (`policy_decision_for_mcp_call`, `denial_from_violation`, `with_scope`, `with_scope_and_profile`) have been removed.
-- Agent refuses to run without an explicit scope manifest; per-scan `enforcement.evaluate` immediately before dispatch.
+- Agent refuses to run without an explicit scope manifest; handler defensively rebuilds `AgentStrict` enforcement (defense-in-depth); `Agent::new()` rejects non-`AgentStrict` profiles; per-scan `enforcement.evaluate` immediately before dispatch.
 - Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
 
 ### `Loader` (`loader.rs`)

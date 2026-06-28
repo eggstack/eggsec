@@ -97,7 +97,7 @@ Budgets can be set per-target in the portfolio:
 }
 ```
 
-**Enforcement (2026-06-10):** `handle_agent()` requires explicit scope manifest (`LoadedScope::is_explicit_manifest()`) and refuses to run without it. `EnforcementContext::agent_strict` is passed to `AgentConfig`; per-scan `enforcement.evaluate` (central boundary: provenance, DenialClass downgrade for ManualPermissive only, positive capability checks) is re-evaluated immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating).
+**Enforcement (2026-06-28, Phase 3):** `handle_agent()` requires explicit scope manifest (`LoadedScope::is_explicit_manifest()`) and refuses to run without it. As defense-in-depth, `handle_agent` defensively rebuilds `EnforcementContext::agent_strict` from the current policy and loaded scope instead of trusting the incoming `CommandContext` enforcement. `Agent::new()` validates that `config.enforcement` is `AgentStrict` and rejects `ManualPermissive`, `ManualGuarded`, or other non-agent profiles (the `None` case is allowed for test-only construction). Per-scan `enforcement.evaluate` (central boundary: provenance, DenialClass downgrade for ManualPermissive only, positive capability checks) is re-evaluated immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating). Manual override flags are never honored by agent execution.
 
 > For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 

@@ -15,7 +15,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 | **Execution profile** | Enforcement behavior, represented by `ExecutionProfile` (`ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`). |
 | **Manual permissive** | Human-directed default mode (`ManualPermissive`). Warnings and confirmation prompts are available; operator may override low-risk classes. |
 | **Manual guarded** | Strict human mode (`ManualGuarded`). Equivalent to CLI `--strict-scope` and future TUI guarded toggle. No discretion path. |
-| **Agent strict** | Noninteractive/model-controlled strict posture (`AgentStrict`). Cannot self-approve scope expansion or override any enforcement. |
+| **Agent strict** | Noninteractive/model-controlled strict posture (`AgentStrict`). Cannot self-approve scope expansion or override any enforcement. Handler defensively rebuilds `AgentStrict`; runtime validates profile at construction. |
 | **Scope provenance** | Whether scope came from an explicit manifest (`ConfigFile`, `CliScopeFile`, `GeneratedPreset`) versus `DefaultEmpty` (no manifest provided). |
 | **Manual override** | Explicit operator acceptance of specific confirmation classes. Only valid in `ManualPermissive` contexts. Honored and audited only there. |
 | **Confirmation class** | Machine-readable class (`ConfirmationClass`) requiring explicit operator action before dispatch. |

@@ -25,6 +25,24 @@ fn load_portfolio_for_cli(portfolio_path: Option<&str>) -> TargetPortfolio {
     TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new())
 }
 
+#[cfg(test)]
+fn validate_agent_enforcement(
+    enforcement: &Option<crate::config::EnforcementContext>,
+) -> Result<bool> {
+    match enforcement {
+        None => Ok(false),
+        Some(ctx) => {
+            if ctx.execution_profile != crate::config::ExecutionProfile::AgentStrict {
+                anyhow::bail!(
+                    "security agent requires AgentStrict enforcement context; \
+                     manual or guarded profiles are not accepted"
+                );
+            }
+            Ok(true)
+        }
+    }
+}
+
 pub async fn handle_agent(ctx: &CommandContext, args: AgentArgs) -> Result<()> {
     let use_ai = args.with_ai;
     let ai_config_path = args.ai_config.clone();
@@ -39,6 +57,11 @@ pub async fn handle_agent(ctx: &CommandContext, args: AgentArgs) -> Result<()> {
              Use --scope <path> to provide a scope file."
         );
     }
+
+    let agent_enforcement = crate::config::EnforcementContext::agent_strict(
+        ctx.config.execution_policy.clone(),
+        ctx.enforcement.loaded_scope.clone(),
+    );
 
     match args.command {
         None => {
@@ -57,7 +80,7 @@ pub async fn handle_agent(ctx: &CommandContext, args: AgentArgs) -> Result<()> {
                 memory_dir,
                 poll_interval,
                 run_args,
-                ctx.enforcement.clone(),
+                agent_enforcement,
             )
             .await
         }
@@ -381,5 +404,64 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
         let _ = args;
         println!("AI integration not enabled. Rebuild with --features ai-integration");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
+
+    #[test]
+    fn validate_agent_enforcement_none_returns_false() {
+        assert_eq!(validate_agent_enforcement(&None).unwrap(), false);
+    }
+
+    #[test]
+    fn validate_agent_enforcement_agent_strict_returns_true() {
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        assert_eq!(
+            validate_agent_enforcement(&Some(enforcement)).unwrap(),
+            true
+        );
+    }
+
+    #[test]
+    fn validate_agent_enforcement_manual_permissive_rejects() {
+        let enforcement = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let result = validate_agent_enforcement(&Some(enforcement));
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("AgentStrict enforcement context"));
+    }
+
+    #[test]
+    fn validate_agent_enforcement_ci_strict_rejects() {
+        let enforcement = EnforcementContext::ci_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let result = validate_agent_enforcement(&Some(enforcement));
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("AgentStrict enforcement context"));
+    }
+
+    #[test]
+    fn validate_agent_enforcement_mcp_strict_rejects() {
+        let enforcement = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let result = validate_agent_enforcement(&Some(enforcement));
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("AgentStrict enforcement context"));
     }
 }

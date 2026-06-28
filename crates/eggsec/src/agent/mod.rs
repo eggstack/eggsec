@@ -196,6 +196,18 @@ pub struct Agent {
 
 impl Agent {
     pub async fn new(config: AgentConfig) -> Result<Self> {
+        // Validate enforcement context: production agent execution requires AgentStrict.
+        // This rejects ManualPermissive, ManualGuarded, and other non-agent profiles.
+        // The None case (no enforcement) is allowed for test-only construction.
+        if let Some(ref enforcement) = config.enforcement {
+            if enforcement.execution_profile != crate::config::ExecutionProfile::AgentStrict {
+                anyhow::bail!(
+                    "security agent requires AgentStrict enforcement context; \
+                     manual or guarded profiles are not accepted"
+                );
+            }
+        }
+
         let registry = create_default_registry();
         let dispatcher = ToolDispatcher::new(registry.clone());
         let dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync> = Box::new(dispatcher);
@@ -2628,5 +2640,197 @@ mod tests {
         // For this test we instead assert success path executed. (Call count verification is indirect via success.)
         // To directly count, we would expose a getter on Agent in test cfg, but success + no error is sufficient
         // alongside the denial test above to prove the gate is pre-dispatch.
+    }
+
+    // --- Phase 3: AgentStrict enforcement defense-in-depth ---
+
+    #[tokio::test]
+    async fn test_agent_new_rejects_manual_permissive_enforcement() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, ExecutionProfile, LoadedScope};
+
+        let enforcement = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let config = AgentConfig {
+            enforcement: Some(enforcement),
+            ..AgentConfig::default()
+        };
+
+        let result = Agent::new(config).await;
+        assert!(result.is_err(), "ManualPermissive enforcement should be rejected");
+        let err_msg = match result {
+            Ok(_) => panic!("Expected error"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            err_msg.contains("AgentStrict enforcement context"),
+            "Expected AgentStrict enforcement error, got: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_agent_new_rejects_manual_guarded_enforcement() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, LoadedScope};
+
+        let enforcement = EnforcementContext::manual_guarded(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let config = AgentConfig {
+            enforcement: Some(enforcement),
+            ..AgentConfig::default()
+        };
+
+        let result = Agent::new(config).await;
+        assert!(result.is_err(), "ManualGuarded enforcement should be rejected");
+        let err_msg = match result {
+            Ok(_) => panic!("Expected error"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            err_msg.contains("AgentStrict enforcement context"),
+            "Expected AgentStrict enforcement error, got: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_agent_new_accepts_agent_strict_enforcement() {
+        use crate::config::{EnforcementContext, LoadedScope};
+
+        let enforcement = EnforcementContext::agent_strict(
+            crate::config::ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let config = AgentConfig {
+            enforcement: Some(enforcement),
+            ..AgentConfig::default()
+        };
+
+        let result = Agent::new(config).await;
+        assert!(result.is_ok(), "AgentStrict should be accepted");
+    }
+
+    #[tokio::test]
+    async fn test_agent_new_accepts_none_enforcement_for_testing() {
+        let config = AgentConfig {
+            enforcement: None,
+            ..AgentConfig::default()
+        };
+
+        let result = Agent::new(config).await;
+        assert!(result.is_ok(), "None enforcement should be allowed (test path)");
+    }
+
+    #[test]
+    fn test_security_agent_surface_maps_to_agent_strict() {
+        use crate::config::{ExecutionProfile, ExecutionSurface};
+
+        let profile = ExecutionSurface::SecurityAgent.profile();
+        assert_eq!(profile, ExecutionProfile::AgentStrict);
+    }
+
+    #[test]
+    fn test_security_agent_surface_does_not_honor_manual_override() {
+        use crate::config::ExecutionSurface;
+
+        assert!(
+            !ExecutionSurface::SecurityAgent.honors_manual_override(),
+            "SecurityAgent must never honor manual override flags"
+        );
+    }
+
+    #[test]
+    fn test_security_agent_surface_requires_explicit_manifest_for_networked() {
+        use crate::config::ExecutionSurface;
+
+        assert!(
+            ExecutionSurface::SecurityAgent.requires_explicit_manifest_for_networked(),
+            "SecurityAgent must require explicit scope manifest for networked ops"
+        );
+    }
+
+    #[test]
+    fn test_agent_strict_enforcement_ignores_manual_override() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope, ManualOverride,
+            OperationDescriptor, OperationMode, OperationRisk, IntendedUse,
+        };
+
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+
+        let descriptor = OperationDescriptor {
+            operation: "web_scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+
+        // Evaluate with no manual overrides — should deny (no explicit scope)
+        let outcome_no_override = enforcement.evaluate(&descriptor);
+        assert!(
+            matches!(outcome_no_override, EnforcementOutcome::Deny(_)),
+            "AgentStrict with DefaultEmpty scope should deny, got: {:?}",
+            outcome_no_override
+        );
+
+        // AgentStrict never honors manual overrides, so the outcome should be the same
+        // regardless of what ManualOverride flags are set. The enforcement context itself
+        // does not reference ManualOverride — it's only used by ManualPermissive paths.
+        // This test verifies that AgentStrict denies regardless.
+        let outcome_with_override = enforcement.evaluate(&descriptor);
+        assert!(
+            matches!(outcome_with_override, EnforcementOutcome::Deny(_)),
+            "AgentStrict should deny even with overrides, got: {:?}",
+            outcome_with_override
+        );
+    }
+
+    #[test]
+    fn test_agent_strict_enforcement_requires_confirmation_is_denial() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
+            OperationDescriptor, OperationMode, OperationRisk, IntendedUse,
+        };
+
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+
+        let descriptor = OperationDescriptor {
+            operation: "web_scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
+        };
+
+        let outcome = enforcement.evaluate(&descriptor);
+        // AgentStrict should never produce Allow or RequireConfirmation for this descriptor
+        assert!(
+            !matches!(outcome, EnforcementOutcome::Allow(_)),
+            "AgentStrict should not Allow operations requiring explicit scope"
+        );
+        assert!(
+            !matches!(outcome, EnforcementOutcome::RequireConfirmation(_)),
+            "AgentStrict should never RequireConfirmation (treats as denial)"
+        );
     }
 }
