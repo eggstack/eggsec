@@ -45,74 +45,144 @@ pub fn get_action_hints(app: &App) -> Vec<ActionHint> {
 fn task_hints(app: &App) -> Vec<ActionHint> {
     if app.is_paused() {
         vec![
-            ActionHint { key: "C", label: "stop" },
-            ActionHint { key: "Y", label: "resume" },
+            ActionHint {
+                key: "C",
+                label: "stop",
+            },
+            ActionHint {
+                key: "Y",
+                label: "resume",
+            },
         ]
     } else {
         vec![
-            ActionHint { key: "C", label: "stop" },
-            ActionHint { key: "Z", label: "pause" },
+            ActionHint {
+                key: "C",
+                label: "stop",
+            },
+            ActionHint {
+                key: "Z",
+                label: "pause",
+            },
         ]
     }
 }
 
 fn policy_confirm_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Enter", label: "confirm" },
-        ActionHint { key: "Esc", label: "cancel" },
+        ActionHint {
+            key: "Enter",
+            label: "confirm",
+        },
+        ActionHint {
+            key: "Esc",
+            label: "cancel",
+        },
     ]
 }
 
 fn confirm_popup_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "y", label: "yes" },
-        ActionHint { key: "n", label: "no" },
+        ActionHint {
+            key: "y",
+            label: "yes",
+        },
+        ActionHint {
+            key: "n",
+            label: "no",
+        },
     ]
 }
 
 fn command_palette_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Enter", label: "run" },
-        ActionHint { key: "↑↓/jk", label: "select" },
-        ActionHint { key: "Esc", label: "close" },
+        ActionHint {
+            key: "Enter",
+            label: "run",
+        },
+        ActionHint {
+            key: "↑↓/jk",
+            label: "select",
+        },
+        ActionHint {
+            key: "Esc",
+            label: "close",
+        },
     ]
 }
 
 fn quick_switch_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Enter", label: "go" },
-        ActionHint { key: "↑↓/jk", label: "select" },
-        ActionHint { key: "Esc", label: "close" },
+        ActionHint {
+            key: "Enter",
+            label: "go",
+        },
+        ActionHint {
+            key: "↑↓/jk",
+            label: "select",
+        },
+        ActionHint {
+            key: "Esc",
+            label: "close",
+        },
     ]
 }
 
 fn search_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Enter", label: "search" },
-        ActionHint { key: "Bksp", label: "edit" },
-        ActionHint { key: "Esc", label: "close" },
+        ActionHint {
+            key: "Enter",
+            label: "search",
+        },
+        ActionHint {
+            key: "Bksp",
+            label: "edit",
+        },
+        ActionHint {
+            key: "Esc",
+            label: "close",
+        },
     ]
 }
 
 fn help_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Esc", label: "close" },
-        ActionHint { key: "j/k", label: "scroll" },
-        ActionHint { key: "g/G", label: "top/end" },
+        ActionHint {
+            key: "Esc",
+            label: "close",
+        },
+        ActionHint {
+            key: "j/k",
+            label: "scroll",
+        },
+        ActionHint {
+            key: "g/G",
+            label: "top/end",
+        },
     ]
 }
 
 fn http_options_hints() -> Vec<ActionHint> {
-    vec![
-        ActionHint { key: "h", label: "close" },
-    ]
+    vec![ActionHint {
+        key: "h",
+        label: "close",
+    }]
 }
 
 fn insert_mode_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Esc", label: "normal" },
-        ActionHint { key: "Tab", label: "next" },
-        ActionHint { key: "Enter", label: "confirm" },
+        ActionHint {
+            key: "Esc",
+            label: "normal",
+        },
+        ActionHint {
+            key: "Tab",
+            label: "next",
+        },
+        ActionHint {
+            key: "Enter",
+            label: "confirm",
+        },
     ]
 }
 
@@ -133,15 +203,33 @@ fn selector_hints(app: &App) -> Vec<ActionHint> {
         && app.tabs.settings.current_section == SettingsSection::Theme
     {
         vec![
-            ActionHint { key: "Enter", label: "apply" },
-            ActionHint { key: "↑↓/jk", label: "preview" },
-            ActionHint { key: "Esc", label: "cancel" },
+            ActionHint {
+                key: "Enter",
+                label: "apply",
+            },
+            ActionHint {
+                key: "↑↓/jk",
+                label: "preview",
+            },
+            ActionHint {
+                key: "Esc",
+                label: "cancel",
+            },
         ]
     } else {
         vec![
-            ActionHint { key: "Enter", label: "select" },
-            ActionHint { key: "↑↓/jk", label: "navigate" },
-            ActionHint { key: "Esc", label: "cancel" },
+            ActionHint {
+                key: "Enter",
+                label: "select",
+            },
+            ActionHint {
+                key: "↑↓/jk",
+                label: "navigate",
+            },
+            ActionHint {
+                key: "Esc",
+                label: "cancel",
+            },
         ]
     }
 }
@@ -152,16 +240,34 @@ fn settings_hints(app: &App) -> Vec<ActionHint> {
     match section {
         SettingsSection::Theme => {
             vec![
-                ActionHint { key: "r", label: "reload" },
-                ActionHint { key: "Enter", label: "themes" },
-                ActionHint { key: "Tab", label: "next" },
+                ActionHint {
+                    key: "r",
+                    label: "reload",
+                },
+                ActionHint {
+                    key: "Enter",
+                    label: "themes",
+                },
+                ActionHint {
+                    key: "Tab",
+                    label: "next",
+                },
             ]
         }
         _ => {
             vec![
-                ActionHint { key: "s", label: "save" },
-                ActionHint { key: "r", label: "reset" },
-                ActionHint { key: "Tab", label: "next" },
+                ActionHint {
+                    key: "s",
+                    label: "save",
+                },
+                ActionHint {
+                    key: "r",
+                    label: "reset",
+                },
+                ActionHint {
+                    key: "Tab",
+                    label: "next",
+                },
             ]
         }
     }
@@ -169,16 +275,31 @@ fn settings_hints(app: &App) -> Vec<ActionHint> {
 
 fn history_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "↑↓", label: "nav" },
-        ActionHint { key: "d", label: "delete" },
-        ActionHint { key: "r", label: "clear" },
+        ActionHint {
+            key: "↑↓",
+            label: "nav",
+        },
+        ActionHint {
+            key: "d",
+            label: "delete",
+        },
+        ActionHint {
+            key: "r",
+            label: "clear",
+        },
     ]
 }
 
 fn dashboard_hints() -> Vec<ActionHint> {
     vec![
-        ActionHint { key: "Enter", label: "open" },
-        ActionHint { key: "n/p", label: "tabs" },
+        ActionHint {
+            key: "Enter",
+            label: "open",
+        },
+        ActionHint {
+            key: "n/p",
+            label: "tabs",
+        },
     ]
 }
 
@@ -190,15 +311,33 @@ fn default_normal_hints(app: &App) -> Vec<ActionHint> {
 
     if has_target {
         vec![
-            ActionHint { key: "Enter", label: "run" },
-            ActionHint { key: "n/p", label: "tabs" },
-            ActionHint { key: "/", label: "search" },
+            ActionHint {
+                key: "Enter",
+                label: "run",
+            },
+            ActionHint {
+                key: "n/p",
+                label: "tabs",
+            },
+            ActionHint {
+                key: "/",
+                label: "search",
+            },
         ]
     } else {
         vec![
-            ActionHint { key: "Enter", label: "focus" },
-            ActionHint { key: "n/p", label: "tabs" },
-            ActionHint { key: "/", label: "search" },
+            ActionHint {
+                key: "Enter",
+                label: "focus",
+            },
+            ActionHint {
+                key: "n/p",
+                label: "tabs",
+            },
+            ActionHint {
+                key: "/",
+                label: "search",
+            },
         ]
     }
 }
@@ -246,9 +385,7 @@ mod tests {
 
     #[test]
     fn policy_confirm_overlay_hints() {
-        use eggsec::config::{
-            OperationDescriptor, OperationMode, OperationRisk, PolicyDecision,
-        };
+        use eggsec::config::{OperationDescriptor, OperationMode, OperationRisk, PolicyDecision};
 
         let mut app = create_test_app();
         let desc = OperationDescriptor {
@@ -427,8 +564,14 @@ mod tests {
     #[test]
     fn format_hints_compact() {
         let hints = vec![
-            ActionHint { key: "C", label: "stop" },
-            ActionHint { key: "Z", label: "pause" },
+            ActionHint {
+                key: "C",
+                label: "stop",
+            },
+            ActionHint {
+                key: "Z",
+                label: "pause",
+            },
         ];
         assert_eq!(format_hints(&hints), "C:stop Z:pause");
     }

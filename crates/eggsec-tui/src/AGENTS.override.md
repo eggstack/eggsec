@@ -6,6 +6,59 @@ Specialized guidance for the terminal UI module.
 
 TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverride` model as CLI. All target-bearing launches gated by central `enforcement.evaluate` before spawn (app/mod.rs:322, via `build_current_operation_descriptor`) + retroactive gate for direct-launch tabs (mod.rs:366). Wireless active deauth/disassoc special-cases dry-run as `SafeActive` so it launches without a prompt; live mode remains `Intrusive` and uses the same policy confirmation overlay. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095) + `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input; confirm path uses narrow `ManualOverride`, re-eval, and `with_manual_override_record` + `confirmation_class_strings` (stable kebab). `PendingAction` (confirmation.rs:4) for UI actions stays separate/lower precedence. See runner.rs:82 (init), app/mod.rs:324-393 (gates + request/confirm_policy), key_handler.rs:205 (PolicyConfirm handling).
 
+## Enforcement Posture Model (Phase 5)
+
+### TuiEnforcementState
+
+`TuiEnforcementState` in `app/enforcement.rs` is the TUI-local enforcement posture model. It wraps `EnforcementContext`, `LoadedScope`, and preflight state for TUI-specific posture management.
+
+```rust
+pub struct TuiEnforcementState {
+    surface: ExecutionSurface,       // TuiManual or TuiManualStrict
+    loaded_scope: LoadedScope,
+    enforcement: EnforcementContext,
+    manual_override: ManualOverride,
+    last_preflight: Option<TuiPreflightResult>,
+}
+```
+
+**Accessing from App:** `App.enforcement_state: TuiEnforcementState` replaces the previous `App.enforcement` + `App.loaded_scope` fields.
+
+**Key methods:**
+- `toggle_posture()` — switches between TuiManual (ManualPermissive) and TuiManualStrict (ManualGuarded)
+- `preflight(target)` — advisory evaluation of a target against current posture
+- `mode_label()` — returns "Manual" or "Guarded" for status bar
+- `scope_label()` — returns scope provenance and rule counts
+- `status_string()` — returns the full status bar posture string
+- `is_guarded()` — true when in Guarded (strict) mode
+- `honors_manual_override()` — true when in Manual (permissive) mode
+
+### Toggle Behavior
+
+`Ctrl+G` toggles between Manual and Guarded TUI postures. `TuiEnforcementState::toggle_posture()` switches the `surface` field between `TuiManual` and `TuiManualStrict`.
+
+**Critical:** `TuiManualStrict` does NOT honor manual overrides. `TuiManual` does. This mirrors CLI `--strict-scope` semantics.
+
+### Preflight Evaluation
+
+`TuiPreflightResult` is an advisory evaluation displayed in the status bar. It does not gate execution. `TuiPreflightOutcomeKind` indicates whether the target will be allowed, warned, confirmed, or denied under the current posture.
+
+### Status Bar Display
+
+The status bar renders posture information using `mode_label()`, `scope_label()`, and `status_string()` from `TuiEnforcementState`. The mode indicator shows "Manual" or "Guarded" with appropriate theme styling.
+
+### CLI-Equivalent Preview
+
+The confirmation overlay includes a CLI-equivalent flag preview showing what flags would reproduce the current posture on the command line.
+
+### Tests
+
+22 unit tests cover `TuiEnforcementState` including toggle behavior, preflight evaluation, mode labels, scope labels, and guard/honors-override queries. Run with:
+
+```bash
+cargo test --lib -p eggsec-tui tui::app::enforcement
+```
+
 ## Recent Fixes (2026-05-29)
 
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress

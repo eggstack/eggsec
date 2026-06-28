@@ -5,6 +5,7 @@ pub(crate) mod bookmarks;
 pub(crate) mod command;
 pub(crate) mod confirmation;
 pub(crate) mod dispatch;
+pub(crate) mod enforcement;
 pub(crate) mod error;
 pub(crate) mod export;
 pub(crate) mod help_config;
@@ -26,6 +27,7 @@ pub(crate) mod theme_runtime;
 pub use crate::state::create_shared_history;
 pub use bookmarks::{get_bookmarked_tab_ids, is_bookmarked, toggle_bookmark};
 pub use confirmation::PendingAction;
+pub use enforcement::{TuiEnforcementState, TuiPreflightOutcomeKind, TuiPreflightResult};
 pub use input::InputMode;
 pub use key_handler::KeyHandler;
 pub use notifications::{Notification, NotificationSeverity};
@@ -49,8 +51,8 @@ use crate::theme::{display_theme_name, ThemeManager};
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use eggsec::config::{
-    confirmation_classes_for, EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
-    ManualOverride, OperationDescriptor,
+    confirmation_classes_for, EnforcementOutcome, ExecutionPolicy, LoadedScope, ManualOverride,
+    OperationDescriptor,
 };
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
@@ -94,11 +96,8 @@ pub struct App {
     pub bookmarks: FxHashSet<String>,
     pub theme_load: ThemeLoadState,
 
-    /// Shared enforcement context (loaded from config + scope at startup, like CLI main).
-    /// TUI defaults to ManualPermissive; --strict-scope equivalent is not a TUI flag today.
-    pub enforcement: EnforcementContext,
-    /// Captured scope provenance for enforcement (mirrors LoadedScope used by CLI handlers).
-    pub loaded_scope: LoadedScope,
+    /// First-class enforcement posture state (wraps EnforcementContext + LoadedScope).
+    pub enforcement_state: TuiEnforcementState,
 }
 
 impl App {
@@ -109,6 +108,12 @@ impl App {
     pub fn new_for_testing(history: SharedHistory) -> Self {
         let session_manager = SessionManager::new(SessionConfig::default());
         let surface = eggsec::config::ExecutionSurface::TuiManual;
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement = eggsec::config::EnforcementContext::for_surface(
+            surface,
+            ExecutionPolicy::default(),
+            loaded_scope.clone(),
+        );
         let mut app = Self {
             current_tab: Tab::Recon,
             should_quit: false,
@@ -132,12 +137,7 @@ impl App {
             needs_redraw: true,
             bookmarks: FxHashSet::default(),
             theme_load: ThemeLoadState::default(),
-            enforcement: eggsec::config::EnforcementContext::for_surface(
-                surface,
-                ExecutionPolicy::default(),
-                LoadedScope::default_empty(),
-            ),
-            loaded_scope: LoadedScope::default_empty(),
+            enforcement_state: TuiEnforcementState::new(surface, loaded_scope, enforcement),
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -215,12 +215,19 @@ impl App {
             needs_redraw: true,
             bookmarks: restored_bookmarks,
             theme_load: ThemeLoadState::default(),
-            enforcement: EnforcementContext::for_surface(
-                eggsec::config::ExecutionSurface::TuiManual,
-                ExecutionPolicy::default(),
-                LoadedScope::default_empty(),
-            ),
-            loaded_scope: LoadedScope::default_empty(),
+            enforcement_state: {
+                let loaded_scope = LoadedScope::default_empty();
+                let enforcement = eggsec::config::EnforcementContext::for_surface(
+                    eggsec::config::ExecutionSurface::TuiManual,
+                    ExecutionPolicy::default(),
+                    loaded_scope.clone(),
+                );
+                TuiEnforcementState::new(
+                    eggsec::config::ExecutionSurface::TuiManual,
+                    loaded_scope,
+                    enforcement,
+                )
+            },
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -364,11 +371,12 @@ impl App {
 
         // Post-dispatch retroactive policy gate for direct-launch tabs (packet, stress, auth, cluster, etc.)
         if self.is_direct_launch_tab(self.current_tab)
-            && self.current_tab.as_tab_state(self).is_running() {
-                if let Some(desc) = self.build_current_operation_descriptor() {
-                    self.evaluate_policy_and_dispatch(desc, None);
-                }
+            && self.current_tab.as_tab_state(self).is_running()
+        {
+            if let Some(desc) = self.build_current_operation_descriptor() {
+                self.evaluate_policy_and_dispatch(desc, None);
             }
+        }
     }
 
     /// Central policy evaluation + dispatch. Handles the Allow/Warn/RequireConfirmation/Deny
@@ -379,7 +387,9 @@ impl App {
         desc: OperationDescriptor,
         task_config: Option<crate::workers::TaskConfig>,
     ) {
-        let outcome = self.enforcement.evaluate(&desc);
+        let outcome = self.enforcement_state.enforcement.evaluate(&desc);
+        self.enforcement_state.last_preflight =
+            Some(TuiPreflightResult::from_outcome(&desc, &outcome));
         match outcome {
             EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                 if let Some(cfg) = task_config {
@@ -624,14 +634,24 @@ impl App {
         decision: eggsec::config::PolicyDecision,
         captured_task_config: Option<crate::workers::TaskConfig>,
     ) {
-        let required =
-            confirmation_classes_for(&descriptor, &decision, &self.enforcement.execution_policy);
+        let required = confirmation_classes_for(
+            &descriptor,
+            &decision,
+            &self.enforcement_state.enforcement.execution_policy,
+        );
+        let cli_flags = self
+            .enforcement_state
+            .last_preflight
+            .as_ref()
+            .map(|pf| pf.suggested_cli_flags.clone())
+            .unwrap_or_default();
         self.overlay.pending_policy = Some(crate::app::confirmation::PendingPolicyConfirmation {
             descriptor,
             decision,
             required_classes: required,
             reason_input: String::new(),
             captured_task_config,
+            cli_flags,
         });
         self.needs_redraw = true;
     }
@@ -681,8 +701,14 @@ impl App {
             };
             mo.assume_yes = false; // TUI confirm popup never sets broad assume_yes; narrow by design
 
+            // Track the override centrally so subsequent preflight/eval calls see it.
+            self.enforcement_state.manual_override = mo.clone();
+
             // Re-evaluate using the same central path the CLI uses (EnforcementContext).
-            let outcome = self.enforcement.evaluate(&pending.descriptor);
+            let outcome = self
+                .enforcement_state
+                .enforcement
+                .evaluate(&pending.descriptor);
             match outcome {
                 EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                     // already allowed; unusual after we got RequireConfirmation, but proceed
@@ -697,7 +723,7 @@ impl App {
                     let required_now = confirmation_classes_for(
                         &pending.descriptor,
                         &decision,
-                        &self.enforcement.execution_policy,
+                        &self.enforcement_state.enforcement.execution_policy,
                     );
                     let permitted = required_now.iter().all(|c| mo.permits(*c));
                     if permitted {

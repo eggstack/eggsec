@@ -63,6 +63,8 @@ pub struct PendingPolicyConfirmation {
     pub reason_input: String,
     /// The TaskConfig that would have been spawned; replayed on successful manual override.
     pub captured_task_config: Option<crate::workers::TaskConfig>,
+    /// CLI-equivalent flags for this confirmation (populated from preflight).
+    pub cli_flags: Vec<String>,
 }
 
 impl PendingPolicyConfirmation {
@@ -98,6 +100,11 @@ impl PendingPolicyConfirmation {
             "Manual override reason (optional): {}",
             self.reason_input
         ));
+        if !self.cli_flags.is_empty() {
+            lines.push(String::new());
+            lines.push("CLI equivalent:".to_string());
+            lines.push(format!("  {}", self.cli_flags.join(" ")));
+        }
         lines.push(String::new());
         lines.push("[Enter] Proceed with override   [Esc] Cancel".to_string());
         ("Policy Confirmation Required".to_string(), lines)

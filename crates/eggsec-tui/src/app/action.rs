@@ -154,4 +154,7 @@ pub enum UiAction {
 
     // HTTP options close affordance
     HttpOptionsClose,
+
+    // Enforcement posture toggle
+    ToggleEnforcementPosture,
 }

@@ -398,6 +398,37 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 TUI uses `EnforcementContext` directly (via `App.enforcement`, `manual_permissive` in runner.rs:82) for all target-bearing launches. Central gate in `App::update()` (mod.rs:322) before `spawn_task` (for handle_enter paths via `build_current_task`/`build_current_operation_descriptor`) plus retroactive gate for direct-launch tabs (mod.rs:366) that start inside their `handle_enter`. `RequireConfirmation` surfaces via highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095, key_handler.rs:205) backed by `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input field. On confirm (mod.rs:787) it builds narrow `ManualOverride`, re-evaluates via the central `enforcement.evaluate`, and records via `decision.with_manual_override_record(mo.reason, confirmation_class_strings(...))` using stable kebab strings from `ConfirmationClass::as_str()`. `PendingAction` (confirmation.rs:4 for reset/save/etc.) remains separate and lower-precedence (`ConfirmPopup` overlay). `--strict-scope` affects profile selection for both CLI and TUI.
 
+### Enforcement Posture Model (Phase 5)
+
+The TUI has a local enforcement posture model in `app/enforcement.rs` (`TuiEnforcementState`) that wraps `EnforcementContext` + `LoadedScope` for TUI-specific posture management.
+
+**Structure:**
+
+```rust
+pub struct TuiEnforcementState {
+    surface: ExecutionSurface,       // TuiManual or TuiManualStrict
+    loaded_scope: LoadedScope,
+    enforcement: EnforcementContext,
+    manual_override: ManualOverride,
+    last_preflight: Option<TuiPreflightResult>,
+}
+```
+
+**Modes:**
+
+- **Manual** (`TuiManual` / `ManualPermissive`): Default TUI posture. Warnings for safe scope ambiguity/missing scope; `RequireConfirmation` with confirm/override for discretion cases. Manual override flags honored and audited.
+- **Guarded** (`TuiManualStrict` / `ManualGuarded`): Hard enforcement. No discretion path, no manual overrides. Scope ambiguity is denied.
+
+**Toggle:** `Ctrl+G` switches between Manual and Guarded postures. `TuiEnforcementState::toggle_posture()` switches the `surface` field. Guarded mode does NOT honor manual overrides (unlike Manual mode).
+
+**Preflight evaluation:** `TuiPreflightResult` is an advisory evaluation of a target against the current posture, displayed in the status bar. `preflight(target)` returns a `TuiPreflightResult` with outcome (`TuiPreflightOutcomeKind`) indicating whether the target will be allowed, warned, confirmed, or denied. Preflight is advisory only and does not gate execution.
+
+**Status bar display:** The status bar renders the current mode label (`mode_label()`), scope provenance and rule counts (`scope_label()`), and the advisory preflight outcome (`status_string()`). The mode indicator shows "Manual" or "Guarded" with appropriate styling.
+
+**CLI-equivalent preview:** The confirmation overlay includes a CLI-equivalent flag preview so users can see what flags would reproduce the current posture on the command line.
+
+**App integration:** `App.enforcement_state: TuiEnforcementState` replaces the previous `App.enforcement` + `App.loaded_scope` fields. The state owns the enforcement context, loaded scope, and preflight cache.
+
 ### Adding a New Tab
 
 Adding a new tab requires changes in **7-9 locations**. Each new tab must be added to:

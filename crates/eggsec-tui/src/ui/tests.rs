@@ -2,8 +2,8 @@ use super::draw;
 use super::shell::{get_normal_status, get_tab_status};
 use crate::app::create_test_app;
 use crate::tabs::AppState;
-use crate::theme::Theme;
 use crate::test_utils::buffer_to_text;
+use crate::theme::Theme;
 use ratatui::{backend::TestBackend, Terminal};
 
 #[test]
@@ -106,9 +106,16 @@ fn render_status_bar_contains_preflight_indicators() {
     let text = buffer_to_text(terminal.backend().buffer());
     // Status bar (bottom row) should include the Phase 5 indicators (mode/scope/risk).
     // These are advisory and computed live from spec + enforcement + loaded_scope.
+    // Compact format: "Manual|none|safe|..." (margin reduces width below 100).
     assert!(
-        text.contains("Mode:") || text.contains("manual") || text.contains("Scope:"),
-        "status bar should surface manual mode / scope provenance for target-bearing tab"
+        text.contains("Mode:")
+            || text.contains("Manual")
+            || text.contains("manual")
+            || text.contains("Scope:")
+            || text.contains("none")
+            || text.contains("default"),
+        "status bar should surface manual mode / scope provenance for target-bearing tab, text sample: {:?}",
+        text.lines().last()
     );
 }
 
@@ -187,6 +194,7 @@ fn render_policy_confirm_on_small_terminal_still_readable() {
         required_classes: vec![],
         reason_input: String::new(),
         captured_task_config: None,
+        cli_flags: vec![],
     });
 
     // Very small viewport

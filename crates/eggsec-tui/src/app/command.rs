@@ -260,6 +260,9 @@ impl super::App {
                     super::notifications::NotificationSeverity::Info,
                 ));
             }
+            "toggle-posture" | "enforcement" => {
+                self.apply_action(super::UiAction::ToggleEnforcementPosture);
+            }
             "clear-history" | "delete-history" => {
                 if self.current_tab == Tab::History && !self.has_active_task() {
                     if command == "clear-history" {

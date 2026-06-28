@@ -179,6 +179,8 @@ Canonical reference points when updating guidance or skills:
 - `ExecutionSurface` - Caller-origin enum that derives `ExecutionProfile`; single source of truth for surface-to-profile mapping
 - `ConfirmationClass` - Kebab-case strings for policy confirmations; use `as_str()` for stable IDs
 - `TabError` - Structured error type with `is_recoverable()` in `eggsec-tui`
+- `TuiEnforcementState` - TUI-local enforcement posture model in `eggsec-tui::app::enforcement`
+- `TuiPreflightResult` - Advisory preflight evaluation result for display in status bar
 - `PayloadType` - Enum of 40 payload categories; lives in `fuzzer/payloads/mod.rs`, NOT `types.rs`
 - `McpProfile` / `McpProfilePolicy` - MCP agent profiles and per-profile tool visibility in `tool/protocol/mcp/`
 
@@ -195,6 +197,7 @@ Canonical reference points when updating guidance or skills:
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **ExecutionSurface**: Introduces caller-origin semantics; `ExecutionProfile` describes enforcement behavior, `ExecutionSurface` describes where it comes from. Use `EnforcementContext::for_surface()` for centralized construction.
 - **Shared Policy Evaluator**: Use `EnforcementContext::evaluate()` (central) in `config/policy_decision.rs` instead of building policy checks inline
+- **TUI Enforcement Posture**: TUI uses `TuiEnforcementState` to wrap `EnforcementContext` + `LoadedScope`. Default is `ManualPermissive` (TuiManual). Toggle to `ManualGuarded` (TuiManualStrict) via Ctrl+G. Guarded mode denies scope ambiguity. Preflight evaluation is advisory and displayed in status bar.
 - **MCP/Agent Invariant**: For MCP/agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. Agent execution defensively rebuilds `AgentStrict` in the handler and validates it at runtime (`Agent::new()` rejects non-`AgentStrict` profiles). See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
 - **eggsec-output Re-exports**: Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity`
 
@@ -234,6 +237,7 @@ Canonical reference points when updating guidance or skills:
 - **Packaged themes**: Run `python3 scripts/package_themes.py` after modifying `themes/*.toml` to regenerate `crates/eggsec-tui/src/theme/packaged.rs`
 - **Theme system**: 50 Halloy-format themes packaged via LZMA. `cyber-red` fallback always available in-code. `Theme::default()` returns `cyber-red`.
 - **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes. Background thread loading via `std::thread::spawn` + `std::sync::mpsc`.
+- **TUI enforcement toggle**: `TuiEnforcementState::toggle_posture()` switches between TuiManual and TuiManualStrict. TuiManualStrict does NOT honor manual overrides (unlike TuiManual).
 
 ## Skills Directory
 

@@ -110,6 +110,24 @@ Priority order for hint resolution:
 
 `direct_launch` tabs start work inside their own `handle_enter` and get retroactively evaluated by `EnforcementContext::evaluate()`.
 
+## Enforcement Posture Model
+
+`TuiEnforcementState` in `app/enforcement.rs` manages the TUI-local enforcement posture.
+
+- **Manual** (default): `TuiManual` / `ManualPermissive`. Warnings for scope ambiguity; `RequireConfirmation` with confirm/override for discretion cases. Manual overrides honored.
+- **Guarded**: `TuiManualStrict` / `ManualGuarded`. Hard enforcement, no discretion, no manual overrides.
+
+**Ctrl+G** toggles between Manual and Guarded. `toggle_posture()` switches the surface field.
+
+**Preflight**: Advisory evaluation of a target via `preflight(target)`. Result displayed in status bar. Does not gate execution.
+
+**Status bar**: Shows mode label ("Manual"/"Guarded"), scope provenance, rule counts, and preflight outcome.
+
+**Tests:**
+```bash
+cargo test --lib -p eggsec-tui tui::app::enforcement
+```
+
 ## Overlay Precedence
 ```rust
 pub enum OverlayType {

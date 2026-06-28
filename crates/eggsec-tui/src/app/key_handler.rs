@@ -4,8 +4,8 @@ use super::App;
 use super::InputMode;
 use super::OverlayController;
 use super::UiAction;
-use crate::tabs::Tab;
 use crate::tabs::SettingsSection;
+use crate::tabs::Tab;
 
 // Phase 1 (tui-architecture-usability-pass.md): KeyHandler now decodes to UiAction
 // and delegates mutation to App::apply_action / apply_actions. The public
@@ -176,6 +176,9 @@ impl KeyHandler {
             }
             (KeyModifiers::CONTROL, KeyCode::Char('z')) => vec![UiAction::TogglePause],
             (KeyModifiers::CONTROL, KeyCode::Char('t')) => vec![UiAction::ToggleTheme],
+            (KeyModifiers::CONTROL, KeyCode::Char('g')) => {
+                vec![UiAction::ToggleEnforcementPosture]
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('v')) => {
                 if !app.has_active_task() {
                     // Return RequestPaste so apply does the Clipboard::get + dispatch.
@@ -508,7 +511,8 @@ mod tests {
         app.mode = InputMode::Normal;
         app.tabs.recon.core.inputs.focus(0);
         app.tabs.recon.core.inputs.fields[0].value = "abc".to_string();
-        app.tabs.recon.core.inputs.fields[0].cursor_pos = app.tabs.recon.core.inputs.fields[0].value.len();
+        app.tabs.recon.core.inputs.fields[0].cursor_pos =
+            app.tabs.recon.core.inputs.fields[0].value.len();
 
         press(&mut handler, &mut app, KeyCode::Backspace);
 
@@ -720,11 +724,17 @@ mod tests {
         let mut handler = KeyHandler::new();
 
         // First g sets pending
-        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        handler.handle_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE),
+        );
         assert_eq!(app.pending_key, Some(KeyCode::Char('g')));
 
         // Second g should trigger MoveTop
-        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        handler.handle_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE),
+        );
         assert!(app.pending_key.is_none());
     }
 
@@ -734,11 +744,17 @@ mod tests {
         let mut handler = KeyHandler::new();
 
         // First g sets pending
-        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        handler.handle_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE),
+        );
         assert_eq!(app.pending_key, Some(KeyCode::Char('g')));
 
         // Pressing a non-g key should clear pending state
-        handler.handle_key_event(&mut app, &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        handler.handle_key_event(
+            &mut app,
+            &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+        );
         assert!(app.pending_key.is_none());
     }
 
@@ -750,7 +766,8 @@ mod tests {
         app.mode = InputMode::Normal;
         app.tabs.recon.core.inputs.focus(0);
         app.tabs.recon.core.inputs.fields[0].value = "abc".to_string();
-        app.tabs.recon.core.inputs.fields[0].cursor_pos = app.tabs.recon.core.inputs.fields[0].value.len();
+        app.tabs.recon.core.inputs.fields[0].cursor_pos =
+            app.tabs.recon.core.inputs.fields[0].value.len();
 
         // Backspace in normal -> empty actions (no edit)
         let actions = handler.decode_key_event(
@@ -923,30 +940,22 @@ mod tests {
         app.tabs.settings.theme_selector.open();
 
         // Enter should still be decoded (global shortcut)
-        let actions = handler.decode_key_event(
-            &mut app,
-            &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-        );
+        let actions =
+            handler.decode_key_event(&mut app, &KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(actions, vec![UiAction::Enter]);
 
         // Esc should still be decoded (global shortcut)
-        let actions = handler.decode_key_event(
-            &mut app,
-            &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-        );
+        let actions =
+            handler.decode_key_event(&mut app, &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(actions, vec![UiAction::Escape]);
 
         // Up/Down should still be decoded (global shortcuts)
-        let actions = handler.decode_key_event(
-            &mut app,
-            &KeyEvent::new(KeyCode::Up, KeyModifiers::NONE),
-        );
+        let actions =
+            handler.decode_key_event(&mut app, &KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert_eq!(actions, vec![UiAction::MoveUp]);
 
-        let actions = handler.decode_key_event(
-            &mut app,
-            &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
-        );
+        let actions =
+            handler.decode_key_event(&mut app, &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(actions, vec![UiAction::MoveDown]);
     }
 
@@ -990,7 +999,10 @@ mod tests {
             &KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
         );
 
-        assert_eq!(app.tabs.settings.theme_selector.selected_value(), Some("dark"));
+        assert_eq!(
+            app.tabs.settings.theme_selector.selected_value(),
+            Some("dark")
+        );
         assert_eq!(app.current_theme().name, "dark");
         assert_eq!(
             app.tabs.settings.applied_theme_id.as_deref(),

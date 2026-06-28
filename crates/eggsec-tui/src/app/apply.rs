@@ -36,7 +36,8 @@ impl App {
             | UiAction::ToggleSearch { .. }
             | UiAction::ToggleTheme
             | UiAction::TogglePause
-            | UiAction::Resume => self.apply_overlay_action(action),
+            | UiAction::Resume
+            | UiAction::ToggleEnforcementPosture => self.apply_overlay_action(action),
 
             // --- Focus & cursor movement ---
             UiAction::FocusNext
@@ -156,6 +157,30 @@ impl App {
                 self.resume();
                 self.needs_redraw = true;
             }
+            UiAction::ToggleEnforcementPosture => {
+                let new_profile = self.enforcement_state.toggle_posture();
+                let mode = self.enforcement_state.mode_label();
+                let message = match new_profile {
+                    eggsec::config::ExecutionProfile::ManualPermissive => {
+                        format!(
+                            "TUI enforcement posture: {}. Warnings and explicit confirmations are available.",
+                            mode
+                        )
+                    }
+                    eggsec::config::ExecutionProfile::ManualGuarded => {
+                        format!(
+                            "TUI enforcement posture: {}. Scope ambiguity and confirmation cases will deny.",
+                            mode
+                        )
+                    }
+                    other => format!("TUI enforcement posture: {:?}", other),
+                };
+                self.overlay.notification = Some(crate::app::notifications::Notification::new(
+                    message,
+                    crate::app::notifications::NotificationSeverity::Info,
+                ));
+                self.needs_redraw = true;
+            }
             _ => {}
         }
     }
@@ -258,10 +283,9 @@ impl App {
                 self.handle_delete();
                 self.needs_redraw = true;
             }
-            UiAction::Autocomplete
-                if self.handle_autocomplete() => {
-                    self.needs_redraw = true;
-                }
+            UiAction::Autocomplete if self.handle_autocomplete() => {
+                self.needs_redraw = true;
+            }
             _ => {}
         }
     }
@@ -280,24 +304,22 @@ impl App {
         use crate::utils::Clipboard;
 
         match action {
-            UiAction::Paste(text)
-                if !self.has_active_task() => {
-                    self.dispatcher_mut().handle_paste(&text);
-                    self.needs_redraw = true;
-                }
+            UiAction::Paste(text) if !self.has_active_task() => {
+                self.dispatcher_mut().handle_paste(&text);
+                self.needs_redraw = true;
+            }
             UiAction::Copy | UiAction::RequestCopy => {
                 self.clipboard_copy_from_tab();
                 self.needs_redraw = true;
             }
-            UiAction::RequestPaste
-                if !self.has_active_task() => {
-                    if let Some(text) = Clipboard::get() {
-                        self.dispatcher_mut().handle_paste(&text);
-                    } else {
-                        tracing::debug!("Clipboard read failed or clipboard is empty");
-                    }
-                    self.needs_redraw = true;
+            UiAction::RequestPaste if !self.has_active_task() => {
+                if let Some(text) = Clipboard::get() {
+                    self.dispatcher_mut().handle_paste(&text);
+                } else {
+                    tracing::debug!("Clipboard read failed or clipboard is empty");
                 }
+                self.needs_redraw = true;
+            }
             _ => {}
         }
     }
@@ -345,36 +367,38 @@ impl App {
 
     pub(crate) fn apply_confirm_action(&mut self, action: UiAction) {
         match action {
-            UiAction::ResetCurrent
-                if !self.has_active_task() => {
-                    if self.current_tab == Tab::History {
-                        self.request_confirmation(PendingAction::ClearHistory);
-                    } else {
-                        self.request_confirmation(PendingAction::ResetTab);
-                    }
-                    self.needs_redraw = true;
+            UiAction::ResetCurrent if !self.has_active_task() => {
+                if self.current_tab == Tab::History {
+                    self.request_confirmation(PendingAction::ClearHistory);
+                } else {
+                    self.request_confirmation(PendingAction::ResetTab);
                 }
+                self.needs_redraw = true;
+            }
             UiAction::ReloadThemes
                 if !self.has_active_task()
                     && self.current_tab == Tab::Settings
-                    && self.tabs.settings.current_section == crate::tabs::SettingsSection::Theme
-                    && !self.tabs.settings.theme_selector.is_open()
-                => {
-                    self.spawn_theme_loader_with_reason(
-                        crate::app::state::ThemeLoadReason::ManualReload,
-                    );
-                    self.needs_redraw = true;
-                }
+                    && self.tabs.settings.current_section
+                        == crate::tabs::SettingsSection::Theme
+                    && !self.tabs.settings.theme_selector.is_open() =>
+            {
+                self.spawn_theme_loader_with_reason(
+                    crate::app::state::ThemeLoadReason::ManualReload,
+                );
+                self.needs_redraw = true;
+            }
             UiAction::SaveSettings
-                if !self.has_active_task() && self.current_tab == Tab::Settings => {
-                    self.request_confirmation(PendingAction::SaveSettings);
-                    self.needs_redraw = true;
-                }
+                if !self.has_active_task() && self.current_tab == Tab::Settings =>
+            {
+                self.request_confirmation(PendingAction::SaveSettings);
+                self.needs_redraw = true;
+            }
             UiAction::DeleteHistoryEntry
-                if !self.has_active_task() && self.current_tab == Tab::History => {
-                    self.request_confirmation(PendingAction::DeleteHistoryEntry);
-                    self.needs_redraw = true;
-                }
+                if !self.has_active_task() && self.current_tab == Tab::History =>
+            {
+                self.request_confirmation(PendingAction::DeleteHistoryEntry);
+                self.needs_redraw = true;
+            }
             UiAction::ConfirmPendingAction => {
                 if self.overlay.confirm_button_index == 0 {
                     self.confirm_action();
@@ -554,15 +578,14 @@ impl App {
                     self.quick_switch.selected = 0;
                 }
                 if !results.is_empty() {
-                    self.quick_switch.selected =
-                        self.quick_switch.selected.min(results.len() - 1);
+                    self.quick_switch.selected = self.quick_switch.selected.min(results.len() - 1);
                 }
             }
             QuickSwitchInput::PageDown => {
                 let results = self.get_quick_switch_results();
                 if !results.is_empty() {
-                    self.quick_switch.selected = (self.quick_switch.selected + 10)
-                        .min(results.len().saturating_sub(1));
+                    self.quick_switch.selected =
+                        (self.quick_switch.selected + 10).min(results.len().saturating_sub(1));
                 }
             }
             QuickSwitchInput::Home => {
@@ -583,9 +606,13 @@ impl App {
     fn scroll_help_overlay(&mut self, delta: isize) {
         if self.is_help_visible() {
             self.overlay.help_scroll_offset = if delta < 0 {
-                self.overlay.help_scroll_offset.saturating_sub(delta.unsigned_abs())
+                self.overlay
+                    .help_scroll_offset
+                    .saturating_sub(delta.unsigned_abs())
             } else {
-                self.overlay.help_scroll_offset.saturating_add(delta as usize)
+                self.overlay
+                    .help_scroll_offset
+                    .saturating_add(delta as usize)
             };
             self.needs_redraw = true;
         }
@@ -593,45 +620,38 @@ impl App {
 
     pub(crate) fn apply_overlay_content_action(&mut self, action: UiAction) {
         match action {
-            UiAction::SearchQueryChar(c)
-                if self.is_search_visible() => {
-                    self.search.query.push(c);
-                    self.needs_redraw = true;
-                }
-            UiAction::SearchQueryBackspace
-                if self.is_search_visible() => {
-                    self.search.query.pop();
-                    self.needs_redraw = true;
-                }
-            UiAction::SearchQueryClear
-                if self.is_search_visible() => {
-                    self.search.query.clear();
-                    self.needs_redraw = true;
-                }
-            UiAction::SearchPerform
-                if self.is_search_visible() => {
-                    self.perform_search();
-                    self.needs_redraw = true;
-                }
+            UiAction::SearchQueryChar(c) if self.is_search_visible() => {
+                self.search.query.push(c);
+                self.needs_redraw = true;
+            }
+            UiAction::SearchQueryBackspace if self.is_search_visible() => {
+                self.search.query.pop();
+                self.needs_redraw = true;
+            }
+            UiAction::SearchQueryClear if self.is_search_visible() => {
+                self.search.query.clear();
+                self.needs_redraw = true;
+            }
+            UiAction::SearchPerform if self.is_search_visible() => {
+                self.perform_search();
+                self.needs_redraw = true;
+            }
             UiAction::HelpScrollUp => self.scroll_help_overlay(-1),
             UiAction::HelpScrollDown => self.scroll_help_overlay(1),
             UiAction::HelpScrollPageUp => self.scroll_help_overlay(-10),
             UiAction::HelpScrollPageDown => self.scroll_help_overlay(10),
-            UiAction::HelpScrollTop
-                if self.is_help_visible() => {
-                    self.overlay.help_scroll_offset = 0;
-                    self.needs_redraw = true;
-                }
-            UiAction::HelpScrollBottom
-                if self.is_help_visible() => {
-                    self.overlay.help_scroll_offset = u16::MAX as usize;
-                    self.needs_redraw = true;
-                }
-            UiAction::HttpOptionsClose
-                if self.is_http_options_visible() => {
-                    self.overlay.show_http_options = false;
-                    self.needs_redraw = true;
-                }
+            UiAction::HelpScrollTop if self.is_help_visible() => {
+                self.overlay.help_scroll_offset = 0;
+                self.needs_redraw = true;
+            }
+            UiAction::HelpScrollBottom if self.is_help_visible() => {
+                self.overlay.help_scroll_offset = u16::MAX as usize;
+                self.needs_redraw = true;
+            }
+            UiAction::HttpOptionsClose if self.is_http_options_visible() => {
+                self.overlay.show_http_options = false;
+                self.needs_redraw = true;
+            }
             _ => {}
         }
     }

@@ -72,11 +72,10 @@ pub fn run(config_path: Option<String>) -> Result<()> {
             }
         });
     let loaded_scope = if let Some(ref sp) = scope_path_opt {
-        eggsec::config::load_scope_with_source(Some(sp))
-            .unwrap_or_else(|_| {
-                eggsec::config::load_scope_with_source(None)
-                    .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty())
-            })
+        eggsec::config::load_scope_with_source(Some(sp)).unwrap_or_else(|_| {
+            eggsec::config::load_scope_with_source(None)
+                .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty())
+        })
     } else {
         eggsec::config::load_scope_with_source(None)
             .unwrap_or_else(|_| eggsec::config::LoadedScope::default_empty())
@@ -86,9 +85,9 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         .map(|c| c.execution_policy.clone())
         .unwrap_or_default();
     let surface = eggsec::config::ExecutionSurface::TuiManual;
-    app.enforcement =
+    let enforcement =
         eggsec::config::EnforcementContext::for_surface(surface, policy, loaded_scope.clone());
-    app.loaded_scope = loaded_scope;
+    app.enforcement_state = super::TuiEnforcementState::new(surface, loaded_scope, enforcement);
     let res = run_app(&mut terminal, &mut app);
 
     if let Err(e) = app.session_manager.save_quick(&app) {

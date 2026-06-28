@@ -1,9 +1,9 @@
 use super::App;
 use crate::app::task_management::TaskBuilder;
 use crate::tabs::{Tab, TabInput};
-use eggsec::config::{OperationDescriptor, OperationMode};
 #[allow(unused_imports)]
 use eggsec::config::OperationRisk;
+use eggsec::config::{OperationDescriptor, OperationMode};
 
 impl App {
     pub(crate) fn is_direct_launch_tab(&self, tab: Tab) -> bool {
@@ -248,9 +248,11 @@ impl App {
             }
         }
 
-        if let Some(ref p) = self.loaded_scope.path {
-            if self.loaded_scope.source == eggsec::config::ScopeSource::CliScopeFile
-                || self.loaded_scope.source == eggsec::config::ScopeSource::ConfigFile
+        if let Some(ref p) = self.enforcement_state.loaded_scope.path {
+            if self.enforcement_state.loaded_scope.source
+                == eggsec::config::ScopeSource::CliScopeFile
+                || self.enforcement_state.loaded_scope.source
+                    == eggsec::config::ScopeSource::ConfigFile
             {
                 out.push_str(&format!(" --scope {}", shell_escape(p)));
             }

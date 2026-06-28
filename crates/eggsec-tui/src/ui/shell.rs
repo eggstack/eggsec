@@ -11,7 +11,7 @@ use crate::App;
 use crate::InputMode;
 
 use crate::tabs::{spec_for, TabRiskGroup};
-use eggsec::config::{EnforcementOutcome, ExecutionProfile, ScopeSource};
+use eggsec::config::EnforcementOutcome;
 
 pub fn draw_tabs(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
     use crate::tabs::{Tab, TabWindow};
@@ -254,8 +254,8 @@ pub fn draw_status_bar(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
         chunks.first().copied().unwrap_or(area),
     );
 
-    let status =
-        ratatui::widgets::Paragraph::new(format!(" {status_text}")).style(Style::default().fg(status_color));
+    let status = ratatui::widgets::Paragraph::new(format!(" {status_text}"))
+        .style(Style::default().fg(status_color));
     f.render_widget(status, chunks.get(1).copied().unwrap_or(area));
 
     let help = ratatui::widgets::Paragraph::new(help_text)
@@ -317,7 +317,13 @@ pub fn get_normal_status(app: &App, theme: &Theme) -> (String, ratatui::style::C
         ),
         _ => {
             let state = app.current_tab.as_tab_state(app).state();
-            get_tab_status(&state, theme)
+            let (base_text, base_color) = get_tab_status(&state, theme);
+            if matches!(state, crate::tabs::AppState::Idle) {
+                let posture = app.enforcement_state.status_string();
+                (format!("{} | {}", base_text, posture), base_color)
+            } else {
+                (base_text, base_color)
+            }
         }
     }
 }
@@ -362,36 +368,14 @@ fn get_preflight_status(
         TabRiskGroup::Intrusive => "intrusive",
         TabRiskGroup::Administrative => "admin",
     };
-    let mode_str = match app.enforcement.execution_profile {
-        ExecutionProfile::ManualPermissive => {
-            if compact {
-                "manual"
-            } else {
-                "manual-permissive"
-            }
-        }
-        ExecutionProfile::ManualGuarded => "manual-guarded",
-        ExecutionProfile::CiStrict => "ci-strict",
-        ExecutionProfile::McpStrict => "mcp-strict",
-        ExecutionProfile::AgentStrict => "agent-strict",
-    };
-
-    let scope_str = match app.loaded_scope.source {
-        ScopeSource::DefaultEmpty => {
-            if compact {
-                "default"
-            } else {
-                "default-empty"
-            }
-        }
-        ScopeSource::ConfigFile => "config",
-        ScopeSource::CliScopeFile => "--scope",
-        ScopeSource::GeneratedPreset => "preset",
-    };
+    let mode_str = app.enforcement_state.mode_label();
+    let scope_str = app.enforcement_state.scope_label();
+    let allow_rules = app.enforcement_state.allow_rule_count();
+    let exclude_rules = app.enforcement_state.exclusion_rule_count();
 
     // Advisory only: run the real central evaluator (no side effects, same as launch path).
     let will = if let Some(ref desc) = desc_opt {
-        match app.enforcement.evaluate(desc) {
+        match app.enforcement_state.enforcement.evaluate(desc) {
             EnforcementOutcome::Allow(_) => "run",
             EnforcementOutcome::Warn(_) => "warn",
             EnforcementOutcome::RequireConfirmation(_) => "confirm",
@@ -421,7 +405,12 @@ fn get_preflight_status(
     let scope_match = if target.trim().is_empty() {
         "no-tgt"
     } else {
-        match app.loaded_scope.scope.is_target_allowed(target.as_str()) {
+        match app
+            .enforcement_state
+            .loaded_scope
+            .scope
+            .is_target_allowed(target.as_str())
+        {
             Ok(true) => {
                 if compact {
                     "in"
@@ -454,7 +443,15 @@ fn get_preflight_status(
             let txt = format!("{}|{}|{}|{}", risk_str, tpart, will, mode_str);
             (txt, status_color)
         } else {
-            let txt = format!("{}|{}|{}|{}|{}", mode_str, scope_str, risk_str, tpart, will);
+            let rules_part = if allow_rules > 0 || exclude_rules > 0 {
+                format!(" a:{}/e:{}", allow_rules, exclude_rules)
+            } else {
+                String::new()
+            };
+            let txt = format!(
+                "{}|{}|{}|{}|{}{}",
+                mode_str, scope_str, risk_str, tpart, will, rules_part
+            );
             (txt, status_color)
         }
     } else {
@@ -464,15 +461,20 @@ fn get_preflight_status(
             "warn" => "warn (proceed)",
             _ => "Enter: run",
         };
+        let rules_part = if allow_rules > 0 || exclude_rules > 0 {
+            format!(" | allow: {} | exclude: {}", allow_rules, exclude_rules)
+        } else {
+            String::new()
+        };
         let txt = if target_short.is_empty() {
             format!(
-                "Mode: {} | Scope: {} | Risk: {} | {}",
-                mode_str, scope_str, risk_str, will_hint
+                "Mode: {} | Scope: {} | Risk: {}{} | {}",
+                mode_str, scope_str, risk_str, rules_part, will_hint
             )
         } else {
             format!(
-                "Mode: {} | Scope: {} | Risk: {} | Target: {} ({}) | {}",
-                mode_str, scope_str, risk_str, target_short, scope_match, will_hint
+                "Mode: {} | Scope: {} | Risk: {} | Target: {} ({}){} | {}",
+                mode_str, scope_str, risk_str, target_short, scope_match, rules_part, will_hint
             )
         };
         (txt, status_color)
@@ -672,6 +674,7 @@ mod tests {
             required_classes: vec![],
             reason_input: String::new(),
             captured_task_config: None,
+            cli_flags: vec![],
         });
 
         let backend = TestBackend::new(80, 24);
