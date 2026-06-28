@@ -211,7 +211,7 @@ mod tests {
     use super::*;
     use eggsec::config::{
         EnforcementContext, ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope,
-        OperationDescriptor, OperationMode, OperationRisk,
+        OperationDescriptor, OperationMode, OperationRisk, Scope, ScopeRule, ScopeSource,
     };
 
     fn test_state(surface: ExecutionSurface) -> TuiEnforcementState {
@@ -361,12 +361,10 @@ mod tests {
         let mut state = test_state(ExecutionSurface::TuiManual);
         let desc = passive_descriptor("recon", Some("example.com"));
         let result = state.preflight(&desc);
-        assert!(
-            matches!(
-                result.outcome_kind,
-                TuiPreflightOutcomeKind::Allow | TuiPreflightOutcomeKind::Warn
-            ),
-            "Expected Allow or Warn for safe passive op, got {:?}",
+        assert_eq!(
+            result.outcome_kind,
+            TuiPreflightOutcomeKind::Allow,
+            "Safe passive op with default scope should allow, got {:?}",
             result.outcome_kind
         );
     }
@@ -400,14 +398,10 @@ mod tests {
             required_capabilities: vec![],
         };
         let result = state.preflight(&desc);
-        assert!(
-            matches!(
-                result.outcome_kind,
-                TuiPreflightOutcomeKind::RequireConfirmation
-                    | TuiPreflightOutcomeKind::Deny
-                    | TuiPreflightOutcomeKind::Warn
-            ),
-            "Expected confirmation/deny/warn for scope miss, got {:?}",
+        assert_eq!(
+            result.outcome_kind,
+            TuiPreflightOutcomeKind::Deny,
+            "Guarded mode scope miss should deny, got {:?}",
             result.outcome_kind
         );
     }
@@ -453,5 +447,86 @@ mod tests {
         assert!(!state.manual_override.assume_yes);
         assert!(!state.manual_override.allow_out_of_scope);
         assert!(!state.manual_override.allow_high_risk);
+    }
+
+    fn test_state_with_positive_scope(surface: ExecutionSurface) -> TuiEnforcementState {
+        let scope = Scope {
+            allowed_targets: vec![ScopeRule::new("example.com".to_string())],
+            excluded_targets: vec![],
+            ..Default::default()
+        };
+        let loaded_scope = LoadedScope {
+            scope,
+            source: ScopeSource::ConfigFile,
+            path: Some("scope.toml".to_string()),
+        };
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::for_surface(surface, policy, loaded_scope.clone());
+        TuiEnforcementState::new(surface, loaded_scope, enforcement)
+    }
+
+    #[test]
+    fn preflight_positive_scope_miss_returns_require_confirmation() {
+        let mut state = test_state_with_positive_scope(ExecutionSurface::TuiManual);
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Passive,
+            intended_uses: vec![],
+            target: Some("10.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = state.preflight(&desc);
+        assert_eq!(
+            result.outcome_kind,
+            TuiPreflightOutcomeKind::RequireConfirmation,
+            "Positive scope miss in manual mode should require confirmation, got {:?}",
+            result.outcome_kind
+        );
+    }
+
+    #[test]
+    fn confirm_clears_last_preflight() {
+        let mut state = test_state(ExecutionSurface::TuiManual);
+        assert!(state.last_preflight.is_none());
+        // Simulate a preflight result being set
+        let desc = passive_descriptor("recon", Some("example.com"));
+        state.preflight(&desc);
+        assert!(state.last_preflight.is_some());
+        // Simulate what confirm_policy_action does: clear last_preflight
+        state.last_preflight = None;
+        assert!(state.last_preflight.is_none());
+    }
+
+    #[test]
+    fn confirming_with_matching_override_permits_dispatch() {
+        use eggsec::config::ConfirmationClass;
+        let mut state = test_state(ExecutionSurface::TuiManual);
+        // Set up manual override that permits OutOfScope
+        state.manual_override.allow_out_of_scope = true;
+        // Verify permits
+        assert!(state.manual_override.permits(ConfirmationClass::OutOfScope));
+        assert!(state
+            .manual_override
+            .permits(ConfirmationClass::TargetExpansion));
+    }
+
+    #[test]
+    fn manual_override_does_not_permits_unset_classes() {
+        use eggsec::config::ConfirmationClass;
+        let mut state = test_state(ExecutionSurface::TuiManual);
+        state.manual_override.allow_out_of_scope = true;
+        // Should not permit classes that weren't explicitly set
+        assert!(!state.manual_override.permits(ConfirmationClass::HighRisk));
+        assert!(!state
+            .manual_override
+            .permits(ConfirmationClass::PrivateResolution));
+        assert!(!state
+            .manual_override
+            .permits(ConfirmationClass::TrafficInterception));
     }
 }

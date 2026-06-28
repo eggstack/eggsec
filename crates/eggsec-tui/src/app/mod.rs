@@ -716,6 +716,7 @@ impl App {
                     if let Some(cfg) = pending.captured_task_config {
                         self.spawn_task(Some(cfg));
                     }
+                    self.enforcement_state.last_preflight = None;
                     self.needs_redraw = true;
                 }
                 EnforcementOutcome::RequireConfirmation(decision) => {
@@ -755,6 +756,7 @@ impl App {
                                 .to_string(),
                         ));
                     }
+                    self.enforcement_state.last_preflight = None;
                     self.needs_redraw = true;
                 }
                 EnforcementOutcome::Deny(d) => {
@@ -762,6 +764,7 @@ impl App {
                     self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
                         d.to_human_readable(),
                     ));
+                    self.enforcement_state.last_preflight = None;
                     self.needs_redraw = true;
                 }
             }
