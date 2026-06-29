@@ -4,6 +4,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Interval};
 
+use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
+use crate::config::ExecutionSurface;
 use crate::tool::ratelimit::RateLimitConfig;
 use crate::tool::{
     CancellationToken, ExecutionHistory, RequestOptions, SessionManager, Target, ToolDispatcher,
@@ -509,6 +511,23 @@ impl McpServer {
                 });
             };
             let outcome = self.enforcement.evaluate(&descriptor);
+
+            // Emit audit event for every enforcement outcome
+            let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
+            let audit_event = audit_event_from_enforcement_outcome(
+                ExecutionSurface::McpServer,
+                &self.enforcement,
+                &descriptor,
+                &outcome,
+                false, // confirmed: MCP never confirms
+                false, // override_ignored: MCP never accepts overrides
+                None,  // manual_override: MCP never has manual overrides
+                &[],   // required_classes: MCP never has required classes
+                correlation_id,
+                None, // metadata_id
+            );
+            emit_audit_event(&audit_event);
+
             if let crate::config::EnforcementOutcome::Deny(decision)
             | crate::config::EnforcementOutcome::RequireConfirmation(decision) = outcome
             {

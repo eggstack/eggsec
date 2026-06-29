@@ -10,6 +10,7 @@ Examples:
   eggsec preflight fuzz --target https://example.com/api --json
   eggsec preflight waf-detect --target https://example.com
   eggsec preflight stress --target 10.0.0.1 --allow-high-risk
+  eggsec preflight scan-ports --target 10.0.0.1 --profile ci
 "#;
 
 #[derive(Debug, Clone, Parser)]
@@ -25,4 +26,24 @@ pub struct PreflightArgs {
     /// Output in JSON format
     #[arg(long)]
     pub json: bool,
+
+    /// Enforcement profile to simulate. Overrides the default CLI manual profile.
+    /// Options: manual (default), ci, mcp, agent, guarded.
+    #[arg(long, value_name = "PROFILE")]
+    pub profile: Option<PreflightProfile>,
+}
+
+/// Supported enforcement profiles for preflight simulation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum PreflightProfile {
+    /// CLI manual permissive (default)
+    Manual,
+    /// CI strict (deterministic, no overrides)
+    Ci,
+    /// MCP strict (automated agent)
+    Mcp,
+    /// Security agent strict
+    Agent,
+    /// CLI manual guarded (strict scope)
+    Guarded,
 }

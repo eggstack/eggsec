@@ -97,6 +97,7 @@ pub mod ai_analyze;
 #[cfg(feature = "ai-integration")]
 pub use ai_analyze::*;
 
+use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use crate::cli::Cli;
 use crate::cli::Commands;
 use crate::config::OperationDescriptor;
@@ -243,8 +244,36 @@ impl CommandContext {
         let outcome = self.enforcement.evaluate(&descriptor);
 
         match &outcome {
-            crate::config::EnforcementOutcome::Allow(decision) => Ok(decision.clone()),
+            crate::config::EnforcementOutcome::Allow(decision) => {
+                let event = audit_event_from_enforcement_outcome(
+                    self.execution_surface,
+                    &self.enforcement,
+                    &descriptor,
+                    &outcome,
+                    false,
+                    false,
+                    None,
+                    &[],
+                    None,
+                    None,
+                );
+                emit_audit_event(&event);
+                Ok(decision.clone())
+            }
             crate::config::EnforcementOutcome::Warn(decision) => {
+                let event = audit_event_from_enforcement_outcome(
+                    self.execution_surface,
+                    &self.enforcement,
+                    &descriptor,
+                    &outcome,
+                    false,
+                    false,
+                    None,
+                    &[],
+                    None,
+                    None,
+                );
+                emit_audit_event(&event);
                 for warning in &decision.warnings {
                     tracing::warn!(warning = %warning, "Policy warning");
                 }
@@ -287,6 +316,19 @@ impl CommandContext {
                             classes_vec,
                         );
                     }
+                    let event = audit_event_from_enforcement_outcome(
+                        self.execution_surface,
+                        &self.enforcement,
+                        &descriptor,
+                        &outcome,
+                        true,
+                        false,
+                        Some(&self.manual_override),
+                        &required,
+                        None,
+                        None,
+                    );
+                    emit_audit_event(&event);
                     Ok(out)
                 } else {
                     // Explain exactly which flags are needed (dedicated flags for private/redirect)
@@ -381,10 +423,36 @@ impl CommandContext {
                             base
                         }
                     };
+                    let event = audit_event_from_enforcement_outcome(
+                        self.execution_surface,
+                        &self.enforcement,
+                        &descriptor,
+                        &outcome,
+                        false,
+                        false,
+                        None,
+                        &required,
+                        None,
+                        None,
+                    );
+                    emit_audit_event(&event);
                     anyhow::bail!("{}", msg);
                 }
             }
             crate::config::EnforcementOutcome::Deny(decision) => {
+                let event = audit_event_from_enforcement_outcome(
+                    self.execution_surface,
+                    &self.enforcement,
+                    &descriptor,
+                    &outcome,
+                    false,
+                    false,
+                    None,
+                    &[],
+                    None,
+                    None,
+                );
+                emit_audit_event(&event);
                 if self.json {
                     let json = serde_json::to_string(decision)
                         .unwrap_or_else(|_| "unable to serialize decision".to_string());

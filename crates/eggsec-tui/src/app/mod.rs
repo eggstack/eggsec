@@ -50,9 +50,10 @@ use crate::tabs::{Tab, TabInput};
 use crate::theme::{display_theme_name, ThemeManager};
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
+use eggsec::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use eggsec::config::{
-    confirmation_classes_for, EnforcementOutcome, ExecutionPolicy, LoadedScope, ManualOverride,
-    OperationDescriptor,
+    confirmation_classes_for, ConfirmationClass, EnforcementOutcome, ExecutionPolicy, LoadedScope,
+    ManualOverride, OperationDescriptor,
 };
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
@@ -326,6 +327,27 @@ impl App {
                     &outcome,
                     &self.enforcement_state.enforcement.execution_policy,
                 ));
+                let required_classes: Vec<ConfirmationClass> = match &outcome {
+                    EnforcementOutcome::RequireConfirmation(decision) => confirmation_classes_for(
+                        &desc,
+                        decision,
+                        &self.enforcement_state.enforcement.execution_policy,
+                    ),
+                    _ => vec![],
+                };
+                let audit = audit_event_from_enforcement_outcome(
+                    self.enforcement_state.surface,
+                    &self.enforcement_state.enforcement,
+                    &desc,
+                    &outcome,
+                    false,
+                    false,
+                    None,
+                    &required_classes,
+                    None,
+                    None,
+                );
+                emit_audit_event(&audit);
                 match outcome {
                     EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                         // Proceed to start the tab
@@ -415,6 +437,27 @@ impl App {
             &outcome,
             &self.enforcement_state.enforcement.execution_policy,
         ));
+        let required_classes: Vec<ConfirmationClass> = match &outcome {
+            EnforcementOutcome::RequireConfirmation(decision) => confirmation_classes_for(
+                &desc,
+                decision,
+                &self.enforcement_state.enforcement.execution_policy,
+            ),
+            _ => vec![],
+        };
+        let audit = audit_event_from_enforcement_outcome(
+            self.enforcement_state.surface,
+            &self.enforcement_state.enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &required_classes,
+            None,
+            None,
+        );
+        emit_audit_event(&audit);
         match outcome {
             EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                 if let Some(cfg) = task_config {
@@ -745,7 +788,7 @@ impl App {
                     self.enforcement_state.last_preflight = None;
                     self.needs_redraw = true;
                 }
-                EnforcementOutcome::RequireConfirmation(decision) => {
+                EnforcementOutcome::RequireConfirmation(ref decision) => {
                     // Check if our constructed override permits all required classes
                     let required_now = confirmation_classes_for(
                         &pending.descriptor,
@@ -755,6 +798,19 @@ impl App {
                     let permitted = required_now.iter().all(|c| mo.permits(*c));
                     if permitted {
                         let classes_vec = eggsec::config::confirmation_class_strings(&required_now);
+                        let audit = audit_event_from_enforcement_outcome(
+                            self.enforcement_state.surface,
+                            &self.enforcement_state.enforcement,
+                            &pending.descriptor,
+                            &outcome,
+                            true,
+                            false,
+                            Some(&mo),
+                            &required_now,
+                            None,
+                            None,
+                        );
+                        emit_audit_event(&audit);
                         tracing::warn!(
                             operation = %decision.operation,
                             target = ?decision.target_original,

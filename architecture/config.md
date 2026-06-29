@@ -207,3 +207,7 @@ Use `?` propagation instead of `unwrap_or_default()` to avoid silent failures in
 - **Private IP bypass fixed**: Direct IP addresses now properly blocked in `TargetScope::parse()` and `parse_hostname_only()`
 - **Project qualifier fixed**: `api.rs` now uses `PROJECT_QUALIFIER` consistently with other modules
 - **Error propagation**: Config module uses proper error propagation rather than silent fallback to defaults
+
+## Normalized Audit Events
+
+`audit.rs` provides `EnforcementAuditEvent` for consistent audit records across all surfaces. See `docs/ENFORCEMENT_MODES.md` for the full audit trail specification.

@@ -33,8 +33,12 @@ use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
+use crate::audit::{
+    audit_event_from_enforcement_outcome, audit_event_from_preflight, emit_audit_event,
+};
 use crate::config::preflight_operation;
 use crate::config::EggsecConfig;
+use crate::config::ExecutionSurface;
 use crate::output::schedule::CronScheduler;
 use crate::tool::{
     create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse,
@@ -151,6 +155,16 @@ pub struct AgentRuntimeStatus {
     pub scans_completed: u64,
     pub scans_failed: u64,
     pub alerts_sent: u64,
+    pub last_preflight_denial: Option<AgentPreflightDenial>,
+}
+
+/// A recorded preflight denial from agent execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPreflightDenial {
+    pub operation: String,
+    pub target: String,
+    pub timestamp: DateTime<Utc>,
+    pub denied_reasons: Vec<String>,
 }
 
 /// Persisted runtime metadata, written to disk at start, after each scan, and on shutdown.
@@ -165,6 +179,7 @@ pub struct AgentRuntimePersisted {
     pub alerts_sent: u64,
     pub last_error: Option<String>,
     pub last_shutdown_at: Option<DateTime<Utc>>,
+    pub last_preflight_denial: Option<AgentPreflightDenial>,
 }
 
 pub struct Agent {
@@ -193,6 +208,7 @@ pub struct Agent {
     scans_failed: u64,
     alerts_sent: u64,
     last_error: Option<String>,
+    last_preflight_denial: std::sync::Mutex<Option<AgentPreflightDenial>>,
 }
 
 impl Agent {
@@ -314,6 +330,7 @@ impl Agent {
             scans_failed: 0,
             alerts_sent: 0,
             last_error: None,
+            last_preflight_denial: std::sync::Mutex::new(None),
         })
     }
 
@@ -360,6 +377,7 @@ impl Agent {
             scans_failed: 0,
             alerts_sent: 0,
             last_error: None,
+            last_preflight_denial: std::sync::Mutex::new(None),
         })
     }
 
@@ -412,6 +430,7 @@ impl Agent {
             scans_completed: self.scans_completed,
             scans_failed: self.scans_failed,
             alerts_sent: self.alerts_sent,
+            last_preflight_denial: self.last_preflight_denial.lock().unwrap().clone(),
         }
     }
 
@@ -426,6 +445,7 @@ impl Agent {
             alerts_sent: self.alerts_sent,
             last_error: self.last_error.clone(),
             last_shutdown_at: None,
+            last_preflight_denial: self.last_preflight_denial.lock().unwrap().clone(),
         }
     }
 
@@ -849,6 +869,19 @@ impl Agent {
                 profile = ?preflight_result.profile,
                 "agent preflight evaluation"
             );
+            {
+                let preflight_outcome = enforcement.evaluate(&preflight_result.descriptor);
+                let audit_event = audit_event_from_preflight(
+                    ExecutionSurface::SecurityAgent,
+                    enforcement,
+                    &preflight_result.descriptor,
+                    &preflight_outcome,
+                    None,
+                    &[],
+                    None,
+                );
+                emit_audit_event(&audit_event);
+            }
             if preflight_result.outcome_kind == crate::config::PreflightOutcomeKind::Deny {
                 tracing::warn!(
                     operation = %scan_type,
@@ -856,6 +889,14 @@ impl Agent {
                     reasons = ?preflight_result.decision.denied_reasons,
                     "agent preflight denied - scan will not proceed"
                 );
+                if let Ok(mut denial) = self.last_preflight_denial.lock() {
+                    *denial = Some(AgentPreflightDenial {
+                        operation: scan_type.to_string(),
+                        target: target.to_string(),
+                        timestamp: Utc::now(),
+                        denied_reasons: preflight_result.decision.denied_reasons.clone(),
+                    });
+                }
             }
         }
 
@@ -865,7 +906,23 @@ impl Agent {
             let descriptor =
                 enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
 
-            match enforcement.evaluate(&descriptor) {
+            let outcome = enforcement.evaluate(&descriptor);
+
+            let audit_event = audit_event_from_enforcement_outcome(
+                ExecutionSurface::SecurityAgent,
+                enforcement,
+                &descriptor,
+                &outcome,
+                false,
+                false,
+                None,
+                &[],
+                None,
+                None,
+            );
+            emit_audit_event(&audit_event);
+
+            match outcome {
                 EnforcementOutcome::Allow(_) => {}
                 EnforcementOutcome::Warn(decision) => {
                     if enforcement.execution_profile.is_automated() {

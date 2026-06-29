@@ -1,3 +1,4 @@
+use eggsec::audit::{audit_event_from_preflight, emit_audit_event};
 use eggsec::config::{
     confirmation_classes_for, preflight_operation, ConfirmationClass, EnforcementContext,
     EnforcementOutcome, ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope,
@@ -73,6 +74,23 @@ impl TuiEnforcementState {
         );
         let result = TuiPreflightResult::from_preflight(&shared);
         self.last_preflight = Some(result.clone());
+        let outcome = self.enforcement.evaluate(descriptor);
+        let required_classes: Vec<ConfirmationClass> = match &outcome {
+            EnforcementOutcome::RequireConfirmation(decision) => {
+                confirmation_classes_for(descriptor, decision, &self.enforcement.execution_policy)
+            }
+            _ => vec![],
+        };
+        let audit = audit_event_from_preflight(
+            self.surface,
+            &self.enforcement,
+            descriptor,
+            &outcome,
+            Some(&self.manual_override),
+            &required_classes,
+            None,
+        );
+        emit_audit_event(&audit);
         result
     }
 

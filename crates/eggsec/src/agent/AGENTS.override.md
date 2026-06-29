@@ -23,6 +23,14 @@ Factored helper functions for per-scan enforcement, called immediately before di
 
 These replace inline risk/capability mapping that was previously duplicated in `execute_scan_with_depth`. The enforcement invariant holds: `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate; scope provenance must come from `LoadedScope`.
 
+### Audit Integration (Phase 10)
+
+Agent enforcement decisions emit normalized `EnforcementAuditEvent` records via `crate::audit`. Audit events are emitted for:
+- Preflight evaluations (advisory, using `audit_event_from_preflight()`)
+- Hard enforcement gate decisions (Allow, Warn/deny-as-deny, RequireConfirmation, Deny)
+
+Agent uses `ExecutionSurface::SecurityAgent` for audit records. Agent never accepts manual overrides.
+
 ## Test Seams
 
 Prefer small test seams over making private fields public:

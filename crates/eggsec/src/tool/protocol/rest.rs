@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 
 use super::auth::validate_api_key;
+use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use crate::config::{EnforcementContext, EnforcementOutcome, OperationDescriptor};
 use crate::distributed::TlsConfig;
 use crate::error::EggsecError;
@@ -662,6 +663,20 @@ async fn execute_tool(
     }
 
     let outcome = state.enforcement.evaluate(&descriptor);
+    let correlation_id = generate_correlation_id();
+    let audit_event = audit_event_from_enforcement_outcome(
+        crate::config::ExecutionSurface::RestApi,
+        &state.enforcement,
+        &descriptor,
+        &outcome,
+        false, // confirmed — REST never confirms
+        false, // override_ignored — no overrides attempted in REST
+        None,  // manual_override — REST never provides manual overrides
+        &[],   // required_classes — REST never confirms
+        Some(&correlation_id),
+        None, // metadata_id — not available at dispatch
+    );
+    emit_audit_event(&audit_event);
     match outcome {
         EnforcementOutcome::Allow(_) => {}
         EnforcementOutcome::Warn(decision) => {
@@ -742,6 +757,22 @@ async fn preflight_tool(
             )));
         }
     }
+
+    let outcome = state.enforcement.evaluate(&descriptor);
+    let correlation_id = generate_correlation_id();
+    let audit_event = audit_event_from_enforcement_outcome(
+        crate::config::ExecutionSurface::RestApi,
+        &state.enforcement,
+        &descriptor,
+        &outcome,
+        false, // confirmed — REST preflight never confirms
+        false, // override_ignored — no overrides attempted
+        None,  // manual_override — REST never provides manual overrides
+        &[],   // required_classes — REST never confirms
+        Some(&correlation_id),
+        None, // metadata_id — not available at preflight
+    );
+    emit_audit_event(&audit_event);
 
     let result = crate::config::preflight_operation(
         crate::config::ExecutionSurface::RestApi,

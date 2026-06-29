@@ -102,6 +102,8 @@ description = "Admin panel - excluded"
 
 MCP and autonomous agent paths are always strict and cannot be downgraded or overridden by model-supplied flags.
 
+**Normalized audit events** produce consistent records for every enforcement decision across all surfaces (CLI, TUI, REST, MCP, Agent). Each `EnforcementAuditEvent` captures the execution surface, profile, operation, target, outcome, confirmation classes, scope provenance, and correlation ID. Manual confirmations record class and reason; automated surfaces never record accepted manual overrides. See [docs/ENFORCEMENT_MODES.md](docs/ENFORCEMENT_MODES.md#audit-trail) for the full audit trail specification.
+
 ```bash
 # Manual permissive (default: operator-directed; warn + confirm/override for discretion)
 eggsec scan example.com --profile quick

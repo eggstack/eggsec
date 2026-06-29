@@ -80,6 +80,7 @@
 
 #[cfg(feature = "api-schema")]
 pub mod api_schema;
+pub mod audit;
 pub mod auth;
 pub mod auth_context;
 #[cfg(feature = "headless-browser")]
@@ -192,6 +193,10 @@ mod mobile {
 #[cfg(feature = "db-pentest")]
 pub mod db_pentest;
 
+pub use audit::{
+    audit_event_from_enforcement_outcome, audit_event_from_preflight, emit_audit_event,
+    AuditOutcome, EnforcementAuditEvent, ManualOverrideAudit, ScopeAudit,
+};
 pub use config::{load_config, load_scope, EggsecConfig, Scope};
 pub use error::{EggsecError, Result};
 pub use types::Severity;

@@ -206,3 +206,39 @@ Run:
 cargo test --test enforcement_matrix -p eggsec
 cargo test -p eggsec --features rest-api --test enforcement_matrix
 ```
+
+## Audit Trail
+
+Every meaningful enforcement decision produces a normalized `EnforcementAuditEvent` via `audit.rs`.
+
+### Event Model
+
+- `event_id`: UUID v4 per decision
+- `timestamp`: UTC timestamp
+- `surface`: `ExecutionSurface` (CliManual, TuiManual, McpServer, RestApi, SecurityAgent, Ci)
+- `profile`: `ExecutionProfile` (ManualPermissive, ManualGuarded, McpStrict, AgentStrict, CiStrict)
+- `operation_id`: canonical operation name
+- `target`: optional target string
+- `outcome`: `AuditOutcome` (Allow, Warn, Confirmed, Deny, ConfirmationRequired)
+- `decision`: full `PolicyDecision` with decision_id
+- `confirmation_classes`: classes required for this decision
+- `manual_override`: override details (only when confirmed)
+- `manual_override_ignored`: true if override flags were present but surface does not honor them
+- `scope`: `ScopeAudit` with source, path, allow/exclusion counts, explicit_manifest flag
+- `correlation_id`: optional request/correlation ID for REST/MCP
+
+### Per-Surface Behavior
+
+| Surface | Audit Emitted | Manual Override Record | Correlation ID |
+|---------|--------------|----------------------|----------------|
+| CLI | Yes | Accepted overrides include class+reason | None |
+| TUI | Yes | Accepted overrides include class+reason | None |
+| REST | Yes | Never (REST never confirms) | `generate_correlation_id()` |
+| MCP | Yes | Never (MCP never confirms) | JSON-RPC request id |
+| Agent | Yes | Never (Agent never confirms) | None |
+| CI | Via CLI handler | Never (CI never confirms) | None |
+
+### Tracing Levels
+
+- `Allow`, `Warn`, `Confirmed`: `tracing::info!`
+- `Deny`, `ConfirmationRequired`: `tracing::warn!`

@@ -622,6 +622,17 @@ The registry lives in `config::policy` and is accessible from all surfaces:
 
 Every `OperationDescriptor` is now generated from `OperationMetadata` via `descriptor_for_target()`. This eliminates drift between REST, MCP, TUI, and agent descriptor construction. Alias mapping (32 entries) ensures that alternate tool IDs (REST tool names, MCP tool names, registry IDs) all resolve to the same canonical metadata.
 
+### Normalized Audit Events (Phase 10)
+
+`audit.rs` provides a single `EnforcementAuditEvent` model for consistent audit records across all execution surfaces. Every meaningful enforcement decision (allow, warn, deny, confirmation-required, confirmed override) produces an audit event with surface, profile, operation, target, outcome, scope provenance, and optional correlation ID.
+
+Key functions:
+- `audit_event_from_enforcement_outcome()` - builds events from enforcement decisions
+- `audit_event_from_preflight()` - builds events from preflight evaluations
+- `emit_audit_event()` - logs at appropriate tracing level
+
+Manual confirmations record class and reason. Automated surfaces (REST, MCP, Agent, CI) never record accepted manual overrides.
+
 ### Logging & Tracing
 
 - **Framework**: `tracing` with structured spans

@@ -59,6 +59,16 @@ The confirmation overlay includes a CLI-equivalent flag preview showing what fla
 cargo test --lib -p eggsec-tui tui::app::enforcement
 ```
 
+### Audit Integration (Phase 10)
+
+TUI enforcement decisions emit normalized `EnforcementAuditEvent` records via `eggsec::audit`. Audit events are emitted in:
+- `handle_enter()` for direct-launch tab pre-dispatch evaluation
+- `evaluate_policy_and_dispatch()` for post-dispatch evaluation
+- `confirm_policy_action()` when manual override is accepted (with `confirmed=true`)
+- `TuiEnforcementState::preflight()` for advisory preflight evaluation
+
+Only executable operations produce audit events. TUI uses `ExecutionSurface::TuiManual` or `TuiManualStrict` for audit records.
+
 ## Recent Fixes (2026-05-29)
 
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
