@@ -70,3 +70,19 @@ Policy decision tests in `policy_decision.rs` (48 tests) lock manual-mode enforc
 - `manual_permissive_does_not_downgrade_risk_policy_denial` / `feature_missing_denial` / `capability_denial` - Hard deny classes stay hard
 
 See `docs/ENFORCEMENT_MODES.md` Phase 4 section for the full invariant-to-test mapping.
+
+## Phase 8 Enforcement Matrix
+
+`tests/enforcement_matrix.rs` (105 tests) provides systematic cross-surface coverage for the dual-mode enforcement contract. Tests cover:
+
+- All 8 execution surfaces mapped to correct profiles
+- Manual permissive: safe ops allow, scope misses require confirmation, assume_yes narrow
+- Manual guarded: scope misses deny, overrides ignored
+- MCP/Agent/REST/CI: strict behavior, no confirmation/warn path, no override honoring
+- Risk tier matrix across all surfaces with/without policy flags
+- Capability matrix: baseline allowed, non-baseline requires explicit allow, denied caps hard-deny
+- Override isolation: ManualOverride::permits() per ConfirmationClass
+- Scope state matrix: DefaultEmpty, explicit allow/miss/exclusion
+- Dual-mode contract: permissive never hard-deny safe in-scope, strict never warn/confirm
+
+Run: `cargo test --test enforcement_matrix -p eggsec`

@@ -28,6 +28,8 @@ cargo test -p eggsec-output
 cargo test --lib -p eggsec
 cargo test --test negative_tests -p eggsec
 cargo test --test scanner_tests -p eggsec
+cargo test --test enforcement_matrix -p eggsec
+cargo test -p eggsec --features rest-api --test enforcement_matrix
 cargo clippy --lib -p eggsec
 cargo build --release -p eggsec-cli
 ```
@@ -208,7 +210,7 @@ Canonical reference points when updating guidance or skills:
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4480 (includes #[test] + #[tokio::test]) |
+| Tests | ~4585 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 878 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |

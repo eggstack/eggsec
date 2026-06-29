@@ -176,3 +176,31 @@ Key invariants locked by tests:
 | Audit records use stable kebab strings | `successful_override_records_stable_kebab_case_classes_on_decision_no_debug_no_dups`, `successful_out_of_scope_override_records_audit_fields` |
 | Explicit exclusions hard-deny in non-permissive | `explicit_exclusion_denies_in_all_profiles`, `manual_permissive_does_not_downgrade_explicit_exclusion` |
 | Risk-policy/feature/capability denials stay hard-deny | `manual_permissive_does_not_downgrade_risk_policy_denial`, `manual_permissive_does_not_downgrade_feature_missing_denial`, `manual_permissive_does_not_downgrade_capability_denial` |
+
+## Phase 8 Enforcement Matrix Coverage
+
+Phase 8 added a comprehensive enforcement matrix test suite (`crates/eggsec/tests/enforcement_matrix.rs`) that systematically tests all execution surfaces against scope states, risk tiers, capabilities, and override handling. The matrix protects the dual-mode contract by catching:
+
+1. Manual CLI/TUI becoming too strict to be useful.
+2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
+
+**105 tests** covering:
+
+- **Surface mapping invariants**: All 8 `ExecutionSurface` variants map to correct `ExecutionProfile`.
+- **Manual permissive invariants**: Safe ops allow, scope misses require confirmation, `assume_yes` is narrow, denied capabilities hard-deny, missing features hard-deny.
+- **Manual guarded invariants**: Scope misses deny, overrides ignored, high-risk with policy allows.
+- **MCP invariants**: Missing scope denies, no confirmation path, baseline capabilities allowed, non-baseline requires explicit allow.
+- **Security agent invariants**: Same as MCP, plus `AgentStrict` profile, warnings treated as denial.
+- **REST invariants**: Explicit manifest required, only `Allow` dispatches, no confirmation/warn path, overrides ignored.
+- **CI invariants**: Matches automated strict behavior, no override honoring.
+- **Risk tier matrix**: All risk tiers (Passive through C2Operation) tested across all surfaces with and without policy flags.
+- **Capability matrix**: Baseline vs non-baseline capabilities across all surfaces, denied capability hard-deny.
+- **Override isolation**: `ManualOverride::permits()` tested for each `ConfirmationClass`, override flags don't leak across surfaces.
+- **Scope state matrix**: DefaultEmpty, explicit allow, allow miss, exclusion - tested across permissive and strict surfaces.
+- **Dual-mode contract**: Permissive never hard-deny safe in-scope, strict never produce Warn/RequireConfirmation.
+
+Run:
+```bash
+cargo test --test enforcement_matrix -p eggsec
+cargo test -p eggsec --features rest-api --test enforcement_matrix
+```

@@ -142,6 +142,7 @@ cargo test --lib -p eggsec config::        # All config tests
 cargo test --lib -p eggsec config::loader  # Loader tests only
 cargo test --lib -p eggsec config::scope   # Scope tests only
 cargo test --lib -p eggsec config::policy_decision  # Enforcement policy tests
+cargo test --test enforcement_matrix -p eggsec      # Cross-surface enforcement matrix
 ```
 
 ### Test Patterns
@@ -150,6 +151,7 @@ See inline tests in:
 - `config/scope.rs` - Scope rule matching, CIDR, wildcard patterns
 - `config/settings.rs` - Validation, defaults
 - `config/policy_decision.rs` - 48 enforcement policy tests (Phase 4 regression coverage for manual discretion invariants)
+- `tests/enforcement_matrix.rs` - 105 cross-surface enforcement matrix tests (Phase 8 dual-mode contract coverage)
 
 ## Security Notes
 
