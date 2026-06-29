@@ -3,8 +3,8 @@
 //! Produces findings with `db-postgres-*` / `db-mysql-*` categories.
 //! Phase 4: includes correlation metadata in the info finding description.
 
-use crate::db_pentest::types::DbPentestReport;
-use crate::output::convert::{FindingData, ScanReportData};
+use crate::types::DbPentestReport;
+use eggsec_output::convert::{FindingData, ScanReportData};
 
 pub fn to_scan_report_data_db(result: &DbPentestReport) -> ScanReportData {
     let findings: Vec<FindingData> = result
@@ -76,14 +76,15 @@ pub fn to_scan_report_data_db(result: &DbPentestReport) -> ScanReportData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db_pentest::types::DbFinding;
+    use crate::types::DbFinding;
+    use eggsec_core::types::Severity;
 
     #[test]
     fn bridge_produces_valid_scan_report_data() {
         let mut r = DbPentestReport::new("postgres://u@h:5432/db", "postgres");
         r.findings.push(DbFinding {
             category: "db-postgres-misconfig-dangerous-extension".to_string(),
-            severity: crate::types::Severity::High,
+            severity: Severity::High,
             title: "Dangerous ext".to_string(),
             description: "desc".to_string(),
             recommendation: "revoke".to_string(),

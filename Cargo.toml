@@ -8,6 +8,7 @@ members = [
     "crates/eggsec-output",
     "crates/eggsec-tool-core",
     "crates/eggsec-agent",
+    "crates/eggsec-db-lab",
 ]
 resolver = "2"
 

@@ -8,9 +8,9 @@
 //! (caller in mod.rs + utils::populate_dry_run_findings). Dry-run for mssql is always rich
 //! and driver-independent.
 
-use crate::db_pentest::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
-use crate::types::Severity;
+use crate::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
 use anyhow::Result;
+use eggsec_core::types::Severity;
 use futures::TryStreamExt;
 use tiberius::{AuthMethod, Client, Config};
 use tokio::net::TcpStream;

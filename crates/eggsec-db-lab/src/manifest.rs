@@ -1,7 +1,7 @@
 //! Lab manifest parser + validator for db-pentest (TOML-based allowlist).
 //! Mirrors the advisory LabManifest pattern from mobile-dynamic (errors become action notes).
 
-pub use crate::db_pentest::types::LabDbManifest;
+pub use crate::types::LabDbManifest;
 
 #[cfg(test)]
 mod tests {

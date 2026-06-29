@@ -1,8 +1,8 @@
 //! Utilities: connection string parsing, redaction, dry-run population, target normalization,
 //! and shared URL builders for all database engines.
 
-use crate::db_pentest::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
-use crate::types::Severity;
+use crate::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
+use eggsec_core::types::Severity;
 
 /// Redact password from a connection URL, keeping the user and replacing the password with `***`.
 pub fn redacted_conn_string(s: &str) -> String {

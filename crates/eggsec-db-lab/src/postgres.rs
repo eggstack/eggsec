@@ -2,10 +2,10 @@
 //! All operations are read-only or use safe information_schema / pg_catalog views.
 //! Bounded enumeration with configurable limits.
 
-use crate::db_pentest::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
-use crate::db_pentest::utils;
-use crate::types::Severity;
+use crate::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
+use crate::utils;
 use anyhow::Result;
+use eggsec_core::types::Severity;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::Row;
 

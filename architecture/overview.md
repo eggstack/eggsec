@@ -32,6 +32,7 @@ Eggsec is organized as a Cargo workspace. The first-level crate boundary is:
 - **`eggsec-cli`**: CLI binary entry point. Depends on both `eggsec` and `eggsec-tui`.
 - **`eggsec-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `eggsec` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `eggsec`.
 - **`eggsec-agent`**: agent coordination primitives extracted from `eggsec::tool::agents` (registry, scheduler, lifecycle, communication, delegation, aggregation). Depends on `eggsec-core` but not the main engine crate.
+- **`eggsec-db-lab`**: database pentesting domain crate extracted from `eggsec::db_pentest`. Owns domain execution logic, types, and tests for Postgres/MySQL/MSSQL/MongoDB/Redis security checks. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
 
 New modules should avoid adding heavy runtime dependencies to `eggsec-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `eggsec` crate or in `eggsec-tui` as appropriate.
 

@@ -7,15 +7,15 @@
 //! (caller in mod.rs + utils::populate_dry_run_findings). Dry-run for Redis is
 //! always rich and driver-independent.
 
-use crate::db_pentest::types::{CheckType, DbPentestReport, DbTarget};
+use crate::types::{CheckType, DbPentestReport, DbTarget};
 use anyhow::Result;
 
-#[cfg(feature = "db-pentest-redis")]
+#[cfg(feature = "redis")]
 mod real {
     use super::*;
-    use crate::db_pentest::types::DbFinding;
-    use crate::db_pentest::utils;
-    use crate::types::Severity;
+    use crate::types::DbFinding;
+    use crate::utils;
+    use eggsec_core::types::Severity;
 
     /// Run Redis security checks.
     ///
@@ -502,7 +502,7 @@ mod real {
     }
 }
 
-#[cfg(feature = "db-pentest-redis")]
+#[cfg(feature = "redis")]
 pub async fn run_redis_checks(
     target: &DbTarget,
     report: &mut DbPentestReport,
@@ -513,7 +513,7 @@ pub async fn run_redis_checks(
     real::run_redis_checks_real(target, report, checks, max_queries, client).await
 }
 
-#[cfg(not(feature = "db-pentest-redis"))]
+#[cfg(not(feature = "redis"))]
 pub async fn run_redis_checks(
     target: &DbTarget,
     report: &mut DbPentestReport,

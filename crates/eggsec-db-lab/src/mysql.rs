@@ -1,10 +1,10 @@
 //! MySQL checks for db-pentest Phase 1 (lighter scope than Postgres).
 //! Focus: connection, local_infile/FILE/secure_file_priv, basic priv summary, logging status, version.
 
-use crate::db_pentest::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
-use crate::db_pentest::utils;
-use crate::types::Severity;
+use crate::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
+use crate::utils;
 use anyhow::Result;
+use eggsec_core::types::Severity;
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
 use sqlx::Row;
 

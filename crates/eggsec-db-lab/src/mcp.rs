@@ -1,5 +1,5 @@
 //! MCP tool schema and call types for db-pentest (Phase 5).
-//! Only compiled when `db-pentest-mcp` feature is enabled.
+//! Only compiled when `mcp` feature is enabled.
 //!
 //! This module defines the MCP parameter types (`DbPentestToolCall`) and schema.
 //! The actual `SecurityTool` implementation lives in `tool/implementations/db_pentest.rs`.
@@ -127,8 +127,8 @@ fn default_max_duration() -> u64 {
 
 impl DbPentestToolCall {
     /// Convert MCP tool call parameters to DbPentestRunArgs for the existing pipeline.
-    pub fn to_run_args(&self) -> super::DbPentestRunArgs {
-        super::DbPentestRunArgs {
+    pub fn to_run_args(&self) -> crate::DbPentestRunArgs {
+        crate::DbPentestRunArgs {
             target: Some(self.target.clone()),
             db_type: self.db_type.clone(),
             checks: self.checks.clone(),

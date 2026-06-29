@@ -1,4 +1,4 @@
-use crate::db_pentest::types::{
+use crate::types::{
     DbCorrelatedFinding, DbCorrelationResult, DbCorrelationSummary, DbCorrelationType, DbFinding,
     DbPentestReport,
 };
@@ -467,7 +467,7 @@ pub fn build_timeline(report: &DbPentestReport) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Severity;
+    use eggsec_core::types::Severity;
 
     #[test]
     fn correlation_produces_notes_for_priv_and_sqli() {

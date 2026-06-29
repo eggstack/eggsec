@@ -100,6 +100,8 @@ eggsec-agent = { path = "../eggsec-agent" }
 # NSE remains optional compatibility support for Nmap NSE scripts.
 # Python/Ruby arbitrary plugin runtimes were intentionally removed.
 eggsec-nse = { path = "../eggsec-nse", optional = true }
+# Database pentesting domain crate (extracted from db_pentest module)
+eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
 ssh2 = { version = "0.9", optional = true }
 
 [dependencies.libc]
@@ -335,20 +337,20 @@ database = ["sqlx"]
 # The marker is a no-op feature declaration. Enabling it + `db-pentest` activates the tiberius path in mssql.rs.
 # Dry-run + categories + bridge for mssql are always exercised (synthetic) regardless of the marker, so tests/CI
 # stay green without forcing heavy transitive deps in every environment.
-db-pentest = ["sqlx"]
+db-pentest = ["sqlx", "dep:eggsec-db-lab", "eggsec-db-lab/db-drivers"]
 # Enabling this marker (together with db-pentest) pulls tiberius and activates the real MSSQL client path.
 # Use: cargo ... --features db-pentest,db-pentest-mssql-tiberius
-db-pentest-mssql-tiberius = ["dep:tiberius"]
+db-pentest-mssql-tiberius = ["dep:tiberius", "eggsec-db-lab/mssql"]
 # Enabling this marker (together with db-pentest) pulls the mongodb crate and activates the real MongoDB client path.
 # Use: cargo ... --features db-pentest,db-pentest-mongodb
-db-pentest-mongodb = ["dep:mongodb", "dep:bson"]
+db-pentest-mongodb = ["dep:mongodb", "dep:bson", "eggsec-db-lab/mongodb"]
 # Enabling this marker (together with db-pentest) pulls the redis crate and activates the real Redis client path.
 # Use: cargo ... --features db-pentest,db-pentest-redis
-db-pentest-redis = ["dep:redis"]
+db-pentest-redis = ["dep:redis", "eggsec-db-lab/redis"]
 # Optional MCP/agent exposure for db-pentest. When enabled, registers db-pentest as an MCP tool.
 # Default behavior (without this marker) keeps db-pentest as standalone defense-lab surface only.
 # Real runs via MCP require EnforcementContext + policy confirmation.
-db-pentest-mcp = ["db-pentest"]
+db-pentest-mcp = ["db-pentest", "eggsec-db-lab/mcp"]
 
 # C2 MCP tool exposure (enables c2 tool in MCP server)
 # Default behavior (without this marker) keeps c2 as standalone defense-lab surface only.

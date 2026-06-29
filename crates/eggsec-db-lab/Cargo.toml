@@ -1,0 +1,68 @@
+[package]
+name = "eggsec-db-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Database pentesting domain crate for Eggsec defense-lab security assessment"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords = ["security", "database", "pentest", "defense-lab"]
+categories = ["command-line-utilities", "development-tools::testing"]
+
+[dependencies]
+# Shared types from core
+eggsec-core = { path = "../eggsec-core" }
+# Output bridge (for ScanReportData)
+eggsec-output = { path = "../eggsec-output" }
+
+# Serialization
+serde = { workspace = true }
+serde_json.workspace = true
+toml = "0.8"
+
+# Error handling
+anyhow.workspace = true
+
+# Time
+chrono.workspace = true
+
+# Compression (evidence bundles)
+flate2.workspace = true
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "fs", "time", "macros"] }
+
+# Tracing
+tracing.workspace = true
+
+# Database drivers (optional, behind feature flags)
+sqlx = { version = "0.8", optional = true, features = ["runtime-tokio", "postgres", "mysql", "macros", "chrono"] }
+tiberius = { version = "0.12", optional = true, default-features = false, features = ["tokio", "rustls"] }
+mongodb = { version = "2.8", optional = true, default-features = false, features = ["tokio-runtime"] }
+bson = { version = "2.9", optional = true }
+redis = { version = "0.25", optional = true, features = ["tokio-comp", "connection-manager"] }
+
+# Async utilities for tiberius
+tokio-util = { version = "0.7", optional = true }
+futures = { version = "0.3", optional = true }
+
+[features]
+default = []
+
+# Enable real database drivers (postgres + mysql via sqlx)
+db-drivers = ["dep:sqlx"]
+
+# Enable MSSQL via tiberius
+mssql = ["dep:tiberius", "dep:tokio-util", "dep:futures"]
+
+# Enable MongoDB driver
+mongodb = ["dep:mongodb", "dep:bson"]
+
+# Enable Redis driver
+redis = ["dep:redis"]
+
+# Enable MCP tool schema types (marker only, no extra deps)
+mcp = []

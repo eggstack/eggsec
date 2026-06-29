@@ -4,8 +4,8 @@
 //! subsequent reports against it to identify regressions (new findings,
 //! severity increases) and improvements (resolved findings).
 
-use crate::db_pentest::types::{DbFinding, DbPentestReport};
-use crate::types::Severity;
+use crate::types::{DbFinding, DbPentestReport};
+use eggsec_core::types::Severity;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

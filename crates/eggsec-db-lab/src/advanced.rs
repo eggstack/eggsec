@@ -3,9 +3,10 @@
 //! All real actions are on an allowlist of safe, reversible operations with automatic cleanup.
 //! Dry-run always safe (no side effects, no connections).
 
-use crate::db_pentest::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
-use crate::db_pentest::utils;
-use crate::types::Severity;
+use crate::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
+#[cfg(feature = "db-drivers")]
+use crate::utils;
+use eggsec_core::types::Severity;
 
 /// Allowed advanced test vector operations (reversible, lab-safe).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,7 +123,7 @@ pub fn simulate_advanced_test_vector(
 /// Each vector has automatic cleanup (explicit cleanup step after each vector).
 ///
 /// If `pg_pool` / `mysql_pool` are provided, reuses existing connection pools.
-#[cfg(feature = "db-pentest")]
+#[cfg(feature = "db-drivers")]
 pub async fn execute_advanced_test_vectors(
     target: &DbTarget,
     report: &mut DbPentestReport,
@@ -171,24 +172,24 @@ pub async fn execute_advanced_test_vectors(
     Ok(())
 }
 
-#[cfg(not(feature = "db-pentest"))]
+#[cfg(not(feature = "db-drivers"))]
 pub async fn execute_advanced_test_vectors(
     _target: &DbTarget,
     report: &mut DbPentestReport,
     _checks: &[CheckType],
     _max_queries: u64,
-    _pg_pool: Option<&sqlx::postgres::PgPool>,
-    _mysql_pool: Option<&sqlx::mysql::MySqlPool>,
+    _pg_pool: Option<&()>,
+    _mysql_pool: Option<&()>,
 ) -> anyhow::Result<()> {
     report
         .actions_performed
-        .push("advanced: real execution requires db-pentest feature".to_string());
+        .push("advanced: real execution requires db-drivers feature".to_string());
     Ok(())
 }
 
 // --- Individual vector implementations (real execution with cleanup) ---
 
-#[cfg(feature = "db-pentest")]
+#[cfg(feature = "db-drivers")]
 async fn execute_temp_udf(
     target: &DbTarget,
     report: &mut DbPentestReport,
@@ -342,7 +343,7 @@ async fn execute_temp_udf(
     Ok(())
 }
 
-#[cfg(feature = "db-pentest")]
+#[cfg(feature = "mssql")]
 async fn execute_linked_server_probe(
     target: &DbTarget,
     report: &mut DbPentestReport,
@@ -350,75 +351,64 @@ async fn execute_linked_server_probe(
 ) -> anyhow::Result<()> {
     match target.db_type.as_str() {
         "mssql" | "sqlserver" => {
-            #[cfg(feature = "db-pentest-mssql-tiberius")]
-            {
-                use futures::TryStreamExt;
-                use tiberius::{AuthMethod, Client, Config};
-                use tokio::net::TcpStream;
-                use tokio_util::compat::TokioAsyncWriteCompatExt;
+            use futures::TryStreamExt;
+            use tiberius::{AuthMethod, Client, Config};
+            use tokio::net::TcpStream;
+            use tokio_util::compat::TokioAsyncWriteCompatExt;
 
-                let mut config = Config::new();
-                config.host(&target.host);
-                config.port(target.port);
-                config.authentication(AuthMethod::sql_server(
-                    target.user.clone(),
-                    target.password.clone().unwrap_or_default(),
-                ));
-                config.trust_cert();
+            let mut config = Config::new();
+            config.host(&target.host);
+            config.port(target.port);
+            config.authentication(AuthMethod::sql_server(
+                target.user.clone(),
+                target.password.clone().unwrap_or_default(),
+            ));
+            config.trust_cert();
 
-                let tcp = TcpStream::connect(config.get_addr()).await?;
-                tcp.set_nodelay(true)?;
-                let mut client = Client::connect(config, tcp.compat_write()).await?;
-                report
-                    .actions_performed
-                    .push("advanced: connected (mssql tiberius)".to_string());
+            let tcp = TcpStream::connect(config.get_addr()).await?;
+            tcp.set_nodelay(true)?;
+            let mut client = Client::connect(config, tcp.compat_write()).await?;
+            report
+                .actions_performed
+                .push("advanced: connected (mssql tiberius)".to_string());
 
-                // Probe linked servers (read-only)
-                let mut stream = client
-                    .query("SELECT name FROM sys.servers WHERE is_linked = 1", &[])
-                    .await?;
-                let mut count = 0usize;
-                while let Some(item) = stream.try_next().await? {
-                    if let tiberius::QueryItem::Row(_row) = item {
-                        count += 1;
-                        if count > 20 {
-                            break;
-                        }
+            // Probe linked servers (read-only)
+            let mut stream = client
+                .query("SELECT name FROM sys.servers WHERE is_linked = 1", &[])
+                .await?;
+            let mut count = 0usize;
+            while let Some(item) = stream.try_next().await? {
+                if let tiberius::QueryItem::Row(_row) = item {
+                    count += 1;
+                    if count > 20 {
+                        break;
                     }
                 }
+            }
 
-                report.actions_performed.push(format!(
-                    "advanced: linked server probe returned {} linked server(s)",
+            report.actions_performed.push(format!(
+                "advanced: linked server probe returned {} linked server(s)",
+                count
+            ));
+
+            report.findings.push(DbFinding {
+                category: "db-mssql-advanced-linked-server-probe".to_string(),
+                severity: if count > 0 {
+                    Severity::Medium
+                } else {
+                    Severity::Low
+                },
+                title: "Advanced: Linked server connectivity probe".to_string(),
+                description: format!(
+                    "Probed linked server connectivity: {} linked server(s) found.",
                     count
-                ));
-
-                report.findings.push(DbFinding {
-                    category: "db-mssql-advanced-linked-server-probe".to_string(),
-                    severity: if count > 0 {
-                        Severity::Medium
-                    } else {
-                        Severity::Low
-                    },
-                    title: "Advanced: Linked server connectivity probe".to_string(),
-                    description: format!(
-                        "Probed linked server connectivity: {} linked server(s) found.",
-                        count
-                    ),
-                    recommendation:
-                        "Audit linked server configurations and remove unnecessary links."
-                            .to_string(),
-                    evidence: Some(format!("{} linked server(s) discovered", count)),
-                    db_type: "mssql".to_string(),
-                    target_host: target.host.clone(),
-                });
-            }
-            #[cfg(not(feature = "db-pentest-mssql-tiberius"))]
-            {
-                report.actions_performed.push(
-                    "advanced: linked server probe skipped (tiberius driver not enabled)"
-                        .to_string(),
-                );
-            }
+                ),
+                recommendation: "Audit linked server configurations and remove unnecessary links."
+                    .to_string(),
+                evidence: Some(format!("{} linked server(s) discovered", count)),
+                db_type: "mssql".to_string(),
+                target_host: target.host.clone(),
+            });
         }
         _ => {
             report
@@ -429,7 +419,20 @@ async fn execute_linked_server_probe(
     Ok(())
 }
 
-#[cfg(feature = "db-pentest")]
+#[cfg(not(feature = "mssql"))]
+#[allow(dead_code)]
+async fn execute_linked_server_probe(
+    _target: &DbTarget,
+    report: &mut DbPentestReport,
+    _max_queries: u64,
+) -> anyhow::Result<()> {
+    report
+        .actions_performed
+        .push("advanced: linked server probe skipped (mssql feature not enabled)".to_string());
+    Ok(())
+}
+
+#[cfg(feature = "db-drivers")]
 async fn execute_file_access(
     target: &DbTarget,
     report: &mut DbPentestReport,
@@ -456,22 +459,17 @@ async fn execute_file_access(
                 .push("advanced: connected (postgres)".to_string());
 
             // Check if pg_read_server_files or pg_write_server_files are installed
-            #[cfg(feature = "db-pentest")]
-            let extensions = {
-                use sqlx::Row;
-                let ext_rows = sqlx::query(
-                    "SELECT extname FROM pg_extension WHERE extname IN ('pg_read_server_files', 'pg_write_server_files', 'file_fdw')",
-                )
-                .fetch_all(&pool)
-                .await?;
-                report.queries_executed += 1;
-                ext_rows
-                    .iter()
-                    .map(|r| r.get::<String, _>("extname"))
-                    .collect::<Vec<String>>()
-            };
-            #[cfg(not(feature = "db-pentest"))]
-            let extensions: Vec<String> = Vec::new();
+            use sqlx::Row;
+            let ext_rows = sqlx::query(
+                "SELECT extname FROM pg_extension WHERE extname IN ('pg_read_server_files', 'pg_write_server_files', 'file_fdw')",
+            )
+            .fetch_all(&pool)
+            .await?;
+            report.queries_executed += 1;
+            let extensions: Vec<String> = ext_rows
+                .iter()
+                .map(|r| r.get::<String, _>("extname"))
+                .collect();
 
             // Also check basic connectivity privilege (safe read-only probe)
             let has_copy_priv = sqlx::query_scalar::<_, bool>(
@@ -535,12 +533,27 @@ async fn execute_file_access(
     Ok(())
 }
 
+#[cfg(not(feature = "db-drivers"))]
+#[allow(dead_code)]
+async fn execute_file_access(
+    _target: &DbTarget,
+    report: &mut DbPentestReport,
+    _max_queries: u64,
+    _pg_pool: Option<&()>,
+) -> anyhow::Result<()> {
+    report
+        .actions_performed
+        .push("advanced: file access probe requires db-drivers feature".to_string());
+    Ok(())
+}
+
 // --- Helpers ---
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db_pentest::types::{CheckType, DbTarget};
+    use crate::types::{CheckType, DbTarget};
+    use crate::utils;
 
     fn test_target(db_type: &str) -> DbTarget {
         DbTarget {
@@ -721,7 +734,7 @@ mod tests {
         assert_eq!(adv_findings.len(), 3);
     }
 
-    #[cfg(feature = "db-pentest")]
+    #[cfg(feature = "db-drivers")]
     #[tokio::test]
     async fn execute_advanced_no_vectors_returns_ok() {
         let mut report = DbPentestReport::new("oracle://u@h/db", "oracle");
@@ -736,7 +749,7 @@ mod tests {
             .any(|a| a.contains("no applicable test vectors")));
     }
 
-    #[cfg(feature = "db-pentest")]
+    #[cfg(feature = "db-drivers")]
     #[tokio::test]
     async fn execute_advanced_empty_checks_returns_ok() {
         let mut report = DbPentestReport::new("postgres://u@h/db", "postgres");

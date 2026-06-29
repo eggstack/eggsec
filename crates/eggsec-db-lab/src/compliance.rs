@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::db_pentest::types::DbFinding;
+use crate::types::DbFinding;
 
 /// A compliance mapping rule linking db finding categories to a control.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -233,7 +233,7 @@ pub fn map_findings_to_compliance(findings: &[DbFinding]) -> ComplianceResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Severity;
+    use eggsec_core::types::Severity;
 
     fn make_finding(category: &str) -> DbFinding {
         DbFinding {

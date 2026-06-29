@@ -7,14 +7,14 @@
 //! When the marker is absent, MongoDB targets fall back to synthetic dry-run population
 //! (same pattern as MSSQL with tiberius).
 
-use crate::db_pentest::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
-use crate::db_pentest::utils;
-use crate::types::Severity;
+use crate::types::{CheckType, DbFinding, DbPentestReport, DbTarget};
+use crate::utils;
 use anyhow::Result;
+use eggsec_core::types::Severity;
 
-#[cfg(feature = "db-pentest-mongodb")]
+#[cfg(feature = "mongodb")]
 use bson::doc;
-#[cfg(feature = "db-pentest-mongodb")]
+#[cfg(feature = "mongodb")]
 use mongodb::{
     options::{ClientOptions, ServerApi, ServerApiVersion},
     Client,
@@ -26,11 +26,11 @@ pub async fn run_mongodb_checks(
     checks: &[CheckType],
     max_queries: u64,
 ) -> Result<()> {
-    #[cfg(feature = "db-pentest-mongodb")]
+    #[cfg(feature = "mongodb")]
     {
         run_mongodb_real(target, report, checks, max_queries).await
     }
-    #[cfg(not(feature = "db-pentest-mongodb"))]
+    #[cfg(not(feature = "mongodb"))]
     {
         let _ = (target, report, checks, max_queries);
         Err(anyhow::anyhow!(
@@ -39,7 +39,7 @@ pub async fn run_mongodb_checks(
     }
 }
 
-#[cfg(feature = "db-pentest-mongodb")]
+#[cfg(feature = "mongodb")]
 async fn run_mongodb_real(
     target: &DbTarget,
     report: &mut DbPentestReport,

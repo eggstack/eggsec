@@ -23,7 +23,7 @@ pub struct DbPentestReport {
     #[serde(default)]
     pub correlation: Option<DbCorrelationResult>,
     #[serde(default)]
-    pub compliance: Option<crate::db_pentest::compliance::ComplianceResult>,
+    pub compliance: Option<crate::compliance::ComplianceResult>,
     #[serde(default)]
     pub baseline_label: Option<String>,
     #[serde(default)]
@@ -59,7 +59,7 @@ impl DbPentestReport {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbFinding {
     pub category: String, // e.g. "db-postgres-misconfig-dangerous-extension", "db-mysql-priv-file", "db-mongodb-misconfig-javascript"
-    pub severity: crate::types::Severity,
+    pub severity: eggsec_core::types::Severity,
     pub title: String,
     pub description: String,
     pub recommendation: String,

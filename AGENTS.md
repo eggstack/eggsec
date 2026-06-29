@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 8 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, and `eggsec-agent`. See `README.md` for features and `architecture/overview.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 9 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, and `eggsec-db-lab`. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Quick Reference
 
@@ -22,9 +22,11 @@ cargo check -p eggsec-tui
 cargo check -p eggsec-cli
 cargo check -p eggsec-nse
 cargo check -p eggsec-output
+cargo check -p eggsec-db-lab
 cargo test -p eggsec-core
 cargo test -p eggsec-tool-core
 cargo test -p eggsec-output
+cargo test -p eggsec-db-lab
 cargo test --lib -p eggsec
 cargo test --test negative_tests -p eggsec
 cargo test --test scanner_tests -p eggsec
@@ -37,7 +39,12 @@ cargo build --release -p eggsec-cli
 #### Feature-Specific Build & Test
 
 ```bash
-# db-pentest
+# db-pentest (domain crate)
+cargo check -p eggsec-db-lab
+cargo test -p eggsec-db-lab
+cargo clippy -p eggsec-db-lab
+
+# db-pentest (main crate with adapter)
 cargo check -p eggsec --features db-pentest
 cargo test --lib -p eggsec --features db-pentest
 cargo clippy --lib -p eggsec --features db-pentest
