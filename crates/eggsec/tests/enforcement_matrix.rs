@@ -9,10 +9,10 @@
 //! This file is the canonical cross-surface guardrail.
 
 use eggsec::config::{
-    Capability, ConfirmationClass, EnforcementContext, EnforcementOutcome, ExecutionPolicy,
-    ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride, OperationDescriptor,
-    OperationMetadata, OperationMode, OperationRisk, Scope, ScopeRule, ScopeSource,
-    metadata_for_tool_id,
+    metadata_for_tool_id, Capability, ConfirmationClass, EnforcementContext, EnforcementOutcome,
+    ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride,
+    OperationDescriptor, OperationMetadata, OperationMode, OperationRisk, Scope, ScopeRule,
+    ScopeSource,
 };
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,11 @@ fn descriptor_with_cap(target: &str, risk: OperationRisk, cap: Capability) -> Op
 }
 
 /// Descriptor requiring a compile-time feature.
-fn descriptor_with_feature(target: &str, risk: OperationRisk, feature: &str) -> OperationDescriptor {
+fn descriptor_with_feature(
+    target: &str,
+    risk: OperationRisk,
+    feature: &str,
+) -> OperationDescriptor {
     OperationDescriptor {
         required_features: vec![feature.to_string()],
         ..descriptor(target, risk)
@@ -145,10 +149,8 @@ const AUTOMATED_SURFACES: &[ExecutionSurface] = &[
 ];
 
 /// Surfaces that honor manual overrides (only CliManual and TuiManual).
-const OVERRIDE_HONORING_SURFACES: &[ExecutionSurface] = &[
-    ExecutionSurface::CliManual,
-    ExecutionSurface::TuiManual,
-];
+const OVERRIDE_HONORING_SURFACES: &[ExecutionSurface] =
+    &[ExecutionSurface::CliManual, ExecutionSurface::TuiManual];
 
 /// Surfaces that do NOT honor manual overrides.
 const NON_OVERRIDE_SURFACES: &[ExecutionSurface] = &[
@@ -161,10 +163,8 @@ const NON_OVERRIDE_SURFACES: &[ExecutionSurface] = &[
 ];
 
 /// Manual permissive surfaces.
-const PERMISSIVE_SURFACES: &[ExecutionSurface] = &[
-    ExecutionSurface::CliManual,
-    ExecutionSurface::TuiManual,
-];
+const PERMISSIVE_SURFACES: &[ExecutionSurface] =
+    &[ExecutionSurface::CliManual, ExecutionSurface::TuiManual];
 
 /// Strict/guarded surfaces (not permissive).
 const STRICT_SURFACES: &[ExecutionSurface] = &[
@@ -182,24 +182,42 @@ const STRICT_SURFACES: &[ExecutionSurface] = &[
 
 #[test]
 fn cli_manual_and_tui_manual_map_to_manual_permissive() {
-    assert_eq!(ExecutionSurface::CliManual.profile(), ExecutionProfile::ManualPermissive);
-    assert_eq!(ExecutionSurface::TuiManual.profile(), ExecutionProfile::ManualPermissive);
+    assert_eq!(
+        ExecutionSurface::CliManual.profile(),
+        ExecutionProfile::ManualPermissive
+    );
+    assert_eq!(
+        ExecutionSurface::TuiManual.profile(),
+        ExecutionProfile::ManualPermissive
+    );
 }
 
 #[test]
 fn cli_tui_strict_map_to_manual_guarded() {
-    assert_eq!(ExecutionSurface::CliManualStrict.profile(), ExecutionProfile::ManualGuarded);
-    assert_eq!(ExecutionSurface::TuiManualStrict.profile(), ExecutionProfile::ManualGuarded);
+    assert_eq!(
+        ExecutionSurface::CliManualStrict.profile(),
+        ExecutionProfile::ManualGuarded
+    );
+    assert_eq!(
+        ExecutionSurface::TuiManualStrict.profile(),
+        ExecutionProfile::ManualGuarded
+    );
 }
 
 #[test]
 fn mcp_maps_to_mcp_strict() {
-    assert_eq!(ExecutionSurface::McpServer.profile(), ExecutionProfile::McpStrict);
+    assert_eq!(
+        ExecutionSurface::McpServer.profile(),
+        ExecutionProfile::McpStrict
+    );
 }
 
 #[test]
 fn security_agent_maps_to_agent_strict() {
-    assert_eq!(ExecutionSurface::SecurityAgent.profile(), ExecutionProfile::AgentStrict);
+    assert_eq!(
+        ExecutionSurface::SecurityAgent.profile(),
+        ExecutionProfile::AgentStrict
+    );
 }
 
 #[test]
@@ -209,13 +227,19 @@ fn ci_maps_to_ci_strict() {
 
 #[test]
 fn rest_maps_to_strict_profile() {
-    assert_eq!(ExecutionSurface::RestApi.profile(), ExecutionProfile::McpStrict);
+    assert_eq!(
+        ExecutionSurface::RestApi.profile(),
+        ExecutionProfile::McpStrict
+    );
 }
 
 #[test]
 fn only_cli_tui_manual_honor_manual_overrides() {
     for surface in ALL_SURFACES {
-        let expected = matches!(surface, ExecutionSurface::CliManual | ExecutionSurface::TuiManual);
+        let expected = matches!(
+            surface,
+            ExecutionSurface::CliManual | ExecutionSurface::TuiManual
+        );
         assert_eq!(
             surface.honors_manual_override(),
             expected,
@@ -343,7 +367,11 @@ fn permissive_assume_yes_does_not_permit_private_resolution() {
 #[test]
 fn permissive_assume_yes_does_not_permit_nonbaseline_capability() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     let mut over = ManualOverride::default();
     over.assume_yes = true;
 
@@ -437,7 +465,11 @@ fn guarded_positive_allowlist_miss_denies() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::CliManualStrict, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "guarded: positive allowlist miss should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "guarded: positive allowlist miss should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -446,7 +478,11 @@ fn guarded_positive_scope_miss_denies() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::CliManualStrict, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "guarded: positive scope miss should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "guarded: positive scope miss should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -487,7 +523,11 @@ fn guarded_high_risk_without_policy_denies() {
     let desc = descriptor("127.0.0.1", OperationRisk::Intrusive);
     let ctx = ctx_for_surface(ExecutionSurface::CliManualStrict, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "guarded: high-risk without policy should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "guarded: high-risk without policy should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -496,7 +536,11 @@ fn guarded_high_risk_with_policy_allows() {
     let desc = descriptor("127.0.0.1", OperationRisk::Intrusive);
     let ctx = ctx_for_surface(ExecutionSurface::CliManualStrict, policy_intrusive(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_allowed(), "guarded: high-risk with policy flag should allow, got {:?}", outcome);
+    assert!(
+        outcome.is_allowed(),
+        "guarded: high-risk with policy flag should allow, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -505,7 +549,11 @@ fn guarded_in_scope_safe_op_allows() {
     let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::CliManualStrict, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_allowed(), "guarded: in-scope safe op should allow, got {:?}", outcome);
+    assert!(
+        outcome.is_allowed(),
+        "guarded: in-scope safe op should allow, got {:?}",
+        outcome
+    );
 }
 
 // ===========================================================================
@@ -521,7 +569,11 @@ fn mcp_missing_explicit_scope_denies() {
         LoadedScope::default_empty(),
     );
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "mcp: missing explicit scope should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "mcp: missing explicit scope should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -530,7 +582,11 @@ fn mcp_positive_allowlist_miss_denies() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "mcp: positive allowlist miss should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "mcp: positive allowlist miss should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -540,13 +596,21 @@ fn mcp_manual_override_flags_have_no_effect() {
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
     // MCP never processes ManualOverride; outcome should be deny.
-    assert!(outcome.is_denied(), "mcp: overrides should have no effect, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "mcp: overrides should have no effect, got {:?}",
+        outcome
+    );
 }
 
 #[test]
 fn mcp_nonbaseline_capability_not_allowlisted_denies() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
     assert!(
@@ -559,7 +623,12 @@ fn mcp_nonbaseline_capability_not_allowlisted_denies() {
 #[test]
 fn mcp_baseline_capability_with_scope_allows() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    for cap in &[Capability::PassiveFingerprint, Capability::ActiveProbe, Capability::Crawl, Capability::WafDetect] {
+    for cap in &[
+        Capability::PassiveFingerprint,
+        Capability::ActiveProbe,
+        Capability::Crawl,
+        Capability::WafDetect,
+    ] {
         let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, *cap);
         let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -575,11 +644,19 @@ fn mcp_baseline_capability_with_scope_allows() {
 #[test]
 fn mcp_nonbaseline_capability_with_explicit_allow_allows() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     let policy = policy_allow_cap(Capability::IntrusiveFuzz);
     let ctx = ctx_for_surface(ExecutionSurface::McpServer, policy, scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_allowed(), "mcp: non-baseline with explicit allow should allow, got {:?}", outcome);
+    assert!(
+        outcome.is_allowed(),
+        "mcp: non-baseline with explicit allow should allow, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -626,7 +703,11 @@ fn agent_positive_allowlist_miss_denies() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::SecurityAgent, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "agent: positive allowlist miss should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "agent: positive allowlist miss should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -638,16 +719,28 @@ fn agent_missing_explicit_scope_denies() {
         LoadedScope::default_empty(),
     );
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "agent: missing explicit scope should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "agent: missing explicit scope should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
 fn agent_nonbaseline_capability_denies() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::RawPacketProbe);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::RawPacketProbe,
+    );
     let ctx = ctx_for_surface(ExecutionSurface::SecurityAgent, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "agent: non-baseline capability should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "agent: non-baseline capability should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -670,7 +763,11 @@ fn agent_ignores_manual_overrides() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::SecurityAgent, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "agent: should deny regardless of override intent, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "agent: should deny regardless of override intent, got {:?}",
+        outcome
+    );
 }
 
 // ===========================================================================
@@ -686,7 +783,11 @@ fn rest_requires_explicit_manifest_for_networked() {
         LoadedScope::default_empty(),
     );
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "rest: missing explicit manifest should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "rest: missing explicit manifest should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -695,7 +796,10 @@ fn rest_dispatches_only_on_allow() {
     let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::RestApi, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(matches!(outcome, EnforcementOutcome::Allow(_)), "rest: should dispatch only on Allow");
+    assert!(
+        matches!(outcome, EnforcementOutcome::Allow(_)),
+        "rest: should dispatch only on Allow"
+    );
 }
 
 #[test]
@@ -704,7 +808,11 @@ fn rest_positive_allowlist_miss_denies() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::RestApi, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "rest: positive allowlist miss should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "rest: positive allowlist miss should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -740,7 +848,11 @@ fn rest_ignores_manual_overrides() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::RestApi, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "rest: should deny regardless of override intent, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "rest: should deny regardless of override intent, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -749,7 +861,11 @@ fn rest_excluded_target_denies() {
     let desc = descriptor("admin.example.com", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::RestApi, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "rest: excluded target should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "rest: excluded target should deny, got {:?}",
+        outcome
+    );
 }
 
 // ===========================================================================
@@ -778,7 +894,11 @@ fn ci_does_not_honor_manual_overrides() {
     let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::Ci, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "ci: should deny regardless of override intent, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "ci: should deny regardless of override intent, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -790,7 +910,11 @@ fn ci_requires_explicit_scope_for_networked() {
         LoadedScope::default_empty(),
     );
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_denied(), "ci: missing explicit scope should deny, got {:?}", outcome);
+    assert!(
+        outcome.is_denied(),
+        "ci: missing explicit scope should deny, got {:?}",
+        outcome
+    );
 }
 
 #[test]
@@ -799,7 +923,11 @@ fn ci_in_scope_safe_op_allows() {
     let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
     let ctx = ctx_for_surface(ExecutionSurface::Ci, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
-    assert!(outcome.is_allowed(), "ci: in-scope safe op should allow, got {:?}", outcome);
+    assert!(
+        outcome.is_allowed(),
+        "ci: in-scope safe op should allow, got {:?}",
+        outcome
+    );
 }
 
 // ===========================================================================
@@ -1027,7 +1155,11 @@ fn baseline_capabilities_allowed_across_all_surfaces() {
 #[test]
 fn non_baseline_capabilities_denied_under_strict_without_allow() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     for surface in AUTOMATED_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -1043,7 +1175,11 @@ fn non_baseline_capabilities_denied_under_strict_without_allow() {
 #[test]
 fn non_baseline_capabilities_with_explicit_allow_allows_under_strict() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     let policy = policy_allow_cap(Capability::IntrusiveFuzz);
     for surface in AUTOMATED_SURFACES {
         let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
@@ -1077,7 +1213,11 @@ fn denied_capabilities_hard_deny_across_all_surfaces() {
 #[test]
 fn non_baseline_capability_under_permissive_requires_confirmation() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     for surface in PERMISSIVE_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -1414,11 +1554,8 @@ fn confirm_class_out_of_scope_only_for_scope_miss() {
     let ctx = ctx_for_surface(ExecutionSurface::CliManual, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
     assert!(outcome.requires_confirmation());
-    let classes = eggsec::config::confirmation_classes_for(
-        &desc,
-        outcome.decision(),
-        &default_policy(),
-    );
+    let classes =
+        eggsec::config::confirmation_classes_for(&desc, outcome.decision(), &default_policy());
     if !classes.is_empty() {
         assert!(
             classes.contains(&ConfirmationClass::OutOfScope),
@@ -1435,11 +1572,8 @@ fn confirm_class_explicit_exclusion_for_excluded_target() {
     let ctx = ctx_for_surface(ExecutionSurface::CliManual, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
     assert!(outcome.requires_confirmation());
-    let classes = eggsec::config::confirmation_classes_for(
-        &desc,
-        outcome.decision(),
-        &default_policy(),
-    );
+    let classes =
+        eggsec::config::confirmation_classes_for(&desc, outcome.decision(), &default_policy());
     assert!(
         classes.contains(&ConfirmationClass::ExplicitExclusion),
         "excluded target should produce ExplicitExclusion class, got {:?}",
@@ -1454,11 +1588,8 @@ fn confirm_class_high_risk_for_intrusive_with_policy() {
     let ctx = ctx_for_surface(ExecutionSurface::CliManual, policy_intrusive(), scope);
     let outcome = ctx.evaluate(&desc);
     assert!(outcome.requires_confirmation());
-    let classes = eggsec::config::confirmation_classes_for(
-        &desc,
-        outcome.decision(),
-        &policy_intrusive(),
-    );
+    let classes =
+        eggsec::config::confirmation_classes_for(&desc, outcome.decision(), &policy_intrusive());
     assert!(
         classes.contains(&ConfirmationClass::HighRisk),
         "intrusive with policy should produce HighRisk class, got {:?}",
@@ -1469,15 +1600,16 @@ fn confirm_class_high_risk_for_intrusive_with_policy() {
 #[test]
 fn confirm_class_nonbaseline_for_non_baseline_cap() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::IntrusiveFuzz);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::IntrusiveFuzz,
+    );
     let ctx = ctx_for_surface(ExecutionSurface::CliManual, default_policy(), scope);
     let outcome = ctx.evaluate(&desc);
     assert!(outcome.requires_confirmation());
-    let classes = eggsec::config::confirmation_classes_for(
-        &desc,
-        outcome.decision(),
-        &default_policy(),
-    );
+    let classes =
+        eggsec::config::confirmation_classes_for(&desc, outcome.decision(), &default_policy());
     assert!(
         classes.contains(&ConfirmationClass::NonBaselineCapability),
         "non-baseline cap should produce NonBaselineCapability class, got {:?}",
@@ -1600,19 +1732,28 @@ fn for_surface_builds_correct_context_for_each_surface() {
 #[test]
 fn cli_scope_source_is_explicit() {
     let scope = loaded_cli(scope_allow("127.0.0.1"));
-    assert!(scope.is_explicit_manifest(), "CliScopeFile should be explicit manifest");
+    assert!(
+        scope.is_explicit_manifest(),
+        "CliScopeFile should be explicit manifest"
+    );
 }
 
 #[test]
 fn config_scope_source_is_explicit() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    assert!(scope.is_explicit_manifest(), "ConfigFile should be explicit manifest");
+    assert!(
+        scope.is_explicit_manifest(),
+        "ConfigFile should be explicit manifest"
+    );
 }
 
 #[test]
 fn default_empty_scope_is_not_explicit() {
     let scope = LoadedScope::default_empty();
-    assert!(!scope.is_explicit_manifest(), "DefaultEmpty should not be explicit manifest");
+    assert!(
+        !scope.is_explicit_manifest(),
+        "DefaultEmpty should not be explicit manifest"
+    );
 }
 
 #[test]
@@ -1729,7 +1870,12 @@ fn private_local_target_miss_scope_under_permissive_requires_confirmation() {
     let scope = scope_allow("10.0.0.1");
     let desc = descriptor_private_or_local("192.168.1.100", OperationRisk::SafeActive);
     let policy = default_policy();
-    let outcome = eval_direct(&desc, &policy, Some(&scope), ExecutionProfile::ManualPermissive);
+    let outcome = eval_direct(
+        &desc,
+        &policy,
+        Some(&scope),
+        ExecutionProfile::ManualPermissive,
+    );
     assert!(
         outcome.requires_confirmation(),
         "private/local target with scope miss under permissive should require confirmation, got {:?}",
@@ -1889,7 +2035,11 @@ fn policy_allow_any_caps(caps: &[Capability]) -> ExecutionPolicy {
 #[test]
 fn nonbaseline_raw_packet_probe_across_surfaces() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::RawPacketProbe);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::RawPacketProbe,
+    );
     for surface in ALL_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -1924,7 +2074,11 @@ fn nonbaseline_raw_packet_probe_across_surfaces() {
 #[test]
 fn nonbaseline_credential_testing_across_surfaces() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::CredentialTesting);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::CredentialTesting,
+    );
     for surface in ALL_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -1956,7 +2110,11 @@ fn nonbaseline_credential_testing_across_surfaces() {
 #[test]
 fn nonbaseline_database_assessment_across_surfaces() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::DatabaseAssessment);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::DatabaseAssessment,
+    );
     for surface in ALL_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -1988,7 +2146,11 @@ fn nonbaseline_database_assessment_across_surfaces() {
 #[test]
 fn nonbaseline_traffic_interception_across_surfaces() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::TrafficInterception);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::TrafficInterception,
+    );
     for surface in ALL_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -2020,7 +2182,11 @@ fn nonbaseline_traffic_interception_across_surfaces() {
 #[test]
 fn nonbaseline_remote_execution_across_surfaces() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::RemoteExecution);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::RemoteExecution,
+    );
     for surface in ALL_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -2052,7 +2218,11 @@ fn nonbaseline_remote_execution_across_surfaces() {
 #[test]
 fn nonbaseline_c2_simulation_across_surfaces() {
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
-    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::C2Simulation);
+    let desc = descriptor_with_cap(
+        "127.0.0.1",
+        OperationRisk::SafeActive,
+        Capability::C2Simulation,
+    );
     for surface in ALL_SURFACES {
         let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
         let outcome = ctx.evaluate(&desc);
@@ -2094,9 +2264,8 @@ fn all_nonbaseline_capabilities_allowed_with_explicit_policy() {
         Capability::IntrusiveFuzz,
     ];
     let policy = policy_allow_any_caps(&nonbaseline_caps);
-    let desc_any = |cap: Capability| {
-        descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, cap)
-    };
+    let desc_any =
+        |cap: Capability| descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, cap);
     for cap in &nonbaseline_caps {
         let desc = desc_any(*cap);
         for surface in ALL_SURFACES {
@@ -2273,7 +2442,8 @@ fn metadata_db_pentest_with_scope_and_policy_allows() {
 
 #[test]
 fn metadata_proxy_intercept_requires_traffic_interception_policy() {
-    let meta = metadata_for_tool_id("proxy-intercept").expect("proxy-intercept metadata should exist");
+    let meta =
+        metadata_for_tool_id("proxy-intercept").expect("proxy-intercept metadata should exist");
     assert_eq!(meta.risk, OperationRisk::TrafficInterception);
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let desc = metadata_descriptor(meta, "127.0.0.1");
@@ -2292,7 +2462,8 @@ fn metadata_proxy_intercept_requires_traffic_interception_policy() {
 
 #[test]
 fn metadata_proxy_intercept_with_policy_allows_under_strict() {
-    let meta = metadata_for_tool_id("proxy-intercept").expect("proxy-intercept metadata should exist");
+    let meta =
+        metadata_for_tool_id("proxy-intercept").expect("proxy-intercept metadata should exist");
     let scope = loaded_explicit(scope_allow("127.0.0.1"));
     let desc = metadata_descriptor(meta, "127.0.0.1");
     // proxy-intercept metadata requires TrafficInterception risk + traffic-interception capability.

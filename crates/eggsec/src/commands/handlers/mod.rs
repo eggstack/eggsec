@@ -23,6 +23,7 @@ pub mod notify;
 pub mod plan;
 #[cfg(feature = "postex")]
 pub mod postex;
+pub mod preflight;
 pub mod recon;
 pub mod report;
 pub mod scan;
@@ -53,6 +54,7 @@ pub use hunt::*;
 pub use load::*;
 pub use network::*;
 pub use plan::*;
+pub use preflight::*;
 pub use recon::*;
 pub use scan::*;
 
@@ -423,6 +425,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Resume(args)) => handle_resume(ctx, args).await,
         Some(Commands::Recon(args)) => handle_recon(ctx, args).await,
         Some(Commands::Plan(args)) => handle_plan(ctx, args).await,
+        Some(Commands::Preflight(args)) => handle_preflight(ctx, args).await,
         Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
         Some(Commands::Config(args)) => handle_config(ctx, args).await,
         Some(Commands::Doctor) => handle_doctor(ctx).await,

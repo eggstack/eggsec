@@ -336,9 +336,40 @@ impl McpServer {
             })
             .collect();
 
+        let mut all_tools = mcp_tools;
+        if matches!(
+            self.profile,
+            crate::tool::protocol::mcp::profile::McpProfile::OpsAgent
+        ) {
+            all_tools.push(McpTool {
+                name: "eggsec_preflight".to_string(),
+                description: "Check what would happen before executing an operation — returns enforcement outcome, scope match, required confirmations, and suggested CLI flags without dispatching the tool".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "required": ["target_tool"],
+                    "properties": {
+                        "target_tool": {
+                            "type": "string",
+                            "description": "ID of the tool to evaluate (e.g. 'scan', 'fuzz', 'stress')"
+                        },
+                        "target": {
+                            "type": "string",
+                            "description": "Target URL, IP, or domain for the operation"
+                        },
+                        "target_type": {
+                            "type": "string",
+                            "enum": ["url", "ip", "domain", "cidr"],
+                            "default": "url"
+                        }
+                    }
+                }),
+                capabilities: None,
+            });
+        }
+
         let result = serde_json::json!({
-            "tools": mcp_tools,
-            "count": mcp_tools.len()
+            "tools": all_tools,
+            "count": all_tools.len()
         });
 
         req.success_response(result)
@@ -393,6 +424,10 @@ impl McpServer {
             Some(name) => name,
             None => return req.error_response(McpError::invalid_params("Missing tool name")),
         };
+
+        if name == "eggsec_preflight" {
+            return self.handle_preflight(req).await;
+        }
 
         let arguments = params
             .get("arguments")
@@ -546,6 +581,67 @@ impl McpServer {
                 req.error_response(error)
             }
         }
+    }
+
+    async fn handle_preflight(&self, req: McpRequest) -> McpResponse {
+        let params = match &req.params {
+            Some(p) => p,
+            None => return req.error_response(McpError::invalid_params("Missing params")),
+        };
+
+        let arguments = params
+            .get("arguments")
+            .cloned()
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+        let target_tool = match arguments.get("target_tool").and_then(|v| v.as_str()) {
+            Some(t) => t,
+            None => return req.error_response(McpError::invalid_params("Missing target_tool")),
+        };
+
+        let tool_id = target_tool.to_string();
+
+        let Some(descriptor) =
+            operation_descriptor_for_mcp_call(&self.policy, &tool_id, None, &arguments)
+        else {
+            return req.error_response(McpError {
+                code: -32025,
+                message: format!(
+                    "missing operation metadata for tool '{}' — cannot build preflight",
+                    tool_id
+                ),
+                data: None,
+            });
+        };
+
+        let result = crate::config::preflight_operation(
+            crate::config::ExecutionSurface::McpServer,
+            &self.enforcement,
+            descriptor,
+            None,
+        );
+
+        let outcome_label = result.outcome_kind.label().to_string();
+        let allowed = matches!(
+            result.outcome_kind,
+            crate::config::PreflightOutcomeKind::Allow | crate::config::PreflightOutcomeKind::Warn
+        );
+
+        let response = serde_json::json!({
+            "tool": tool_id,
+            "outcome": outcome_label,
+            "allowed": allowed,
+            "profile": result.profile,
+            "surface": result.surface,
+            "descriptor": result.descriptor,
+            "decision": result.decision,
+            "required_confirmation_classes": result.required_confirmation_classes,
+            "scope_source": result.scope_source,
+            "scope_path": result.scope_path,
+            "suggested_cli_flags": result.suggested_cli_flags,
+        });
+
+        req.success_response(response)
     }
 
     fn resolve_tool_id(&self, name: &str) -> Option<(String, Option<String>)> {

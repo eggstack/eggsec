@@ -168,7 +168,7 @@ Canonical reference points when updating guidance or skills:
 
 **Marker-only features (no deps, just build gating):**
 
-`tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
+`tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default; includes `POST /api/v1/tools/{tool_id}/preflight` endpoint), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
 
 ### Key Types
 
@@ -185,6 +185,8 @@ Canonical reference points when updating guidance or skills:
 - `TabError` - Structured error type with `is_recoverable()` in `eggsec-tui`
 - `TuiEnforcementState` - TUI-local enforcement posture model in `eggsec-tui::app::enforcement`
 - `TuiPreflightResult` - Advisory preflight evaluation result for display in status bar
+- `PreflightResult` - Shared preflight evaluation result across CLI/TUI/REST/MCP/agent (`config::policy_decision`)
+- `PreflightOutcomeKind` - Simplified outcome enum for preflight results (`config::policy_decision`)
 - `PayloadType` - Enum of 40 payload categories; lives in `fuzzer/payloads/mod.rs`, NOT `types.rs`
 - `McpProfile` / `McpProfilePolicy` - MCP agent profiles and per-profile tool visibility in `tool/protocol/mcp/`
 
@@ -202,6 +204,7 @@ Canonical reference points when updating guidance or skills:
 - **ExecutionSurface**: Introduces caller-origin semantics; `ExecutionProfile` describes enforcement behavior, `ExecutionSurface` describes where it comes from. Use `EnforcementContext::for_surface()` for centralized construction.
 - **Operation Metadata**: `OperationMetadata` in `config::policy` is the single source of truth for `OperationDescriptor` generation. All surfaces (REST, MCP, TUI, agent) use `metadata_for_tool_id()` or `operation_metadata()` to look up canonical operation definitions. Alias mapping resolves alternate tool IDs (e.g., "scan" → "scan-ports", "fuzz" → "fuzz") to canonical metadata. Descriptors are generated via `metadata.descriptor_for_target()`. Surface-specific overrides (e.g., REST always sets `requires_explicit_scope = true`, MCP uses profile policy) are applied after metadata lookup.
 - **Shared Policy Evaluator**: Use `EnforcementContext::evaluate()` (central) in `config/policy_decision.rs` instead of building policy checks inline
+- **Shared Preflight**: `preflight_operation()` in `config::policy_decision` is the single entry point for all surfaces. CLI, TUI, REST, MCP, and agent all use it. It evaluates the same `EnforcementContext::evaluate()` path as dispatch without executing the tool. CLI has a standalone `preflight` command. REST has `POST /api/v1/tools/{tool_id}/preflight`. MCP has `eggsec_preflight` tool. Agent logs preflight results before dispatch.
 - **TUI Enforcement Posture**: TUI uses `TuiEnforcementState` to wrap `EnforcementContext` + `LoadedScope`. Default is `ManualPermissive` (TuiManual). Toggle to `ManualGuarded` (TuiManualStrict) via Ctrl+G. Guarded mode denies scope ambiguity. Preflight evaluation is advisory and displayed in status bar.
 - **MCP/Agent/REST Invariant**: For MCP, agent, and REST execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. REST now carries `EnforcementContext` (via `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` in `handle_serve()`) and dispatches through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile). Agent execution defensively rebuilds `AgentStrict` in the handler and validates it at runtime (`Agent::new()` rejects non-`AgentStrict` profiles). See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
 - **eggsec-output Re-exports**: Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity`
@@ -217,7 +220,7 @@ Canonical reference points when updating guidance or skills:
 | Pipeline profiles | 18 |
 | Output formats | 8 |
 | Themes | 50 packaged + 3 built-in |
-| CLI commands | 26 base, 45 total with all features |
+| CLI commands | 27 base, 46 total with all features |
 
 ### Security Notes
 

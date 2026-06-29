@@ -55,8 +55,9 @@ pub use policy::{
 };
 pub use policy_decision::{
     classify_denial_reasons, confirmation_class_strings, confirmation_classes_for,
-    evaluate_enforcement, evaluate_operation_policy, may_downgrade_to_warning, ConfirmationClass,
-    EnforcementContext, EnforcementOutcome, ManualOverride, PolicyDecision,
+    evaluate_enforcement, evaluate_operation_policy, may_downgrade_to_warning, preflight_operation,
+    ConfirmationClass, EnforcementContext, EnforcementOutcome, ManualOverride, PolicyDecision,
+    PreflightOutcomeKind, PreflightResult,
 };
 pub use presets::DefenseLabPreset;
 

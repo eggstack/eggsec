@@ -127,6 +127,14 @@ pub struct ExecuteRequest {
     pub options: Option<crate::tool::RequestOptions>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PreflightRequest {
+    pub target: String,
+    pub target_type: Option<String>,
+    pub params: Option<serde_json::Value>,
+    pub options: Option<serde_json::Value>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ToolListResponse {
     pub tools: Vec<ToolListItem>,
@@ -232,6 +240,7 @@ pub fn create_router(
         .route("/api/v1/tools", get(list_tools))
         .route("/api/v1/tools/{tool_id}", get(get_tool))
         .route("/api/v1/tools/{tool_id}/execute", post(execute_tool))
+        .route("/api/v1/tools/{tool_id}/preflight", post(preflight_tool))
         .layer(cors)
         .with_state(state);
 
@@ -442,6 +451,47 @@ async fn openapi_spec() -> impl IntoResponse {
                                             "error": {"type": "string"},
                                             "code": {"type": "string", "enum": ["POLICY_DENIED"]},
                                             "decision": {"type": "object"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/tools/{tool_id}/preflight": {
+                "post": {
+                    "summary": "Preflight check — evaluate what would happen without executing",
+                    "parameters": [
+                        {"name": "tool_id", "in": "path", "required": true, "schema": {"type": "string"}}
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "target": {"type": "string"},
+                                        "target_type": {"type": "string", "enum": ["url", "domain", "ip", "cidr"]},
+                                        "params": {"type": "object"},
+                                        "options": {"type": "object"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "Preflight evaluation result"},
+                        "403": {
+                            "description": "Tool not exposed via REST API",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "error": {"type": "string"},
+                                            "code": {"type": "string"}
                                         }
                                     }
                                 }
@@ -667,6 +717,40 @@ async fn execute_tool(
             Err(e)
         }
     }
+}
+
+async fn preflight_tool(
+    State(state): State<Arc<RestState>>,
+    Path(tool_id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<PreflightRequest>,
+) -> Result<Json<crate::config::PreflightResult>, EggsecError> {
+    if let Err(e) = require_auth(&state, &headers) {
+        return Err(e);
+    }
+
+    validate_target(&payload.target)?;
+
+    let target_url = &payload.target;
+    let descriptor = operation_descriptor_for_rest_tool(&tool_id, target_url)?;
+
+    if let Some(metadata) = crate::tool::metadata::metadata_for_tool_id(&tool_id) {
+        if !metadata.rest_exposable {
+            return Err(EggsecError::Config(format!(
+                "Tool '{}' is not exposed via REST API",
+                tool_id
+            )));
+        }
+    }
+
+    let result = crate::config::preflight_operation(
+        crate::config::ExecutionSurface::RestApi,
+        &state.enforcement,
+        descriptor,
+        None,
+    );
+
+    Ok(Json(result))
 }
 
 #[cfg(test)]
@@ -1133,5 +1217,36 @@ mod tests {
 
         let response = policy_denied_response("test denial", decision);
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_preflight_does_not_dispatch() {
+        use crate::config::{
+            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope,
+            PreflightOutcomeKind,
+        };
+
+        let policy = ExecutionPolicy::default();
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        let result = crate::config::preflight_operation(
+            ExecutionSurface::RestApi,
+            &enforcement,
+            descriptor,
+            None,
+        );
+
+        assert_eq!(result.surface, ExecutionSurface::RestApi);
+        assert!(
+            matches!(
+                result.outcome_kind,
+                PreflightOutcomeKind::Deny | PreflightOutcomeKind::RequireConfirmation
+            ),
+            "Preflight should evaluate without dispatch, got: {:?}",
+            result.outcome_kind
+        );
     }
 }

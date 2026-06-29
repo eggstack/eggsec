@@ -303,6 +303,10 @@ Defense-lab profiles require private/localhost targets and enforce conservative 
 # Web proxy pipeline scan (Phase 4; requires --features web-proxy)
 ./eggsec scan 127.0.0.1 --profile web-proxy --scope scope.toml
 
+# Preview enforcement decision for an operation (dry-run policy check)
+./eggsec preflight scan-ports --target 192.168.1.1
+./eggsec preflight fuzz --target https://example.com/api --json
+
 # Resume a previous scan
 ./eggsec resume session.json
 ```
@@ -317,6 +321,7 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 |---------|------|-------------|
 | `eggsec policy-explain` | - | Explain policy decisions for a target/profile |
 | `eggsec scope-explain` | - | Explain scope matching for a target |
+| `eggsec preflight <operation>` | - | Preview enforcement decision for an operation without executing (shows scope, risk, confirmation requirements, suggested CLI flags) |
 | `eggsec scan --profile defense-lab` | defense-lab | Comprehensive local defense validation |
 | `eggsec scan --profile waf-regression` | defense-lab | WAF payload regression |
 | `eggsec scan --profile synvoid-local` | defense-lab | Synvoid-specific local validation |

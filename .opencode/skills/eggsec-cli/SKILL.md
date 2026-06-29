@@ -139,6 +139,7 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | `handle_agent` | `handlers/agent.rs` | `rest-api` | Autonomous agent |
 | `handle_ai_analyze` | `handlers/ai_analyze.rs` | `ai-integration` | AI analysis |
 | `handle_grpc_server` | `handlers/grpc.rs` | `grpc-api` | gRPC server |
+| `handle_preflight` | `handlers/preflight.rs` | - | Advisory policy preflight for a target; uses shared `preflight_operation()` |
 | `handle_plan` | `handlers/plan.rs` | - | Execution planning |
 | `handle_ci` | `handlers/ci.rs` | - | CI/CD checks |
 | `handle_report` | `handlers/report.rs` | - | Report generation |
@@ -207,6 +208,9 @@ cargo test --lib -p eggsec cli::
 5. Gate with feature flag if needed
 6. Add `evaluate_and_enforce_operation` with appropriate `OperationDescriptor` in handler
 7. Add tests
+
+### Preflight Command
+`eggsec preflight <operation> --target <target> [--json]` runs advisory policy evaluation without executing. Uses `metadata_for_tool_id()` + `preflight_operation()` from `config::policy_decision`. Output includes outcome kind, decision, suggested flags, and required confirmation classes.
 
 ### Bug Fixes in Handlers
 - **Never use `unwrap()`** - Use `ok_or_else()` or `context()`

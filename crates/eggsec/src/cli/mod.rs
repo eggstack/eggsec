@@ -25,6 +25,7 @@ pub mod packet;
 pub mod plan;
 #[cfg(feature = "postex")]
 pub mod postex;
+pub mod preflight;
 pub mod scan;
 pub mod storage;
 pub mod stress;
@@ -45,6 +46,7 @@ pub use hunt::*;
 pub use misc::*;
 pub use packet::*;
 pub use plan::*;
+pub use preflight::*;
 pub use scan::*;
 pub use storage::*;
 pub use vuln::*;
@@ -273,6 +275,8 @@ pub enum Commands {
     // --- Planning & CI ---
     #[command(about = "Preview execution plan without running it")]
     Plan(PlanArgs),
+    #[command(about = "Preview enforcement decision without executing")]
+    Preflight(PreflightArgs),
     #[command(about = "Run security checks in CI/CD mode")]
     Ci(CiArgs),
     #[command(about = "Validate configuration files", long_about = CONFIG_ABOUT)]

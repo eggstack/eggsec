@@ -1,7 +1,8 @@
 use eggsec::config::{
-    confirmation_classes_for, ConfirmationClass, EnforcementContext, EnforcementOutcome,
-    ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride,
-    OperationDescriptor, PolicyDecision, ScopeSource,
+    confirmation_classes_for, preflight_operation, ConfirmationClass, EnforcementContext,
+    EnforcementOutcome, ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope,
+    ManualOverride, OperationDescriptor, PolicyDecision, PreflightOutcomeKind, PreflightResult,
+    ScopeSource,
 };
 
 #[derive(Debug, Clone)]
@@ -64,12 +65,13 @@ impl TuiEnforcementState {
     }
 
     pub fn preflight(&mut self, descriptor: &OperationDescriptor) -> TuiPreflightResult {
-        let outcome = self.enforcement.evaluate(descriptor);
-        let result = TuiPreflightResult::from_outcome(
-            descriptor,
-            &outcome,
-            &self.enforcement.execution_policy,
+        let shared = preflight_operation(
+            self.surface,
+            &self.enforcement,
+            descriptor.clone(),
+            Some(&self.manual_override),
         );
+        let result = TuiPreflightResult::from_preflight(&shared);
         self.last_preflight = Some(result.clone());
         result
     }
@@ -140,6 +142,25 @@ impl TuiEnforcementState {
 }
 
 impl TuiPreflightResult {
+    pub fn from_preflight(preflight: &PreflightResult) -> Self {
+        let outcome_kind = match preflight.outcome_kind {
+            PreflightOutcomeKind::Allow => TuiPreflightOutcomeKind::Allow,
+            PreflightOutcomeKind::Warn => TuiPreflightOutcomeKind::Warn,
+            PreflightOutcomeKind::RequireConfirmation => {
+                TuiPreflightOutcomeKind::RequireConfirmation
+            }
+            PreflightOutcomeKind::Deny => TuiPreflightOutcomeKind::Deny,
+        };
+        Self {
+            operation: preflight.descriptor.operation.clone(),
+            target: preflight.descriptor.target.clone(),
+            outcome_kind,
+            decision: preflight.decision.clone(),
+            required_confirmation_classes: preflight.required_confirmation_classes.clone(),
+            suggested_cli_flags: preflight.suggested_cli_flags.clone(),
+        }
+    }
+
     pub fn from_outcome(
         descriptor: &OperationDescriptor,
         outcome: &EnforcementOutcome,

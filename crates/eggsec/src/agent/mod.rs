@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
+use crate::config::preflight_operation;
 use crate::config::EggsecConfig;
 use crate::output::schedule::CronScheduler;
 use crate::tool::{
@@ -832,9 +833,32 @@ impl Agent {
             .evaluate_rate_limit(target)
             .map_err(|e| anyhow::anyhow!("Rate limit exceeded: {:?}", e))?;
 
-        // Per-scan enforcement evaluation using the shared EnforcementContext (if configured at startup).
-        // This ensures scope provenance, capability allow/deny, risk policy, and explicit-manifest
-        // requirements are re-evaluated immediately before dispatch, not only at agent launch.
+        if let Some(ref enforcement) = self.config.enforcement {
+            let preflight_descriptor =
+                enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
+            let preflight_result = preflight_operation(
+                crate::config::ExecutionSurface::SecurityAgent,
+                enforcement,
+                preflight_descriptor,
+                None,
+            );
+            tracing::info!(
+                operation = %scan_type,
+                target = %target,
+                outcome = %preflight_result.outcome_kind.label(),
+                profile = ?preflight_result.profile,
+                "agent preflight evaluation"
+            );
+            if preflight_result.outcome_kind == crate::config::PreflightOutcomeKind::Deny {
+                tracing::warn!(
+                    operation = %scan_type,
+                    target = %target,
+                    reasons = ?preflight_result.decision.denied_reasons,
+                    "agent preflight denied - scan will not proceed"
+                );
+            }
+        }
+
         if let Some(ref enforcement) = self.config.enforcement {
             use crate::config::EnforcementOutcome;
 

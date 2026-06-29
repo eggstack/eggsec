@@ -424,6 +424,159 @@ impl EnforcementContext {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreflightResult {
+    pub surface: super::ExecutionSurface,
+    pub profile: ExecutionProfile,
+    pub descriptor: OperationDescriptor,
+    pub outcome_kind: PreflightOutcomeKind,
+    pub decision: PolicyDecision,
+    pub required_confirmation_classes: Vec<ConfirmationClass>,
+    pub manual_override_honored: bool,
+    pub scope_source: super::scope::ScopeSource,
+    pub scope_path: Option<String>,
+    pub suggested_cli_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PreflightOutcomeKind {
+    Allow,
+    Warn,
+    RequireConfirmation,
+    Deny,
+}
+
+impl PreflightOutcomeKind {
+    pub fn from_outcome(outcome: &EnforcementOutcome) -> Self {
+        match outcome {
+            EnforcementOutcome::Allow(_) => PreflightOutcomeKind::Allow,
+            EnforcementOutcome::Warn(_) => PreflightOutcomeKind::Warn,
+            EnforcementOutcome::RequireConfirmation(_) => PreflightOutcomeKind::RequireConfirmation,
+            EnforcementOutcome::Deny(_) => PreflightOutcomeKind::Deny,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            PreflightOutcomeKind::Allow => "allow",
+            PreflightOutcomeKind::Warn => "warn",
+            PreflightOutcomeKind::RequireConfirmation => "confirmation-required",
+            PreflightOutcomeKind::Deny => "deny",
+        }
+    }
+}
+
+pub fn preflight_operation(
+    surface: super::ExecutionSurface,
+    enforcement: &EnforcementContext,
+    descriptor: OperationDescriptor,
+    manual_override: Option<&ManualOverride>,
+) -> PreflightResult {
+    let outcome = enforcement.evaluate(&descriptor);
+    let outcome_kind = PreflightOutcomeKind::from_outcome(&outcome);
+    let decision = outcome.decision().clone();
+
+    let required_confirmation_classes = if let EnforcementOutcome::RequireConfirmation(_) = &outcome
+    {
+        confirmation_classes_for(&descriptor, &decision, &enforcement.execution_policy)
+    } else {
+        Vec::new()
+    };
+
+    let manual_override_honored = if surface.honors_manual_override() {
+        if let Some(mo) = manual_override {
+            !required_confirmation_classes.is_empty()
+                && required_confirmation_classes.iter().all(|c| mo.permits(*c))
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    let suggested_cli_flags = if surface.is_manual() {
+        confirmation_class_cli_flags(&required_confirmation_classes)
+    } else {
+        Vec::new()
+    };
+
+    PreflightResult {
+        surface,
+        profile: enforcement.execution_profile,
+        descriptor,
+        outcome_kind,
+        decision,
+        required_confirmation_classes,
+        manual_override_honored,
+        scope_source: enforcement.loaded_scope.source.clone(),
+        scope_path: enforcement.loaded_scope.path.clone(),
+        suggested_cli_flags,
+    }
+}
+
+fn confirmation_class_cli_flags(classes: &[ConfirmationClass]) -> Vec<String> {
+    classes
+        .iter()
+        .map(|c| match c {
+            ConfirmationClass::OutOfScope => "--allow-out-of-scope".to_string(),
+            ConfirmationClass::TargetExpansion => "--allow-out-of-scope".to_string(),
+            ConfirmationClass::PrivateResolution => "--allow-private-resolution".to_string(),
+            ConfirmationClass::CrossHostRedirect => "--allow-cross-host-redirect".to_string(),
+            ConfirmationClass::ExplicitExclusion => "--allow-excluded-target".to_string(),
+            ConfirmationClass::HighRisk => "--allow-high-risk".to_string(),
+            ConfirmationClass::TrafficInterception => "--allow-web-proxy".to_string(),
+            ConfirmationClass::NonBaselineCapability => {
+                "--allow-nonbaseline-capability".to_string()
+            }
+        })
+        .collect()
+}
+
+impl PreflightResult {
+    pub fn to_human_readable(&self) -> String {
+        let mut lines = Vec::new();
+        lines.push(format!("Operation: {}", self.descriptor.operation));
+        if let Some(ref target) = self.descriptor.target {
+            lines.push(format!("Target: {}", target));
+        }
+        lines.push(format!("Surface: {}", self.surface.label()));
+        lines.push(format!("Profile: {}", self.profile));
+        lines.push(format!("Outcome: {}", self.outcome_kind.label()));
+        if !self.required_confirmation_classes.is_empty() {
+            let classes: Vec<&str> = self
+                .required_confirmation_classes
+                .iter()
+                .map(|c| c.as_str())
+                .collect();
+            lines.push(format!("Classes: {}", classes.join(", ")));
+        }
+        if !self.suggested_cli_flags.is_empty() {
+            lines.push(format!(
+                "Suggested flags: {}",
+                self.suggested_cli_flags.join(" ")
+            ));
+        }
+        if self.manual_override_honored {
+            lines.push("Manual override: honored".to_string());
+        }
+        lines.push(format!("Scope: {:?}", self.scope_source));
+        if let Some(ref path) = self.scope_path {
+            lines.push(format!("Scope path: {}", path));
+        }
+        if !self.decision.denied_reasons.is_empty() {
+            lines.push(format!(
+                "Denied reasons: {}",
+                self.decision.denied_reasons.join("; ")
+            ));
+        }
+        if !self.decision.warnings.is_empty() {
+            lines.push(format!("Warnings: {}", self.decision.warnings.join("; ")));
+        }
+        lines.join("\n")
+    }
+}
+
 /// Check whether a named compile-time Cargo feature is enabled.
 ///
 /// Returns `true` for features that are always available or not relevant
@@ -2193,5 +2346,245 @@ mod tests {
                 outcome
             );
         }
+    }
+
+    // --- Preflight tests ---
+
+    #[test]
+    fn preflight_operation_allow_for_safe_passive() {
+        let scope = super::super::Scope {
+            allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+            ..Default::default()
+        };
+        let loaded_scope = super::super::LoadedScope::explicit(
+            scope,
+            super::super::ScopeSource::ConfigFile,
+            Some("scope.toml".to_string()),
+        );
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::manual_permissive(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "recon".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Passive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = super::preflight_operation(
+            super::super::ExecutionSurface::CliManual,
+            &enforcement,
+            descriptor,
+            None,
+        );
+        assert!(
+            result.outcome_kind == super::PreflightOutcomeKind::Allow
+                || result.outcome_kind == super::PreflightOutcomeKind::Warn,
+            "Safe passive op should allow or warn, got {:?}",
+            result.outcome_kind
+        );
+        assert_eq!(result.surface, super::super::ExecutionSurface::CliManual);
+        assert!(result.suggested_cli_flags.is_empty());
+    }
+
+    #[test]
+    fn preflight_operation_deny_for_strict_missing_scope() {
+        let loaded_scope = super::super::LoadedScope::default_empty();
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::mcp_strict(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        let result = super::preflight_operation(
+            super::super::ExecutionSurface::RestApi,
+            &enforcement,
+            descriptor,
+            None,
+        );
+        assert_eq!(
+            result.outcome_kind,
+            super::PreflightOutcomeKind::Deny,
+            "MCP strict with missing scope should deny, got {:?}",
+            result.outcome_kind
+        );
+        assert!(result.suggested_cli_flags.is_empty());
+        assert!(!result.manual_override_honored);
+    }
+
+    #[test]
+    fn preflight_operation_require_confirmation_for_high_risk_manual() {
+        let loaded_scope = super::super::LoadedScope::default_empty();
+        let mut policy = ExecutionPolicy::default();
+        policy.allow_intrusive_fuzzing = true;
+        let enforcement = EnforcementContext::manual_permissive(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::DefenseLab,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WafRegression],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = super::preflight_operation(
+            super::super::ExecutionSurface::CliManual,
+            &enforcement,
+            descriptor,
+            None,
+        );
+        assert_eq!(
+            result.outcome_kind,
+            super::PreflightOutcomeKind::RequireConfirmation,
+            "High-risk fuzz in manual mode should require confirmation, got {:?}",
+            result.outcome_kind
+        );
+        assert!(!result.required_confirmation_classes.is_empty());
+        assert!(!result.suggested_cli_flags.is_empty());
+    }
+
+    #[test]
+    fn preflight_manual_override_honored_when_flags_match() {
+        let loaded_scope = super::super::LoadedScope::default_empty();
+        let mut policy = ExecutionPolicy::default();
+        policy.allow_intrusive_fuzzing = true;
+        let enforcement = EnforcementContext::manual_permissive(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::DefenseLab,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WafRegression],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let mo = ManualOverride {
+            allow_high_risk: true,
+            ..Default::default()
+        };
+        let result = super::preflight_operation(
+            super::super::ExecutionSurface::CliManual,
+            &enforcement,
+            descriptor,
+            Some(&mo),
+        );
+        assert!(
+            result.manual_override_honored,
+            "Manual override with matching flag should be honored"
+        );
+    }
+
+    #[test]
+    fn preflight_no_suggested_flags_for_automated_surface() {
+        let loaded_scope = super::super::LoadedScope::default_empty();
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::mcp_strict(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        let result = super::preflight_operation(
+            super::super::ExecutionSurface::McpServer,
+            &enforcement,
+            descriptor,
+            None,
+        );
+        assert!(
+            result.suggested_cli_flags.is_empty(),
+            "Automated surfaces should not suggest CLI flags"
+        );
+    }
+
+    #[test]
+    fn preflight_result_serializes() {
+        let loaded_scope = super::super::LoadedScope::default_empty();
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::manual_permissive(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "recon".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Passive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = super::preflight_operation(
+            super::super::ExecutionSurface::CliManual,
+            &enforcement,
+            descriptor,
+            None,
+        );
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"outcome_kind\""));
+        assert!(json.contains("\"surface\""));
+        assert!(json.contains("\"descriptor\""));
+        assert!(json.contains("\"decision\""));
+    }
+
+    #[test]
+    fn preflight_matches_evaluate_outcome() {
+        let loaded_scope = super::super::LoadedScope::default_empty();
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::manual_permissive(policy, loaded_scope);
+        let descriptor = OperationDescriptor {
+            operation: "recon".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Passive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let preflight = super::preflight_operation(
+            super::super::ExecutionSurface::CliManual,
+            &enforcement,
+            descriptor.clone(),
+            None,
+        );
+        let direct = enforcement.evaluate(&descriptor);
+        let preflight_kind = match preflight.outcome_kind {
+            super::PreflightOutcomeKind::Allow => true,
+            super::PreflightOutcomeKind::Warn => true,
+            super::PreflightOutcomeKind::RequireConfirmation => false,
+            super::PreflightOutcomeKind::Deny => false,
+        };
+        assert_eq!(
+            preflight_kind,
+            direct.is_allowed(),
+            "Preflight outcome should match direct evaluate outcome"
+        );
     }
 }

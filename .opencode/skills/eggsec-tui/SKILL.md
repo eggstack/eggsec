@@ -119,7 +119,7 @@ Priority order for hint resolution:
 
 **Ctrl+G** toggles between Manual and Guarded. `toggle_posture()` switches the surface field.
 
-**Preflight**: Advisory evaluation of a target via `preflight(target)`. Result displayed in status bar. `TuiPreflightResult::from_outcome()` now accepts `&ExecutionPolicy` parameter, computing confirmation classes using the active policy (not `Default::default()`). Does not gate execution.
+**Preflight**: Advisory evaluation of a target via `TuiEnforcementState::preflight()`. Uses the shared `preflight_operation()` helper from `config::policy_decision` — the same function called by CLI, REST, MCP, and agent surfaces. `TuiPreflightResult::from_outcome()` now accepts `&ExecutionPolicy` parameter, computing confirmation classes using the active policy (not `Default::default()`). Does not gate execution.
 
 **Status bar**: Shows mode label ("Manual"/"Guarded"), scope provenance, rule counts, and preflight outcome.
 

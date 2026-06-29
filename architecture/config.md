@@ -143,6 +143,10 @@ Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for central
 - Agent refuses to run without an explicit scope manifest; handler defensively rebuilds `AgentStrict` enforcement (defense-in-depth); `Agent::new()` rejects non-`AgentStrict` profiles; per-scan `enforcement.evaluate` immediately before dispatch.
 - Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
 
+### Preflight System (`preflight_operation()`)
+
+`PreflightResult` (`config/policy_decision.rs`) and `preflight_operation()` provide a read-only policy check that surfaces enforcement decisions *before* dispatching an operation. Every execution surface (CLI `eggsec preflight`, TUI wrapper, REST `POST /api/preflight`, MCP tool, agent scan logger) calls `preflight_operation(surface, enforcement, descriptor, manual_override)` which delegates to `EnforcementContext::evaluate()` — the same enforcement path used at dispatch time. The result includes the outcome kind (Allow/Warn/RequireConfirmation/Deny), required confirmation classes, suggested CLI flags for manual surfaces, and scope provenance. The TUI wraps this as `TuiPreflightResult` for status-bar display; REST returns it as JSON; the agent logs it before each scan.
+
 ### `Loader` (`loader.rs`)
 
 Handles the mechanics of finding and parsing configuration files.
