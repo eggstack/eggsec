@@ -11,7 +11,8 @@
 use eggsec::config::{
     Capability, ConfirmationClass, EnforcementContext, EnforcementOutcome, ExecutionPolicy,
     ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride, OperationDescriptor,
-    OperationMode, OperationRisk, Scope, ScopeRule, ScopeSource,
+    OperationMetadata, OperationMode, OperationRisk, Scope, ScopeRule, ScopeSource,
+    metadata_for_tool_id,
 };
 
 // ---------------------------------------------------------------------------
@@ -1638,6 +1639,749 @@ fn strict_profiles_accept_explicit_manifest_for_networked() {
         assert!(
             outcome.is_allowed(),
             "{}: explicit manifest + matching scope should allow for automated surface, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+// ===========================================================================
+// 18. Private/local target scope test
+// ===========================================================================
+
+fn descriptor_private_or_local(target: &str, risk: OperationRisk) -> OperationDescriptor {
+    OperationDescriptor {
+        operation: "matrix-private-op".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk,
+        intended_uses: vec![],
+        target: Some(target.to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: true,
+        requires_explicit_scope: true,
+        required_capabilities: vec![],
+    }
+}
+
+/// Helper to call evaluate_enforcement directly with optional scope.
+fn eval_direct(
+    desc: &OperationDescriptor,
+    policy: &ExecutionPolicy,
+    scope: Option<&Scope>,
+    profile: ExecutionProfile,
+) -> EnforcementOutcome {
+    eggsec::config::evaluate_enforcement(desc, policy, scope, profile)
+}
+
+#[test]
+fn private_local_target_denies_when_no_scope_provided() {
+    let desc = descriptor_private_or_local("127.0.0.1", OperationRisk::SafeActive);
+    let policy = default_policy();
+    // ManualPermissive downgrades the no-scope denial to Warn.
+    let outcome = eval_direct(&desc, &policy, None, ExecutionProfile::ManualPermissive);
+    assert!(
+        matches!(outcome, EnforcementOutcome::Warn(_)),
+        "ManualPermissive: private/local target with no scope should warn, got {:?}",
+        outcome
+    );
+    // All other profiles deny.
+    for profile in &[
+        ExecutionProfile::ManualGuarded,
+        ExecutionProfile::McpStrict,
+        ExecutionProfile::AgentStrict,
+        ExecutionProfile::CiStrict,
+    ] {
+        let outcome = eval_direct(&desc, &policy, None, *profile);
+        assert!(
+            outcome.is_denied(),
+            "{:?}: private/local target with no scope should deny, got {:?}",
+            profile,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn private_local_target_allows_with_explicit_scope() {
+    let scope = scope_allow("127.0.0.1");
+    let desc = descriptor_private_or_local("127.0.0.1", OperationRisk::SafeActive);
+    let policy = default_policy();
+    for profile in &[
+        ExecutionProfile::ManualPermissive,
+        ExecutionProfile::ManualGuarded,
+        ExecutionProfile::McpStrict,
+        ExecutionProfile::AgentStrict,
+        ExecutionProfile::CiStrict,
+    ] {
+        let outcome = eval_direct(&desc, &policy, Some(&scope), *profile);
+        assert!(
+            outcome.is_allowed(),
+            "{:?}: private/local target with explicit scope should allow, got {:?}",
+            profile,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn private_local_target_miss_scope_under_permissive_requires_confirmation() {
+    let scope = scope_allow("10.0.0.1");
+    let desc = descriptor_private_or_local("192.168.1.100", OperationRisk::SafeActive);
+    let policy = default_policy();
+    let outcome = eval_direct(&desc, &policy, Some(&scope), ExecutionProfile::ManualPermissive);
+    assert!(
+        outcome.requires_confirmation(),
+        "private/local target with scope miss under permissive should require confirmation, got {:?}",
+        outcome
+    );
+}
+
+#[test]
+fn private_local_target_miss_scope_under_strict_denies() {
+    let scope = scope_allow("10.0.0.1");
+    let desc = descriptor_private_or_local("192.168.1.100", OperationRisk::SafeActive);
+    let policy = default_policy();
+    for profile in &[
+        ExecutionProfile::McpStrict,
+        ExecutionProfile::AgentStrict,
+        ExecutionProfile::CiStrict,
+    ] {
+        let outcome = eval_direct(&desc, &policy, Some(&scope), *profile);
+        assert!(
+            outcome.is_denied(),
+            "{:?}: private/local target with scope miss under strict should deny, got {:?}",
+            profile,
+            outcome
+        );
+    }
+}
+
+// ===========================================================================
+// 19. DbPentest and TrafficInterception risk tier matrix tests
+// ===========================================================================
+
+#[test]
+fn risk_tier_db_pentest_denied_without_policy_all_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::DbPentest);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied(),
+            "{}: db pentest without policy should deny, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn risk_tier_db_pentest_with_policy_requires_confirmation_under_permissive() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::DbPentest);
+    let policy = ExecutionPolicy {
+        allow_db_pentesting: true,
+        ..Default::default()
+    };
+    for surface in PERMISSIVE_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.requires_confirmation(),
+            "{}: db pentest with policy under permissive should require confirmation, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn risk_tier_db_pentest_with_policy_allows_under_strict() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::DbPentest);
+    let policy = ExecutionPolicy {
+        allow_db_pentesting: true,
+        ..Default::default()
+    };
+    for surface in STRICT_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "{}: db pentest with policy under strict should allow, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn risk_tier_traffic_interception_denied_without_policy_all_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::TrafficInterception);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied(),
+            "{}: traffic interception without policy should deny, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn risk_tier_traffic_interception_with_policy_allows_under_permissive() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::TrafficInterception);
+    let policy = ExecutionPolicy {
+        allow_traffic_interception: true,
+        ..Default::default()
+    };
+    // TrafficInterception is NOT in the HighRisk confirmation list, so with policy flag
+    // it allows directly under permissive (no operator confirmation needed).
+    for surface in PERMISSIVE_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "{}: traffic interception with policy under permissive should allow, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn risk_tier_traffic_interception_with_policy_allows_under_strict() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::TrafficInterception);
+    let policy = ExecutionPolicy {
+        allow_traffic_interception: true,
+        ..Default::default()
+    };
+    for surface in STRICT_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "{}: traffic interception with policy under strict should allow, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+// ===========================================================================
+// 20. Nonbaseline capability variant matrix tests (all 6 types)
+// ===========================================================================
+
+fn policy_allow_any_caps(caps: &[Capability]) -> ExecutionPolicy {
+    ExecutionPolicy {
+        allowed_capabilities: caps.to_vec(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn nonbaseline_raw_packet_probe_across_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::RawPacketProbe);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            // ManualPermissive: nonbaseline capability triggers RequireConfirmation (operator discretion).
+            assert!(
+                outcome.requires_confirmation(),
+                "{}: RawPacketProbe under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else if AUTOMATED_SURFACES.contains(surface) {
+            // Automated profiles: nonbaseline capability without explicit allow denies.
+            assert!(
+                outcome.is_denied(),
+                "{}: RawPacketProbe without allow under automated should deny, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            // ManualGuarded: capability checks are not enforced (only scope is enforced).
+            assert!(
+                outcome.is_allowed(),
+                "{}: RawPacketProbe under guarded should allow (no capability check), got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn nonbaseline_credential_testing_across_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::CredentialTesting);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            assert!(
+                outcome.requires_confirmation(),
+                "{}: CredentialTesting under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else if AUTOMATED_SURFACES.contains(surface) {
+            assert!(
+                outcome.is_denied(),
+                "{}: CredentialTesting without allow under automated should deny, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            assert!(
+                outcome.is_allowed(),
+                "{}: CredentialTesting under guarded should allow (no capability check), got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn nonbaseline_database_assessment_across_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::DatabaseAssessment);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            assert!(
+                outcome.requires_confirmation(),
+                "{}: DatabaseAssessment under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else if AUTOMATED_SURFACES.contains(surface) {
+            assert!(
+                outcome.is_denied(),
+                "{}: DatabaseAssessment without allow under automated should deny, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            assert!(
+                outcome.is_allowed(),
+                "{}: DatabaseAssessment under guarded should allow (no capability check), got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn nonbaseline_traffic_interception_across_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::TrafficInterception);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            assert!(
+                outcome.requires_confirmation(),
+                "{}: TrafficInterception under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else if AUTOMATED_SURFACES.contains(surface) {
+            assert!(
+                outcome.is_denied(),
+                "{}: TrafficInterception without allow under automated should deny, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            assert!(
+                outcome.is_allowed(),
+                "{}: TrafficInterception under guarded should allow (no capability check), got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn nonbaseline_remote_execution_across_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::RemoteExecution);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            assert!(
+                outcome.requires_confirmation(),
+                "{}: RemoteExecution under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else if AUTOMATED_SURFACES.contains(surface) {
+            assert!(
+                outcome.is_denied(),
+                "{}: RemoteExecution without allow under automated should deny, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            assert!(
+                outcome.is_allowed(),
+                "{}: RemoteExecution under guarded should allow (no capability check), got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn nonbaseline_c2_simulation_across_surfaces() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, Capability::C2Simulation);
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            assert!(
+                outcome.requires_confirmation(),
+                "{}: C2Simulation under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else if AUTOMATED_SURFACES.contains(surface) {
+            assert!(
+                outcome.is_denied(),
+                "{}: C2Simulation without allow under automated should deny, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            assert!(
+                outcome.is_allowed(),
+                "{}: C2Simulation under guarded should allow (no capability check), got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn all_nonbaseline_capabilities_allowed_with_explicit_policy() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let nonbaseline_caps = [
+        Capability::RawPacketProbe,
+        Capability::CredentialTesting,
+        Capability::DatabaseAssessment,
+        Capability::TrafficInterception,
+        Capability::RemoteExecution,
+        Capability::C2Simulation,
+        Capability::IntrusiveFuzz,
+    ];
+    let policy = policy_allow_any_caps(&nonbaseline_caps);
+    let desc_any = |cap: Capability| {
+        descriptor_with_cap("127.0.0.1", OperationRisk::SafeActive, cap)
+    };
+    for cap in &nonbaseline_caps {
+        let desc = desc_any(*cap);
+        for surface in ALL_SURFACES {
+            let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+            let outcome = ctx.evaluate(&desc);
+            if PERMISSIVE_SURFACES.contains(surface) {
+                // ManualPermissive: even with explicit allow, operator discretion triggers confirmation.
+                assert!(
+                    outcome.requires_confirmation(),
+                    "{}: nonbaseline {:?} under permissive with explicit allow should require confirmation, got {:?}",
+                    surface,
+                    cap,
+                    outcome
+                );
+            } else if AUTOMATED_SURFACES.contains(surface) {
+                // Automated profiles: explicit allow permits the capability.
+                assert!(
+                    outcome.is_allowed(),
+                    "{}: nonbaseline {:?} with explicit allow should allow, got {:?}",
+                    surface,
+                    cap,
+                    outcome
+                );
+            } else {
+                // ManualGuarded: capability checks are not enforced.
+                assert!(
+                    outcome.is_allowed(),
+                    "{}: nonbaseline {:?} under guarded should allow (no capability check), got {:?}",
+                    surface,
+                    cap,
+                    outcome
+                );
+            }
+        }
+    }
+}
+
+// ===========================================================================
+// 21. Metadata integration tests
+// ===========================================================================
+
+fn metadata_descriptor(meta: &OperationMetadata, target: &str) -> OperationDescriptor {
+    meta.descriptor_for_target(Some(target.to_string()))
+}
+
+#[test]
+fn metadata_recon_baseline_allows_across_surfaces() {
+    let meta = metadata_for_tool_id("recon").expect("recon metadata should exist");
+    assert_eq!(meta.risk, OperationRisk::SafeActive);
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "recon metadata on {}: should allow safe in-scope, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_fuzz_intrusive_requires_confirmation_under_permissive() {
+    let meta = metadata_for_tool_id("fuzz").expect("fuzz metadata should exist");
+    assert_eq!(meta.risk, OperationRisk::Intrusive);
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    for surface in PERMISSIVE_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        // Intrusive without policy flag: hard deny (risk-policy denial).
+        assert!(
+            outcome.is_denied(),
+            "fuzz metadata on {}: intrusive without policy should deny, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_fuzz_intrusive_with_policy_requires_confirmation_under_permissive() {
+    let meta = metadata_for_tool_id("fuzz").expect("fuzz metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    let policy = policy_intrusive();
+    for surface in PERMISSIVE_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.requires_confirmation(),
+            "fuzz metadata on {}: intrusive with policy under permissive should require confirmation, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_fuzz_intrusive_with_policy_allows_under_strict() {
+    let meta = metadata_for_tool_id("fuzz").expect("fuzz metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // fuzz metadata requires IntrusiveFuzz risk + http-fuzz-low-impact capability.
+    let policy = ExecutionPolicy {
+        allow_intrusive_fuzzing: true,
+        allowed_capabilities: vec![Capability::HttpFuzzLowImpact],
+        ..Default::default()
+    };
+    for surface in STRICT_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "fuzz metadata on {}: intrusive with policy under strict should allow, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_db_pentest_requires_explicit_scope() {
+    let meta = metadata_for_tool_id("db-pentest").expect("db-pentest metadata should exist");
+    assert_eq!(meta.risk, OperationRisk::DbPentest);
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // db-pentest requires ExplicitScopeRequired, so DefaultEmpty should deny under strict.
+    for surface in AUTOMATED_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), LoadedScope::default_empty());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied(),
+            "db-pentest metadata on {}: DefaultEmpty should deny, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_db_pentest_with_scope_and_policy_allows() {
+    let meta = metadata_for_tool_id("db-pentest").expect("db-pentest metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // db-pentest metadata requires DbPentest risk + database-assessment capability.
+    let policy = ExecutionPolicy {
+        allow_db_pentesting: true,
+        allowed_capabilities: vec![Capability::DatabaseAssessment],
+        ..Default::default()
+    };
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        if PERMISSIVE_SURFACES.contains(surface) {
+            // ManualPermissive: DbPentest is in the HighRisk confirmation list.
+            assert!(
+                outcome.requires_confirmation(),
+                "db-pentest metadata on {}: with policy under permissive should require confirmation, got {:?}",
+                surface,
+                outcome
+            );
+        } else {
+            assert!(
+                outcome.is_allowed(),
+                "db-pentest metadata on {}: with policy under strict should allow, got {:?}",
+                surface,
+                outcome
+            );
+        }
+    }
+}
+
+#[test]
+fn metadata_proxy_intercept_requires_traffic_interception_policy() {
+    let meta = metadata_for_tool_id("proxy-intercept").expect("proxy-intercept metadata should exist");
+    assert_eq!(meta.risk, OperationRisk::TrafficInterception);
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // Without policy: deny (risk-policy denial).
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied(),
+            "proxy-intercept metadata on {}: without policy should deny, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_proxy_intercept_with_policy_allows_under_strict() {
+    let meta = metadata_for_tool_id("proxy-intercept").expect("proxy-intercept metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // proxy-intercept metadata requires TrafficInterception risk + traffic-interception capability.
+    let policy = ExecutionPolicy {
+        allow_traffic_interception: true,
+        allowed_capabilities: vec![Capability::TrafficInterception],
+        ..Default::default()
+    };
+    for surface in STRICT_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "proxy-intercept metadata on {}: with policy under strict should allow, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_packet_requires_raw_packet_capability() {
+    let meta = metadata_for_tool_id("packet").expect("packet metadata should exist");
+    assert_eq!(meta.risk, OperationRisk::RawPacket);
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // RawPacket risk requires allow_raw_packets policy.
+    for surface in ALL_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied(),
+            "packet metadata on {}: without policy should deny, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_packet_with_policy_allows_under_strict() {
+    let meta = metadata_for_tool_id("packet").expect("packet metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    // packet metadata requires RawPacket risk + raw-packet-probe capability.
+    let policy = ExecutionPolicy {
+        allow_raw_packets: true,
+        allowed_capabilities: vec![Capability::RawPacketProbe],
+        ..Default::default()
+    };
+    for surface in STRICT_SURFACES {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_allowed(),
+            "packet metadata on {}: with policy under strict should allow, got {:?}",
+            surface,
+            outcome
+        );
+    }
+}
+
+#[test]
+fn metadata_non_rest_exposable_denies_on_rest() {
+    // All metadata entries have rest_exposable flags; verify that REST surface
+    // still works with in-scope operations.
+    let meta = metadata_for_tool_id("recon").expect("recon metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "127.0.0.1");
+    let ctx = ctx_for_surface(ExecutionSurface::RestApi, default_policy(), scope);
+    let outcome = ctx.evaluate(&desc);
+    assert!(
+        outcome.is_allowed(),
+        "recon metadata on REST: safe in-scope should allow, got {:?}",
+        outcome
+    );
+}
+
+#[test]
+fn metadata_recon_out_of_scope_denies_on_automated() {
+    let meta = metadata_for_tool_id("recon").expect("recon metadata should exist");
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = metadata_descriptor(meta, "93.184.216.34");
+    for surface in AUTOMATED_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let outcome = ctx.evaluate(&desc);
+        assert!(
+            outcome.is_denied(),
+            "recon metadata on {}: out-of-scope should deny, got {:?}",
             surface,
             outcome
         );

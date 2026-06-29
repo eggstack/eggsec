@@ -184,7 +184,7 @@ Phase 8 added a comprehensive enforcement matrix test suite (`crates/eggsec/test
 1. Manual CLI/TUI becoming too strict to be useful.
 2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
 
-**105 tests** covering:
+**134 tests** covering:
 
 - **Surface mapping invariants**: All 8 `ExecutionSurface` variants map to correct `ExecutionProfile`.
 - **Manual permissive invariants**: Safe ops allow, scope misses require confirmation, `assume_yes` is narrow, denied capabilities hard-deny, missing features hard-deny.
@@ -193,11 +193,13 @@ Phase 8 added a comprehensive enforcement matrix test suite (`crates/eggsec/test
 - **Security agent invariants**: Same as MCP, plus `AgentStrict` profile, warnings treated as denial.
 - **REST invariants**: Explicit manifest required, only `Allow` dispatches, no confirmation/warn path, overrides ignored.
 - **CI invariants**: Matches automated strict behavior, no override honoring.
-- **Risk tier matrix**: All risk tiers (Passive through C2Operation) tested across all surfaces with and without policy flags.
-- **Capability matrix**: Baseline vs non-baseline capabilities across all surfaces, denied capability hard-deny.
+- **Risk tier matrix**: All risk tiers (Passive through C2Operation, including DbPentest and TrafficInterception) tested across all surfaces with and without policy flags.
+- **Capability matrix**: Baseline vs non-baseline capabilities across all surfaces, denied capability hard-deny, all 6 nonbaseline capability variants (RawPacketProbe, CredentialTesting, DatabaseAssessment, TrafficInterception, RemoteExecution, C2Simulation).
 - **Override isolation**: `ManualOverride::permits()` tested for each `ConfirmationClass`, override flags don't leak across surfaces.
 - **Scope state matrix**: DefaultEmpty, explicit allow, allow miss, exclusion - tested across permissive and strict surfaces.
 - **Dual-mode contract**: Permissive never hard-deny safe in-scope, strict never produce Warn/RequireConfirmation.
+- **Private/local target scope**: `requires_private_or_local_target` denies when no scope provided (all profiles), allows with explicit scope, scope miss behavior under permissive vs strict.
+- **Metadata integration**: Descriptors generated from `OperationMetadata` for recon, fuzz, db-pentest, proxy-intercept, and packet operations, verifying risk + capability + feature requirements.
 
 Run:
 ```bash
