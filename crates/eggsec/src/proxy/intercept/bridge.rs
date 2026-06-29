@@ -45,7 +45,10 @@ pub fn to_scan_report_data_proxy(report: &WebProxySessionReport) -> ScanReportDa
         };
 
         all_findings.push(FindingData {
-            title: format!("Proxy manipulation: {} on flow #{}", manip.field, manip.flow_index),
+            title: format!(
+                "Proxy manipulation: {} on flow #{}",
+                manip.field, manip.flow_index
+            ),
             severity: "info".to_string(),
             category: format!("proxy-manipulation-{}", finding_type),
             description: format!(
@@ -189,8 +192,12 @@ pub fn to_scan_report_data_proxy(report: &WebProxySessionReport) -> ScanReportDa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proxy::intercept::correlation::{CorrelationContext, CorrelationReference, CorrelationSource};
-    use crate::proxy::intercept::protocols::{GrpcCall, GrpcSession, Http2Session, Http2Stream, WebSocketSession};
+    use crate::proxy::intercept::correlation::{
+        CorrelationContext, CorrelationReference, CorrelationSource,
+    };
+    use crate::proxy::intercept::protocols::{
+        GrpcCall, GrpcSession, Http2Session, Http2Stream, WebSocketSession,
+    };
     use crate::proxy::intercept::types::{ManipulationRecord, ProxyFlow, ProxyFlowDirection};
 
     #[test]
@@ -224,8 +231,14 @@ mod tests {
         assert_eq!(srd.scan_type, "web-proxy-intercept");
         assert_eq!(srd.target, "127.0.0.1:8080");
         assert_eq!(srd.findings.len(), 2);
-        assert!(srd.findings.iter().any(|f| f.category == "proxy-intercept-flow"));
-        assert!(srd.findings.iter().any(|f| f.category == "web-traffic-summary"));
+        assert!(srd
+            .findings
+            .iter()
+            .any(|f| f.category == "proxy-intercept-flow"));
+        assert!(srd
+            .findings
+            .iter()
+            .any(|f| f.category == "web-traffic-summary"));
         assert_eq!(srd.duration_ms, 60_000);
         assert_eq!(srd.timestamp, "2026-01-01T00:01:00Z");
     }
@@ -277,14 +290,21 @@ mod tests {
 
         let srd = to_scan_report_data_proxy(&r);
         assert_eq!(srd.findings.len(), 2);
-        assert!(srd.findings.iter().any(|f| f.category.contains("proxy-manipulation-header")));
+        assert!(srd
+            .findings
+            .iter()
+            .any(|f| f.category.contains("proxy-manipulation-header")));
     }
 
     #[test]
     fn bridge_includes_websocket_session_findings() {
         let mut r = WebProxySessionReport::new("127.0.0.1:8080", false);
-        r.ws_sessions
-            .push(WebSocketSession::new("wss://example.com/chat", "example.com", "/chat", true));
+        r.ws_sessions.push(WebSocketSession::new(
+            "wss://example.com/chat",
+            "example.com",
+            "/chat",
+            true,
+        ));
 
         let srd = to_scan_report_data_proxy(&r);
         assert_eq!(srd.findings.len(), 2);
@@ -371,8 +391,12 @@ mod tests {
     #[test]
     fn bridge_web_traffic_summary_includes_protocol_counts() {
         let mut r = WebProxySessionReport::new("127.0.0.1:8080", false);
-        r.ws_sessions
-            .push(WebSocketSession::new("wss://example.com/ws", "example.com", "/ws", true));
+        r.ws_sessions.push(WebSocketSession::new(
+            "wss://example.com/ws",
+            "example.com",
+            "/ws",
+            true,
+        ));
         let mut h2 = Http2Session::new("api.example.com", true);
         h2.add_stream(Http2Stream::new(1, "GET", "/data"));
         r.http2_sessions.push(h2);
@@ -426,8 +450,12 @@ mod tests {
             redaction_applied: None,
             protocol: "http1".to_string(),
         });
-        r.ws_sessions
-            .push(WebSocketSession::new("wss://example.com/ws", "example.com", "/ws", true));
+        r.ws_sessions.push(WebSocketSession::new(
+            "wss://example.com/ws",
+            "example.com",
+            "/ws",
+            true,
+        ));
         let mut h2 = Http2Session::new("api.example.com", true);
         h2.add_stream(Http2Stream::new(1, "GET", "/data"));
         r.http2_sessions.push(h2);

@@ -9,9 +9,18 @@ use serde::{Deserialize, Serialize};
 /// List available campaign profiles.
 pub fn available_profiles() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("apt29", "APT29 (Cozy Bear) simulation with HTTP/S beacons and LOTL techniques"),
-        ("carbanak", "Carbanak/FIN7 simulation with DNS beacons and financial targeting"),
-        ("default", "Generic purple team campaign with mixed C2 protocols"),
+        (
+            "apt29",
+            "APT29 (Cozy Bear) simulation with HTTP/S beacons and LOTL techniques",
+        ),
+        (
+            "carbanak",
+            "Carbanak/FIN7 simulation with DNS beacons and financial targeting",
+        ),
+        (
+            "default",
+            "Generic purple team campaign with mixed C2 protocols",
+        ),
     ]
 }
 
@@ -67,7 +76,11 @@ pub struct CampaignTimeline {
 ///
 /// The graph connects each technique node to the previous phase's techniques,
 /// creating a dependency chain that reflects the campaign progression.
-pub fn build_attack_graph(campaign_id: &str, campaign_name: &str, phases: &[CampaignPhase]) -> AttackGraph {
+pub fn build_attack_graph(
+    campaign_id: &str,
+    campaign_name: &str,
+    phases: &[CampaignPhase],
+) -> AttackGraph {
     let mut nodes = Vec::new();
     let mut prev_phase_technique_ids: Vec<String> = Vec::new();
 
@@ -75,13 +88,15 @@ pub fn build_attack_graph(campaign_id: &str, campaign_name: &str, phases: &[Camp
         let mut current_phase_ids = Vec::new();
         for technique in &phase.mitre_technique_ids() {
             let depends_on = prev_phase_technique_ids.clone();
-                let node = AttackGraphNode {
-                    technique_id: technique.to_string(),
-                    phase_name: phase.name.clone(),
-                    phase_order: phase.order,
-                    task_type: super::tasking::task_type_for_technique_static(technique).as_str().to_string(),
-                    depends_on,
-                };
+            let node = AttackGraphNode {
+                technique_id: technique.to_string(),
+                phase_name: phase.name.clone(),
+                phase_order: phase.order,
+                task_type: super::tasking::task_type_for_technique_static(technique)
+                    .as_str()
+                    .to_string(),
+                depends_on,
+            };
             current_phase_ids.push(node.technique_id.clone());
             nodes.push(node);
         }
@@ -107,7 +122,11 @@ pub fn build_attack_graph(campaign_id: &str, campaign_name: &str, phases: &[Camp
 }
 
 /// Build a campaign timeline from phases with sequential timestamps.
-pub fn build_timeline(campaign_id: &str, campaign_name: &str, phases: &[CampaignPhase]) -> CampaignTimeline {
+pub fn build_timeline(
+    campaign_id: &str,
+    campaign_name: &str,
+    phases: &[CampaignPhase],
+) -> CampaignTimeline {
     let mut entries = Vec::new();
     let mut total_techniques = 0;
     let base_time = chrono::Utc::now();

@@ -56,7 +56,10 @@ mod integration_tests {
         let mut headers = HashMap::new();
         headers.insert("upgrade".to_string(), "websocket".to_string());
         headers.insert("connection".to_string(), "Upgrade".to_string());
-        headers.insert("sec-websocket-key".to_string(), "dGhlIHNhbXBsZSBub25jZQ==".to_string());
+        headers.insert(
+            "sec-websocket-key".to_string(),
+            "dGhlIHNhbXBsZSBub25jZQ==".to_string(),
+        );
 
         let detection = detect_protocol("GET", "/socket", &headers);
         assert_eq!(detection.protocol, ProxyProtocol::WebSocket);
@@ -105,8 +108,8 @@ mod integration_tests {
         assert!(state.can_send(1000));
 
         // Add client frame
-        let client_frame = GrpcStreamFrame::new(1, ProxyFlowDirection::Request)
-            .with_payload(vec![0u8; 1000]);
+        let client_frame =
+            GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_payload(vec![0u8; 1000]);
         state.add_frame(client_frame);
 
         // Verify bytes in flight increased
@@ -115,8 +118,8 @@ mod integration_tests {
         assert!(!state.can_send(65536));
 
         // Add server response (reduces bytes in flight)
-        let server_frame = GrpcStreamFrame::new(1, ProxyFlowDirection::Response)
-            .with_payload(vec![0u8; 500]);
+        let server_frame =
+            GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_payload(vec![0u8; 500]);
         state.add_frame(server_frame);
 
         // Verify bytes in flight decreased
@@ -131,39 +134,25 @@ mod integration_tests {
 
         // Should succeed within window
         let frame = state
-            .create_frame(
-                1,
-                ProxyFlowDirection::Request,
-                vec![0u8; 500],
-                false,
-                false,
-            )
+            .create_frame(1, ProxyFlowDirection::Request, vec![0u8; 500], false, false)
             .unwrap();
         assert!(!frame.end_stream);
         state.add_frame(frame);
 
         let final_frame = state
-            .create_frame(
-                1,
-                ProxyFlowDirection::Request,
-                Vec::new(),
-                true,
-                false,
-            )
+            .create_frame(1, ProxyFlowDirection::Request, Vec::new(), true, false)
             .unwrap();
         assert!(final_frame.end_stream);
 
         // Should fail when exceeding window
-        let frame = state.create_frame(
-            1,
-            ProxyFlowDirection::Request,
-            vec![0u8; 600],
-            false,
-            false,
-        );
+        let frame =
+            state.create_frame(1, ProxyFlowDirection::Request, vec![0u8; 600], false, false);
         assert!(frame.is_err());
         match frame.unwrap_err() {
-            FlowControlError::WindowExceeded { requested, available } => {
+            FlowControlError::WindowExceeded {
+                requested,
+                available,
+            } => {
                 assert_eq!(requested, 600);
                 assert!(available <= 500);
             }
@@ -178,15 +167,16 @@ mod integration_tests {
 
         // Add some frames
         for _ in 0..5 {
-            state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request)
-                .with_payload(vec![0u8; 100]));
-            state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response)
-                .with_payload(vec![0u8; 200]));
+            state.add_frame(
+                GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_payload(vec![0u8; 100]),
+            );
+            state.add_frame(
+                GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_payload(vec![0u8; 200]),
+            );
         }
 
         // Add end-of-stream frame
-        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response)
-            .with_end_stream());
+        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_end_stream());
 
         let summary = state.summary();
         assert_eq!(summary.method_type, GrpcMethodType::ServerStreaming);
@@ -208,7 +198,10 @@ mod integration_tests {
 
         // gRPC detection
         let mut grpc_headers = HashMap::new();
-        grpc_headers.insert("content-type".to_string(), "application/grpc+proto".to_string());
+        grpc_headers.insert(
+            "content-type".to_string(),
+            "application/grpc+proto".to_string(),
+        );
         let det = detect_protocol("POST", "/pkg.Svc/Method", &grpc_headers);
         assert_eq!(det.protocol, ProxyProtocol::Grpc);
         assert!(det.confidence > 0.9);

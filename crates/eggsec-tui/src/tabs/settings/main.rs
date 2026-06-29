@@ -1,13 +1,13 @@
 use crate::app::tab_error::TabError;
 use crate::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem};
 use crate::tabs::{AppState, TabState};
-use crate::theme::{canonical_theme_id, display_theme_name};
 use crate::theme::manager::ThemeInfo;
 use crate::theme::palette::ThemeColors;
-use rustc_hash::FxHashMap;
+use crate::theme::{canonical_theme_id, display_theme_name};
 use eggsec::config::{
     EggsecConfig, HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan,
 };
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsFocusArea {
@@ -472,17 +472,13 @@ impl SettingsTab {
             .first()
             .map(|f| f.value.parse().unwrap_or(50))
             .unwrap_or(50);
-        config.scan.rate_limit_per_second = self
-            .scan_inputs
-            .fields
-            .get(1)
-            .and_then(|f| {
-                if f.value.is_empty() {
-                    None
-                } else {
-                    f.value.parse::<u32>().ok()
-                }
-            });
+        config.scan.rate_limit_per_second = self.scan_inputs.fields.get(1).and_then(|f| {
+            if f.value.is_empty() {
+                None
+            } else {
+                f.value.parse::<u32>().ok()
+            }
+        });
         config.scan.port_timeout_secs = self
             .scan_inputs
             .fields
@@ -620,9 +616,9 @@ impl SettingsTab {
                             .to_string(),
                     ),
                     Ok(_) => {}
-                    Err(_) => errors.push(
-                        "Scan rate_limit_per_second must be a valid number".to_string(),
-                    ),
+                    Err(_) => {
+                        errors.push("Scan rate_limit_per_second must be a valid number".to_string())
+                    }
                 }
             }
         }
@@ -636,12 +632,10 @@ impl SettingsTab {
         if let Some(field) = self.session_inputs.fields.first() {
             match field.value.parse::<u64>() {
                 Ok(v) if v > 0 => {}
-                Ok(_) => {
-                    errors.push("Session auto_save_interval_secs must be greater than 0".to_string())
-                }
-                Err(_) => errors.push(
-                    "Session auto_save_interval_secs must be a valid number".to_string(),
-                ),
+                Ok(_) => errors
+                    .push("Session auto_save_interval_secs must be greater than 0".to_string()),
+                Err(_) => errors
+                    .push("Session auto_save_interval_secs must be a valid number".to_string()),
             }
         }
         if let Some(field) = self.report_inputs.fields.get(2) {
@@ -1085,9 +1079,7 @@ mod tests {
         let mut tab = SettingsTab::new();
         set_session_field(&mut tab, 0, "xyz");
         let err = tab.validate().unwrap_err();
-        assert!(err
-            .iter()
-            .any(|e| e.contains("auto_save_interval_secs")));
+        assert!(err.iter().any(|e| e.contains("auto_save_interval_secs")));
     }
 
     #[test]
@@ -1095,9 +1087,7 @@ mod tests {
         let mut tab = SettingsTab::new();
         set_session_field(&mut tab, 0, "0");
         let err = tab.validate().unwrap_err();
-        assert!(err
-            .iter()
-            .any(|e| e.contains("auto_save_interval_secs")));
+        assert!(err.iter().any(|e| e.contains("auto_save_interval_secs")));
     }
 
     #[test]
@@ -1290,8 +1280,8 @@ mod tests {
 
     #[test]
     fn settings_layout_footer_visible_at_80x24() {
-        use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
+        use ratatui::{backend::TestBackend, Terminal};
 
         let tab = SettingsTab::new();
         let backend = TestBackend::new(80, 24);
@@ -1318,8 +1308,8 @@ mod tests {
 
     #[test]
     fn settings_layout_status_does_not_collide_with_footer() {
-        use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
+        use ratatui::{backend::TestBackend, Terminal};
 
         let mut tab = SettingsTab::new();
         tab.status_message = "Settings saved successfully".to_string();
@@ -1343,8 +1333,8 @@ mod tests {
 
     #[test]
     fn settings_layout_small_terminal_renders_without_panic() {
-        use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
+        use ratatui::{backend::TestBackend, Terminal};
 
         let tab = SettingsTab::new();
         // 60x20 is a supported small size per plan
@@ -1456,19 +1446,20 @@ mod tests {
         assert!(!tab.theme_selector.is_open());
 
         tab.handle_enter();
-        assert!(tab.theme_selector.is_open(), "Enter should open the selector");
+        assert!(
+            tab.theme_selector.is_open(),
+            "Enter should open the selector"
+        );
     }
 
     #[test]
     fn theme_hint_shows_apply_when_selector_open() {
-        use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
+        use ratatui::{backend::TestBackend, Terminal};
 
         let mut tab = SettingsTab::new();
         tab.current_section = SettingsSection::Theme;
-        tab.theme_selector = Selector::new("Theme").items(vec![
-            SelectorItem::new("Dark", "dark"),
-        ]);
+        tab.theme_selector = Selector::new("Theme").items(vec![SelectorItem::new("Dark", "dark")]);
         tab.theme_selector.open();
 
         let backend = TestBackend::new(80, 24);
@@ -1499,8 +1490,8 @@ mod tests {
 
     #[test]
     fn theme_hint_shows_themes_when_selector_closed() {
-        use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
+        use ratatui::{backend::TestBackend, Terminal};
 
         let mut tab = SettingsTab::new();
         tab.current_section = SettingsSection::Theme;
@@ -1537,9 +1528,7 @@ mod tests {
         let mut tab = SettingsTab::new();
         set_scan_field(&mut tab, 1, "abc");
         let err = tab.validate().unwrap_err();
-        assert!(err
-            .iter()
-            .any(|e| e.contains("rate_limit_per_second")));
+        assert!(err.iter().any(|e| e.contains("rate_limit_per_second")));
     }
 
     #[test]
@@ -1547,9 +1536,7 @@ mod tests {
         let mut tab = SettingsTab::new();
         set_scan_field(&mut tab, 1, "0");
         let err = tab.validate().unwrap_err();
-        assert!(err
-            .iter()
-            .any(|e| e.contains("rate_limit_per_second")));
+        assert!(err.iter().any(|e| e.contains("rate_limit_per_second")));
     }
 
     #[test]
@@ -1709,10 +1696,10 @@ mod tests {
 
     #[test]
     fn theme_preview_uses_resolved_colors_not_thread_local() {
-        use ratatui::{backend::TestBackend, Terminal};
         use crate::tabs::TabRender;
         use crate::theme::palette::ThemeColors;
         use ratatui::style::Color;
+        use ratatui::{backend::TestBackend, Terminal};
 
         // Custom theme with distinctive colors that differ from any built-in.
         let custom_colors = ThemeColors {
@@ -1773,9 +1760,7 @@ mod tests {
         // that foreground color in the expected preview region.
         let mut found_custom_fg = false;
         for cell in buffer.content() {
-            if cell.symbol() == "N"
-                && cell.fg == Color::Magenta
-            {
+            if cell.symbol() == "N" && cell.fg == Color::Magenta {
                 found_custom_fg = true;
                 break;
             }

@@ -269,8 +269,7 @@ pub(crate) async fn scan_ports_spoofed(
             };
             if let Some(rate) = max_rate {
                 if rate > 0 {
-                    let delay_ms = (1000u64.saturating_mul(total_packets as u64))
-                        / rate as u64;
+                    let delay_ms = (1000u64.saturating_mul(total_packets as u64)) / rate as u64;
                     tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                 }
             }

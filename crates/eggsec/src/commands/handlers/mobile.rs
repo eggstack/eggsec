@@ -3,16 +3,15 @@ use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 #[allow(unused_mut)]
-pub async fn handle_mobile(
-    ctx: &CommandContext,
-    mut args: crate::cli::MobileArgs,
-) -> Result<()> {
+pub async fn handle_mobile(ctx: &CommandContext, mut args: crate::cli::MobileArgs) -> Result<()> {
     // Normalize legacy direct path vs subcommand form for dispatch and policy target.
     // Legacy `eggsec mobile <path>` or `mobile static <path>` -> static path.
     // `mobile dynamic ...` -> dynamic path (feature gated in CLI parser + here).
     #[allow(unused_variables)]
     let (is_dynamic, static_path, dynamic_target) = match &args.command {
-        Some(crate::cli::MobileSubcommand::Static(s)) => (false, Some(s.path.clone()), None::<String>),
+        Some(crate::cli::MobileSubcommand::Static(s)) => {
+            (false, Some(s.path.clone()), None::<String>)
+        }
         #[cfg(feature = "mobile-dynamic")]
         Some(crate::cli::MobileSubcommand::Dynamic(d)) => (true, None, Some(d.target.clone())),
         None => {
@@ -20,7 +19,9 @@ pub async fn handle_mobile(
             if let Some(ref p) = args.path {
                 (false, Some(p.clone()), None::<String>)
             } else {
-                return Err(anyhow::anyhow!("mobile: provide a path for legacy static or use a subcommand (static|dynamic)"));
+                return Err(anyhow::anyhow!(
+                    "mobile: provide a path for legacy static or use a subcommand (static|dynamic)"
+                ));
             }
         }
     };
@@ -29,13 +30,20 @@ pub async fn handle_mobile(
         // Dynamic path: DefenseLab + SafeActive (Intrusive only for real/non-dry Frida) + mobile-dynamic feature + explicit allow flag(s)
         #[cfg(feature = "mobile-dynamic")]
         {
-            let is_real_frida = if let Some(crate::cli::MobileSubcommand::Dynamic(d)) = &args.command {
-                !d.frida_script.is_empty() && !d.dry_run
-            } else { false };
+            let is_real_frida =
+                if let Some(crate::cli::MobileSubcommand::Dynamic(d)) = &args.command {
+                    !d.frida_script.is_empty() && !d.dry_run
+                } else {
+                    false
+                };
             ctx.evaluate_and_enforce_operation(OperationDescriptor {
                 operation: "mobile-dynamic".to_string(),
                 mode: crate::config::OperationMode::DefenseLab,
-                risk: if is_real_frida { crate::config::OperationRisk::Intrusive } else { crate::config::OperationRisk::SafeActive },
+                risk: if is_real_frida {
+                    crate::config::OperationRisk::Intrusive
+                } else {
+                    crate::config::OperationRisk::SafeActive
+                },
                 intended_uses: vec![crate::config::IntendedUse::WebAssessment],
                 target: dynamic_target.clone(),
                 required_features: vec!["mobile-dynamic".to_string()],
@@ -66,7 +74,9 @@ pub async fn handle_mobile(
             }
             let target = dynamic_target.clone().unwrap_or_default();
             let scan_id = format!("mobile-dynamic-{}", chrono::Utc::now().timestamp());
-            ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+            ctx.notify_manager
+                .notify_scan_started(&scan_id, &target)
+                .await;
 
             // Extract owned DynamicMobileArgs for the call (move out of the enum)
             let dyn_args_cli = match args.command.take() {
@@ -106,19 +116,29 @@ pub async fn handle_mobile(
             match crate::mobile::run_dynamic_cli(dyn_args, &ctx.config).await {
                 Ok(()) => {
                     ctx.notify_manager
-                        .notify_scan_complete(&scan_id, &target, "Mobile dynamic completed", None, None)
+                        .notify_scan_complete(
+                            &scan_id,
+                            &target,
+                            "Mobile dynamic completed",
+                            None,
+                            None,
+                        )
                         .await;
                     Ok(())
                 }
                 Err(e) => {
-                    ctx.notify_manager.notify_error(&scan_id, &target, &e.to_string()).await;
+                    ctx.notify_manager
+                        .notify_error(&scan_id, &target, &e.to_string())
+                        .await;
                     Err(e.into())
                 }
             }
         }
         #[cfg(not(feature = "mobile-dynamic"))]
         {
-            anyhow::bail!("mobile-dynamic feature not enabled; rebuild with --features mobile-dynamic")
+            anyhow::bail!(
+                "mobile-dynamic feature not enabled; rebuild with --features mobile-dynamic"
+            )
         }
     } else {
         // Static path (legacy or 'static' sub)
@@ -139,19 +159,23 @@ pub async fn handle_mobile(
         // We reuse the top-level flags; construct a thin static args view.
         let static_args = crate::cli::MobileArgs {
             path: Some(spath.clone()),
-            command: Some(crate::cli::MobileSubcommand::Static(crate::cli::MobileStaticArgs {
-                path: spath.clone(),
-                json: args.json | ctx.json,
-                output: args.output.clone(),
-                quiet: args.quiet,
-            })),
+            command: Some(crate::cli::MobileSubcommand::Static(
+                crate::cli::MobileStaticArgs {
+                    path: spath.clone(),
+                    json: args.json | ctx.json,
+                    output: args.output.clone(),
+                    quiet: args.quiet,
+                },
+            )),
             json: args.json | ctx.json,
             output: args.output.clone(),
             quiet: args.quiet,
         };
         let target = spath.clone();
         let scan_id = format!("mobile-{}", chrono::Utc::now().timestamp());
-        ctx.notify_manager.notify_scan_started(&scan_id, &target).await;
+        ctx.notify_manager
+            .notify_scan_started(&scan_id, &target)
+            .await;
         match crate::mobile::run_cli(static_args, &ctx.config).await {
             Ok(()) => {
                 ctx.notify_manager
@@ -160,7 +184,9 @@ pub async fn handle_mobile(
                 Ok(())
             }
             Err(e) => {
-                ctx.notify_manager.notify_error(&scan_id, &target, &e.to_string()).await;
+                ctx.notify_manager
+                    .notify_error(&scan_id, &target, &e.to_string())
+                    .await;
                 Err(e.into())
             }
         }

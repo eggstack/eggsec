@@ -57,7 +57,10 @@ pub enum MobileSubcommand {
 
     /// Dynamic Android runtime testing (ADB + logcat analysis). Requires feature mobile-dynamic.
     #[cfg(feature = "mobile-dynamic")]
-    #[command(name = "dynamic", about = "Controlled dynamic run on lab Android device/emulator (install/launch/log/uninstall)")]
+    #[command(
+        name = "dynamic",
+        about = "Controlled dynamic run on lab Android device/emulator (install/launch/log/uninstall)"
+    )]
     Dynamic(Box<DynamicMobileArgs>),
 }
 
@@ -120,25 +123,41 @@ pub struct DynamicMobileArgs {
     #[arg(help = "Path to .apk (Android test build only) for dynamic run")]
     pub target: String,
 
-    #[arg(long, help = "Device serial (e.g. emulator-5554) or host:port (e.g. 127.0.0.1:5555)")]
+    #[arg(
+        long,
+        help = "Device serial (e.g. emulator-5554) or host:port (e.g. 127.0.0.1:5555)"
+    )]
     pub device: Option<String>,
 
     #[arg(long, help = "Install the APK via adb (pm install -r)")]
     pub install: bool,
 
-    #[arg(long, help = "Launch via am start (e.g. --launch '.MainActivity' or 'com.pkg/.MainActivity')")]
+    #[arg(
+        long,
+        help = "Launch via am start (e.g. --launch '.MainActivity' or 'com.pkg/.MainActivity')"
+    )]
     pub launch: Option<String>,
 
-    #[arg(long, help = "Capture logcat output during/after launch for runtime analysis")]
+    #[arg(
+        long,
+        help = "Capture logcat output during/after launch for runtime analysis"
+    )]
     pub capture_logs: bool,
 
-    #[arg(long, default_value_t = 60, help = "Duration in seconds for log capture (bounded)")]
+    #[arg(
+        long,
+        default_value_t = 60,
+        help = "Duration in seconds for log capture (bounded)"
+    )]
     pub duration: u64,
 
     #[arg(long, help = "Uninstall the package after run (best-effort cleanup)")]
     pub uninstall_after: bool,
 
-    #[arg(long, help = "Plan/dry-run mode: simulate all actions, produce valid structured report, touch nothing")]
+    #[arg(
+        long,
+        help = "Plan/dry-run mode: simulate all actions, produce valid structured report, touch nothing"
+    )]
     pub dry_run: bool,
 
     #[arg(long, help = "Output results as JSON")]
@@ -147,30 +166,58 @@ pub struct DynamicMobileArgs {
     #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
 
-    #[arg(long, short = 'q', help = "Suppress non-essential output and the lab warning note")]
+    #[arg(
+        long,
+        short = 'q',
+        help = "Suppress non-essential output and the lab warning note"
+    )]
     pub quiet: bool,
 
-    #[arg(long, help = "Explicit confirmation for dynamic mobile execution (required for any non-dry-run real device actions; recorded for audit)")]
+    #[arg(
+        long,
+        help = "Explicit confirmation for dynamic mobile execution (required for any non-dry-run real device actions; recorded for audit)"
+    )]
     pub allow_dynamic_mobile: bool,
 
-    #[arg(long, value_name = "FILE", help = "Path to optional lab manifest TOML (allowed_device_serials + allowed_packages; advisory in Phase 1)")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Path to optional lab manifest TOML (allowed_device_serials + allowed_packages; advisory in Phase 1)"
+    )]
     pub lab_manifest: Option<String>,
 
-    #[arg(long, help = "List reachable devices/emulators via pure-Rust probe (+ external adb convenience if in PATH) and exit. Target APK may be omitted or a placeholder.")]
+    #[arg(
+        long,
+        help = "List reachable devices/emulators via pure-Rust probe (+ external adb convenience if in PATH) and exit. Target APK may be omitted or a placeholder."
+    )]
     pub list_devices: bool,
 
     // mobile-dynamic extensions: proxy + traffic-capture + runtime-permission operations
-    #[arg(long, value_name = "HOST:PORT", help = "Configure device global HTTP proxy for the run (e.g. 127.0.0.1:8080). Requires user-managed MITM CA on device for HTTPS inspection. Device setting only (no auto mitmproxy start).")]
+    #[arg(
+        long,
+        value_name = "HOST:PORT",
+        help = "Configure device global HTTP proxy for the run (e.g. 127.0.0.1:8080). Requires user-managed MITM CA on device for HTTPS inspection. Device setting only (no auto mitmproxy start)."
+    )]
     pub proxy: Option<String>,
-    #[arg(long, help = "After run, reset/clear the global HTTP proxy on device (best-effort).")]
+    #[arg(
+        long,
+        help = "After run, reset/clear the global HTTP proxy on device (best-effort)."
+    )]
     pub reset_proxy: bool,
     #[arg(long = "grant-permission", value_name = "PERM", action = clap::ArgAction::Append, help = "Grant runtime permission(s) to package (pm grant). Repeatable. e.g. android.permission.CAMERA")]
     pub grant_permissions: Vec<String>,
     #[arg(long = "revoke-permission", value_name = "PERM", action = clap::ArgAction::Append, help = "Revoke runtime permission(s) (pm revoke). Repeatable.")]
     pub revoke_permissions: Vec<String>,
-    #[arg(long, help = "Snapshot current permission state for the target package (via dumpsys) and include in report.")]
+    #[arg(
+        long,
+        help = "Snapshot current permission state for the target package (via dumpsys) and include in report."
+    )]
     pub list_permissions: bool,
-    #[arg(long, value_name = "FILE", help = "Path to traffic capture (mitmproxy text log or minimal HAR JSON) to parse for traffic_summary + findings. Complements --proxy.")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Path to traffic capture (mitmproxy text log or minimal HAR JSON) to parse for traffic_summary + findings. Complements --proxy."
+    )]
     pub traffic_capture: Option<String>,
 
     // Phase 3b/3c Frida (under mobile-dynamic; runtime gated by --allow-frida + policy)
@@ -178,12 +225,23 @@ pub struct DynamicMobileArgs {
     // Supports user .js files, "builtin:NAME", "library:NAME" (Phase 3c reusable components).
     #[arg(long, value_name = "SPEC", action = clap::ArgAction::Append, help = "Frida script spec (repeatable for multi-script Phase 3c). File path, or \"builtin:NAME\" (crypto-keystore|bypass-validation|api-trace|basic-method-trace), or \"library:NAME\" (common-hooks etc.). Real requires --allow-frida (Intrusive). Dry-run safe.")]
     pub frida_script: Vec<String>,
-    #[arg(long, help = "Explicit confirmation for Frida instrumentation (required for any non-dry-run Frida operations; recorded for audit). Real Frida also needs frida CLI + frida-server on device.")]
+    #[arg(
+        long,
+        help = "Explicit confirmation for Frida instrumentation (required for any non-dry-run Frida operations; recorded for audit). Real Frida also needs frida CLI + frida-server on device."
+    )]
     pub allow_frida: bool,
 
     // Phase 3c behavioral regression + evidence bundle
-    #[arg(long, value_name = "FILE", help = "Path to prior baseline JSON (MobileBaseline) for regression diff vs current run (Phase 3c). Dry-run safe.")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Path to prior baseline JSON (MobileBaseline) for regression diff vs current run (Phase 3c). Dry-run safe."
+    )]
     pub baseline: Option<String>,
-    #[arg(long, value_name = "FILE", help = "Path to write gzipped evidence bundle (report + traffic + frida + actions) after run (Phase 3c, optional). Uses flate2.")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Path to write gzipped evidence bundle (report + traffic + frida + actions) after run (Phase 3c, optional). Uses flate2."
+    )]
     pub evidence_bundle: Option<String>,
 }

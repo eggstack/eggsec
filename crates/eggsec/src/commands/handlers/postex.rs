@@ -2,10 +2,7 @@ use crate::commands::handlers::CommandContext;
 use crate::config::OperationDescriptor;
 use anyhow::Result;
 
-pub async fn handle_postex(
-    ctx: &CommandContext,
-    args: crate::cli::PostexArgs,
-) -> Result<()> {
+pub async fn handle_postex(ctx: &CommandContext, args: crate::cli::PostexArgs) -> Result<()> {
     ctx.evaluate_and_enforce_operation(OperationDescriptor {
         operation: "postex".to_string(),
         mode: crate::config::OperationMode::DefenseLab,

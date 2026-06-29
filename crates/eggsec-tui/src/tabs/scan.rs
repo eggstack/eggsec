@@ -303,8 +303,12 @@ impl TabRender for ScanTab {
             .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
-        let Some(config_area) = chunks.first() else { return; };
-        let Some(main_area) = chunks.get(1) else { return; };
+        let Some(config_area) = chunks.first() else {
+            return;
+        };
+        let Some(main_area) = chunks.get(1) else {
+            return;
+        };
 
         let input_inner = crate::tabs::core::render_config_block(
             f,
@@ -422,7 +426,8 @@ impl TabRender for ScanTab {
         if let Some(ref err) = self.error {
             crate::tabs::core::render_error_block(f, output_area, "Output", err);
         } else if !self.results_view.is_empty() {
-            self.results_view.render(f, output_area, Some(results_border));
+            self.results_view
+                .render(f, output_area, Some(results_border));
         } else {
             let placeholder =
                 empty_state_paragraph("Current Stage Output", "Stage output will appear here");
@@ -695,9 +700,7 @@ impl TabInput for ScanTab {
             self.output_selector.move_next();
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
             self.scroll_output_down();
-        } else if self.focus_area == ScanFocusArea::Results
-            && self.results_view.is_empty()
-        {
+        } else if self.focus_area == ScanFocusArea::Results && self.results_view.is_empty() {
             self.focus_area = ScanFocusArea::Inputs;
             self.inputs.focus(0);
         } else if self.focus_area == ScanFocusArea::Inputs && !self.inputs.is_focused() {

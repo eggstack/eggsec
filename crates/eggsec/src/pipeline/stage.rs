@@ -157,15 +157,23 @@ impl Stage {
             "vuln" | "vulnerability" | "vuln-assess" => Some(Stage::Vuln),
             "db" | "dbpentest" | "db-pentest" => {
                 #[cfg(feature = "db-pentest")]
-                { Some(Stage::DbPentest) }
+                {
+                    Some(Stage::DbPentest)
+                }
                 #[cfg(not(feature = "db-pentest"))]
-                { None }
+                {
+                    None
+                }
             }
             "proxy" | "webproxy" | "web-proxy" | "intercept" => {
                 #[cfg(feature = "web-proxy")]
-                { Some(Stage::WebProxy) }
+                {
+                    Some(Stage::WebProxy)
+                }
                 #[cfg(not(feature = "web-proxy"))]
-                { None }
+                {
+                    None
+                }
             }
             _ => None,
         }
@@ -240,7 +248,9 @@ pub fn profile_from_str(s: &str) -> Option<crate::cli::ScanProfile> {
         "waf-regression" => Some(crate::cli::ScanProfile::WafRegression),
         "protocol-edge" => Some(crate::cli::ScanProfile::ProtocolEdge),
         "nse-safe" => Some(crate::cli::ScanProfile::NseSafe),
-        "db-regression" | "db_regression" | "dbregression" => Some(crate::cli::ScanProfile::DbRegression),
+        "db-regression" | "db_regression" | "dbregression" => {
+            Some(crate::cli::ScanProfile::DbRegression)
+        }
         "web-proxy" | "webproxy" | "proxy" => Some(crate::cli::ScanProfile::WebProxy),
         _ => None,
     }
@@ -364,7 +374,10 @@ mod tests {
             Some(ScanProfile::ProtocolEdge)
         );
         assert_eq!(profile_from_str("nse-safe"), Some(ScanProfile::NseSafe));
-        assert_eq!(profile_from_str("db-regression"), Some(ScanProfile::DbRegression));
+        assert_eq!(
+            profile_from_str("db-regression"),
+            Some(ScanProfile::DbRegression)
+        );
     }
 
     #[test]

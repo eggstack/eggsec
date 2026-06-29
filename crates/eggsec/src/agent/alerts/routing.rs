@@ -251,8 +251,8 @@ impl AlertRouter {
         if let Some(ref secret) = config.secret {
             let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
                 .expect("HMAC-SHA256 accepts any key size");
-            let canonical_json = serde_json::to_string(&payload)
-                .context("Failed to serialize webhook payload")?;
+            let canonical_json =
+                serde_json::to_string(&payload).context("Failed to serialize webhook payload")?;
             mac.update(canonical_json.as_bytes());
             let result = mac.finalize();
             let signature = format!("sha256={}", hex::encode(result.into_bytes()));

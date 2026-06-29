@@ -252,7 +252,10 @@ mod tests {
     fn waf_stress_primary_target() {
         let mut tab = WafStressTab::new();
         tab.core.inputs.fields[0].value = "https://example.com".to_string();
-        assert_eq!(tab.primary_target(), Some("https://example.com".to_string()));
+        assert_eq!(
+            tab.primary_target(),
+            Some("https://example.com".to_string())
+        );
     }
 
     #[test]
@@ -265,7 +268,9 @@ mod tests {
         assert!(copied.unwrap().is_empty());
 
         // With content, copy returns the content
-        tab.core.results_view.add_line(ratatui::text::Line::from("test"));
+        tab.core
+            .results_view
+            .add_line(ratatui::text::Line::from("test"));
         let copied = tab.handle_copy();
         assert!(copied.is_some());
         assert!(copied.unwrap().contains("test"));

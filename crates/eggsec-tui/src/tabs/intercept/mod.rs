@@ -7,12 +7,12 @@ use eggsec::proxy::intercept::correlation::{
     BehavioralPattern, ConfidenceScorer, CorrelationContext, CorrelationEngine, CorrelationSource,
     TemporalCorrelation,
 };
+#[cfg(test)]
+use eggsec::proxy::intercept::protocols::WebSocketOpcode;
 use eggsec::proxy::intercept::protocols::{
     GrpcCall, GrpcSession, GrpcStreamFrame, GrpcStreamingState, Http2Session, Http2Stream,
     WebSocketMessage, WebSocketSession,
 };
-#[cfg(test)]
-use eggsec::proxy::intercept::protocols::WebSocketOpcode;
 use eggsec::proxy::intercept::types::{
     FlowAction, InterceptSession, ManipulationRecord, ProxyFlow,
 };
@@ -25,18 +25,23 @@ use ratatui::{
 };
 
 mod render;
-mod types;
-mod utils;
 #[cfg(test)]
 mod tests;
+mod types;
+mod utils;
 
 pub use types::*;
-use utils::{truncate_str, format_bytes};
+use utils::{format_bytes, truncate_str};
 
 #[macro_export]
 macro_rules! inner {
     ($area:expr, $margin:expr) => {
-        Rect::new($area.x + $margin, $area.y + $margin, $area.width - $margin * 2, $area.height - $margin * 2)
+        Rect::new(
+            $area.x + $margin,
+            $area.y + $margin,
+            $area.width - $margin * 2,
+            $area.height - $margin * 2,
+        )
     };
 }
 
@@ -332,19 +337,17 @@ impl InterceptTab {
 
     /// Get a summary line for streaming state.
     pub fn grpc_streaming_summary(&self, streaming_idx: usize) -> Option<String> {
-        self.grpc_streaming_states
-            .get(streaming_idx)
-            .map(|s| {
-                let summary = s.summary();
-                format!(
-                    "{:?}: {} client / {} server frames, {} bytes (window: {})",
-                    summary.method_type,
-                    summary.client_frame_count,
-                    summary.server_frame_count,
-                    summary.total_bytes,
-                    summary.flow_control_window,
-                )
-            })
+        self.grpc_streaming_states.get(streaming_idx).map(|s| {
+            let summary = s.summary();
+            format!(
+                "{:?}: {} client / {} server frames, {} bytes (window: {})",
+                summary.method_type,
+                summary.client_frame_count,
+                summary.server_frame_count,
+                summary.total_bytes,
+                summary.flow_control_window,
+            )
+        })
     }
 
     /// Compute correlation summary as a string.
@@ -366,7 +369,9 @@ impl InterceptTab {
 
     /// Recompute temporal and behavioral correlations from the current context.
     pub fn recompute_correlations(&mut self) {
-        let (temporal, behavioral) = self.correlation_engine.correlate(&mut self.correlation_context);
+        let (temporal, behavioral) = self
+            .correlation_engine
+            .correlate(&mut self.correlation_context);
         self.temporal_correlations = temporal;
         self.behavioral_matches = behavioral;
     }
@@ -463,7 +468,8 @@ impl InterceptTab {
     /// Cycle to the next gRPC session.
     pub fn next_grpc_session(&mut self) {
         if !self.grpc_sessions.is_empty() {
-            self.selected_grpc_session = (self.selected_grpc_session + 1) % self.grpc_sessions.len();
+            self.selected_grpc_session =
+                (self.selected_grpc_session + 1) % self.grpc_sessions.len();
             self.stream_mux_scroll = 0;
         }
     }
@@ -490,10 +496,12 @@ impl InterceptTab {
             .iter()
             .enumerate()
             .filter(|(_, f)| match self.filter_field {
-                0 => f.method.to_lowercase().contains(&q)
-                    || f.host.to_lowercase().contains(&q)
-                    || f.path.to_lowercase().contains(&q)
-                    || f.response_status.to_string().contains(&q),
+                0 => {
+                    f.method.to_lowercase().contains(&q)
+                        || f.host.to_lowercase().contains(&q)
+                        || f.path.to_lowercase().contains(&q)
+                        || f.response_status.to_string().contains(&q)
+                }
                 1 => f.method.to_lowercase().contains(&q),
                 2 => f.host.to_lowercase().contains(&q),
                 3 => f.path.to_lowercase().contains(&q),
@@ -559,7 +567,9 @@ impl InterceptTab {
     }
 
     pub fn apply_edit(&mut self) {
-        if self.edit_modal.state != EditModalState::EditingValue && self.edit_modal.state != EditModalState::DiffPreview {
+        if self.edit_modal.state != EditModalState::EditingValue
+            && self.edit_modal.state != EditModalState::DiffPreview
+        {
             return;
         }
 
@@ -605,9 +615,17 @@ impl InterceptTab {
                     Some(EditTarget::Path) => "path".to_string(),
                     None => "unknown".to_string(),
                 },
-                before: if before.is_empty() { None } else { Some(before) },
+                before: if before.is_empty() {
+                    None
+                } else {
+                    Some(before)
+                },
                 after: if after.is_empty() { None } else { Some(after) },
-                reason: if reason.is_empty() { "manual edit".to_string() } else { reason },
+                reason: if reason.is_empty() {
+                    "manual edit".to_string()
+                } else {
+                    reason
+                },
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
 
@@ -748,11 +766,13 @@ impl InterceptTab {
                                 ));
                             }
                             Err(e) => {
-                                self.error = Some(TabError::Unknown(format!("Failed to write HAR: {}", e)));
+                                self.error =
+                                    Some(TabError::Unknown(format!("Failed to write HAR: {}", e)));
                             }
                         },
                         Err(e) => {
-                            self.error = Some(TabError::Unknown(format!("Failed to serialize HAR: {}", e)));
+                            self.error =
+                                Some(TabError::Unknown(format!("Failed to serialize HAR: {}", e)));
                         }
                     }
                 }
@@ -857,16 +877,21 @@ impl TabRender for InterceptTab {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3), // status bar
-                Constraint::Min(8),   // flow list + detail (split horizontal)
+                Constraint::Min(8),    // flow list + detail (split horizontal)
                 Constraint::Length(3), // action bar
             ])
             .split(area);
 
         if area.width < 60 || area.height < 15 {
             let too_small = ratatui::widgets::Paragraph::new(
-                "Terminal too small for Intercept tab.\nNeed at least 60x15."
+                "Terminal too small for Intercept tab.\nNeed at least 60x15.",
             )
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(error))).title(" Too Small "))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(tc!(error)))
+                    .title(" Too Small "),
+            )
             .style(Style::default().fg(tc!(error)));
             f.render_widget(too_small, area);
             return;
@@ -878,9 +903,21 @@ impl TabRender for InterceptTab {
 
         // Status bar with enforcement posture badge
         let posture_badge = if self.dry_run {
-            Span::styled(" DRY-RUN ", Style::default().fg(tc!(background)).bg(tc!(success)).add_modifier(Modifier::BOLD))
+            Span::styled(
+                " DRY-RUN ",
+                Style::default()
+                    .fg(tc!(background))
+                    .bg(tc!(success))
+                    .add_modifier(Modifier::BOLD),
+            )
         } else if self.state == AppState::Running {
-            Span::styled(" LIVE ", Style::default().fg(tc!(background)).bg(tc!(warning)).add_modifier(Modifier::BOLD))
+            Span::styled(
+                " LIVE ",
+                Style::default()
+                    .fg(tc!(background))
+                    .bg(tc!(warning))
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
             Span::styled(" IDLE ", Style::default().fg(tc!(muted)))
         };
@@ -888,11 +925,18 @@ impl TabRender for InterceptTab {
         let status_text = format!(
             " {} | {} | Flows: {} | {}{}{}",
             self.listen_addr,
-            if self.state == AppState::Running { "ACTIVE" } else { "IDLE" },
+            if self.state == AppState::Running {
+                "ACTIVE"
+            } else {
+                "IDLE"
+            },
             self.flows.len(),
             if self.dry_run { "DRY-RUN" } else { "LIVE" },
             if self.performance_mode {
-                format!(" | PERF | ~{}", format_bytes(self.estimate_memory_usage() as u64))
+                format!(
+                    " | PERF | ~{}",
+                    format_bytes(self.estimate_memory_usage() as u64)
+                )
             } else {
                 String::new()
             },
@@ -904,9 +948,21 @@ impl TabRender for InterceptTab {
                 String::new()
             }
         );
-        let status = ratatui::widgets::Paragraph::new(Line::from(vec![posture_badge, Span::raw(status_text)]))
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))).title(" Status "))
-        .style(Style::default().fg(if self.state == AppState::Running { tc!(success) } else { tc!(text) }));
+        let status = ratatui::widgets::Paragraph::new(Line::from(vec![
+            posture_badge,
+            Span::raw(status_text),
+        ]))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(tc!(border)))
+                .title(" Status "),
+        )
+        .style(Style::default().fg(if self.state == AppState::Running {
+            tc!(success)
+        } else {
+            tc!(text)
+        }));
         f.render_widget(status, status_area);
 
         // Content: flow list (left) + detail pane (right)
@@ -922,7 +978,18 @@ impl TabRender for InterceptTab {
         self.render_flow_list(f, flow_area);
 
         // Detail pane tabs
-        let tab_names = ["Headers", "Body", "Manipulations", "Rules", "Timeline", "WS", "H2", "gRPC", "Mux", "Corr"];
+        let tab_names = [
+            "Headers",
+            "Body",
+            "Manipulations",
+            "Rules",
+            "Timeline",
+            "WS",
+            "H2",
+            "gRPC",
+            "Mux",
+            "Corr",
+        ];
         let tab_line: Vec<Span> = tab_names
             .iter()
             .enumerate()
@@ -1227,4 +1294,3 @@ impl DetailPane {
         }
     }
 }
-

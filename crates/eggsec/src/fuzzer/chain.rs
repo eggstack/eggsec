@@ -186,7 +186,9 @@ impl ChainExecutor {
                     status_code: None,
                     response_time_ms: 0,
                     extracted_vars: FxHashMap::default(),
-                    error: Some("Conditional action reached execute_single_action unexpectedly".into()),
+                    error: Some(
+                        "Conditional action reached execute_single_action unexpectedly".into(),
+                    ),
                 }
             }
         }

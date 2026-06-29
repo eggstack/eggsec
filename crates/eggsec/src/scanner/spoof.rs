@@ -452,8 +452,9 @@ pub fn build_fragmented_packets(
         }
 
         ipv4_packet.set_fragment_offset(
-            i.try_into()
-                .map_err(|_| EggsecError::Runtime("fragment offset too large for u16".to_string()))?,
+            i.try_into().map_err(|_| {
+                EggsecError::Runtime("fragment offset too large for u16".to_string())
+            })?,
         );
         ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
         ipv4_packet.set_source(src_ip);

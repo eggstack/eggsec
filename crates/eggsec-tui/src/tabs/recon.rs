@@ -78,11 +78,7 @@ impl ReconTab {
     }
 
     pub fn get_options(&self) -> ReconOptions {
-        let checked: Vec<bool> = self
-            .option_checkboxes
-            .iter()
-            .map(|cb| cb.checked)
-            .collect();
+        let checked: Vec<bool> = self.option_checkboxes.iter().map(|cb| cb.checked).collect();
         ReconOptions::from_checkboxes(&checked)
     }
 
@@ -350,8 +346,12 @@ impl TabRender for ReconTab {
         if visible_rows > 0 {
             let row_offset = self.options_window_start(visible_rows);
             let row_constraints = vec![Constraint::Length(1); visible_rows];
-            let Some(left_chunk) = option_chunks.first() else { return; };
-            let Some(right_chunk) = option_chunks.get(1) else { return; };
+            let Some(left_chunk) = option_chunks.first() else {
+                return;
+            };
+            let Some(right_chunk) = option_chunks.get(1) else {
+                return;
+            };
             let left_options = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(row_constraints.clone())

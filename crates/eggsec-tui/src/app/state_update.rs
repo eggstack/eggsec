@@ -29,11 +29,10 @@ impl super::App {
 
         // Handle theme reload request from Settings tab ('r' key in insert mode).
         if self.current_tab == super::tabs::Tab::Settings
-            && self.tabs.settings.take_pending_theme_reload() {
-                self.spawn_theme_loader_with_reason(
-                    super::state::ThemeLoadReason::ManualReload,
-                );
-            }
+            && self.tabs.settings.take_pending_theme_reload()
+        {
+            self.spawn_theme_loader_with_reason(super::state::ThemeLoadReason::ManualReload);
+        }
 
         // Poll background theme loading.
         if let Some(rx) = self.theme_load.rx.take() {
@@ -440,7 +439,10 @@ impl super::App {
                 for finding in &report.findings {
                     display.push_str(&format!(
                         "[{:?}] {} - {}\n  {}\n\n",
-                        finding.severity, finding.title, finding.description, finding.recommendation
+                        finding.severity,
+                        finding.title,
+                        finding.description,
+                        finding.recommendation
                     ));
                 }
                 if report.findings.is_empty() {
@@ -448,7 +450,11 @@ impl super::App {
                 }
                 self.tabs.auth.core.results_view.clear();
                 for line in display.lines() {
-                    self.tabs.auth.core.results_view.add_line(ratatui::text::Line::from(line.to_string()));
+                    self.tabs
+                        .auth
+                        .core
+                        .results_view
+                        .add_line(ratatui::text::Line::from(line.to_string()));
                 }
                 self.tabs.auth.core.state = super::tabs::AppState::Completed;
                 None
@@ -467,26 +473,58 @@ impl super::App {
             TaskResult::C2(report) => {
                 let mut display = String::new();
                 display.push_str(&format!("Target: {}\n", report.target));
-                display.push_str(&format!("Campaign: {} ({})\n", report.campaign.name, report.campaign.mitre_profile));
+                display.push_str(&format!(
+                    "Campaign: {} ({})\n",
+                    report.campaign.name, report.campaign.mitre_profile
+                ));
                 display.push_str(&format!("Dry-run: {}\n\n", report.dry_run));
-                display.push_str(&format!("Beacons: {}/{} successful\n", report.summary.successful_beacons, report.summary.total_beacons));
-                display.push_str(&format!("Tasks: {}/{} completed\n", report.summary.completed_tasks, report.summary.total_tasks));
-                display.push_str(&format!("OPSEC: {}/{}\n\n", report.summary.opsec_score, report.summary.opsec_max));
+                display.push_str(&format!(
+                    "Beacons: {}/{} successful\n",
+                    report.summary.successful_beacons, report.summary.total_beacons
+                ));
+                display.push_str(&format!(
+                    "Tasks: {}/{} completed\n",
+                    report.summary.completed_tasks, report.summary.total_tasks
+                ));
+                display.push_str(&format!(
+                    "OPSEC: {}/{}\n\n",
+                    report.summary.opsec_score, report.summary.opsec_max
+                ));
                 for phase in &report.campaign.phases {
-                    display.push_str(&format!("  Phase {}: {} - {}\n", phase.order, phase.name, phase.description));
+                    display.push_str(&format!(
+                        "  Phase {}: {} - {}\n",
+                        phase.order, phase.name, phase.description
+                    ));
                 }
                 if let Some(ref graph) = report.attack_graph {
-                    display.push_str(&format!("\nAttack Graph: {} nodes, critical path: {}\n", graph.nodes.len(), graph.critical_path.join(" -> ")));
+                    display.push_str(&format!(
+                        "\nAttack Graph: {} nodes, critical path: {}\n",
+                        graph.nodes.len(),
+                        graph.critical_path.join(" -> ")
+                    ));
                 }
                 if let Some(ref timeline) = report.timeline {
-                    display.push_str(&format!("Timeline: {} phases, {} techniques\n", timeline.total_phases, timeline.total_techniques));
+                    display.push_str(&format!(
+                        "Timeline: {} phases, {} techniques\n",
+                        timeline.total_phases, timeline.total_techniques
+                    ));
                 }
                 for finding in &report.opsec_assessment.findings {
-                    display.push_str(&format!("\n  [{:?}] {} - {:?}\n    {}\n", finding.severity, finding.description, finding.category, finding.recommendation));
+                    display.push_str(&format!(
+                        "\n  [{:?}] {} - {:?}\n    {}\n",
+                        finding.severity,
+                        finding.description,
+                        finding.category,
+                        finding.recommendation
+                    ));
                 }
                 self.tabs.c2.core.results_view.clear();
                 for line in display.lines() {
-                    self.tabs.c2.core.results_view.add_line(ratatui::text::Line::from(line.to_string()));
+                    self.tabs
+                        .c2
+                        .core
+                        .results_view
+                        .add_line(ratatui::text::Line::from(line.to_string()));
                 }
                 self.tabs.c2.core.state = super::tabs::AppState::Completed;
                 None

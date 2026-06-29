@@ -235,11 +235,7 @@ mod tests {
             &mut super::super::browser::BrowserTab::new().core,
         );
         #[cfg(feature = "nse")]
-        assert_tab_core_inputs(
-            "NSE",
-            "core",
-            &mut super::super::nse::NseTab::new().core,
-        );
+        assert_tab_core_inputs("NSE", "core", &mut super::super::nse::NseTab::new().core);
         #[cfg(feature = "vuln-management")]
         assert_tab_core_inputs("Vuln", "core", &mut super::super::vuln::VulnTab::new().core);
         #[cfg(feature = "wireless")]

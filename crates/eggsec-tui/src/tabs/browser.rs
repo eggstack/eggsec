@@ -417,11 +417,7 @@ impl TabInput for BrowserTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        crate::tabs::core::is_input_focused(
-            self.focus_area,
-            StandardFocusArea::Inputs,
-            &self.core,
-        )
+        crate::tabs::core::is_input_focused(self.focus_area, StandardFocusArea::Inputs, &self.core)
     }
 
     fn page_up(&mut self, page_size: usize) {

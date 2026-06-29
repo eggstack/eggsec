@@ -51,26 +51,38 @@ mod tests {
     #[test]
     fn luminance_black_is_zero() {
         let lum = relative_luminance(Color::Rgb(0, 0, 0));
-        assert!((lum - 0.0).abs() < 1e-10, "black luminance should be 0.0, got {lum}");
+        assert!(
+            (lum - 0.0).abs() < 1e-10,
+            "black luminance should be 0.0, got {lum}"
+        );
     }
 
     #[test]
     fn luminance_white_is_one() {
         let lum = relative_luminance(Color::Rgb(255, 255, 255));
-        assert!((lum - 1.0).abs() < 1e-10, "white luminance should be 1.0, got {lum}");
+        assert!(
+            (lum - 1.0).abs() < 1e-10,
+            "white luminance should be 1.0, got {lum}"
+        );
     }
 
     #[test]
     fn contrast_ratio_black_vs_white() {
         let ratio = contrast_ratio(Color::Rgb(0, 0, 0), Color::Rgb(255, 255, 255));
-        assert!((ratio - 21.0).abs() < 1e-10, "black/white ratio should be 21.0, got {ratio}");
+        assert!(
+            (ratio - 21.0).abs() < 1e-10,
+            "black/white ratio should be 21.0, got {ratio}"
+        );
     }
 
     #[test]
     fn contrast_ratio_same_color_is_one() {
         let c = Color::Rgb(128, 64, 32);
         let ratio = contrast_ratio(c, c);
-        assert!((ratio - 1.0).abs() < 1e-10, "same-color ratio should be 1.0, got {ratio}");
+        assert!(
+            (ratio - 1.0).abs() < 1e-10,
+            "same-color ratio should be 1.0, got {ratio}"
+        );
     }
 
     #[test]
@@ -96,6 +108,9 @@ mod tests {
     #[test]
     fn non_rgb_colors_default_to_neutral() {
         let lum = relative_luminance(Color::Reset);
-        assert!((lum - 0.5).abs() < 1e-10, "non-RGB should default to 0.5, got {lum}");
+        assert!(
+            (lum - 0.5).abs() < 1e-10,
+            "non-RGB should default to 0.5, got {lum}"
+        );
     }
 }

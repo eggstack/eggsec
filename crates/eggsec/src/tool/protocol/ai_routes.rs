@@ -38,7 +38,10 @@ fn placeholder_sqli_payloads(vuln_type: &str) -> Vec<String> {
     vec![
         format!("' OR 1=1 -- (example {} payload)", vuln_type),
         format!("\"; DROP TABLE users; -- (example {} payload)", vuln_type),
-        format!("<script>alert('xss')</script> (example {} payload)", vuln_type),
+        format!(
+            "<script>alert('xss')</script> (example {} payload)",
+            vuln_type
+        ),
     ]
 }
 
@@ -147,10 +150,16 @@ async fn suggest_payloads(
     let (status, payloads) = if let Some(ref client) = state.ai_client {
         match client.suggest_payloads(&req.vuln_type, &context).await {
             Ok(payloads) => ("success".to_string(), payloads),
-            Err(_) => ("partial".to_string(), placeholder_sqli_payloads(&req.vuln_type)),
+            Err(_) => (
+                "partial".to_string(),
+                placeholder_sqli_payloads(&req.vuln_type),
+            ),
         }
     } else {
-        ("placeholder".to_string(), placeholder_sqli_payloads(&req.vuln_type))
+        (
+            "placeholder".to_string(),
+            placeholder_sqli_payloads(&req.vuln_type),
+        )
     };
 
     Ok(Json(SuggestPayloadsResponse {
@@ -201,10 +210,16 @@ async fn waf_bypass(
             .await
         {
             Ok(bypasses) => ("success".to_string(), bypasses),
-            Err(_) => ("partial".to_string(), placeholder_waf_bypass_suggestions(&req.waf_name)),
+            Err(_) => (
+                "partial".to_string(),
+                placeholder_waf_bypass_suggestions(&req.waf_name),
+            ),
         }
     } else {
-        ("placeholder".to_string(), placeholder_waf_bypass_suggestions(&req.waf_name))
+        (
+            "placeholder".to_string(),
+            placeholder_waf_bypass_suggestions(&req.waf_name),
+        )
     };
 
     Ok(Json(WafBypassResponse {

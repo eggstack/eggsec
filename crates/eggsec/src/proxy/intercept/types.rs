@@ -205,25 +205,31 @@ impl WebProxySessionReport {
         let now = chrono::Utc::now();
         self.ended_at = now.to_rfc3339();
         if let Ok(start) = chrono::DateTime::parse_from_rfc3339(&self.started_at) {
-            self.duration_ms = (now - start.with_timezone(&chrono::Utc)).num_milliseconds().max(0) as u64;
+            self.duration_ms = (now - start.with_timezone(&chrono::Utc))
+                .num_milliseconds()
+                .max(0) as u64;
         }
     }
 
     /// Save the session report to a JSON file for later resume.
     pub fn save_to_file(&self, path: &str) -> Result<(), crate::error::EggsecError> {
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to serialize session: {}", e)))?;
-        std::fs::write(path, json)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to write session file: {}", e)))?;
+        let json = serde_json::to_string_pretty(self).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to serialize session: {}", e))
+        })?;
+        std::fs::write(path, json).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to write session file: {}", e))
+        })?;
         Ok(())
     }
 
     /// Load a session report from a JSON file for resume.
     pub fn load_from_file(path: &str) -> Result<Self, crate::error::EggsecError> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to read session file: {}", e)))?;
-        serde_json::from_str(&json)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to deserialize session: {}", e)))
+        let json = std::fs::read_to_string(path).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to read session file: {}", e))
+        })?;
+        serde_json::from_str(&json).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to deserialize session: {}", e))
+        })
     }
 
     /// Merge flows from a previous session into this one (for session resume).
@@ -238,7 +244,8 @@ impl WebProxySessionReport {
         self.manipulations.extend(previous.manipulations.clone());
 
         // Merge actions performed
-        self.actions_performed.extend(previous.actions_performed.clone());
+        self.actions_performed
+            .extend(previous.actions_performed.clone());
 
         // Merge protocol sessions
         self.ws_sessions.extend(previous.ws_sessions.clone());
@@ -376,25 +383,30 @@ impl InterceptSession {
 
     /// Save the session to a JSON file.
     pub fn save_to_file(&self, path: &str) -> error::Result<()> {
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| error::EggsecError::Proxy(format!("Failed to serialize session: {}", e)))?;
-        std::fs::write(path, json)
-            .map_err(|e| error::EggsecError::Proxy(format!("Failed to write session file: {}", e)))?;
+        let json = serde_json::to_string_pretty(self).map_err(|e| {
+            error::EggsecError::Proxy(format!("Failed to serialize session: {}", e))
+        })?;
+        std::fs::write(path, json).map_err(|e| {
+            error::EggsecError::Proxy(format!("Failed to write session file: {}", e))
+        })?;
         Ok(())
     }
 
     /// Load a session from a JSON file.
     pub fn load_from_file(path: &str) -> error::Result<Self> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| error::EggsecError::Proxy(format!("Failed to read session file: {}", e)))?;
+        let json = std::fs::read_to_string(path).map_err(|e| {
+            error::EggsecError::Proxy(format!("Failed to read session file: {}", e))
+        })?;
         serde_json::from_str(&json)
             .map_err(|e| error::EggsecError::Proxy(format!("Failed to deserialize session: {}", e)))
     }
 
     /// Export the session as HAR 1.2 format.
     pub fn to_har(&self) -> HarExport {
-        let entries: Vec<HarEntry> = self.flows.iter().map(|flow| {
-            HarEntry {
+        let entries: Vec<HarEntry> = self
+            .flows
+            .iter()
+            .map(|flow| HarEntry {
                 started_date_time: flow.started_at.clone(),
                 time_ms: flow.duration_ms,
                 request: HarRequest {
@@ -402,10 +414,14 @@ impl InterceptSession {
                     url: flow.url.clone(),
                     http_version: "HTTP/1.1".to_string(),
                     cookies: Vec::new(),
-                    headers: flow.request_headers.iter().map(|(k, v)| HarNameValuePair {
-                        name: k.clone(),
-                        value: v.clone(),
-                    }).collect(),
+                    headers: flow
+                        .request_headers
+                        .iter()
+                        .map(|(k, v)| HarNameValuePair {
+                            name: k.clone(),
+                            value: v.clone(),
+                        })
+                        .collect(),
                     query_string: Vec::new(),
                     headers_size: -1,
                     body_size: flow.request_body_size as i64,
@@ -416,10 +432,14 @@ impl InterceptSession {
                     status_text: String::new(),
                     http_version: "HTTP/1.1".to_string(),
                     cookies: Vec::new(),
-                    headers: flow.response_headers.iter().map(|(k, v)| HarNameValuePair {
-                        name: k.clone(),
-                        value: v.clone(),
-                    }).collect(),
+                    headers: flow
+                        .response_headers
+                        .iter()
+                        .map(|(k, v)| HarNameValuePair {
+                            name: k.clone(),
+                            value: v.clone(),
+                        })
+                        .collect(),
                     content: HarContent {
                         size: flow.response_body_size as i64,
                         mime_type: "application/octet-stream".to_string(),
@@ -432,7 +452,10 @@ impl InterceptSession {
                     body_size: flow.response_body_size as i64,
                     comment: None,
                 },
-                cache: HarCache { before_request: None, after_request: None },
+                cache: HarCache {
+                    before_request: None,
+                    after_request: None,
+                },
                 timings: HarTimings {
                     send: 0.0,
                     wait: flow.duration_ms as f64,
@@ -442,8 +465,8 @@ impl InterceptSession {
                 server_ip_address: None,
                 connection: None,
                 comment: None,
-            }
-        }).collect();
+            })
+            .collect();
 
         HarExport {
             log: HarLog {
@@ -642,8 +665,7 @@ impl ProxyMetrics {
         // Running average: new_avg = old_avg * (n-1)/n + new_sample/n
         let n = self.total_rules_evaluated as f64;
         if n > 0.0 {
-            self.rule_eval_time_ms =
-                self.rule_eval_time_ms * ((n - 1.0) / n) + elapsed_ms / n;
+            self.rule_eval_time_ms = self.rule_eval_time_ms * ((n - 1.0) / n) + elapsed_ms / n;
         }
     }
 

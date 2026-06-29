@@ -185,7 +185,10 @@ impl RateLimiter {
         let raw_tokens = elapsed.as_secs_f64() * self.requests_per_second as f64;
         let tokens_to_add = (raw_tokens.min(f64::from(u32::MAX)) as u32).min(self.burst_size);
 
-        self.tokens = self.tokens.saturating_add(tokens_to_add).min(self.burst_size);
+        self.tokens = self
+            .tokens
+            .saturating_add(tokens_to_add)
+            .min(self.burst_size);
         self.last_refill = now;
     }
 

@@ -420,11 +420,18 @@ fn infer_tool_category(tool_id: &str) -> ToolCategory {
     match tool_id {
         "stress" | "waf-stress" | "syn-flood" | "udp-flood" | "icmp-flood" => ToolCategory::Stress,
         "proxy" | "tor" => ToolCategory::Recon,
-        "proxy-start" | "proxy-stop" | "proxy-status" | "proxy-list-flows" | "proxy-inspect-flow"
-        | "proxy-forward-flow" | "proxy-drop-flow" | "proxy-replay-flow"
-        | "proxy-add-rule" | "proxy-list-rules" | "proxy-remove-rule" | "proxy-export-session" => {
-            ToolCategory::Scanning
-        }
+        "proxy-start"
+        | "proxy-stop"
+        | "proxy-status"
+        | "proxy-list-flows"
+        | "proxy-inspect-flow"
+        | "proxy-forward-flow"
+        | "proxy-drop-flow"
+        | "proxy-replay-flow"
+        | "proxy-add-rule"
+        | "proxy-list-rules"
+        | "proxy-remove-rule"
+        | "proxy-export-session" => ToolCategory::Scanning,
         "load" | "loadtest" | "http-bench" => ToolCategory::LoadTest,
         "fuzz" | "fuzzer" | "api-fuzz" => ToolCategory::Fuzzing,
         "recon" | "recon-all" | "subdomain" => ToolCategory::Recon,
@@ -448,11 +455,18 @@ pub fn classify_tool_risk(tool_id: &str) -> crate::config::OperationRisk {
         }
         "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => OperationRisk::RawPacket,
         "proxy" | "tor" => OperationRisk::ExploitAdjacent,
-        "proxy-start" | "proxy-stop" | "proxy-status" | "proxy-list-flows" | "proxy-inspect-flow"
-        | "proxy-forward-flow" | "proxy-drop-flow" | "proxy-replay-flow"
-        | "proxy-add-rule" | "proxy-list-rules" | "proxy-remove-rule" | "proxy-export-session" => {
-            OperationRisk::TrafficInterception
-        }
+        "proxy-start"
+        | "proxy-stop"
+        | "proxy-status"
+        | "proxy-list-flows"
+        | "proxy-inspect-flow"
+        | "proxy-forward-flow"
+        | "proxy-drop-flow"
+        | "proxy-replay-flow"
+        | "proxy-add-rule"
+        | "proxy-list-rules"
+        | "proxy-remove-rule"
+        | "proxy-export-session" => OperationRisk::TrafficInterception,
         "remote" | "exec" | "ssh" => OperationRisk::RemoteExecution,
         "load" | "loadtest" | "http-bench" => OperationRisk::LoadTest,
         "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
@@ -491,9 +505,18 @@ pub fn required_capabilities_for_tool_call(
         "db-pentest" => vec![Capability::DatabaseAssessment],
         "c2" => vec![Capability::C2Simulation],
         "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
-        "proxy-start" | "proxy-stop" | "proxy-status" | "proxy-list-flows" | "proxy-inspect-flow"
-        | "proxy-forward-flow" | "proxy-drop-flow" | "proxy-replay-flow"
-        | "proxy-add-rule" | "proxy-list-rules" | "proxy-remove-rule" | "proxy-export-session" => {
+        "proxy-start"
+        | "proxy-stop"
+        | "proxy-status"
+        | "proxy-list-flows"
+        | "proxy-inspect-flow"
+        | "proxy-forward-flow"
+        | "proxy-drop-flow"
+        | "proxy-replay-flow"
+        | "proxy-add-rule"
+        | "proxy-list-rules"
+        | "proxy-remove-rule"
+        | "proxy-export-session" => {
             vec![Capability::TrafficInterception]
         }
         _ => Vec::new(),

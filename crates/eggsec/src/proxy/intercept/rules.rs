@@ -258,7 +258,12 @@ impl EnhancedRuleSet {
             if !rule.enabled {
                 continue;
             }
-            extract_prefixes(&rule.condition, &mut self.host_prefix_index, &mut self.path_prefix_index, idx);
+            extract_prefixes(
+                &rule.condition,
+                &mut self.host_prefix_index,
+                &mut self.path_prefix_index,
+                idx,
+            );
         }
     }
 
@@ -344,7 +349,9 @@ impl EnhancedRuleSet {
             let mut indices = rustc_hash::FxHashSet::default();
 
             for (prefix, idxs) in &self.host_prefix_index {
-                if context.host.starts_with(prefix.as_str()) || context.host.contains(prefix.as_str()) {
+                if context.host.starts_with(prefix.as_str())
+                    || context.host.contains(prefix.as_str())
+                {
                     for &idx in idxs {
                         indices.insert(idx);
                     }
@@ -352,7 +359,9 @@ impl EnhancedRuleSet {
             }
 
             for (prefix, idxs) in &self.path_prefix_index {
-                if context.path.starts_with(prefix.as_str()) || context.path.contains(prefix.as_str()) {
+                if context.path.starts_with(prefix.as_str())
+                    || context.path.contains(prefix.as_str())
+                {
                     for &idx in idxs {
                         indices.insert(idx);
                     }
@@ -406,10 +415,7 @@ impl EnhancedRuleSet {
     }
 
     pub fn get_tags(&self) -> Vec<&str> {
-        self.rules
-            .iter()
-            .filter_map(|r| r.tag.as_deref())
-            .collect()
+        self.rules.iter().filter_map(|r| r.tag.as_deref()).collect()
     }
 
     pub fn len(&self) -> usize {
@@ -421,18 +427,22 @@ impl EnhancedRuleSet {
     }
 
     pub fn save_to_file(&self, path: &str) -> Result<()> {
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to serialize rules: {}", e)))?;
-        std::fs::write(path, json)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to write rules file: {}", e)))?;
+        let json = serde_json::to_string_pretty(self).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to serialize rules: {}", e))
+        })?;
+        std::fs::write(path, json).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to write rules file: {}", e))
+        })?;
         Ok(())
     }
 
     pub fn load_from_file(path: &str) -> Result<Self> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to read rules file: {}", e)))?;
-        serde_json::from_str(&json)
-            .map_err(|e| crate::error::EggsecError::Proxy(format!("Failed to deserialize rules: {}", e)))
+        let json = std::fs::read_to_string(path).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to read rules file: {}", e))
+        })?;
+        serde_json::from_str(&json).map_err(|e| {
+            crate::error::EggsecError::Proxy(format!("Failed to deserialize rules: {}", e))
+        })
     }
 
     pub fn export_json(&self) -> Result<String> {
@@ -577,10 +587,7 @@ impl InterceptRule {
         }
 
         if let Some(ref header_name) = self.header_name {
-            let header_value = headers
-                .get(header_name)
-                .map(|v| v.as_str())
-                .unwrap_or("");
+            let header_value = headers.get(header_name).map(|v| v.as_str()).unwrap_or("");
             if let Some(ref value_pattern) = self.header_value_pattern {
                 if !header_value.contains(value_pattern.as_str()) {
                     return false;
@@ -840,12 +847,8 @@ priority: 100
 
     #[test]
     fn test_method_matching() {
-        let rule = InterceptRule::new(
-            "example.com".to_string(),
-            None,
-            RuleAction::Intercept,
-        )
-        .with_method("POST".to_string());
+        let rule = InterceptRule::new("example.com".to_string(), None, RuleAction::Intercept)
+            .with_method("POST".to_string());
 
         let headers = std::collections::HashMap::new();
         assert!(rule.matches_request("example.com", "/", "POST", &headers));
@@ -855,12 +858,8 @@ priority: 100
 
     #[test]
     fn test_header_matching() {
-        let rule = InterceptRule::new(
-            "example.com".to_string(),
-            None,
-            RuleAction::Intercept,
-        )
-        .with_header("Authorization".to_string(), Some("Bearer".to_string()));
+        let rule = InterceptRule::new("example.com".to_string(), None, RuleAction::Intercept)
+            .with_header("Authorization".to_string(), Some("Bearer".to_string()));
 
         let mut headers = std::collections::HashMap::new();
         headers.insert("Authorization".to_string(), "Bearer token123".to_string());
@@ -873,12 +872,8 @@ priority: 100
 
     #[test]
     fn test_intercept_rule_with_id() {
-        let rule = InterceptRule::new(
-            "example.com".to_string(),
-            None,
-            RuleAction::Block,
-        )
-        .with_id("block-evil");
+        let rule = InterceptRule::new("example.com".to_string(), None, RuleAction::Block)
+            .with_id("block-evil");
         assert_eq!(rule.id.as_deref(), Some("block-evil"));
     }
 
@@ -947,8 +942,7 @@ action: inject_response
     fn test_condition_header_contains() {
         let mut headers = HashMap::new();
         headers.insert("Authorization".to_string(), "Bearer token123".to_string());
-        let cond =
-            RuleCondition::HeaderContains("Authorization".to_string(), "Bearer".to_string());
+        let cond = RuleCondition::HeaderContains("Authorization".to_string(), "Bearer".to_string());
         let mut ctx = RuleContext::new("example.com", "/", "GET");
         ctx.headers = headers;
         assert!(cond.evaluate(&ctx));
@@ -1024,9 +1018,7 @@ action: inject_response
 
     #[test]
     fn test_condition_not() {
-        let cond = RuleCondition::Not(Box::new(RuleCondition::HostMatches(
-            "evil.com".to_string(),
-        )));
+        let cond = RuleCondition::Not(Box::new(RuleCondition::HostMatches("evil.com".to_string())));
         let ctx = RuleContext::new("good.com", "/", "GET");
         assert!(cond.evaluate(&ctx));
 

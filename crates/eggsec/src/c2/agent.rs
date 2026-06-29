@@ -149,7 +149,10 @@ pub fn simulate_agent_lifecycle(
     events.push(AgentEvent {
         timestamp: chrono::Utc::now().to_rfc3339(),
         event_type: AgentEventType::Registered,
-        detail: format!("Agent '{}' registered with beacon interval {}ms", config.name, config.beacon_interval_ms),
+        detail: format!(
+            "Agent '{}' registered with beacon interval {}ms",
+            config.name, config.beacon_interval_ms
+        ),
     });
 
     // Phase 2: Check-ins across campaign phases
@@ -165,7 +168,10 @@ pub fn simulate_agent_lifecycle(
             events.push(AgentEvent {
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 event_type: AgentEventType::CheckIn,
-                detail: format!("Check-in #{} during phase '{}'", agent.checkin_count, phase.name),
+                detail: format!(
+                    "Check-in #{} during phase '{}'",
+                    agent.checkin_count, phase.name
+                ),
             });
 
             // Generate tasks for this phase
@@ -176,7 +182,9 @@ pub fn simulate_agent_lifecycle(
                     status: TaskStatus::Simulated,
                     output: Some(format!(
                         "dry-run: {} task simulated in phase '{}' (technique: {})",
-                        task_type.as_str(), phase.name, technique
+                        task_type.as_str(),
+                        phase.name,
+                        technique
                     )),
                     mitre_technique: Some(technique.clone()),
                 };

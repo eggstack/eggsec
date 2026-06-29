@@ -113,18 +113,31 @@ impl TransparentProxy {
 
         for port in &self.config.redirect_ports {
             let rule_args = [
-                "-t", "nat", "-A", "PREROUTING",
-                "-i", &self.config.interface,
-                "-p", "tcp",
-                "--dport", &port.to_string(),
-                "-j", "REDIRECT",
-                "--to-port", &proxy_port.to_string(),
+                "-t",
+                "nat",
+                "-A",
+                "PREROUTING",
+                "-i",
+                &self.config.interface,
+                "-p",
+                "tcp",
+                "--dport",
+                &port.to_string(),
+                "-j",
+                "REDIRECT",
+                "--to-port",
+                &proxy_port.to_string(),
             ];
 
             let output = std::process::Command::new("iptables")
                 .args(&rule_args)
                 .output()
-                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables: {}", e)))?;
+                .map_err(|e| {
+                    TransparentProxyError::IptablesFailed(format!(
+                        "Failed to execute iptables: {}",
+                        e
+                    ))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -143,18 +156,31 @@ impl TransparentProxy {
 
         if self.config.intercept_dns {
             let dns_rule_args = [
-                "-t", "nat", "-A", "PREROUTING",
-                "-i", &self.config.interface,
-                "-p", "udp",
-                "--dport", "53",
-                "-j", "REDIRECT",
-                "--to-port", &proxy_port.to_string(),
+                "-t",
+                "nat",
+                "-A",
+                "PREROUTING",
+                "-i",
+                &self.config.interface,
+                "-p",
+                "udp",
+                "--dport",
+                "53",
+                "-j",
+                "REDIRECT",
+                "--to-port",
+                &proxy_port.to_string(),
             ];
 
             let output = std::process::Command::new("iptables")
                 .args(&dns_rule_args)
                 .output()
-                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables for DNS: {}", e)))?;
+                .map_err(|e| {
+                    TransparentProxyError::IptablesFailed(format!(
+                        "Failed to execute iptables for DNS: {}",
+                        e
+                    ))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -181,7 +207,10 @@ impl TransparentProxy {
 
         Ok(IptablesResult {
             success: true,
-            output: format!("{} iptables rules inserted successfully", inserted_rules.len()),
+            output: format!(
+                "{} iptables rules inserted successfully",
+                inserted_rules.len()
+            ),
             inserted_rules,
         })
     }
@@ -202,18 +231,31 @@ impl TransparentProxy {
         // Remove rules in reverse order
         for port in self.config.redirect_ports.iter().rev() {
             let rule_args = [
-                "-t", "nat", "-D", "PREROUTING",
-                "-i", &self.config.interface,
-                "-p", "tcp",
-                "--dport", &port.to_string(),
-                "-j", "REDIRECT",
-                "--to-port", &proxy_port.to_string(),
+                "-t",
+                "nat",
+                "-D",
+                "PREROUTING",
+                "-i",
+                &self.config.interface,
+                "-p",
+                "tcp",
+                "--dport",
+                &port.to_string(),
+                "-j",
+                "REDIRECT",
+                "--to-port",
+                &proxy_port.to_string(),
             ];
 
             let output = std::process::Command::new("iptables")
                 .args(&rule_args)
                 .output()
-                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables cleanup: {}", e)))?;
+                .map_err(|e| {
+                    TransparentProxyError::IptablesFailed(format!(
+                        "Failed to execute iptables cleanup: {}",
+                        e
+                    ))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -225,18 +267,31 @@ impl TransparentProxy {
 
         if self.config.intercept_dns {
             let dns_rule_args = [
-                "-t", "nat", "-D", "PREROUTING",
-                "-i", &self.config.interface,
-                "-p", "udp",
-                "--dport", "53",
-                "-j", "REDIRECT",
-                "--to-port", &proxy_port.to_string(),
+                "-t",
+                "nat",
+                "-D",
+                "PREROUTING",
+                "-i",
+                &self.config.interface,
+                "-p",
+                "udp",
+                "--dport",
+                "53",
+                "-j",
+                "REDIRECT",
+                "--to-port",
+                &proxy_port.to_string(),
             ];
 
             let output = std::process::Command::new("iptables")
                 .args(&dns_rule_args)
                 .output()
-                .map_err(|e| TransparentProxyError::IptablesFailed(format!("Failed to execute iptables DNS cleanup: {}", e)))?;
+                .map_err(|e| {
+                    TransparentProxyError::IptablesFailed(format!(
+                        "Failed to execute iptables DNS cleanup: {}",
+                        e
+                    ))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -248,7 +303,10 @@ impl TransparentProxy {
 
         self.rules_active = false;
 
-        tracing::info!("Transparent proxy: {} iptables rules removed", removed_rules.len());
+        tracing::info!(
+            "Transparent proxy: {} iptables rules removed",
+            removed_rules.len()
+        );
 
         Ok(IptablesResult {
             success: true,
@@ -279,10 +337,12 @@ impl TransparentProxy {
         let test_output = std::process::Command::new("iptables")
             .args(["-t", "nat", "-L", "PREROUTING", "-n"])
             .output()
-            .map_err(|e| TransparentProxyError::PermissionDenied(format!(
-                "Failed to check iptables permissions: {}",
-                e
-            )))?;
+            .map_err(|e| {
+                TransparentProxyError::PermissionDenied(format!(
+                    "Failed to check iptables permissions: {}",
+                    e
+                ))
+            })?;
 
         if !test_output.status.success() {
             let stderr = String::from_utf8_lossy(&test_output.stderr);

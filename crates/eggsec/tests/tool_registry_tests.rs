@@ -66,11 +66,7 @@ fn test_registry_new() {
 #[test]
 fn test_registry_register() {
     let registry = ToolRegistry::new();
-    let result = registry.register(MockTool::new(
-        "test",
-        "Test Tool",
-        ToolCategory::Recon,
-    ));
+    let result = registry.register(MockTool::new("test", "Test Tool", ToolCategory::Recon));
     assert!(result.is_ok());
 }
 
@@ -78,11 +74,7 @@ fn test_registry_register() {
 fn test_registry_register_duplicate() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new(
-            "test",
-            "Test Tool",
-            ToolCategory::Recon,
-        ))
+        .register(MockTool::new("test", "Test Tool", ToolCategory::Recon))
         .unwrap();
     let result = registry.register(MockTool::new("test", "Test Tool 2", ToolCategory::Scanning));
     assert!(result.is_err());
@@ -92,11 +84,7 @@ fn test_registry_register_duplicate() {
 fn test_registry_unregister() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new(
-            "test",
-            "Test Tool",
-            ToolCategory::Recon,
-        ))
+        .register(MockTool::new("test", "Test Tool", ToolCategory::Recon))
         .unwrap();
     let removed = registry.unregister("test");
     assert!(removed.is_some());
@@ -114,11 +102,7 @@ fn test_registry_unregister_not_found() {
 fn test_registry_get() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new(
-            "test",
-            "Test Tool",
-            ToolCategory::Recon,
-        ))
+        .register(MockTool::new("test", "Test Tool", ToolCategory::Recon))
         .unwrap();
     let tool = registry.get("test");
     assert!(tool.is_some());
@@ -136,14 +120,14 @@ fn test_registry_get_not_found() {
 fn test_registry_list() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new(
-            "test1",
-            "Test Tool 1",
-            ToolCategory::Recon,
-        ))
+        .register(MockTool::new("test1", "Test Tool 1", ToolCategory::Recon))
         .unwrap();
     registry
-        .register(MockTool::new("test2", "Test Tool 2", ToolCategory::Scanning))
+        .register(MockTool::new(
+            "test2",
+            "Test Tool 2",
+            ToolCategory::Scanning,
+        ))
         .unwrap();
 
     let tools = registry.list();
@@ -154,11 +138,7 @@ fn test_registry_list() {
 fn test_registry_list_by_category() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new(
-            "recon",
-            "Recon",
-            ToolCategory::Recon,
-        ))
+        .register(MockTool::new("recon", "Recon", ToolCategory::Recon))
         .unwrap();
     registry
         .register(MockTool::new("scan", "Scanner", ToolCategory::Scanning))
@@ -173,11 +153,7 @@ fn test_registry_list_by_category() {
 fn test_registry_categories() {
     let registry = ToolRegistry::new();
     registry
-        .register(MockTool::new(
-            "recon",
-            "Recon",
-            ToolCategory::Recon,
-        ))
+        .register(MockTool::new("recon", "Recon", ToolCategory::Recon))
         .unwrap();
     registry
         .register(MockTool::new("scan", "Scanner", ToolCategory::Scanning))
@@ -211,20 +187,18 @@ async fn test_registry_concurrent_access() {
     let registry = Arc::new(ToolRegistry::new());
 
     const IDS: [&str; 10] = [
-        "tool0", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8",
-        "tool9",
+        "tool0", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8", "tool9",
     ];
     const NAMES: [&str; 10] = [
-        "Tool 0", "Tool 1", "Tool 2", "Tool 3", "Tool 4", "Tool 5", "Tool 6", "Tool 7",
-        "Tool 8", "Tool 9",
+        "Tool 0", "Tool 1", "Tool 2", "Tool 3", "Tool 4", "Tool 5", "Tool 6", "Tool 7", "Tool 8",
+        "Tool 9",
     ];
 
     let mut handles = Vec::new();
     for (id, name) in IDS.into_iter().zip(NAMES) {
         let reg = registry.clone();
-        let handle = task::spawn(async move {
-            reg.register(MockTool::new(id, name, ToolCategory::Recon))
-        });
+        let handle =
+            task::spawn(async move { reg.register(MockTool::new(id, name, ToolCategory::Recon)) });
         handles.push(handle);
     }
 

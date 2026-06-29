@@ -257,10 +257,26 @@ pub fn get_static_help_data() -> StaticHelpData {
             title: "Auth Test".to_string(),
             content: "Authentication control validation (defense-lab only)".to_string(),
             commands: vec![
-                HelpCommand { key: "Enter".to_string(), description: "Start authentication testing".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "Esc".to_string(), description: "Stop testing".to_string(), category: "Control".to_string() },
-                HelpCommand { key: "Tab".to_string(), description: "Next field".to_string(), category: "Navigation".to_string() },
-                HelpCommand { key: "Shift+Tab".to_string(), description: "Previous field".to_string(), category: "Navigation".to_string() },
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Start authentication testing".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "Esc".to_string(),
+                    description: "Stop testing".to_string(),
+                    category: "Control".to_string(),
+                },
+                HelpCommand {
+                    key: "Tab".to_string(),
+                    description: "Next field".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Shift+Tab".to_string(),
+                    description: "Previous field".to_string(),
+                    category: "Navigation".to_string(),
+                },
             ],
         },
     );

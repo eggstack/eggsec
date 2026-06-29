@@ -105,7 +105,8 @@ pub fn build_narrative(report: &WebProxySessionReport) -> AttackNarrative {
 
     // Notable flows (errors, redirects, auth patterns)
     for flow in &report.flows {
-        if flow.response_status >= 400 || flow.response_status == 301 || flow.response_status == 302 {
+        if flow.response_status >= 400 || flow.response_status == 301 || flow.response_status == 302
+        {
             seq += 1;
             let status_desc = match flow.response_status {
                 301 | 302 => format!("redirect ({})", flow.response_status),
@@ -137,8 +138,7 @@ pub fn build_narrative(report: &WebProxySessionReport) -> AttackNarrative {
 
         // Check for auth-related headers
         if flow.request_headers.iter().any(|(k, _)| {
-            k.eq_ignore_ascii_case("authorization")
-                || k.eq_ignore_ascii_case("cookie")
+            k.eq_ignore_ascii_case("authorization") || k.eq_ignore_ascii_case("cookie")
         }) {
             seq += 1;
             events.push(NarrativeEvent {
@@ -266,7 +266,11 @@ fn build_risk_assessment(report: &WebProxySessionReport) -> String {
         findings.push(format!("{} server errors observed", error_flows));
     }
 
-    let auth_required = report.flows.iter().filter(|f| f.response_status == 401).count();
+    let auth_required = report
+        .flows
+        .iter()
+        .filter(|f| f.response_status == 401)
+        .count();
     if auth_required > 0 {
         findings.push(format!("{} 401 Unauthorized responses", auth_required));
     }
@@ -292,21 +296,15 @@ fn build_recommendations(report: &WebProxySessionReport) -> Vec<String> {
         let field_lower = m.field.to_lowercase();
         field_lower.contains("authorization") || field_lower.contains("token")
     }) {
-        recs.push(
-            "Review authentication token manipulations for credential exposure.".to_string(),
-        );
+        recs.push("Review authentication token manipulations for credential exposure.".to_string());
     }
 
     if report.flows.iter().any(|f| f.response_status == 403) {
-        recs.push(
-            "Investigate 403 Forbidden responses for access control issues.".to_string(),
-        );
+        recs.push("Investigate 403 Forbidden responses for access control issues.".to_string());
     }
 
     if report.flows.iter().any(|f| f.response_status >= 500) {
-        recs.push(
-            "Review server error responses for potential information leakage.".to_string(),
-        );
+        recs.push("Review server error responses for potential information leakage.".to_string());
     }
 
     if !report.correlation_refs.is_empty() {
@@ -410,10 +408,7 @@ mod tests {
     fn test_narrative_auth_detection() {
         let report = sample_report();
         let narrative = build_narrative(&report);
-        assert!(narrative
-            .events
-            .iter()
-            .any(|e| e.category == "flow_auth"));
+        assert!(narrative.events.iter().any(|e| e.category == "flow_auth"));
     }
 
     #[test]
@@ -439,7 +434,9 @@ mod tests {
         let report = sample_report();
         let narrative = build_narrative(&report);
         assert!(
-            narrative.risk_assessment.contains("authentication credential manipulation")
+            narrative
+                .risk_assessment
+                .contains("authentication credential manipulation")
                 || narrative.risk_assessment.contains("Elevated risk"),
             "Expected risk assessment about auth manipulation, got: {}",
             narrative.risk_assessment
@@ -469,10 +466,7 @@ mod tests {
         let narrative = build_narrative(&report);
         assert_eq!(narrative.correlations.len(), 1);
         assert!(narrative.correlations[0].contains("DbPentest"));
-        assert!(narrative
-            .events
-            .iter()
-            .any(|e| e.category == "correlation"));
+        assert!(narrative.events.iter().any(|e| e.category == "correlation"));
     }
 
     #[test]

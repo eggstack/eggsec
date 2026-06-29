@@ -40,17 +40,13 @@ pub async fn analyze_apk(path: &Path) -> Result<MobileScanReport> {
 /// secondary scans and finding construction happen here.
 fn analyze_apk_blocking(path: &Path) -> Result<MobileScanReport> {
     let start = std::time::Instant::now();
-    let mut report = MobileScanReport::new(
-        path.to_string_lossy().as_ref(),
-        MobilePlatform::Android,
-    );
+    let mut report =
+        MobileScanReport::new(path.to_string_lossy().as_ref(), MobilePlatform::Android);
 
-    let file = std::fs::File::open(path).map_err(|e| {
-        EggsecError::Validation(format!("failed to open APK: {}", e))
-    })?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| {
-        EggsecError::Validation(format!("invalid APK zip: {}", e))
-    })?;
+    let file = std::fs::File::open(path)
+        .map_err(|e| EggsecError::Validation(format!("failed to open APK: {}", e)))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| EggsecError::Validation(format!("invalid APK zip: {}", e)))?;
 
     const MAX_TOTAL_EXTRACT: u64 = 50 * 1024 * 1024; // 50 MiB safety budget
     const MAX_SINGLE_CONTENT: u64 = 128 * 1024; // per small-text scan budget
@@ -62,9 +58,9 @@ fn analyze_apk_blocking(path: &Path) -> Result<MobileScanReport> {
     let mut saw_cert = false;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| {
-            EggsecError::Validation(format!("zip entry error: {}", e))
-        })?;
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| EggsecError::Validation(format!("zip entry error: {}", e)))?;
         let raw_name = entry.name().to_string();
 
         // ZipSlip / path traversal rejection (defense in depth, matches IPA)
@@ -163,12 +159,16 @@ fn analyze_apk_blocking(path: &Path) -> Result<MobileScanReport> {
 /// On binary parse failure we fall back to the text path for resilience on unusual builds.
 fn parse_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()> {
     if data.is_empty() {
-        return Err(EggsecError::Validation("empty AndroidManifest.xml".to_string()));
+        return Err(EggsecError::Validation(
+            "empty AndroidManifest.xml".to_string(),
+        ));
     }
 
     let looks_like_text = data.first() == Some(&b'<')
         || data.starts_with(b"<?xml")
-        || data.windows(9).any(|w| w.eq_ignore_ascii_case(b"<manifest"));
+        || data
+            .windows(9)
+            .any(|w| w.eq_ignore_ascii_case(b"<manifest"));
 
     if looks_like_text {
         parse_text_manifest(data, report)
@@ -176,7 +176,10 @@ fn parse_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()> {
         match parse_binary_axml(data, report) {
             Ok(()) => Ok(()),
             Err(e) => {
-                debug!("binary AXML parse failed ({}), falling back to text scan", e);
+                debug!(
+                    "binary AXML parse failed ({}), falling back to text scan",
+                    e
+                );
                 parse_text_manifest(data, report)
             }
         }
@@ -235,10 +238,7 @@ fn parse_binary_axml(data: &[u8], report: &mut MobileScanReport) -> Result<()> {
             if body + 40 <= data.len() {
                 let raw_name = read_u32_at(data, body + 12);
                 let name_idx = if raw_name == 0 { 0xffffffff } else { raw_name };
-                let tag_name = strings
-                    .get(name_idx as usize)
-                    .cloned()
-                    .unwrap_or_default();
+                let tag_name = strings.get(name_idx as usize).cloned().unwrap_or_default();
 
                 let raw_ac = read_u32_at(data, body + 24);
                 let attr_count = if raw_ac == 0 { 0 } else { raw_ac };
@@ -285,10 +285,7 @@ fn parse_binary_axml(data: &[u8], report: &mut MobileScanReport) -> Result<()> {
             if body + 20 <= data.len() {
                 let raw_name = read_u32_at(data, body + 12);
                 let name_idx = if raw_name == 0 { 0xffffffff } else { raw_name };
-                let tag_name = strings
-                    .get(name_idx as usize)
-                    .cloned()
-                    .unwrap_or_default();
+                let tag_name = strings.get(name_idx as usize).cloned().unwrap_or_default();
                 handle_end_tag(
                     &tag_name,
                     &mut current_component,
@@ -330,7 +327,9 @@ fn extract_string_pool(data: &[u8]) -> Result<Vec<String>> {
 
         pos += chunk_size;
     }
-    Err(EggsecError::Parse("no string pool chunk found in AXML".to_string()))
+    Err(EggsecError::Parse(
+        "no string pool chunk found in AXML".to_string(),
+    ))
 }
 
 fn parse_string_pool_chunk(data: &[u8], chunk_start: usize) -> Result<Vec<String>> {
@@ -460,7 +459,9 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_string();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_string();
                 let attrs: HashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| {
@@ -470,7 +471,9 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                         a.ok()
                     })
                     .map(|a| {
-                        let k = std::str::from_utf8(a.key.as_ref()).unwrap_or("").to_string();
+                        let k = std::str::from_utf8(a.key.as_ref())
+                            .unwrap_or("")
+                            .to_string();
                         let v = a.unescape_value().unwrap_or_default().to_string();
                         let key = k.trim_start_matches("android:").to_string();
                         (key, v)
@@ -499,7 +502,9 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                     }
                     "activity" | "service" | "receiver" | "provider" => {
                         let name = attrs.get("name").cloned().unwrap_or_default();
-                        let exported = attrs.get("exported").map(|v| v.eq_ignore_ascii_case("true"));
+                        let exported = attrs
+                            .get("exported")
+                            .map(|v| v.eq_ignore_ascii_case("true"));
                         current_component = Some(Component {
                             kind: tag.clone(),
                             name,
@@ -518,7 +523,9 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
             Ok(Event::Empty(e)) => {
                 // Self-closing component tags (e.g. <provider .../>) never produce an End event.
                 // We must handle them immediately.
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_string();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_string();
                 let attrs: HashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| {
@@ -528,16 +535,23 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                         a.ok()
                     })
                     .map(|a| {
-                        let k = std::str::from_utf8(a.key.as_ref()).unwrap_or("").to_string();
+                        let k = std::str::from_utf8(a.key.as_ref())
+                            .unwrap_or("")
+                            .to_string();
                         let v = a.unescape_value().unwrap_or_default().to_string();
                         let key = k.trim_start_matches("android:").to_string();
                         (key, v)
                     })
                     .collect();
 
-                if matches!(tag.as_str(), "activity" | "service" | "receiver" | "provider") {
+                if matches!(
+                    tag.as_str(),
+                    "activity" | "service" | "receiver" | "provider"
+                ) {
                     let name = attrs.get("name").cloned().unwrap_or_default();
-                    let exported = attrs.get("exported").map(|v| v.eq_ignore_ascii_case("true"));
+                    let exported = attrs
+                        .get("exported")
+                        .map(|v| v.eq_ignore_ascii_case("true"));
                     let comp = Component {
                         kind: tag,
                         name,
@@ -587,7 +601,11 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
 
 /// Application-level attribute handling (shared by binary and text paths).
 fn handle_application_attrs(attrs: &HashMap<String, String>, report: &mut MobileScanReport) {
-    if attrs.get("debuggable").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+    if attrs
+        .get("debuggable")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
         add_finding(
             report,
             "manifest",
@@ -599,7 +617,9 @@ fn handle_application_attrs(attrs: &HashMap<String, String>, report: &mut Mobile
         );
     }
 
-    let allow_backup = attrs.get("allowBackup").map(|v| v.eq_ignore_ascii_case("true"));
+    let allow_backup = attrs
+        .get("allowBackup")
+        .map(|v| v.eq_ignore_ascii_case("true"));
     if allow_backup == Some(true) || allow_backup.is_none() {
         add_finding(
             report,
@@ -612,7 +632,11 @@ fn handle_application_attrs(attrs: &HashMap<String, String>, report: &mut Mobile
         );
     }
 
-    if attrs.get("usesCleartextTraffic").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+    if attrs
+        .get("usesCleartextTraffic")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
         add_finding(
             report,
             "manifest",
@@ -624,7 +648,11 @@ fn handle_application_attrs(attrs: &HashMap<String, String>, report: &mut Mobile
         );
     }
 
-    if attrs.get("testOnly").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+    if attrs
+        .get("testOnly")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
         add_finding(
             report,
             "manifest",
@@ -654,7 +682,11 @@ fn handle_application_attrs(attrs: &HashMap<String, String>, report: &mut Mobile
         }
     }
 
-    if attrs.get("exported").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+    if attrs
+        .get("exported")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
         add_finding(
             report,
             "manifest",
@@ -686,7 +718,9 @@ fn handle_permission(name: &str, report: &mut MobileScanReport) {
         "android.permission.RECEIVE_MMS",
     ];
 
-    if DANGEROUS.iter().any(|&d| name.eq_ignore_ascii_case(d) || name.ends_with(d.split('.').next_back().unwrap_or(name))) {
+    if DANGEROUS.iter().any(|&d| {
+        name.eq_ignore_ascii_case(d) || name.ends_with(d.split('.').next_back().unwrap_or(name))
+    }) {
         add_finding(
             report,
             "permission",
@@ -728,7 +762,9 @@ fn handle_start_tag(
         }
         "activity" | "service" | "receiver" | "provider" => {
             let name = attrs.get("name").cloned().unwrap_or_default();
-            let exported = attrs.get("exported").map(|v| v.eq_ignore_ascii_case("true"));
+            let exported = attrs
+                .get("exported")
+                .map(|v| v.eq_ignore_ascii_case("true"));
             *current = Some(Component {
                 kind: tag.to_string(),
                 name,
@@ -801,7 +837,9 @@ fn handle_component_end(c: Component, report: &mut MobileScanReport) {
 /// Parse a referenced network_security_config.xml (text XML) for cleartext and user CA anchors.
 fn parse_network_security_config(data: &[u8], report: &mut MobileScanReport) {
     let text = String::from_utf8_lossy(data).to_lowercase();
-    if text.contains("cleartexttrafficpermitted=\"true\"") || text.contains("cleartexttrafficpermitted=true") {
+    if text.contains("cleartexttrafficpermitted=\"true\"")
+        || text.contains("cleartexttrafficpermitted=true")
+    {
         add_finding(
             report,
             "network-config",
@@ -830,14 +868,24 @@ fn parse_network_security_config(data: &[u8], report: &mut MobileScanReport) {
 fn scan_text_for_secrets_and_storage(file: &str, content: &str, report: &mut MobileScanReport) {
     let lower = content.to_ascii_lowercase();
     let secret_markers = [
-        "api_key", "apikey", "api-key",
-        "secret", "secret_key", "secretkey",
-        "access_token", "accesstoken",
-        "private_key", "privatekey", "private-key",
-        "aws_access", "aws_secret",
+        "api_key",
+        "apikey",
+        "api-key",
+        "secret",
+        "secret_key",
+        "secretkey",
+        "access_token",
+        "accesstoken",
+        "private_key",
+        "privatekey",
+        "private-key",
+        "aws_access",
+        "aws_secret",
         "bearer ",
-        "password", "passwd",
-        "auth_token", "authtoken",
+        "password",
+        "passwd",
+        "auth_token",
+        "authtoken",
     ];
 
     for marker in &secret_markers {
@@ -863,7 +911,8 @@ fn scan_text_for_secrets_and_storage(file: &str, content: &str, report: &mut Mob
 
     if lower.contains("mode_world_readable")
         || lower.contains("mode_world_writeable")
-        || (lower.contains("getsharedpreferences") && (lower.contains("mode_world") || lower.contains(", 0)") || lower.contains(",0)")))
+        || (lower.contains("getsharedpreferences")
+            && (lower.contains("mode_world") || lower.contains(", 0)") || lower.contains(",0)")))
     {
         add_finding(
             report,
@@ -880,7 +929,9 @@ fn scan_text_for_secrets_and_storage(file: &str, content: &str, report: &mut Mob
 /// Basic debug signing detection from the raw bytes of a META-INF certificate file.
 fn check_cert_for_debug(name: &str, bytes: &[u8], report: &mut MobileScanReport) {
     let lower_ascii = String::from_utf8_lossy(bytes).to_ascii_lowercase();
-    if lower_ascii.contains("android debug") || (lower_ascii.contains("debug") && lower_ascii.contains("cert")) {
+    if lower_ascii.contains("android debug")
+        || (lower_ascii.contains("debug") && lower_ascii.contains("cert"))
+    {
         add_finding(
             report,
             "signing",
@@ -943,7 +994,9 @@ fn read_u32_at(data: &[u8], off: usize) -> u32 {
 #[inline]
 fn read_u32_at_mut(data: &[u8], pos: &mut usize) -> Result<u32> {
     if *pos + 4 > data.len() {
-        return Err(EggsecError::Parse("AXML truncated while reading u32".to_string()));
+        return Err(EggsecError::Parse(
+            "AXML truncated while reading u32".to_string(),
+        ));
     }
     let v = u32::from_le_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
     *pos += 4;
@@ -969,7 +1022,8 @@ mod tests {
             zw.write_all(manifest.as_bytes()).unwrap();
             // small asset that should trigger the secret scanner
             zw.start_file("res/values/secrets.xml", opts).unwrap();
-            zw.write_all(b"<string name=\"api_key\">sk_live_1234567890abcdef</string>").unwrap();
+            zw.write_all(b"<string name=\"api_key\">sk_live_1234567890abcdef</string>")
+                .unwrap();
             zw.finish().unwrap();
         }
         let tmp = NamedTempFile::new().unwrap();
@@ -1010,7 +1064,9 @@ mod tests {
         assert!(titles.iter().any(|t| t.contains("Backup allowed")));
         assert!(titles.iter().any(|t| t.contains("Cleartext HTTP")));
         assert!(titles.iter().any(|t| t.contains("testOnly")));
-        assert!(titles.iter().any(|t| t.contains("Dangerous permission") && t.contains("READ_SMS")));
+        assert!(titles
+            .iter()
+            .any(|t| t.contains("Dangerous permission") && t.contains("READ_SMS")));
         assert!(titles.iter().any(|t| t.contains("Exported activity")));
         assert!(titles.iter().any(|t| t.contains("Exported provider")));
         assert!(titles.iter().any(|t| t.contains("Hardcoded secret")));
@@ -1059,19 +1115,23 @@ mod tests {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
             let opts = zip::write::FileOptions::<()>::default();
             zw.start_file("AndroidManifest.xml", opts).unwrap();
-            zw.write_all(b"<manifest package=\"p\"><application/></manifest>").unwrap();
+            zw.write_all(b"<manifest package=\"p\"><application/></manifest>")
+                .unwrap();
 
-            zw.start_file("res/xml/network_security_config.xml", opts).unwrap();
+            zw.start_file("res/xml/network_security_config.xml", opts)
+                .unwrap();
             zw.write_all(
                 br#"<network-security-config>
                      <base-config cleartextTrafficPermitted="true">
                        <trust-anchors><certificates src="user"/></trust-anchors>
                      </base-config>
                    </network-security-config>"#,
-            ).unwrap();
+            )
+            .unwrap();
 
             zw.start_file("shared_prefs_leak.txt", opts).unwrap();
-            zw.write_all(b"MODE_WORLD_READABLE getSharedPreferences(ctx, 0)").unwrap();
+            zw.write_all(b"MODE_WORLD_READABLE getSharedPreferences(ctx, 0)")
+                .unwrap();
 
             zw.finish().unwrap();
         }
@@ -1079,7 +1139,11 @@ mod tests {
         std::fs::write(tmp.path(), &archive).unwrap();
 
         let report = analyze_apk(tmp.path()).await.unwrap();
-        let cats: Vec<_> = report.findings.iter().map(|f| f.category.as_str()).collect();
+        let cats: Vec<_> = report
+            .findings
+            .iter()
+            .map(|f| f.category.as_str())
+            .collect();
         assert!(cats.iter().any(|c| *c == "network-config"));
         assert!(cats.iter().any(|c| *c == "insecure-storage"));
     }
@@ -1090,26 +1154,26 @@ mod tests {
     const MINIMAL_BINARY_AXML: &[u8] = &[
         0x03, 0x00, 0x08, 0x00, 0x44, 0x00, 0x00, 0x00, // outer XML chunk
         0x01, 0x00, 0x1c, 0x00, 0x34, 0x00, 0x00, 0x00, // string pool
-        0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x12, 0x00, 0x00, 0x00,
-        0x1c, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00,
+        0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x12, 0x00,
+        0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00,
         // strings (UTF-16LE)
-        b'm',0,b'a',0,b'n',0,b'i',0,b'f',0,b'e',0,b's',0,b't',0,0,0,
-        b'p',0,b'a',0,b'c',0,b'k',0,b'a',0,b'g',0,b'e',0,0,0,
-        b'a',0,b'p',0,b'p',0,b'l',0,b'i',0,b'c',0,b'a',0,b't',0,b'i',0,b'o',0,b'n',0,0,0,
-        b'd',0,b'e',0,b'b',0,b'u',0,b'g',0,b'g',0,b'a',0,b'b',0,b'l',0,b'e',0,0,0,
-        b't',0,b'r',0,b'u',0,b'e',0,0,0,
-        // manifest start tag (abbreviated)
-        0x02,0x01,0x10,0x00,0x20,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-        0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x14,0x00,0x00,0x00,
-        0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-        0xff,0xff,0xff,0xff,0x01,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x02,0x00,0x00,0x00,
+        b'm', 0, b'a', 0, b'n', 0, b'i', 0, b'f', 0, b'e', 0, b's', 0, b't', 0, 0, 0, b'p', 0, b'a',
+        0, b'c', 0, b'k', 0, b'a', 0, b'g', 0, b'e', 0, 0, 0, b'a', 0, b'p', 0, b'p', 0, b'l', 0,
+        b'i', 0, b'c', 0, b'a', 0, b't', 0, b'i', 0, b'o', 0, b'n', 0, 0, 0, b'd', 0, b'e', 0,
+        b'b', 0, b'u', 0, b'g', 0, b'g', 0, b'a', 0, b'b', 0, b'l', 0, b'e', 0, 0, 0, b't', 0,
+        b'r', 0, b'u', 0, b'e', 0, 0, 0, // manifest start tag (abbreviated)
+        0x02, 0x01, 0x10, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x14, 0x00,
+        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+        0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
         // application start tag with debuggable=true (typed bool)
-        0x02,0x01,0x10,0x00,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-        0xff,0xff,0xff,0xff,0x02,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x14,0x00,0x00,0x00,
-        0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-        0xff,0xff,0xff,0xff,0x03,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0x12,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
+        0x02, 0x01, 0x10, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xff, 0xff, 0xff, 0xff, 0x02, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x14, 0x00,
+        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0x03, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+        0x12, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
     ];
 
     #[tokio::test]
@@ -1133,7 +1197,15 @@ mod tests {
     #[test]
     fn add_finding_populates_report() {
         let mut r = MobileScanReport::new("t.apk", MobilePlatform::Android);
-        add_finding(&mut r, "test", Severity::High, "Title", "Desc", "Rec", Some("ev".into()));
+        add_finding(
+            &mut r,
+            "test",
+            Severity::High,
+            "Title",
+            "Desc",
+            "Rec",
+            Some("ev".into()),
+        );
         assert_eq!(r.findings.len(), 1);
         assert_eq!(r.findings[0].severity, Severity::High);
     }

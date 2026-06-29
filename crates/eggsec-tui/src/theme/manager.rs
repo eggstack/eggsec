@@ -273,15 +273,60 @@ impl ThemeManager {
         let mut warnings = Vec::new();
 
         let pairs = [
-            ("text", "background", theme.colors.text, theme.colors.background),
-            ("selected_text", "selected", theme.colors.selected_text, theme.colors.selected),
-            ("text_dim", "background", theme.colors.text_dim, theme.colors.background),
-            ("warning", "background", theme.colors.warning, theme.colors.background),
-            ("error", "background", theme.colors.error, theme.colors.background),
-            ("success", "background", theme.colors.success, theme.colors.background),
-            ("mode_normal", "background", theme.colors.mode_normal, theme.colors.background),
-            ("mode_insert", "background", theme.colors.mode_insert, theme.colors.background),
-            ("focus_input", "background", theme.colors.focus_input, theme.colors.background),
+            (
+                "text",
+                "background",
+                theme.colors.text,
+                theme.colors.background,
+            ),
+            (
+                "selected_text",
+                "selected",
+                theme.colors.selected_text,
+                theme.colors.selected,
+            ),
+            (
+                "text_dim",
+                "background",
+                theme.colors.text_dim,
+                theme.colors.background,
+            ),
+            (
+                "warning",
+                "background",
+                theme.colors.warning,
+                theme.colors.background,
+            ),
+            (
+                "error",
+                "background",
+                theme.colors.error,
+                theme.colors.background,
+            ),
+            (
+                "success",
+                "background",
+                theme.colors.success,
+                theme.colors.background,
+            ),
+            (
+                "mode_normal",
+                "background",
+                theme.colors.mode_normal,
+                theme.colors.background,
+            ),
+            (
+                "mode_insert",
+                "background",
+                theme.colors.mode_insert,
+                theme.colors.background,
+            ),
+            (
+                "focus_input",
+                "background",
+                theme.colors.focus_input,
+                theme.colors.background,
+            ),
         ];
 
         for (fg_name, bg_name, fg, bg) in pairs {
@@ -556,7 +601,8 @@ mod tests {
     #[test]
     fn mark_theme_fallback_adjusted() {
         let mut manager = ThemeManager::new();
-        let warnings = vec!["text/background contrast ratio 2.5:1 is below 4.5:1 minimum".to_string()];
+        let warnings =
+            vec!["text/background contrast ratio 2.5:1 is below 4.5:1 minimum".to_string()];
         manager.mark_theme_fallback_adjusted("dark", warnings.clone());
         let info = manager.get_info("dark").unwrap();
         assert_eq!(info.status, ThemeLoadStatus::FallbackAdjusted);

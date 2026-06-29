@@ -77,7 +77,10 @@ impl PipelineContext {
     }
 
     #[cfg(feature = "web-proxy")]
-    pub fn update_web_proxy_report(&mut self, report: crate::proxy::intercept::types::WebProxySessionReport) {
+    pub fn update_web_proxy_report(
+        &mut self,
+        report: crate::proxy::intercept::types::WebProxySessionReport,
+    ) {
         self.web_proxy_report = Some(report);
     }
 }

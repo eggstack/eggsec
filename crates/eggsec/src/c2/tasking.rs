@@ -17,7 +17,13 @@ pub fn task_type_for_technique_static(technique: &str) -> TaskType {
 /// Postex categories and their associated MITRE techniques that map to C2 task types.
 const POSTEX_LATERAL_TECHNIQUES: &[&str] = &["T1021.002", "T1021.001", "T1021.006", "T1090.002"];
 const POSTEX_LOTL_TECHNIQUES: &[&str] = &[
-    "T1059.001", "T1047", "T1105", "T1218.011", "T1218.007", "T1218.005", "T1218.010",
+    "T1059.001",
+    "T1047",
+    "T1105",
+    "T1218.011",
+    "T1218.007",
+    "T1218.005",
+    "T1218.010",
 ];
 const POSTEX_CREDENTIAL_TECHNIQUES: &[&str] = &["T1003", "T1555"];
 const POSTEX_PERSISTENCE_TECHNIQUES: &[&str] = &["T1547.001", "T1547.002", "T1547.003"];
@@ -28,25 +34,37 @@ fn postex_enrichment(technique: &str, phase_name: &str) -> Option<(TaskType, Tas
         Some((
             TaskType::Lateral,
             TaskStatus::Simulated,
-            format!("dry-run: postex lateral movement simulated (phase: {}, technique: {})", phase_name, technique),
+            format!(
+                "dry-run: postex lateral movement simulated (phase: {}, technique: {})",
+                phase_name, technique
+            ),
         ))
     } else if POSTEX_LOTL_TECHNIQUES.contains(&technique) {
         Some((
             TaskType::Execute,
             TaskStatus::Simulated,
-            format!("dry-run: postex LOTL technique simulated (phase: {}, technique: {})", phase_name, technique),
+            format!(
+                "dry-run: postex LOTL technique simulated (phase: {}, technique: {})",
+                phase_name, technique
+            ),
         ))
     } else if POSTEX_CREDENTIAL_TECHNIQUES.contains(&technique) {
         Some((
             TaskType::Recon,
             TaskStatus::Completed,
-            format!("dry-run: postex credential access simulated (phase: {}, technique: {})", phase_name, technique),
+            format!(
+                "dry-run: postex credential access simulated (phase: {}, technique: {})",
+                phase_name, technique
+            ),
         ))
     } else if POSTEX_PERSISTENCE_TECHNIQUES.contains(&technique) {
         Some((
             TaskType::Persist,
             TaskStatus::Simulated,
-            format!("dry-run: postex persistence mechanism simulated (phase: {}, technique: {})", phase_name, technique),
+            format!(
+                "dry-run: postex persistence mechanism simulated (phase: {}, technique: {})",
+                phase_name, technique
+            ),
         ))
     } else {
         None
@@ -59,64 +77,84 @@ fn dry_run_tasks(campaign: &C2Campaign) -> Vec<TaskResult> {
 
     for phase in &campaign.phases {
         for technique in &phase.mitre_techniques {
-            let (task_type, status, output) = if let Some(enriched) =
-                postex_enrichment(technique, &phase.name)
-            {
-                enriched
-            } else {
-                match technique.as_str() {
-                    "T1071" | "T1071.001" | "T1071.004" => (
-                        TaskType::Recon,
-                        TaskStatus::Completed,
-                        format!("dry-run: network recon completed (phase: {})", phase.name),
-                    ),
-                    "T1059" => (
-                        TaskType::Execute,
-                        TaskStatus::Simulated,
-                        format!("dry-run: command execution simulated (phase: {})", phase.name),
-                    ),
-                    "T1053" => (
-                        TaskType::Persist,
-                        TaskStatus::Simulated,
-                        format!("dry-run: scheduled task persistence simulated (phase: {})", phase.name),
-                    ),
-                    "T1570" | "T1041" => (
-                        TaskType::Exfil,
-                        TaskStatus::Simulated,
-                        format!("dry-run: data exfiltration simulated (phase: {})", phase.name),
-                    ),
-                    "T1070.006" => (
-                        TaskType::Evade,
-                        TaskStatus::Simulated,
-                        format!("dry-run: log evasion simulated (phase: {})", phase.name),
-                    ),
-                    "T1547.001" => (
-                        TaskType::Persist,
-                        TaskStatus::Simulated,
-                        format!("dry-run: registry persistence simulated (phase: {})", phase.name),
-                    ),
-                    "T1565.001" => (
-                        TaskType::Execute,
-                        TaskStatus::Simulated,
-                        format!("dry-run: data manipulation simulated (phase: {})", phase.name),
-                    ),
-                    "T1001" => (
-                        TaskType::Evade,
-                        TaskStatus::Simulated,
-                        format!("dry-run: traffic obfuscation simulated (phase: {})", phase.name),
-                    ),
-                    "T1573" | "T1573.002" => (
-                        TaskType::Recon,
-                        TaskStatus::Simulated,
-                        format!("dry-run: encrypted channel simulation (phase: {})", phase.name),
-                    ),
-                    _ => (
-                        TaskType::Execute,
-                        TaskStatus::Simulated,
-                        format!("dry-run: generic task simulated (phase: {})", phase.name),
-                    ),
-                }
-            };
+            let (task_type, status, output) =
+                if let Some(enriched) = postex_enrichment(technique, &phase.name) {
+                    enriched
+                } else {
+                    match technique.as_str() {
+                        "T1071" | "T1071.001" | "T1071.004" => (
+                            TaskType::Recon,
+                            TaskStatus::Completed,
+                            format!("dry-run: network recon completed (phase: {})", phase.name),
+                        ),
+                        "T1059" => (
+                            TaskType::Execute,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: command execution simulated (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        "T1053" => (
+                            TaskType::Persist,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: scheduled task persistence simulated (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        "T1570" | "T1041" => (
+                            TaskType::Exfil,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: data exfiltration simulated (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        "T1070.006" => (
+                            TaskType::Evade,
+                            TaskStatus::Simulated,
+                            format!("dry-run: log evasion simulated (phase: {})", phase.name),
+                        ),
+                        "T1547.001" => (
+                            TaskType::Persist,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: registry persistence simulated (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        "T1565.001" => (
+                            TaskType::Execute,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: data manipulation simulated (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        "T1001" => (
+                            TaskType::Evade,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: traffic obfuscation simulated (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        "T1573" | "T1573.002" => (
+                            TaskType::Recon,
+                            TaskStatus::Simulated,
+                            format!(
+                                "dry-run: encrypted channel simulation (phase: {})",
+                                phase.name
+                            ),
+                        ),
+                        _ => (
+                            TaskType::Execute,
+                            TaskStatus::Simulated,
+                            format!("dry-run: generic task simulated (phase: {})", phase.name),
+                        ),
+                    }
+                };
 
             results.push(TaskResult {
                 task_type,
@@ -221,10 +259,7 @@ async fn real_execute_task(target: &str, technique: &str, phase_name: &str) -> T
 
     match client
         .post(&url)
-        .body(format!(
-            "phase={},technique={}",
-            phase_name, technique
-        ))
+        .body(format!("phase={},technique={}", phase_name, technique))
         .send()
         .await
     {
@@ -303,7 +338,11 @@ async fn real_exfil_task(target: &str, technique: &str, _phase_name: &str) -> Ta
 
 /// Perform a real evade task: send decoy HTTP traffic.
 async fn real_evade_task(target: &str, technique: &str) -> TaskResult {
-    let url = format!("http://{}/decoy/{}", target, technique.to_lowercase().replace('.', "-"));
+    let url = format!(
+        "http://{}/decoy/{}",
+        target,
+        technique.to_lowercase().replace('.', "-")
+    );
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build();
@@ -408,11 +447,7 @@ async fn real_tasks(campaign: &C2Campaign, target: &str) -> Vec<TaskResult> {
 
 /// Simulate C2 tasks. Produces dry-run synthetic results or real network I/O
 /// depending on the `dry_run` flag.
-pub async fn simulate_tasks(
-    campaign: &C2Campaign,
-    target: &str,
-    dry_run: bool,
-) -> Vec<TaskResult> {
+pub async fn simulate_tasks(campaign: &C2Campaign, target: &str, dry_run: bool) -> Vec<TaskResult> {
     if dry_run {
         dry_run_tasks(campaign)
     } else {
@@ -560,8 +595,14 @@ mod tests {
             }],
         };
         let tasks = simulate_tasks(&campaign, "localhost", true).await;
-        let exfil: Vec<_> = tasks.iter().filter(|t| t.task_type == TaskType::Exfil).collect();
-        let lateral: Vec<_> = tasks.iter().filter(|t| t.task_type == TaskType::Lateral).collect();
+        let exfil: Vec<_> = tasks
+            .iter()
+            .filter(|t| t.task_type == TaskType::Exfil)
+            .collect();
+        let lateral: Vec<_> = tasks
+            .iter()
+            .filter(|t| t.task_type == TaskType::Lateral)
+            .collect();
         assert_eq!(exfil.len(), 1);
         assert_eq!(lateral.len(), 1);
     }
@@ -620,9 +661,6 @@ mod tests {
             task_type_for_technique_static("T1547.001"),
             TaskType::Persist
         );
-        assert_eq!(
-            task_type_for_technique_static("T1070.006"),
-            TaskType::Evade
-        );
+        assert_eq!(task_type_for_technique_static("T1070.006"), TaskType::Evade);
     }
 }

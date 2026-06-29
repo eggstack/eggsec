@@ -1,5 +1,7 @@
 use crate::app::tab_error::TabError;
-use crate::components::{empty_state_paragraph, Checkbox, InputGroup, ProgressGauge, ScrollableText};
+use crate::components::{
+    empty_state_paragraph, Checkbox, InputGroup, ProgressGauge, ScrollableText,
+};
 use crate::tabs::AppState;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -417,12 +419,7 @@ fn inputs_field_count(core: &TabCore) -> usize {
 /// In the Inputs area: navigates input fields (or scrolls results if unfocused).
 /// In the Results area: scrolls results up.
 /// The Options area is a no-op (callers handle selector-specific up/down).
-pub fn handle_up_2area<A: Copy + PartialEq>(
-    core: &mut TabCore,
-    current: A,
-    inputs: A,
-    results: A,
-) {
+pub fn handle_up_2area<A: Copy + PartialEq>(core: &mut TabCore, current: A, inputs: A, results: A) {
     if current == inputs {
         if !core.inputs.is_focused() && !core.results_view.is_empty() {
             core.scroll_results_up();
@@ -457,12 +454,7 @@ pub fn handle_down_2area<A: Copy + PartialEq>(
 
 /// Alias for `handle_up_2area`. The Options area is a no-op in vertical
 /// navigation, so 3-area tabs use the same logic as 2-area tabs.
-pub fn handle_up_3area<A: Copy + PartialEq>(
-    core: &mut TabCore,
-    current: A,
-    inputs: A,
-    results: A,
-) {
+pub fn handle_up_3area<A: Copy + PartialEq>(core: &mut TabCore, current: A, inputs: A, results: A) {
     handle_up_2area(core, current, inputs, results);
 }
 
@@ -512,11 +504,7 @@ pub fn is_at_left_edge_simple<A: Copy + PartialEq>(current: A, inputs: A, core: 
 }
 
 /// Common `is_at_right_edge` for Inputs/Results tabs.
-pub fn is_at_right_edge_simple<A: Copy + PartialEq>(
-    current: A,
-    inputs: A,
-    core: &TabCore,
-) -> bool {
+pub fn is_at_right_edge_simple<A: Copy + PartialEq>(current: A, inputs: A, core: &TabCore) -> bool {
     if current == inputs {
         core.inputs.is_at_right_edge()
     } else {
@@ -552,10 +540,7 @@ pub fn toggle_focused_checkbox(
 
 /// Toggle the checkbox at `focused_index` within a `Vec<Checkbox>`.
 /// Clamps the index to valid range before toggling.
-pub fn toggle_focused_checkbox_vec(
-    checkboxes: &mut [Checkbox],
-    focused_index: &mut usize,
-) -> bool {
+pub fn toggle_focused_checkbox_vec(checkboxes: &mut [Checkbox], focused_index: &mut usize) -> bool {
     if checkboxes.is_empty() {
         return false;
     }
@@ -618,7 +603,10 @@ pub fn handle_options_down_wrapping(focused_index: &mut usize, checkbox_count: u
     }
 }
 
-pub fn indexed_input_area_index<A: Copy + PartialEq>(current: A, input_areas: &[A]) -> Option<usize> {
+pub fn indexed_input_area_index<A: Copy + PartialEq>(
+    current: A,
+    input_areas: &[A],
+) -> Option<usize> {
     input_areas.iter().position(|area| *area == current)
 }
 
@@ -873,11 +861,7 @@ pub fn handle_enter_3area<A: Copy + PartialEq>(
 /// Common `handle_escape` for simple 2-area tabs (Inputs/Results).
 /// If running, stops. If in Inputs, blurs. If in Results, switches to Inputs and focuses first field.
 /// Returns the new focus area.
-pub fn handle_escape_simple<A: Copy + PartialEq>(
-    core: &mut TabCore,
-    current: A,
-    inputs: A,
-) -> A {
+pub fn handle_escape_simple<A: Copy + PartialEq>(core: &mut TabCore, current: A, inputs: A) -> A {
     if core.state == AppState::Running {
         core.stop();
         current
@@ -917,7 +901,9 @@ pub fn handle_escape_3area<A: Copy + PartialEq>(
 /// Returns the first expression from a list. Used as `first_area!(A, B, C)` -> `A`.
 #[macro_export]
 macro_rules! first_area {
-    ($first:expr $(, $rest:expr)*) => { $first };
+    ($first:expr $(, $rest:expr)*) => {
+        $first
+    };
 }
 
 /// Returns the last expression from a list. Used as `last_area!(A, B, C)` -> `C`.
@@ -938,11 +924,7 @@ macro_rules! narea_slice {
 
 /// Generic `handle_escape` for N-area tabs. If running, stops. Otherwise returns
 /// to the first area (typically Inputs) and focuses the first field.
-pub fn handle_escape_to_first<A: Copy + PartialEq>(
-    core: &mut TabCore,
-    current: A,
-    first: A,
-) -> A {
+pub fn handle_escape_to_first<A: Copy + PartialEq>(core: &mut TabCore, current: A, first: A) -> A {
     if core.state == AppState::Running {
         core.stop();
         current
@@ -1101,8 +1083,8 @@ pub fn render_results_area(
         }
         AppState::Error(_) => {
             if let Some(ref err) = error {
-                let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                    .style(theme.error());
+                let error_text =
+                    Paragraph::new(format!("Error: {}", err.message())).style(theme.error());
                 f.render_widget(error_text, area);
             }
         }
@@ -1140,7 +1122,11 @@ pub fn render_config_block(
 pub fn render_error_block(f: &mut Frame, area: Rect, title: &str, error: &TabError) {
     let theme = crate::theme::legacy::current_theme();
     let error_text = Paragraph::new(format!("Error: {}", error.message()))
-        .block(Block::default().borders(Borders::ALL).title(format!(" {} ", title)))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} ", title)),
+        )
         .style(theme.error());
     f.render_widget(error_text, area);
 }
@@ -1204,10 +1190,7 @@ pub fn render_standard_2area(
         .sum();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(input_height),
-            Constraint::Min(0),
-        ])
+        .constraints([Constraint::Length(input_height), Constraint::Min(0)])
         .split(area);
 
     let input_inner = render_config_block(
@@ -1327,7 +1310,8 @@ mod tests {
     #[test]
     fn tab_core_target_first_field() {
         let core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new().add(crate::components::InputField::new("Target").with_value("example.com")),
+            InputGroup::new()
+                .add(crate::components::InputField::new("Target").with_value("example.com")),
         );
         assert_eq!(core.target(), "example.com");
     }
@@ -1368,7 +1352,8 @@ mod tests {
         core.state = AppState::Running;
         core.progress.current = 50;
         core.progress.total = 100;
-        core.results_view.add_line(ratatui::text::Line::from("test"));
+        core.results_view
+            .add_line(ratatui::text::Line::from("test"));
         core.error = Some(TabError::Target("err".to_string()));
 
         core.reset_all();
@@ -1414,10 +1399,8 @@ mod tests {
 
     #[test]
     fn tab_input_helpers() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
 
         // char
@@ -1456,10 +1439,8 @@ mod tests {
 
     #[test]
     fn tab_input_noop_when_running() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.state = AppState::Running;
 
         tab_input_char(&mut core, 'a', true, true);
@@ -1608,21 +1589,37 @@ mod tests {
             Results,
         }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Inputs -> Options
-        let next = focus_next_3area(&mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results);
+        let next = focus_next_3area(
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+        );
         assert_eq!(next, Area::Options);
 
         // Options -> Results
-        let next = focus_next_3area(&mut core, Area::Options, Area::Inputs, Area::Options, Area::Results);
+        let next = focus_next_3area(
+            &mut core,
+            Area::Options,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+        );
         assert_eq!(next, Area::Results);
 
         // Results -> Inputs (focuses first field)
-        let next = focus_next_3area(&mut core, Area::Results, Area::Inputs, Area::Options, Area::Results);
+        let next = focus_next_3area(
+            &mut core,
+            Area::Results,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+        );
         assert_eq!(next, Area::Inputs);
         assert!(core.inputs.is_focused());
     }
@@ -1636,21 +1633,37 @@ mod tests {
             Results,
         }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Inputs -> Results (blurs)
-        let prev = focus_prev_3area(&mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results);
+        let prev = focus_prev_3area(
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+        );
         assert_eq!(prev, Area::Results);
 
         // Results -> Options
-        let prev = focus_prev_3area(&mut core, Area::Results, Area::Inputs, Area::Options, Area::Results);
+        let prev = focus_prev_3area(
+            &mut core,
+            Area::Results,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+        );
         assert_eq!(prev, Area::Options);
 
         // Options -> Inputs (focuses first field)
-        let prev = focus_prev_3area(&mut core, Area::Options, Area::Inputs, Area::Options, Area::Results);
+        let prev = focus_prev_3area(
+            &mut core,
+            Area::Options,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+        );
         assert_eq!(prev, Area::Inputs);
     }
 
@@ -1689,10 +1702,8 @@ mod tests {
 
     #[test]
     fn handle_escape_simple_blurs_when_in_inputs() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
         let result = handle_escape_simple(&mut core, 0, 0);
         assert_eq!(result, 0); // Stays in inputs area
@@ -1701,10 +1712,8 @@ mod tests {
 
     #[test]
     fn handle_escape_simple_focuses_inputs_when_from_results() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let result = handle_escape_simple(&mut core, 1, 0);
         assert_eq!(result, 0); // Returns inputs area
         assert!(core.inputs.is_focused());
@@ -1720,10 +1729,8 @@ mod tests {
 
     #[test]
     fn execute_enter_action_blur_inputs() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
         execute_enter_action(&mut core, EnterAction::BlurInputs);
         assert!(!core.inputs.is_focused());
@@ -1756,15 +1763,22 @@ mod tests {
     #[test]
     fn handle_enter_3area_results_no_op() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         handle_enter_3area(
-            &mut core, Area::Results, Area::Inputs, Area::Options, Area::Results,
-            false, false,
+            &mut core,
+            Area::Results,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+            false,
+            false,
             |_| false,
         );
         assert_eq!(core.state, AppState::Idle);
@@ -1773,13 +1787,22 @@ mod tests {
     #[test]
     fn handle_enter_3area_running_stops() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results");
         core.state = AppState::Running;
         handle_enter_3area(
-            &mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results,
-            true, false,
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+            true,
+            false,
             |_| false,
         );
         assert_eq!(core.state, AppState::Idle);
@@ -1788,16 +1811,23 @@ mod tests {
     #[test]
     fn handle_enter_3area_inputs_focused_blurs() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
         handle_enter_3area(
-            &mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results,
-            false, true,
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+            false,
+            true,
             |_| false,
         );
         assert!(!core.inputs.is_focused());
@@ -1806,7 +1836,11 @@ mod tests {
     #[test]
     fn handle_enter_3area_options_calls_action_no_start() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results").with_inputs(
             InputGroup::new()
@@ -1814,9 +1848,17 @@ mod tests {
         );
         let mut called = false;
         handle_enter_3area(
-            &mut core, Area::Options, Area::Inputs, Area::Options, Area::Results,
-            false, false,
-            |_| { called = true; false },
+            &mut core,
+            Area::Options,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+            false,
+            false,
+            |_| {
+                called = true;
+                false
+            },
         );
         assert!(called);
         assert_eq!(core.state, AppState::Idle);
@@ -1825,15 +1867,24 @@ mod tests {
     #[test]
     fn handle_enter_3area_options_starts_when_action_returns_true() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results").with_inputs(
             InputGroup::new()
                 .add(crate::components::InputField::new("Target").with_value("example.com")),
         );
         handle_enter_3area(
-            &mut core, Area::Options, Area::Inputs, Area::Options, Area::Results,
-            false, false,
+            &mut core,
+            Area::Options,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+            false,
+            false,
             |_| true,
         );
         assert_eq!(core.state, AppState::Running);
@@ -1842,15 +1893,24 @@ mod tests {
     #[test]
     fn handle_enter_3area_inputs_unfocused_starts() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results").with_inputs(
             InputGroup::new()
                 .add(crate::components::InputField::new("Target").with_value("example.com")),
         );
         handle_enter_3area(
-            &mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results,
-            false, false,
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
+            false,
+            false,
             |_| false,
         );
         assert_eq!(core.state, AppState::Running);
@@ -1859,12 +1919,20 @@ mod tests {
     #[test]
     fn handle_escape_3area_running_stops() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results");
         core.state = AppState::Running;
         let result = handle_escape_3area(
-            &mut core, Area::Options, Area::Inputs, Area::Options, Area::Results,
+            &mut core,
+            Area::Options,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
         );
         assert_eq!(result, Area::Options);
         assert_eq!(core.state, AppState::Idle);
@@ -1873,14 +1941,20 @@ mod tests {
     #[test]
     fn handle_escape_3area_options_returns_to_inputs() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let result = handle_escape_3area(
-            &mut core, Area::Options, Area::Inputs, Area::Options, Area::Results,
+            &mut core,
+            Area::Options,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
         );
         assert_eq!(result, Area::Inputs);
         assert!(core.inputs.is_focused());
@@ -1889,14 +1963,20 @@ mod tests {
     #[test]
     fn handle_escape_3area_results_returns_to_inputs() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let result = handle_escape_3area(
-            &mut core, Area::Results, Area::Inputs, Area::Options, Area::Results,
+            &mut core,
+            Area::Results,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
         );
         assert_eq!(result, Area::Inputs);
         assert!(core.inputs.is_focused());
@@ -1905,15 +1985,21 @@ mod tests {
     #[test]
     fn handle_escape_3area_inputs_blurs() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
         let result = handle_escape_3area(
-            &mut core, Area::Inputs, Area::Inputs, Area::Options, Area::Results,
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Options,
+            Area::Results,
         );
         assert_eq!(result, Area::Inputs);
         assert!(!core.inputs.is_focused());
@@ -1922,63 +2008,100 @@ mod tests {
     #[test]
     fn handle_enter_2area_results_no_op() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
+        handle_enter_2area(
+            &mut core,
+            Area::Results,
+            Area::Inputs,
+            Area::Results,
+            false,
+            false,
         );
-        handle_enter_2area(&mut core, Area::Results, Area::Inputs, Area::Results, false, false);
         assert_eq!(core.state, AppState::Idle);
     }
 
     #[test]
     fn handle_enter_2area_running_stops() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results");
         core.state = AppState::Running;
-        handle_enter_2area(&mut core, Area::Inputs, Area::Inputs, Area::Results, true, false);
+        handle_enter_2area(
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Results,
+            true,
+            false,
+        );
         assert_eq!(core.state, AppState::Idle);
     }
 
     #[test]
     fn handle_enter_2area_inputs_focused_blurs() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
-        handle_enter_2area(&mut core, Area::Inputs, Area::Inputs, Area::Results, false, true);
+        handle_enter_2area(
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Results,
+            false,
+            true,
+        );
         assert!(!core.inputs.is_focused());
     }
 
     #[test]
     fn handle_enter_2area_inputs_unfocused_starts() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results").with_inputs(
             InputGroup::new()
                 .add(crate::components::InputField::new("Target").with_value("example.com")),
         );
-        handle_enter_2area(&mut core, Area::Inputs, Area::Inputs, Area::Results, false, false);
+        handle_enter_2area(
+            &mut core,
+            Area::Inputs,
+            Area::Inputs,
+            Area::Results,
+            false,
+            false,
+        );
         assert_eq!(core.state, AppState::Running);
     }
 
     #[test]
     fn focus_next_2area_cycles_correctly() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Inputs -> Results (blurs)
         let next = focus_next_2area(&mut core, Area::Inputs, Area::Inputs, Area::Results);
@@ -1994,12 +2117,13 @@ mod tests {
     #[test]
     fn focus_prev_2area_cycles_correctly() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Inputs -> Results (blurs)
         let prev = focus_prev_2area(&mut core, Area::Inputs, Area::Inputs, Area::Results);
@@ -2014,15 +2138,17 @@ mod tests {
     #[test]
     fn handle_up_2area_scrolls_results_when_not_focused() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         // Add some content to results
         for i in 0..20 {
-            core.results_view.add_line(ratatui::text::Line::from(format!("line {}", i)));
+            core.results_view
+                .add_line(ratatui::text::Line::from(format!("line {}", i)));
         }
 
         // In Results area: up scrolls results
@@ -2035,14 +2161,16 @@ mod tests {
     #[test]
     fn handle_down_2area_scrolls_results_when_not_focused() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         for i in 0..20 {
-            core.results_view.add_line(ratatui::text::Line::from(format!("line {}", i)));
+            core.results_view
+                .add_line(ratatui::text::Line::from(format!("line {}", i)));
         }
 
         // In Results area: down scrolls results
@@ -2055,21 +2183,29 @@ mod tests {
     #[test]
     fn handle_enter_2area_running_and_results_returns_idle() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Results }
+        enum Area {
+            Inputs,
+            Results,
+        }
 
         let mut core = TabCore::new("test", "Results");
         core.state = AppState::Running;
         // Running + Results area = Stop
-        handle_enter_2area(&mut core, Area::Results, Area::Inputs, Area::Results, true, false);
+        handle_enter_2area(
+            &mut core,
+            Area::Results,
+            Area::Inputs,
+            Area::Results,
+            true,
+            false,
+        );
         assert_eq!(core.state, AppState::Idle);
     }
 
     #[test]
     fn handle_escape_simple_idempotent_when_idle_in_results() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         // In Results, idle: should focus inputs
         let result = handle_escape_simple(&mut core, 1, 0);
         assert_eq!(result, 0);
@@ -2088,16 +2224,16 @@ mod tests {
     fn handle_up_3area_delegates_to_2area() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[allow(dead_code)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core3 = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
-        let mut core2 = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core3 = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
+        let mut core2 = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Both should produce identical behavior in Inputs area
         handle_up_3area(&mut core3, Area::Inputs, Area::Inputs, Area::Results);
@@ -2114,16 +2250,16 @@ mod tests {
     fn handle_down_3area_delegates_to_2area() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[allow(dead_code)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core3 = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
-        let mut core2 = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core3 = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
+        let mut core2 = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         handle_down_3area(&mut core3, Area::Inputs, Area::Inputs, Area::Results);
         handle_down_2area(&mut core2, Area::Inputs, Area::Inputs, Area::Results);
@@ -2137,12 +2273,14 @@ mod tests {
     #[test]
     fn handle_up_3area_options_is_noop() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let state_before = core.state.clone();
         // Options area should be a no-op
         handle_up_3area(&mut core, Area::Options, Area::Inputs, Area::Results);
@@ -2152,12 +2290,14 @@ mod tests {
     #[test]
     fn handle_down_3area_options_is_noop() {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum Area { Inputs, Options, Results }
+        enum Area {
+            Inputs,
+            Options,
+            Results,
+        }
 
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let state_before = core.state.clone();
         handle_down_3area(&mut core, Area::Options, Area::Inputs, Area::Results);
         assert_eq!(core.state, state_before);
@@ -2186,10 +2326,8 @@ mod tests {
 
     #[test]
     fn focus_next_n_cycles_through_all_areas() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         let mut current = NArea::Inputs;
         let expected = [
@@ -2209,37 +2347,37 @@ mod tests {
 
     #[test]
     fn test_focus_next_n_no_blur_on_leave_inputs() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         core.inputs.focus(0);
         assert!(core.inputs.is_focused());
 
         let next = focus_next_n(&mut core, NArea::Inputs, N_AREAS);
         assert_eq!(next, NArea::Payload);
         // focus_next_n does NOT blur — blur is handled by escape/focus_prev
-        assert!(core.inputs.is_focused(), "should not blur on forward navigation");
+        assert!(
+            core.inputs.is_focused(),
+            "should not blur on forward navigation"
+        );
     }
 
     #[test]
     fn focus_next_n_focuses_on_enter_inputs() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         let current = focus_next_n(&mut core, NArea::Results, N_AREAS);
         assert_eq!(current, NArea::Inputs);
-        assert!(core.inputs.is_focused(), "should focus first field on enter Inputs");
+        assert!(
+            core.inputs.is_focused(),
+            "should focus first field on enter Inputs"
+        );
     }
 
     #[test]
     fn focus_prev_n_cycles_backwards() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         let mut current = NArea::Results;
         let expected = [
@@ -2289,12 +2427,11 @@ mod tests {
 
     #[test]
     fn handle_up_n_scrolls_results_in_results_area() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         for i in 0..20 {
-            core.results_view.add_line(ratatui::text::Line::from(format!("line {}", i)));
+            core.results_view
+                .add_line(ratatui::text::Line::from(format!("line {}", i)));
         }
 
         handle_up_n(&mut core, NArea::Results, N_AREAS);
@@ -2303,10 +2440,8 @@ mod tests {
 
     #[test]
     fn handle_down_n_in_middle_area_is_noop() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Middle area (not Inputs, not Results) should be a no-op
         handle_down_n(&mut core, NArea::Mode, N_AREAS);
@@ -2316,8 +2451,7 @@ mod tests {
     #[test]
     fn handle_left_n_in_inputs_moves_cursor() {
         let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target").with_value("test")),
+            InputGroup::new().add(crate::components::InputField::new("Target").with_value("test")),
         );
         core.inputs.focus(0);
 
@@ -2335,8 +2469,7 @@ mod tests {
     #[test]
     fn handle_right_n_in_inputs_moves_cursor() {
         let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target").with_value("test")),
+            InputGroup::new().add(crate::components::InputField::new("Target").with_value("test")),
         );
         core.inputs.focus(0);
         // Move to beginning so right actually moves
@@ -2367,8 +2500,7 @@ mod tests {
     #[test]
     fn handle_escape_to_first_in_first_area_blurs() {
         let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target").with_value("test")),
+            InputGroup::new().add(crate::components::InputField::new("Target").with_value("test")),
         );
         core.inputs.focus(0);
         assert!(core.inputs.is_focused());
@@ -2379,10 +2511,8 @@ mod tests {
 
     #[test]
     fn handle_escape_to_first_in_other_area_returns_to_first() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let result = handle_escape_to_first(&mut core, NArea::Results, NArea::Inputs);
         assert_eq!(result, NArea::Inputs);
         assert!(core.inputs.is_focused());
@@ -2394,20 +2524,29 @@ mod tests {
     fn focus_border_style_focused_uses_border_focused_color() {
         let style = focus_border_style(true);
         // Should produce a non-default style (i.e., a foreground color is set)
-        assert!(style.fg.is_some(), "focused border should have a foreground color");
+        assert!(
+            style.fg.is_some(),
+            "focused border should have a foreground color"
+        );
     }
 
     #[test]
     fn focus_border_style_unfocused_uses_border_color() {
         let style = focus_border_style(false);
-        assert!(style.fg.is_some(), "unfocused border should have a foreground color");
+        assert!(
+            style.fg.is_some(),
+            "unfocused border should have a foreground color"
+        );
     }
 
     #[test]
     fn focus_border_style_focused_and_unfocused_differ() {
         let focused = focus_border_style(true);
         let unfocused = focus_border_style(false);
-        assert_ne!(focused.fg, unfocused.fg, "focused and unfocused borders should use different colors");
+        assert_ne!(
+            focused.fg, unfocused.fg,
+            "focused and unfocused borders should use different colors"
+        );
     }
 
     // --- render_standard_2area tests ---
@@ -2418,10 +2557,8 @@ mod tests {
         use ratatui::Terminal;
 
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-        let core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let config = Render2AreaConfig {
             title: "Test",
             input_constraints: vec![Constraint::Length(3)],
@@ -2442,10 +2579,8 @@ mod tests {
         use ratatui::Terminal;
 
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-        let core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
         let config = Render2AreaConfig {
             title: "Test",
             input_constraints: vec![Constraint::Length(3)],
@@ -2506,43 +2641,75 @@ mod tests {
 
     #[test]
     fn focus_next_selector_cycles_correctly() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Selector -> Inputs
-        let next = focus_next_selector(&mut core, SelArea::Selector, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        let next = focus_next_selector(
+            &mut core,
+            SelArea::Selector,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         assert_eq!(next, SelArea::Inputs);
         assert!(core.inputs.is_focused());
 
         // Inputs -> Results
-        let next = focus_next_selector(&mut core, SelArea::Inputs, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        let next = focus_next_selector(
+            &mut core,
+            SelArea::Inputs,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         assert_eq!(next, SelArea::Results);
 
         // Results -> Selector
-        let next = focus_next_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        let next = focus_next_selector(
+            &mut core,
+            SelArea::Results,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         assert_eq!(next, SelArea::Selector);
     }
 
     #[test]
     fn focus_prev_selector_cycles_correctly() {
-        let mut core = TabCore::new("test", "Results").with_inputs(
-            InputGroup::new()
-                .add(crate::components::InputField::new("Target")),
-        );
+        let mut core = TabCore::new("test", "Results")
+            .with_inputs(InputGroup::new().add(crate::components::InputField::new("Target")));
 
         // Selector -> Results
-        let prev = focus_prev_selector(&mut core, SelArea::Selector, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        let prev = focus_prev_selector(
+            &mut core,
+            SelArea::Selector,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         assert_eq!(prev, SelArea::Results);
 
         // Results -> Inputs
-        let prev = focus_prev_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        let prev = focus_prev_selector(
+            &mut core,
+            SelArea::Results,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         assert_eq!(prev, SelArea::Inputs);
         assert!(core.inputs.is_focused());
 
         // Inputs -> Selector
-        let prev = focus_prev_selector(&mut core, SelArea::Inputs, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        let prev = focus_prev_selector(
+            &mut core,
+            SelArea::Inputs,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         assert_eq!(prev, SelArea::Selector);
     }
 
@@ -2556,7 +2723,13 @@ mod tests {
         }
         core.results_view.scroll_down(5);
 
-        handle_up_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        handle_up_selector(
+            &mut core,
+            SelArea::Results,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         // Should not panic; scroll position changed
     }
 
@@ -2569,7 +2742,13 @@ mod tests {
             core.results_view.add_line(Line::from("line"));
         }
 
-        handle_down_selector(&mut core, SelArea::Results, SelArea::Selector, SelArea::Inputs, SelArea::Results);
+        handle_down_selector(
+            &mut core,
+            SelArea::Results,
+            SelArea::Selector,
+            SelArea::Inputs,
+            SelArea::Results,
+        );
         // Should not panic
     }
 
@@ -2609,10 +2788,7 @@ mod tests {
             .add(crate::components::InputField::new("Timeout"));
 
         // Only 2 chunks for 3 fields - should not panic
-        let chunks = [
-            Rect::new(0, 0, 80, 3),
-            Rect::new(0, 3, 80, 3),
-        ];
+        let chunks = [Rect::new(0, 0, 80, 3), Rect::new(0, 3, 80, 3)];
 
         terminal
             .draw(|f| {

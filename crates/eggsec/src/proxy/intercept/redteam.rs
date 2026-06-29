@@ -52,9 +52,7 @@ mod redteam_crlf_injection {
 
         proxy.modify_request(&mut request, &modification);
 
-        assert!(!request
-            .headers
-            .contains_key("X-Custom"));
+        assert!(!request.headers.contains_key("X-Custom"));
         // The header should not be inserted at all
     }
 
@@ -88,10 +86,7 @@ mod redteam_crlf_injection {
         };
         let mut modification = super::super::interceptor::ResponseModification::default();
         let mut headers = FxHashMap::default();
-        headers.insert(
-            "X-Injected".to_string(),
-            "value\nEvil: true".to_string(),
-        );
+        headers.insert("X-Injected".to_string(), "value\nEvil: true".to_string());
         modification.headers = Some(headers);
 
         proxy.modify_response(&mut response, &modification);
@@ -109,10 +104,7 @@ mod redteam_crlf_injection {
         };
         let mut modification = super::super::interceptor::ResponseModification::default();
         let mut headers = FxHashMap::default();
-        headers.insert(
-            "X-Injected".to_string(),
-            "value\revil".to_string(),
-        );
+        headers.insert("X-Injected".to_string(), "value\revil".to_string());
         modification.headers = Some(headers);
 
         proxy.modify_response(&mut response, &modification);
@@ -236,7 +228,10 @@ mod redteam_rule_engine_adversarial {
     fn deeply_nested_or_conditions_dont_panic() {
         let mut cond = RuleCondition::HostMatches("example.com".to_string());
         for _ in 0..100 {
-            cond = RuleCondition::Or(vec![cond, RuleCondition::HostMatches("other.com".to_string())]);
+            cond = RuleCondition::Or(vec![
+                cond,
+                RuleCondition::HostMatches("other.com".to_string()),
+            ]);
         }
 
         let ctx = RuleContext::new("example.com", "/", "GET");

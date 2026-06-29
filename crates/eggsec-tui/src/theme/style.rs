@@ -263,20 +263,14 @@ mod tests {
         assert_eq!(theme.style_for_risk("passive").fg, theme.safe().fg);
         assert_eq!(theme.style_for_risk("safe").fg, theme.safe().fg);
         assert_eq!(theme.style_for_risk("intrusive").fg, theme.danger().fg);
-        assert_eq!(
-            theme.style_for_risk("administrative").fg,
-            theme.danger().fg
-        );
+        assert_eq!(theme.style_for_risk("administrative").fg, theme.danger().fg);
         assert_eq!(theme.style_for_risk("unknown").fg, theme.muted().fg);
     }
 
     #[test]
     fn style_for_policy_outcome_matches_expected() {
         let theme = test_theme();
-        assert_eq!(
-            theme.style_for_policy_outcome("allow").fg,
-            theme.safe().fg
-        );
+        assert_eq!(theme.style_for_policy_outcome("allow").fg, theme.safe().fg);
         assert_eq!(
             theme.style_for_policy_outcome("deny").fg,
             theme.policy_denied().fg
@@ -298,9 +292,6 @@ mod tests {
             theme.style_for_task_state("paused").fg,
             theme.paused_task().fg
         );
-        assert_eq!(
-            theme.style_for_task_state("idle").fg,
-            theme.muted().fg
-        );
+        assert_eq!(theme.style_for_task_state("idle").fg, theme.muted().fg);
     }
 }

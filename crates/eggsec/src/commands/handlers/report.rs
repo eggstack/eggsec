@@ -15,12 +15,16 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
             // standalone defense-lab commands (wireless/mobile) when their feature is enabled.
             // This makes `eggsec <lab> --json -o out.json ; eggsec report convert out.json -f ...` work.
             // Try native ScanReportData first, then cascade through feature-gated defense-lab bridges.
-            let report: convert::ScanReportData = if let Ok(r) = serde_json::from_str::<convert::ScanReportData>(&content) {
+            let report: convert::ScanReportData = if let Ok(r) =
+                serde_json::from_str::<convert::ScanReportData>(&content)
+            {
                 r
             } else if let Some(r) = try_bridge_defense_lab(&content) {
                 r
             } else {
-                return Err(anyhow::anyhow!("Failed to parse input as ScanReportData or any supported defense-lab format"));
+                return Err(anyhow::anyhow!(
+                    "Failed to parse input as ScanReportData or any supported defense-lab format"
+                ));
             };
 
             let output = match convert_args.format {
@@ -215,7 +219,9 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
 fn try_bridge_defense_lab(content: &str) -> Option<crate::output::convert::ScanReportData> {
     #[cfg(feature = "web-proxy")]
     {
-        if let Ok(p) = serde_json::from_str::<crate::proxy::intercept::types::WebProxySessionReport>(content) {
+        if let Ok(p) =
+            serde_json::from_str::<crate::proxy::intercept::types::WebProxySessionReport>(content)
+        {
             return Some(crate::proxy::intercept::to_scan_report_data_proxy(&p));
         }
     }
@@ -226,14 +232,18 @@ fn try_bridge_defense_lab(content: &str) -> Option<crate::output::convert::ScanR
         }
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(content) {
             if let Some(ls) = v.get("last_scan") {
-                if let Ok(w) = serde_json::from_value::<crate::wireless::WirelessScanResult>(ls.clone()) {
+                if let Ok(w) =
+                    serde_json::from_value::<crate::wireless::WirelessScanResult>(ls.clone())
+                {
                     return Some(crate::wireless::to_scan_report_data(&w));
                 }
             }
         }
         #[cfg(feature = "wireless-advanced")]
         {
-            if let Ok(a) = serde_json::from_str::<crate::wireless::active::ActiveWirelessAttackResult>(content) {
+            if let Ok(a) =
+                serde_json::from_str::<crate::wireless::active::ActiveWirelessAttackResult>(content)
+            {
                 return Some(crate::wireless::active::to_active_scan_report_data(&a));
             }
         }

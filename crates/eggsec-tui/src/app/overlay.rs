@@ -262,10 +262,7 @@ mod tests {
             "high risk",
         );
         app.request_policy_confirmation(desc, decision, None);
-        assert_eq!(
-            app.topmost_overlay(),
-            Some(OverlayType::PolicyConfirm)
-        );
+        assert_eq!(app.topmost_overlay(), Some(OverlayType::PolicyConfirm));
 
         let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
         let actions = OverlayController::new().decode(&app, &ctrl_c);

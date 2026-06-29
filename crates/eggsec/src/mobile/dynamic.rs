@@ -86,7 +86,7 @@ pub struct DynamicMobileArgs {
     pub traffic_capture: Option<String>,
 
     // Phase 3a Frida (under single mobile-dynamic; runtime gated)
-    pub frida_script: Option<String>,   // legacy single (still honored for compat)
+    pub frida_script: Option<String>, // legacy single (still honored for compat)
     pub allow_frida: bool,
 
     // Phase 3c multi-script + advanced features (all under mobile-dynamic)
@@ -113,11 +113,21 @@ pub struct MobileBaseline {
 
 /// Capture a baseline snapshot from a completed dynamic report.
 pub fn capture_baseline(report: &DynamicMobileReport) -> MobileBaseline {
-    let frida_fc = report.frida_instrumentation.as_ref().map(|fi| fi.script_results.len()).unwrap_or(0);
-    let frida_fs: Vec<String> = report.frida_instrumentation.as_ref()
-        .map(|fi| fi.script_results.iter().filter_map(|sr| {
-            sr.findings.iter().find(|f| f.contains("frida-")).cloned()
-        }).collect()).unwrap_or_default();
+    let frida_fc = report
+        .frida_instrumentation
+        .as_ref()
+        .map(|fi| fi.script_results.len())
+        .unwrap_or(0);
+    let frida_fs: Vec<String> = report
+        .frida_instrumentation
+        .as_ref()
+        .map(|fi| {
+            fi.script_results
+                .iter()
+                .filter_map(|sr| sr.findings.iter().find(|f| f.contains("frida-")).cloned())
+                .collect()
+        })
+        .unwrap_or_default();
     MobileBaseline {
         target: report.target.clone(),
         timestamp: report.timestamp.clone(),
@@ -131,31 +141,64 @@ pub fn capture_baseline(report: &DynamicMobileReport) -> MobileBaseline {
 /// Compare current report to a baseline; return human-readable regression notes.
 /// Simple structural diff (counts + presence of prior frida signals). No ML.
 /// Phase 4c (partial): also computes "new categories" delta (frida-* + dynamic finding categories) for slightly richer behavioral signal (pure, no deps).
-pub fn compare_to_baseline(current: &DynamicMobileReport, baseline: &MobileBaseline) -> Vec<String> {
+pub fn compare_to_baseline(
+    current: &DynamicMobileReport,
+    baseline: &MobileBaseline,
+) -> Vec<String> {
     let mut notes = vec![];
     if current.findings.len() as isize - baseline.findings_count as isize > 2 {
-        notes.push(format!("regression: findings increased from {} to {} (possible new behaviors)", baseline.findings_count, current.findings.len()));
+        notes.push(format!(
+            "regression: findings increased from {} to {} (possible new behaviors)",
+            baseline.findings_count,
+            current.findings.len()
+        ));
     }
     if let Some(fi) = &current.frida_instrumentation {
         if fi.script_results.len() > baseline.frida_script_count {
-            notes.push(format!("regression: more Frida scripts observed ({} vs baseline {})", fi.script_results.len(), baseline.frida_script_count));
+            notes.push(format!(
+                "regression: more Frida scripts observed ({} vs baseline {})",
+                fi.script_results.len(),
+                baseline.frida_script_count
+            ));
         }
         for f in &fi.script_results {
             for sig in &f.findings {
-                if sig.contains("frida-") && !baseline.frida_findings.iter().any(|b| b.contains(sig.split(':').next().unwrap_or(""))) {
+                if sig.contains("frida-")
+                    && !baseline
+                        .frida_findings
+                        .iter()
+                        .any(|b| b.contains(sig.split(':').next().unwrap_or("")))
+                {
                     notes.push(format!("regression: new Frida signal vs baseline: {}", sig));
                 }
             }
         }
     }
     // Phase 4c partial: lightweight category-set delta (new dynamic/frida categories vs baseline sample)
-    let current_cats: std::collections::HashSet<&str> = current.findings.iter().map(|f| f.category.as_str())
-        .chain(current.frida_instrumentation.iter().flat_map(|fi| fi.script_results.iter().flat_map(|sr| sr.findings.iter().map(|s| s.as_str()))))
+    let current_cats: std::collections::HashSet<&str> = current
+        .findings
+        .iter()
+        .map(|f| f.category.as_str())
+        .chain(current.frida_instrumentation.iter().flat_map(|fi| {
+            fi.script_results
+                .iter()
+                .flat_map(|sr| sr.findings.iter().map(|s| s.as_str()))
+        }))
         .collect();
-    let base_cats: std::collections::HashSet<&str> = baseline.frida_findings.iter().map(|s| s.as_str()).collect();
+    let base_cats: std::collections::HashSet<&str> =
+        baseline.frida_findings.iter().map(|s| s.as_str()).collect();
     let new_cats: Vec<_> = current_cats.difference(&base_cats).copied().collect();
     if !new_cats.is_empty() {
-        notes.push(format!("regression: {} new categories observed vs baseline (e.g. {})", new_cats.len(), new_cats.iter().take(3).cloned().collect::<Vec<_>>().join(", ")));
+        notes.push(format!(
+            "regression: {} new categories observed vs baseline (e.g. {})",
+            new_cats.len(),
+            new_cats
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
     if notes.is_empty() {
         notes.push("regression: no significant deviation from baseline".to_string());
@@ -178,18 +221,35 @@ pub fn export_evidence_bundle(
         "exported_at": chrono::Utc::now().to_rfc3339(),
     });
     if let Some(fi) = &report.frida_instrumentation {
-        payload["frida_structured"] = serde_json::to_value(&fi.structured_results).unwrap_or(serde_json::json!([]));
+        payload["frida_structured"] =
+            serde_json::to_value(&fi.structured_results).unwrap_or(serde_json::json!([]));
     }
     // Phase 4c: bundle manifest for report integration / consumers (additive, non-breaking)
-    let frida_structured_count = report.frida_instrumentation.as_ref().map(|fi| fi.structured_results.len()).unwrap_or(0);
-    let regression_notes_count = report.frida_instrumentation.as_ref().map(|fi| fi.regression_notes.len()).unwrap_or(0);
+    let frida_structured_count = report
+        .frida_instrumentation
+        .as_ref()
+        .map(|fi| fi.structured_results.len())
+        .unwrap_or(0);
+    let regression_notes_count = report
+        .frida_instrumentation
+        .as_ref()
+        .map(|fi| fi.regression_notes.len())
+        .unwrap_or(0);
     let has_traffic = traffic.is_some();
     let has_perm = report.permission_state.is_some();
     let mut contents: Vec<String> = vec!["report".into()];
-    if has_traffic { contents.push("traffic_summary".into()); }
-    if has_perm { contents.push("permission_state".into()); }
-    if frida_structured_count > 0 { contents.push("frida_structured".into()); }
-    if regression_notes_count > 0 { contents.push("regression_notes".into()); }
+    if has_traffic {
+        contents.push("traffic_summary".into());
+    }
+    if has_perm {
+        contents.push("permission_state".into());
+    }
+    if frida_structured_count > 0 {
+        contents.push("frida_structured".into());
+    }
+    if regression_notes_count > 0 {
+        contents.push("regression_notes".into());
+    }
     payload["bundle_manifest"] = serde_json::json!({
         "version": "1",
         "contents": contents,
@@ -199,8 +259,9 @@ pub fn export_evidence_bundle(
         "actions_count": report.actions_performed.len(),
     });
     let bytes = serde_json::to_vec_pretty(&payload)?;
-    let file = std::fs::File::create(bundle_path)
-        .map_err(|e| crate::error::EggsecError::Validation(format!("bundle create {}: {}", bundle_path, e)))?;
+    let file = std::fs::File::create(bundle_path).map_err(|e| {
+        crate::error::EggsecError::Validation(format!("bundle create {}: {}", bundle_path, e))
+    })?;
     let mut enc = flate2::write::GzEncoder::new(file, flate2::Compression::default());
     enc.write_all(&bytes)
         .map_err(|e| crate::error::EggsecError::Validation(format!("bundle write: {}", e)))?;
@@ -233,11 +294,17 @@ pub fn run_baseline_compare_workflow(
                     corr = Some(res);
                 }
             } else {
-                notes.push(format!("workflow: baseline {} had unexpected schema (ignored)", baseline_path));
+                notes.push(format!(
+                    "workflow: baseline {} had unexpected schema (ignored)",
+                    baseline_path
+                ));
             }
         }
         Err(e) => {
-            notes.push(format!("workflow: failed to read baseline {}: {}", baseline_path, e));
+            notes.push(format!(
+                "workflow: failed to read baseline {}: {}",
+                baseline_path, e
+            ));
         }
     }
     (notes, corr)
@@ -254,8 +321,13 @@ pub struct LabManifest {
 impl LabManifest {
     /// Load from TOML file (advisory semantics).
     pub fn load(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| EggsecError::Validation(format!("failed to read lab manifest {}: {}", path.display(), e)))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            EggsecError::Validation(format!(
+                "failed to read lab manifest {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
         toml::from_str(&content)
             .map_err(|e| EggsecError::Validation(format!("invalid lab manifest TOML: {}", e)))
     }
@@ -264,7 +336,7 @@ impl LabManifest {
 /// Runtime finding from dynamic execution (logcat, observed behavior).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicMobileFinding {
-    pub category: String,           // "runtime-permission", "crash-log", "cleartext-observed", "log-secret-leak", ...
+    pub category: String, // "runtime-permission", "crash-log", "cleartext-observed", "log-secret-leak", ...
     pub severity: Severity,
     pub title: String,
     pub description: String,
@@ -384,8 +456,15 @@ impl CorrelationEngine {
         let avg = if correlations.is_empty() {
             0
         } else {
-            let sum: u32 = correlations.iter().filter_map(|c| c.score.map(u32::from)).sum();
-            let cnt = correlations.iter().filter(|c| c.score.is_some()).count().max(1) as u32;
+            let sum: u32 = correlations
+                .iter()
+                .filter_map(|c| c.score.map(u32::from))
+                .sum();
+            let cnt = correlations
+                .iter()
+                .filter(|c| c.score.is_some())
+                .count()
+                .max(1) as u32;
             (sum / cnt).min(100) as u8
         };
 
@@ -440,9 +519,9 @@ fn build_timeline(static_ts: &str, dynamic_report: &DynamicMobileReport) -> Vec<
 /// Full report from a dynamic mobile run (install/launch/observe/uninstall cycle).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicMobileReport {
-    pub target: String,                 // APK path or package name
-    pub scan_type: String,              // "mobile-dynamic"
-    pub platform: MobilePlatform,       // Android only in current scope
+    pub target: String,           // APK path or package name
+    pub scan_type: String,        // "mobile-dynamic"
+    pub platform: MobilePlatform, // Android only in current scope
     pub device_serial: Option<String>,
     pub app_id: Option<String>,
     pub version: Option<String>,
@@ -501,7 +580,10 @@ impl DynamicMobileReport {
 ///   cleanup on exit path, feeds captured logs to runtime::parse_logcat_findings.
 /// - Output: --json or pretty human; -o writes to file; --quiet suppresses notes.
 /// - --allow-dynamic-mobile is accepted (policy/enforcement checked in caller/handler).
-pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::EggsecConfig) -> Result<()> {
+pub async fn run_dynamic_cli(
+    args: DynamicMobileArgs,
+    _config: &crate::config::EggsecConfig,
+) -> Result<()> {
     let start = Instant::now();
 
     // Convenience: list devices (pure-Rust probe + external adb if present).
@@ -553,9 +635,15 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
             Err(e) => {
                 if !args.quiet {
-                    eprintln!("warning: failed to load --lab-manifest {}: {}", manifest_path, e);
+                    eprintln!(
+                        "warning: failed to load --lab-manifest {}: {}",
+                        manifest_path, e
+                    );
                 }
-                actions.push(format!("lab-manifest load failed (treated as advisory): {}", e));
+                actions.push(format!(
+                    "lab-manifest load failed (treated as advisory): {}",
+                    e
+                ));
             }
         }
     }
@@ -585,7 +673,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         }
         // Dynamic-extension simulation
         if let Some(ref p) = args.proxy {
-            actions.push(format!("dry-run: would configure device global proxy {}", p));
+            actions.push(format!(
+                "dry-run: would configure device global proxy {}",
+                p
+            ));
         }
         if args.reset_proxy {
             actions.push("dry-run: would reset/clear device global proxy after run".to_string());
@@ -616,18 +707,24 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             s.total_requests = 1;
             s.cleartext_requests = 1;
             s.unique_domains.push("example.test".into());
-            s.suspicious_endpoints.push("http://example.test/login".into());
+            s.suspicious_endpoints
+                .push("http://example.test/login".into());
             traffic_sum_for_report = Some(s);
         }
-        if args.list_permissions || !args.grant_permissions.is_empty() || !args.revoke_permissions.is_empty() {
-            perm_state_for_report = Some("dry-run: simulated permission state after grant/revoke/list".to_string());
+        if args.list_permissions
+            || !args.grant_permissions.is_empty()
+            || !args.revoke_permissions.is_empty()
+        {
+            perm_state_for_report =
+                Some("dry-run: simulated permission state after grant/revoke/list".to_string());
         }
         // Include one simulated high-signal finding so report is non-empty and bridge-exercised
         findings.push(DynamicMobileFinding {
             category: "runtime-permission".to_string(),
             severity: Severity::Low,
             title: "Simulated runtime permission grant (dry-run)".to_string(),
-            description: "In a real run, logcat would show permission grant/denial events.".to_string(),
+            description: "In a real run, logcat would show permission grant/denial events."
+                .to_string(),
             recommendation: "Correlate runtime grants with static manifest analysis.".to_string(),
             evidence: Some("dry-run: simulated CAMERA grant".to_string()),
             static_correlation: None,
@@ -641,8 +738,12 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
         }
         if !all_frida_specs.is_empty() {
-            actions.push("dry-run: would connect frida to device (multi-script supported)".to_string());
-            actions.push("dry-run: would execute frida script(s) (builtin:/library:/file)".to_string());
+            actions.push(
+                "dry-run: would connect frida to device (multi-script supported)".to_string(),
+            );
+            actions.push(
+                "dry-run: would execute frida script(s) (builtin:/library:/file)".to_string(),
+            );
             if all_frida_specs.len() == 1 {
                 // Legacy single-spec rich simulation (preserves Phase 3b smoke assertions for richer carrier + multiple cats).
                 // The 3b leg invokes with one --frida-script "builtin:..." and expects >1 enabled_builtins, multiple frida-* cats, and structured.
@@ -660,7 +761,8 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     severity: Severity::Low,
                     title: "Frida bypass observation (dry-run)".to_string(),
                     description: "Would observe root/Frida detection bypass hooks.".to_string(),
-                    recommendation: "Validate detection logic under instrumentation in lab.".to_string(),
+                    recommendation: "Validate detection logic under instrumentation in lab."
+                        .to_string(),
                     evidence: None,
                     static_correlation: None,
                 });
@@ -668,7 +770,8 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     category: "frida-crypto-observation".to_string(),
                     severity: Severity::Low,
                     title: "Frida crypto/keystore observation (dry-run)".to_string(),
-                    description: "Would observe javax.crypto / KeyStore flows (redacted).".to_string(),
+                    description: "Would observe javax.crypto / KeyStore flows (redacted)."
+                        .to_string(),
                     recommendation: "Review crypto usage under instrumentation.".to_string(),
                     evidence: Some("dry-run: frida-crypto-observation [REDACTED]".to_string()),
                     static_correlation: None,
@@ -677,12 +780,17 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     category: "frida-api-trace".to_string(),
                     severity: Severity::Low,
                     title: "Frida API call trace (dry-run)".to_string(),
-                    description: "Would trace HttpURLConnection/OkHttp with redacted params.".to_string(),
-                    recommendation: "Correlate observed API calls with traffic_summary.".to_string(),
+                    description: "Would trace HttpURLConnection/OkHttp with redacted params."
+                        .to_string(),
+                    recommendation: "Correlate observed API calls with traffic_summary."
+                        .to_string(),
                     evidence: Some("dry-run: http://example.test/api [REDACTED]".to_string()),
                     static_correlation: None,
                 });
-                actions.push("dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)".to_string());
+                actions.push(
+                    "dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)"
+                        .to_string(),
+                );
                 let mut structured_ex: Vec<serde_json::Value> = vec![];
                 structured_ex.push(serde_json::json!({"type":"frida-crypto-observation","method":"Cipher.doFinal","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}));
                 structured_ex.push(serde_json::json!({"type":"frida-api-trace","params_inspected":{"url":"http://ex.test/api"}}));
@@ -705,12 +813,19 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             } else {
                 // Accurate per-spec population for true multi-script / library: / builtin: cases (Phase 3c leg).
                 for spec in &all_frida_specs {
-                    let cat = if spec.contains("crypto") || spec.contains("crypto-keystore") { "frida-crypto-observation" }
-                        else if spec.contains("bypass") { "frida-bypass-validation" }
-                        else if spec.contains("api") { "frida-api-trace" }
-                        else if spec.contains("secret") { "frida-secret-extract" }
-                        else if spec.contains("native-load") || spec.contains("native_load") { "frida-native-load" }
-                        else { "frida-method-trace" };
+                    let cat = if spec.contains("crypto") || spec.contains("crypto-keystore") {
+                        "frida-crypto-observation"
+                    } else if spec.contains("bypass") {
+                        "frida-bypass-validation"
+                    } else if spec.contains("api") {
+                        "frida-api-trace"
+                    } else if spec.contains("secret") {
+                        "frida-secret-extract"
+                    } else if spec.contains("native-load") || spec.contains("native_load") {
+                        "frida-native-load"
+                    } else {
+                        "frida-method-trace"
+                    };
                     findings.push(DynamicMobileFinding {
                         category: cat.to_string(),
                         severity: Severity::Low,
@@ -721,14 +836,23 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                         static_correlation: None,
                     });
                 }
-                actions.push("dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)".to_string());
+                actions.push(
+                    "dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)"
+                        .to_string(),
+                );
                 let mut script_results: Vec<crate::mobile::FridaScriptResult> = vec![];
                 let mut structured_results: Vec<serde_json::Value> = vec![];
                 let mut enabled: Vec<String> = vec![];
                 for spec in &all_frida_specs {
                     let is_lib = spec.starts_with("library:");
                     let is_built = spec.starts_with("builtin:");
-                    let name = if is_built { spec.strip_prefix("builtin:").unwrap_or(spec) } else if is_lib { spec.strip_prefix("library:").unwrap_or(spec) } else { spec.as_str() };
+                    let name = if is_built {
+                        spec.strip_prefix("builtin:").unwrap_or(spec)
+                    } else if is_lib {
+                        spec.strip_prefix("library:").unwrap_or(spec)
+                    } else {
+                        spec.as_str()
+                    };
                     enabled.push(name.to_string());
                     script_results.push(crate::mobile::FridaScriptResult {
                         script_source: spec.clone(),
@@ -761,10 +885,12 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         }
     } else {
         // Real execution path — device required
-        let device = args
-            .device
-            .as_ref()
-            .ok_or_else(|| EggsecError::Validation("--device (serial or host:port) is required for non-dry-run dynamic mobile".to_string()))?;
+        let device = args.device.as_ref().ok_or_else(|| {
+            EggsecError::Validation(
+                "--device (serial or host:port) is required for non-dry-run dynamic mobile"
+                    .to_string(),
+            )
+        })?;
 
         if args.install {
             let p = Path::new(&target);
@@ -781,14 +907,19 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         // This produces the audit "connected" entry and fails fast if device is unreachable.
         let _conn = crate::mobile::adb::AdbClient::connect(device)
             .await
-            .map_err(|e| EggsecError::Validation(format!("adb connect to {} failed: {}", device, e)))?;
+            .map_err(|e| {
+                EggsecError::Validation(format!("adb connect to {} failed: {}", device, e))
+            })?;
         actions.push(format!("connected to device {}", device));
 
         // Derive package for launch/uninstall (heuristic; real would parse manifest or require --package)
         let is_apk_like = target.ends_with(".apk") || Path::new(&target).exists();
         let package: String = if is_apk_like {
             if let Some(ref launch) = args.launch {
-                launch.split_once('/').map(|(p, _)| p.to_string()).unwrap_or_else(|| "com.example.dynamic".to_string())
+                launch
+                    .split_once('/')
+                    .map(|(p, _)| p.to_string())
+                    .unwrap_or_else(|| "com.example.dynamic".to_string())
             } else {
                 "com.example.dynamic".to_string()
             }
@@ -797,13 +928,16 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         };
 
         if args.install {
-            let data = tokio::fs::read(&target)
-                .await
-                .map_err(|e| EggsecError::Validation(format!("failed to read apk for install: {}", e)))?;
+            let data = tokio::fs::read(&target).await.map_err(|e| {
+                EggsecError::Validation(format!("failed to read apk for install: {}", e))
+            })?;
             let mut conn_i = crate::mobile::adb::AdbClient::connect(device)
                 .await
-                .map_err(|e| EggsecError::Validation(format!("adb connect for install failed: {}", e)))?;
-            let install_out = conn_i.install_apk(&data)
+                .map_err(|e| {
+                    EggsecError::Validation(format!("adb connect for install failed: {}", e))
+                })?;
+            let install_out = conn_i
+                .install_apk(&data)
                 .await
                 .map_err(|e| EggsecError::Validation(format!("install failed: {}", e)))?;
             actions.push(format!("install: {}", install_out.trim()));
@@ -813,7 +947,8 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             let mut conn_l = crate::mobile::adb::AdbClient::connect(device)
                 .await
                 .map_err(|e| EggsecError::Validation(e.to_string()))?;
-            conn_l.launch_app(&package, Some(activity))
+            conn_l
+                .launch_app(&package, Some(activity))
                 .await
                 .map_err(|e| EggsecError::Validation(format!("launch failed: {}", e)))?;
             actions.push(format!("launched {}", activity));
@@ -828,20 +963,29 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                 .capture_logcat(dur, Some(&package))
                 .await
                 .map_err(|e| EggsecError::Validation(format!("logcat capture failed: {}", e)))?;
-            actions.push(format!("captured {} bytes of logcat ({}s)", captured_logs.len(), dur.as_secs()));
+            actions.push(format!(
+                "captured {} bytes of logcat ({}s)",
+                captured_logs.len(),
+                dur.as_secs()
+            ));
             let parsed = crate::mobile::runtime::parse_logcat_findings(&captured_logs);
             findings.extend(parsed);
         }
 
         // Runtime permission grant/revoke + optional snapshot (before traffic/proxy for ordered audit)
-        if args.list_permissions || !args.grant_permissions.is_empty() || !args.revoke_permissions.is_empty() {
+        if args.list_permissions
+            || !args.grant_permissions.is_empty()
+            || !args.revoke_permissions.is_empty()
+        {
             let mut conn_p = crate::mobile::adb::AdbClient::connect(device)
                 .await
                 .map_err(|e| EggsecError::Validation(e.to_string()))?;
             if args.list_permissions {
                 match conn_p.list_permissions(&package).await {
                     Ok(_state) => {
-                        actions.push("permission state snapshot (list-permissions) recorded".to_string());
+                        actions.push(
+                            "permission state snapshot (list-permissions) recorded".to_string(),
+                        );
                     }
                     Err(e) => {
                         actions.push(format!("list-permissions failed (non-fatal): {}", e));
@@ -861,7 +1005,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                 }
             }
             // final snapshot if any permission work or explicit list
-            if args.list_permissions || !args.grant_permissions.is_empty() || !args.revoke_permissions.is_empty() {
+            if args.list_permissions
+                || !args.grant_permissions.is_empty()
+                || !args.revoke_permissions.is_empty()
+            {
                 if let Ok(final_state) = conn_p.list_permissions(&package).await {
                     perm_state_for_report = Some(final_state);
                     actions.push("permission state after grant/revoke/list captured".to_string());
@@ -874,7 +1021,11 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         if let Some(ref proxy_spec) = args.proxy {
             // parse host:port (lenient)
             let (host, port) = if let Some((h, pstr)) = proxy_spec.rsplit_once(':') {
-                if let Ok(p) = pstr.parse::<u16>() { (h.to_string(), p) } else { (proxy_spec.clone(), 8080) }
+                if let Ok(p) = pstr.parse::<u16>() {
+                    (h.to_string(), p)
+                } else {
+                    (proxy_spec.clone(), 8080)
+                }
             } else {
                 (proxy_spec.clone(), 8080)
             };
@@ -887,7 +1038,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     actions.push(format!("configured device global proxy {}:{}", host, port));
                 }
                 Err(e) => {
-                    actions.push(format!("set device proxy failed (non-fatal for lab): {}", e));
+                    actions.push(format!(
+                        "set device proxy failed (non-fatal for lab): {}",
+                        e
+                    ));
                 }
             }
         }
@@ -905,7 +1059,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     traffic_sum_for_report = Some(sum);
                 }
                 Err(e) => {
-                    actions.push(format!("failed to read --traffic-capture {}: {}", cap_path, e));
+                    actions.push(format!(
+                        "failed to read --traffic-capture {}: {}",
+                        cap_path, e
+                    ));
                 }
             }
         }
@@ -922,7 +1079,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     cleaned = true;
                 }
                 Err(e) => {
-                    actions.push(format!("uninstall failed (best-effort cleanup will retry): {}", e));
+                    actions.push(format!(
+                        "uninstall failed (best-effort cleanup will retry): {}",
+                        e
+                    ));
                 }
             }
         }
@@ -933,7 +1093,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                 .await
                 .map_err(|e| EggsecError::Validation(e.to_string()))?;
             let _ = conn_cl.uninstall(&package, false).await;
-            actions.push(format!("post-run cleanup: uninstall attempted for {} (best effort)", package));
+            actions.push(format!(
+                "post-run cleanup: uninstall attempted for {} (best effort)",
+                package
+            ));
         }
 
         // Reset proxy at end if requested (best-effort, after app work, before final uninstall if any)
@@ -942,7 +1105,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                 if conn_rs.clear_global_proxy().await.is_ok() {
                     actions.push("reset device global proxy (best effort)".to_string());
                 } else {
-                    actions.push("reset device global proxy attempted (may require manual clear)".to_string());
+                    actions.push(
+                        "reset device global proxy attempted (may require manual clear)"
+                            .to_string(),
+                    );
                 }
             }
         }
@@ -955,7 +1121,11 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             }
         }
         if !all_specs.is_empty() {
-            actions.push(format!("frida: connect to device {} ({} spec(s))", device, all_specs.len()));
+            actions.push(format!(
+                "frida: connect to device {} ({} spec(s))",
+                device,
+                all_specs.len()
+            ));
             match crate::mobile::frida::connect(device) {
                 Ok(sess) => {
                     actions.push(format!("frida: connected (sim={})", sess.is_simulation));
@@ -966,19 +1136,30 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                         actions.push(format!("frida: execute spec {}", spec));
                         match crate::mobile::frida::run_frida_spec(&sess, spec, &package) {
                             Ok(mut res) => {
-                                res.output = crate::mobile::frida::redact_frida_evidence(&res.output);
+                                res.output =
+                                    crate::mobile::frida::redact_frida_evidence(&res.output);
                                 if let Some(so) = &res.structured_output {
                                     structured_results.push(so.clone());
                                 }
                                 for fstr in &res.findings {
-                                     let cat = if fstr.contains("frida-method-trace") { "frida-method-trace" }
-                                         else if fstr.contains("frida-secret-extract") { "frida-secret-extract" }
-                                         else if fstr.contains("frida-bypass") { "frida-bypass-validation" }
-                                         else if fstr.contains("frida-crypto-observation") { "frida-crypto-observation" }
-                                         else if fstr.contains("frida-api-trace") { "frida-api-trace" }
-                                         else if fstr.contains("frida-native-load") { "frida-native-load" }
-                                         else { "frida-raw" };
-                                    let ev = Some(crate::mobile::frida::redact_frida_evidence(&fstr.chars().take(200).collect::<String>()));
+                                    let cat = if fstr.contains("frida-method-trace") {
+                                        "frida-method-trace"
+                                    } else if fstr.contains("frida-secret-extract") {
+                                        "frida-secret-extract"
+                                    } else if fstr.contains("frida-bypass") {
+                                        "frida-bypass-validation"
+                                    } else if fstr.contains("frida-crypto-observation") {
+                                        "frida-crypto-observation"
+                                    } else if fstr.contains("frida-api-trace") {
+                                        "frida-api-trace"
+                                    } else if fstr.contains("frida-native-load") {
+                                        "frida-native-load"
+                                    } else {
+                                        "frida-raw"
+                                    };
+                                    let ev = Some(crate::mobile::frida::redact_frida_evidence(
+                                        &fstr.chars().take(200).collect::<String>(),
+                                    ));
                                     findings.push(DynamicMobileFinding {
                                         category: cat.to_string(),
                                         severity: Severity::Low,
@@ -990,17 +1171,30 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                                     });
                                 }
                                 // track enabled for carrier
-                                let name = if spec.starts_with("builtin:") { spec.strip_prefix("builtin:").unwrap_or(spec) }
-                                    else if spec.starts_with("library:") { spec.strip_prefix("library:").unwrap_or(spec) }
-                                    else { spec.as_str() };
+                                let name = if spec.starts_with("builtin:") {
+                                    spec.strip_prefix("builtin:").unwrap_or(spec)
+                                } else if spec.starts_with("library:") {
+                                    spec.strip_prefix("library:").unwrap_or(spec)
+                                } else {
+                                    spec.as_str()
+                                };
                                 enabled.push(name.to_string());
                                 script_results.push(res);
                             }
-                            Err(e) => { actions.push(format!("frida: spec {} failed (best-effort): {}", spec, e)); }
+                            Err(e) => {
+                                actions.push(format!(
+                                    "frida: spec {} failed (best-effort): {}",
+                                    spec, e
+                                ));
+                            }
                         }
                     }
                     let fi = crate::mobile::FridaInstrumentation {
-                        note: format!("Frida instrumentation (device={}, specs={})", device, all_specs.len()),
+                        note: format!(
+                            "Frida instrumentation (device={}, specs={})",
+                            device,
+                            all_specs.len()
+                        ),
                         sessions: vec![sess.clone()],
                         script_results,
                         enabled_builtins: enabled,
@@ -1011,7 +1205,9 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                     };
                     frida_instr_for_report = Some(fi);
                 }
-                Err(e) => { actions.push(format!("frida: connect failed (best-effort): {}", e)); }
+                Err(e) => {
+                    actions.push(format!("frida: connect failed (best-effort): {}", e));
+                }
             }
         }
     }
@@ -1025,7 +1221,11 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             scan_type: "mobile-dynamic".to_string(),
             platform: MobilePlatform::Android,
             device_serial: args.device.clone(),
-            app_id: if target.ends_with(".apk") { None } else { Some(target.clone()) },
+            app_id: if target.ends_with(".apk") {
+                None
+            } else {
+                Some(target.clone())
+            },
             version: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
             findings: findings.clone(),
@@ -1041,7 +1241,10 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
             Ok(content) => {
                 if let Ok(bl) = serde_json::from_str::<MobileBaseline>(&content) {
                     let reg = compare_to_baseline(&temp_for_compare, &bl);
-                    actions.push(format!("loaded baseline from {} ({} findings)", bpath, bl.findings_count));
+                    actions.push(format!(
+                        "loaded baseline from {} ({} findings)",
+                        bpath, bl.findings_count
+                    ));
                     if let Some(ref mut fi) = frida_instr_for_report {
                         fi.regression_notes = reg.clone();
                     } else if !reg.is_empty() {
@@ -1059,14 +1262,18 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
                                 severity: Severity::Low,
                                 title: "Behavioral change vs baseline".to_string(),
                                 description: n.clone(),
-                                recommendation: "Investigate Frida/dynamic surface delta in lab.".to_string(),
+                                recommendation: "Investigate Frida/dynamic surface delta in lab."
+                                    .to_string(),
                                 evidence: Some(bpath.clone()),
                                 static_correlation: None,
                             });
                         }
                     }
                 } else {
-                    actions.push(format!("baseline {} had unexpected schema (ignored)", bpath));
+                    actions.push(format!(
+                        "baseline {} had unexpected schema (ignored)",
+                        bpath
+                    ));
                 }
             }
             Err(e) => actions.push(format!("failed to read --baseline {}: {}", bpath, e)),
@@ -1079,7 +1286,11 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         scan_type: "mobile-dynamic".to_string(),
         platform: MobilePlatform::Android,
         device_serial: args.device.clone(),
-        app_id: if target.ends_with(".apk") { None } else { Some(target.clone()) },
+        app_id: if target.ends_with(".apk") {
+            None
+        } else {
+            Some(target.clone())
+        },
         version: None,
         timestamp: chrono::Utc::now().to_rfc3339(),
         findings,
@@ -1099,9 +1310,16 @@ pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &crate::config::E
         match export_evidence_bundle(&report, tsr, bpath) {
             Ok(p) => {
                 // The action is recorded inside the bundle itself; optionally surface
-                if !report.actions_performed.iter().any(|a| a.contains("evidence bundle written")) {
+                if !report
+                    .actions_performed
+                    .iter()
+                    .any(|a| a.contains("evidence bundle written"))
+                {
                     // best-effort note (the serialized report already has the prior actions)
-                    eprintln!("(note) evidence bundle written to {} (path recorded in bundle content)", p);
+                    eprintln!(
+                        "(note) evidence bundle written to {} (path recorded in bundle content)",
+                        p
+                    );
                 }
             }
             Err(e) => {
@@ -1146,9 +1364,13 @@ fn build_dynamic_recommendations(report: &DynamicMobileReport) -> Vec<String> {
     }
     recs.push("This is ADB + logcat + proxy-capture observation. Future phases may add active MITM lifecycle and gated instrumentation.".to_string());
     if report.dry_run {
-        recs.push("Report generated in --dry-run mode — no device actions were executed.".to_string());
+        recs.push(
+            "Report generated in --dry-run mode — no device actions were executed.".to_string(),
+        );
     }
-    if report.frida_instrumentation.is_some() && (report.traffic_summary.is_some() || !report.findings.is_empty()) {
+    if report.frida_instrumentation.is_some()
+        && (report.traffic_summary.is_some() || !report.findings.is_empty())
+    {
         recs.push("Frida instrumentation present; review correlation_notes and static_correlation for Frida ↔ traffic/static overlaps.".to_string());
     }
     if let Some(ref fi) = report.frida_instrumentation {
@@ -1167,7 +1389,10 @@ fn build_dynamic_recommendations(report: &DynamicMobileReport) -> Vec<String> {
 
 pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
     let mut buf = String::new();
-    buf.push_str(&format!("Mobile Dynamic Analysis ({})\n", report.platform.as_str()));
+    buf.push_str(&format!(
+        "Mobile Dynamic Analysis ({})\n",
+        report.platform.as_str()
+    ));
     buf.push_str(&format!("Target: {}\n", report.target));
     if let Some(ref d) = report.device_serial {
         buf.push_str(&format!("Device: {}\n", d));
@@ -1175,14 +1400,27 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
     if let Some(ref id) = report.app_id {
         buf.push_str(&format!("App ID / Package: {}\n", id));
     }
-    buf.push_str(&format!("Scan type: {}  |  dry_run: {}\n", report.scan_type, report.dry_run));
-    buf.push_str(&format!("Findings: {}  |  Actions logged: {}\n\n", report.findings.len(), report.actions_performed.len()));
-    if report.traffic_summary.is_some() || report.permission_state.is_some() || report.frida_instrumentation.is_some() {
+    buf.push_str(&format!(
+        "Scan type: {}  |  dry_run: {}\n",
+        report.scan_type, report.dry_run
+    ));
+    buf.push_str(&format!(
+        "Findings: {}  |  Actions logged: {}\n\n",
+        report.findings.len(),
+        report.actions_performed.len()
+    ));
+    if report.traffic_summary.is_some()
+        || report.permission_state.is_some()
+        || report.frida_instrumentation.is_some()
+    {
         buf.push_str("Runtime extensions:\n");
         if let Some(ref ts) = report.traffic_summary {
             buf.push_str(&format!(
                 "  traffic: requests={}, cleartext={}, domains={}, suspicious={}\n",
-                ts.total_requests, ts.cleartext_requests, ts.unique_domains.len(), ts.suspicious_endpoints.len()
+                ts.total_requests,
+                ts.cleartext_requests,
+                ts.unique_domains.len(),
+                ts.suspicious_endpoints.len()
             ));
         }
         if report.permission_state.is_some() {
@@ -1205,12 +1443,21 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
     }
     // Phase 4b reporting polish: surface regression / correlation hints in human output (library surface for full CorrelationResult remains correlate_reports / CorrelationEngine)
     if let Some(ref fi) = report.frida_instrumentation {
-        if !fi.regression_notes.is_empty() || report.findings.iter().any(|f| f.static_correlation.is_some()) {
+        if !fi.regression_notes.is_empty()
+            || report
+                .findings
+                .iter()
+                .any(|f| f.static_correlation.is_some())
+        {
             buf.push_str("Correlation / Regression:\n");
             if !fi.regression_notes.is_empty() {
                 buf.push_str(&format!("  {} regression note(s) from baseline (see --baseline / compare_to_baseline / frida_instrumentation.regression_notes in JSON).\n", fi.regression_notes.len()));
             }
-            let corr_count = report.findings.iter().filter(|f| f.static_correlation.is_some()).count();
+            let corr_count = report
+                .findings
+                .iter()
+                .filter(|f| f.static_correlation.is_some())
+                .count();
             if corr_count > 0 {
                 buf.push_str(&format!("  {} finding(s) carry static_correlation (from correlate_findings / correlate_reports).\n", corr_count));
             }
@@ -1263,7 +1510,9 @@ pub fn format_dynamic_report(report: &DynamicMobileReport) -> String {
 /// Convert DynamicMobileReport into unified ScanReportData for unified report consumers
 /// (mirrors `wireless::to_scan_report_data`).
 /// Categories follow the documented convention: mobile-dynamic-android-*
-pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::output::convert::ScanReportData {
+pub fn to_scan_report_data_dynamic(
+    result: &DynamicMobileReport,
+) -> crate::output::convert::ScanReportData {
     use crate::output::convert::FindingData;
 
     let findings: Vec<FindingData> = result
@@ -1292,7 +1541,10 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
     if let Some(ref ts) = result.traffic_summary {
         let mut desc = format!(
             "requests={}, cleartext={}, domains={}, suspicious_endpoints={}",
-            ts.total_requests, ts.cleartext_requests, ts.unique_domains.len(), ts.suspicious_endpoints.len()
+            ts.total_requests,
+            ts.cleartext_requests,
+            ts.unique_domains.len(),
+            ts.suspicious_endpoints.len()
         );
         if has_correlation {
             desc.push_str(" (static correlation present for some traffic findings)");
@@ -1309,7 +1561,8 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
         });
     }
     if result.permission_state.is_some() {
-        let mut desc = "Permission snapshot (grants/revokes/list) recorded during dynamic run.".to_string();
+        let mut desc =
+            "Permission snapshot (grants/revokes/list) recorded during dynamic run.".to_string();
         if has_correlation {
             desc.push_str(" (static correlation present for some permission findings)");
         }
@@ -1325,7 +1578,13 @@ pub fn to_scan_report_data_dynamic(result: &DynamicMobileReport) -> crate::outpu
         });
     }
     if let Some(ref fi) = result.frida_instrumentation {
-        let mut desc = format!("note={}, sessions={}, scripts={}, builtins={}", fi.note, fi.sessions.len(), fi.script_results.len(), fi.enabled_builtins.len());
+        let mut desc = format!(
+            "note={}, sessions={}, scripts={}, builtins={}",
+            fi.note,
+            fi.sessions.len(),
+            fi.script_results.len(),
+            fi.enabled_builtins.len()
+        );
         if !fi.structured_results.is_empty() {
             desc.push_str(&format!(", structured={}", fi.structured_results.len()));
         }
@@ -1433,7 +1692,8 @@ pub fn correlate_findings(
                     enrichment: Some("exact cleartext traffic match".into()),
                 });
             } else if static_user_ca {
-                let note = "observed cleartext; static allows user CAs (MITM risk surface)".to_string();
+                let note =
+                    "observed cleartext; static allows user CAs (MITM risk surface)".to_string();
                 df.static_correlation = Some(note.clone());
                 notes.push(CorrelatedFinding {
                     dynamic_category: dcat.to_string(),
@@ -1471,11 +1731,17 @@ pub fn correlate_findings(
         // Phase 3b Frida correlation rules (extend for high-signal overlaps)
         if dcat == "frida-crypto-observation" || dcat == "frida-method-trace" {
             let has_static_secret = static_findings.iter().any(|f| {
-                f.category == "secret" || f.title.to_ascii_lowercase().contains("secret") || f.title.to_ascii_lowercase().contains("hardcoded")
-                    || f.evidence.as_ref().is_some_and(|e| e.to_ascii_lowercase().contains("api_key") || e.to_ascii_lowercase().contains("sk_live"))
+                f.category == "secret"
+                    || f.title.to_ascii_lowercase().contains("secret")
+                    || f.title.to_ascii_lowercase().contains("hardcoded")
+                    || f.evidence.as_ref().is_some_and(|e| {
+                        e.to_ascii_lowercase().contains("api_key")
+                            || e.to_ascii_lowercase().contains("sk_live")
+                    })
             });
             if has_static_secret {
-                let note = "Frida observed crypto on flow with static secret/cleartext marker".to_string();
+                let note =
+                    "Frida observed crypto on flow with static secret/cleartext marker".to_string();
                 df.static_correlation = Some(note.clone());
                 notes.push(CorrelatedFinding {
                     dynamic_category: dcat.to_string(),
@@ -1487,20 +1753,29 @@ pub fn correlate_findings(
                 });
             }
         }
-        if dcat == "frida-api-trace" && static_findings.iter().any(|f| f.category == "network-config" || f.category == "manifest") {
-                let note = "Frida-observed call correlates with proxy traffic to domain".to_string();
-                df.static_correlation = Some(note.clone());
-                notes.push(CorrelatedFinding {
-                    dynamic_category: dcat.to_string(),
-                    static_category: "network|manifest".to_string(),
-                    note,
-                    score: Some(55),
-                    correlation_type: Some(CorrelationType::CrossLayer),
-                    enrichment: Some("frida api trace + static network surface".into()),
-                });
+        if dcat == "frida-api-trace"
+            && static_findings
+                .iter()
+                .any(|f| f.category == "network-config" || f.category == "manifest")
+        {
+            let note = "Frida-observed call correlates with proxy traffic to domain".to_string();
+            df.static_correlation = Some(note.clone());
+            notes.push(CorrelatedFinding {
+                dynamic_category: dcat.to_string(),
+                static_category: "network|manifest".to_string(),
+                note,
+                score: Some(55),
+                correlation_type: Some(CorrelationType::CrossLayer),
+                enrichment: Some("frida api trace + static network surface".into()),
+            });
         }
         if dcat == "frida-bypass-validation"
-            && static_findings.iter().any(|f| f.category == "permission" && f.evidence.as_ref().is_some_and(|e| e.contains("debug") || e.contains("READ_LOGS")))
+            && static_findings.iter().any(|f| {
+                f.category == "permission"
+                    && f.evidence
+                        .as_ref()
+                        .is_some_and(|e| e.contains("debug") || e.contains("READ_LOGS"))
+            })
         {
             let note = "bypass observed + debug/permission surface present".to_string();
             df.static_correlation = Some(note.clone());
@@ -1513,8 +1788,7 @@ pub fn correlate_findings(
                 enrichment: Some("bypass + debug/read-logs surface".into()),
             });
         }
-        if dcat == "frida-secret-extract"
-            && static_findings.iter().any(|f| f.category == "secret")
+        if dcat == "frida-secret-extract" && static_findings.iter().any(|f| f.category == "secret")
         {
             let note = "frida secret extract correlates with static secret finding".to_string();
             df.static_correlation = Some(note.clone());
@@ -1529,7 +1803,9 @@ pub fn correlate_findings(
         }
         // Phase 4c (partial): supply-chain / native load observation correlation (best-effort)
         if dcat == "frida-native-load" {
-            let note = "native library load observed at runtime (supply-chain / dynamic code surface)".to_string();
+            let note =
+                "native library load observed at runtime (supply-chain / dynamic code surface)"
+                    .to_string();
             df.static_correlation = Some(note.clone());
             notes.push(CorrelatedFinding {
                 dynamic_category: dcat.to_string(),
@@ -1544,8 +1820,12 @@ pub fn correlate_findings(
 
     // Phase 3c advanced cross-correlation (static ↔ dynamic ↔ Frida ↔ traffic).
     // Precompute flags to avoid overlapping borrows while the mutable iteration above is live.
-    let has_traffic_dynamic = dynamic_findings.iter().any(|d| d.category.contains("traffic") || d.category.contains("cleartext"));
-    let has_runtime_perm_dynamic = dynamic_findings.iter().any(|d| d.category == "runtime-permission");
+    let has_traffic_dynamic = dynamic_findings
+        .iter()
+        .any(|d| d.category.contains("traffic") || d.category.contains("cleartext"));
+    let has_runtime_perm_dynamic = dynamic_findings
+        .iter()
+        .any(|d| d.category == "runtime-permission");
     for df in dynamic_findings.iter_mut() {
         let dcat = df.category.as_str();
         if dcat.starts_with("frida-") {
@@ -1562,7 +1842,9 @@ pub fn correlate_findings(
                 });
             }
             if has_runtime_perm_dynamic {
-                let note = "Frida + runtime permission activity (potential privilege or data access path)".to_string();
+                let note =
+                    "Frida + runtime permission activity (potential privilege or data access path)"
+                        .to_string();
                 df.static_correlation = Some(note.clone());
                 notes.push(CorrelatedFinding {
                     dynamic_category: dcat.to_string(),
@@ -1665,7 +1947,10 @@ mod tests {
         assert_eq!(data.target, "dry.apk");
         assert_eq!(data.scan_type, "mobile-dynamic");
         assert_eq!(data.findings.len(), 1);
-        assert_eq!(data.findings[0].category, "mobile-dynamic-android-runtime-permission");
+        assert_eq!(
+            data.findings[0].category,
+            "mobile-dynamic-android-runtime-permission"
+        );
         assert!(data.wireless_networks.is_empty());
         assert!(data.policy_summary.is_none());
     }
@@ -1693,8 +1978,14 @@ mod tests {
         });
         let data = to_scan_report_data_dynamic(&r);
         assert_eq!(data.findings.len(), 2);
-        assert_eq!(data.findings[0].category, "mobile-dynamic-android-crash-log");
-        assert_eq!(data.findings[1].category, "mobile-dynamic-android-log-secret-leak");
+        assert_eq!(
+            data.findings[0].category,
+            "mobile-dynamic-android-crash-log"
+        );
+        assert_eq!(
+            data.findings[1].category,
+            "mobile-dynamic-android-log-secret-leak"
+        );
         // roundtrip
         let j = serde_json::to_string(&data).unwrap();
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
@@ -1713,8 +2004,12 @@ D/NetworkClient: http://api.vuln.example.com/data?token=sk_live_ABC123
 W/PackageManager: permission denied: READ_SMS
 "#;
         let fs = crate::mobile::runtime::parse_logcat_findings(synthetic);
-        assert!(fs.iter().any(|f| f.category == "runtime-permission" && f.title.contains("granted")));
-        assert!(fs.iter().any(|f| f.category == "runtime-permission" && f.title.contains("denied")));
+        assert!(fs
+            .iter()
+            .any(|f| f.category == "runtime-permission" && f.title.contains("granted")));
+        assert!(fs
+            .iter()
+            .any(|f| f.category == "runtime-permission" && f.title.contains("denied")));
         assert!(fs.iter().any(|f| f.category == "crash-log"));
         assert!(fs.iter().any(|f| f.category == "cleartext-observed"));
         assert!(fs.iter().any(|f| f.category == "log-secret-leak"));
@@ -1737,7 +2032,10 @@ W/PackageManager: permission denied: READ_SMS
 
         a.proxy = Some("127.0.0.1:8080".into());
         a.reset_proxy = true;
-        a.grant_permissions = vec!["android.permission.CAMERA".into(), "android.permission.READ_EXTERNAL_STORAGE".into()];
+        a.grant_permissions = vec![
+            "android.permission.CAMERA".into(),
+            "android.permission.READ_EXTERNAL_STORAGE".into(),
+        ];
         a.revoke_permissions = vec!["android.permission.READ_SMS".into()];
         a.list_permissions = true;
         a.traffic_capture = Some("/tmp/mitm.log".into());
@@ -1771,7 +2069,11 @@ W/PackageManager: permission denied: READ_SMS
 
         // run_dynamic_cli succeeds in dry-run and prints (we suppress via quiet + capture not needed)
         let res = run_dynamic_cli(args, &cfg).await;
-        assert!(res.is_ok(), "dry-run with phase2 fields should succeed: {:?}", res.err());
+        assert!(
+            res.is_ok(),
+            "dry-run with phase2 fields should succeed: {:?}",
+            res.err()
+        );
 
         // To assert the produced report content we reconstruct via direct build + the same logic path exercised,
         // but since output is side-effect printed, we instead build an equivalent report manually using the
@@ -1795,10 +2097,12 @@ W/PackageManager: permission denied: READ_SMS
         ts.total_requests = 1;
         ts.cleartext_requests = 1;
         ts.unique_domains.push("example.test".into());
-        ts.suspicious_endpoints.push("http://example.test/login".into());
+        ts.suspicious_endpoints
+            .push("http://example.test/login".into());
         r.traffic_summary = Some(ts);
         // permission_state set when any perm work
-        r.permission_state = Some("dry-run: simulated permission state after grant/revoke/list".into());
+        r.permission_state =
+            Some("dry-run: simulated permission state after grant/revoke/list".into());
 
         // Verify carriers present
         assert!(r.traffic_summary.is_some());
@@ -1812,8 +2116,14 @@ W/PackageManager: permission denied: READ_SMS
 
         // bridge includes the extra info findings
         let data = to_scan_report_data_dynamic(&r);
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-permission-state"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-permission-state"));
     }
 
     #[test]
@@ -1841,10 +2151,12 @@ W/PackageManager: permission denied: READ_SMS
         ts.total_requests = 3;
         ts.cleartext_requests = 1;
         ts.unique_domains.push("proxy.test".into());
-        ts.suspicious_endpoints.push("http://proxy.test/secret".into());
+        ts.suspicious_endpoints
+            .push("http://proxy.test/secret".into());
         r.traffic_summary = Some(ts);
         r.permission_state = Some("post-grant state".into());
-        r.actions_performed.push("dry-run: would configure device global proxy 10.0.0.1:8080".into());
+        r.actions_performed
+            .push("dry-run: would configure device global proxy 10.0.0.1:8080".into());
 
         let s = format_dynamic_report(&r);
         assert!(s.contains("Runtime extensions:"));
@@ -1864,14 +2176,26 @@ W/PackageManager: permission denied: READ_SMS
 
         let data = to_scan_report_data_dynamic(&r);
         // native findings (none in this direct construction) + 2 extra info
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-traffic-summary"
-            && f.description.contains("requests=5")));
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-permission-state"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-traffic-summary"
+                && f.description.contains("requests=5")));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-permission-state"));
         // roundtrip the bridged data
         let j = serde_json::to_string(&data).unwrap();
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
-        assert!(back.findings.iter().any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
-        assert!(back.findings.iter().any(|f| f.category == "mobile-dynamic-android-permission-state"));
+        assert!(back
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
+        assert!(back
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-permission-state"));
     }
 
     #[test]
@@ -1937,9 +2261,17 @@ W/PackageManager: permission denied: READ_SMS
 
         let notes = correlate_findings(&statics, &mut dyns);
         // Cleartext match
-        assert!(dyns[0].static_correlation.as_ref().unwrap().contains("cleartext"));
+        assert!(dyns[0]
+            .static_correlation
+            .as_ref()
+            .unwrap()
+            .contains("cleartext"));
         // Permission match
-        assert!(dyns[1].static_correlation.as_ref().unwrap().contains("READ_SMS"));
+        assert!(dyns[1]
+            .static_correlation
+            .as_ref()
+            .unwrap()
+            .contains("READ_SMS"));
         // Crash has no correlation
         assert!(dyns[2].static_correlation.is_none());
         // Notes returned for the two matches
@@ -1968,7 +2300,11 @@ W/PackageManager: permission denied: READ_SMS
             static_correlation: None,
         }];
         let notes = correlate_findings(&statics, &mut dyns);
-        assert!(dyns[0].static_correlation.as_ref().unwrap().contains("user CAs"));
+        assert!(dyns[0]
+            .static_correlation
+            .as_ref()
+            .unwrap()
+            .contains("user CAs"));
         assert_eq!(notes.len(), 1);
     }
 
@@ -1984,31 +2320,50 @@ W/PackageManager: permission denied: READ_SMS
             "dry-run: would snapshot permission state (list-permissions)".to_string(),
             "dry-run: would parse traffic capture from /tmp/capture.har".to_string(),
         ];
-        assert!(actions.iter().any(|a| a.contains("global proxy 127.0.0.1:8888")));
-        assert!(actions.iter().any(|a| a.contains("reset/clear device global proxy")));
-        assert!(actions.iter().any(|a| a.contains("grant permission android.permission.CAMERA")));
-        assert!(actions.iter().any(|a| a.contains("revoke permission android.permission.READ_CONTACTS")));
-        assert!(actions.iter().any(|a| a.contains("snapshot permission state (list-permissions)")));
-        assert!(actions.iter().any(|a| a.contains("parse traffic capture from /tmp/capture.har")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("global proxy 127.0.0.1:8888")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("reset/clear device global proxy")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("grant permission android.permission.CAMERA")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("revoke permission android.permission.READ_CONTACTS")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("snapshot permission state (list-permissions)")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("parse traffic capture from /tmp/capture.har")));
     }
 
     #[test]
     fn dry_run_frida_flags_populate_actions_findings_and_carrier() {
         // Exercise the dry-run Frida simulation path (Phase 3b under mobile-dynamic).
-        let mut actions: Vec<String> = vec!["dry-run: no device or network actions performed".into()];
+        let mut actions: Vec<String> =
+            vec!["dry-run: no device or network actions performed".into()];
         let mut findings: Vec<DynamicMobileFinding> = vec![];
         let mut frida_instr_for_report: Option<crate::mobile::FridaInstrumentation> = None;
 
         let frida_script = Some("/tmp/trace.js".to_string());
         if let Some(ref fs) = frida_script {
-            actions.push(format!("dry-run: would connect frida to device (script: {})", fs));
+            actions.push(format!(
+                "dry-run: would connect frida to device (script: {})",
+                fs
+            ));
             actions.push("dry-run: would execute frida script (or builtin:...)".to_string());
             findings.push(DynamicMobileFinding {
                 category: "frida-method-trace".to_string(),
                 severity: Severity::Low,
                 title: "Frida method trace (dry-run)".to_string(),
-                description: "Would hook sensitive methods (e.g. Cipher.doFinal) and emit structured traces.".to_string(),
-                recommendation: "Review frida output for secrets/crypto flows in lab runs.".to_string(),
+                description:
+                    "Would hook sensitive methods (e.g. Cipher.doFinal) and emit structured traces."
+                        .to_string(),
+                recommendation: "Review frida output for secrets/crypto flows in lab runs."
+                    .to_string(),
                 evidence: Some(format!("dry-run: script={}", fs)),
                 static_correlation: None,
             });
@@ -2017,7 +2372,8 @@ W/PackageManager: permission denied: READ_SMS
                 severity: Severity::Low,
                 title: "Frida bypass observation (dry-run)".to_string(),
                 description: "Would observe root/Frida detection bypass hooks.".to_string(),
-                recommendation: "Validate detection logic under instrumentation in lab.".to_string(),
+                recommendation: "Validate detection logic under instrumentation in lab."
+                    .to_string(),
                 evidence: None,
                 static_correlation: None,
             });
@@ -2030,30 +2386,48 @@ W/PackageManager: permission denied: READ_SMS
                 evidence: Some("redacted".to_string()),
                 static_correlation: None,
             });
-            actions.push("dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)".to_string());
+            actions.push(
+                "dry-run: frida instrumentation simulated (see frida_instrumentation in JSON)"
+                    .to_string(),
+            );
             let mut fi = crate::mobile::FridaInstrumentation::default();
-            fi.note = "dry-run simulation of Frida connect + script execution (Phase 3b)".to_string();
-            fi.sessions.push(crate::mobile::FridaSession { device_id: "dry-sim".into(), is_simulation: true });
+            fi.note =
+                "dry-run simulation of Frida connect + script execution (Phase 3b)".to_string();
+            fi.sessions.push(crate::mobile::FridaSession {
+                device_id: "dry-sim".into(),
+                is_simulation: true,
+            });
             fi.enabled_builtins.push("basic_method_trace (sim)".into());
             fi.enabled_builtins.push("crypto-keystore (sim)".into());
             fi.script_results.push(crate::mobile::FridaScriptResult {
                 script_source: fs.clone(),
                 output: "(dry-run) simulated Frida output with structured JSON markers".to_string(),
-                findings: vec!["frida-method-trace: javax.crypto.Cipher.doFinal (sim)".into(), "frida-bypass-validation (sim)".into(), "frida-crypto-observation (sim)".into()],
+                findings: vec![
+                    "frida-method-trace: javax.crypto.Cipher.doFinal (sim)".into(),
+                    "frida-bypass-validation (sim)".into(),
+                    "frida-crypto-observation (sim)".into(),
+                ],
                 duration_ms: 5,
                 structured_output: Some(serde_json::json!({"type":"frida-crypto-observation"})),
             });
             fi.start_time = Some(chrono::Utc::now().to_rfc3339());
-            fi.structured_results.push(serde_json::json!({"type":"frida-crypto-observation"}));
+            fi.structured_results
+                .push(serde_json::json!({"type":"frida-crypto-observation"}));
             fi.correlation_notes.push("test corr".into());
             frida_instr_for_report = Some(fi);
         }
 
         assert!(actions.iter().any(|a| a.contains("would connect frida")));
-        assert!(actions.iter().any(|a| a.contains("would execute frida script")));
+        assert!(actions
+            .iter()
+            .any(|a| a.contains("would execute frida script")));
         assert!(findings.iter().any(|f| f.category == "frida-method-trace"));
-        assert!(findings.iter().any(|f| f.category == "frida-bypass-validation"));
-        assert!(findings.iter().any(|f| f.category == "frida-crypto-observation"));
+        assert!(findings
+            .iter()
+            .any(|f| f.category == "frida-bypass-validation"));
+        assert!(findings
+            .iter()
+            .any(|f| f.category == "frida-crypto-observation"));
         let fi = frida_instr_for_report.expect("carrier must be set for frida dry-run");
         assert!(fi.note.contains("dry-run simulation"));
         assert!(!fi.sessions.is_empty());
@@ -2081,12 +2455,21 @@ W/PackageManager: permission denied: READ_SMS
         r.frida_instrumentation = Some(fi);
 
         let data = to_scan_report_data_dynamic(&r);
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-method-trace"));
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-instrumentation"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-frida-method-trace"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-frida-instrumentation"));
         // roundtrip
         let j = serde_json::to_string(&data).unwrap();
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
-        assert!(back.findings.iter().any(|f| f.category.contains("frida-method-trace")));
+        assert!(back
+            .findings
+            .iter()
+            .any(|f| f.category.contains("frida-method-trace")));
     }
 
     #[test]
@@ -2097,36 +2480,129 @@ W/PackageManager: permission denied: READ_SMS
         fi.note = "3b rich".to_string();
         fi.start_time = Some(chrono::Utc::now().to_rfc3339());
         fi.enabled_builtins = vec!["crypto-keystore".into(), "api-trace".into()];
-        fi.structured_results.push(serde_json::json!({"type":"frida-crypto-observation"}));
+        fi.structured_results
+            .push(serde_json::json!({"type":"frida-crypto-observation"}));
         fi.correlation_notes.push("frida+static secret".into());
         r.frida_instrumentation = Some(fi);
-        r.findings.push(DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "c".into(), recommendation: "r".into(), evidence: None, static_correlation: None });
+        r.findings.push(DynamicMobileFinding {
+            category: "frida-crypto-observation".into(),
+            severity: Severity::Low,
+            title: "c".into(),
+            description: "c".into(),
+            recommendation: "r".into(),
+            evidence: None,
+            static_correlation: None,
+        });
         let data = to_scan_report_data_dynamic(&r);
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-crypto-observation"));
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-instrumentation" && f.description.contains("structured=1")));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-frida-crypto-observation"));
+        assert!(data.findings.iter().any(|f| f.category
+            == "mobile-dynamic-android-frida-instrumentation"
+            && f.description.contains("structured=1")));
         let j = serde_json::to_string(&data).unwrap();
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
-        assert!(back.findings.iter().any(|f| f.category.contains("frida-crypto-observation")));
+        assert!(back
+            .findings
+            .iter()
+            .any(|f| f.category.contains("frida-crypto-observation")));
     }
 
     #[test]
     fn correlate_findings_new_frida_rules_static_secret_traffic_bypass() {
         let statics = vec![
-            MobileFinding { category: "secret".into(), severity: Severity::High, title: "hardcoded api_key".into(), description: "".into(), recommendation: "".into(), evidence: Some("api_key=ABC".into()) },
-            MobileFinding { category: "network-config".into(), severity: Severity::Medium, title: "cleartext".into(), description: "".into(), recommendation: "".into(), evidence: Some("cleartext".into()) },
-            MobileFinding { category: "permission".into(), severity: Severity::Low, title: "debug".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_LOGS".into()) },
+            MobileFinding {
+                category: "secret".into(),
+                severity: Severity::High,
+                title: "hardcoded api_key".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: Some("api_key=ABC".into()),
+            },
+            MobileFinding {
+                category: "network-config".into(),
+                severity: Severity::Medium,
+                title: "cleartext".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: Some("cleartext".into()),
+            },
+            MobileFinding {
+                category: "permission".into(),
+                severity: Severity::Low,
+                title: "debug".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: Some("android.permission.READ_LOGS".into()),
+            },
         ];
         let mut dyns = vec![
-            DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
-            DynamicMobileFinding { category: "frida-api-trace".into(), severity: Severity::Low, title: "a".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
-            DynamicMobileFinding { category: "frida-bypass-validation".into(), severity: Severity::Low, title: "b".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
-            DynamicMobileFinding { category: "frida-secret-extract".into(), severity: Severity::Low, title: "s".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
+            DynamicMobileFinding {
+                category: "frida-crypto-observation".into(),
+                severity: Severity::Low,
+                title: "c".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "frida-api-trace".into(),
+                severity: Severity::Low,
+                title: "a".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "frida-bypass-validation".into(),
+                severity: Severity::Low,
+                title: "b".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "frida-secret-extract".into(),
+                severity: Severity::Low,
+                title: "s".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
         ];
         let notes = correlate_findings(&statics, &mut dyns);
-        assert!(dyns[0].static_correlation.as_ref().unwrap().contains("crypto") || dyns[0].static_correlation.as_ref().unwrap().contains("secret"));
-        assert!(dyns[1].static_correlation.as_ref().unwrap().contains("Frida-observed call"));
-        assert!(dyns[2].static_correlation.as_ref().unwrap().contains("bypass"));
-        assert!(dyns[3].static_correlation.as_ref().unwrap().contains("secret extract"));
+        assert!(
+            dyns[0]
+                .static_correlation
+                .as_ref()
+                .unwrap()
+                .contains("crypto")
+                || dyns[0]
+                    .static_correlation
+                    .as_ref()
+                    .unwrap()
+                    .contains("secret")
+        );
+        assert!(dyns[1]
+            .static_correlation
+            .as_ref()
+            .unwrap()
+            .contains("Frida-observed call"));
+        assert!(dyns[2]
+            .static_correlation
+            .as_ref()
+            .unwrap()
+            .contains("bypass"));
+        assert!(dyns[3]
+            .static_correlation
+            .as_ref()
+            .unwrap()
+            .contains("secret extract"));
         assert!(notes.len() >= 4);
     }
 
@@ -2154,20 +2630,49 @@ W/PackageManager: permission denied: READ_SMS
         let mut r = DynamicMobileReport::new("rec.apk");
         r.frida_instrumentation = Some(crate::mobile::FridaInstrumentation::default());
         r.traffic_summary = Some(crate::mobile::TrafficSummary::new());
-        r.findings.push(DynamicMobileFinding { category: "frida-api-trace".into(), severity: Severity::Low, title: "t".into(), description: "d".into(), recommendation: "r".into(), evidence: None, static_correlation: None });
+        r.findings.push(DynamicMobileFinding {
+            category: "frida-api-trace".into(),
+            severity: Severity::Low,
+            title: "t".into(),
+            description: "d".into(),
+            recommendation: "r".into(),
+            evidence: None,
+            static_correlation: None,
+        });
         let recs = build_dynamic_recommendations(&r);
-        assert!(recs.iter().any(|s| s.contains("correlation_notes") || s.contains("Frida instrumentation present")));
+        assert!(recs.iter().any(
+            |s| s.contains("correlation_notes") || s.contains("Frida instrumentation present")
+        ));
     }
 
     #[test]
     fn to_scan_report_data_dynamic_new_frida_categories_roundtrip() {
         let mut r = DynamicMobileReport::new("cats3b.apk");
-        for c in ["frida-crypto-observation", "frida-bypass-validation", "frida-api-trace"] {
-            r.findings.push(DynamicMobileFinding { category: c.into(), severity: Severity::Low, title: "x".into(), description: "x".into(), recommendation: "x".into(), evidence: None, static_correlation: None });
+        for c in [
+            "frida-crypto-observation",
+            "frida-bypass-validation",
+            "frida-api-trace",
+        ] {
+            r.findings.push(DynamicMobileFinding {
+                category: c.into(),
+                severity: Severity::Low,
+                title: "x".into(),
+                description: "x".into(),
+                recommendation: "x".into(),
+                evidence: None,
+                static_correlation: None,
+            });
         }
         let data = to_scan_report_data_dynamic(&r);
-        for c in ["frida-crypto-observation", "frida-bypass-validation", "frida-api-trace"] {
-            assert!(data.findings.iter().any(|f| f.category == format!("mobile-dynamic-android-{}", c)));
+        for c in [
+            "frida-crypto-observation",
+            "frida-bypass-validation",
+            "frida-api-trace",
+        ] {
+            assert!(data
+                .findings
+                .iter()
+                .any(|f| f.category == format!("mobile-dynamic-android-{}", c)));
         }
         let j = serde_json::to_string(&data).unwrap();
         let back: crate::output::convert::ScanReportData = serde_json::from_str(&j).unwrap();
@@ -2191,9 +2696,13 @@ W/PackageManager: permission denied: READ_SMS
         args.dry_run = true;
         args.frida_scripts = vec!["library:common-hooks".into(), "builtin:api-trace".into()];
         args.frida_script = Some("builtin:crypto-keystore".into()); // legacy single should merge
-        // Simulate the dry block logic for frida (mirror what run_dynamic_cli does)
+                                                                    // Simulate the dry block logic for frida (mirror what run_dynamic_cli does)
         let mut all: Vec<String> = args.frida_scripts.clone();
-        if let Some(ref l) = args.frida_script { if !l.trim().is_empty() && !all.contains(l) { all.push(l.clone()); } }
+        if let Some(ref l) = args.frida_script {
+            if !l.trim().is_empty() && !all.contains(l) {
+                all.push(l.clone());
+            }
+        }
         assert!(all.len() >= 3);
         assert!(all.iter().any(|s| s.starts_with("library:")));
         assert!(all.iter().any(|s| s.starts_with("builtin:")));
@@ -2202,38 +2711,87 @@ W/PackageManager: permission denied: READ_SMS
         r.dry_run = true;
         let mut fi = crate::mobile::FridaInstrumentation::default();
         fi.note = "3c multi+library".to_string();
-        fi.enabled_builtins = vec!["common-hooks".into(), "api-trace".into(), "crypto-keystore".into()];
-        fi.script_results.push(crate::mobile::FridaScriptResult { script_source: "library:common-hooks".into(), output: "sim".into(), findings: vec!["frida-library".into()], duration_ms: 1, structured_output: None });
-        fi.structured_results.push(serde_json::json!({"type":"frida-api-trace"}));
+        fi.enabled_builtins = vec![
+            "common-hooks".into(),
+            "api-trace".into(),
+            "crypto-keystore".into(),
+        ];
+        fi.script_results.push(crate::mobile::FridaScriptResult {
+            script_source: "library:common-hooks".into(),
+            output: "sim".into(),
+            findings: vec!["frida-library".into()],
+            duration_ms: 1,
+            structured_output: None,
+        });
+        fi.structured_results
+            .push(serde_json::json!({"type":"frida-api-trace"}));
         r.frida_instrumentation = Some(fi);
         let data = to_scan_report_data_dynamic(&r);
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-frida-instrumentation"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-frida-instrumentation"));
     }
 
     #[test]
     fn baseline_capture_and_regression_compare() {
         let mut base_report = DynamicMobileReport::new("base.apk");
-        base_report.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None });
+        base_report.findings.push(DynamicMobileFinding {
+            category: "runtime-permission".into(),
+            severity: Severity::Low,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: None,
+            static_correlation: None,
+        });
         let b = capture_baseline(&base_report);
         assert_eq!(b.findings_count, 1);
         assert_eq!(b.target, "base.apk");
 
         let mut cur = DynamicMobileReport::new("cur.apk");
-        for _ in 0..5 { cur.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None }); }
+        for _ in 0..5 {
+            cur.findings.push(DynamicMobileFinding {
+                category: "runtime-permission".into(),
+                severity: Severity::Low,
+                title: "p".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            });
+        }
         let mut fi = crate::mobile::FridaInstrumentation::default();
-        fi.script_results.push(crate::mobile::FridaScriptResult { script_source: "x".into(), output: "".into(), findings: vec!["frida-new-sig".into()], duration_ms: 1, structured_output: None });
+        fi.script_results.push(crate::mobile::FridaScriptResult {
+            script_source: "x".into(),
+            output: "".into(),
+            findings: vec!["frida-new-sig".into()],
+            duration_ms: 1,
+            structured_output: None,
+        });
         cur.frida_instrumentation = Some(fi);
         let notes = compare_to_baseline(&cur, &b);
-        assert!(notes.iter().any(|n| n.contains("findings increased") || n.contains("new Frida") || n.contains("no significant")));
+        assert!(notes.iter().any(|n| n.contains("findings increased")
+            || n.contains("new Frida")
+            || n.contains("no significant")));
     }
 
     #[test]
     fn evidence_bundle_export_uses_flate2_and_roundtrips_info() {
         let mut r = DynamicMobileReport::new("bundle.apk");
-        r.findings.push(DynamicMobileFinding { category: "frida-api-trace".into(), severity: Severity::Low, title: "a".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None });
+        r.findings.push(DynamicMobileFinding {
+            category: "frida-api-trace".into(),
+            severity: Severity::Low,
+            title: "a".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: None,
+            static_correlation: None,
+        });
         let mut ts = crate::mobile::TrafficSummary::new();
         ts.total_requests = 2;
-        let tmp = std::env::temp_dir().join(format!("eggsec_3c_bundle_{}.json.gz", std::process::id()));
+        let tmp =
+            std::env::temp_dir().join(format!("eggsec_3c_bundle_{}.json.gz", std::process::id()));
         let path = tmp.to_string_lossy().to_string();
         let out = export_evidence_bundle(&r, Some(&ts), &path).expect("bundle write");
         assert!(std::path::Path::new(&out).exists());
@@ -2245,11 +2803,42 @@ W/PackageManager: permission denied: READ_SMS
 
     #[test]
     fn advanced_correlation_adds_frida_traffic_permission_cross_notes() {
-        let statics = vec![ MobileFinding { category: "secret".into(), severity: Severity::High, title: "s".into(), description: "".into(), recommendation: "".into(), evidence: Some("api_key".into()) } ];
+        let statics = vec![MobileFinding {
+            category: "secret".into(),
+            severity: Severity::High,
+            title: "s".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("api_key".into()),
+        }];
         let mut dyns = vec![
-            DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
-            DynamicMobileFinding { category: "traffic-cleartext".into(), severity: Severity::Low, title: "t".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
-            DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None },
+            DynamicMobileFinding {
+                category: "frida-crypto-observation".into(),
+                severity: Severity::Low,
+                title: "c".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "traffic-cleartext".into(),
+                severity: Severity::Low,
+                title: "t".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
+            DynamicMobileFinding {
+                category: "runtime-permission".into(),
+                severity: Severity::Low,
+                title: "p".into(),
+                description: "".into(),
+                recommendation: "".into(),
+                evidence: None,
+                static_correlation: None,
+            },
         ];
         let notes = correlate_findings(&statics, &mut dyns);
         // Existing 3b rule + new 3c cross rules should fire
@@ -2268,24 +2857,61 @@ W/PackageManager: permission denied: READ_SMS
             version: None,
             timestamp: "2026-06-12T00:00:00Z".into(),
             findings: vec![
-                MobileFinding { category: "permission".into(), severity: Severity::Medium, title: "READ_SMS".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()) },
-                MobileFinding { category: "secret".into(), severity: Severity::High, title: "hardcoded".into(), description: "".into(), recommendation: "".into(), evidence: Some("api_key=ABC".into()) },
+                MobileFinding {
+                    category: "permission".into(),
+                    severity: Severity::Medium,
+                    title: "READ_SMS".into(),
+                    description: "".into(),
+                    recommendation: "".into(),
+                    evidence: Some("android.permission.READ_SMS".into()),
+                },
+                MobileFinding {
+                    category: "secret".into(),
+                    severity: Severity::High,
+                    title: "hardcoded".into(),
+                    description: "".into(),
+                    recommendation: "".into(),
+                    evidence: Some("api_key=ABC".into()),
+                },
             ],
             recommendations: vec![],
             duration_ms: 1,
         };
         let mut dyn_r = DynamicMobileReport::new("d.apk");
-        dyn_r.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()), static_correlation: None });
-        dyn_r.findings.push(DynamicMobileFinding { category: "frida-crypto-observation".into(), severity: Severity::Low, title: "c".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None });
+        dyn_r.findings.push(DynamicMobileFinding {
+            category: "runtime-permission".into(),
+            severity: Severity::Low,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("android.permission.READ_SMS".into()),
+            static_correlation: None,
+        });
+        dyn_r.findings.push(DynamicMobileFinding {
+            category: "frida-crypto-observation".into(),
+            severity: Severity::Low,
+            title: "c".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: None,
+            static_correlation: None,
+        });
 
         let res = CorrelationEngine::new().correlate(&statics, &dyn_r);
         assert!(res.correlations.len() >= 2);
         // Direct perm match should have high score
-        let perm = res.correlations.iter().find(|c| c.dynamic_category == "runtime-permission").unwrap();
+        let perm = res
+            .correlations
+            .iter()
+            .find(|c| c.dynamic_category == "runtime-permission")
+            .unwrap();
         assert!(perm.score.unwrap_or(0) >= 70);
         assert_eq!(perm.correlation_type, Some(CorrelationType::Direct));
         // Frida crypto should be present (score ~70)
-        assert!(res.correlations.iter().any(|c| c.dynamic_category.contains("frida-crypto")));
+        assert!(res
+            .correlations
+            .iter()
+            .any(|c| c.dynamic_category.contains("frida-crypto")));
     }
 
     #[test]
@@ -2294,7 +2920,9 @@ W/PackageManager: permission denied: READ_SMS
         static_r.timestamp = "2026-06-12T00:00:00Z".into();
         let mut dyn_r = DynamicMobileReport::new("d.apk");
         dyn_r.timestamp = "2026-06-12T00:00:10Z".into();
-        dyn_r.actions_performed.push("dry-run: would install".into());
+        dyn_r
+            .actions_performed
+            .push("dry-run: would install".into());
         dyn_r.duration_ms = 1234;
         let mut fi = crate::mobile::FridaInstrumentation::default();
         fi.start_time = Some("2026-06-12T00:00:05Z".into());
@@ -2339,7 +2967,15 @@ W/PackageManager: permission denied: READ_SMS
         let statics = MobileScanReport::new("s.apk", MobilePlatform::Android);
         let mut dyn_r = DynamicMobileReport::new("d.apk");
         // one clear high-signal direct candidate (will be scored inside correlate_findings when rules match)
-        dyn_r.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.CAMERA".into()), static_correlation: None });
+        dyn_r.findings.push(DynamicMobileFinding {
+            category: "runtime-permission".into(),
+            severity: Severity::Low,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("android.permission.CAMERA".into()),
+            static_correlation: None,
+        });
 
         // engine with high threshold should drop low-score (or unscored) items
         let eng = CorrelationEngine::new().with_min_score(90);
@@ -2351,8 +2987,23 @@ W/PackageManager: permission denied: READ_SMS
 
     #[test]
     fn backward_compat_correlated_finding_pre_phase4_and_static_correlation_side_effect() {
-        let statics = vec![ MobileFinding { category: "permission".into(), severity: Severity::Medium, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()) } ];
-        let mut dyns = vec![ DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("android.permission.READ_SMS".into()), static_correlation: None } ];
+        let statics = vec![MobileFinding {
+            category: "permission".into(),
+            severity: Severity::Medium,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("android.permission.READ_SMS".into()),
+        }];
+        let mut dyns = vec![DynamicMobileFinding {
+            category: "runtime-permission".into(),
+            severity: Severity::Low,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("android.permission.READ_SMS".into()),
+            static_correlation: None,
+        }];
         let notes = correlate_findings(&statics, &mut dyns);
         // legacy field still populated
         assert!(dyns[0].static_correlation.is_some());
@@ -2365,9 +3016,24 @@ W/PackageManager: permission denied: READ_SMS
     #[test]
     fn engine_dry_safe_no_side_effects_on_inputs() {
         let mut static_r = MobileScanReport::new("s.apk", MobilePlatform::Android);
-        static_r.findings.push(MobileFinding { category: "permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("X".into()) });
+        static_r.findings.push(MobileFinding {
+            category: "permission".into(),
+            severity: Severity::Low,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("X".into()),
+        });
         let mut dyn_r = DynamicMobileReport::new("d.apk");
-        dyn_r.findings.push(DynamicMobileFinding { category: "runtime-permission".into(), severity: Severity::Low, title: "p".into(), description: "".into(), recommendation: "".into(), evidence: Some("X".into()), static_correlation: None });
+        dyn_r.findings.push(DynamicMobileFinding {
+            category: "runtime-permission".into(),
+            severity: Severity::Low,
+            title: "p".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: Some("X".into()),
+            static_correlation: None,
+        });
 
         let before_dyn_len = dyn_r.findings.len();
         let before_static_len = static_r.findings.len();
@@ -2384,7 +3050,8 @@ W/PackageManager: permission denied: READ_SMS
         r.dry_run = true;
         let mut fi = crate::mobile::FridaInstrumentation::default();
         fi.note = "phase4b".to_string();
-        fi.regression_notes.push("behavior changed: new crypto call".into());
+        fi.regression_notes
+            .push("behavior changed: new crypto call".into());
         fi.regression_notes.push("baseline findings delta".into());
         r.frida_instrumentation = Some(fi);
         r.findings.push(DynamicMobileFinding {
@@ -2421,21 +3088,48 @@ W/PackageManager: permission denied: READ_SMS
         args.dry_run = true;
         args.frida_scripts = vec!["builtin:native-load".into()];
         for spec in &args.frida_scripts {
-            let cat = if spec.contains("native-load") || spec.contains("native_load") { "frida-native-load" } else { "frida-raw" };
+            let cat = if spec.contains("native-load") || spec.contains("native_load") {
+                "frida-native-load"
+            } else {
+                "frida-raw"
+            };
             assert_eq!(cat, "frida-native-load");
         }
 
         // 2. run_baseline_compare_workflow (pure, dry, no device)
         let mut cur = DynamicMobileReport::new("wf.apk");
-        cur.findings.push(DynamicMobileFinding { category: "frida-native-load".into(), severity: Severity::Low, title: "n".into(), description: "".into(), recommendation: "".into(), evidence: None, static_correlation: None });
+        cur.findings.push(DynamicMobileFinding {
+            category: "frida-native-load".into(),
+            severity: Severity::Low,
+            title: "n".into(),
+            description: "".into(),
+            recommendation: "".into(),
+            evidence: None,
+            static_correlation: None,
+        });
         let mut fi = crate::mobile::FridaInstrumentation::default();
-        fi.script_results.push(crate::mobile::FridaScriptResult { script_source: "builtin:native-load".into(), output: "".into(), findings: vec!["frida-native-load: libfoo".into()], duration_ms: 1, structured_output: None });
+        fi.script_results.push(crate::mobile::FridaScriptResult {
+            script_source: "builtin:native-load".into(),
+            output: "".into(),
+            findings: vec!["frida-native-load: libfoo".into()],
+            duration_ms: 1,
+            structured_output: None,
+        });
         cur.frida_instrumentation = Some(fi);
-        let bl = MobileBaseline { target: "wf.apk".into(), timestamp: "2026-06-12T00:00:00Z".into(), findings_count: 0, frida_script_count: 0, frida_findings: vec![], actions_sample: vec![] };
+        let bl = MobileBaseline {
+            target: "wf.apk".into(),
+            timestamp: "2026-06-12T00:00:00Z".into(),
+            findings_count: 0,
+            frida_script_count: 0,
+            frida_findings: vec![],
+            actions_sample: vec![],
+        };
         let bp = std::env::temp_dir().join(format!("eggsec_4c_bl_{}.json", std::process::id()));
         std::fs::write(&bp, serde_json::to_string(&bl).unwrap()).unwrap();
         let (notes, corr) = run_baseline_compare_workflow(&bp.to_string_lossy(), &cur, None);
-        assert!(notes.iter().any(|n| n.contains("new categories") || n.contains("no significant")));
+        assert!(notes
+            .iter()
+            .any(|n| n.contains("new categories") || n.contains("no significant")));
         assert!(corr.is_none()); // no static baseline supplied
         let _ = std::fs::remove_file(&bp);
 
@@ -2455,12 +3149,27 @@ W/PackageManager: permission denied: READ_SMS
         let _ = std::fs::remove_file(&p);
 
         // 4. compare_to_baseline surfaces the Phase 4c "new categories" note
-        let base = MobileBaseline { target: "b".into(), timestamp: "2026-06-12T00:00:00Z".into(), findings_count: 0, frida_script_count: 0, frida_findings: vec!["old".into()], actions_sample: vec![] };
+        let base = MobileBaseline {
+            target: "b".into(),
+            timestamp: "2026-06-12T00:00:00Z".into(),
+            findings_count: 0,
+            frida_script_count: 0,
+            frida_findings: vec!["old".into()],
+            actions_sample: vec![],
+        };
         let mut cur2 = DynamicMobileReport::new("c".into());
         let mut fi2 = crate::mobile::FridaInstrumentation::default();
-        fi2.script_results.push(crate::mobile::FridaScriptResult { script_source: "s".into(), output: "".into(), findings: vec!["frida-native-load: new".into()], duration_ms: 1, structured_output: None });
+        fi2.script_results.push(crate::mobile::FridaScriptResult {
+            script_source: "s".into(),
+            output: "".into(),
+            findings: vec!["frida-native-load: new".into()],
+            duration_ms: 1,
+            structured_output: None,
+        });
         cur2.frida_instrumentation = Some(fi2);
         let ns = compare_to_baseline(&cur2, &base);
-        assert!(ns.iter().any(|n| n.contains("new categories observed vs baseline")));
+        assert!(ns
+            .iter()
+            .any(|n| n.contains("new categories observed vs baseline")));
     }
 }

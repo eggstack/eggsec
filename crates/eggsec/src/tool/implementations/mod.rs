@@ -1,5 +1,7 @@
 #[cfg(feature = "c2-mcp")]
 pub mod c2;
+#[cfg(feature = "db-pentest-mcp")]
+pub mod db_pentest;
 pub mod fuzzer;
 pub mod loadtest;
 pub mod oast;
@@ -10,5 +12,3 @@ pub mod recon;
 pub mod scanner;
 pub mod search;
 pub mod waf;
-#[cfg(feature = "db-pentest-mcp")]
-pub mod db_pentest;

@@ -191,10 +191,9 @@ mod stress_tests {
         for i in 0..100 {
             let stream_id = (i * 2 + 1) as u32; // Odd numbers for client-initiated
             let mut stream = Http2Stream::new(stream_id, "GET", &format!("/api/{}", i));
-            stream.request_headers.insert(
-                "content-type".to_string(),
-                "application/json".to_string(),
-            );
+            stream
+                .request_headers
+                .insert("content-type".to_string(), "application/json".to_string());
             stream.response_status = 200;
             stream.response_body = Some(format!("Response {}", i));
             stream.state = Http2StreamState::Closed;
@@ -203,7 +202,10 @@ mod stress_tests {
 
         // Verify all streams
         assert_eq!(session.streams.len(), 100);
-        assert!(session.streams.iter().all(|s| s.state == Http2StreamState::Closed));
+        assert!(session
+            .streams
+            .iter()
+            .all(|s| s.state == Http2StreamState::Closed));
     }
 
     /// Stress test: gRPC streaming with 1000 frames.

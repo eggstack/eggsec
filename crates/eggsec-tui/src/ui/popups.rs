@@ -278,11 +278,7 @@ pub fn draw_quick_switch(f: &mut Frame, app: &mut App, theme: &Theme) {
         .selected
         .min(results.len().saturating_sub(1));
 
-    let selected_display = if results.is_empty() {
-        0
-    } else {
-        selected + 1
-    };
+    let selected_display = if results.is_empty() { 0 } else { selected + 1 };
     let status_text = format!("{}/{}", selected_display, results.len());
 
     let empty_message = if app.quick_switch.query.is_empty() {

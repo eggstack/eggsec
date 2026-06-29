@@ -187,10 +187,7 @@ impl PostexScanner {
                     technique: t.clone(),
                     simulated: true,
                     confidence,
-                    evidence: format!(
-                        "dry-run: {} would be simulated against {}",
-                        t.name, target
-                    ),
+                    evidence: format!("dry-run: {} would be simulated against {}", t.name, target),
                     recommendations: vec![
                         format!("Review {} technique in lab environment", t.name),
                         format!("Ensure MITRE ATT&CK detection for {}", t.mitre_id),
@@ -354,9 +351,8 @@ impl PostexScanner {
                 mitre_id: "T1003.001".to_string(),
                 category: PostexCategory::CredentialAccess,
                 risk: PostexRisk::Critical,
-                description:
-                    "Detection of LSASS process memory access for credential extraction"
-                        .to_string(),
+                description: "Detection of LSASS process memory access for credential extraction"
+                    .to_string(),
                 reversible: false,
             },
             PostexTechnique {
@@ -365,8 +361,8 @@ impl PostexScanner {
                 mitre_id: "T1134".to_string(),
                 category: PostexCategory::CredentialAccess,
                 risk: PostexRisk::High,
-                description:
-                    "Detection of access token manipulation for privilege escalation".to_string(),
+                description: "Detection of access token manipulation for privilege escalation"
+                    .to_string(),
                 reversible: true,
             },
             PostexTechnique {
@@ -375,8 +371,8 @@ impl PostexScanner {
                 mitre_id: "T1110.003".to_string(),
                 category: PostexCategory::CredentialAccess,
                 risk: PostexRisk::High,
-                description:
-                    "Detection of password spraying against authentication endpoints".to_string(),
+                description: "Detection of password spraying against authentication endpoints"
+                    .to_string(),
                 reversible: true,
             },
             PostexTechnique {
@@ -385,9 +381,8 @@ impl PostexScanner {
                 mitre_id: "T1558.003".to_string(),
                 category: PostexCategory::CredentialAccess,
                 risk: PostexRisk::Critical,
-                description:
-                    "Detection of Kerberos service ticket extraction for offline cracking"
-                        .to_string(),
+                description: "Detection of Kerberos service ticket extraction for offline cracking"
+                    .to_string(),
                 reversible: true,
             },
         ]

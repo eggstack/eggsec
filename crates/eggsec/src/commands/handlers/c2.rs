@@ -2,10 +2,7 @@ use crate::commands::handlers::CommandContext;
 use crate::config::OperationDescriptor;
 use anyhow::Result;
 
-pub async fn handle_c2(
-    ctx: &CommandContext,
-    args: crate::cli::C2Args,
-) -> Result<()> {
+pub async fn handle_c2(ctx: &CommandContext, args: crate::cli::C2Args) -> Result<()> {
     let is_real = !args.dry_run;
 
     let risk = if is_real {

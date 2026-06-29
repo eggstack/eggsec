@@ -125,7 +125,7 @@ impl Default for PluginSandbox {
         Self {
             granted: CapabilitySet::new(),
             max_memory_bytes: 10 * 1024 * 1024, // 10MB default
-            max_execution_ms: 5000, // 5 seconds default
+            max_execution_ms: 5000,             // 5 seconds default
             max_operations: 1000,
         }
     }
@@ -229,11 +229,22 @@ impl std::fmt::Display for SandboxViolation {
             Self::MemoryExceeded { used, limit } => {
                 write!(f, "Memory exceeded: {} bytes used, {} limit", used, limit)
             }
-            Self::ExecutionTimeExceeded { elapsed_ms, limit_ms } => {
-                write!(f, "Execution time exceeded: {}ms elapsed, {}ms limit", elapsed_ms, limit_ms)
+            Self::ExecutionTimeExceeded {
+                elapsed_ms,
+                limit_ms,
+            } => {
+                write!(
+                    f,
+                    "Execution time exceeded: {}ms elapsed, {}ms limit",
+                    elapsed_ms, limit_ms
+                )
             }
             Self::OperationsExceeded { count, limit } => {
-                write!(f, "Operations exceeded: {} operations, {} limit", count, limit)
+                write!(
+                    f,
+                    "Operations exceeded: {} operations, {} limit",
+                    count, limit
+                )
             }
         }
     }
@@ -337,12 +348,7 @@ pub trait ProtocolHandler: Send + Sync {
     ///
     /// Called during protocol detection phase. Return `Detected` with
     /// a confidence > 0.0 to claim the traffic.
-    fn detect(
-        &self,
-        host: &str,
-        path: &str,
-        headers: &HashMap<String, String>,
-    ) -> DetectionResult;
+    fn detect(&self, host: &str, path: &str, headers: &HashMap<String, String>) -> DetectionResult;
 
     /// Handle a detected protocol session.
     ///
@@ -406,8 +412,12 @@ impl PluginRegistry {
                 DetectionResult::Detected { confidence, .. } => {
                     if confidence > 0.0 {
                         match &best {
-                            Some((_, DetectionResult::Detected { confidence: best_c, .. }))
-                                if best_c >= &confidence => {}
+                            Some((
+                                _,
+                                DetectionResult::Detected {
+                                    confidence: best_c, ..
+                                },
+                            )) if best_c >= &confidence => {}
                             _ => {
                                 let result = handler.detect(host, path, headers);
                                 best = Some((i, result));
@@ -482,10 +492,7 @@ impl ProtocolHandler for NonStandardPortHandler {
         // Check if host:port uses a non-standard port
         if let Some(port_str) = host.split(':').nth(1) {
             if let Ok(port) = port_str.parse::<u16>() {
-                let is_standard = matches!(
-                    port,
-                    80 | 443 | 8080 | 8443 | 3000 | 5000 | 9090
-                );
+                let is_standard = matches!(port, 80 | 443 | 8080 | 8443 | 3000 | 5000 | 9090);
                 if !is_standard {
                     let mut ctx = HashMap::new();
                     ctx.insert("port".to_string(), port.to_string());
@@ -515,10 +522,7 @@ impl ProtocolHandler for NonStandardPortHandler {
                     findings.push(PluginFinding {
                         plugin_id: "non-standard-port".to_string(),
                         title: format!("Service on non-standard port {}", port),
-                        description: format!(
-                            "Host {} is using non-standard port {}",
-                            host, port
-                        ),
+                        description: format!("Host {} is using non-standard port {}", host, port),
                         severity: 2,
                         metadata: HashMap::new(),
                     });
@@ -558,7 +562,11 @@ mod tests {
         let headers = HashMap::new();
         let result = handler.detect("example.com:9999", "/", &headers);
         match result {
-            DetectionResult::Detected { confidence, protocol_name, context } => {
+            DetectionResult::Detected {
+                confidence,
+                protocol_name,
+                context,
+            } => {
                 assert!(confidence > 0.0);
                 assert_eq!(protocol_name, "non-standard-port");
                 assert_eq!(context.get("port").unwrap(), "9999");
@@ -573,7 +581,10 @@ mod tests {
         let headers = HashMap::new();
         let result = handler.handle("example.com:3306", "/", &headers, None);
         assert_eq!(result.findings.len(), 1);
-        assert_eq!(result.findings[0].title, "Service on non-standard port 3306");
+        assert_eq!(
+            result.findings[0].title,
+            "Service on non-standard port 3306"
+        );
     }
 
     #[test]
@@ -587,9 +598,7 @@ mod tests {
     #[test]
     fn test_registry_register_and_list() {
         let mut registry = PluginRegistry::new();
-        registry
-            .register(Box::new(NonStandardPortHandler))
-            .unwrap();
+        registry.register(Box::new(NonStandardPortHandler)).unwrap();
         assert_eq!(registry.len(), 1);
         let plugins = registry.list();
         assert_eq!(plugins[0].id, "non-standard-port");
@@ -598,9 +607,7 @@ mod tests {
     #[test]
     fn test_registry_duplicate_id_rejected() {
         let mut registry = PluginRegistry::new();
-        registry
-            .register(Box::new(NonStandardPortHandler))
-            .unwrap();
+        registry.register(Box::new(NonStandardPortHandler)).unwrap();
         let result = registry.register(Box::new(NonStandardPortHandler));
         assert!(result.is_err());
         assert_eq!(
@@ -621,15 +628,29 @@ mod tests {
                     description: "".to_string(),
                 }
             }
-            fn detect(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>) -> DetectionResult {
+            fn detect(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+            ) -> DetectionResult {
                 DetectionResult::Detected {
                     confidence: 0.9,
                     protocol_name: "high".to_string(),
                     context: HashMap::new(),
                 }
             }
-            fn handle(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>, _b: Option<&str>) -> HandleResult {
-                HandleResult { findings: vec![], metadata: HashMap::new() }
+            fn handle(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+                _b: Option<&str>,
+            ) -> HandleResult {
+                HandleResult {
+                    findings: vec![],
+                    metadata: HashMap::new(),
+                }
             }
         }
 
@@ -701,11 +722,25 @@ mod tests {
                     description: "".to_string(),
                 }
             }
-            fn detect(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>) -> DetectionResult {
+            fn detect(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+            ) -> DetectionResult {
                 DetectionResult::NotDetected
             }
-            fn handle(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>, _b: Option<&str>) -> HandleResult {
-                HandleResult { findings: vec![], metadata: HashMap::new() }
+            fn handle(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+                _b: Option<&str>,
+            ) -> HandleResult {
+                HandleResult {
+                    findings: vec![],
+                    metadata: HashMap::new(),
+                }
             }
         }
 
@@ -720,26 +755,72 @@ mod tests {
         struct LowHandler;
         impl ProtocolHandler for LowHandler {
             fn info(&self) -> PluginInfo {
-                PluginInfo { id: "low".to_string(), name: "Low".to_string(), version: "1.0.0".to_string(), description: "".to_string() }
+                PluginInfo {
+                    id: "low".to_string(),
+                    name: "Low".to_string(),
+                    version: "1.0.0".to_string(),
+                    description: "".to_string(),
+                }
             }
-            fn detect(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>) -> DetectionResult {
-                DetectionResult::Detected { confidence: 0.3, protocol_name: "low".to_string(), context: HashMap::new() }
+            fn detect(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+            ) -> DetectionResult {
+                DetectionResult::Detected {
+                    confidence: 0.3,
+                    protocol_name: "low".to_string(),
+                    context: HashMap::new(),
+                }
             }
-            fn handle(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>, _b: Option<&str>) -> HandleResult {
-                HandleResult { findings: vec![], metadata: HashMap::new() }
+            fn handle(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+                _b: Option<&str>,
+            ) -> HandleResult {
+                HandleResult {
+                    findings: vec![],
+                    metadata: HashMap::new(),
+                }
             }
         }
 
         struct HighHandler;
         impl ProtocolHandler for HighHandler {
             fn info(&self) -> PluginInfo {
-                PluginInfo { id: "high".to_string(), name: "High".to_string(), version: "1.0.0".to_string(), description: "".to_string() }
+                PluginInfo {
+                    id: "high".to_string(),
+                    name: "High".to_string(),
+                    version: "1.0.0".to_string(),
+                    description: "".to_string(),
+                }
             }
-            fn detect(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>) -> DetectionResult {
-                DetectionResult::Detected { confidence: 0.9, protocol_name: "high".to_string(), context: HashMap::new() }
+            fn detect(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+            ) -> DetectionResult {
+                DetectionResult::Detected {
+                    confidence: 0.9,
+                    protocol_name: "high".to_string(),
+                    context: HashMap::new(),
+                }
             }
-            fn handle(&self, _h: &str, _p: &str, _hdr: &HashMap<String, String>, _b: Option<&str>) -> HandleResult {
-                HandleResult { findings: vec![], metadata: HashMap::new() }
+            fn handle(
+                &self,
+                _h: &str,
+                _p: &str,
+                _hdr: &HashMap<String, String>,
+                _b: Option<&str>,
+            ) -> HandleResult {
+                HandleResult {
+                    findings: vec![],
+                    metadata: HashMap::new(),
+                }
             }
         }
 
@@ -835,9 +916,7 @@ mod tests {
         ]);
         assert!(granted.includes(&required));
 
-        let not_included = CapabilitySet::with(vec![
-            PluginCapability::NetworkAccess,
-        ]);
+        let not_included = CapabilitySet::with(vec![PluginCapability::NetworkAccess]);
         assert!(!granted.includes(&not_included));
     }
 
@@ -864,8 +943,12 @@ mod tests {
     #[test]
     fn test_plugin_sandbox_check_capability() {
         let sandbox = PluginSandbox::restricted();
-        assert!(sandbox.check_capability(&PluginCapability::ReadMetadata).is_ok());
-        assert!(sandbox.check_capability(&PluginCapability::WriteData).is_err());
+        assert!(sandbox
+            .check_capability(&PluginCapability::ReadMetadata)
+            .is_ok());
+        assert!(sandbox
+            .check_capability(&PluginCapability::WriteData)
+            .is_err());
     }
 
     #[test]
@@ -894,7 +977,10 @@ mod tests {
         let violation = SandboxViolation::CapabilityDenied(PluginCapability::WriteData);
         assert!(violation.to_string().contains("write-data"));
 
-        let violation = SandboxViolation::MemoryExceeded { used: 2048, limit: 1024 };
+        let violation = SandboxViolation::MemoryExceeded {
+            used: 2048,
+            limit: 1024,
+        };
         assert!(violation.to_string().contains("2048"));
         assert!(violation.to_string().contains("1024"));
     }
@@ -903,7 +989,10 @@ mod tests {
     fn test_plugin_capability_display() {
         assert_eq!(PluginCapability::ReadMetadata.to_string(), "read-metadata");
         assert_eq!(PluginCapability::WriteData.to_string(), "write-data");
-        assert_eq!(PluginCapability::NetworkAccess.to_string(), "network-access");
+        assert_eq!(
+            PluginCapability::NetworkAccess.to_string(),
+            "network-access"
+        );
     }
 
     #[test]

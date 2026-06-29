@@ -116,15 +116,30 @@ impl std::fmt::Display for PipelineReport {
             )?;
             if !proxy.ws_sessions.is_empty() {
                 let ws_msgs: usize = proxy.ws_sessions.iter().map(|s| s.messages.len()).sum();
-                writeln!(f, "\t{} WebSocket sessions ({} messages)", proxy.ws_sessions.len(), ws_msgs)?;
+                writeln!(
+                    f,
+                    "\t{} WebSocket sessions ({} messages)",
+                    proxy.ws_sessions.len(),
+                    ws_msgs
+                )?;
             }
             if !proxy.http2_sessions.is_empty() {
                 let h2_streams: usize = proxy.http2_sessions.iter().map(|s| s.streams.len()).sum();
-                writeln!(f, "\t{} HTTP/2 sessions ({} streams)", proxy.http2_sessions.len(), h2_streams)?;
+                writeln!(
+                    f,
+                    "\t{} HTTP/2 sessions ({} streams)",
+                    proxy.http2_sessions.len(),
+                    h2_streams
+                )?;
             }
             if !proxy.grpc_sessions.is_empty() {
                 let grpc_calls: usize = proxy.grpc_sessions.iter().map(|s| s.calls.len()).sum();
-                writeln!(f, "\t{} gRPC sessions ({} calls)", proxy.grpc_sessions.len(), grpc_calls)?;
+                writeln!(
+                    f,
+                    "\t{} gRPC sessions ({} calls)",
+                    proxy.grpc_sessions.len(),
+                    grpc_calls
+                )?;
             }
         }
 

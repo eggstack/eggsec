@@ -160,7 +160,9 @@ impl WirelessTab {
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             format!("Active Attack: {}", result.attack_type),
-            Style::default().fg(tc!(danger)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(danger))
+                .add_modifier(Modifier::BOLD),
         )]));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
@@ -227,9 +229,7 @@ impl WirelessTab {
         if !result.recommendations.is_empty() {
             self.results_view.add_line(Line::from(vec![Span::styled(
                 "Recommendations:",
-                Style::default()
-                    .fg(tc!(info))
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(tc!(info)).add_modifier(Modifier::BOLD),
             )]));
             for rec in &result.recommendations {
                 self.results_view.add_line(Line::from(vec![
@@ -540,13 +540,13 @@ impl TabRender for WirelessTab {
             let error_block = Block::default()
                 .borders(Borders::ALL)
                 .title(" Results ")
-                .border_style(
-                    Style::default().fg(if self.focus_area == WirelessFocusArea::Results {
+                .border_style(Style::default().fg(
+                    if self.focus_area == WirelessFocusArea::Results {
                         tc!(border_focused)
                     } else {
                         tc!(border)
-                    }),
-                );
+                    },
+                ));
             let error_inner = error_block.inner(results_area);
             f.render_widget(error_block, results_area);
             let error_text = Paragraph::new(format!("Error: {}", err.message()))

@@ -746,20 +746,59 @@ pub fn visible_tab_specs() -> Vec<&'static TabSpec> {
         spec_for(Tab::Dashboard).unwrap(),
         spec_for(Tab::Auth).unwrap(),
     ];
-    cfg_push!(specs, [
-        #[cfg(feature = "advanced-hunting")]     { spec_for(Tab::Hunt).unwrap() },
-        #[cfg(feature = "compliance")]           { spec_for(Tab::Compliance).unwrap() },
-        #[cfg(feature = "database")]             { spec_for(Tab::Storage).unwrap() },
-        #[cfg(feature = "external-integrations")] { spec_for(Tab::Integrations).unwrap() },
-        #[cfg(feature = "finding-workflow")]     { spec_for(Tab::Workflow).unwrap() },
-        #[cfg(feature = "vuln-management")]      { spec_for(Tab::Vuln).unwrap() },
-        #[cfg(feature = "nse")]                  { spec_for(Tab::Nse).unwrap() },
-        #[cfg(feature = "headless-browser")]     { spec_for(Tab::Browser).unwrap() },
-        #[cfg(feature = "wireless")]             { spec_for(Tab::Wireless).unwrap() },
-        #[cfg(feature = "db-pentest")]           { spec_for(Tab::DbPentest).unwrap() },
-        #[cfg(feature = "c2")]                   { spec_for(Tab::C2).unwrap() },
-        #[cfg(feature = "web-proxy")]            { spec_for(Tab::Intercept).unwrap() },
-    ]);
+    cfg_push!(
+        specs,
+        [
+            #[cfg(feature = "advanced-hunting")]
+            {
+                spec_for(Tab::Hunt).unwrap()
+            },
+            #[cfg(feature = "compliance")]
+            {
+                spec_for(Tab::Compliance).unwrap()
+            },
+            #[cfg(feature = "database")]
+            {
+                spec_for(Tab::Storage).unwrap()
+            },
+            #[cfg(feature = "external-integrations")]
+            {
+                spec_for(Tab::Integrations).unwrap()
+            },
+            #[cfg(feature = "finding-workflow")]
+            {
+                spec_for(Tab::Workflow).unwrap()
+            },
+            #[cfg(feature = "vuln-management")]
+            {
+                spec_for(Tab::Vuln).unwrap()
+            },
+            #[cfg(feature = "nse")]
+            {
+                spec_for(Tab::Nse).unwrap()
+            },
+            #[cfg(feature = "headless-browser")]
+            {
+                spec_for(Tab::Browser).unwrap()
+            },
+            #[cfg(feature = "wireless")]
+            {
+                spec_for(Tab::Wireless).unwrap()
+            },
+            #[cfg(feature = "db-pentest")]
+            {
+                spec_for(Tab::DbPentest).unwrap()
+            },
+            #[cfg(feature = "c2")]
+            {
+                spec_for(Tab::C2).unwrap()
+            },
+            #[cfg(feature = "web-proxy")]
+            {
+                spec_for(Tab::Intercept).unwrap()
+            },
+        ]
+    );
     specs
 }
 
@@ -811,9 +850,7 @@ mod tests {
                 assert!(
                     matches!(
                         spec.category,
-                        TabCategory::Assessment
-                            | TabCategory::Traffic
-                            | TabCategory::Configuration
+                        TabCategory::Assessment | TabCategory::Traffic | TabCategory::Configuration
                     ),
                     "Direct-launch tab {} has unexpected category {:?}",
                     spec.stable_id,
@@ -825,9 +862,7 @@ mod tests {
 
     #[test]
     fn test_tab_spec_count_matches_all_tab_variants() {
-        let all_variants: Vec<Tab> = (0..=32)
-            .filter_map(|i| Tab::from_discriminant(i))
-            .collect();
+        let all_variants: Vec<Tab> = (0..=32).filter_map(|i| Tab::from_discriminant(i)).collect();
         assert_eq!(tab_specs().len(), all_variants.len());
     }
 

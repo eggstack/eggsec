@@ -339,8 +339,7 @@ impl TabInput for ComplianceTab {
         if self.focus_area == ComplianceFocusArea::Inputs {
             self.core.inputs.is_at_left_edge()
         } else if self.focus_area == ComplianceFocusArea::Framework {
-            self.framework_selector.items.is_empty()
-                || self.framework_selector.selected == 0
+            self.framework_selector.items.is_empty() || self.framework_selector.selected == 0
         } else {
             true
         }

@@ -3,20 +3,20 @@ mod tests {
     use crate::tabs::TabInput;
     use crate::tabs::TabState;
 
+    use super::super::cluster::{ClusterFocusArea, ClusterTab};
     use super::super::core::StandardFocusArea;
     use super::super::core::StandardFocusAreaSelector;
-    use super::super::graphql::GraphQlTab;
-    use super::super::oauth::OAuthTab;
-    use super::super::recon::ReconTab;
-    use super::super::load::LoadTab;
-    use super::super::scan_ports::ScanPortsTab;
-    use super::super::stress::StressTab;
-    use super::super::packet::PacketTab;
-    use super::super::waf::{WafFocusArea, WafTab};
-    use super::super::cluster::{ClusterFocusArea, ClusterTab};
     use super::super::dashboard::DashboardTab;
-    use super::super::settings::main::{SettingsFocusArea, SettingsSection, SettingsTab};
+    use super::super::graphql::GraphQlTab;
     use super::super::history::HistoryTab;
+    use super::super::load::LoadTab;
+    use super::super::oauth::OAuthTab;
+    use super::super::packet::PacketTab;
+    use super::super::recon::ReconTab;
+    use super::super::scan_ports::ScanPortsTab;
+    use super::super::settings::main::{SettingsFocusArea, SettingsSection, SettingsTab};
+    use super::super::stress::StressTab;
+    use super::super::waf::{WafFocusArea, WafTab};
 
     // =========================================================================
     // 1. GraphQl tab: all focus areas
@@ -510,8 +510,7 @@ mod tests {
         let gql_before = gql.introspection_checkbox.checked;
         gql.handle_enter();
         assert_eq!(
-            gql.introspection_checkbox.checked,
-            !gql_before,
+            gql.introspection_checkbox.checked, !gql_before,
             "GraphQl Options should toggle"
         );
         assert!(!gql.is_running());
@@ -522,8 +521,7 @@ mod tests {
         let oauth_before = oauth.redirect_test_checkbox.checked;
         oauth.handle_enter();
         assert_eq!(
-            oauth.redirect_test_checkbox.checked,
-            !oauth_before,
+            oauth.redirect_test_checkbox.checked, !oauth_before,
             "OAuth Options should toggle"
         );
         assert!(!oauth.is_running());
@@ -535,8 +533,7 @@ mod tests {
         let recon_before = recon.option_checkboxes[0].checked;
         recon.handle_enter();
         assert_eq!(
-            recon.option_checkboxes[0].checked,
-            !recon_before,
+            recon.option_checkboxes[0].checked, !recon_before,
             "Recon Options should toggle"
         );
         assert!(!recon.is_running());
@@ -547,8 +544,7 @@ mod tests {
         let sp_before = sp.udp_checkbox.checked;
         sp.handle_enter();
         assert_eq!(
-            sp.udp_checkbox.checked,
-            !sp_before,
+            sp.udp_checkbox.checked, !sp_before,
             "ScanPorts Options should toggle"
         );
         assert!(!sp.is_running());
@@ -560,8 +556,7 @@ mod tests {
         let waf_before = waf.technique_checkboxes[0].checked;
         waf.handle_enter();
         assert_eq!(
-            waf.technique_checkboxes[0].checked,
-            !waf_before,
+            waf.technique_checkboxes[0].checked, !waf_before,
             "Waf Techniques should toggle"
         );
         assert!(!waf.is_running());

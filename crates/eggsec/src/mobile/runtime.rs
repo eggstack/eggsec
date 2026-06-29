@@ -8,8 +8,8 @@
 //! Standalone defense-lab. No device interaction here (see adb.rs + dynamic.rs).
 //! Parser is pure/string-based (no regex crate dep for Phase 1 to keep surface small).
 
-use crate::types::Severity;
 use super::dynamic::DynamicMobileFinding;
+use crate::types::Severity;
 
 /// Parse logcat output (full dump or stream) for high-signal security-relevant events.
 /// Returns zero or more DynamicMobileFinding entries (may contain duplicates across lines;
@@ -32,8 +32,18 @@ pub fn parse_logcat_findings(log: &str) -> Vec<DynamicMobileFinding> {
 
         // Permission grants / denials
         let l = line.to_ascii_lowercase();
-        if l.contains("permission") && (l.contains("grant") || l.contains("granted") || l.contains("deny") || l.contains("denied") || l.contains("revoke")) {
-            let sev = if l.contains("grant") || l.contains("granted") { Severity::Low } else { Severity::Medium };
+        if l.contains("permission")
+            && (l.contains("grant")
+                || l.contains("granted")
+                || l.contains("deny")
+                || l.contains("denied")
+                || l.contains("revoke"))
+        {
+            let sev = if l.contains("grant") || l.contains("granted") {
+                Severity::Low
+            } else {
+                Severity::Medium
+            };
             let title = if l.contains("grant") || l.contains("granted") {
                 "Runtime permission granted"
             } else {
@@ -51,7 +61,10 @@ pub fn parse_logcat_findings(log: &str) -> Vec<DynamicMobileFinding> {
         }
 
         // Crashes with stack frames
-        if l.contains("fatal exception") || l.contains("androidruntime:") || (l.contains("at ") && (l.contains("com.") || l.contains("java.lang."))) {
+        if l.contains("fatal exception")
+            || l.contains("androidruntime:")
+            || (l.contains("at ") && (l.contains("com.") || l.contains("java.lang.")))
+        {
             findings.push(DynamicMobileFinding {
                 category: "crash-log".to_string(),
                 severity: Severity::High,
@@ -106,7 +119,19 @@ fn contains_obvious_secret(line: &str) -> bool {
 fn basic_redact(line: &str) -> String {
     let mut out = line.to_string();
     // Simple non-regex redaction for common patterns (P1 basic hints only)
-    for pat in ["api_key=", "API_KEY=", "secret=", "SECRET=", "password=", "PASSWORD=", "token=", "auth_token=", "sk_live_", "sk_test_", "AIzaSy"] {
+    for pat in [
+        "api_key=",
+        "API_KEY=",
+        "secret=",
+        "SECRET=",
+        "password=",
+        "PASSWORD=",
+        "token=",
+        "auth_token=",
+        "sk_live_",
+        "sk_test_",
+        "AIzaSy",
+    ] {
         if out.contains(pat) {
             // Mask the value portion after the key (up to space or end)
             if let Some(pos) = out.find(pat) {
@@ -150,7 +175,9 @@ mod tests {
     fn parser_finds_permission_denied() {
         let log = "W ActivityManager: permission denied: android.permission.READ_CONTACTS\n";
         let fs = parse_logcat_findings(log);
-        assert!(fs.iter().any(|f| f.category == "runtime-permission" && f.title.contains("denied")));
+        assert!(fs
+            .iter()
+            .any(|f| f.category == "runtime-permission" && f.title.contains("denied")));
     }
 
     #[test]
@@ -160,11 +187,17 @@ mod tests {
                    E AndroidRuntime: java.lang.NullPointerException\n\
                    E AndroidRuntime: at com.example.app.MainActivity.onCreate(MainActivity.java:42)\n";
         let fs = parse_logcat_findings(log);
-        assert!(fs.iter().any(|f| f.category == "crash-log" && f.severity == Severity::High));
+        assert!(fs
+            .iter()
+            .any(|f| f.category == "crash-log" && f.severity == Severity::High));
         // P1 parser emits one finding per interesting line (fatal + at-frames); evidence for the crash finding(s) will contain relevant tokens
         let has_crash_context = fs.iter().any(|f| {
             f.category == "crash-log"
-                && f.evidence.as_ref().map_or(false, |e| e.contains("NullPointerException") || e.contains("at com.example") || e.contains("FATAL EXCEPTION"))
+                && f.evidence.as_ref().map_or(false, |e| {
+                    e.contains("NullPointerException")
+                        || e.contains("at com.example")
+                        || e.contains("FATAL EXCEPTION")
+                })
         });
         assert!(has_crash_context);
     }
@@ -174,7 +207,10 @@ mod tests {
         let log = "D Network: connecting to http://api.example.com/v1/data\n";
         let fs = parse_logcat_findings(log);
         assert!(fs.iter().any(|f| f.category == "cleartext-observed"));
-        let c = fs.iter().find(|f| f.category == "cleartext-observed").unwrap();
+        let c = fs
+            .iter()
+            .find(|f| f.category == "cleartext-observed")
+            .unwrap();
         assert!(c.evidence.as_ref().unwrap().contains("http://"));
     }
 
@@ -182,7 +218,10 @@ mod tests {
     fn parser_finds_secret_and_redacts() {
         let log = "D Config: api_key=sk_live_abc123XYZ456secretvalue loaded\nD Auth: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\n";
         let fs = parse_logcat_findings(log);
-        let secrets: Vec<_> = fs.iter().filter(|f| f.category == "log-secret-leak").collect();
+        let secrets: Vec<_> = fs
+            .iter()
+            .filter(|f| f.category == "log-secret-leak")
+            .collect();
         assert!(!secrets.is_empty());
         // redaction happened in evidence
         for s in &secrets {

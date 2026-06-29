@@ -186,7 +186,10 @@ pub struct ThemeLoadOutcome {
     pub theme: Theme,
 }
 
-fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
+fn halloy_to_theme(
+    halloy: &HalloyTheme,
+    file_stem: &str,
+) -> Result<ThemeLoadOutcome, ThemeLoadError> {
     let bg_hex = halloy
         .general
         .as_ref()
@@ -363,13 +366,19 @@ fn halloy_to_theme(halloy: &HalloyTheme, file_stem: &str) -> Result<ThemeLoadOut
     })
 }
 
-pub fn load_halloy_theme(content: &str, file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
+pub fn load_halloy_theme(
+    content: &str,
+    file_stem: &str,
+) -> Result<ThemeLoadOutcome, ThemeLoadError> {
     let halloy: HalloyTheme = toml::from_str(content)?;
     halloy_to_theme(&halloy, file_stem)
 }
 
 #[allow(dead_code)] // Used in #[cfg(test)] only
-pub fn load_halloy_theme_bytes(content: &[u8], file_stem: &str) -> Result<ThemeLoadOutcome, ThemeLoadError> {
+pub fn load_halloy_theme_bytes(
+    content: &[u8],
+    file_stem: &str,
+) -> Result<ThemeLoadOutcome, ThemeLoadError> {
     let s = std::str::from_utf8(content).map_err(|e| {
         use serde::de::Error;
         ThemeLoadError::ParseError(toml::de::Error::custom(e.to_string()))
@@ -393,7 +402,10 @@ primary = "#D8DEE9"
         let outcome = load_halloy_theme(toml_content, "test-theme").unwrap();
         assert_eq!(outcome.theme.name, "test-theme");
         assert_eq!(outcome.theme.mode, ThemeMode::Dark);
-        assert_eq!(outcome.theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
+        assert_eq!(
+            outcome.theme.colors.background,
+            Color::Rgb(0x2E, 0x34, 0x40)
+        );
         assert_eq!(outcome.theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
     }
 
@@ -511,21 +523,42 @@ background_selected_hover = "#88C0D0"
         let outcome = load_halloy_theme(toml_content, "nord").unwrap();
         assert_eq!(outcome.theme.name, "nord");
         assert_eq!(outcome.theme.mode, ThemeMode::Dark);
-        assert_eq!(outcome.theme.colors.background, Color::Rgb(0x2E, 0x34, 0x40));
+        assert_eq!(
+            outcome.theme.colors.background,
+            Color::Rgb(0x2E, 0x34, 0x40)
+        );
         assert_eq!(outcome.theme.colors.text, Color::Rgb(0xD8, 0xDE, 0xE9));
         assert_eq!(outcome.theme.colors.border, Color::Rgb(0x4C, 0x56, 0x6A));
-        assert_eq!(outcome.theme.colors.border_focused, Color::Rgb(0x81, 0xA1, 0xC1));
+        assert_eq!(
+            outcome.theme.colors.border_focused,
+            Color::Rgb(0x81, 0xA1, 0xC1)
+        );
         assert_eq!(outcome.theme.colors.success, Color::Rgb(0xA3, 0xBE, 0x8C));
         assert_eq!(outcome.theme.colors.error, Color::Rgb(0xBF, 0x61, 0x6A));
         assert_eq!(outcome.theme.colors.warning, Color::Rgb(0x81, 0xA1, 0xC1));
         assert_eq!(outcome.theme.colors.info, Color::Rgb(0xD0, 0x87, 0x70));
         assert_eq!(outcome.theme.colors.selected, Color::Rgb(0x2E, 0x34, 0x40));
-        assert_eq!(outcome.theme.colors.selected_text, Color::Rgb(0x88, 0xC0, 0xD0));
+        assert_eq!(
+            outcome.theme.colors.selected_text,
+            Color::Rgb(0x88, 0xC0, 0xD0)
+        );
         assert_eq!(outcome.theme.colors.highlight, Color::Rgb(0x43, 0x4C, 0x5E));
-        assert_eq!(outcome.theme.colors.mode_normal, Color::Rgb(0x3B, 0x42, 0x52));
-        assert_eq!(outcome.theme.colors.mode_insert, Color::Rgb(0x4C, 0x56, 0x6A));
-        assert_eq!(outcome.theme.colors.tab_active, Color::Rgb(0x81, 0xA1, 0xC1));
-        assert_eq!(outcome.theme.colors.tab_inactive, Color::Rgb(0x4C, 0x56, 0x6A));
+        assert_eq!(
+            outcome.theme.colors.mode_normal,
+            Color::Rgb(0x3B, 0x42, 0x52)
+        );
+        assert_eq!(
+            outcome.theme.colors.mode_insert,
+            Color::Rgb(0x4C, 0x56, 0x6A)
+        );
+        assert_eq!(
+            outcome.theme.colors.tab_active,
+            Color::Rgb(0x81, 0xA1, 0xC1)
+        );
+        assert_eq!(
+            outcome.theme.colors.tab_inactive,
+            Color::Rgb(0x4C, 0x56, 0x6A)
+        );
     }
 
     #[test]
@@ -538,7 +571,10 @@ background = "#1A1A2E"
         let defaults = dark_theme();
         assert_eq!(outcome.theme.colors.success, defaults.colors.success);
         assert_eq!(outcome.theme.colors.error, defaults.colors.error);
-        assert_eq!(outcome.theme.colors.status_running, defaults.colors.status_running);
+        assert_eq!(
+            outcome.theme.colors.status_running,
+            defaults.colors.status_running
+        );
     }
 
     #[test]

@@ -220,9 +220,7 @@ impl WebProxyToolCall {
             }
             ProxyAction::AddRule => {
                 if self.rule_pattern.is_none() {
-                    return Err(
-                        "Action 'add_rule' requires a 'rule_pattern' parameter".to_string(),
-                    );
+                    return Err("Action 'add_rule' requires a 'rule_pattern' parameter".to_string());
                 }
                 if let Some(ref act) = self.rule_action {
                     if !matches!(act.as_str(), "allow" | "block" | "modify") {

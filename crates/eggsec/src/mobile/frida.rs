@@ -67,33 +67,71 @@ pub fn connect(device: &str) -> crate::error::Result<FridaSession> {
     // Simulation path: treat common dry-run device markers or absence of real CLI as simulation.
     if is_frida_cli_available() {
         // Real path: validate reachability best-effort via frida-ps (non-fatal on probe failure for Phase 3a).
-        if let Err(e) = Command::new("frida-ps").arg("-U").arg("-D").arg(device).output() {
+        if let Err(e) = Command::new("frida-ps")
+            .arg("-U")
+            .arg("-D")
+            .arg(device)
+            .output()
+        {
             tracing::warn!("frida-ps probe failed: {}", e);
         }
-        Ok(FridaSession { device_id: device.to_string(), is_simulation: false })
+        Ok(FridaSession {
+            device_id: device.to_string(),
+            is_simulation: false,
+        })
     } else {
         // No frida CLI: produce simulation session (dry-run semantics; real callers gate via allow + policy).
-        Ok(FridaSession { device_id: device.to_string(), is_simulation: true })
+        Ok(FridaSession {
+            device_id: device.to_string(),
+            is_simulation: true,
+        })
     }
 }
 
 /// Returns true if the `frida` (or `frida-cli`) binary is discoverable in PATH.
 pub fn is_frida_cli_available() -> bool {
     // Try common names.
-    if Command::new("which").arg("frida").output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("frida")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         return true;
     }
-    if Command::new("which").arg("frida-cli").output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("frida-cli")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         return true;
     }
     // Fallback: direct spawn (some envs lack `which` or have it in limited PATH).
-    Command::new("frida").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
-        || Command::new("frida-cli").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+    Command::new("frida")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+        || Command::new("frida-cli")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
 }
 
 pub(crate) fn redact_frida_evidence(s: &str) -> String {
     let mut out = s.to_string();
-    let patterns = ["api_key", "sk_live_", "AIza", "token=", "password=", "secret=", "auth=", "bearer "];
+    let patterns = [
+        "api_key",
+        "sk_live_",
+        "AIza",
+        "token=",
+        "password=",
+        "secret=",
+        "auth=",
+        "bearer ",
+    ];
     for p in &patterns {
         if out.to_ascii_lowercase().contains(p) {
             out = out.replace(p, "[REDACTED]");
@@ -102,7 +140,11 @@ pub(crate) fn redact_frida_evidence(s: &str) -> String {
     if out.contains("[B(") && out.contains("len=") {
         if let Some(start) = out.find("len=") {
             if let Some(end) = out[start..].find(')') {
-                out = format!("{}[B(len=REDACTED){}", &out[..start], &out[start+end+1..]);
+                out = format!(
+                    "{}[B(len=REDACTED){}",
+                    &out[..start],
+                    &out[start + end + 1..]
+                );
             }
         }
     }
@@ -199,7 +241,11 @@ Java.perform(function() {
 /// - "library:NAME" → returns embedded library component (FRIDA_LIB_COMMON_HOOKS etc.), with package placeholder substitution
 /// - raw content (inline JS) → returned as-is (file reads for user paths happen at call sites in dynamic.rs)
 pub fn resolve_frida_script_spec(spec: &str, package: &str) -> crate::error::Result<String> {
-    let pkg = if package.trim().is_empty() { "com.example.target" } else { package };
+    let pkg = if package.trim().is_empty() {
+        "com.example.target"
+    } else {
+        package
+    };
     if let Some(name) = spec.strip_prefix("builtin:") {
         let script = match name {
             "crypto-keystore" => generate_crypto_keystore_script(pkg),
@@ -217,10 +263,12 @@ pub fn resolve_frida_script_spec(spec: &str, package: &str) -> crate::error::Res
     if let Some(name) = spec.strip_prefix("library:") {
         let src = match name {
             "common-hooks" | "common_hooks" => FRIDA_LIB_COMMON_HOOKS.to_string(),
-            _ => return Err(crate::error::EggsecError::Validation(format!(
-                "unknown frida library component '{}'; available: common-hooks",
-                name
-            ))),
+            _ => {
+                return Err(crate::error::EggsecError::Validation(format!(
+                    "unknown frida library component '{}'; available: common-hooks",
+                    name
+                )))
+            }
         };
         // Substitute a realistic package for the placeholder used in the embedded source
         let script = src.replace("com.target.app", pkg);
@@ -232,20 +280,33 @@ pub fn resolve_frida_script_spec(spec: &str, package: &str) -> crate::error::Res
 
 /// Execute a resolved spec (builtin:/library:/raw). Thin wrapper that resolves then executes.
 /// For library/builtin this ensures synthetic structured population on dry paths (mirrors prior run_builtin behavior).
-pub fn run_frida_spec(session: &FridaSession, spec: &str, package: &str) -> crate::error::Result<FridaScriptResult> {
+pub fn run_frida_spec(
+    session: &FridaSession,
+    spec: &str,
+    package: &str,
+) -> crate::error::Result<FridaScriptResult> {
     let script = resolve_frida_script_spec(spec, package)?;
     let mut res = execute_script(session, &script)?;
     if res.structured_output.is_none() {
         if spec.contains("crypto") || spec.contains("crypto-keystore") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-crypto-observation","method":"spec","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}));
+            res.structured_output = Some(
+                serde_json::json!({"type":"frida-crypto-observation","method":"spec","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}),
+            );
         } else if spec.contains("bypass") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-bypass-validation","method":"spec","args":"","ret":"","ts":0}));
+            res.structured_output = Some(
+                serde_json::json!({"type":"frida-bypass-validation","method":"spec","args":"","ret":"","ts":0}),
+            );
         } else if spec.contains("api") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-api-trace","method":"spec","params_inspected":{},"ts":0}));
+            res.structured_output = Some(
+                serde_json::json!({"type":"frida-api-trace","method":"spec","params_inspected":{},"ts":0}),
+            );
         } else if spec.contains("secret-extract") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-secret-extract","method":"spec","ts":0}));
+            res.structured_output =
+                Some(serde_json::json!({"type":"frida-secret-extract","method":"spec","ts":0}));
         } else if spec.contains("native-load") || spec.contains("native_load") {
-            res.structured_output = Some(serde_json::json!({"type":"frida-native-load","method":"spec","lib":"[REDACTED]","ts":0}));
+            res.structured_output = Some(
+                serde_json::json!({"type":"frida-native-load","method":"spec","lib":"[REDACTED]","ts":0}),
+            );
         }
     }
     Ok(res)
@@ -253,7 +314,11 @@ pub fn run_frida_spec(session: &FridaSession, spec: &str, package: &str) -> crat
 
 /// Phase 3c backward-compatible thin wrapper around the builtin path (still used by some call sites).
 /// Now implemented via the unified resolver for consistency.
-pub fn run_builtin(builtin: &str, session: &FridaSession, package: &str) -> crate::error::Result<FridaScriptResult> {
+pub fn run_builtin(
+    builtin: &str,
+    session: &FridaSession,
+    package: &str,
+) -> crate::error::Result<FridaScriptResult> {
     run_frida_spec(session, &format!("builtin:{}", builtin), package)
 }
 
@@ -338,7 +403,11 @@ pub fn generate_basic_method_trace_script(package: &str, methods: &[&str]) -> St
   console.log(JSON.stringify({{type:"frida-session-start", pkg:"{pkg}", methods:methods, ts:Date.now()}}));
 }}); "#,
         pkg = package.replace('"', "\\\""),
-        methods = methods.iter().map(|m| format!("\"{}\"", m.replace('"', "\\\""))).collect::<Vec<_>>().join(","),
+        methods = methods
+            .iter()
+            .map(|m| format!("\"{}\"", m.replace('"', "\\\"")))
+            .collect::<Vec<_>>()
+            .join(","),
         hooks = hooks
     )
 }
@@ -347,7 +416,8 @@ pub fn generate_basic_method_trace_script(package: &str, methods: &[&str]) -> St
 /// Emits JSON {type:"frida-crypto-observation", method, args_redacted, ret_redacted, ts}.
 pub fn generate_crypto_keystore_script(package: &str) -> String {
     let pkg = package.replace('"', "\\\"");
-    format!(r#"Java.perform(function () {{
+    format!(
+        r#"Java.perform(function () {{
   try {{
     var Cipher = Java.use("javax.crypto.Cipher");
     Cipher.doFinal.overload('[B').implementation = function (b) {{
@@ -382,14 +452,17 @@ pub fn generate_crypto_keystore_script(package: &str) -> String {
       return this.getEntry(alias, prot);
     }};
   }} catch (e) {{}}
-}}); "#, pkg = pkg)
+}}); "#,
+        pkg = pkg
+    )
 }
 
 /// Phase 3b: bypass/detection validation (root, frida, debug, su checks).
 /// Emits {type:"frida-bypass-validation", ...}.
 pub fn generate_bypass_validation_script(package: &str) -> String {
     let pkg = package.replace('"', "\\\"");
-    format!(r#"Java.perform(function () {{
+    format!(
+        r#"Java.perform(function () {{
   try {{
     var System = Java.use("java.lang.System");
     System.getProperty.overload("java.lang.String").implementation = function (k) {{
@@ -417,14 +490,17 @@ pub fn generate_bypass_validation_script(package: &str) -> String {
     Build.TAGS.value = "release-keys";
     console.log(JSON.stringify({{type:"frida-bypass-validation", method:"Build.TAGS", pkg:"{pkg}", args:"patched", ret:Build.TAGS.value, ts:Date.now()}}));
   }} catch (e) {{}}
-}}); "#, pkg = pkg)
+}}); "#,
+        pkg = pkg
+    )
 }
 
 /// Phase 3b: API call tracing with parameter inspection (HttpURLConnection, OkHttp common paths).
 /// Emits {type:"frida-api-trace", ... params_inspected}.
 pub fn generate_api_trace_script(package: &str) -> String {
     let pkg = package.replace('"', "\\\"");
-    format!(r#"Java.perform(function () {{
+    format!(
+        r#"Java.perform(function () {{
   try {{
     var Http = Java.use("java.net.HttpURLConnection");
     Http.getInputStream.implementation = function () {{
@@ -445,7 +521,9 @@ pub fn generate_api_trace_script(package: &str) -> String {
       return this.build();
     }};
   }} catch (e) {{}}
-}}); "#, pkg = pkg)
+}}); "#,
+        pkg = pkg
+    )
 }
 
 /// Phase 4c (partial delivery): Runtime supply chain / native library load observation (best-effort).
@@ -453,7 +531,8 @@ pub fn generate_api_trace_script(package: &str) -> String {
 /// Emits {type:"frida-native-load", method, lib|path, ts}. Dry-run safe; structured JSON.
 pub fn generate_native_lib_load_script(package: &str) -> String {
     let pkg = package.replace('"', "\\\"");
-    format!(r#"Java.perform(function () {{
+    format!(
+        r#"Java.perform(function () {{
   try {{
     var System = Java.use("java.lang.System");
     System.loadLibrary.overload("java.lang.String").implementation = function (lib) {{
@@ -483,7 +562,9 @@ pub fn generate_native_lib_load_script(package: &str) -> String {
       }});
     }}
   }} catch (e) {{}}
-}}); "#, pkg = pkg)
+}}); "#,
+        pkg = pkg
+    )
 }
 
 /// Thin backward wrapper.
@@ -492,16 +573,30 @@ pub fn basic_method_trace(
     package: &str,
     methods: &[&str],
 ) -> crate::error::Result<FridaScriptResult> {
-    let pkg = if package.trim().is_empty() { "com.example.target" } else { package };
+    let pkg = if package.trim().is_empty() {
+        "com.example.target"
+    } else {
+        package
+    };
     let meths: Vec<&str> = if methods.is_empty() {
-        vec!["javax.crypto.Cipher", "android.security.keystore.KeyStore", "java.security.KeyStore", "com.example.login.Auth"]
+        vec![
+            "javax.crypto.Cipher",
+            "android.security.keystore.KeyStore",
+            "java.security.KeyStore",
+            "com.example.login.Auth",
+        ]
     } else {
         methods.to_vec()
     };
     let script = generate_basic_method_trace_script(pkg, &meths);
     let mut res = execute_script(session, &script)?;
-    if !res.findings.iter().any(|f| f.contains("frida-method-trace")) {
-        res.findings.push("frida-method-trace: basic_method_trace executed".to_string());
+    if !res
+        .findings
+        .iter()
+        .any(|f| f.contains("frida-method-trace"))
+    {
+        res.findings
+            .push("frida-method-trace: basic_method_trace executed".to_string());
     }
     res.findings.push(format!("frida-session: pkg={}", pkg));
     Ok(res)
@@ -523,7 +618,8 @@ pub fn execute_script(
     if session.is_simulation || !is_frida_cli_available() {
         let mut findings = vec!["frida-simulation: script accepted".to_string()];
         if script.contains("frida-method-trace") || script.contains("Cipher.doFinal") {
-            findings.push("frida-method-trace: javax.crypto.Cipher.doFinal (simulated)".to_string());
+            findings
+                .push("frida-method-trace: javax.crypto.Cipher.doFinal (simulated)".to_string());
         }
         if script.contains("bypass-validation") || script.contains("root") {
             findings.push("frida-bypass-validation: System.getProperty (simulated)".to_string());
@@ -534,7 +630,10 @@ pub fn execute_script(
         if script.contains("frida-api-trace") || script.contains("api-trace") {
             findings.push("frida-api-trace: HttpURLConnection (simulated)".to_string());
         }
-        if script.contains("frida-native-load") || script.contains("native-load") || script.contains("native_load") {
+        if script.contains("frida-native-load")
+            || script.contains("native-load")
+            || script.contains("native_load")
+        {
             findings.push("frida-native-load: System.loadLibrary / dlopen (simulated)".to_string());
         }
         let mut structured_output: Option<serde_json::Value> = None;
@@ -547,15 +646,29 @@ pub fn execute_script(
                 }
             }
         }
-        if structured_output.is_none() && (script.contains("frida-crypto-observation") || script.contains("crypto")) {
-            structured_output = Some(serde_json::json!({"type":"frida-crypto-observation","method":"sim","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}));
+        if structured_output.is_none()
+            && (script.contains("frida-crypto-observation") || script.contains("crypto"))
+        {
+            structured_output = Some(
+                serde_json::json!({"type":"frida-crypto-observation","method":"sim","args_redacted":"[REDACTED]","ret_redacted":"[REDACTED]","ts":0}),
+            );
         }
-        if structured_output.is_none() && (script.contains("frida-native-load") || script.contains("native-load") || script.contains("native_load")) {
-            structured_output = Some(serde_json::json!({"type":"frida-native-load","method":"sim","lib":"[sim]","ts":0}));
+        if structured_output.is_none()
+            && (script.contains("frida-native-load")
+                || script.contains("native-load")
+                || script.contains("native_load"))
+        {
+            structured_output = Some(
+                serde_json::json!({"type":"frida-native-load","method":"sim","lib":"[sim]","ts":0}),
+            );
         }
         return Ok(FridaScriptResult {
             script_source: script.to_string(),
-            output: format!("(simulation) executed {} bytes of script on {}", script.len(), session.device_id),
+            output: format!(
+                "(simulation) executed {} bytes of script on {}",
+                script.len(),
+                session.device_id
+            ),
             findings,
             duration_ms: start.elapsed().as_millis() as u64,
             structured_output,
@@ -564,8 +677,9 @@ pub fn execute_script(
     // Real path (frida CLI present): write temp script, invoke, capture, cleanup.
     let tmp_dir = std::env::temp_dir();
     let script_path = tmp_dir.join(format!("eggsec_frida_{}.js", uuid::Uuid::new_v4()));
-    std::fs::write(&script_path, script)
-        .map_err(|e| crate::error::EggsecError::Validation(format!("frida: failed to write temp script: {}", e)))?;
+    std::fs::write(&script_path, script).map_err(|e| {
+        crate::error::EggsecError::Validation(format!("frida: failed to write temp script: {}", e))
+    })?;
     // Typical invocation (attach or spawn; Phase 3a uses -f for spawn-by-default with --no-pause -q for clean output).
     // We do not know package here; caller (basic_method_trace / run_dynamic_cli) may have used -f context in script or we attach.
     // Use a bounded timeout (30s default for Phase 3a safety).
@@ -590,16 +704,33 @@ pub fn execute_script(
     });
     let output_res = rx.recv_timeout(Duration::from_secs(30));
     if let Err(e) = std::fs::remove_file(&script_path) {
-        tracing::warn!("Failed to clean up frida script {}: {}", script_path.display(), e);
+        tracing::warn!(
+            "Failed to clean up frida script {}: {}",
+            script_path.display(),
+            e
+        );
     }
     let out = match output_res {
         Ok(Ok(o)) => o,
-        Ok(Err(e)) => return Err(crate::error::EggsecError::Validation(format!("frida CLI invoke error: {}", e))),
-        Err(_) => return Err(crate::error::EggsecError::Validation("frida execution timed out (30s)".to_string())),
+        Ok(Err(e)) => {
+            return Err(crate::error::EggsecError::Validation(format!(
+                "frida CLI invoke error: {}",
+                e
+            )))
+        }
+        Err(_) => {
+            return Err(crate::error::EggsecError::Validation(
+                "frida execution timed out (30s)".to_string(),
+            ))
+        }
     };
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-    let combined = if stderr.trim().is_empty() { stdout.clone() } else { format!("{}\n{}", stdout, stderr) };
+    let combined = if stderr.trim().is_empty() {
+        stdout.clone()
+    } else {
+        format!("{}\n{}", stdout, stderr)
+    };
     let mut findings: Vec<String> = Vec::new();
     let mut structured_output: Option<serde_json::Value> = None;
     for line in combined.lines() {
@@ -611,7 +742,13 @@ pub fn execute_script(
                     structured_output = Some(v);
                 }
             }
-        } else if t.to_uppercase().contains("FRIDA-FINDING:") || t.contains("frida-method-trace") || t.contains("frida-secret-extract") || t.contains("frida-bypass-validation") || t.contains("frida-crypto-observation") || t.contains("frida-api-trace") {
+        } else if t.to_uppercase().contains("FRIDA-FINDING:")
+            || t.contains("frida-method-trace")
+            || t.contains("frida-secret-extract")
+            || t.contains("frida-bypass-validation")
+            || t.contains("frida-crypto-observation")
+            || t.contains("frida-api-trace")
+        {
             findings.push(t.to_string());
         }
     }
@@ -633,7 +770,10 @@ mod tests {
 
     #[test]
     fn frida_module_present_under_mobile_dynamic_and_types_construct() {
-        let sess = FridaSession { device_id: "emulator-5554".into(), is_simulation: true };
+        let sess = FridaSession {
+            device_id: "emulator-5554".into(),
+            is_simulation: true,
+        };
         assert_eq!(sess.device_id, "emulator-5554");
         let res: FridaScriptResult = Default::default();
         assert!(res.script_source.is_empty());
@@ -652,7 +792,10 @@ mod tests {
 
     #[test]
     fn execute_script_dry_or_missing_cli_produces_valid_result() {
-        let sess = FridaSession { device_id: "emulator-5554".into(), is_simulation: true };
+        let sess = FridaSession {
+            device_id: "emulator-5554".into(),
+            is_simulation: true,
+        };
         let script = "Java.perform(function(){ console.log('hi'); });";
         let res = execute_script(&sess, script).expect("dry execute must succeed");
         assert!(res.script_source.contains("Java.perform"));
@@ -664,13 +807,19 @@ mod tests {
     #[test]
     fn execute_script_real_path_errors_cleanly_if_cli_missing_but_still_gated_by_caller() {
         // If frida CLI is present in this env the call may succeed (best-effort); we only assert the API shape.
-        let sess = FridaSession { device_id: "emulator-5554".into(), is_simulation: false };
+        let sess = FridaSession {
+            device_id: "emulator-5554".into(),
+            is_simulation: false,
+        };
         let _ = execute_script(&sess, "Java.perform(function(){});"); // must not panic; may err if no frida
     }
 
     #[test]
     fn script_generation_contains_expected_hooks_and_json_markers() {
-        let s = generate_basic_method_trace_script("com.example.vuln", &["javax.crypto.Cipher", "android.security.keystore.KeyStore"]);
+        let s = generate_basic_method_trace_script(
+            "com.example.vuln",
+            &["javax.crypto.Cipher", "android.security.keystore.KeyStore"],
+        );
         assert!(s.contains("Java.perform"));
         assert!(s.contains("javax.crypto.Cipher.doFinal"));
         assert!(s.contains("frida-method-trace"));
@@ -681,19 +830,33 @@ mod tests {
 
     #[test]
     fn basic_method_trace_dry_run_produces_findings_and_duration() {
-        let sess = FridaSession { device_id: "emulator-5554".into(), is_simulation: true };
-        let res = basic_method_trace(&sess, "com.example.vuln", &["javax.crypto.Cipher"]).expect("trace dry must succeed");
-        assert!(res.findings.iter().any(|f| f.contains("frida-method-trace")));
+        let sess = FridaSession {
+            device_id: "emulator-5554".into(),
+            is_simulation: true,
+        };
+        let res = basic_method_trace(&sess, "com.example.vuln", &["javax.crypto.Cipher"])
+            .expect("trace dry must succeed");
+        assert!(res
+            .findings
+            .iter()
+            .any(|f| f.contains("frida-method-trace")));
         assert!(res.duration_ms < 5000);
         assert!(res.script_source.contains("Cipher"));
     }
 
     #[test]
     fn result_parsing_handles_synthetic_json_output() {
-        let sess = FridaSession { device_id: "d".into(), is_simulation: true };
-        let script = r#"console.log(JSON.stringify({type:"frida-method-trace", method:"Cipher.doFinal"}));"#;
+        let sess = FridaSession {
+            device_id: "d".into(),
+            is_simulation: true,
+        };
+        let script =
+            r#"console.log(JSON.stringify({type:"frida-method-trace", method:"Cipher.doFinal"}));"#;
         let res = execute_script(&sess, script).expect("parse sim");
-        assert!(res.findings.iter().any(|f| f.contains("frida-method-trace") || f.contains("frida-json")));
+        assert!(res
+            .findings
+            .iter()
+            .any(|f| f.contains("frida-method-trace") || f.contains("frida-json")));
     }
 
     #[test]
@@ -725,30 +888,58 @@ mod tests {
 
     #[test]
     fn run_builtin_for_each_new_builtin_and_unknown_error() {
-        let sess = FridaSession { device_id: "d".into(), is_simulation: true };
+        let sess = FridaSession {
+            device_id: "d".into(),
+            is_simulation: true,
+        };
         let r1 = run_builtin("crypto-keystore", &sess, "p").expect("crypto");
-        assert!(r1.findings.iter().any(|f| f.contains("frida-crypto-observation")) || r1.structured_output.is_some());
+        assert!(
+            r1.findings
+                .iter()
+                .any(|f| f.contains("frida-crypto-observation"))
+                || r1.structured_output.is_some()
+        );
         let r2 = run_builtin("bypass-validation", &sess, "p").expect("bypass");
-        assert!(r2.findings.iter().any(|f| f.contains("frida-bypass")) || r2.structured_output.is_some());
+        assert!(
+            r2.findings.iter().any(|f| f.contains("frida-bypass"))
+                || r2.structured_output.is_some()
+        );
         let r3 = run_builtin("api-trace", &sess, "p").expect("api");
-        assert!(r3.findings.iter().any(|f| f.contains("frida-api")) || r3.structured_output.is_some());
+        assert!(
+            r3.findings.iter().any(|f| f.contains("frida-api")) || r3.structured_output.is_some()
+        );
         let r4 = run_builtin("basic-method-trace", &sess, "p").expect("basic alias");
-        assert!(r4.findings.iter().any(|f| f.contains("frida-method-trace")) || r4.structured_output.is_some());
+        assert!(
+            r4.findings.iter().any(|f| f.contains("frida-method-trace"))
+                || r4.structured_output.is_some()
+        );
         let r5 = run_builtin("native-load", &sess, "p").expect("native-load 4c");
-        assert!(r5.findings.iter().any(|f| f.contains("frida-native-load")) || r5.structured_output.is_some());
+        assert!(
+            r5.findings.iter().any(|f| f.contains("frida-native-load"))
+                || r5.structured_output.is_some()
+        );
         let err = run_builtin("unknown-foo", &sess, "p").unwrap_err();
         assert!(err.to_string().contains("unknown frida builtin"));
     }
 
     #[test]
     fn execute_script_structured_json_parse_path_sim_and_synthetic() {
-        let sess = FridaSession { device_id: "d".into(), is_simulation: true };
+        let sess = FridaSession {
+            device_id: "d".into(),
+            is_simulation: true,
+        };
         let script = r#"console.log(JSON.stringify({type:"frida-crypto-observation", method:"Cipher.doFinal"}));"#;
         let res = execute_script(&sess, script).expect("sim json");
         assert!(res.structured_output.is_some());
-        assert_eq!(res.structured_output.as_ref().unwrap()["type"], "frida-crypto-observation");
+        assert_eq!(
+            res.structured_output.as_ref().unwrap()["type"],
+            "frida-crypto-observation"
+        );
         let res2 = execute_script(&sess, "console.log('plain');").expect("plain");
-        assert!(res2.structured_output.is_none() || !res2.structured_output.as_ref().unwrap().is_object());
+        assert!(
+            res2.structured_output.is_none()
+                || !res2.structured_output.as_ref().unwrap().is_object()
+        );
     }
 
     #[test]
@@ -761,8 +952,12 @@ mod tests {
 
     #[test]
     fn execute_script_dry_populates_structured_for_json_builtin_markers() {
-        let sess = FridaSession { device_id: "d".into(), is_simulation: true };
-        let script = r#"console.log(JSON.stringify({type:"frida-crypto-observation", method:"x"}));"#;
+        let sess = FridaSession {
+            device_id: "d".into(),
+            is_simulation: true,
+        };
+        let script =
+            r#"console.log(JSON.stringify({type:"frida-crypto-observation", method:"x"}));"#;
         let res = execute_script(&sess, script).expect("struct");
         assert!(res.structured_output.is_some());
     }

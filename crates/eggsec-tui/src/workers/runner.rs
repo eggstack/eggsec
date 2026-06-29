@@ -680,11 +680,27 @@ impl TaskRunner {
                 super::security::run_wireless_task(interface, progress_tx, result_tx).await
             }
             #[cfg(feature = "wireless-advanced")]
-            TaskConfig::WirelessActive { interface, attack_type, bssid, client, frame_count, rate_limit, dry_run } => {
+            TaskConfig::WirelessActive {
+                interface,
+                attack_type,
+                bssid,
+                client,
+                frame_count,
+                rate_limit,
+                dry_run,
+            } => {
                 super::security::run_wireless_active_task(
-                    interface, attack_type, bssid, client, frame_count, rate_limit, dry_run,
-                    progress_tx, result_tx,
-                ).await
+                    interface,
+                    attack_type,
+                    bssid,
+                    client,
+                    frame_count,
+                    rate_limit,
+                    dry_run,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
             TaskConfig::Auth {
                 target,
@@ -709,7 +725,16 @@ impl TaskRunner {
                 .await
             }
             #[cfg(feature = "db-pentest")]
-            TaskConfig::DbPentest { manifest, target, db_type, checks, dry_run, allow_advanced, max_queries, max_duration } => {
+            TaskConfig::DbPentest {
+                manifest,
+                target,
+                db_type,
+                checks,
+                dry_run,
+                allow_advanced,
+                max_queries,
+                max_duration,
+            } => {
                 super::db_pentest::run_db_pentest_task(
                     manifest,
                     target,
@@ -721,20 +746,36 @@ impl TaskRunner {
                     max_duration,
                     progress_tx,
                     result_tx,
-                ).await
+                )
+                .await
             }
             #[cfg(feature = "web-proxy")]
-            TaskConfig::Intercept { listen_addr, dry_run, max_flows, target } => {
+            TaskConfig::Intercept {
+                listen_addr,
+                dry_run,
+                max_flows,
+                target,
+            } => {
                 super::intercept_worker::run_intercept_task(
-                    TaskConfig::Intercept { listen_addr, dry_run, max_flows, target },
+                    TaskConfig::Intercept {
+                        listen_addr,
+                        dry_run,
+                        max_flows,
+                        target,
+                    },
                     progress_tx,
                     result_tx,
                 )
                 .await
             }
             #[cfg(feature = "c2")]
-            TaskConfig::C2 { target, campaign, dry_run } => {
-                super::c2_worker::run_c2_task(target, campaign, dry_run, progress_tx, result_tx).await
+            TaskConfig::C2 {
+                target,
+                campaign,
+                dry_run,
+            } => {
+                super::c2_worker::run_c2_task(target, campaign, dry_run, progress_tx, result_tx)
+                    .await
             }
         };
         result

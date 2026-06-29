@@ -756,15 +756,11 @@ impl EmailSecurityAnalyzer {
             Err(_) => return (false, None),
         };
 
-        let tls_stream = match tokio::time::timeout(
-            timeout,
-            connector.connect(domain, stream),
-        )
-        .await
-        {
-            Ok(Ok(ts)) => ts,
-            _ => return (false, None),
-        };
+        let tls_stream =
+            match tokio::time::timeout(timeout, connector.connect(domain, stream)).await {
+                Ok(Ok(ts)) => ts,
+                _ => return (false, None),
+            };
 
         let (mut reader, _writer) = tokio::io::split(tls_stream);
         let mut buf = vec![0u8; 1024];

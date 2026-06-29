@@ -564,7 +564,8 @@ mod tests {
     fn test_render_long_multibyte_no_panic() {
         use ratatui::{backend::TestBackend, Terminal};
         let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
-        let mut field = InputField::new("Test").with_value("\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}");
+        let mut field = InputField::new("Test")
+            .with_value("\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}");
         field.width = Some(20);
         field.focused = true;
         terminal

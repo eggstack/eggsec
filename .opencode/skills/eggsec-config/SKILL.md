@@ -137,6 +137,7 @@ if !scope.is_target_allowed("example.com")? {
 cargo test --lib -p eggsec config::        # All config tests
 cargo test --lib -p eggsec config::loader  # Loader tests only
 cargo test --lib -p eggsec config::scope   # Scope tests only
+cargo test --lib -p eggsec config::policy_decision  # Enforcement policy tests
 ```
 
 ### Test Patterns
@@ -144,6 +145,7 @@ See inline tests in:
 - `config/loader.rs` - Config loading, file discovery, TOML/YAML parsing
 - `config/scope.rs` - Scope rule matching, CIDR, wildcard patterns
 - `config/settings.rs` - Validation, defaults
+- `config/policy_decision.rs` - 48 enforcement policy tests (Phase 4 regression coverage for manual discretion invariants)
 
 ## Security Notes
 

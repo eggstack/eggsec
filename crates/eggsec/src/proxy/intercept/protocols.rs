@@ -1,8 +1,8 @@
 //! Protocol-specific types for WebSocket, HTTP/2, and gRPC interception.
 
+use super::types::ProxyFlowDirection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use super::types::ProxyFlowDirection;
 
 /// Supported proxy protocol types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -294,10 +294,8 @@ impl Http2Session {
         self.connection_window_size = connection_window;
         self.stream_window_size = stream_window;
         self.initial_window_size = stream_window;
-        self.settings.insert(
-            "INITIAL_WINDOW_SIZE".to_string(),
-            stream_window.to_string(),
-        );
+        self.settings
+            .insert("INITIAL_WINDOW_SIZE".to_string(), stream_window.to_string());
         self.settings.insert(
             "MAX_CONCURRENT_STREAMS".to_string(),
             self.max_concurrent_streams.to_string(),
@@ -469,10 +467,7 @@ impl GrpcCall {
                     // Varint
                     let (value, bytes_read) = read_varint(bytes, cursor)?;
                     cursor += bytes_read;
-                    fields.insert(
-                        format!("field_{}", field_number),
-                        serde_json::json!(value),
-                    );
+                    fields.insert(format!("field_{}", field_number), serde_json::json!(value));
                 }
                 2 => {
                     // Length-delimited
@@ -489,10 +484,7 @@ impl GrpcCall {
 
                     // Try to decode as UTF-8 string
                     if let Ok(s) = std::str::from_utf8(data) {
-                        fields.insert(
-                            format!("field_{}", field_number),
-                            serde_json::json!(s),
-                        );
+                        fields.insert(format!("field_{}", field_number), serde_json::json!(s));
                     } else {
                         // Store as base64 for binary data
                         fields.insert(
@@ -516,10 +508,7 @@ impl GrpcCall {
                         bytes[cursor + 3],
                     ]);
                     cursor += 4;
-                    fields.insert(
-                        format!("field_{}", field_number),
-                        serde_json::json!(value),
-                    );
+                    fields.insert(format!("field_{}", field_number), serde_json::json!(value));
                 }
                 1 => {
                     // 64-bit fixed
@@ -537,10 +526,7 @@ impl GrpcCall {
                         bytes[cursor + 7],
                     ]);
                     cursor += 8;
-                    fields.insert(
-                        format!("field_{}", field_number),
-                        serde_json::json!(value),
-                    );
+                    fields.insert(format!("field_{}", field_number), serde_json::json!(value));
                 }
                 _ => {
                     return Err(format!("Unsupported wire type: {}", wire_type));
@@ -720,13 +706,23 @@ impl GrpcSession {
     pub fn streaming_call_count(&self) -> usize {
         self.calls
             .iter()
-            .filter(|c| matches!(c.method_type, GrpcMethodType::ServerStreaming | GrpcMethodType::ClientStreaming | GrpcMethodType::Bidirectional))
+            .filter(|c| {
+                matches!(
+                    c.method_type,
+                    GrpcMethodType::ServerStreaming
+                        | GrpcMethodType::ClientStreaming
+                        | GrpcMethodType::Bidirectional
+                )
+            })
             .count()
     }
 
     /// Find calls with non-OK status codes.
     pub fn error_calls(&self) -> Vec<&GrpcCall> {
-        self.calls.iter().filter(|c| c.response_status != 0).collect()
+        self.calls
+            .iter()
+            .filter(|c| c.response_status != 0)
+            .collect()
     }
 }
 
@@ -967,7 +963,10 @@ pub enum FlowControlError {
 impl std::fmt::Display for FlowControlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::WindowExceeded { requested, available } => {
+            Self::WindowExceeded {
+                requested,
+                available,
+            } => {
                 write!(
                     f,
                     "Flow control window exceeded: requested {} bytes, only {} available",
@@ -1124,7 +1123,7 @@ impl Default for GrpcReflectionInfo {
 /// gRPC client library.
 pub fn parse_grpc_reflection_response(payload: &str) -> Option<GrpcReflectionInfo> {
     let bytes = hex::decode(payload).ok()?;
-    
+
     // Try to parse as service list response
     // The actual parsing would depend on the proto definition
     // For now, return a basic structure indicating reflection is available
@@ -1253,7 +1252,11 @@ pub struct ProtocolDetection {
 }
 
 /// Detect protocol from the initial HTTP request headers.
-pub fn detect_protocol(_method: &str, _path: &str, headers: &HashMap<String, String>) -> ProtocolDetection {
+pub fn detect_protocol(
+    _method: &str,
+    _path: &str,
+    headers: &HashMap<String, String>,
+) -> ProtocolDetection {
     // Check for WebSocket upgrade
     if let Some(upgrade) = headers.get("upgrade") {
         if upgrade.eq_ignore_ascii_case("websocket") {
@@ -1300,7 +1303,10 @@ pub fn detect_protocol(_method: &str, _path: &str, headers: &HashMap<String, Str
 pub fn detect_grpc_method_type(_path: &str, headers: &HashMap<String, String>) -> GrpcMethodType {
     // Check for streaming indicators in grpc-status or TE header
     let te = headers.get("te").map(|v| v.as_str()).unwrap_or("");
-    let grpc_encoding = headers.get("grpc-encoding").map(|v| v.as_str()).unwrap_or("");
+    let grpc_encoding = headers
+        .get("grpc-encoding")
+        .map(|v| v.as_str())
+        .unwrap_or("");
 
     // Check the request content-type for streaming hints
     let _is_trailers_only = headers.contains_key("grpc-status");
@@ -1321,11 +1327,20 @@ mod tests {
     #[test]
     fn test_websocket_opcode_from_byte() {
         assert_eq!(WebSocketOpcode::from_byte(0x1), Some(WebSocketOpcode::Text));
-        assert_eq!(WebSocketOpcode::from_byte(0x2), Some(WebSocketOpcode::Binary));
-        assert_eq!(WebSocketOpcode::from_byte(0x8), Some(WebSocketOpcode::Close));
+        assert_eq!(
+            WebSocketOpcode::from_byte(0x2),
+            Some(WebSocketOpcode::Binary)
+        );
+        assert_eq!(
+            WebSocketOpcode::from_byte(0x8),
+            Some(WebSocketOpcode::Close)
+        );
         assert_eq!(WebSocketOpcode::from_byte(0x9), Some(WebSocketOpcode::Ping));
         assert_eq!(WebSocketOpcode::from_byte(0xA), Some(WebSocketOpcode::Pong));
-        assert_eq!(WebSocketOpcode::from_byte(0x0), Some(WebSocketOpcode::Continuation));
+        assert_eq!(
+            WebSocketOpcode::from_byte(0x0),
+            Some(WebSocketOpcode::Continuation)
+        );
         assert_eq!(WebSocketOpcode::from_byte(0x5), None);
     }
 
@@ -1349,7 +1364,8 @@ mod tests {
 
     #[test]
     fn test_websocket_session_add_message() {
-        let mut session = WebSocketSession::new("wss://example.com/chat", "example.com", "/chat", true);
+        let mut session =
+            WebSocketSession::new("wss://example.com/chat", "example.com", "/chat", true);
         let msg = WebSocketMessage {
             direction: super::super::types::ProxyFlowDirection::Request,
             opcode: WebSocketOpcode::Text,
@@ -1367,7 +1383,8 @@ mod tests {
 
     #[test]
     fn test_websocket_session_close() {
-        let mut session = WebSocketSession::new("wss://example.com/chat", "example.com", "/chat", true);
+        let mut session =
+            WebSocketSession::new("wss://example.com/chat", "example.com", "/chat", true);
         session.close(Some(1000), Some("normal closure".to_string()));
         assert!(session.closed_at.is_some());
         assert_eq!(session.close_code, Some(1000));
@@ -1427,7 +1444,10 @@ mod tests {
     #[test]
     fn test_detect_protocol_grpc() {
         let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "application/grpc+proto".to_string());
+        headers.insert(
+            "content-type".to_string(),
+            "application/grpc+proto".to_string(),
+        );
         let det = detect_protocol("POST", "/package.Service/Method", &headers);
         assert_eq!(det.protocol, ProxyProtocol::Grpc);
         assert!(det.confidence > 0.9);
@@ -1453,14 +1473,20 @@ mod tests {
     #[test]
     fn test_detect_grpc_method_type_unary() {
         let headers = HashMap::new();
-        assert_eq!(detect_grpc_method_type("/pkg.Svc/Method", &headers), GrpcMethodType::Unary);
+        assert_eq!(
+            detect_grpc_method_type("/pkg.Svc/Method", &headers),
+            GrpcMethodType::Unary
+        );
     }
 
     #[test]
     fn test_detect_grpc_method_type_streaming() {
         let mut headers = HashMap::new();
         headers.insert("te".to_string(), "trailers".to_string());
-        assert_eq!(detect_grpc_method_type("/pkg.Svc/Stream", &headers), GrpcMethodType::ServerStreaming);
+        assert_eq!(
+            detect_grpc_method_type("/pkg.Svc/Stream", &headers),
+            GrpcMethodType::ServerStreaming
+        );
     }
 
     #[test]
@@ -1528,10 +1554,9 @@ mod tests {
     #[test]
     fn test_grpc_streaming_state_add_frame() {
         let mut state = GrpcStreamingState::new(GrpcMethodType::Bidirectional);
-        let req = GrpcStreamFrame::new(1, ProxyFlowDirection::Request)
-            .with_payload(vec![1, 2, 3]);
-        let resp = GrpcStreamFrame::new(1, ProxyFlowDirection::Response)
-            .with_payload(vec![4, 5, 6, 7]);
+        let req = GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_payload(vec![1, 2, 3]);
+        let resp =
+            GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_payload(vec![4, 5, 6, 7]);
         state.add_frame(req);
         state.add_frame(resp);
         assert_eq!(state.client_frames.len(), 1);
@@ -1551,8 +1576,12 @@ mod tests {
     #[test]
     fn test_grpc_streaming_state_total_bytes() {
         let mut state = GrpcStreamingState::new(GrpcMethodType::Unary);
-        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_payload(vec![0; 100]));
-        state.add_frame(GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_payload(vec![0; 200]));
+        state.add_frame(
+            GrpcStreamFrame::new(1, ProxyFlowDirection::Request).with_payload(vec![0; 100]),
+        );
+        state.add_frame(
+            GrpcStreamFrame::new(1, ProxyFlowDirection::Response).with_payload(vec![0; 200]),
+        );
         assert_eq!(state.total_bytes(), 300);
     }
 
@@ -1602,7 +1631,8 @@ mod tests {
     #[test]
     fn test_detect_grpc_security_issues_with_auth_no_finding() {
         let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
-        call.request_metadata.insert("authorization".to_string(), "Bearer token".to_string());
+        call.request_metadata
+            .insert("authorization".to_string(), "Bearer token".to_string());
         let findings = detect_grpc_security_issues(&call);
         assert!(!findings.iter().any(|f| f.category == "missing_auth"));
     }
@@ -1613,7 +1643,10 @@ mod tests {
         call.request_size = 15_000_000; // 15MB > 10MB threshold
         let findings = detect_grpc_security_issues(&call);
         assert!(findings.iter().any(|f| f.category == "large_payload"));
-        let large = findings.iter().find(|f| f.category == "large_payload").unwrap();
+        let large = findings
+            .iter()
+            .find(|f| f.category == "large_payload")
+            .unwrap();
         assert_eq!(large.severity, 4);
     }
 
@@ -1623,7 +1656,10 @@ mod tests {
         call.response_status = 13; // INTERNAL
         let findings = detect_grpc_security_issues(&call);
         assert!(findings.iter().any(|f| f.category == "grpc_error"));
-        let err = findings.iter().find(|f| f.category == "grpc_error").unwrap();
+        let err = findings
+            .iter()
+            .find(|f| f.category == "grpc_error")
+            .unwrap();
         assert!(err.description.contains("INTERNAL"));
         assert_eq!(err.severity, 3); // non-auth error -> severity 3
     }
@@ -1633,7 +1669,10 @@ mod tests {
         let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
         call.response_status = 7; // PERMISSION_DENIED
         let findings = detect_grpc_security_issues(&call);
-        let err = findings.iter().find(|f| f.category == "grpc_error").unwrap();
+        let err = findings
+            .iter()
+            .find(|f| f.category == "grpc_error")
+            .unwrap();
         assert_eq!(err.severity, 6); // auth-related error -> severity 6
     }
 
@@ -1642,7 +1681,10 @@ mod tests {
         let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
         call.response_status = 16; // UNAUTHENTICATED
         let findings = detect_grpc_security_issues(&call);
-        let err = findings.iter().find(|f| f.category == "grpc_error").unwrap();
+        let err = findings
+            .iter()
+            .find(|f| f.category == "grpc_error")
+            .unwrap();
         assert_eq!(err.severity, 6);
     }
 
@@ -1651,7 +1693,10 @@ mod tests {
         let call = GrpcCall::new("/admin.Service/Debug", GrpcMethodType::Unary);
         let findings = detect_grpc_security_issues(&call);
         assert!(findings.iter().any(|f| f.category == "sensitive_endpoint"));
-        let ep = findings.iter().find(|f| f.category == "sensitive_endpoint").unwrap();
+        let ep = findings
+            .iter()
+            .find(|f| f.category == "sensitive_endpoint")
+            .unwrap();
         assert_eq!(ep.severity, 6);
     }
 
@@ -1660,14 +1705,18 @@ mod tests {
         // Only first match should be reported (break after first)
         let call = GrpcCall::new("/internal/debug/Admin", GrpcMethodType::Unary);
         let findings = detect_grpc_security_issues(&call);
-        let sensitive: Vec<_> = findings.iter().filter(|f| f.category == "sensitive_endpoint").collect();
+        let sensitive: Vec<_> = findings
+            .iter()
+            .filter(|f| f.category == "sensitive_endpoint")
+            .collect();
         assert_eq!(sensitive.len(), 1); // break after first match
     }
 
     #[test]
     fn test_detect_grpc_security_issues_clean_call() {
         let mut call = GrpcCall::new("/pkg.Svc/Method", GrpcMethodType::Unary);
-        call.request_metadata.insert("authorization".to_string(), "Bearer token".to_string());
+        call.request_metadata
+            .insert("authorization".to_string(), "Bearer token".to_string());
         call.request_size = 1024;
         call.response_status = 0;
         let findings = detect_grpc_security_issues(&call);
@@ -1680,9 +1729,18 @@ mod tests {
     fn test_grpc_session_streaming_call_count() {
         let mut session = GrpcSession::new("grpc.example.com", true);
         session.add_call(GrpcCall::new("/pkg.Svc/Unary", GrpcMethodType::Unary));
-        session.add_call(GrpcCall::new("/pkg.Svc/ServerStream", GrpcMethodType::ServerStreaming));
-        session.add_call(GrpcCall::new("/pkg.Svc/Bidi", GrpcMethodType::Bidirectional));
-        session.add_call(GrpcCall::new("/pkg.Svc/ClientStream", GrpcMethodType::ClientStreaming));
+        session.add_call(GrpcCall::new(
+            "/pkg.Svc/ServerStream",
+            GrpcMethodType::ServerStreaming,
+        ));
+        session.add_call(GrpcCall::new(
+            "/pkg.Svc/Bidi",
+            GrpcMethodType::Bidirectional,
+        ));
+        session.add_call(GrpcCall::new(
+            "/pkg.Svc/ClientStream",
+            GrpcMethodType::ClientStreaming,
+        ));
         assert_eq!(session.streaming_call_count(), 3);
     }
 
@@ -1748,23 +1806,26 @@ mod tests {
         let mut info = GrpcReflectionInfo::new();
         info.services.push(GrpcServiceInfo {
             name: "svc1".to_string(),
-            methods: vec![GrpcMethodInfo {
-                name: "m1".to_string(),
-                path: "/svc1/m1".to_string(),
-                method_type: GrpcMethodType::Unary,
-                input_type: "".to_string(),
-                output_type: "".to_string(),
-                client_streaming: false,
-                server_streaming: false,
-            }, GrpcMethodInfo {
-                name: "m2".to_string(),
-                path: "/svc1/m2".to_string(),
-                method_type: GrpcMethodType::Unary,
-                input_type: "".to_string(),
-                output_type: "".to_string(),
-                client_streaming: false,
-                server_streaming: false,
-            }],
+            methods: vec![
+                GrpcMethodInfo {
+                    name: "m1".to_string(),
+                    path: "/svc1/m1".to_string(),
+                    method_type: GrpcMethodType::Unary,
+                    input_type: "".to_string(),
+                    output_type: "".to_string(),
+                    client_streaming: false,
+                    server_streaming: false,
+                },
+                GrpcMethodInfo {
+                    name: "m2".to_string(),
+                    path: "/svc1/m2".to_string(),
+                    method_type: GrpcMethodType::Unary,
+                    input_type: "".to_string(),
+                    output_type: "".to_string(),
+                    client_streaming: false,
+                    server_streaming: false,
+                },
+            ],
             description: None,
         });
         info.services.push(GrpcServiceInfo {

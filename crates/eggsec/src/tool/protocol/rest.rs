@@ -491,13 +491,10 @@ async fn get_tool(
         return Err(EggsecError::Config(e.to_string()));
     }
 
-    let tool = state
-        .registry
-        .get(&tool_id)
-        .ok_or_else(|| {
-            state.metrics.record_request(start.elapsed(), true);
-            EggsecError::Config(format!("Tool '{}' not found", tool_id))
-        })?;
+    let tool = state.registry.get(&tool_id).ok_or_else(|| {
+        state.metrics.record_request(start.elapsed(), true);
+        EggsecError::Config(format!("Tool '{}' not found", tool_id))
+    })?;
 
     state.metrics.record_request(start.elapsed(), false);
 

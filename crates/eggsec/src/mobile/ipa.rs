@@ -55,9 +55,9 @@ fn read_entry_safe<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> R
             name
         )));
     }
-    let mut zf = archive
-        .by_name(name)
-        .map_err(|e| EggsecError::Internal(format!("failed to open zip entry '{}': {}", name, e)))?;
+    let mut zf = archive.by_name(name).map_err(|e| {
+        EggsecError::Internal(format!("failed to open zip entry '{}': {}", name, e))
+    })?;
     let sz = zf.size();
     if sz > MAX_FILE_READ {
         return Err(EggsecError::Validation(format!(
@@ -237,16 +237,19 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
         }
     }
 
-    let file = std::fs::File::open(path)
-        .map_err(|e| EggsecError::Internal(format!("failed to open IPA '{}': {}", path.display(), e)))?;
+    let file = std::fs::File::open(path).map_err(|e| {
+        EggsecError::Internal(format!("failed to open IPA '{}': {}", path.display(), e))
+    })?;
     let mut archive = ZipArchive::new(file)
         .map_err(|e| EggsecError::Internal(format!("invalid or corrupt IPA ZIP: {}", e)))?;
 
     // 1. Locate the app bundle Info.plist (first match)
-    let plist_name = locate_info_plist(&mut archive)
-        .ok_or_else(|| EggsecError::Validation(
-            "No valid Payload/*.app/Info.plist found in IPA (malformed bundle or ZipSlip-filtered)".to_string(),
-        ))?;
+    let plist_name = locate_info_plist(&mut archive).ok_or_else(|| {
+        EggsecError::Validation(
+            "No valid Payload/*.app/Info.plist found in IPA (malformed bundle or ZipSlip-filtered)"
+                .to_string(),
+        )
+    })?;
 
     // Derive the bundle directory prefix for later walks (e.g. "Payload/MyApp.app/")
     let bundle_prefix = match plist_name.rfind('/') {
@@ -256,11 +259,15 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
 
     // 2. Read + deserialize the main Info.plist
     let plist_bytes = read_entry_safe(&mut archive, &plist_name)?;
-    let info: InfoPlist = from_bytes(&plist_bytes)
-        .map_err(|e| EggsecError::Internal(format!("failed to parse Info.plist as plist: {}", e)))?;
+    let info: InfoPlist = from_bytes(&plist_bytes).map_err(|e| {
+        EggsecError::Internal(format!("failed to parse Info.plist as plist: {}", e))
+    })?;
 
     report.app_id = info.cf_bundle_identifier.clone();
-    match (&info.cf_bundle_short_version_string, &info.cf_bundle_version) {
+    match (
+        &info.cf_bundle_short_version_string,
+        &info.cf_bundle_version,
+    ) {
         (Some(s), Some(b)) => report.version = Some(format!("{} ({})", s, b)),
         (Some(s), None) => report.version = Some(s.clone()),
         (None, Some(b)) => report.version = Some(b.clone()),
@@ -309,7 +316,9 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
                     ));
                 }
                 if let Some(ref min_tls) = exc.ns_exception_minimum_tls_version {
-                    if min_tls.to_lowercase().contains("1.0") || min_tls.to_lowercase().contains("1.1") {
+                    if min_tls.to_lowercase().contains("1.0")
+                        || min_tls.to_lowercase().contains("1.1")
+                    {
                         insecure_reasons.push(format!("weak min TLS {} for {}", min_tls, domain));
                     }
                 }
@@ -394,7 +403,8 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
             has_code_signature = true;
         }
 
-        let is_provision = name.ends_with(".mobileprovision") || name.contains("embedded.mobileprovision");
+        let is_provision =
+            name.ends_with(".mobileprovision") || name.contains("embedded.mobileprovision");
         if is_provision || (size > 0 && size < MAX_TEXT_SCAN) {
             candidates.push((name, size, is_provision));
         }
@@ -412,15 +422,20 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
                     debug_indicators.push("aps-environment=development".to_string());
                 }
                 let lower = text.to_lowercase();
-                if lower.contains("enterprise") || lower.contains("ad-hoc") || lower.contains("debug") {
-                    debug_indicators.push("development/ad-hoc/enterprise profile marker".to_string());
+                if lower.contains("enterprise")
+                    || lower.contains("ad-hoc")
+                    || lower.contains("debug")
+                {
+                    debug_indicators
+                        .push("development/ad-hoc/enterprise profile marker".to_string());
                 }
             }
             continue;
         }
 
         // Bounded secret scan on small text/config files inside the .app
-        let inside_app = name.starts_with(&bundle_prefix) || (name.starts_with("Payload/") && name.contains(".app/"));
+        let inside_app = name.starts_with(&bundle_prefix)
+            || (name.starts_with("Payload/") && name.contains(".app/"));
         if inside_app && size > 0 && size < MAX_TEXT_SCAN {
             let lower = name.to_lowercase();
             if lower.ends_with(".plist")
@@ -491,9 +506,9 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as IoWrite;
     use tempfile::NamedTempFile;
     use zip::ZipWriter;
-    use std::io::Write as IoWrite;
 
     /// Helper: build a minimal valid IPA (ZIP) containing the given Info.plist XML bytes
     /// plus an optional _CodeSignature marker and/or a provisioning file.
@@ -505,7 +520,8 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
 
             zw.start_file("Payload/TestApp.app/Info.plist", opts)
                 .expect("start Info.plist");
@@ -622,9 +638,18 @@ mod tests {
         // A clean, properly-signed IPA with no ATS exceptions, no file-sharing, no custom schemes,
         // and no secrets should produce zero High/Critical findings. The Keychain guidance is only
         // emitted when we actually saw transport or secret issues (per the Phase 1 spec).
-        assert!(report.findings.iter().all(|f| f.severity != Severity::High && f.severity != Severity::Critical));
+        assert!(report
+            .findings
+            .iter()
+            .all(|f| f.severity != Severity::High && f.severity != Severity::Critical));
         // No Low signing note either, because we included a _CodeSignature in this test IPA.
-        assert!(report.findings.is_empty() || report.findings.iter().all(|f| f.severity == Severity::Info || f.severity == Severity::Low));
+        assert!(
+            report.findings.is_empty()
+                || report
+                    .findings
+                    .iter()
+                    .all(|f| f.severity == Severity::Info || f.severity == Severity::Low)
+        );
     }
 
     #[tokio::test]
@@ -639,8 +664,12 @@ mod tests {
             .filter(|f| f.category == "url-scheme")
             .collect();
         assert_eq!(scheme_findings.len(), 2);
-        assert!(scheme_findings.iter().any(|f| f.evidence.as_deref() == Some("myapp")));
-        assert!(scheme_findings.iter().any(|f| f.evidence.as_deref() == Some("myapp-prod")));
+        assert!(scheme_findings
+            .iter()
+            .any(|f| f.evidence.as_deref() == Some("myapp")));
+        assert!(scheme_findings
+            .iter()
+            .any(|f| f.evidence.as_deref() == Some("myapp-prod")));
         assert!(scheme_findings.iter().all(|f| f.severity == Severity::Low));
     }
 
@@ -656,8 +685,15 @@ mod tests {
         );
         let report = analyze_ipa(tmp.path()).await.expect("analyze");
 
-        assert!(report.findings.iter().any(|f| f.title.contains("Missing _CodeSignature")));
-        let build = report.findings.iter().find(|f| f.category == "build").expect("build finding");
+        assert!(report
+            .findings
+            .iter()
+            .any(|f| f.title.contains("Missing _CodeSignature")));
+        let build = report
+            .findings
+            .iter()
+            .find(|f| f.category == "build")
+            .expect("build finding");
         assert!(build.severity == Severity::Low);
         assert!(build.evidence.as_ref().unwrap().contains("get-task-allow"));
         assert!(build.evidence.as_ref().unwrap().contains("aps-environment"));
@@ -674,9 +710,15 @@ mod tests {
         );
         let report = analyze_ipa(tmp.path()).await.expect("analyze");
 
-        let secrets: Vec<_> = report.findings.iter().filter(|f| f.category == "secret").collect();
+        let secrets: Vec<_> = report
+            .findings
+            .iter()
+            .filter(|f| f.category == "secret")
+            .collect();
         assert!(!secrets.is_empty());
-        assert!(secrets.iter().any(|f| f.title.contains("OpenAI") || f.title.contains("GitHub")));
+        assert!(secrets
+            .iter()
+            .any(|f| f.title.contains("OpenAI") || f.title.contains("GitHub")));
         // Also triggers the Keychain guidance
         assert!(report.findings.iter().any(|f| f.title.contains("Keychain")));
     }
@@ -686,9 +728,11 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
             // Malicious entry
-            zw.start_file("Payload/../../evil.plist", opts).expect("start evil");
+            zw.start_file("Payload/../../evil.plist", opts)
+                .expect("start evil");
             zw.write_all(b"bad").expect("write");
             zw.finish().expect("finish");
         }
@@ -703,8 +747,10 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
-            zw.start_file("Payload/Weird.app/Other.plist", opts).expect("start other");
+            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            zw.start_file("Payload/Weird.app/Other.plist", opts)
+                .expect("start other");
             zw.write_all(b"not the info").expect("write");
             zw.finish().expect("finish");
         }
@@ -722,8 +768,10 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
-            zw.start_file("Payload/TestApp.app/Info.plist", opts).expect("start oversized plist");
+            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            zw.start_file("Payload/TestApp.app/Info.plist", opts)
+                .expect("start oversized plist");
             zw.write_all(&huge_plist).expect("write huge");
             zw.finish().expect("finish");
         }

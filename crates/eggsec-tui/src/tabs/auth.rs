@@ -41,17 +41,44 @@ pub struct AuthTab {
 impl AuthTab {
     pub fn new() -> Self {
         let inputs = crate::components::InputGroup::new()
-            .add(InputField::new("Target URL").with_width(50).with_value("https://target.lab"))
-            .add(InputField::new("Username / Userlist").with_width(40).with_value("admin or users.txt"))
-            .add(InputField::new("Password List / Wordlist").with_width(45).with_value("passwords.txt or rockyou.txt"))
-            .add(InputField::new("Credential File (optional)").with_width(45).with_value("user:pass file"))
-            .add(InputField::new("Max Attempts").with_width(12).with_value("50"))
-            .add(InputField::new("Concurrency").with_width(12).with_value("5"))
-            .add(InputField::new("Timeout (sec)").with_width(12).with_value("30"));
+            .add(
+                InputField::new("Target URL")
+                    .with_width(50)
+                    .with_value("https://target.lab"),
+            )
+            .add(
+                InputField::new("Username / Userlist")
+                    .with_width(40)
+                    .with_value("admin or users.txt"),
+            )
+            .add(
+                InputField::new("Password List / Wordlist")
+                    .with_width(45)
+                    .with_value("passwords.txt or rockyou.txt"),
+            )
+            .add(
+                InputField::new("Credential File (optional)")
+                    .with_width(45)
+                    .with_value("user:pass file"),
+            )
+            .add(
+                InputField::new("Max Attempts")
+                    .with_width(12)
+                    .with_value("50"),
+            )
+            .add(
+                InputField::new("Concurrency")
+                    .with_width(12)
+                    .with_value("5"),
+            )
+            .add(
+                InputField::new("Timeout (sec)")
+                    .with_width(12)
+                    .with_value("30"),
+            );
 
         Self {
-            core: TabCore::new("Running auth tests...", "Auth Results")
-                .with_inputs(inputs),
+            core: TabCore::new("Running auth tests...", "Auth Results").with_inputs(inputs),
             focus_area: AuthFocusArea::Target,
         }
     }
@@ -65,35 +92,64 @@ impl AuthTab {
     }
 
     pub fn target(&self) -> Option<&str> {
-        self.core.inputs.fields.first().map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+        self.core
+            .inputs
+            .fields
+            .first()
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
     }
 
     pub fn username(&self) -> Option<&str> {
-        self.core.inputs.fields.get(1).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+        self.core
+            .inputs
+            .fields
+            .get(1)
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
     }
 
     pub fn password_list(&self) -> Option<&str> {
-        self.core.inputs.fields.get(2).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+        self.core
+            .inputs
+            .fields
+            .get(2)
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
     }
 
     pub fn credential_file(&self) -> Option<&str> {
-        self.core.inputs.fields.get(3).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+        self.core
+            .inputs
+            .fields
+            .get(3)
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
     }
 
     pub fn max_attempts(&self) -> usize {
-        self.core.inputs.fields.get(4)
+        self.core
+            .inputs
+            .fields
+            .get(4)
             .and_then(|f| f.value.parse().ok())
             .unwrap_or(50)
     }
 
     pub fn concurrency(&self) -> usize {
-        self.core.inputs.fields.get(5)
+        self.core
+            .inputs
+            .fields
+            .get(5)
             .and_then(|f| f.value.parse().ok())
             .unwrap_or(5)
     }
 
     pub fn timeout(&self) -> u64 {
-        self.core.inputs.fields.get(6)
+        self.core
+            .inputs
+            .fields
+            .get(6)
             .and_then(|f| f.value.parse().ok())
             .unwrap_or(30)
     }
@@ -115,11 +171,17 @@ impl AuthTab {
             cmd.push_str(&format!(" --credential-file {}", c));
         }
         let ma = self.max_attempts();
-        if ma != 50 { cmd.push_str(&format!(" --max-attempts {}", ma)); }
+        if ma != 50 {
+            cmd.push_str(&format!(" --max-attempts {}", ma));
+        }
         let conc = self.concurrency();
-        if conc != 5 { cmd.push_str(&format!(" --concurrency {}", conc)); }
+        if conc != 5 {
+            cmd.push_str(&format!(" --concurrency {}", conc));
+        }
         let to = self.timeout();
-        if to != 30 { cmd.push_str(&format!(" --timeout {}", to)); }
+        if to != 30 {
+            cmd.push_str(&format!(" --timeout {}", to));
+        }
         Some(cmd)
     }
 
@@ -141,8 +203,12 @@ impl AuthTab {
     }
 
     pub fn set_results_from_report(&mut self, report: &eggsec::auth::AuthTestReport) {
-        let mut out = format!("Target: {}\nTests run: {}\nTotal attempts: {}\n\n",
-            report.target, report.tests_run.len(), report.total_attempts);
+        let mut out = format!(
+            "Target: {}\nTests run: {}\nTotal attempts: {}\n\n",
+            report.target,
+            report.tests_run.len(),
+            report.total_attempts
+        );
 
         if !report.findings.is_empty() {
             out.push_str("Findings:\n");
@@ -207,9 +273,15 @@ impl TabRender for AuthTab {
             ])
             .split(area);
 
-        let Some(title_area) = layout.first() else { return; };
-        let Some(inputs_area) = layout.get(1) else { return; };
-        let Some(results_area) = layout.get(2) else { return; };
+        let Some(title_area) = layout.first() else {
+            return;
+        };
+        let Some(inputs_area) = layout.get(1) else {
+            return;
+        };
+        let Some(results_area) = layout.get(2) else {
+            return;
+        };
 
         let title = Paragraph::new("Authentication Testing — Defense-lab only | Brute-force, Credential Stuffing, Lockout, Rate-limit, MFA, Timing, Session, Policy")
             .block(Block::default().borders(Borders::ALL).title("⚠ Defense Lab").border_style(Style::default().fg(tc!(border))))
@@ -277,7 +349,8 @@ impl TabInput for AuthTab {
         }
 
         if self.target().map_or(true, |t| t.is_empty()) {
-            let err = TabError::Target("Target URL is required for authentication testing".to_string());
+            let err =
+                TabError::Target("Target URL is required for authentication testing".to_string());
             self.core.state = AppState::Error(err.message());
             self.core.error = Some(err);
             return;
@@ -367,7 +440,12 @@ mod tests {
 
         let config = tab.build_task_config().unwrap();
         match config {
-            TaskConfig::Auth { target, max_attempts, concurrency, .. } => {
+            TaskConfig::Auth {
+                target,
+                max_attempts,
+                concurrency,
+                ..
+            } => {
                 assert_eq!(target, "https://target.lab");
                 assert_eq!(max_attempts, 100);
                 assert_eq!(concurrency, 10);
@@ -392,6 +470,9 @@ mod tests {
     #[test]
     fn input_labels_are_unique() {
         let tab = AuthTab::new();
-        assert_eq!(tab.core.inputs.duplicate_label_names(), Vec::<String>::new());
+        assert_eq!(
+            tab.core.inputs.duplicate_label_names(),
+            Vec::<String>::new()
+        );
     }
 }

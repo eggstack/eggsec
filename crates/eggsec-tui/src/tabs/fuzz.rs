@@ -1,7 +1,7 @@
 use crate::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem};
 use crate::tabs::core::{
-    self, field_as, field_str, render_results_area, render_config_block, start_scan,
-    FuzzFocusArea, TabCore, FUZZ_AREAS,
+    self, field_as, field_str, render_config_block, render_results_area, start_scan, FuzzFocusArea,
+    TabCore, FUZZ_AREAS,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
@@ -449,9 +449,8 @@ impl TabRender for FuzzTab {
         );
 
         let num_fields = 12;
-        let config_constraints: Vec<Constraint> = (0..num_fields)
-            .map(|_| Constraint::Length(3))
-            .collect();
+        let config_constraints: Vec<Constraint> =
+            (0..num_fields).map(|_| Constraint::Length(3)).collect();
 
         let config_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -515,7 +514,12 @@ impl TabRender for FuzzTab {
         };
         let status = Paragraph::new(status_text)
             .style(Style::default().fg(status_color))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))).title("Status"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(tc!(border)))
+                    .title("Status"),
+            );
         if let Some(status_chunk) = config_chunks.get(11) {
             f.render_widget(status, *status_chunk);
         }

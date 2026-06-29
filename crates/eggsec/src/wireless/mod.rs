@@ -99,8 +99,11 @@ impl WirelessScanner {
             .output()
             .await
             .map_err(|e| {
-                let msg = if e.to_string().contains("not found") || e.to_string().contains("No such file") {
-                    "iwlist command not found (install wireless-tools package and ensure in PATH)".to_string()
+                let msg = if e.to_string().contains("not found")
+                    || e.to_string().contains("No such file")
+                {
+                    "iwlist command not found (install wireless-tools package and ensure in PATH)"
+                        .to_string()
                 } else {
                     format!("iwlist scan failed: {}", e)
                 };
@@ -112,7 +115,10 @@ impl WirelessScanner {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stderr_l = stderr.to_lowercase();
-            let msg = if stderr_l.contains("operation not permitted") || stderr_l.contains("permission denied") || stderr_l.contains("not permitted") {
+            let msg = if stderr_l.contains("operation not permitted")
+                || stderr_l.contains("permission denied")
+                || stderr_l.contains("not permitted")
+            {
                 "iwlist scan failed: Operation not permitted. run as root or grant CAP_NET_ADMIN (setcap cap_net_admin+ep /sbin/iwlist or use sudo)".to_string()
             } else if stderr.trim().is_empty() {
                 format!(
@@ -205,7 +211,8 @@ impl WirelessScanner {
             }
 
             if line.starts_with("ESSID:") {
-                let essid = line.split("ESSID:\"")
+                let essid = line
+                    .split("ESSID:\"")
                     .nth(1)
                     .unwrap_or("")
                     .trim_matches('"')
@@ -295,7 +302,10 @@ impl WirelessScanner {
         }
 
         if skipped_malformed > 0 {
-            tracing::warn!("Skipped {} malformed wireless network entries", skipped_malformed);
+            tracing::warn!(
+                "Skipped {} malformed wireless network entries",
+                skipped_malformed
+            );
         }
 
         networks
@@ -311,7 +321,10 @@ impl WirelessScanner {
         false
     }
 
-    pub fn analyze_networks(networks: &[WirelessNetwork], known_good: Option<&std::collections::HashSet<String>>) -> Vec<WirelessVulnerability> {
+    pub fn analyze_networks(
+        networks: &[WirelessNetwork],
+        known_good: Option<&std::collections::HashSet<String>>,
+    ) -> Vec<WirelessVulnerability> {
         let mut vulnerabilities = Vec::new();
 
         for network in networks {
@@ -320,8 +333,15 @@ impl WirelessScanner {
                     ssid: network.ssid.clone(),
                     bssid: network.bssid.clone(),
                     vulnerability_type: "Weak Signal Strength".to_string(),
-                    severity: if network.signal_strength <= -90 { Severity::Low } else { Severity::Medium },
-                    description: format!("Network {} has weak signal ({} dBm)", network.ssid, network.signal_strength),
+                    severity: if network.signal_strength <= -90 {
+                        Severity::Low
+                    } else {
+                        Severity::Medium
+                    },
+                    description: format!(
+                        "Network {} has weak signal ({} dBm)",
+                        network.ssid, network.signal_strength
+                    ),
                     recommendation: "Reposition AP or investigate interference".to_string(),
                 });
             }
@@ -332,8 +352,12 @@ impl WirelessScanner {
                     bssid: network.bssid.clone(),
                     vulnerability_type: "WPS Enabled".to_string(),
                     severity: Severity::Medium,
-                    description: format!("Network {} has WPS enabled (PIN brute-force risk)", network.ssid),
-                    recommendation: "Disable WPS or use PIN-less mode with rate limiting".to_string(),
+                    description: format!(
+                        "Network {} has WPS enabled (PIN brute-force risk)",
+                        network.ssid
+                    ),
+                    recommendation: "Disable WPS or use PIN-less mode with rate limiting"
+                        .to_string(),
                 });
             }
 
@@ -343,8 +367,12 @@ impl WirelessScanner {
                     bssid: network.bssid.clone(),
                     vulnerability_type: "Hidden SSID".to_string(),
                     severity: Severity::Low,
-                    description: format!("Network {} uses hidden SSID (provides minimal security benefit)", network.ssid),
-                    recommendation: "Consider broadcasting SSID for better client compatibility".to_string(),
+                    description: format!(
+                        "Network {} uses hidden SSID (provides minimal security benefit)",
+                        network.ssid
+                    ),
+                    recommendation: "Consider broadcasting SSID for better client compatibility"
+                        .to_string(),
                 });
             }
 
@@ -354,7 +382,10 @@ impl WirelessScanner {
                     bssid: network.bssid.clone(),
                     vulnerability_type: "WPA2/WPA3 Transition Mode".to_string(),
                     severity: Severity::Low,
-                    description: format!("Network {} is in WPA2/WPA3 transition mode (downgrade risk)", network.ssid),
+                    description: format!(
+                        "Network {} is in WPA2/WPA3 transition mode (downgrade risk)",
+                        network.ssid
+                    ),
                     recommendation: "Enforce WPA3-only when all clients support it".to_string(),
                 });
             }
@@ -414,35 +445,65 @@ impl WirelessScanner {
             }
         }
 
-        let mut ssid_groups: std::collections::HashMap<String, Vec<&WirelessNetwork>> = std::collections::HashMap::new();
+        let mut ssid_groups: std::collections::HashMap<String, Vec<&WirelessNetwork>> =
+            std::collections::HashMap::new();
         for network in networks {
-            ssid_groups.entry(network.ssid.clone()).or_default().push(network);
+            ssid_groups
+                .entry(network.ssid.clone())
+                .or_default()
+                .push(network);
         }
         for (ssid, nets) in &ssid_groups {
             if nets.len() >= 2 {
-                let distinct_bssids: std::collections::HashSet<_> = nets.iter().map(|n| &n.bssid).collect();
-                let distinct_secs: std::collections::HashSet<_> = nets.iter().map(|n| n.security_type).collect();
+                let distinct_bssids: std::collections::HashSet<_> =
+                    nets.iter().map(|n| &n.bssid).collect();
+                let distinct_secs: std::collections::HashSet<_> =
+                    nets.iter().map(|n| n.security_type).collect();
                 if distinct_bssids.len() >= 2 || distinct_secs.len() >= 2 {
-                    let bssid_list: Vec<_> = nets.iter().map(|n| format!("{} (ch{}, {})", n.bssid, n.channel, n.security_type.as_str())).collect();
+                    let bssid_list: Vec<_> = nets
+                        .iter()
+                        .map(|n| {
+                            format!(
+                                "{} (ch{}, {})",
+                                n.bssid,
+                                n.channel,
+                                n.security_type.as_str()
+                            )
+                        })
+                        .collect();
                     let is_sec_diff = distinct_secs.len() >= 2;
-                    let severity = if is_sec_diff { Severity::Medium } else { Severity::Low };
-                    let mut desc = format!("Multiple BSSIDs or security configs for SSID {}: {}", ssid, bssid_list.join("; "));
+                    let severity = if is_sec_diff {
+                        Severity::Medium
+                    } else {
+                        Severity::Low
+                    };
+                    let mut desc = format!(
+                        "Multiple BSSIDs or security configs for SSID {}: {}",
+                        ssid,
+                        bssid_list.join("; ")
+                    );
                     desc.push_str(" (passive heuristic; heuristic only; verify physically or via authorized inventory)");
                     if is_sec_diff {
-                        desc.push_str(" including security configuration differences (possible downgrade)");
+                        desc.push_str(
+                            " including security configuration differences (possible downgrade)",
+                        );
                     }
                     // Skip rogue/Evil-Twin if any net in group matches known-good (by SSID, BSSID, or "SSID,BSSID")
                     let suppressed = if let Some(kg) = known_good {
                         nets.iter().any(|n| Self::is_known_good(n, kg))
-                    } else { false };
+                    } else {
+                        false
+                    };
                     if !suppressed {
                         vulnerabilities.push(WirelessVulnerability {
                             ssid: ssid.clone(),
                             bssid: nets[0].bssid.clone(),
-                            vulnerability_type: "Possible Rogue AP / Evil Twin (passive heuristic)".to_string(),
+                            vulnerability_type: "Possible Rogue AP / Evil Twin (passive heuristic)"
+                                .to_string(),
                             severity,
                             description: desc,
-                            recommendation: "Verify authorized APs only; investigate in lab".to_string(),
+                            recommendation: "Verify authorized APs only; investigate in lab"
+                                .to_string(),
                         });
                     }
                 }
@@ -480,7 +541,10 @@ impl WirelessScanner {
                 }
             }
             if network.wps_enabled && seen.insert(format!("wps:{}", network.bssid)) {
-                recommendations.push("Disable WPS on networks where it is enabled (PIN brute-force risk)".to_string());
+                recommendations.push(
+                    "Disable WPS on networks where it is enabled (PIN brute-force risk)"
+                        .to_string(),
+                );
             }
             if network.transition_mode && seen.insert(format!("transition:{}", network.bssid)) {
                 recommendations.push("Consider enforcing WPA3-only mode on transition networks to avoid downgrade attacks".to_string());
@@ -489,7 +553,10 @@ impl WirelessScanner {
                 recommendations.push("Hidden SSIDs offer little security benefit; consider broadcasting for client compatibility".to_string());
             }
             if network.signal_strength <= -80 && seen.insert(format!("weak:{}", network.bssid)) {
-                recommendations.push("Investigate weak signal networks for interference or reposition APs".to_string());
+                recommendations.push(
+                    "Investigate weak signal networks for interference or reposition APs"
+                        .to_string(),
+                );
             }
         }
 
@@ -502,7 +569,9 @@ impl WirelessScanner {
             recommendations.push("No wireless networks were detected during the scan".to_string());
         }
 
-        recommendations.push("Run repeated scans to observe changes over time for rogue detection.".to_string());
+        recommendations.push(
+            "Run repeated scans to observe changes over time for rogue detection.".to_string(),
+        );
 
         recommendations
     }
@@ -517,7 +586,10 @@ impl Default for WirelessScanner {
 fn wireless_category_for(vuln_type: &str) -> String {
     if vuln_type.contains("Rogue") || vuln_type.contains("Evil Twin") {
         "wireless-rogue".to_string()
-    } else if vuln_type == "Open Network" || vuln_type == "WEP Encryption" || vuln_type == "WPA Encryption" {
+    } else if vuln_type == "Open Network"
+        || vuln_type == "WEP Encryption"
+        || vuln_type == "WPA Encryption"
+    {
         "wireless-security".to_string()
     } else if vuln_type == "WPS Enabled" {
         "wireless-wps".to_string()
@@ -549,7 +621,11 @@ pub fn to_scan_report_data(result: &WirelessScanResult) -> crate::output::conver
                 .map(|n| {
                     format!(
                         "network={} bssid={} ch={} sig={}dBm sec={}",
-                        v.ssid, v.bssid, n.channel, n.signal_strength, n.security_type.as_str()
+                        v.ssid,
+                        v.bssid,
+                        n.channel,
+                        n.signal_strength,
+                        n.security_type.as_str()
                     )
                 })
                 .unwrap_or_else(|| format!("network={} bssid={}", v.ssid, v.bssid));
@@ -607,21 +683,32 @@ pub async fn run_cli(
 
     let scanner = WirelessScanner::new().with_interface(args.interface.clone());
 
-    let known_good_set: std::collections::HashSet<String> = if let Some(ref p) = scan_args.known_good {
-        load_known_good(p)
+    let known_good_set: std::collections::HashSet<String> =
+        if let Some(ref p) = scan_args.known_good {
+            load_known_good(p)
+        } else {
+            std::collections::HashSet::new()
+        };
+    let kg_ref: Option<&std::collections::HashSet<String>> = if known_good_set.is_empty() {
+        None
     } else {
-        std::collections::HashSet::new()
+        Some(&known_good_set)
     };
-    let kg_ref: Option<&std::collections::HashSet<String>> = if known_good_set.is_empty() { None } else { Some(&known_good_set) };
 
     if !scan_args.quiet {
         eprintln!("NOTE: Requires root (or CAP_NET_ADMIN) + 'iwlist' from wireless-tools. Interface in managed mode. For authorized lab/defensive validation use only. Passive recon only.");
         if scan_args.dry_run {
             eprintln!("DRY-RUN: planning mode (no iwlist calls, no privileges required).");
         } else if scan_args.repeat == 1 {
-            eprintln!("Scanning on {} for ~{}s...", args.interface, scan_args.duration);
+            eprintln!(
+                "Scanning on {} for ~{}s...",
+                args.interface, scan_args.duration
+            );
         } else {
-            eprintln!("Performing {} repeated scans on {} ({}s each, ~2s delay between)...", scan_args.repeat, args.interface, scan_args.duration);
+            eprintln!(
+                "Performing {} repeated scans on {} ({}s each, ~2s delay between)...",
+                scan_args.repeat, args.interface, scan_args.duration
+            );
         }
     }
 
@@ -649,7 +736,10 @@ pub async fn run_cli(
                 Ok(r) => Some(r),
                 Err(e) => {
                     if !scan_args.quiet {
-                        eprintln!("Scan {}/{} failed: {}; continuing for remaining repeats...", i, scan_args.repeat, e);
+                        eprintln!(
+                            "Scan {}/{} failed: {}; continuing for remaining repeats...",
+                            i, scan_args.repeat, e
+                        );
                     }
                     last_err = Some(e);
                     None
@@ -682,7 +772,9 @@ pub async fn run_cli(
         return Err(e);
     } else {
         // fallback (should not happen)
-        return Err(EggsecError::Network("No successful wireless scan results".to_string()));
+        return Err(EggsecError::Network(
+            "No successful wireless scan results".to_string(),
+        ));
     };
 
     let output = if scan_args.json {
@@ -717,7 +809,11 @@ pub async fn run_cli(
                 network.security_type.as_str(),
                 if network.wps_enabled { " (WPS)" } else { "" }
             ));
-            buf.push_str(&format!("     Signal:   {} dBm{}\n", network.signal_strength, if network.is_hidden { " [hidden]" } else { "" }));
+            buf.push_str(&format!(
+                "     Signal:   {} dBm{}\n",
+                network.signal_strength,
+                if network.is_hidden { " [hidden]" } else { "" }
+            ));
             buf.push_str(&format!("     Last seen: {}\n", network.last_seen));
             if network.transition_mode {
                 buf.push_str("     Note: WPA2/WPA3 transition mode\n");
@@ -740,8 +836,20 @@ pub async fn run_cli(
                     ));
                 }
             } else {
-                let rogue_count = vulns.iter().filter(|v| v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin")).count();
-                let other_vulns: Vec<_> = vulns.drain(..).filter(|v| !(v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin"))).collect();
+                let rogue_count = vulns
+                    .iter()
+                    .filter(|v| {
+                        v.vulnerability_type.contains("Rogue")
+                            || v.vulnerability_type.contains("Evil Twin")
+                    })
+                    .count();
+                let other_vulns: Vec<_> = vulns
+                    .drain(..)
+                    .filter(|v| {
+                        !(v.vulnerability_type.contains("Rogue")
+                            || v.vulnerability_type.contains("Evil Twin"))
+                    })
+                    .collect();
                 if !other_vulns.is_empty() {
                     buf.push_str("Findings / Vulnerabilities:\n");
                     for v in &other_vulns {
@@ -864,16 +972,22 @@ fn compute_changes_since(
         }
     }
 
-    let curr_rogues: std::collections::HashSet<String> = WirelessScanner::analyze_networks(&curr.networks, known_good)
-        .into_iter()
-        .filter(|v| v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin"))
-        .map(|v| v.ssid.clone())
-        .collect();
-    let prev_rogues: std::collections::HashSet<String> = WirelessScanner::analyze_networks(&prev.networks, known_good)
-        .into_iter()
-        .filter(|v| v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin"))
-        .map(|v| v.ssid.clone())
-        .collect();
+    let curr_rogues: std::collections::HashSet<String> =
+        WirelessScanner::analyze_networks(&curr.networks, known_good)
+            .into_iter()
+            .filter(|v| {
+                v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin")
+            })
+            .map(|v| v.ssid.clone())
+            .collect();
+    let prev_rogues: std::collections::HashSet<String> =
+        WirelessScanner::analyze_networks(&prev.networks, known_good)
+            .into_iter()
+            .filter(|v| {
+                v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin")
+            })
+            .map(|v| v.ssid.clone())
+            .collect();
     for s in &curr_rogues {
         if !prev_rogues.contains(s) {
             diffs.push(format!("New rogue/Evil-Twin candidate: {}", s));
@@ -888,8 +1002,10 @@ fn build_temporal_summary(
     known_good: Option<&std::collections::HashSet<String>>,
 ) -> String {
     let mut unique_ssids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut all_seen_nets: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
-    let mut last_sec: std::collections::HashMap<String, SecurityType> = std::collections::HashMap::new();
+    let mut all_seen_nets: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
+    let mut last_sec: std::collections::HashMap<String, SecurityType> =
+        std::collections::HashMap::new();
     let mut last_sig: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     let mut scans_with_new_nets: u32 = 0;
     let mut sec_changes: u32 = 0;
@@ -922,18 +1038,29 @@ fn build_temporal_summary(
         }
         let rogues_here = WirelessScanner::analyze_networks(&res.networks, known_good)
             .into_iter()
-            .filter(|v| v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin"))
+            .filter(|v| {
+                v.vulnerability_type.contains("Rogue") || v.vulnerability_type.contains("Evil Twin")
+            })
             .count();
         rogue_count_total += rogues_here as u32;
     }
 
     let mut s = String::new();
     s.push_str("Scan summary over time:\n");
-    s.push_str(&format!("  Total unique SSIDs seen: {}\n", unique_ssids.len()));
-    s.push_str(&format!("  Scans with new networks: {}\n", scans_with_new_nets));
+    s.push_str(&format!(
+        "  Total unique SSIDs seen: {}\n",
+        unique_ssids.len()
+    ));
+    s.push_str(&format!(
+        "  Scans with new networks: {}\n",
+        scans_with_new_nets
+    ));
     s.push_str(&format!("  Security changes observed: {}\n", sec_changes));
     s.push_str(&format!("  Signal drifts (>5dBm): {}\n", sig_drifts));
-    s.push_str(&format!("  Rogue candidates across all: {}\n", rogue_count_total));
+    s.push_str(&format!(
+        "  Rogue candidates across all: {}\n",
+        rogue_count_total
+    ));
     s
 }
 
@@ -1064,7 +1191,9 @@ mod tests {
             transition_mode: false,
         }];
         let vulns = WirelessScanner::analyze_networks(&networks, None);
-        assert!(vulns.iter().any(|v| v.vulnerability_type == "Weak Signal Strength"));
+        assert!(vulns
+            .iter()
+            .any(|v| v.vulnerability_type == "Weak Signal Strength"));
     }
 
     #[test]
@@ -1094,7 +1223,9 @@ mod tests {
             },
         ];
         let vulns = WirelessScanner::analyze_networks(&networks, None);
-        assert!(vulns.iter().any(|v| v.vulnerability_type.contains("Rogue AP / Evil Twin")));
+        assert!(vulns
+            .iter()
+            .any(|v| v.vulnerability_type.contains("Rogue AP / Evil Twin")));
     }
 
     #[test]
@@ -1133,10 +1264,15 @@ mod tests {
             },
         ];
         let vulns = WirelessScanner::analyze_networks(&networks, None);
-        let rogue = vulns.iter().find(|v| v.vulnerability_type.contains("Rogue"));
+        let rogue = vulns
+            .iter()
+            .find(|v| v.vulnerability_type.contains("Rogue"));
         assert!(rogue.is_some());
         assert_eq!(rogue.unwrap().severity, Severity::Medium);
-        assert!(rogue.unwrap().description.contains("security configuration differences"));
+        assert!(rogue
+            .unwrap()
+            .description
+            .contains("security configuration differences"));
     }
 
     #[test]
@@ -1173,12 +1309,16 @@ mod tests {
         let mut kg2: std::collections::HashSet<String> = std::collections::HashSet::new();
         kg2.insert("aa:bb:cc:dd:ee:ff".to_string());
         let vulns2 = WirelessScanner::analyze_networks(&networks, Some(&kg2));
-        assert!(!vulns2.iter().any(|v| v.vulnerability_type.contains("Rogue")));
+        assert!(!vulns2
+            .iter()
+            .any(|v| v.vulnerability_type.contains("Rogue")));
 
         let mut kg3: std::collections::HashSet<String> = std::collections::HashSet::new();
         kg3.insert("CorpNet,aa:bb:cc:dd:ee:ff".to_string());
         let vulns3 = WirelessScanner::analyze_networks(&networks, Some(&kg3));
-        assert!(!vulns3.iter().any(|v| v.vulnerability_type.contains("Rogue")));
+        assert!(!vulns3
+            .iter()
+            .any(|v| v.vulnerability_type.contains("Rogue")));
     }
 
     #[test]
@@ -1220,7 +1360,9 @@ mod tests {
         let mut set = std::collections::HashSet::new();
         for line in content.lines() {
             let t = line.trim();
-            if t.is_empty() || t.starts_with('#') { continue; }
+            if t.is_empty() || t.starts_with('#') {
+                continue;
+            }
             set.insert(t.to_string());
         }
         assert_eq!(set.len(), 3);
@@ -1301,20 +1443,90 @@ mod tests {
         let result = WirelessScanResult {
             interface: "wlan0".into(),
             networks: vec![
-                WirelessNetwork { ssid: "CorpNet".into(), bssid: "00:11:22:33:44:55".into(), channel: 6, security_type: SecurityType::WPA2, signal_strength: -50, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
-                WirelessNetwork { ssid: "CorpNet".into(), bssid: "aa:bb:cc:dd:ee:ff".into(), channel: 11, security_type: SecurityType::Open, signal_strength: -55, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
-                WirelessNetwork { ssid: "WPSNet".into(), bssid: "11:22:33:44:55:66".into(), channel: 1, security_type: SecurityType::WPA2, signal_strength: -60, last_seen: "t".into(), wps_enabled: true, is_hidden: false, transition_mode: false },
-                WirelessNetwork { ssid: "<hidden>".into(), bssid: "22:33:44:55:66:77".into(), channel: 6, security_type: SecurityType::WPA2, signal_strength: -65, last_seen: "t".into(), wps_enabled: false, is_hidden: true, transition_mode: false },
-                WirelessNetwork { ssid: "WeakNet".into(), bssid: "33:44:55:66:77:88".into(), channel: 11, security_type: SecurityType::WPA3, signal_strength: -85, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
-                WirelessNetwork { ssid: "TransNet".into(), bssid: "44:55:66:77:88:99".into(), channel: 36, security_type: SecurityType::WPA2, signal_strength: -50, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: true },
-                WirelessNetwork { ssid: "WEPNet".into(), bssid: "55:66:77:88:99:aa".into(), channel: 1, security_type: SecurityType::WEP, signal_strength: -70, last_seen: "t".into(), wps_enabled: false, is_hidden: false, transition_mode: false },
+                WirelessNetwork {
+                    ssid: "CorpNet".into(),
+                    bssid: "00:11:22:33:44:55".into(),
+                    channel: 6,
+                    security_type: SecurityType::WPA2,
+                    signal_strength: -50,
+                    last_seen: "t".into(),
+                    wps_enabled: false,
+                    is_hidden: false,
+                    transition_mode: false,
+                },
+                WirelessNetwork {
+                    ssid: "CorpNet".into(),
+                    bssid: "aa:bb:cc:dd:ee:ff".into(),
+                    channel: 11,
+                    security_type: SecurityType::Open,
+                    signal_strength: -55,
+                    last_seen: "t".into(),
+                    wps_enabled: false,
+                    is_hidden: false,
+                    transition_mode: false,
+                },
+                WirelessNetwork {
+                    ssid: "WPSNet".into(),
+                    bssid: "11:22:33:44:55:66".into(),
+                    channel: 1,
+                    security_type: SecurityType::WPA2,
+                    signal_strength: -60,
+                    last_seen: "t".into(),
+                    wps_enabled: true,
+                    is_hidden: false,
+                    transition_mode: false,
+                },
+                WirelessNetwork {
+                    ssid: "<hidden>".into(),
+                    bssid: "22:33:44:55:66:77".into(),
+                    channel: 6,
+                    security_type: SecurityType::WPA2,
+                    signal_strength: -65,
+                    last_seen: "t".into(),
+                    wps_enabled: false,
+                    is_hidden: true,
+                    transition_mode: false,
+                },
+                WirelessNetwork {
+                    ssid: "WeakNet".into(),
+                    bssid: "33:44:55:66:77:88".into(),
+                    channel: 11,
+                    security_type: SecurityType::WPA3,
+                    signal_strength: -85,
+                    last_seen: "t".into(),
+                    wps_enabled: false,
+                    is_hidden: false,
+                    transition_mode: false,
+                },
+                WirelessNetwork {
+                    ssid: "TransNet".into(),
+                    bssid: "44:55:66:77:88:99".into(),
+                    channel: 36,
+                    security_type: SecurityType::WPA2,
+                    signal_strength: -50,
+                    last_seen: "t".into(),
+                    wps_enabled: false,
+                    is_hidden: false,
+                    transition_mode: true,
+                },
+                WirelessNetwork {
+                    ssid: "WEPNet".into(),
+                    bssid: "55:66:77:88:99:aa".into(),
+                    channel: 1,
+                    security_type: SecurityType::WEP,
+                    signal_strength: -70,
+                    last_seen: "t".into(),
+                    wps_enabled: false,
+                    is_hidden: false,
+                    transition_mode: false,
+                },
             ],
             scan_duration_secs: 10,
             recommendations: vec![],
         };
         let data = to_scan_report_data(&result);
         assert_eq!(data.findings.len(), 7); // weak + wps + hidden + transition + open + wep + 1 rogue (from CorpNet ssid group with sec diff)
-        // categories asserted
+                                            // categories asserted
         let cats: Vec<_> = data.findings.iter().map(|f| f.category.as_str()).collect();
         assert!(cats.contains(&"wireless-rogue"));
         assert!(cats.contains(&"wireless-security"));
@@ -1334,7 +1546,12 @@ mod tests {
         assert_eq!(data.wireless_networks.len(), 7);
 
         // empty case
-        let empty = WirelessScanResult { interface: "wlanx".into(), networks: vec![], scan_duration_secs: 0, recommendations: vec![] };
+        let empty = WirelessScanResult {
+            interface: "wlanx".into(),
+            networks: vec![],
+            scan_duration_secs: 0,
+            recommendations: vec![],
+        };
         let de = to_scan_report_data(&empty);
         assert_eq!(de.findings.len(), 0);
         assert!(de.wireless_networks.is_empty());

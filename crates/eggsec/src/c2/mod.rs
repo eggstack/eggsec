@@ -209,7 +209,9 @@ impl C2Scanner {
             "apt29" => C2Campaign {
                 id: "c2-campaign-apt29".to_string(),
                 name: "APT29 Simulation".to_string(),
-                description: "Simulated APT29-style campaign with HTTP/S beacons and LOTL techniques".to_string(),
+                description:
+                    "Simulated APT29-style campaign with HTTP/S beacons and LOTL techniques"
+                        .to_string(),
                 mitre_profile: "APT29 (Cozy Bear)".to_string(),
                 phases: vec![
                     CampaignPhase {
@@ -245,7 +247,9 @@ impl C2Scanner {
             "carbanak" => C2Campaign {
                 id: "c2-campaign-carbanak".to_string(),
                 name: "Carbanak Simulation".to_string(),
-                description: "Simulated Carbanak-style campaign with DNS beacons and financial targeting".to_string(),
+                description:
+                    "Simulated Carbanak-style campaign with DNS beacons and financial targeting"
+                        .to_string(),
                 mitre_profile: "Carbanak/FIN7".to_string(),
                 phases: vec![
                     CampaignPhase {
@@ -306,7 +310,10 @@ impl C2Scanner {
         };
 
         let successful_beacons = beacon_results.iter().filter(|b| b.success).count();
-        let completed_tasks = task_results.iter().filter(|t| t.status == TaskStatus::Completed).count();
+        let completed_tasks = task_results
+            .iter()
+            .filter(|t| t.status == TaskStatus::Completed)
+            .count();
 
         let summary = C2Summary {
             total_beacons: beacon_results.len(),
@@ -397,11 +404,18 @@ pub fn to_scan_report_data(report: &C2Report) -> crate::output::convert::ScanRep
                 beacon.protocol.as_str(),
                 beacon.interval_ms,
                 beacon.jitter_percent,
-                if beacon.success { "successful" } else { "failed" }
+                if beacon.success {
+                    "successful"
+                } else {
+                    "failed"
+                }
             ),
             location: report.target.clone(),
             evidence: beacon.evidence.clone(),
-            remediation: Some("Monitor for anomalous outbound connections with periodic timing patterns".to_string()),
+            remediation: Some(
+                "Monitor for anomalous outbound connections with periodic timing patterns"
+                    .to_string(),
+            ),
             cwe_ids: Vec::new(),
         });
     }
@@ -422,7 +436,9 @@ pub fn to_scan_report_data(report: &C2Report) -> crate::output::convert::ScanRep
                 "Task type: {} - status: {:?}{}",
                 task.task_type.as_str(),
                 task.status,
-                task.output.as_deref().map_or_else(String::new, |o| format!(" - {}", o))
+                task.output
+                    .as_deref()
+                    .map_or_else(String::new, |o| format!(" - {}", o))
             ),
             location: report.target.clone(),
             evidence: task.output.clone(),
@@ -697,10 +713,7 @@ mod tests {
     async fn test_dry_run_scan_summary_counts() {
         let scanner = C2Scanner::new(true, "default");
         let report = scanner.scan("localhost").await.unwrap();
-        assert_eq!(
-            report.summary.total_beacons,
-            report.beacon_results.len()
-        );
+        assert_eq!(report.summary.total_beacons, report.beacon_results.len());
         assert_eq!(
             report.summary.successful_beacons,
             report.beacon_results.iter().filter(|b| b.success).count()
@@ -708,7 +721,8 @@ mod tests {
         assert_eq!(report.summary.total_tasks, report.task_results.len());
         assert_eq!(
             report.summary.completed_tasks,
-            report.task_results
+            report
+                .task_results
                 .iter()
                 .filter(|t| t.status == TaskStatus::Completed)
                 .count()
@@ -895,29 +909,17 @@ mod tests {
 
         // Dry-run beacons always succeed; real beacons fail against unreachable target
         assert!(
-            dry_report
-                .beacon_results
-                .iter()
-                .all(|b| b.success),
+            dry_report.beacon_results.iter().all(|b| b.success),
             "dry-run beacons should always succeed"
         );
         assert!(
-            real_report
-                .beacon_results
-                .iter()
-                .all(|b| !b.success),
+            real_report.beacon_results.iter().all(|b| !b.success),
             "real beacons should fail against unreachable target"
         );
 
         // Evidence should differ: dry-run has "dry-run:" prefix, real has "real:" or error
-        let dry_evidence = dry_report.beacon_results[0]
-            .evidence
-            .as_ref()
-            .unwrap();
-        let real_evidence = real_report.beacon_results[0]
-            .evidence
-            .as_ref()
-            .unwrap();
+        let dry_evidence = dry_report.beacon_results[0].evidence.as_ref().unwrap();
+        let real_evidence = real_report.beacon_results[0].evidence.as_ref().unwrap();
         assert!(
             dry_evidence.contains("dry-run"),
             "dry-run evidence should contain 'dry-run'"
@@ -941,7 +943,10 @@ mod tests {
     #[tokio::test]
     async fn test_dry_run_scan_always_succeeds() {
         let scanner = C2Scanner::new(true, "apt29");
-        let report = scanner.scan("totally-invalid-target-that-does-not-exist").await.unwrap();
+        let report = scanner
+            .scan("totally-invalid-target-that-does-not-exist")
+            .await
+            .unwrap();
         assert!(report.dry_run);
         assert!(
             report.beacon_results.iter().all(|b| b.success),
@@ -951,8 +956,7 @@ mod tests {
             report
                 .task_results
                 .iter()
-                .all(|t| t.status == TaskStatus::Completed
-                    || t.status == TaskStatus::Simulated),
+                .all(|t| t.status == TaskStatus::Completed || t.status == TaskStatus::Simulated),
             "dry-run tasks should always complete or be simulated"
         );
     }

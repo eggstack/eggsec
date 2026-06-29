@@ -5,35 +5,35 @@ use serde::{Deserialize, Serialize};
 pub mod auth;
 #[cfg(feature = "headless-browser")]
 pub mod browser;
+#[cfg(feature = "c2")]
+pub mod c2;
 pub mod ci;
 pub mod cluster;
+#[cfg(feature = "db-pentest")]
+pub mod db_pentest;
+#[cfg(feature = "evasion")]
+pub mod evasion;
 pub mod explain;
 pub mod fuzz;
 pub mod http;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
 pub mod misc;
+#[cfg(feature = "mobile")]
+pub mod mobile;
 pub mod packet;
 pub mod plan;
+#[cfg(feature = "postex")]
+pub mod postex;
 pub mod scan;
 pub mod storage;
 pub mod stress;
 pub(crate) mod timeout;
 pub mod vuln;
-#[cfg(feature = "wireless")]
-pub mod wireless;
-#[cfg(feature = "mobile")]
-pub mod mobile;
-#[cfg(feature = "db-pentest")]
-pub mod db_pentest;
-#[cfg(feature = "evasion")]
-pub mod evasion;
 #[cfg(feature = "web-proxy")]
 pub mod web_proxy;
-#[cfg(feature = "postex")]
-pub mod postex;
-#[cfg(feature = "c2")]
-pub mod c2;
+#[cfg(feature = "wireless")]
+pub mod wireless;
 
 pub use ci::*;
 pub use cluster::*;
@@ -67,12 +67,12 @@ pub use db_pentest::*;
 #[cfg(feature = "evasion")]
 pub use evasion::*;
 
-#[cfg(feature = "web-proxy")]
-pub use web_proxy::*;
-#[cfg(feature = "postex")]
-pub use postex::*;
 #[cfg(feature = "c2")]
 pub use c2::*;
+#[cfg(feature = "postex")]
+pub use postex::*;
+#[cfg(feature = "web-proxy")]
+pub use web_proxy::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -585,9 +585,11 @@ impl ScanProfile {
                 crate::probe::ProbeRisk::SafeActive
             }
             ScanProfile::Stealth => crate::probe::ProbeRisk::Passive,
-            ScanProfile::DefenseLab | ScanProfile::SynvoidLocal | ScanProfile::WafRegression | ScanProfile::DbRegression | ScanProfile::WebProxy => {
-                crate::probe::ProbeRisk::Intrusive
-            }
+            ScanProfile::DefenseLab
+            | ScanProfile::SynvoidLocal
+            | ScanProfile::WafRegression
+            | ScanProfile::DbRegression
+            | ScanProfile::WebProxy => crate::probe::ProbeRisk::Intrusive,
             ScanProfile::Endpoint
             | ScanProfile::Web
             | ScanProfile::Waf

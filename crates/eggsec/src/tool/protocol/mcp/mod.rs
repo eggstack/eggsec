@@ -11,8 +11,8 @@ pub mod routes;
 mod streaming;
 mod types;
 
-pub use constraints::McpConstraintContext;
 pub use auth::{validate_auth, validate_auth_internal, validate_auth_params};
+pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
 pub use policy::{
     classify_tool_risk, McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector,

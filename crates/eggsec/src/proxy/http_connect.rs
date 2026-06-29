@@ -202,8 +202,8 @@ impl HttpConnectProxy {
 pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<ProxiedConnection> {
     let proxy_addr = proxy.socket_addr()?;
 
-    let http_proxy = HttpConnectProxy::new(proxy_addr)
-        .with_timeout(Duration::from_millis(proxy.timeout_ms));
+    let http_proxy =
+        HttpConnectProxy::new(proxy_addr).with_timeout(Duration::from_millis(proxy.timeout_ms));
 
     let http_proxy = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
         http_proxy.with_auth(user.clone(), pass.expose_secret().to_string())

@@ -158,12 +158,12 @@ impl LoadTab {
 
         self.core.results_view.clear();
 
-        self.core.results_view.add_line(Line::from(vec![
-            Span::styled(
+        self.core
+            .results_view
+            .add_line(Line::from(vec![Span::styled(
                 "Stress Test Results",
                 Style::default().fg(tc!(accent)),
-            ),
-        ]));
+            )]));
         self.core.results_view.add_line(Line::from(""));
 
         self.core.results_view.add_line(Line::from(vec![
@@ -260,12 +260,10 @@ impl LoadTab {
         let status_codes = results.status_codes.clone();
         if !status_codes.is_empty() {
             self.core.results_view.add_line(Line::from(""));
-            self.core
-                .results_view
-                .add_line(Line::from(Span::styled(
-                    "Status Codes:",
-                    Style::default().fg(tc!(accent)),
-                )));
+            self.core.results_view.add_line(Line::from(Span::styled(
+                "Status Codes:",
+                Style::default().fg(tc!(accent)),
+            )));
             let mut codes: Vec<_> = status_codes.iter().collect();
             codes.sort_by_key(|(k, _)| *k);
             for (code, count) in codes {
@@ -285,12 +283,10 @@ impl LoadTab {
         let errors = results.errors.clone();
         if !errors.is_empty() {
             self.core.results_view.add_line(Line::from(""));
-            self.core
-                .results_view
-                .add_line(Line::from(Span::styled(
-                    "Errors:",
-                    Style::default().fg(tc!(error)),
-                )));
+            self.core.results_view.add_line(Line::from(Span::styled(
+                "Errors:",
+                Style::default().fg(tc!(error)),
+            )));
             for error in &errors {
                 self.core
                     .results_view
@@ -371,7 +367,11 @@ impl TabRender for LoadTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let num_fields = self.core.inputs.fields.len().max(1) as u16;
         let input_height = (num_fields * 3 + 2).min(area.height.saturating_sub(8));
-        let results_height = area.height.saturating_sub(6).saturating_sub(input_height).max(3);
+        let results_height = area
+            .height
+            .saturating_sub(6)
+            .saturating_sub(input_height)
+            .max(3);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -385,7 +385,10 @@ impl TabRender for LoadTab {
         if let Some(selector_area) = chunks.first() {
             self.test_type_selector.render(f, *selector_area);
 
-            if let Some(dropdown) = self.test_type_selector.dropdown_info(*selector_area, f.area().height) {
+            if let Some(dropdown) = self
+                .test_type_selector
+                .dropdown_info(*selector_area, f.area().height)
+            {
                 dropdown.render(f);
             }
         }
@@ -401,9 +404,8 @@ impl TabRender for LoadTab {
             f.render_widget(input_block, *input_area);
 
             let num_fields = self.core.inputs.fields.len().max(1);
-            let constraints: Vec<Constraint> = (0..num_fields)
-                .map(|_| Constraint::Length(3))
-                .collect();
+            let constraints: Vec<Constraint> =
+                (0..num_fields).map(|_| Constraint::Length(3)).collect();
 
             let input_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -445,7 +447,10 @@ impl TabRender for LoadTab {
 
         let selector_area = *chunks.first().unwrap_or(&area);
 
-        if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area, f.area().height) {
+        if let Some(dropdown) = self
+            .test_type_selector
+            .dropdown_info(selector_area, f.area().height)
+        {
             dropdown.render(f);
         }
     }
@@ -656,7 +661,9 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != StandardFocusAreaSelector::Results && self.core.inputs.is_focused() {
+        } else if self.focus_area != StandardFocusAreaSelector::Results
+            && self.core.inputs.is_focused()
+        {
             self.core.inputs.move_left()
         } else {
             false
@@ -674,7 +681,9 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != StandardFocusAreaSelector::Results && self.core.inputs.is_focused() {
+        } else if self.focus_area != StandardFocusAreaSelector::Results
+            && self.core.inputs.is_focused()
+        {
             self.core.inputs.move_right()
         } else {
             false

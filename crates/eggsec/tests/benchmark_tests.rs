@@ -192,8 +192,8 @@ mod benchmarks {
     }
 
     fn evidence_bundle_export_benchmark(c: &mut Criterion) {
-        use eggsec::proxy::intercept::EvidenceBundle;
         use eggsec::proxy::intercept::types::{ProxyFlow, WebProxySessionReport};
+        use eggsec::proxy::intercept::EvidenceBundle;
 
         let mut group = c.benchmark_group("evidence_bundle");
 

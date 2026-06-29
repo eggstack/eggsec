@@ -567,7 +567,7 @@ impl Pipeline {
 
     #[cfg(feature = "db-pentest")]
     async fn run_db_pentest_stage(&self) -> Result<()> {
-        use crate::db_pentest::{DbPentestRunArgs, run_db_pentest_cli};
+        use crate::db_pentest::{run_db_pentest_cli, DbPentestRunArgs};
 
         let args = DbPentestRunArgs {
             target: Some(self.target.clone()),
@@ -622,7 +622,9 @@ impl Pipeline {
         let mut report = WebProxySessionReport::new("pipeline-intercept", dry_run);
         report.ca_fingerprint = "pipeline-dry-run-fingerprint".to_string();
         report.manifest_matched = true;
-        report.actions_performed.push("pipeline-dry-run-execution".to_string());
+        report
+            .actions_performed
+            .push("pipeline-dry-run-execution".to_string());
         report.budget = crate::proxy::intercept::types::BudgetUsage {
             max_flows: Some(1000),
             flows_captured: 0,
@@ -640,11 +642,12 @@ impl Pipeline {
         };
 
         // Phase 1: Target Discovery - probe the target to determine protocol and endpoints
-        let target_url = if self.target.starts_with("http://") || self.target.starts_with("https://") {
-            self.target.clone()
-        } else {
-            format!("http://{}", self.target)
-        };
+        let target_url =
+            if self.target.starts_with("http://") || self.target.starts_with("https://") {
+                self.target.clone()
+            } else {
+                format!("http://{}", self.target)
+            };
 
         let discovered_endpoints = self.discover_target_endpoints(&target_url).await;
         report.actions_performed.push(format!(
@@ -653,7 +656,9 @@ impl Pipeline {
         ));
 
         // Phase 2: Baseline Traffic Capture - make initial requests to establish baseline
-        let baseline_flows = self.capture_baseline_traffic(&target_url, &discovered_endpoints).await;
+        let baseline_flows = self
+            .capture_baseline_traffic(&target_url, &discovered_endpoints)
+            .await;
         for flow in baseline_flows {
             report.add_flow(flow);
         }
@@ -735,45 +740,52 @@ impl Pipeline {
             let started_at = chrono::Utc::now();
 
             if let Ok(resp) = client.get(&url).send().await {
-                    let status = resp.status().as_u16();
-                    let headers: std::collections::HashMap<String, String> = resp
-                        .headers()
-                        .iter()
-                        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
-                        .collect();
+                let status = resp.status().as_u16();
+                let headers: std::collections::HashMap<String, String> = resp
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                    .collect();
 
-                    let body = resp.text().await.unwrap_or_default();
-                    let completed_at = chrono::Utc::now();
-                    let duration_ms = (completed_at - started_at).num_milliseconds().max(0) as u64;
+                let body = resp.text().await.unwrap_or_default();
+                let completed_at = chrono::Utc::now();
+                let duration_ms = (completed_at - started_at).num_milliseconds().max(0) as u64;
 
-                    let parsed_url = url::Url::parse(&url).ok();
-                    let host = parsed_url.as_ref().and_then(|u| u.host_str()).unwrap_or(&self.target).to_string();
-                    let path = parsed_url.as_ref().map(|u| u.path().to_string()).unwrap_or_default();
+                let parsed_url = url::Url::parse(&url).ok();
+                let host = parsed_url
+                    .as_ref()
+                    .and_then(|u| u.host_str())
+                    .unwrap_or(&self.target)
+                    .to_string();
+                let path = parsed_url
+                    .as_ref()
+                    .map(|u| u.path().to_string())
+                    .unwrap_or_default();
 
-                    flows.push(crate::proxy::intercept::types::ProxyFlow {
-                        index: i as u64,
-                        method: "GET".to_string(),
-                        url: url.clone(),
-                        host,
-                        path,
-                        request_headers: {
-                            let mut h = std::collections::HashMap::new();
-                            h.insert("User-Agent".to_string(), "eggsec-pipeline/1.0".to_string());
-                            h
-                        },
-                        request_body: None,
-                        response_status: status,
-                        response_headers: headers,
-                        response_body: Some(body.clone()),
-                        is_https: url.starts_with("https://"),
-                        duration_ms,
-                        request_body_size: 0,
-                        response_body_size: body.len() as u64,
-                        started_at: started_at.to_rfc3339(),
-                        completed_at: completed_at.to_rfc3339(),
-                        redaction_applied: None,
-                        protocol: "http1".to_string(),
-                    });
+                flows.push(crate::proxy::intercept::types::ProxyFlow {
+                    index: i as u64,
+                    method: "GET".to_string(),
+                    url: url.clone(),
+                    host,
+                    path,
+                    request_headers: {
+                        let mut h = std::collections::HashMap::new();
+                        h.insert("User-Agent".to_string(), "eggsec-pipeline/1.0".to_string());
+                        h
+                    },
+                    request_body: None,
+                    response_status: status,
+                    response_headers: headers,
+                    response_body: Some(body.clone()),
+                    is_https: url.starts_with("https://"),
+                    duration_ms,
+                    request_body_size: 0,
+                    response_body_size: body.len() as u64,
+                    started_at: started_at.to_rfc3339(),
+                    completed_at: completed_at.to_rfc3339(),
+                    redaction_applied: None,
+                    protocol: "http1".to_string(),
+                });
             }
         }
 
@@ -797,9 +809,7 @@ impl Pipeline {
                 .response_headers
                 .contains_key("content-security-policy");
             let has_x_frame = flow.response_headers.contains_key("x-frame-options");
-            let has_x_content = flow
-                .response_headers
-                .contains_key("x-content-type-options");
+            let has_x_content = flow.response_headers.contains_key("x-content-type-options");
 
             if flow.is_https && !has_strict_transport {
                 findings.push(PipelineProxyFinding {

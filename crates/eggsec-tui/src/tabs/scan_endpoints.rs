@@ -162,8 +162,7 @@ impl ScanEndpointsTab {
     pub fn start(&mut self) {
         if self.target().is_empty() {
             self.core.state = AppState::Error("Target cannot be empty".to_string());
-            self.core.error =
-                Some(TabError::Target("Target cannot be empty".to_string()));
+            self.core.error = Some(TabError::Target("Target cannot be empty".to_string()));
             return;
         }
 
@@ -171,8 +170,7 @@ impl ScanEndpointsTab {
         if let Some(path_str) = wordlist_path {
             let path = std::path::Path::new(&path_str);
             if !path.exists() {
-                self.core.state =
-                    AppState::Error(format!("Wordlist file not found: {}", path_str));
+                self.core.state = AppState::Error(format!("Wordlist file not found: {}", path_str));
                 self.core.error = Some(TabError::Config(format!(
                     "Wordlist file not found: {}",
                     path_str
@@ -231,13 +229,13 @@ impl TabRender for ScanEndpointsTab {
         let input_block = Block::default()
             .borders(Borders::ALL)
             .title(" Endpoint Scan Configuration ")
-            .border_style(Style::default().fg(
-                if self.focus_area == StandardFocusArea::Inputs {
+            .border_style(
+                Style::default().fg(if self.focus_area == StandardFocusArea::Inputs {
                     tc!(border_focused)
                 } else {
                     tc!(border)
-                },
-            ));
+                }),
+            );
         let input_inner = input_block.inner(input_area);
         f.render_widget(input_block, input_area);
 
@@ -413,8 +411,12 @@ mod tests {
     fn test_handle_up_down_scroll_results() {
         let mut tab = create_test_tab();
         tab.focus_area = StandardFocusArea::Results;
-        tab.core.results_view.add_line(ratatui::text::Line::from("line1"));
-        tab.core.results_view.add_line(ratatui::text::Line::from("line2"));
+        tab.core
+            .results_view
+            .add_line(ratatui::text::Line::from("line1"));
+        tab.core
+            .results_view
+            .add_line(ratatui::text::Line::from("line2"));
 
         tab.handle_down();
         tab.handle_up();

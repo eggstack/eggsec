@@ -112,7 +112,8 @@ async fn real_beacons(campaign: &C2Campaign, target: &str) -> Vec<BeaconResult> 
                         Ok(resp) => {
                             let latency_ms = start.elapsed().as_millis() as u64;
                             let status = resp.status().as_u16();
-                            let success = resp.status().is_success() || resp.status().is_redirection();
+                            let success =
+                                resp.status().is_success() || resp.status().is_redirection();
                             BeaconResult {
                                 protocol,
                                 interval_ms,
@@ -174,9 +175,7 @@ async fn real_beacons(campaign: &C2Campaign, target: &str) -> Vec<BeaconResult> 
                                 success: true,
                                 evidence: Some(format!(
                                     "TCP connection to {}:{} succeeded (latency: {}ms)",
-                                    target,
-                                    443,
-                                    latency_ms
+                                    target, 443, latency_ms
                                 )),
                             }
                         }
@@ -301,10 +300,9 @@ mod tests {
         assert!(!beacons.is_empty());
         assert!(beacons.iter().all(|b| b.success));
         // Dry-run evidence contains "dry-run:"
-        assert!(beacons.iter().all(|b| b
-            .evidence
-            .as_ref()
-            .map_or(false, |e| e.contains("dry-run"))));
+        assert!(beacons
+            .iter()
+            .all(|b| b.evidence.as_ref().map_or(false, |e| e.contains("dry-run"))));
     }
 
     #[tokio::test]
@@ -369,10 +367,7 @@ mod tests {
 
     #[test]
     fn test_protocol_for_technique() {
-        assert_eq!(
-            protocol_for_technique("T1071.001"),
-            BeaconProtocol::Https
-        );
+        assert_eq!(protocol_for_technique("T1071.001"), BeaconProtocol::Https);
         assert_eq!(protocol_for_technique("T1071.004"), BeaconProtocol::Dns);
         assert_eq!(protocol_for_technique("T1573"), BeaconProtocol::Tcp);
         assert_eq!(protocol_for_technique("T1001"), BeaconProtocol::Dns);

@@ -71,12 +71,14 @@ impl SecurityTool for C2Tool {
 
         let scanner = crate::c2::C2Scanner::new(true, &campaign);
 
-        let report = scanner.scan(&target).await.map_err(|e| {
-            crate::error::EggsecError::ScanFailed {
-                stage: "c2".to_string(),
-                error: e.to_string(),
-            }
-        })?;
+        let report =
+            scanner
+                .scan(&target)
+                .await
+                .map_err(|e| crate::error::EggsecError::ScanFailed {
+                    stage: "c2".to_string(),
+                    error: e.to_string(),
+                })?;
 
         let findings: Vec<Finding> = report
             .beacon_results
@@ -101,11 +103,17 @@ impl SecurityTool for C2Tool {
                 location: target.clone(),
                 evidence: b.evidence.clone(),
                 cve_ids: vec![],
-                remediation: Some("Monitor for anomalous outbound connections with periodic timing patterns".to_string()),
+                remediation: Some(
+                    "Monitor for anomalous outbound connections with periodic timing patterns"
+                        .to_string(),
+                ),
                 references: vec![],
                 metadata: {
                     let mut m = rustc_hash::FxHashMap::default();
-                    m.insert("protocol".to_string(), serde_json::Value::String(b.protocol.as_str().to_string()));
+                    m.insert(
+                        "protocol".to_string(),
+                        serde_json::Value::String(b.protocol.as_str().to_string()),
+                    );
                     m.insert(
                         "category".to_string(),
                         serde_json::Value::String("c2-beacon".to_string()),
@@ -136,16 +144,15 @@ impl SecurityTool for C2Tool {
                     location: target.clone(),
                     evidence: t.output.clone(),
                     cve_ids: vec![],
-                    remediation: Some("Implement detection for C2 task execution patterns".to_string()),
+                    remediation: Some(
+                        "Implement detection for C2 task execution patterns".to_string(),
+                    ),
                     references: vec![],
                     metadata: {
                         let mut m = rustc_hash::FxHashMap::default();
                         m.insert(
                             "category".to_string(),
-                            serde_json::Value::String(format!(
-                                "c2-task-{}",
-                                t.task_type.as_str()
-                            )),
+                            serde_json::Value::String(format!("c2-task-{}", t.task_type.as_str())),
                         );
                         if let Some(ref technique) = t.mitre_technique {
                             m.insert(
@@ -157,33 +164,40 @@ impl SecurityTool for C2Tool {
                     },
                 }
             }))
-            .chain(report.opsec_assessment.findings.iter().enumerate().map(
-                |(i, f)| Finding {
-                    id: format!("c2-opsec-{}", i),
-                    finding_type: FindingType::Misconfiguration,
-                    severity: match f.severity {
-                        crate::c2::OpsecSeverity::Info => ResponseSeverity::Info,
-                        crate::c2::OpsecSeverity::Low => ResponseSeverity::Low,
-                        crate::c2::OpsecSeverity::Medium => ResponseSeverity::Medium,
-                        crate::c2::OpsecSeverity::High => ResponseSeverity::High,
-                    },
-                    title: format!("OPSEC: {}", f.description),
-                    description: f.description.clone(),
-                    location: target.clone(),
-                    evidence: None,
-                    cve_ids: vec![],
-                    remediation: Some(f.recommendation.clone()),
-                    references: vec![],
-                    metadata: {
-                        let mut m = rustc_hash::FxHashMap::default();
-                        m.insert(
-                            "category".to_string(),
-                            serde_json::Value::String(format!("{:?}", f.category).to_lowercase()),
-                        );
-                        m
-                    },
-                },
-            ))
+            .chain(
+                report
+                    .opsec_assessment
+                    .findings
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| Finding {
+                        id: format!("c2-opsec-{}", i),
+                        finding_type: FindingType::Misconfiguration,
+                        severity: match f.severity {
+                            crate::c2::OpsecSeverity::Info => ResponseSeverity::Info,
+                            crate::c2::OpsecSeverity::Low => ResponseSeverity::Low,
+                            crate::c2::OpsecSeverity::Medium => ResponseSeverity::Medium,
+                            crate::c2::OpsecSeverity::High => ResponseSeverity::High,
+                        },
+                        title: format!("OPSEC: {}", f.description),
+                        description: f.description.clone(),
+                        location: target.clone(),
+                        evidence: None,
+                        cve_ids: vec![],
+                        remediation: Some(f.recommendation.clone()),
+                        references: vec![],
+                        metadata: {
+                            let mut m = rustc_hash::FxHashMap::default();
+                            m.insert(
+                                "category".to_string(),
+                                serde_json::Value::String(
+                                    format!("{:?}", f.category).to_lowercase(),
+                                ),
+                            );
+                            m
+                        },
+                    }),
+            )
             .collect();
 
         let result = serde_json::json!({
@@ -223,12 +237,7 @@ impl SecurityTool for C2Tool {
 
         let _ = config;
 
-        Ok(ToolResponse::success(
-            request.id.clone(),
-            self.id(),
-            result,
-        )
-        .with_findings(findings))
+        Ok(ToolResponse::success(request.id.clone(), self.id(), result).with_findings(findings))
     }
 
     fn validate(&self, request: &ToolRequest) -> ToolResult<()> {
@@ -255,7 +264,8 @@ impl SecurityTool for C2Tool {
     fn capabilities(&self) -> Vec<ToolCapability> {
         vec![ToolCapability {
             name: "c2-simulation".to_string(),
-            description: "C2 campaign simulation with beacons, tasking, and OPSEC scoring".to_string(),
+            description: "C2 campaign simulation with beacons, tasking, and OPSEC scoring"
+                .to_string(),
             parameters: vec![
                 ParameterDef {
                     name: "target".to_string(),

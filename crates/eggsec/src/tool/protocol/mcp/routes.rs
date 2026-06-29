@@ -66,26 +66,22 @@ async fn process_batch(
             responses.push(req.error_response(e));
             continue;
         }
-        let response = match tokio::time::timeout(
-            Duration::from_secs(30),
-            server.handle_request(req),
-        )
-        .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-                McpResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: None,
-                    result: None,
-                    error: Some(McpError::internal(&format!(
-                        "MCP request handler timed out: {}",
-                        e
-                    ))),
+        let response =
+            match tokio::time::timeout(Duration::from_secs(30), server.handle_request(req)).await {
+                Ok(response) => response,
+                Err(e) => {
+                    tracing::warn!(error = %e, "MCP request handler timed out after 30s");
+                    McpResponse {
+                        jsonrpc: "2.0".to_string(),
+                        id: None,
+                        result: None,
+                        error: Some(McpError::internal(&format!(
+                            "MCP request handler timed out: {}",
+                            e
+                        ))),
+                    }
                 }
-            }
-        };
+            };
         responses.push(response);
     }
     responses
@@ -363,7 +359,8 @@ pub async fn run_stdio(
         match incoming {
             Ok(incoming) => {
                 let requests = incoming.into_vec();
-                let responses = process_batch(&server, requests, server.policy.max_batch_size).await;
+                let responses =
+                    process_batch(&server, requests, server.policy.max_batch_size).await;
                 write_json_line(&mut writer, &responses).await;
             }
             Err(e) => {

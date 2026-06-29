@@ -452,7 +452,10 @@ impl TabRender for ProxyTab {
             ])
             .split(area);
         let selector_area = chunks.first().copied().unwrap_or(area);
-        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area, f.area().height) {
+        if let Some(dropdown) = self
+            .view_selector
+            .dropdown_info(selector_area, f.area().height)
+        {
             dropdown.render(f);
         }
     }

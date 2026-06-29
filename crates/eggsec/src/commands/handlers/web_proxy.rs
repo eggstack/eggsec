@@ -1,11 +1,12 @@
 use crate::commands::handlers::CommandContext;
 use crate::config::OperationDescriptor;
-use crate::proxy::intercept::protocols::{
-    WebSocketMessage, WebSocketSession, WebSocketOpcode,
-    Http2Stream, Http2Session, Http2StreamState,
-    GrpcCall, GrpcSession, GrpcMethodType,
+use crate::proxy::intercept::correlation::{
+    CorrelationContext, CorrelationReference, CorrelationSource,
 };
-use crate::proxy::intercept::correlation::{CorrelationContext, CorrelationReference, CorrelationSource};
+use crate::proxy::intercept::protocols::{
+    GrpcCall, GrpcMethodType, GrpcSession, Http2Session, Http2Stream, Http2StreamState,
+    WebSocketMessage, WebSocketOpcode, WebSocketSession,
+};
 use anyhow::Result;
 
 pub async fn handle_proxy_intercept(
@@ -40,7 +41,8 @@ pub async fn handle_proxy_intercept(
         );
     }
 
-    let mut report = crate::proxy::intercept::types::WebProxySessionReport::new(&args.listen, args.dry_run);
+    let mut report =
+        crate::proxy::intercept::types::WebProxySessionReport::new(&args.listen, args.dry_run);
 
     if !args.quiet {
         eprintln!(
@@ -53,7 +55,9 @@ pub async fn handle_proxy_intercept(
         // Dry-run: produce complete report with synthetic data, zero network activity
         report.ca_fingerprint = "dry-run-synthetic-fingerprint".to_string();
         report.manifest_matched = true;
-        report.actions_performed.push("dry-run-execution".to_string());
+        report
+            .actions_performed
+            .push("dry-run-execution".to_string());
         report.budget = crate::proxy::intercept::types::BudgetUsage {
             max_flows: Some(args.max_flows),
             flows_captured: 0,
@@ -131,7 +135,12 @@ pub async fn handle_proxy_intercept(
         }
 
         // Add synthetic WebSocket session
-        let mut ws_session = WebSocketSession::new("wss://echo.example.com/chat", "echo.example.com", "/chat", true);
+        let mut ws_session = WebSocketSession::new(
+            "wss://echo.example.com/chat",
+            "echo.example.com",
+            "/chat",
+            true,
+        );
         ws_session.add_message(WebSocketMessage {
             direction: crate::proxy::intercept::types::ProxyFlowDirection::Request,
             opcode: WebSocketOpcode::Text,
@@ -161,38 +170,58 @@ pub async fn handle_proxy_intercept(
         });
         ws_session.close(Some(1000), Some("normal".to_string()));
         report.ws_sessions.push(ws_session);
-        report.actions_performed.push("synthetic-ws-session-generated".to_string());
+        report
+            .actions_performed
+            .push("synthetic-ws-session-generated".to_string());
 
         // Add synthetic HTTP/2 session
         let mut http2_session = Http2Session::new("api.example.com", true);
         // Stream 1: GET /users
         let mut stream1 = Http2Stream::new(1, "GET", "/users");
-        stream1.request_headers.insert(":method".to_string(), "GET".to_string());
-        stream1.request_headers.insert(":path".to_string(), "/users".to_string());
-        stream1.request_headers.insert(":scheme".to_string(), "https".to_string());
+        stream1
+            .request_headers
+            .insert(":method".to_string(), "GET".to_string());
+        stream1
+            .request_headers
+            .insert(":path".to_string(), "/users".to_string());
+        stream1
+            .request_headers
+            .insert(":scheme".to_string(), "https".to_string());
         stream1.response_status = 200;
-        stream1.response_headers.insert("content-type".to_string(), "application/json".to_string());
+        stream1
+            .response_headers
+            .insert("content-type".to_string(), "application/json".to_string());
         stream1.response_body = Some("[{\"id\":1},{\"id\":2}]".to_string());
         stream1.state = Http2StreamState::Closed;
         http2_session.add_stream(stream1);
         // Stream 3: POST /users (odd = client-initiated)
         let mut stream3 = Http2Stream::new(3, "POST", "/users");
-        stream3.request_headers.insert(":method".to_string(), "POST".to_string());
-        stream3.request_headers.insert(":path".to_string(), "/users".to_string());
-        stream3.request_headers.insert(":scheme".to_string(), "https".to_string());
+        stream3
+            .request_headers
+            .insert(":method".to_string(), "POST".to_string());
+        stream3
+            .request_headers
+            .insert(":path".to_string(), "/users".to_string());
+        stream3
+            .request_headers
+            .insert(":scheme".to_string(), "https".to_string());
         stream3.request_body = Some("{\"name\":\"Alice\"}".to_string());
         stream3.response_status = 201;
         stream3.response_body = Some("{\"id\":3,\"name\":\"Alice\"}".to_string());
         stream3.state = Http2StreamState::Closed;
         http2_session.add_stream(stream3);
         report.http2_sessions.push(http2_session);
-        report.actions_performed.push("synthetic-http2-session-generated".to_string());
+        report
+            .actions_performed
+            .push("synthetic-http2-session-generated".to_string());
 
         // Add synthetic gRPC session
         let mut grpc_session = GrpcSession::new("grpc.example.com", true);
         // Unary call
         let mut unary_call = GrpcCall::new("/package.Service/GetUser", GrpcMethodType::Unary);
-        unary_call.request_metadata.insert("authorization".to_string(), "Bearer token".to_string());
+        unary_call
+            .request_metadata
+            .insert("authorization".to_string(), "Bearer token".to_string());
         unary_call.request_body = Some("0A0748656C6C6F".to_string());
         unary_call.request_size = 7;
         unary_call.response_status = 0;
@@ -201,31 +230,51 @@ pub async fn handle_proxy_intercept(
         unary_call.duration_ms = 42;
         grpc_session.add_call(unary_call);
         // Server streaming call
-        let mut stream_call = GrpcCall::new("/package.Service/StreamUsers", GrpcMethodType::ServerStreaming);
-        stream_call.request_metadata.insert("authorization".to_string(), "Bearer token".to_string());
+        let mut stream_call = GrpcCall::new(
+            "/package.Service/StreamUsers",
+            GrpcMethodType::ServerStreaming,
+        );
+        stream_call
+            .request_metadata
+            .insert("authorization".to_string(), "Bearer token".to_string());
         stream_call.response_status = 0;
         stream_call.duration_ms = 156;
         grpc_session.add_call(stream_call);
         report.grpc_sessions.push(grpc_session);
-        report.actions_performed.push("synthetic-grpc-session-generated".to_string());
+        report
+            .actions_performed
+            .push("synthetic-grpc-session-generated".to_string());
 
         // Add synthetic correlation
         let mut correlation = CorrelationContext::new();
-        correlation.add_flow_correlation(1, CorrelationReference::new(
-            CorrelationSource::DbPentest,
-            "sqli-finding-1",
-            "SQL injection in user lookup matches proxy-modified parameter",
-        ).with_confidence(0.85).with_metadata("query", "SELECT * FROM users WHERE id=1"));
-        correlation.add_flow_correlation(1, CorrelationReference::new(
-            CorrelationSource::AuthTest,
-            "token-reuse-1",
-            "JWT token from proxy session reused in subsequent auth test"
-        ).with_confidence(0.92));
+        correlation.add_flow_correlation(
+            1,
+            CorrelationReference::new(
+                CorrelationSource::DbPentest,
+                "sqli-finding-1",
+                "SQL injection in user lookup matches proxy-modified parameter",
+            )
+            .with_confidence(0.85)
+            .with_metadata("query", "SELECT * FROM users WHERE id=1"),
+        );
+        correlation.add_flow_correlation(
+            1,
+            CorrelationReference::new(
+                CorrelationSource::AuthTest,
+                "token-reuse-1",
+                "JWT token from proxy session reused in subsequent auth test",
+            )
+            .with_confidence(0.92),
+        );
         report.correlation = Some(correlation);
-        report.actions_performed.push("synthetic-correlation-generated".to_string());
+        report
+            .actions_performed
+            .push("synthetic-correlation-generated".to_string());
 
         report.budget.flows_captured = report.flows.len() as u64;
-        report.actions_performed.push("synthetic-flows-generated".to_string());
+        report
+            .actions_performed
+            .push("synthetic-flows-generated".to_string());
         report.finalize();
 
         let output = if args.json || ctx.json {
@@ -257,32 +306,76 @@ fn format_proxy_report(report: &crate::proxy::intercept::types::WebProxySessionR
     out.push_str("  Interactive Web Proxy — Session Report\n");
     out.push_str("═══════════════════════════════════════════\n\n");
     out.push_str(&format!("  Listen:       {}\n", report.listen_addr));
-    out.push_str(&format!("  CA Fingerprint: {}\n", &report.ca_fingerprint[..std::cmp::min(16, report.ca_fingerprint.len())]));
+    out.push_str(&format!(
+        "  CA Fingerprint: {}\n",
+        &report.ca_fingerprint[..std::cmp::min(16, report.ca_fingerprint.len())]
+    ));
     out.push_str(&format!("  Dry Run:      {}\n", report.dry_run));
     out.push_str(&format!("  Duration:     {}ms\n", report.duration_ms));
-    out.push_str(&format!("  Flows:        {} (HTTPS: {}, HTTP: {}, Blocked: {}, Redacted: {})\n",
-        report.flows.len(), report.https_intercepted, report.http_logged, report.blocked, report.redacted));
-    out.push_str(&format!("  WS Sessions:  {} ({} messages)\n", report.ws_sessions.len(), report.ws_sessions.iter().map(|s| s.messages.len()).sum::<usize>()));
-    out.push_str(&format!("  HTTP/2 Sess:  {} ({} streams)\n", report.http2_sessions.len(), report.http2_sessions.iter().map(|s| s.streams.len()).sum::<usize>()));
-    out.push_str(&format!("  gRPC Sess:    {} ({} calls)\n", report.grpc_sessions.len(), report.grpc_sessions.iter().map(|s| s.calls.len()).sum::<usize>()));
+    out.push_str(&format!(
+        "  Flows:        {} (HTTPS: {}, HTTP: {}, Blocked: {}, Redacted: {})\n",
+        report.flows.len(),
+        report.https_intercepted,
+        report.http_logged,
+        report.blocked,
+        report.redacted
+    ));
+    out.push_str(&format!(
+        "  WS Sessions:  {} ({} messages)\n",
+        report.ws_sessions.len(),
+        report
+            .ws_sessions
+            .iter()
+            .map(|s| s.messages.len())
+            .sum::<usize>()
+    ));
+    out.push_str(&format!(
+        "  HTTP/2 Sess:  {} ({} streams)\n",
+        report.http2_sessions.len(),
+        report
+            .http2_sessions
+            .iter()
+            .map(|s| s.streams.len())
+            .sum::<usize>()
+    ));
+    out.push_str(&format!(
+        "  gRPC Sess:    {} ({} calls)\n",
+        report.grpc_sessions.len(),
+        report
+            .grpc_sessions
+            .iter()
+            .map(|s| s.calls.len())
+            .sum::<usize>()
+    ));
     if let Some(ref corr) = report.correlation {
-        out.push_str(&format!("  Correlation:  {} refs ({} sources, {} correlated flows)\n",
-            corr.summary.total_references, corr.summary.unique_sources, corr.summary.correlated_flows));
+        out.push_str(&format!(
+            "  Correlation:  {} refs ({} sources, {} correlated flows)\n",
+            corr.summary.total_references,
+            corr.summary.unique_sources,
+            corr.summary.correlated_flows
+        ));
     }
-    out.push_str(&format!("  Budget:       max_flows={} max_bytes_per_flow={} max_duration={}s max_concurrent={}\n",
+    out.push_str(&format!(
+        "  Budget:       max_flows={} max_bytes_per_flow={} max_duration={}s max_concurrent={}\n",
         report.budget.max_flows.unwrap_or(0),
         report.budget.max_bytes_per_flow.unwrap_or(0),
         report.budget.max_duration_secs.unwrap_or(0),
-        report.budget.max_concurrent.unwrap_or(0)));
+        report.budget.max_concurrent.unwrap_or(0)
+    ));
     if !report.actions_performed.is_empty() {
-        out.push_str(&format!("  Actions:      {}\n", report.actions_performed.join("; ")));
+        out.push_str(&format!(
+            "  Actions:      {}\n",
+            report.actions_performed.join("; ")
+        ));
     }
     out.push('\n');
 
     for flow in &report.flows {
         let proto = if flow.is_https { "HTTPS" } else { "HTTP" };
-        out.push_str(&format!("  [{}] {} {} {} → {} ({}ms)\n",
-            flow.index, proto, flow.method, flow.url, flow.response_status, flow.duration_ms));
+        out.push_str(&format!(
+            "  [{}] {} {} {} → {} ({}ms)\n",
+            flow.index, proto, flow.method, flow.url, flow.response_status, flow.duration_ms
+        ));
         if let Some(ref body) = flow.response_body {
             let preview = if body.len() > 80 { &body[..80] } else { body };
             out.push_str(&format!("    Response: {}...\n", preview));

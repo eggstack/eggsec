@@ -28,8 +28,16 @@ pub struct C2Tab {
 impl C2Tab {
     pub fn new() -> Self {
         let inputs = crate::components::InputGroup::new()
-            .add(InputField::new("Target").with_width(50).with_value("localhost"))
-            .add(InputField::new("Campaign Profile").with_width(30).with_value("apt29"));
+            .add(
+                InputField::new("Target")
+                    .with_width(50)
+                    .with_value("localhost"),
+            )
+            .add(
+                InputField::new("Campaign Profile")
+                    .with_width(30)
+                    .with_value("apt29"),
+            );
 
         Self {
             core: TabCore::new("Running C2 simulation...", "C2 Results").with_inputs(inputs),
@@ -46,11 +54,21 @@ impl C2Tab {
     }
 
     pub fn target(&self) -> Option<&str> {
-        self.core.inputs.fields.first().map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+        self.core
+            .inputs
+            .fields
+            .first()
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
     }
 
     pub fn campaign(&self) -> Option<&str> {
-        self.core.inputs.fields.get(1).map(|f| f.value.as_str()).filter(|v| !v.is_empty())
+        self.core
+            .inputs
+            .fields
+            .get(1)
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
     }
 
     pub fn primary_target(&self) -> Option<String> {
@@ -117,13 +135,26 @@ impl TabRender for C2Tab {
             ])
             .split(area);
 
-        let Some(title_area) = layout.get(0) else { return; };
-        let Some(inputs_area) = layout.get(1) else { return; };
-        let Some(results_area) = layout.get(2) else { return; };
+        let Some(title_area) = layout.get(0) else {
+            return;
+        };
+        let Some(inputs_area) = layout.get(1) else {
+            return;
+        };
+        let Some(results_area) = layout.get(2) else {
+            return;
+        };
 
-        let title = Paragraph::new("C2 Campaign Simulation — Defense-lab only | Beacons, Tasking, OPSEC, Attack Graph")
-            .block(Block::default().borders(Borders::ALL).title("\u{26a0} Defense Lab").border_style(Style::default().fg(tc!(border))))
-            .style(Style::default().fg(tc!(warning)));
+        let title = Paragraph::new(
+            "C2 Campaign Simulation — Defense-lab only | Beacons, Tasking, OPSEC, Attack Graph",
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("\u{26a0} Defense Lab")
+                .border_style(Style::default().fg(tc!(border))),
+        )
+        .style(Style::default().fg(tc!(warning)));
         f.render_widget(title, *title_area);
 
         let mut builder = FormBuilder::new("Inputs").row_height(3);
@@ -268,7 +299,11 @@ mod tests {
 
         let config = tab.build_task_config().unwrap();
         match config {
-            TaskConfig::C2 { target, campaign, dry_run } => {
+            TaskConfig::C2 {
+                target,
+                campaign,
+                dry_run,
+            } => {
                 assert_eq!(target, "10.0.0.1");
                 assert_eq!(campaign, "carbanak");
                 assert!(dry_run);
@@ -293,6 +328,9 @@ mod tests {
     #[test]
     fn input_labels_are_unique() {
         let tab = C2Tab::new();
-        assert_eq!(tab.core.inputs.duplicate_label_names(), Vec::<String>::new());
+        assert_eq!(
+            tab.core.inputs.duplicate_label_names(),
+            Vec::<String>::new()
+        );
     }
 }

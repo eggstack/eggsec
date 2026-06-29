@@ -4,9 +4,9 @@ mod auth;
 mod c2_worker;
 #[cfg(feature = "db-pentest")]
 mod db_pentest;
+mod fuzzer;
 #[cfg(feature = "web-proxy")]
 mod intercept_worker;
-mod fuzzer;
 mod network;
 mod recon;
 mod runner;

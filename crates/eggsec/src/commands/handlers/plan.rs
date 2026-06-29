@@ -1,12 +1,12 @@
 use crate::cli::plan::PlanArgs;
 use crate::cli::ScanProfile;
-use std::str::FromStr;
 use crate::commands::handlers::CommandContext;
 use crate::config::{
     evaluate_operation_policy, load_scope, OperationDescriptor, OperationMode, OperationRisk,
     PolicyDecision,
 };
 use anyhow::Result;
+use std::str::FromStr;
 
 #[derive(Debug, serde::Serialize)]
 pub struct PlannedStage {

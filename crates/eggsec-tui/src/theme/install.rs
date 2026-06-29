@@ -364,10 +364,16 @@ mod tests {
         let results = load_themes_from_dir(&dir, &packaged_ids);
         assert_eq!(results.len(), 2);
 
-        let packaged = results.iter().find(|r| r.file_stem == "packaged_theme").unwrap();
+        let packaged = results
+            .iter()
+            .find(|r| r.file_stem == "packaged_theme")
+            .unwrap();
         assert_eq!(packaged.source, ThemeSource::Packaged);
 
-        let custom = results.iter().find(|r| r.file_stem == "custom_theme").unwrap();
+        let custom = results
+            .iter()
+            .find(|r| r.file_stem == "custom_theme")
+            .unwrap();
         assert_eq!(custom.source, ThemeSource::Custom);
 
         let _ = fs::remove_dir_all(&dir);

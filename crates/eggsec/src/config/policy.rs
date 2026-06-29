@@ -654,10 +654,7 @@ mod tests {
             format!("{}", OperationRisk::ExploitAdjacent),
             "exploit adjacent"
         );
-        assert_eq!(
-            format!("{}", OperationRisk::C2Operation),
-            "c2 operation"
-        );
+        assert_eq!(format!("{}", OperationRisk::C2Operation), "c2 operation");
         assert_eq!(
             format!("{}", OperationRisk::AgentAutonomous),
             "agent autonomous"
@@ -837,10 +834,7 @@ mod tests {
             ExecutionSurface::SecurityAgent.profile(),
             ExecutionProfile::AgentStrict
         );
-        assert_eq!(
-            ExecutionSurface::Ci.profile(),
-            ExecutionProfile::CiStrict
-        );
+        assert_eq!(ExecutionSurface::Ci.profile(), ExecutionProfile::CiStrict);
         assert!(ExecutionSurface::RestApi.profile().is_strict());
     }
 

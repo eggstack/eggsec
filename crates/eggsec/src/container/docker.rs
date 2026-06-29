@@ -209,7 +209,9 @@ impl DockerScanner {
 
     async fn inspect_image(&self, image_name: &str) -> Result<serde_json::Value> {
         if !Self::is_valid_image_name(image_name) {
-            return Err(EggsecError::Validation("Invalid image name: contains forbidden characters".to_string()));
+            return Err(EggsecError::Validation(
+                "Invalid image name: contains forbidden characters".to_string(),
+            ));
         }
 
         let output = Command::new("docker")

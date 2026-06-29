@@ -80,14 +80,9 @@ pub struct BundleManifest {
 
 impl EvidenceBundle {
     /// Build an `EvidenceBundle` from a session report and optional rule set.
-    pub fn from_report(
-        report: &WebProxySessionReport,
-        rules: Option<&EnhancedRuleSet>,
-    ) -> Self {
+    pub fn from_report(report: &WebProxySessionReport, rules: Option<&EnhancedRuleSet>) -> Self {
         let rule_set = rules.cloned().unwrap_or_default();
-        let correlations: Vec<CorrelationReference> = report
-            .correlation_refs
-            .to_vec();
+        let correlations: Vec<CorrelationReference> = report.correlation_refs.to_vec();
 
         let manifest = BundleManifest {
             target: report.listen_addr.clone(),
@@ -123,12 +118,13 @@ impl EvidenceBundle {
 
     /// Serialize the bundle to compressed JSON bytes.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let json = serde_json::to_vec_pretty(self)
-            .map_err(|e| EggsecError::Proxy(format!("Failed to serialize evidence bundle: {}", e)))?;
+        let json = serde_json::to_vec_pretty(self).map_err(|e| {
+            EggsecError::Proxy(format!("Failed to serialize evidence bundle: {}", e))
+        })?;
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        encoder
-            .write_all(&json)
-            .map_err(|e| EggsecError::Proxy(format!("Failed to compress evidence bundle: {}", e)))?;
+        encoder.write_all(&json).map_err(|e| {
+            EggsecError::Proxy(format!("Failed to compress evidence bundle: {}", e))
+        })?;
         encoder
             .finish()
             .map_err(|e| EggsecError::Proxy(format!("Failed to finish gzip stream: {}", e)))
@@ -139,11 +135,12 @@ impl EvidenceBundle {
         use std::io::Read;
         let mut decoder = flate2::read::GzDecoder::new(data);
         let mut json = String::new();
-        decoder
-            .read_to_string(&mut json)
-            .map_err(|e| EggsecError::Proxy(format!("Failed to decompress evidence bundle: {}", e)))?;
-        serde_json::from_str(&json)
-            .map_err(|e| EggsecError::Proxy(format!("Failed to deserialize evidence bundle: {}", e)))
+        decoder.read_to_string(&mut json).map_err(|e| {
+            EggsecError::Proxy(format!("Failed to decompress evidence bundle: {}", e))
+        })?;
+        serde_json::from_str(&json).map_err(|e| {
+            EggsecError::Proxy(format!("Failed to deserialize evidence bundle: {}", e))
+        })
     }
 
     /// Reconstruct a `WebProxySessionReport` from this bundle.
@@ -261,8 +258,12 @@ pub fn export_evidence_bundle(
 ) -> Result<String> {
     let bundle = EvidenceBundle::from_report(report, rules);
     let bytes = bundle.to_bytes()?;
-    let mut file = std::fs::File::create(bundle_path)
-        .map_err(|e| EggsecError::Proxy(format!("Failed to create bundle file {}: {}", bundle_path, e)))?;
+    let mut file = std::fs::File::create(bundle_path).map_err(|e| {
+        EggsecError::Proxy(format!(
+            "Failed to create bundle file {}: {}",
+            bundle_path, e
+        ))
+    })?;
     file.write_all(&bytes)
         .map_err(|e| EggsecError::Proxy(format!("Failed to write bundle file: {}", e)))?;
     Ok(bundle_path.to_string())
@@ -282,8 +283,12 @@ pub fn export_signed_evidence_bundle(
     let mut bundle = EvidenceBundle::from_report(report, rules);
     bundle.sign(signing_key, key_id)?;
     let bytes = bundle.to_bytes()?;
-    let mut file = std::fs::File::create(bundle_path)
-        .map_err(|e| EggsecError::Proxy(format!("Failed to create bundle file {}: {}", bundle_path, e)))?;
+    let mut file = std::fs::File::create(bundle_path).map_err(|e| {
+        EggsecError::Proxy(format!(
+            "Failed to create bundle file {}: {}",
+            bundle_path, e
+        ))
+    })?;
     file.write_all(&bytes)
         .map_err(|e| EggsecError::Proxy(format!("Failed to write bundle file: {}", e)))?;
     Ok(bundle_path.to_string())
@@ -291,8 +296,9 @@ pub fn export_signed_evidence_bundle(
 
 /// Import an evidence bundle from a gzipped JSON file.
 pub fn import_evidence_bundle(bundle_path: &str) -> Result<EvidenceBundle> {
-    let data = std::fs::read(bundle_path)
-        .map_err(|e| EggsecError::Proxy(format!("Failed to read bundle file {}: {}", bundle_path, e)))?;
+    let data = std::fs::read(bundle_path).map_err(|e| {
+        EggsecError::Proxy(format!("Failed to read bundle file {}: {}", bundle_path, e))
+    })?;
     EvidenceBundle::from_bytes(&data)
 }
 
@@ -352,7 +358,10 @@ impl BundleDiff {
             parts.push(format!("{} manipulations added", self.manipulations_added));
         }
         if self.manipulations_removed > 0 {
-            parts.push(format!("{} manipulations removed", self.manipulations_removed));
+            parts.push(format!(
+                "{} manipulations removed",
+                self.manipulations_removed
+            ));
         }
         if self.rules_added > 0 {
             parts.push(format!("{} rules added", self.rules_added));
@@ -364,7 +373,10 @@ impl BundleDiff {
             parts.push(format!("{} correlations added", self.correlations_added));
         }
         if self.correlations_removed > 0 {
-            parts.push(format!("{} correlations removed", self.correlations_removed));
+            parts.push(format!(
+                "{} correlations removed",
+                self.correlations_removed
+            ));
         }
         if self.manifest_changed {
             parts.push("manifest changed".to_string());
@@ -409,8 +421,7 @@ pub fn compare_bundles(baseline: &EvidenceBundle, other: &EvidenceBundle) -> Bun
         }
     }
 
-    let manipulations_diff =
-        baseline.manipulations.len() as i64 - other.manipulations.len() as i64;
+    let manipulations_diff = baseline.manipulations.len() as i64 - other.manipulations.len() as i64;
     let manipulations_added = if manipulations_diff > 0 {
         manipulations_diff as usize
     } else {
@@ -423,13 +434,24 @@ pub fn compare_bundles(baseline: &EvidenceBundle, other: &EvidenceBundle) -> Bun
     };
 
     let rules_diff = baseline.rules.len() as i64 - other.rules.len() as i64;
-    let rules_added = if rules_diff > 0 { rules_diff as usize } else { 0 };
-    let rules_removed = if rules_diff < 0 { (-rules_diff) as usize } else { 0 };
+    let rules_added = if rules_diff > 0 {
+        rules_diff as usize
+    } else {
+        0
+    };
+    let rules_removed = if rules_diff < 0 {
+        (-rules_diff) as usize
+    } else {
+        0
+    };
 
-    let corr_diff =
-        baseline.correlations.len() as i64 - other.correlations.len() as i64;
+    let corr_diff = baseline.correlations.len() as i64 - other.correlations.len() as i64;
     let correlations_added = if corr_diff > 0 { corr_diff as usize } else { 0 };
-    let correlations_removed = if corr_diff < 0 { (-corr_diff) as usize } else { 0 };
+    let correlations_removed = if corr_diff < 0 {
+        (-corr_diff) as usize
+    } else {
+        0
+    };
 
     let manifest_changed = baseline.manifest.flow_count != other.manifest.flow_count
         || baseline.manifest.started_at != other.manifest.started_at
@@ -603,22 +625,20 @@ mod tests {
     #[test]
     fn test_evidence_bundle_ws_http2_grpc_counts() {
         let mut report = sample_report();
-        report.ws_sessions.push(
-            crate::proxy::intercept::protocols::WebSocketSession::new(
+        report
+            .ws_sessions
+            .push(crate::proxy::intercept::protocols::WebSocketSession::new(
                 "wss://example.com/ws",
                 "example.com",
                 "/ws",
                 true,
-            ),
-        );
-        let mut h2 =
-            crate::proxy::intercept::protocols::Http2Session::new("example.com", true);
+            ));
+        let mut h2 = crate::proxy::intercept::protocols::Http2Session::new("example.com", true);
         h2.add_stream(crate::proxy::intercept::protocols::Http2Stream::new(
             1, "GET", "/data",
         ));
         report.http2_sessions.push(h2);
-        let mut grpc =
-            crate::proxy::intercept::protocols::GrpcSession::new("example.com", true);
+        let mut grpc = crate::proxy::intercept::protocols::GrpcSession::new("example.com", true);
         grpc.add_call(crate::proxy::intercept::protocols::GrpcCall::new(
             "/pkg.Svc/Method",
             crate::proxy::intercept::protocols::GrpcMethodType::Unary,

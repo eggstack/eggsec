@@ -760,8 +760,8 @@ pub fn router(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::auth::extract_api_token;
+    use super::*;
 
     fn make_agent(name: &str, caps: Vec<String>) -> AgentInfo {
         AgentInfo {

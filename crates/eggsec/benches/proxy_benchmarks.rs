@@ -1,8 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use eggsec::proxy::intercept::types::{FlowBuffer, ProxyFlow, WebProxySessionReport};
 use eggsec::proxy::intercept::{
     EnhancedRule, EnhancedRuleSet, RuleAction, RuleCondition, RuleContext,
 };
-use eggsec::proxy::intercept::types::{ProxyFlow, FlowBuffer, WebProxySessionReport};
 use std::collections::HashMap;
 
 fn make_flow(index: u64) -> ProxyFlow {

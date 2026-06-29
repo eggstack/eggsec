@@ -299,8 +299,7 @@ impl CorrelationEngine {
                 ) {
                     let delta_ms = (ta - tb).num_milliseconds().abs();
                     if delta_ms <= self.temporal_window_ms {
-                        let confidence =
-                            1.0 - (delta_ms as f64 / self.temporal_window_ms as f64);
+                        let confidence = 1.0 - (delta_ms as f64 / self.temporal_window_ms as f64);
                         results.push(TemporalCorrelation {
                             a: a.clone(),
                             b: b.clone(),
@@ -317,28 +316,35 @@ impl CorrelationEngine {
     /// Match behavioral patterns against a context.
     ///
     /// Returns patterns that have sufficient source diversity to match.
-    pub fn match_behavioral(
-        &self,
-        context: &CorrelationContext,
-    ) -> Vec<(BehavioralPattern, f64)> {
+    pub fn match_behavioral(&self, context: &CorrelationContext) -> Vec<(BehavioralPattern, f64)> {
         let mut matches = Vec::new();
         for pattern in &self.patterns {
             let mut matched_sources: std::collections::HashSet<CorrelationSource> =
                 std::collections::HashSet::new();
             for reference in &context.references {
-                let source_match = pattern
-                    .required_sources
-                    .contains(&reference.source);
+                let source_match = pattern.required_sources.contains(&reference.source);
                 if source_match {
                     let host_match = pattern
                         .host_pattern
                         .as_ref()
-                        .map(|h| reference.metadata.get("host").map(|rh| rh.contains(h)).unwrap_or(false))
+                        .map(|h| {
+                            reference
+                                .metadata
+                                .get("host")
+                                .map(|rh| rh.contains(h))
+                                .unwrap_or(false)
+                        })
                         .unwrap_or(true);
                     let path_match = pattern
                         .path_pattern
                         .as_ref()
-                        .map(|p| reference.metadata.get("path").map(|rp| rp.contains(p)).unwrap_or(false))
+                        .map(|p| {
+                            reference
+                                .metadata
+                                .get("path")
+                                .map(|rp| rp.contains(p))
+                                .unwrap_or(false)
+                        })
                         .unwrap_or(true);
                     if host_match && path_match {
                         matched_sources.insert(reference.source);
@@ -437,7 +443,8 @@ impl ConfidenceScorer {
         pattern: &BehavioralPattern,
         matched_sources: &[CorrelationSource],
     ) -> f64 {
-        let match_ratio = matched_sources.len() as f64 / pattern.required_sources.len().max(1) as f64;
+        let match_ratio =
+            matched_sources.len() as f64 / pattern.required_sources.len().max(1) as f64;
         match_ratio * self.pattern_match_weight
     }
 
@@ -470,7 +477,8 @@ impl ConfidenceScorer {
         metadata_score: f64,
         severity_score: f64,
     ) -> f64 {
-        let combined = temporal_score + diversity_score + pattern_score + metadata_score + severity_score;
+        let combined =
+            temporal_score + diversity_score + pattern_score + metadata_score + severity_score;
         combined.clamp(0.0, 1.0)
     }
 
@@ -533,20 +541,12 @@ mod tests {
 
     #[test]
     fn test_correlation_reference_clamps_confidence() {
-        let r = CorrelationReference::new(
-            CorrelationSource::External,
-            "ext-1",
-            "Manual",
-        )
-        .with_confidence(1.5);
+        let r = CorrelationReference::new(CorrelationSource::External, "ext-1", "Manual")
+            .with_confidence(1.5);
         assert_eq!(r.confidence, 1.0);
 
-        let r2 = CorrelationReference::new(
-            CorrelationSource::External,
-            "ext-2",
-            "Manual",
-        )
-        .with_confidence(-0.5);
+        let r2 = CorrelationReference::new(CorrelationSource::External, "ext-2", "Manual")
+            .with_confidence(-0.5);
         assert_eq!(r2.confidence, 0.0);
     }
 
@@ -593,16 +593,14 @@ mod tests {
     #[test]
     fn test_correlation_context_summary() {
         let mut ctx = CorrelationContext::new();
-        ctx.add_reference(CorrelationReference::new(
-            CorrelationSource::DbPentest,
-            "db-1",
-            "DB finding",
-        ).with_confidence(0.8));
-        ctx.add_reference(CorrelationReference::new(
-            CorrelationSource::AuthTest,
-            "auth-1",
-            "Auth finding",
-        ).with_confidence(0.9));
+        ctx.add_reference(
+            CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "DB finding")
+                .with_confidence(0.8),
+        );
+        ctx.add_reference(
+            CorrelationReference::new(CorrelationSource::AuthTest, "auth-1", "Auth finding")
+                .with_confidence(0.9),
+        );
 
         assert_eq!(ctx.summary.total_references, 2);
         assert_eq!(ctx.summary.unique_sources, 2);
@@ -627,7 +625,10 @@ mod tests {
     fn test_proxy_mobile_hook() {
         let hook = proxy_mobile_hook();
         assert_eq!(hook.hook_type, "proxy_mobile_correlation");
-        assert_eq!(hook.parameters.get("target_loadout").unwrap(), "mobile-dynamic");
+        assert_eq!(
+            hook.parameters.get("target_loadout").unwrap(),
+            "mobile-dynamic"
+        );
     }
 
     #[test]
@@ -652,13 +653,10 @@ mod tests {
 
     #[test]
     fn test_correlation_reference_roundtrip() {
-        let r = CorrelationReference::new(
-            CorrelationSource::MobileDynamic,
-            "mob-1",
-            "Mobile finding",
-        )
-        .with_confidence(0.6)
-        .with_metadata("platform", "android");
+        let r =
+            CorrelationReference::new(CorrelationSource::MobileDynamic, "mob-1", "Mobile finding")
+                .with_confidence(0.6)
+                .with_metadata("platform", "android");
         let json = serde_json::to_string(&r).unwrap();
         let back: CorrelationReference = serde_json::from_str(&json).unwrap();
         assert_eq!(back.source, CorrelationSource::MobileDynamic);
@@ -672,11 +670,7 @@ mod tests {
         let mut ctx = CorrelationContext::new();
         ctx.add_flow_correlation(
             0,
-            CorrelationReference::new(
-                CorrelationSource::DbPentest,
-                "db-1",
-                "DB finding",
-            ),
+            CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "DB finding"),
         );
         let json = serde_json::to_string(&ctx).unwrap();
         let back: CorrelationContext = serde_json::from_str(&json).unwrap();
@@ -1209,10 +1203,7 @@ mod tests {
             ],
             min_sources: 2,
         };
-        let matched = vec![
-            CorrelationSource::DbPentest,
-            CorrelationSource::AuthTest,
-        ];
+        let matched = vec![CorrelationSource::DbPentest, CorrelationSource::AuthTest];
         let score = scorer.score_pattern_match(&pattern, &matched);
         assert!(score > 0.0 && score <= 0.25);
     }
@@ -1251,11 +1242,8 @@ mod tests {
     #[test]
     fn test_confidence_scorer_score_reference() {
         let scorer = ConfidenceScorer::default();
-        let reference = CorrelationReference::new(
-            CorrelationSource::DbPentest,
-            "db-1",
-            "SQLi finding",
-        );
+        let reference =
+            CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "SQLi finding");
         let all_references = vec![
             CorrelationReference::new(CorrelationSource::DbPentest, "db-1", "SQLi finding"),
             CorrelationReference::new(CorrelationSource::AuthTest, "auth-1", "Auth bypass"),

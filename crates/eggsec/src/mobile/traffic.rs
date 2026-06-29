@@ -56,7 +56,8 @@ pub fn parse_traffic_capture(input: &str) -> TrafficSummary {
     let mut sum = TrafficSummary::new();
 
     let trimmed = input.trim();
-    if trimmed.starts_with('{') || (trimmed.contains("\"log\"") && trimmed.contains("\"entries\"")) {
+    if trimmed.starts_with('{') || (trimmed.contains("\"log\"") && trimmed.contains("\"entries\""))
+    {
         if let Some(har) = try_parse_minimal_har(trimmed) {
             return har;
         }
@@ -140,7 +141,12 @@ fn ingest_url(url: &str, sum: &mut TrafficSummary) {
 
     // Extract host (between :// and next / or :port or end)
     let host = extract_host(url);
-    if !host.is_empty() && !sum.unique_domains.iter().any(|d| d.eq_ignore_ascii_case(&host)) {
+    if !host.is_empty()
+        && !sum
+            .unique_domains
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(&host))
+    {
         sum.unique_domains.push(host.clone());
     }
 
@@ -169,7 +175,8 @@ fn ingest_url(url: &str, sum: &mut TrafficSummary) {
         let compact = sanitize_for_listing(url);
         // Avoid flooding: only add a generic cleartext finding once per unique host or first few
         let already = sum.findings.iter().any(|f| {
-            f.category == "traffic-cleartext" && f.evidence.as_ref().is_some_and(|e| e.contains(&host))
+            f.category == "traffic-cleartext"
+                && f.evidence.as_ref().is_some_and(|e| e.contains(&host))
         });
         if !already {
             sum.findings.push(DynamicMobileFinding {
@@ -177,7 +184,8 @@ fn ingest_url(url: &str, sum: &mut TrafficSummary) {
                 severity: Severity::Low,
                 title: "Cleartext HTTP traffic observed".to_string(),
                 description: "Non-TLS network activity captured during run.".to_string(),
-                recommendation: "Prefer HTTPS everywhere; pin certificates where appropriate.".to_string(),
+                recommendation: "Prefer HTTPS everywhere; pin certificates where appropriate."
+                    .to_string(),
                 evidence: Some(compact),
                 static_correlation: None,
             });
@@ -188,7 +196,10 @@ fn ingest_url(url: &str, sum: &mut TrafficSummary) {
 fn extract_host(url: &str) -> String {
     // after :// up to / or : or end
     if let Some(after_scheme) = url.split_once("://").map(|(_, r)| r) {
-        let host_part = after_scheme.split(['/', '?', '#']).next().unwrap_or(after_scheme);
+        let host_part = after_scheme
+            .split(['/', '?', '#'])
+            .next()
+            .unwrap_or(after_scheme);
         // strip port if present
         let h = host_part.split(':').next().unwrap_or(host_part);
         return h.to_string();
@@ -197,7 +208,10 @@ fn extract_host(url: &str) -> String {
 }
 
 fn is_suspicious_url(lower_url: &str) -> bool {
-    let path_and_query = lower_url.split_once("://").map(|(_, r)| r).unwrap_or(lower_url);
+    let path_and_query = lower_url
+        .split_once("://")
+        .map(|(_, r)| r)
+        .unwrap_or(lower_url);
     path_and_query.contains("/login")
         || path_and_query.contains("/auth")
         || path_and_query.contains("/oauth")
@@ -275,12 +289,22 @@ GET http://api.example.com/login?user=foo&api_key=sk_live_SECRET 401
         let s = parse_traffic_capture(log);
         assert!(s.total_requests >= 2);
         assert!(s.cleartext_requests >= 2);
-        assert!(s.unique_domains.iter().any(|d| d.contains("api.example.com")));
-        assert!(s.unique_domains.iter().any(|d| d.contains("auth.example.com")));
+        assert!(s
+            .unique_domains
+            .iter()
+            .any(|d| d.contains("api.example.com")));
+        assert!(s
+            .unique_domains
+            .iter()
+            .any(|d| d.contains("auth.example.com")));
         assert!(!s.suspicious_endpoints.is_empty());
         assert!(s.findings.iter().any(|f| f.category == "traffic-cleartext"));
         // at least one finding should mention redaction or suspicious path
-        let has_susp = s.findings.iter().any(|f| f.evidence.as_ref().map_or(false, |e| e.contains("[REDACTED]") || e.contains("/login")));
+        let has_susp = s.findings.iter().any(|f| {
+            f.evidence
+                .as_ref()
+                .map_or(false, |e| e.contains("[REDACTED]") || e.contains("/login"))
+        });
         assert!(has_susp);
     }
 
@@ -313,7 +337,10 @@ GET http://api.example.com/login?user=foo&api_key=sk_live_SECRET 401
         let s = parse_traffic_capture(log);
         // Case-insensitive alpha sort on lowered keys; first-seen casing is preserved for the kept entry.
         // Lower cmp yields "a" before "b" => a.example before B.example in the final vec.
-        assert_eq!(s.unique_domains, vec!["a.example.com".to_string(), "B.example.com".to_string()]);
+        assert_eq!(
+            s.unique_domains,
+            vec!["a.example.com".to_string(), "B.example.com".to_string()]
+        );
     }
 
     #[test]
@@ -326,8 +353,14 @@ https://good.test/api?key=sk_live_xxx
 "#;
         let s = parse_traffic_capture(log);
         assert!(s.suspicious_endpoints.iter().any(|e| e.contains("/login")));
-        assert!(s.suspicious_endpoints.iter().any(|e| e.contains("/oauth/token")));
-        assert!(s.suspicious_endpoints.iter().any(|e| e.contains("/session")));
+        assert!(s
+            .suspicious_endpoints
+            .iter()
+            .any(|e| e.contains("/oauth/token")));
+        assert!(s
+            .suspicious_endpoints
+            .iter()
+            .any(|e| e.contains("/session")));
         // findings emitted for suspicious (medium) + generic cleartext (low)
         assert!(s.findings.iter().any(|f| f.category == "traffic-cleartext"
             && f.severity == crate::types::Severity::Medium
@@ -342,7 +375,10 @@ https://good.test/api?key=sk_live_xxx
         let sum = parse_traffic_capture(proxy_log);
         assert!(sum.total_requests >= 2);
         assert!(sum.cleartext_requests >= 1);
-        assert!(sum.unique_domains.iter().any(|d| d.contains("insecure.proxy.test")));
+        assert!(sum
+            .unique_domains
+            .iter()
+            .any(|d| d.contains("insecure.proxy.test")));
 
         let mut r = crate::mobile::DynamicMobileReport::new("app.apk");
         r.traffic_summary = Some(sum.clone());
@@ -354,15 +390,35 @@ https://good.test/api?key=sk_live_xxx
         assert!(pretty.contains("domains="));
 
         let data = crate::mobile::to_scan_report_data_dynamic(&r);
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-traffic-summary"));
         // the bridge description includes the domain count/details
-        assert!(data.findings.iter().any(|f| f.category == "mobile-dynamic-android-traffic-summary" && f.description.contains("domains=")));
+        assert!(data
+            .findings
+            .iter()
+            .any(|f| f.category == "mobile-dynamic-android-traffic-summary"
+                && f.description.contains("domains=")));
         // roundtrip via report carrying the summary
         let j = serde_json::to_string(&r).unwrap();
         let back: crate::mobile::DynamicMobileReport = serde_json::from_str(&j).unwrap();
         assert!(back.traffic_summary.is_some());
-        assert_eq!(back.traffic_summary.as_ref().unwrap().suspicious_endpoints.len(), sum.suspicious_endpoints.len());
-        assert!(back.traffic_summary.as_ref().unwrap().unique_domains.iter().any(|d| d.contains("insecure.proxy.test")));
+        assert_eq!(
+            back.traffic_summary
+                .as_ref()
+                .unwrap()
+                .suspicious_endpoints
+                .len(),
+            sum.suspicious_endpoints.len()
+        );
+        assert!(back
+            .traffic_summary
+            .as_ref()
+            .unwrap()
+            .unique_domains
+            .iter()
+            .any(|d| d.contains("insecure.proxy.test")));
     }
 
     #[test]
@@ -377,7 +433,8 @@ https://good.test/api?key=sk_live_xxx
 
     #[test]
     fn malformed_har_falls_back_gracefully() {
-        let bad = r#"{"log":{"entries":[{"request":{"url":"http://bad.test/a"}}, {"request":{}} ]}}"#;
+        let bad =
+            r#"{"log":{"entries":[{"request":{"url":"http://bad.test/a"}}, {"request":{}} ]}}"#;
         let s = parse_traffic_capture(bad);
         // Minimal valid url should still be ingested; malformed entry ignored.
         assert!(s.total_requests >= 1);
@@ -396,7 +453,10 @@ https://good.test/api?key=sk_live_xxx
         assert!(s.unique_domains.iter().any(|d| d.contains("long.test")));
         assert!(s.unique_domains.iter().any(|d| d.contains("good.test")));
         // non-http(s) ignored
-        assert!(!s.unique_domains.iter().any(|d| d.contains("ignore.test") || d.contains("skip.test")));
+        assert!(!s
+            .unique_domains
+            .iter()
+            .any(|d| d.contains("ignore.test") || d.contains("skip.test")));
     }
 
     #[test]
@@ -404,8 +464,16 @@ https://good.test/api?key=sk_live_xxx
         // Secrets embedded in *path* (query is stripped before redaction; path-embedded secrets are redacted).
         let log = "GET http://leak.test/login/api-keySECRET123?user=1\nhttp://x.test/p/private_key=XYZ\nhttp://b.test/bearer TOKEN123";
         let s = parse_traffic_capture(log);
-        let evs: Vec<_> = s.findings.iter().filter_map(|f| f.evidence.as_ref()).collect();
+        let evs: Vec<_> = s
+            .findings
+            .iter()
+            .filter_map(|f| f.evidence.as_ref())
+            .collect();
         let joined: String = evs.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ");
-        assert!(joined.contains("api-key=[REDACTED]") || joined.contains("private_key=[REDACTED]") || joined.contains("bearer [REDACTED]"));
+        assert!(
+            joined.contains("api-key=[REDACTED]")
+                || joined.contains("private_key=[REDACTED]")
+                || joined.contains("bearer [REDACTED]")
+        );
     }
 }

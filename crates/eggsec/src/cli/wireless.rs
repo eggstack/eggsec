@@ -34,13 +34,24 @@ pub struct WirelessScanArgs {
     pub quiet: bool,
     #[arg(long, default_value_t = 10, help = "Scan duration in seconds")]
     pub duration: u64,
-    #[arg(long, default_value_t = 1, help = "Number of scans to perform (repeat for change/rogue observation)")]
+    #[arg(
+        long,
+        default_value_t = 1,
+        help = "Number of scans to perform (repeat for change/rogue observation)"
+    )]
     pub repeat: u32,
     #[arg(long, help = "Enable verbose suspicious/rogue network heuristics")]
     pub detect_suspicious: bool,
-    #[arg(long, help = "Plan mode: show what would be scanned without performing iwlist calls")]
+    #[arg(
+        long,
+        help = "Plan mode: show what would be scanned without performing iwlist calls"
+    )]
     pub dry_run: bool,
-    #[arg(long, value_name = "FILE", help = "Path to simple allowlist (one entry per line: SSID or BSSID or SSID,BSSID)")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Path to simple allowlist (one entry per line: SSID or BSSID or SSID,BSSID)"
+    )]
     pub known_good: Option<String>,
 }
 
@@ -67,7 +78,10 @@ pub struct DeauthArgs {
     pub bssid: String,
 
     /// Target client MAC in AA:BB:CC:DD:EE:FF format (omit for broadcast deauth)
-    #[arg(long, help = "Target client MAC address (omit for broadcast deauth to all clients)")]
+    #[arg(
+        long,
+        help = "Target client MAC address (omit for broadcast deauth to all clients)"
+    )]
     pub client: Option<String>,
 
     /// Number of frames to send
@@ -75,7 +89,11 @@ pub struct DeauthArgs {
     pub count: u64,
 
     /// 802.11 reason code
-    #[arg(long, default_value_t = 7, help = "802.11 reason code (default: 7 = class 3 from unassoc)")]
+    #[arg(
+        long,
+        default_value_t = 7,
+        help = "802.11 reason code (default: 7 = class 3 from unassoc)"
+    )]
     pub reason_code: u16,
 
     /// Send deauth to broadcast address (all clients)
@@ -83,15 +101,26 @@ pub struct DeauthArgs {
     pub broadcast: bool,
 
     /// Monitor-mode interface override
-    #[arg(long, help = "Specify monitor-mode interface (default: use main interface)")]
+    #[arg(
+        long,
+        help = "Specify monitor-mode interface (default: use main interface)"
+    )]
     pub monitor_iface: Option<String>,
 
     /// Maximum frames to send (budget)
-    #[arg(long, default_value_t = 100, help = "Maximum frames to send (hard budget)")]
+    #[arg(
+        long,
+        default_value_t = 100,
+        help = "Maximum frames to send (hard budget)"
+    )]
     pub max_frames: u64,
 
     /// Frames per second rate limit
-    #[arg(long, default_value_t = 10, help = "Frame injection rate (frames per second)")]
+    #[arg(
+        long,
+        default_value_t = 10,
+        help = "Frame injection rate (frames per second)"
+    )]
     pub fps: u64,
 
     /// Output results as JSON
@@ -107,7 +136,10 @@ pub struct DeauthArgs {
     pub dry_run: bool,
 
     /// Confirm active wireless attack (required for non-dry-run)
-    #[arg(long, help = "Confirm active wireless attack execution (required for non-dry-run)")]
+    #[arg(
+        long,
+        help = "Confirm active wireless attack execution (required for non-dry-run)"
+    )]
     pub allow_active_wireless: bool,
 
     /// Reason for manual override (recorded for audit)

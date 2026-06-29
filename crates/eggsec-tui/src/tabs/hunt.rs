@@ -1,5 +1,7 @@
 use crate::components::{Checkbox, InputField, InputGroup};
-use crate::tabs::core::{field_as, render_input_fields, render_results_area, StandardFocusArea, TabCore};
+use crate::tabs::core::{
+    field_as, render_input_fields, render_results_area, StandardFocusArea, TabCore,
+};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use eggsec::hunt::{HuntConfig, HuntReport};
@@ -233,8 +235,8 @@ impl TabRender for HuntTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
-        let is_config_focused =
-            self.focus_area == StandardFocusArea::Inputs || self.focus_area == StandardFocusArea::Options;
+        let is_config_focused = self.focus_area == StandardFocusArea::Inputs
+            || self.focus_area == StandardFocusArea::Options;
         let config_block = Block::default()
             .borders(Borders::ALL)
             .title(" Configuration ")
@@ -266,8 +268,12 @@ impl TabRender for HuntTab {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(*cb_area);
 
-        let Some(left_chunk) = cb_chunks.get(0) else { return; };
-        let Some(right_chunk) = cb_chunks.get(1) else { return; };
+        let Some(left_chunk) = cb_chunks.get(0) else {
+            return;
+        };
+        let Some(right_chunk) = cb_chunks.get(1) else {
+            return;
+        };
 
         let left = Layout::default()
             .direction(Direction::Vertical)
@@ -497,10 +503,6 @@ impl TabInput for HuntTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        crate::tabs::core::is_input_focused(
-            self.focus_area,
-            StandardFocusArea::Inputs,
-            &self.core,
-        )
+        crate::tabs::core::is_input_focused(self.focus_area, StandardFocusArea::Inputs, &self.core)
     }
 }

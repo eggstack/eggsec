@@ -9,51 +9,49 @@
 mod bridge;
 mod bundle;
 mod cert;
+pub mod correlation;
+#[cfg(feature = "dynamic-plugins")]
+pub mod dynamic_plugins;
 mod interceptor;
 pub mod narrative;
 pub mod plugins;
 pub mod protocols;
 mod redteam;
 mod rules;
-pub mod types;
-pub mod correlation;
 #[cfg(feature = "transparent-proxy")]
 pub mod transparent;
-#[cfg(feature = "dynamic-plugins")]
-pub mod dynamic_plugins;
+pub mod types;
 
 pub use bridge::to_scan_report_data_proxy;
-pub use bundle::{EvidenceBundle, BundleManifest, BundleDiff, export_evidence_bundle, export_signed_evidence_bundle, import_evidence_bundle, compare_bundles};
+pub use bundle::{
+    compare_bundles, export_evidence_bundle, export_signed_evidence_bundle, import_evidence_bundle,
+    BundleDiff, BundleManifest, EvidenceBundle,
+};
 pub use cert::{CertGenerator, CertMaterial};
 pub use interceptor::{InterceptConfig, InterceptMode, InterceptProxy};
 pub use rules::{
-    InterceptRule, RuleAction, RuleSet,
-    EnhancedRule, EnhancedRuleSet, RuleCondition, RuleContext, RuleId, InjectResponseConfig,
+    EnhancedRule, EnhancedRuleSet, InjectResponseConfig, InterceptRule, RuleAction, RuleCondition,
+    RuleContext, RuleId, RuleSet,
 };
 
 pub use protocols::{
-    ProxyProtocol, WebSocketMessage, WebSocketSession, WebSocketOpcode,
-    Http2Stream, Http2Session, Http2StreamState,
-    GrpcCall, GrpcSession, GrpcMethodType, ProtocolDetection,
-    GrpcStreamFrame, GrpcStreamingState, GrpcSecurityFinding,
-    detect_grpc_security_issues, StreamingSummary, FlowControlError,
-    GrpcReflectionInfo, GrpcReflectionVersion, GrpcServiceInfo,
-    GrpcMethodInfo, GrpcTypeInfo, GrpcFieldInfo,
+    detect_grpc_security_issues, FlowControlError, GrpcCall, GrpcFieldInfo, GrpcMethodInfo,
+    GrpcMethodType, GrpcReflectionInfo, GrpcReflectionVersion, GrpcSecurityFinding,
+    GrpcServiceInfo, GrpcSession, GrpcStreamFrame, GrpcStreamingState, GrpcTypeInfo, Http2Session,
+    Http2Stream, Http2StreamState, ProtocolDetection, ProxyProtocol, StreamingSummary,
+    WebSocketMessage, WebSocketOpcode, WebSocketSession,
 };
 
 pub use correlation::{
-    CorrelationContext, CorrelationReference, CorrelationSource,
-    CorrelationHook, CorrelationSummary,
-    CorrelationEngine, TemporalCorrelation, BehavioralPattern,
-    ConfidenceScorer,
+    BehavioralPattern, ConfidenceScorer, CorrelationContext, CorrelationEngine, CorrelationHook,
+    CorrelationReference, CorrelationSource, CorrelationSummary, TemporalCorrelation,
 };
 
-pub use narrative::{AttackNarrative, NarrativeEvent, build_narrative};
+pub use narrative::{build_narrative, AttackNarrative, NarrativeEvent};
 
 pub use plugins::{
-    ProtocolHandler, PluginRegistry, PluginInfo, PluginError,
-    DetectionResult, HandleResult, PluginFinding,
-    PluginCapability, CapabilitySet, PluginSandbox, SandboxViolation,
+    CapabilitySet, DetectionResult, HandleResult, PluginCapability, PluginError, PluginFinding,
+    PluginInfo, PluginRegistry, PluginSandbox, ProtocolHandler, SandboxViolation,
 };
 
 use crate::error::{EggsecError, Result};
@@ -133,8 +131,16 @@ impl ProxyServer {
                     let http2_live = self.proxy_http2_live;
 
                     tokio::spawn(async move {
-                        if let Err(e) =
-                            handle_connection(stream, client_addr, rules, enhanced_rules, mode, cert_gen, http2_live).await
+                        if let Err(e) = handle_connection(
+                            stream,
+                            client_addr,
+                            rules,
+                            enhanced_rules,
+                            mode,
+                            cert_gen,
+                            http2_live,
+                        )
+                        .await
                         {
                             tracing::debug!("Connection error: {}", e);
                         }
@@ -223,9 +229,7 @@ fn extract_ws_path(request_str: &str) -> &str {
         .unwrap_or("/")
 }
 
-async fn read_http_headers(
-    stream: &mut (impl tokio::io::AsyncRead + Unpin),
-) -> Result<Vec<u8>> {
+async fn read_http_headers(stream: &mut (impl tokio::io::AsyncRead + Unpin)) -> Result<Vec<u8>> {
     const MAX_HEADER_SIZE: usize = 8192;
     let mut request = Vec::with_capacity(1024);
     let mut buf = [0u8; 4096];
@@ -266,19 +270,12 @@ async fn handle_websocket_interception(
 
     let ws_url = format!("wss://{}{}", host, path);
 
-    let ws_client = tokio_tungstenite::WebSocketStream::from_raw_socket(
-        client_stream,
-        Role::Server,
-        None,
-    )
-    .await;
+    let ws_client =
+        tokio_tungstenite::WebSocketStream::from_raw_socket(client_stream, Role::Server, None)
+            .await;
 
-    let ws_upstream = tokio_tungstenite::WebSocketStream::from_raw_socket(
-        upstream,
-        Role::Client,
-        None,
-    )
-    .await;
+    let ws_upstream =
+        tokio_tungstenite::WebSocketStream::from_raw_socket(upstream, Role::Client, None).await;
 
     let mut session = WebSocketSession::new(&ws_url, host, path, true);
 
@@ -390,7 +387,9 @@ async fn handle_websocket_interception(
     _host: &str,
     _path: &str,
 ) -> Result<()> {
-    tracing::debug!("WebSocket interception requires web-proxy feature; falling back to passthrough");
+    tracing::debug!(
+        "WebSocket interception requires web-proxy feature; falling back to passthrough"
+    );
     Ok(())
 }
 
@@ -699,7 +698,15 @@ async fn handle_connection(
     let request = String::from_utf8_lossy(&buf[..n]);
 
     if request.starts_with("CONNECT") {
-        handle_connect_request(stream, &request, rules, enhanced_rules, cert_gen, http2_live).await
+        handle_connect_request(
+            stream,
+            &request,
+            rules,
+            enhanced_rules,
+            cert_gen,
+            http2_live,
+        )
+        .await
     } else {
         handle_http_request(stream, &buf[..n], rules, enhanced_rules).await
     }
@@ -784,7 +791,11 @@ async fn handle_connect_request(
     // Check if HTTP/2 was negotiated via ALPN
     let alpn = client_stream.get_ref().1.alpn_protocol();
     if http2_live && alpn == Some(b"h2") {
-        tracing::debug!("HTTP/2 ALPN negotiated for {}:{}, dispatching to h2 interceptor", host, port);
+        tracing::debug!(
+            "HTTP/2 ALPN negotiated for {}:{}, dispatching to h2 interceptor",
+            host,
+            port
+        );
         return handle_http2_interception(client_stream, upstream, host).await;
     }
 
@@ -850,7 +861,11 @@ async fn handle_http_request(
         RuleAction::Modify => {
             tracing::debug!("HTTP {} {} - Modify", host, path);
         }
-        RuleAction::Intercept | RuleAction::Monitor | RuleAction::InjectResponse | RuleAction::Delay | RuleAction::Tag => {
+        RuleAction::Intercept
+        | RuleAction::Monitor
+        | RuleAction::InjectResponse
+        | RuleAction::Delay
+        | RuleAction::Tag => {
             tracing::debug!("HTTP {} {} - {:?}", host, path, rule_action);
         }
         RuleAction::Allow => {}
@@ -889,7 +904,14 @@ async fn handle_http_request(
 
     let delay_ms = {
         let enhanced_rules_guard = enhanced_rules.read();
-        let ctx = build_rule_context(host, path, method, &headers, request_body.as_deref(), "http1");
+        let ctx = build_rule_context(
+            host,
+            path,
+            method,
+            &headers,
+            request_body.as_deref(),
+            "http1",
+        );
         enhanced_rules_guard
             .evaluate_first(&ctx)
             .and_then(|r| r.delay_ms)
@@ -1038,17 +1060,15 @@ mod tests {
 
     #[test]
     fn test_proxy_server_with_enhanced_rules() {
-        use crate::proxy::intercept::rules::{RuleCondition, RuleAction};
+        use crate::proxy::intercept::rules::{RuleAction, RuleCondition};
 
         let server = ProxyServer::new("127.0.0.1:8080".parse().unwrap()).unwrap();
-        server.add_enhanced_rule(
-            EnhancedRule::new(
-                "test-rule",
-                "Test Rule",
-                RuleCondition::HostMatches("example.com".to_string()),
-                RuleAction::Block,
-            )
-        );
+        server.add_enhanced_rule(EnhancedRule::new(
+            "test-rule",
+            "Test Rule",
+            RuleCondition::HostMatches("example.com".to_string()),
+            RuleAction::Block,
+        ));
         let rules = server.enhanced_rules.read();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules.get_by_id("test-rule").unwrap().name, "Test Rule");
@@ -1056,7 +1076,7 @@ mod tests {
 
     #[test]
     fn test_enhanced_rule_evaluation_in_context() {
-        use crate::proxy::intercept::rules::{RuleCondition, RuleAction};
+        use crate::proxy::intercept::rules::{RuleAction, RuleCondition};
 
         let mut headers = HashMap::new();
         headers.insert("Host".to_string(), "example.com".to_string());
@@ -1071,25 +1091,21 @@ mod tests {
         );
 
         let mut rule_set = EnhancedRuleSet::new();
-        rule_set.add(
-            EnhancedRule::new(
-                "body-inspector",
-                "Body Inspector",
-                RuleCondition::BodyContains("secret".to_string()),
-                RuleAction::Monitor,
-            )
-        );
-        rule_set.add(
-            EnhancedRule::new(
-                "admin-block",
-                "Admin Blocker",
-                RuleCondition::And(vec![
-                    RuleCondition::HostMatches("example.com".to_string()),
-                    RuleCondition::PathMatches("/admin/*".to_string()),
-                ]),
-                RuleAction::Block,
-            )
-        );
+        rule_set.add(EnhancedRule::new(
+            "body-inspector",
+            "Body Inspector",
+            RuleCondition::BodyContains("secret".to_string()),
+            RuleAction::Monitor,
+        ));
+        rule_set.add(EnhancedRule::new(
+            "admin-block",
+            "Admin Blocker",
+            RuleCondition::And(vec![
+                RuleCondition::HostMatches("example.com".to_string()),
+                RuleCondition::PathMatches("/admin/*".to_string()),
+            ]),
+            RuleAction::Block,
+        ));
 
         let matches = rule_set.evaluate(&ctx);
         assert_eq!(matches.len(), 2);
@@ -1141,18 +1157,12 @@ mod tests {
 
     #[test]
     fn test_extract_ws_path() {
-        assert_eq!(
-            extract_ws_path("GET /chat HTTP/1.1\r\n"),
-            "/chat"
-        );
+        assert_eq!(extract_ws_path("GET /chat HTTP/1.1\r\n"), "/chat");
         assert_eq!(
             extract_ws_path("GET http://example.com/ws HTTP/1.1\r\n"),
             "/ws"
         );
-        assert_eq!(
-            extract_ws_path("GET / HTTP/1.1\r\n"),
-            "/"
-        );
+        assert_eq!(extract_ws_path("GET / HTTP/1.1\r\n"), "/");
     }
 
     #[test]

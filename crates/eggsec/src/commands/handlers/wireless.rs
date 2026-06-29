@@ -2,10 +2,7 @@ use crate::commands::handlers::CommandContext;
 use crate::config::OperationDescriptor;
 use anyhow::Result;
 
-pub async fn handle_wireless(
-    ctx: &CommandContext,
-    args: crate::cli::WirelessArgs,
-) -> Result<()> {
+pub async fn handle_wireless(ctx: &CommandContext, args: crate::cli::WirelessArgs) -> Result<()> {
     match args.command {
         #[cfg(feature = "wireless-advanced")]
         Some(crate::cli::WirelessSubcommand::Deauth(deauth_args)) => {
@@ -14,12 +11,12 @@ pub async fn handle_wireless(
         Some(crate::cli::WirelessSubcommand::Scan(scan_args)) => {
             handle_scan(ctx, args.interface, scan_args).await
         }
-        None => {
-            handle_scan(ctx, args.interface, crate::cli::WirelessScanArgs::default()).await
-        }
+        None => handle_scan(ctx, args.interface, crate::cli::WirelessScanArgs::default()).await,
         #[cfg(not(feature = "wireless-advanced"))]
         Some(crate::cli::WirelessSubcommand::Deauth(_)) => {
-            anyhow::bail!("wireless-advanced feature not enabled; rebuild with --features wireless-advanced")
+            anyhow::bail!(
+                "wireless-advanced feature not enabled; rebuild with --features wireless-advanced"
+            )
         }
     }
 }
@@ -115,7 +112,7 @@ async fn handle_deauth(
         client: client_bytes,
         reason_code: deauth_args.reason_code,
         max_frames: deauth_args.max_frames.min(1000), // Enforce hard budget
-        frames_per_second: deauth_args.fps.min(100),   // Enforce rate limit
+        frames_per_second: deauth_args.fps.min(100),  // Enforce rate limit
         dry_run: deauth_args.dry_run,
     };
 
@@ -128,11 +125,9 @@ async fn handle_deauth(
         .notify_scan_started(&scan_id, &target)
         .await;
 
-    let result = crate::wireless::active::attacks::deauth::run_deauth(
-        &config,
-        deauth_args.broadcast,
-    )
-    .await?;
+    let result =
+        crate::wireless::active::attacks::deauth::run_deauth(&config, deauth_args.broadcast)
+            .await?;
 
     if deauth_args.json || ctx.json {
         let json = serde_json::to_string_pretty(&result)?;
@@ -147,8 +142,14 @@ async fn handle_deauth(
         println!("\n=== Active Wireless Attack Result ===");
         println!("Interface:    {}", result.interface);
         println!("Attack type:  {}", result.attack_type);
-        println!("Target BSSID: {}", result.target_bssid.as_deref().unwrap_or("-"));
-        println!("Target:       {}", result.target_client.as_deref().unwrap_or("-"));
+        println!(
+            "Target BSSID: {}",
+            result.target_bssid.as_deref().unwrap_or("-")
+        );
+        println!(
+            "Target:       {}",
+            result.target_client.as_deref().unwrap_or("-")
+        );
         println!("Frames sent:  {}", result.frames_sent);
         println!("Duration:     {}s", result.duration_secs);
         println!("Dry run:      {}", result.dry_run);

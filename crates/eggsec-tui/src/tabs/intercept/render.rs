@@ -1,5 +1,5 @@
 use super::types::*;
-use super::utils::{truncate_str, format_bytes};
+use super::utils::{format_bytes, truncate_str};
 use super::InterceptTab;
 use crate::components::empty_state_paragraph;
 use crate::tc;
@@ -24,7 +24,13 @@ impl InterceptTab {
 
         let header_cells = ["#", "Method", "Host", "Path", "Status", "Size", "HTTPS"]
             .iter()
-            .map(|h| Cell::from(*h).style(Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD)));
+            .map(|h| {
+                Cell::from(*h).style(
+                    Style::default()
+                        .fg(tc!(accent))
+                        .add_modifier(Modifier::BOLD),
+                )
+            });
         let header = Row::new(header_cells).height(1);
 
         let viewport_height = area.height.saturating_sub(3) as usize;
@@ -44,7 +50,8 @@ impl InterceptTab {
                 Cell::from(flow.method.clone()),
                 Cell::from(truncate_str(&flow.host, 20)),
                 Cell::from(truncate_str(&flow.path, 25)),
-                Cell::from(format!("{}", flow.response_status)).style(Style::default().fg(status_color)),
+                Cell::from(format!("{}", flow.response_status))
+                    .style(Style::default().fg(status_color)),
                 Cell::from(format_bytes(flow.response_body_size)),
                 Cell::from(if flow.is_https { "Y" } else { "N" }),
             ])
@@ -63,10 +70,12 @@ impl InterceptTab {
             ],
         )
         .header(header)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))).title(format!(
-            " Flows ({}) ",
-            self.flows.len()
-        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(tc!(border)))
+                .title(format!(" Flows ({}) ", self.flows.len())),
+        )
         .highlight_style(Style::default().bg(tc!(selected)))
         .highlight_symbol("> ");
 
@@ -100,7 +109,8 @@ impl InterceptTab {
                 } else if self.detail_pane == DetailPane::Correlation {
                     self.render_correlation(f, area);
                 } else {
-                    let placeholder = empty_state_paragraph("Detail", "Select a flow to view details");
+                    let placeholder =
+                        empty_state_paragraph("Detail", "Select a flow to view details");
                     f.render_widget(placeholder, area);
                 }
             }
@@ -114,12 +124,18 @@ impl InterceptTab {
             .split(area);
 
         let legacy_style = if self.selected_rule_view == RuleManagementView::Legacy {
-            Style::default().fg(tc!(background)).bg(tc!(accent)).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(tc!(background))
+                .bg(tc!(accent))
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(tc!(text))
         };
         let enhanced_style = if self.selected_rule_view == RuleManagementView::Enhanced {
-            Style::default().fg(tc!(background)).bg(tc!(accent)).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(tc!(background))
+                .bg(tc!(accent))
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(tc!(text))
         };
@@ -171,15 +187,34 @@ impl InterceptTab {
 
         if self.selected_rule_view == RuleManagementView::Enhanced {
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![Span::styled(" Enhanced Rules", Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD))]));
+            lines.push(Line::from(vec![Span::styled(
+                " Enhanced Rules",
+                Style::default()
+                    .fg(tc!(accent))
+                    .add_modifier(Modifier::BOLD),
+            )]));
             lines.push(Line::from(""));
             lines.push(Line::from(vec![Span::styled("  Condition Types: ", Style::default().fg(tc!(info))), Span::raw("HostMatches, PathMatches, MethodMatches, HeaderContains, BodyContains, BodySizeGt/Lt")]));
-            lines.push(Line::from(vec![Span::styled("  Combinators: ", Style::default().fg(tc!(info))), Span::raw("AND, OR, NOT for complex conditions")]));
-            lines.push(Line::from(vec![Span::styled("  Protocol: ", Style::default().fg(tc!(info))), Span::raw("ProtocolIs, WebSocketOpcodeIs, GrpcMethodIs")]));
-            lines.push(Line::from(vec![Span::styled("  Actions: ", Style::default().fg(tc!(info))), Span::raw("Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag")]));
+            lines.push(Line::from(vec![
+                Span::styled("  Combinators: ", Style::default().fg(tc!(info))),
+                Span::raw("AND, OR, NOT for complex conditions"),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("  Protocol: ", Style::default().fg(tc!(info))),
+                Span::raw("ProtocolIs, WebSocketOpcodeIs, GrpcMethodIs"),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("  Actions: ", Style::default().fg(tc!(info))),
+                Span::raw("Allow, Block, Intercept, Monitor, Modify, InjectResponse, Delay, Tag"),
+            ]));
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![Span::styled("  Persistence: ", Style::default().fg(tc!(info))), Span::raw("JSON save/load via EnhancedRuleSet")]));
-            lines.push(Line::from("  eggsec proxy intercept --rule-set /path/to/rules.json"));
+            lines.push(Line::from(vec![
+                Span::styled("  Persistence: ", Style::default().fg(tc!(info))),
+                Span::raw("JSON save/load via EnhancedRuleSet"),
+            ]));
+            lines.push(Line::from(
+                "  eggsec proxy intercept --rule-set /path/to/rules.json",
+            ));
         }
 
         let block = Block::default()
@@ -194,7 +229,8 @@ impl InterceptTab {
         let flow = match self.selected_flow_data() {
             Some(f) => f,
             None => {
-                let placeholder = empty_state_paragraph("Protocol", "Select a flow to view protocol details");
+                let placeholder =
+                    empty_state_paragraph("Protocol", "Select a flow to view protocol details");
                 f.render_widget(placeholder, area);
                 return;
             }
@@ -204,18 +240,32 @@ impl InterceptTab {
         let mut lines = vec![
             Line::from(vec![Span::styled(
                 format!("{} Protocol Details", protocol),
-                Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(tc!(accent))
+                    .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
-            Line::from(vec![Span::styled(" Flow Protocol: ", Style::default().fg(tc!(info))), Span::raw(flow_protocol.clone())]),
+            Line::from(vec![
+                Span::styled(" Flow Protocol: ", Style::default().fg(tc!(info))),
+                Span::raw(flow_protocol.clone()),
+            ]),
             Line::from(""),
         ];
 
         match protocol {
             "WebSocket" => {
-                lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("Check Upgrade header for 'websocket' value")]));
-                lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("WebSocket sessions captured during MITM interception")]));
-                lines.push(Line::from(vec![Span::styled(" Manipulation: ", Style::default().fg(tc!(info))), Span::raw("Edit and replay individual frames")]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Detection: ", Style::default().fg(tc!(info))),
+                    Span::raw("Check Upgrade header for 'websocket' value"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Capture: ", Style::default().fg(tc!(info))),
+                    Span::raw("WebSocket sessions captured during MITM interception"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Manipulation: ", Style::default().fg(tc!(info))),
+                    Span::raw("Edit and replay individual frames"),
+                ]));
                 lines.push(Line::from(""));
 
                 if !self.ws_sessions.is_empty() {
@@ -229,15 +279,27 @@ impl InterceptTab {
                         lines.push(Line::from(vec![
                             Span::styled(
                                 format!("  Session {}: ", session_idx),
-                                Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+                                Style::default()
+                                    .fg(tc!(accent))
+                                    .add_modifier(Modifier::BOLD),
                             ),
-                            Span::raw(format!("{} ({} messages)", session.host, session.messages.len())),
+                            Span::raw(format!(
+                                "{} ({} messages)",
+                                session.host,
+                                session.messages.len()
+                            )),
                         ]));
 
                         let page_size = 10;
                         let messages = self.ws_messages_page(session_idx, 0, page_size);
                         for msg in messages.iter() {
-                            let prefix = if msg.direction == eggsec::proxy::intercept::types::ProxyFlowDirection::Request { "  -> " } else { " <-  " };
+                            let prefix = if msg.direction
+                                == eggsec::proxy::intercept::types::ProxyFlowDirection::Request
+                            {
+                                "  -> "
+                            } else {
+                                " <-  "
+                            };
                             lines.push(Line::from(vec![
                                 Span::raw(prefix.to_string()),
                                 Span::styled(
@@ -250,12 +312,13 @@ impl InterceptTab {
 
                         let total = self.ws_session_message_count(session_idx);
                         if total > page_size {
-                            lines.push(Line::from(vec![
-                                Span::styled(
-                                    format!("  ... {} more messages (scroll to see more)", total - page_size),
-                                    Style::default().fg(tc!(muted)),
+                            lines.push(Line::from(vec![Span::styled(
+                                format!(
+                                    "  ... {} more messages (scroll to see more)",
+                                    total - page_size
                                 ),
-                            ]));
+                                Style::default().fg(tc!(muted)),
+                            )]));
                         }
                     }
                 } else {
@@ -264,49 +327,81 @@ impl InterceptTab {
                         Span::raw("No WebSocket sessions captured yet"),
                     ]));
                 }
-            },
+            }
             "HTTP/2" => {
-                lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("HTTP/2 identified by :scheme pseudo-header")]));
-                lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("HTTP/2 streams with ID, priority, window updates")]));
-                lines.push(Line::from(vec![Span::styled(" Streams: ", Style::default().fg(tc!(info))), Span::raw("Multiplexed over single TCP connection")]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Detection: ", Style::default().fg(tc!(info))),
+                    Span::raw("HTTP/2 identified by :scheme pseudo-header"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Capture: ", Style::default().fg(tc!(info))),
+                    Span::raw("HTTP/2 streams with ID, priority, window updates"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Streams: ", Style::default().fg(tc!(info))),
+                    Span::raw("Multiplexed over single TCP connection"),
+                ]));
                 lines.push(Line::from(""));
 
                 if !self.http2_sessions.is_empty() {
                     let total_streams = self.total_http2_streams();
                     lines.push(Line::from(vec![
                         Span::styled(" Captured Sessions: ", Style::default().fg(tc!(info))),
-                        Span::raw(format!("{} ({} total streams)", self.http2_sessions.len(), total_streams)),
+                        Span::raw(format!(
+                            "{} ({} total streams)",
+                            self.http2_sessions.len(),
+                            total_streams
+                        )),
                     ]));
                     lines.push(Line::from(""));
 
                     if let Some(session) = self.http2_sessions.first() {
                         let (open, half_closed, closed, idle) = self.http2_stream_state_counts(0);
                         lines.push(Line::from(vec![
-                            Span::styled(format!("  Session {}: ", 0),
-                                Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD)),
-                            Span::raw(format!("{}{} ({} streams)",
-                                if session.is_secure { "https://" } else { "http://" },
+                            Span::styled(
+                                format!("  Session {}: ", 0),
+                                Style::default()
+                                    .fg(tc!(accent))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(format!(
+                                "{}{} ({} streams)",
+                                if session.is_secure {
+                                    "https://"
+                                } else {
+                                    "http://"
+                                },
                                 session.host,
-                                session.streams.len())),
+                                session.streams.len()
+                            )),
                         ]));
 
                         lines.push(Line::from(vec![
                             Span::styled("    Stream States: ", Style::default().fg(tc!(info))),
-                            Span::raw(format!("open={}, half-closed={}, closed={}, idle={}",
-                                open, half_closed, closed, idle)),
+                            Span::raw(format!(
+                                "open={}, half-closed={}, closed={}, idle={}",
+                                open, half_closed, closed, idle
+                            )),
                         ]));
 
                         lines.push(Line::from(vec![
                             Span::styled("    Connection Window: ", Style::default().fg(tc!(info))),
-                            Span::raw(format!("{} bytes ({} stream window)",
-                                session.connection_window_size, session.stream_window_size)),
+                            Span::raw(format!(
+                                "{} bytes ({} stream window)",
+                                session.connection_window_size, session.stream_window_size
+                            )),
                         ]));
 
                         if session.max_concurrent_streams > 0 {
                             lines.push(Line::from(vec![
-                                Span::styled("    Max Concurrent: ", Style::default().fg(tc!(info))),
-                                Span::raw(format!("{} streams, max frame: {} bytes",
-                                    session.max_concurrent_streams, session.max_frame_size)),
+                                Span::styled(
+                                    "    Max Concurrent: ",
+                                    Style::default().fg(tc!(info)),
+                                ),
+                                Span::raw(format!(
+                                    "{} streams, max frame: {} bytes",
+                                    session.max_concurrent_streams, session.max_frame_size
+                                )),
                             ]));
                         }
 
@@ -314,8 +409,10 @@ impl InterceptTab {
                         let display_count = streams.len().min(5);
                         if display_count > 0 {
                             lines.push(Line::from(""));
-                            lines.push(Line::from(vec![Span::styled("    Streams:",
-                                Style::default().fg(tc!(info)))]));
+                            lines.push(Line::from(vec![Span::styled(
+                                "    Streams:",
+                                Style::default().fg(tc!(info)),
+                            )]));
                             for stream in streams.iter().take(display_count) {
                                 let state_str = match stream.state {
                                     eggsec::proxy::intercept::protocols::Http2StreamState::Open => "OPEN",
@@ -331,65 +428,111 @@ impl InterceptTab {
                                 };
                                 lines.push(Line::from(vec![
                                     Span::raw(format!("      [{}] ", stream.stream_id)),
-                                    Span::styled(format!("{:<6}", state_str), Style::default().fg(state_color)),
-                                    Span::raw(format!(" {} {}", stream.method, truncate_str(&stream.path, 40))),
+                                    Span::styled(
+                                        format!("{:<6}", state_str),
+                                        Style::default().fg(state_color),
+                                    ),
+                                    Span::raw(format!(
+                                        " {} {}",
+                                        stream.method,
+                                        truncate_str(&stream.path, 40)
+                                    )),
                                 ]));
                             }
                             if streams.len() > display_count {
                                 lines.push(Line::from(Span::styled(
-                                    format!("      ... {} more streams (see Stream Mux tab)", streams.len() - display_count),
+                                    format!(
+                                        "      ... {} more streams (see Stream Mux tab)",
+                                        streams.len() - display_count
+                                    ),
                                     Style::default().fg(tc!(muted)),
                                 )));
                             }
                         }
                     }
                     lines.push(Line::from(""));
-                    lines.push(Line::from(vec![Span::styled(" Tip: ", Style::default().fg(tc!(success))),
-                        Span::raw("Switch to 'Stream Mux' tab for full multiplexing visualization")]));
+                    lines.push(Line::from(vec![
+                        Span::styled(" Tip: ", Style::default().fg(tc!(success))),
+                        Span::raw("Switch to 'Stream Mux' tab for full multiplexing visualization"),
+                    ]));
                 } else {
-                    lines.push(Line::from(vec![Span::styled(" Note: ", Style::default().fg(tc!(warning))),
-                        Span::raw("No HTTP/2 sessions captured yet")]));
-                    lines.push(Line::from(vec![Span::styled(" Tip: ", Style::default().fg(tc!(success))),
-                        Span::raw("Stream demultiplexing available in 'Stream Mux' tab")]));
+                    lines.push(Line::from(vec![
+                        Span::styled(" Note: ", Style::default().fg(tc!(warning))),
+                        Span::raw("No HTTP/2 sessions captured yet"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled(" Tip: ", Style::default().fg(tc!(success))),
+                        Span::raw("Stream demultiplexing available in 'Stream Mux' tab"),
+                    ]));
                 }
-            },
+            }
             "gRPC" => {
-                lines.push(Line::from(vec![Span::styled(" Detection: ", Style::default().fg(tc!(info))), Span::raw("gRPC identified by Content-Type: application/grpc*")]));
-                lines.push(Line::from(vec![Span::styled(" Capture: ", Style::default().fg(tc!(info))), Span::raw("gRPC calls with method type, metadata, body")]));
-                lines.push(Line::from(vec![Span::styled(" Methods: ", Style::default().fg(tc!(info))), Span::raw("Unary, ServerStreaming, ClientStreaming, Bidirectional")]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Detection: ", Style::default().fg(tc!(info))),
+                    Span::raw("gRPC identified by Content-Type: application/grpc*"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Capture: ", Style::default().fg(tc!(info))),
+                    Span::raw("gRPC calls with method type, metadata, body"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled(" Methods: ", Style::default().fg(tc!(info))),
+                    Span::raw("Unary, ServerStreaming, ClientStreaming, Bidirectional"),
+                ]));
                 lines.push(Line::from(""));
 
                 if !self.grpc_sessions.is_empty() {
                     let total_calls: usize = self.grpc_sessions.iter().map(|s| s.calls.len()).sum();
-                    let streaming_calls: usize = self.grpc_sessions.iter()
+                    let streaming_calls: usize = self
+                        .grpc_sessions
+                        .iter()
                         .map(|s| s.streaming_call_count())
                         .sum();
-                    let error_calls: usize = self.grpc_sessions.iter()
+                    let error_calls: usize = self
+                        .grpc_sessions
+                        .iter()
                         .flat_map(|s| s.error_calls())
                         .count();
 
                     lines.push(Line::from(vec![
                         Span::styled(" Captured Sessions: ", Style::default().fg(tc!(info))),
-                        Span::raw(format!("{} ({} total calls, {} streaming, {} errors)",
-                            self.grpc_sessions.len(), total_calls, streaming_calls, error_calls)),
+                        Span::raw(format!(
+                            "{} ({} total calls, {} streaming, {} errors)",
+                            self.grpc_sessions.len(),
+                            total_calls,
+                            streaming_calls,
+                            error_calls
+                        )),
                     ]));
                     lines.push(Line::from(""));
 
                     if let Some(session) = self.grpc_sessions.first() {
                         lines.push(Line::from(vec![
-                            Span::styled(format!("  Session {}: ", 0),
-                                Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD)),
-                            Span::raw(format!("{}{} ({} calls)",
-                                if session.is_secure { "https://" } else { "http://" },
+                            Span::styled(
+                                format!("  Session {}: ", 0),
+                                Style::default()
+                                    .fg(tc!(accent))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(format!(
+                                "{}{} ({} calls)",
+                                if session.is_secure {
+                                    "https://"
+                                } else {
+                                    "http://"
+                                },
                                 session.host,
-                                session.calls.len())),
+                                session.calls.len()
+                            )),
                         ]));
 
                         let display_count = session.calls.len().min(5);
                         if display_count > 0 {
                             lines.push(Line::from(""));
-                            lines.push(Line::from(vec![Span::styled("    Calls:",
-                                Style::default().fg(tc!(info)))]));
+                            lines.push(Line::from(vec![Span::styled(
+                                "    Calls:",
+                                Style::default().fg(tc!(info)),
+                            )]));
                             for call in session.calls.iter().take(display_count) {
                                 let type_str = match call.method_type {
                                     eggsec::proxy::intercept::protocols::GrpcMethodType::Unary => "UNARY",
@@ -404,13 +547,19 @@ impl InterceptTab {
                                 };
                                 lines.push(Line::from(vec![
                                     Span::raw(format!("      [{:<13}] ", type_str)),
-                                    Span::styled(type_str.to_string(), Style::default().fg(type_color)),
+                                    Span::styled(
+                                        type_str.to_string(),
+                                        Style::default().fg(type_color),
+                                    ),
                                     Span::raw(format!(" {}", truncate_str(&call.path, 50))),
                                 ]));
                             }
                             if session.calls.len() > display_count {
                                 lines.push(Line::from(Span::styled(
-                                    format!("      ... {} more calls", session.calls.len() - display_count),
+                                    format!(
+                                        "      ... {} more calls",
+                                        session.calls.len() - display_count
+                                    ),
                                     Style::default().fg(tc!(muted)),
                                 )));
                             }
@@ -425,28 +574,37 @@ impl InterceptTab {
                         ]));
                         for finding in self.grpc_security_findings.iter().take(3) {
                             lines.push(Line::from(vec![
-                                Span::styled(format!("    - {}: ", finding.category),
-                                    Style::default().fg(tc!(warning))),
+                                Span::styled(
+                                    format!("    - {}: ", finding.category),
+                                    Style::default().fg(tc!(warning)),
+                                ),
                                 Span::raw(truncate_str(&finding.description, 50)),
                             ]));
                         }
                         if self.grpc_security_findings.len() > 3 {
                             lines.push(Line::from(Span::styled(
-                                format!("    ... {} more findings", self.grpc_security_findings.len() - 3),
+                                format!(
+                                    "    ... {} more findings",
+                                    self.grpc_security_findings.len() - 3
+                                ),
                                 Style::default().fg(tc!(muted)),
                             )));
                         }
                     }
 
                     lines.push(Line::from(""));
-                    lines.push(Line::from(vec![Span::styled(" Tip: ", Style::default().fg(tc!(success))),
-                        Span::raw("Switch to 'Stream Mux' tab for streaming frame visualization")]));
+                    lines.push(Line::from(vec![
+                        Span::styled(" Tip: ", Style::default().fg(tc!(success))),
+                        Span::raw("Switch to 'Stream Mux' tab for streaming frame visualization"),
+                    ]));
                 } else {
-                    lines.push(Line::from(vec![Span::styled(" Note: ", Style::default().fg(tc!(warning))),
-                        Span::raw("No gRPC sessions captured yet")]));
+                    lines.push(Line::from(vec![
+                        Span::styled(" Note: ", Style::default().fg(tc!(warning))),
+                        Span::raw("No gRPC sessions captured yet"),
+                    ]));
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         let block = Block::default()
@@ -461,7 +619,9 @@ impl InterceptTab {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Stream Multiplexing",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(""));
 
@@ -476,33 +636,45 @@ impl InterceptTab {
                 Style::default().fg(tc!(muted)),
             )));
         } else {
-            let session_idx = self.selected_http2_session.min(self.http2_sessions.len() - 1);
+            let session_idx = self
+                .selected_http2_session
+                .min(self.http2_sessions.len() - 1);
             let session = &self.http2_sessions[session_idx];
 
             lines.push(Line::from(vec![
                 Span::styled("  Session: ", Style::default().fg(tc!(info))),
-                Span::raw(format!("{} ({} of {}, [<]/[>] to cycle)",
+                Span::raw(format!(
+                    "{} ({} of {}, [<]/[>] to cycle)",
                     session.host,
                     session_idx + 1,
-                    self.http2_sessions.len())),
+                    self.http2_sessions.len()
+                )),
             ]));
 
             let (open, half_closed, closed, idle) = self.http2_stream_state_counts(session_idx);
             lines.push(Line::from(vec![
                 Span::styled("  States: ", Style::default().fg(tc!(info))),
                 Span::styled(format!("OPEN:{} ", open), Style::default().fg(tc!(success))),
-                Span::styled(format!("HALF:{} ", half_closed), Style::default().fg(tc!(warning))),
-                Span::styled(format!("CLOSED:{} ", closed), Style::default().fg(tc!(muted))),
+                Span::styled(
+                    format!("HALF:{} ", half_closed),
+                    Style::default().fg(tc!(warning)),
+                ),
+                Span::styled(
+                    format!("CLOSED:{} ", closed),
+                    Style::default().fg(tc!(muted)),
+                ),
                 Span::styled(format!("IDLE:{} ", idle), Style::default().fg(tc!(text))),
             ]));
 
             lines.push(Line::from(vec![
                 Span::styled("  Windows: ", Style::default().fg(tc!(info))),
-                Span::raw(format!("conn={}B stream={}B max-frame={}B max-streams={}",
+                Span::raw(format!(
+                    "conn={}B stream={}B max-frame={}B max-streams={}",
                     session.connection_window_size,
                     session.stream_window_size,
                     session.max_frame_size,
-                    session.max_concurrent_streams)),
+                    session.max_concurrent_streams
+                )),
             ]));
 
             let streams = self.http2_streams_for_session(session_idx);
@@ -515,17 +687,39 @@ impl InterceptTab {
 
                 for stream in streams.iter().take(20) {
                     let (marker, color) = match stream.state {
-                        eggsec::proxy::intercept::protocols::Http2StreamState::Open => ("[OPEN    ]", tc!(success)),
-                        eggsec::proxy::intercept::protocols::Http2StreamState::HalfClosedLocal => ("[HALF-L  ]", tc!(warning)),
-                        eggsec::proxy::intercept::protocols::Http2StreamState::HalfClosedRemote => ("[HALF-R  ]", tc!(warning)),
-                        eggsec::proxy::intercept::protocols::Http2StreamState::Closed => ("[CLOSED  ]", tc!(muted)),
-                        eggsec::proxy::intercept::protocols::Http2StreamState::Idle => ("[IDLE    ]", tc!(text)),
+                        eggsec::proxy::intercept::protocols::Http2StreamState::Open => {
+                            ("[OPEN    ]", tc!(success))
+                        }
+                        eggsec::proxy::intercept::protocols::Http2StreamState::HalfClosedLocal => {
+                            ("[HALF-L  ]", tc!(warning))
+                        }
+                        eggsec::proxy::intercept::protocols::Http2StreamState::HalfClosedRemote => {
+                            ("[HALF-R  ]", tc!(warning))
+                        }
+                        eggsec::proxy::intercept::protocols::Http2StreamState::Closed => {
+                            ("[CLOSED  ]", tc!(muted))
+                        }
+                        eggsec::proxy::intercept::protocols::Http2StreamState::Idle => {
+                            ("[IDLE    ]", tc!(text))
+                        }
                     };
-                    let dur_hint = if stream.closed_at.is_some() { "DONE" } else { "LIVE" };
+                    let dur_hint = if stream.closed_at.is_some() {
+                        "DONE"
+                    } else {
+                        "LIVE"
+                    };
                     lines.push(Line::from(vec![
-                        Span::styled(format!("    {:>3} ", stream.stream_id), Style::default().fg(tc!(accent))),
+                        Span::styled(
+                            format!("    {:>3} ", stream.stream_id),
+                            Style::default().fg(tc!(accent)),
+                        ),
                         Span::styled(marker, Style::default().fg(color)),
-                        Span::raw(format!(" {} {} ({})", stream.method, truncate_str(&stream.path, 30), dur_hint)),
+                        Span::raw(format!(
+                            " {} {} ({})",
+                            stream.method,
+                            truncate_str(&stream.path, 30),
+                            dur_hint
+                        )),
                     ]));
                 }
                 if streams.len() > 20 {
@@ -552,55 +746,97 @@ impl InterceptTab {
             let total_frames = self.total_grpc_stream_frames();
             lines.push(Line::from(vec![
                 Span::styled("  Total: ", Style::default().fg(tc!(info))),
-                Span::raw(format!("{} streaming call(s), {} frames", self.grpc_streaming_states.len(), total_frames)),
+                Span::raw(format!(
+                    "{} streaming call(s), {} frames",
+                    self.grpc_streaming_states.len(),
+                    total_frames
+                )),
             ]));
 
             for (idx, state) in self.grpc_streaming_states.iter().enumerate() {
                 let summary = state.summary();
                 let type_str = match summary.method_type {
                     eggsec::proxy::intercept::protocols::GrpcMethodType::Unary => "UNARY",
-                    eggsec::proxy::intercept::protocols::GrpcMethodType::ServerStreaming => "SERVER-STREAM",
-                    eggsec::proxy::intercept::protocols::GrpcMethodType::ClientStreaming => "CLIENT-STREAM",
+                    eggsec::proxy::intercept::protocols::GrpcMethodType::ServerStreaming => {
+                        "SERVER-STREAM"
+                    }
+                    eggsec::proxy::intercept::protocols::GrpcMethodType::ClientStreaming => {
+                        "CLIENT-STREAM"
+                    }
                     eggsec::proxy::intercept::protocols::GrpcMethodType::Bidirectional => "BIDI",
                 };
                 let type_color = match summary.method_type {
-                    eggsec::proxy::intercept::protocols::GrpcMethodType::Bidirectional => tc!(accent),
-                    eggsec::proxy::intercept::protocols::GrpcMethodType::ServerStreaming => tc!(info),
+                    eggsec::proxy::intercept::protocols::GrpcMethodType::Bidirectional => {
+                        tc!(accent)
+                    }
+                    eggsec::proxy::intercept::protocols::GrpcMethodType::ServerStreaming => {
+                        tc!(info)
+                    }
                     _ => tc!(text),
                 };
                 lines.push(Line::from(""));
                 lines.push(Line::from(vec![
-                    Span::styled(format!("  Stream #{}: ", idx), Style::default().fg(tc!(info))),
+                    Span::styled(
+                        format!("  Stream #{}: ", idx),
+                        Style::default().fg(tc!(info)),
+                    ),
                     Span::styled(type_str, Style::default().fg(type_color)),
-                    Span::raw(format!(" | {} client / {} server", summary.client_frame_count, summary.server_frame_count)),
+                    Span::raw(format!(
+                        " | {} client / {} server",
+                        summary.client_frame_count, summary.server_frame_count
+                    )),
                 ]));
 
                 let pct = if summary.flow_control_window > 0 {
-                    (summary.bytes_in_flight as f64 / summary.flow_control_window as f64 * 100.0).min(100.0)
+                    (summary.bytes_in_flight as f64 / summary.flow_control_window as f64 * 100.0)
+                        .min(100.0)
                 } else {
                     0.0
                 };
                 let bar_width = 20;
                 let filled = (pct / 100.0 * bar_width as f64) as usize;
-                let bar: String = std::iter::repeat('#').take(filled).chain(std::iter::repeat('-').take(bar_width - filled)).collect();
-                let bar_color = if pct < 50.0 { tc!(success) } else if pct < 80.0 { tc!(warning) } else { tc!(error) };
+                let bar: String = std::iter::repeat('#')
+                    .take(filled)
+                    .chain(std::iter::repeat('-').take(bar_width - filled))
+                    .collect();
+                let bar_color = if pct < 50.0 {
+                    tc!(success)
+                } else if pct < 80.0 {
+                    tc!(warning)
+                } else {
+                    tc!(error)
+                };
                 lines.push(Line::from(vec![
                     Span::styled("    Flow Window: ", Style::default().fg(tc!(info))),
                     Span::styled(format!("[{}] ", bar), Style::default().fg(bar_color)),
-                    Span::raw(format!("{}/{}B ({:.0}%)", summary.bytes_in_flight, summary.flow_control_window, pct)),
+                    Span::raw(format!(
+                        "{}/{}B ({:.0}%)",
+                        summary.bytes_in_flight, summary.flow_control_window, pct
+                    )),
                 ]));
 
                 let frames = self.grpc_stream_frames_page(idx, 0, 5);
                 if !frames.is_empty() {
-                    lines.push(Line::from(vec![Span::styled("    Recent Frames:", Style::default().fg(tc!(muted)))]));
+                    lines.push(Line::from(vec![Span::styled(
+                        "    Recent Frames:",
+                        Style::default().fg(tc!(muted)),
+                    )]));
                     for frame in frames {
-                        let arrow = if frame.direction == eggsec::proxy::intercept::types::ProxyFlowDirection::Request { "->" } else { "<-" };
+                        let arrow = if frame.direction
+                            == eggsec::proxy::intercept::types::ProxyFlowDirection::Request
+                        {
+                            "->"
+                        } else {
+                            "<-"
+                        };
                         let end_marker = if frame.end_stream { " [END]" } else { "" };
                         lines.push(Line::from(vec![
                             Span::raw(format!("      {} ", arrow)),
                             Span::raw(format!("{}B{}", frame.size, end_marker)),
-                            Span::styled(format!(" @ {}", truncate_str(&frame.timestamp, 19)),
-                                Style::default().fg(tc!(muted))),
+                            Span::styled(
+                                format!(" @ {}", truncate_str(&frame.timestamp, 19)),
+                                Style::default().fg(tc!(muted)),
+                            ),
                         ]));
                     }
                     if summary.client_frame_count + summary.server_frame_count > 5 {
@@ -627,12 +863,11 @@ impl InterceptTab {
         }
 
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![Span::styled(
-            "  Keys: ",
-            Style::default().fg(tc!(info)),
-        ),
-        Span::styled("[</>]", Style::default().fg(tc!(accent))),
-        Span::raw(" cycle session")]));
+        lines.push(Line::from(vec![
+            Span::styled("  Keys: ", Style::default().fg(tc!(info))),
+            Span::styled("[</>]", Style::default().fg(tc!(accent))),
+            Span::raw(" cycle session"),
+        ]));
 
         let block = Block::default()
             .borders(Borders::ALL)
@@ -646,12 +881,16 @@ impl InterceptTab {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Cross-Loadout Correlation",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(""));
 
-        lines.push(Line::from(vec![Span::styled(" Summary: ", Style::default().fg(tc!(info))),
-            Span::raw(self.correlation_summary_str())]));
+        lines.push(Line::from(vec![
+            Span::styled(" Summary: ", Style::default().fg(tc!(info))),
+            Span::raw(self.correlation_summary_str()),
+        ]));
         lines.push(Line::from(""));
 
         let source_counts = self.correlation_source_counts();
@@ -671,7 +910,10 @@ impl InterceptTab {
                 };
                 let bar = std::iter::repeat('#').take(*count).collect::<String>();
                 lines.push(Line::from(vec![
-                    Span::styled(format!("    {:<14} ", source_str), Style::default().fg(tc!(info))),
+                    Span::styled(
+                        format!("    {:<14} ", source_str),
+                        Style::default().fg(tc!(info)),
+                    ),
                     Span::styled(bar, Style::default().fg(tc!(accent))),
                     Span::raw(format!(" ({})", count)),
                 ]));
@@ -696,11 +938,19 @@ impl InterceptTab {
         } else {
             for (i, t) in self.temporal_correlations.iter().take(8).enumerate() {
                 let conf_pct = (t.confidence * 100.0) as u32;
-                let conf_color = if conf_pct >= 70 { tc!(success) } else if conf_pct >= 40 { tc!(warning) } else { tc!(muted) };
+                let conf_color = if conf_pct >= 70 {
+                    tc!(success)
+                } else if conf_pct >= 40 {
+                    tc!(warning)
+                } else {
+                    tc!(muted)
+                };
                 lines.push(Line::from(vec![
                     Span::raw(format!("  [{}] ", i + 1)),
-                    Span::styled(format!("{:?} <-> {:?} ", t.a.source, t.b.source),
-                        Style::default().fg(tc!(accent))),
+                    Span::styled(
+                        format!("{:?} <-> {:?} ", t.a.source, t.b.source),
+                        Style::default().fg(tc!(accent)),
+                    ),
                     Span::styled(format!("{}ms ", t.delta_ms), Style::default().fg(tc!(info))),
                     Span::styled(format!("({}%)", conf_pct), Style::default().fg(conf_color)),
                 ]));
@@ -711,7 +961,10 @@ impl InterceptTab {
             }
             if self.temporal_correlations.len() > 8 {
                 lines.push(Line::from(Span::styled(
-                    format!("  ... {} more temporal correlations", self.temporal_correlations.len() - 8),
+                    format!(
+                        "  ... {} more temporal correlations",
+                        self.temporal_correlations.len() - 8
+                    ),
                     Style::default().fg(tc!(muted)),
                 )));
             }
@@ -730,15 +983,30 @@ impl InterceptTab {
         } else {
             for (pattern, confidence) in &self.behavioral_matches {
                 let conf_pct = (confidence * 100.0) as u32;
-                let conf_color = if conf_pct >= 70 { tc!(success) } else if conf_pct >= 40 { tc!(warning) } else { tc!(muted) };
+                let conf_color = if conf_pct >= 70 {
+                    tc!(success)
+                } else if conf_pct >= 40 {
+                    tc!(warning)
+                } else {
+                    tc!(muted)
+                };
                 lines.push(Line::from(vec![
-                    Span::styled(format!("  - {} ", pattern.id), Style::default().fg(tc!(accent))),
+                    Span::styled(
+                        format!("  - {} ", pattern.id),
+                        Style::default().fg(tc!(accent)),
+                    ),
                     Span::raw(truncate_str(&pattern.description, 45)),
                 ]));
                 lines.push(Line::from(vec![
                     Span::styled("      ", Style::default()),
-                    Span::styled(format!("confidence: {}%", conf_pct), Style::default().fg(conf_color)),
-                    Span::raw(format!(" ({} sources required)", pattern.required_sources.len())),
+                    Span::styled(
+                        format!("confidence: {}%", conf_pct),
+                        Style::default().fg(conf_color),
+                    ),
+                    Span::raw(format!(
+                        " ({} sources required)",
+                        pattern.required_sources.len()
+                    )),
                 ]));
             }
         }
@@ -754,7 +1022,10 @@ impl InterceptTab {
                 for r in flow_corrs.iter().take(5) {
                     let conf_pct = (r.confidence * 100.0) as u32;
                     lines.push(Line::from(vec![
-                        Span::styled(format!("  -> {:?} ", r.source), Style::default().fg(tc!(accent))),
+                        Span::styled(
+                            format!("  -> {:?} ", r.source),
+                            Style::default().fg(tc!(accent)),
+                        ),
                         Span::raw(truncate_str(&r.description, 40)),
                         Span::styled(format!(" ({}%)", conf_pct), Style::default().fg(tc!(muted))),
                     ]));
@@ -778,7 +1049,9 @@ impl InterceptTab {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Request Headers",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         for (k, v) in &flow.request_headers {
             lines.push(Line::from(vec![
@@ -789,7 +1062,9 @@ impl InterceptTab {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
             "Response Headers",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(vec![
             Span::styled("  Status: ", Style::default().fg(tc!(info))),
@@ -814,7 +1089,9 @@ impl InterceptTab {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Request Body",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         match &flow.request_body {
             Some(body) if !body.is_empty() => {
@@ -838,7 +1115,9 @@ impl InterceptTab {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
             "Response Body",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         match &flow.response_body {
             Some(body) if !body.is_empty() => {
@@ -879,10 +1158,7 @@ impl InterceptTab {
         let mut lines: Vec<Line> = Vec::new();
         for (i, m) in self.manipulation_history.iter().enumerate() {
             lines.push(Line::from(vec![
-                Span::styled(
-                    format!("[{}] ", i + 1),
-                    Style::default().fg(tc!(info)),
-                ),
+                Span::styled(format!("[{}] ", i + 1), Style::default().fg(tc!(info))),
                 Span::styled(
                     format!("Flow #{} ", m.flow_index),
                     Style::default().fg(tc!(accent)),
@@ -909,7 +1185,10 @@ impl InterceptTab {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(tc!(border)))
-            .title(format!(" Manipulations ({}) ", self.manipulation_history.len()));
+            .title(format!(
+                " Manipulations ({}) ",
+                self.manipulation_history.len()
+            ));
         let paragraph = ratatui::widgets::Paragraph::new(lines).block(block);
         f.render_widget(paragraph, area);
     }
@@ -918,7 +1197,9 @@ impl InterceptTab {
         let mut lines: Vec<Line> = Vec::new();
         lines.push(Line::from(vec![Span::styled(
             "Session Timeline",
-            Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(""));
 
@@ -988,13 +1269,12 @@ impl InterceptTab {
                 match event {
                     TimelineEvent::FlowStart(idx, method, host, path) => {
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                format!("  [{}] ", idx),
-                                Style::default().fg(tc!(accent)),
-                            ),
+                            Span::styled(format!("  [{}] ", idx), Style::default().fg(tc!(accent))),
                             Span::styled(
                                 format!("{} ", method),
-                                Style::default().fg(tc!(success)).add_modifier(Modifier::BOLD),
+                                Style::default()
+                                    .fg(tc!(success))
+                                    .add_modifier(Modifier::BOLD),
                             ),
                             Span::raw(format!("{}{}", host, path)),
                         ]));
@@ -1008,14 +1288,8 @@ impl InterceptTab {
                             tc!(text)
                         };
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                format!("  [{}] ", idx),
-                                Style::default().fg(tc!(muted)),
-                            ),
-                            Span::styled(
-                                format!("{} ", status),
-                                Style::default().fg(status_color),
-                            ),
+                            Span::styled(format!("  [{}] ", idx), Style::default().fg(tc!(muted))),
+                            Span::styled(format!("{} ", status), Style::default().fg(status_color)),
                             Span::raw(format!("{} ", host)),
                             Span::styled("completed", Style::default().fg(tc!(muted))),
                         ]));
@@ -1028,7 +1302,9 @@ impl InterceptTab {
                             ),
                             Span::styled(
                                 "EDIT ",
-                                Style::default().fg(tc!(warning)).add_modifier(Modifier::BOLD),
+                                Style::default()
+                                    .fg(tc!(warning))
+                                    .add_modifier(Modifier::BOLD),
                             ),
                             Span::raw(format!("{} ", field)),
                             Span::styled(
@@ -1050,11 +1326,9 @@ impl InterceptTab {
 
         if !self.manipulation_history.is_empty() {
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![Span::styled(
-                "  Manipulations: ",
-                Style::default().fg(tc!(info)),
-            ),
-            Span::raw(format!("{}", self.manipulation_history.len())),
+            lines.push(Line::from(vec![
+                Span::styled("  Manipulations: ", Style::default().fg(tc!(info))),
+                Span::raw(format!("{}", self.manipulation_history.len())),
             ]));
         }
 
@@ -1067,7 +1341,15 @@ impl InterceptTab {
     }
 
     pub(super) fn render_action_bar(&self, f: &mut Frame, area: Rect) {
-        let actions = ["Forward", "Drop", "Replay", "Pause All", "Resume All", "Save", "Export HAR"];
+        let actions = [
+            "Forward",
+            "Drop",
+            "Replay",
+            "Pause All",
+            "Resume All",
+            "Save",
+            "Export HAR",
+        ];
         let spans: Vec<Span> = actions
             .iter()
             .enumerate()
@@ -1095,7 +1377,9 @@ impl InterceptTab {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(tc!(border)))
-            .title(" Actions (←/→ navigate · Enter execute · D-Drop R-Replay F-Forward · Esc-back ");
+            .title(
+                " Actions (←/→ navigate · Enter execute · D-Drop R-Replay F-Forward · Esc-back ",
+            );
         let paragraph = ratatui::widgets::Paragraph::new(Line::from(spans)).block(block);
         f.render_widget(paragraph, area);
     }
@@ -1136,12 +1420,18 @@ impl InterceptTab {
             None => "Unknown".to_string(),
         };
 
-        let field_para = Paragraph::new(field_name)
-            .style(Style::default().fg(tc!(accent)).add_modifier(Modifier::BOLD));
+        let field_para = Paragraph::new(field_name).style(
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD),
+        );
         f.render_widget(field_para, modal_layout[0]);
 
-        let orig_label = Paragraph::new(format!("Original: {}", truncate_str(&self.edit_modal.original_value, 60)))
-            .style(Style::default().fg(tc!(muted)));
+        let orig_label = Paragraph::new(format!(
+            "Original: {}",
+            truncate_str(&self.edit_modal.original_value, 60)
+        ))
+        .style(Style::default().fg(tc!(muted)));
         f.render_widget(orig_label, modal_layout[1]);
 
         let edit_area = modal_layout[2];
@@ -1155,30 +1445,34 @@ impl InterceptTab {
         } else {
             self.edit_modal.edit_buffer.clone()
         };
-        let edit_para = Paragraph::new(edit_content)
-            .style(Style::default().fg(tc!(text)));
+        let edit_para = Paragraph::new(edit_content).style(Style::default().fg(tc!(text)));
         f.render_widget(edit_block, edit_area);
-        let inner_rect = Rect::new(edit_area.x + 1, edit_area.y + 1, edit_area.width - 2, edit_area.height - 2);
+        let inner_rect = Rect::new(
+            edit_area.x + 1,
+            edit_area.y + 1,
+            edit_area.width - 2,
+            edit_area.height - 2,
+        );
         f.render_widget(edit_para, inner_rect);
 
         let diff_label = if self.edit_modal.original_value != self.edit_modal.edit_buffer {
-            format!("~ Change: {} → {}",
+            format!(
+                "~ Change: {} → {}",
                 truncate_str(&self.edit_modal.original_value, 30),
-                truncate_str(&self.edit_modal.edit_buffer, 30))
+                truncate_str(&self.edit_modal.edit_buffer, 30)
+            )
         } else {
             "(no change)".to_string()
         };
-        let diff_para = Paragraph::new(diff_label)
-            .style(Style::default().fg(tc!(warning)));
+        let diff_para = Paragraph::new(diff_label).style(Style::default().fg(tc!(warning)));
         f.render_widget(diff_para, modal_layout[4]);
 
-        let reason_para = Paragraph::new("Reason: (optional) ")
-            .style(Style::default().fg(tc!(muted)));
+        let reason_para =
+            Paragraph::new("Reason: (optional) ").style(Style::default().fg(tc!(muted)));
         f.render_widget(reason_para, modal_layout[5]);
 
         let help_text = "Enter-apply  Esc-cancel  Tab-switch focus";
-        let help_para = Paragraph::new(help_text)
-            .style(Style::default().fg(tc!(muted)));
+        let help_para = Paragraph::new(help_text).style(Style::default().fg(tc!(muted)));
         f.render_widget(help_para, modal_layout[6]);
     }
 

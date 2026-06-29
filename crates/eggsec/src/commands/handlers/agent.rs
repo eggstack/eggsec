@@ -443,10 +443,8 @@ mod tests {
 
     #[test]
     fn validate_agent_enforcement_ci_strict_rejects() {
-        let enforcement = EnforcementContext::ci_strict(
-            ExecutionPolicy::default(),
-            LoadedScope::default_empty(),
-        );
+        let enforcement =
+            EnforcementContext::ci_strict(ExecutionPolicy::default(), LoadedScope::default_empty());
         let result = validate_agent_enforcement(&Some(enforcement));
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();

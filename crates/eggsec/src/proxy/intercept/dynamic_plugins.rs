@@ -14,8 +14,8 @@
 //! Plugins are loaded in a sandboxed manner with capability-based restrictions.
 //! Only explicitly whitelisted symbols are resolved from the shared library.
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 /// Metadata about a dynamically loaded plugin.
 #[derive(Debug, Clone)]
@@ -61,9 +61,7 @@ impl DynamicPluginRegistry {
         }
 
         // Validate file extension
-        let ext = path.extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         if !matches!(ext, "so" | "dylib" | "dll") {
             return Err(PluginLoadError::InvalidExtension(ext.to_string()));
         }
@@ -76,8 +74,14 @@ impl DynamicPluginRegistry {
         //
         // For now, we return a placeholder that simulates successful loading
         let plugin_info = super::PluginInfo {
-            id: format!("dynamic-{}", path.file_stem().unwrap_or_default().to_string_lossy()),
-            name: format!("Dynamic Plugin: {}", path.file_name().unwrap_or_default().to_string_lossy()),
+            id: format!(
+                "dynamic-{}",
+                path.file_stem().unwrap_or_default().to_string_lossy()
+            ),
+            name: format!(
+                "Dynamic Plugin: {}",
+                path.file_name().unwrap_or_default().to_string_lossy()
+            ),
             version: "0.1.0".to_string(),
             description: "Dynamically loaded plugin".to_string(),
         };
@@ -104,17 +108,15 @@ impl DynamicPluginRegistry {
 
         let mut loaded_paths = Vec::new();
 
-        let entries = std::fs::read_dir(dir)
-            .map_err(|e| PluginLoadError::IoError(e.to_string()))?;
+        let entries =
+            std::fs::read_dir(dir).map_err(|e| PluginLoadError::IoError(e.to_string()))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| PluginLoadError::IoError(e.to_string()))?;
             let path = entry.path();
 
             if path.is_file() {
-                let ext = path.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
                 if matches!(ext, "so" | "dylib" | "dll") {
                     match self.load_plugin(&path) {
@@ -203,7 +205,11 @@ impl std::fmt::Display for PluginLoadError {
             Self::IoError(msg) => write!(f, "I/O error: {}", msg),
             Self::InitFailed(msg) => write!(f, "Plugin initialization failed: {}", msg),
             Self::ApiVersionMismatch { expected, found } => {
-                write!(f, "API version mismatch: expected {}, found {}", expected, found)
+                write!(
+                    f,
+                    "API version mismatch: expected {}, found {}",
+                    expected, found
+                )
             }
             Self::SymbolNotFound(sym) => write!(f, "Symbol not found: {}", sym),
             Self::InvalidPluginData(msg) => write!(f, "Invalid plugin data: {}", msg),
@@ -244,7 +250,9 @@ impl Default for PluginLoadConfig {
 }
 
 /// Initialize plugin loading with configuration.
-pub fn init_plugin_system(config: &PluginLoadConfig) -> Result<DynamicPluginRegistry, PluginLoadError> {
+pub fn init_plugin_system(
+    config: &PluginLoadConfig,
+) -> Result<DynamicPluginRegistry, PluginLoadError> {
     let mut registry = DynamicPluginRegistry::new();
 
     for dir in &config.plugin_dirs {
@@ -288,7 +296,10 @@ mod tests {
         let err = PluginLoadError::InvalidExtension("txt".to_string());
         assert!(err.to_string().contains("txt"));
 
-        let err = PluginLoadError::ApiVersionMismatch { expected: 1, found: 2 };
+        let err = PluginLoadError::ApiVersionMismatch {
+            expected: 1,
+            found: 2,
+        };
         assert!(err.to_string().contains("expected 1"));
         assert!(err.to_string().contains("found 2"));
     }
@@ -298,7 +309,10 @@ mod tests {
         let mut registry = DynamicPluginRegistry::new();
         let result = registry.load_plugin(Path::new("/nonexistent/plugin.so"));
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), PluginLoadError::FileNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            PluginLoadError::FileNotFound(_)
+        ));
     }
 
     #[test]
@@ -313,7 +327,10 @@ mod tests {
         let mut registry = DynamicPluginRegistry::new();
         let result = registry.load_plugin(&invalid_path);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), PluginLoadError::InvalidExtension(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            PluginLoadError::InvalidExtension(_)
+        ));
     }
 
     #[test]

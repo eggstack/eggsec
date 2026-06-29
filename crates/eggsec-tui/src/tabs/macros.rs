@@ -418,11 +418,8 @@ macro_rules! tab_escape {
     ($tab:ty, core: $core:ident, focus: $focus:ident,
      strategy: to_first, First: $first:expr) => {
         fn handle_escape(&mut self) {
-            self.$focus = $crate::tabs::core::handle_escape_to_first(
-                &mut self.$core,
-                self.$focus,
-                $first,
-            );
+            self.$focus =
+                $crate::tabs::core::handle_escape_to_first(&mut self.$core, self.$focus, $first);
         }
     };
 }

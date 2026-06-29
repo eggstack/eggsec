@@ -37,9 +37,9 @@ pub mod apk;
 pub mod ipa;
 
 #[cfg(feature = "mobile-dynamic")]
-pub mod dynamic;
-#[cfg(feature = "mobile-dynamic")]
 pub mod adb;
+#[cfg(feature = "mobile-dynamic")]
+pub mod dynamic;
 #[cfg(feature = "mobile-dynamic")]
 pub mod runtime;
 #[cfg(feature = "mobile-dynamic")]
@@ -51,19 +51,19 @@ pub mod frida;
 // Re-export key dynamic types at crate::mobile level for handler/report bridge ergonomics (cfg-gated).
 #[cfg(feature = "mobile-dynamic")]
 pub use dynamic::{
-    run_dynamic_cli, DynamicMobileArgs, DynamicMobileReport, DynamicMobileFinding, LabManifest,
-    format_dynamic_report, to_scan_report_data_dynamic, correlate_findings, CorrelatedFinding,
-    correlate_reports, CorrelationEngine, CorrelationResult, CorrelationSummary, CorrelationType,
-    MobileBaseline, capture_baseline, compare_to_baseline, export_evidence_bundle,
-    run_baseline_compare_workflow,
+    capture_baseline, compare_to_baseline, correlate_findings, correlate_reports,
+    export_evidence_bundle, format_dynamic_report, run_baseline_compare_workflow, run_dynamic_cli,
+    to_scan_report_data_dynamic, CorrelatedFinding, CorrelationEngine, CorrelationResult,
+    CorrelationSummary, CorrelationType, DynamicMobileArgs, DynamicMobileFinding,
+    DynamicMobileReport, LabManifest, MobileBaseline,
 };
 #[cfg(feature = "mobile-dynamic")]
-pub use traffic::{TrafficSummary, parse_traffic_capture};
+pub use traffic::{parse_traffic_capture, TrafficSummary};
 
 #[cfg(feature = "mobile-dynamic")]
 pub use frida::{
-    FridaSession, FridaScriptResult, FridaInstrumentation, connect, execute_script,
-    basic_method_trace, resolve_frida_script_spec, run_frida_spec, FRIDA_LIB_COMMON_HOOKS,
+    basic_method_trace, connect, execute_script, resolve_frida_script_spec, run_frida_spec,
+    FridaInstrumentation, FridaScriptResult, FridaSession, FRIDA_LIB_COMMON_HOOKS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,7 +127,10 @@ impl MobileScanReport {
 /// Supports legacy direct path form (MobileArgs { path: Some(..), command: None, ... })
 /// and new subcommand form (command: Some(MobileSubcommand::Static(MobileStaticArgs { path, .. })))
 /// with common flags merged (subcommand flags take precedence for static).
-pub async fn run_cli(args: crate::cli::MobileArgs, _config: &crate::config::EggsecConfig) -> Result<()> {
+pub async fn run_cli(
+    args: crate::cli::MobileArgs,
+    _config: &crate::config::EggsecConfig,
+) -> Result<()> {
     let start = std::time::Instant::now();
 
     // Resolve effective static path + flags from legacy direct or 'static' subcommand.
@@ -137,7 +140,9 @@ pub async fn run_cli(args: crate::cli::MobileArgs, _config: &crate::config::Eggs
         }
         _ => {
             let p = args.path.clone().ok_or_else(|| {
-                EggsecError::Validation("mobile static: path required (legacy or via 'static' subcommand)".to_string())
+                EggsecError::Validation(
+                    "mobile static: path required (legacy or via 'static' subcommand)".to_string(),
+                )
             })?;
             (p, args.json, args.output.clone(), args.quiet)
         }
@@ -145,10 +150,16 @@ pub async fn run_cli(args: crate::cli::MobileArgs, _config: &crate::config::Eggs
 
     let path = Path::new(&eff_path);
     if !path.exists() {
-        return Err(EggsecError::Validation(format!("Path does not exist: {}", eff_path)));
+        return Err(EggsecError::Validation(format!(
+            "Path does not exist: {}",
+            eff_path
+        )));
     }
     if !path.is_file() {
-        return Err(EggsecError::Validation(format!("Path is not a file: {}", eff_path)));
+        return Err(EggsecError::Validation(format!(
+            "Path is not a file: {}",
+            eff_path
+        )));
     }
 
     let ext = path
@@ -222,11 +233,16 @@ fn build_general_recommendations(report: &MobileScanReport) -> Vec<String> {
     if report.findings.is_empty() {
         recs.push("No high-signal static issues detected in manifest/config surface. Expand testing with code review, dependency analysis, and (in lab) dynamic instrumentation under explicit authorization.".to_string());
     } else {
-        recs.push("Review all findings in the context of the app's data classification and threat model.".to_string());
+        recs.push(
+            "Review all findings in the context of the app's data classification and threat model."
+                .to_string(),
+        );
         recs.push("Prefer platform secure storage (Android Keystore / iOS Keychain) and strong transport (TLS 1.2+ with pinning where feasible).".to_string());
     }
     recs.push("This is static analysis only. Combine with SAST/dependency scanning, manual review, and authorized dynamic testing for comprehensive coverage.".to_string());
-    recs.push("Ensure test builds are provenance-controlled and destroyed after lab use.".to_string());
+    recs.push(
+        "Ensure test builds are provenance-controlled and destroyed after lab use.".to_string(),
+    );
     recs
 }
 
@@ -437,7 +453,10 @@ mod tests {
         });
         let data = to_scan_report_data(&r);
         assert_eq!(data.findings[0].category, "mobile-ios-secret");
-        assert_eq!(data.findings[0].evidence.as_deref(), Some("api_key=sk_live_..."));
+        assert_eq!(
+            data.findings[0].evidence.as_deref(),
+            Some("api_key=sk_live_...")
+        );
         assert!(data.wireless_networks.is_empty());
         assert!(data.policy_summary.is_none());
     }
@@ -464,7 +483,10 @@ mod tests {
         });
         let data = to_scan_report_data(&r);
         assert_eq!(data.findings.len(), 2);
-        assert_eq!(data.findings[0].category, "mobile-android-exported-component");
+        assert_eq!(
+            data.findings[0].category,
+            "mobile-android-exported-component"
+        );
         assert_eq!(data.findings[1].category, "mobile-android-hardcoded-secret");
         assert!(data.findings[0].remediation.is_some());
         assert!(data.findings[1].remediation.is_some());

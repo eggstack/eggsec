@@ -429,10 +429,14 @@ impl DashboardTab {
             Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(""));
-        self.results_view.add_line(Line::from("  [h/l]     Navigate tabs"));
-        self.results_view.add_line(Line::from("  [Enter]   Start new scan"));
-        self.results_view.add_line(Line::from("  [e]       Export results"));
-        self.results_view.add_line(Line::from("  [Space]   View help"));
+        self.results_view
+            .add_line(Line::from("  [h/l]     Navigate tabs"));
+        self.results_view
+            .add_line(Line::from("  [Enter]   Start new scan"));
+        self.results_view
+            .add_line(Line::from("  [e]       Export results"));
+        self.results_view
+            .add_line(Line::from("  [Space]   View help"));
     }
 }
 

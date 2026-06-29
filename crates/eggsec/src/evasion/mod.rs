@@ -140,7 +140,8 @@ impl EvasionScanner {
                 mitre_id: Some("T1106".to_string()),
                 category: EvasionCategory::Syscall,
                 risk_level: EvasionRisk::High,
-                description: "Detects direct syscall usage that bypasses standard API hooks".to_string(),
+                description: "Detects direct syscall usage that bypasses standard API hooks"
+                    .to_string(),
             },
             EvasionTechnique {
                 id: "evasion-syscall-002".to_string(),
@@ -148,7 +149,8 @@ impl EvasionScanner {
                 mitre_id: Some("T1106".to_string()),
                 category: EvasionCategory::Syscall,
                 risk_level: EvasionRisk::High,
-                description: "Detects indirect syscall patterns used to evade userland hooks".to_string(),
+                description: "Detects indirect syscall patterns used to evade userland hooks"
+                    .to_string(),
             },
             EvasionTechnique {
                 id: "evasion-hook-001".to_string(),
@@ -172,7 +174,8 @@ impl EvasionScanner {
                 mitre_id: Some("T1014".to_string()),
                 category: EvasionCategory::HookBypass,
                 risk_level: EvasionRisk::High,
-                description: "Detects removal of userland API hooks placed by security products".to_string(),
+                description: "Detects removal of userland API hooks placed by security products"
+                    .to_string(),
             },
             EvasionTechnique {
                 id: "evasion-obf-001".to_string(),
@@ -180,7 +183,8 @@ impl EvasionScanner {
                 mitre_id: Some("T1027".to_string()),
                 category: EvasionCategory::Obfuscation,
                 risk_level: EvasionRisk::Medium,
-                description: "Detects encoded/encrypted strings used to hide malicious payloads".to_string(),
+                description: "Detects encoded/encrypted strings used to hide malicious payloads"
+                    .to_string(),
             },
             EvasionTechnique {
                 id: "evasion-obf-002".to_string(),
@@ -236,7 +240,8 @@ impl EvasionScanner {
                 mitre_id: Some("T1497".to_string()),
                 category: EvasionCategory::AntiAnalysis,
                 risk_level: EvasionRisk::Low,
-                description: "Detects sleep/timing checks used to evade automated analysis".to_string(),
+                description: "Detects sleep/timing checks used to evade automated analysis"
+                    .to_string(),
             },
             EvasionTechnique {
                 id: "evasion-traffic-001".to_string(),
@@ -360,7 +365,10 @@ impl EvasionScanner {
             if let Some(path) = &target.path {
                 if let Ok(bytes) = tokio::fs::read(path).await {
                     let syscall_patterns: &[&[u8]] = &[
-                        b"syscall", b"NtCreateFile", b"NtWriteVirtualMemory", b"ZwCreateSection",
+                        b"syscall",
+                        b"NtCreateFile",
+                        b"NtWriteVirtualMemory",
+                        b"ZwCreateSection",
                     ];
                     let mut matches = 0;
                     for pattern in syscall_patterns {
@@ -371,7 +379,10 @@ impl EvasionScanner {
                     if matches > 0 {
                         detected = true;
                         confidence = 0.3 + (matches as f64 * 0.15).min(0.5);
-                        evidence = Some(format!("Found {} syscall-related patterns in binary", matches));
+                        evidence = Some(format!(
+                            "Found {} syscall-related patterns in binary",
+                            matches
+                        ));
                     }
                 }
             }
@@ -411,18 +422,29 @@ impl EvasionScanner {
                             if bytes.windows(p.len()).any(|w| w == *p) {
                                 detected = true;
                                 confidence = 0.4;
-                                evidence = Some(format!("Found ETW-related symbol: {:?}", String::from_utf8_lossy(p)));
+                                evidence = Some(format!(
+                                    "Found ETW-related symbol: {:?}",
+                                    String::from_utf8_lossy(p)
+                                ));
                                 break;
                             }
                         }
                     }
                     "evasion-hook-002" => {
-                        let patterns: &[&[u8]] = &[b"AmsiScanBuffer", b"AmsiScanString", b"amsiInitFailed", b"amsi.dll"];
+                        let patterns: &[&[u8]] = &[
+                            b"AmsiScanBuffer",
+                            b"AmsiScanString",
+                            b"amsiInitFailed",
+                            b"amsi.dll",
+                        ];
                         for p in patterns {
                             if bytes.windows(p.len()).any(|w| w == *p) {
                                 detected = true;
                                 confidence = 0.45;
-                                evidence = Some(format!("Found AMSI-related symbol: {:?}", String::from_utf8_lossy(p)));
+                                evidence = Some(format!(
+                                    "Found AMSI-related symbol: {:?}",
+                                    String::from_utf8_lossy(p)
+                                ));
                                 break;
                             }
                         }
@@ -431,12 +453,17 @@ impl EvasionScanner {
                         let patterns: &[&[u8]] = &[b"VirtualProtect", b"NtProtectVirtualMemory"];
                         let mut found = 0;
                         for p in patterns {
-                            if bytes.windows(p.len()).any(|w| w == *p) { found += 1; }
+                            if bytes.windows(p.len()).any(|w| w == *p) {
+                                found += 1;
+                            }
                         }
                         if found > 0 {
                             detected = true;
                             confidence = 0.25;
-                            evidence = Some(format!("Found {} memory protection APIs (potential unhooking)", found));
+                            evidence = Some(format!(
+                                "Found {} memory protection APIs (potential unhooking)",
+                                found
+                            ));
                         }
                     }
                     _ => {}
@@ -476,12 +503,17 @@ impl EvasionScanner {
                         let mut suspicious = 0;
                         for window in bytes.windows(32) {
                             let xor_count = window.iter().filter(|&&b| b == window[0]).count();
-                            if xor_count > 24 { suspicious += 1; }
+                            if xor_count > 24 {
+                                suspicious += 1;
+                            }
                         }
                         if suspicious > 5 {
                             detected = true;
                             confidence = 0.35;
-                            evidence = Some(format!("Found {} suspicious XOR-encoded patterns", suspicious));
+                            evidence = Some(format!(
+                                "Found {} suspicious XOR-encoded patterns",
+                                suspicious
+                            ));
                         }
                     }
                     "evasion-obf-002" => {
@@ -490,7 +522,10 @@ impl EvasionScanner {
                         if total > 0 && nop_count as f64 / total as f64 > 0.3 {
                             detected = true;
                             confidence = 0.3;
-                            evidence = Some(format!("High NOP ratio: {:.1}% of binary is NOP instructions", nop_count as f64 / total as f64 * 100.0));
+                            evidence = Some(format!(
+                                "High NOP ratio: {:.1}% of binary is NOP instructions",
+                                nop_count as f64 / total as f64 * 100.0
+                            ));
                         }
                     }
                     _ => {}
@@ -533,7 +568,10 @@ impl EvasionScanner {
                         if let Ok(maps) = tokio::fs::read_to_string(&maps_path).await {
                             match technique.id.as_str() {
                                 "evasion-inj-001" => {
-                                    let rwx_count = maps.lines().filter(|l| l.contains("rwxp") && !l.contains("/")).count();
+                                    let rwx_count = maps
+                                        .lines()
+                                        .filter(|l| l.contains("rwxp") && !l.contains("/"))
+                                        .count();
                                     if rwx_count > 0 {
                                         detected = true;
                                         confidence = 0.5;
@@ -541,7 +579,10 @@ impl EvasionScanner {
                                     }
                                 }
                                 "evasion-inj-002" => {
-                                    let suspicious = maps.lines().filter(|l| l.contains("/tmp/") || l.contains("/dev/shm/")).count();
+                                    let suspicious = maps
+                                        .lines()
+                                        .filter(|l| l.contains("/tmp/") || l.contains("/dev/shm/"))
+                                        .count();
                                     if suspicious > 0 {
                                         detected = true;
                                         confidence = 0.55;
@@ -558,15 +599,21 @@ impl EvasionScanner {
                 if let Some(path) = &target.path {
                     if let Ok(bytes) = tokio::fs::read(path).await {
                         if technique.id == "evasion-inj-003" {
-                            let patterns: &[&[u8]] = &[b"LoadLibraryA", b"GetProcAddress", b"VirtualAlloc"];
+                            let patterns: &[&[u8]] =
+                                &[b"LoadLibraryA", b"GetProcAddress", b"VirtualAlloc"];
                             let mut found = 0;
                             for p in patterns {
-                                if bytes.windows(p.len()).any(|w| w == *p) { found += 1; }
+                                if bytes.windows(p.len()).any(|w| w == *p) {
+                                    found += 1;
+                                }
                             }
                             if found >= 2 {
                                 detected = true;
                                 confidence = 0.4;
-                                evidence = Some(format!("Found {} reflective loading APIs (potential reflective DLL)", found));
+                                evidence = Some(format!(
+                                    "Found {} reflective loading APIs (potential reflective DLL)",
+                                    found
+                                ));
                             }
                         }
                     }
@@ -586,7 +633,10 @@ impl EvasionScanner {
                     "Implement DLL load auditing and path validation".to_string(),
                 ]
             } else {
-                vec!["No injection indicators; requires memory forensics for full coverage".to_string()]
+                vec![
+                    "No injection indicators; requires memory forensics for full coverage"
+                        .to_string(),
+                ]
             },
         }
     }
@@ -604,22 +654,43 @@ impl EvasionScanner {
             if let Ok(bytes) = tokio::fs::read(path).await {
                 match technique.id.as_str() {
                     "evasion-anti-001" => {
-                        let patterns: &[&[u8]] = &[b"VMware", b"VirtualBox", b"VBOX", b"QEMU", b"Xen", b"Hyper-V", b"svm", b"kvm"];
+                        let patterns: &[&[u8]] = &[
+                            b"VMware",
+                            b"VirtualBox",
+                            b"VBOX",
+                            b"QEMU",
+                            b"Xen",
+                            b"Hyper-V",
+                            b"svm",
+                            b"kvm",
+                        ];
                         let mut found = 0;
                         for p in patterns {
-                            if bytes.windows(p.len()).any(|w| w == *p) { found += 1; }
+                            if bytes.windows(p.len()).any(|w| w == *p) {
+                                found += 1;
+                            }
                         }
                         if found > 0 {
                             detected = true;
                             confidence = 0.3 + (found as f64 * 0.1).min(0.4);
-                            evidence = Some(format!("Found {} VM-related strings (potential VM detection)", found));
+                            evidence = Some(format!(
+                                "Found {} VM-related strings (potential VM detection)",
+                                found
+                            ));
                         }
                     }
                     "evasion-anti-002" => {
-                        let patterns: &[&[u8]] = &[b"IsDebuggerPresent", b"CheckRemoteDebuggerPresent", b"NtQueryInformationProcess", b"OutputDebugString"];
+                        let patterns: &[&[u8]] = &[
+                            b"IsDebuggerPresent",
+                            b"CheckRemoteDebuggerPresent",
+                            b"NtQueryInformationProcess",
+                            b"OutputDebugString",
+                        ];
                         let mut found = 0;
                         for p in patterns {
-                            if bytes.windows(p.len()).any(|w| w == *p) { found += 1; }
+                            if bytes.windows(p.len()).any(|w| w == *p) {
+                                found += 1;
+                            }
                         }
                         if found > 0 {
                             detected = true;
@@ -628,15 +699,21 @@ impl EvasionScanner {
                         }
                     }
                     "evasion-anti-003" => {
-                        let patterns: &[&[u8]] = &[b"SleepEx", b"QueryPerformanceCounter", b"rdtsc", b"rdtscp"];
+                        let patterns: &[&[u8]] =
+                            &[b"SleepEx", b"QueryPerformanceCounter", b"rdtsc", b"rdtscp"];
                         let mut found = 0;
                         for p in patterns {
-                            if bytes.windows(p.len()).any(|w| w == *p) { found += 1; }
+                            if bytes.windows(p.len()).any(|w| w == *p) {
+                                found += 1;
+                            }
                         }
                         if found > 1 {
                             detected = true;
                             confidence = 0.25;
-                            evidence = Some(format!("Found {} timing-related APIs (potential timing evasion)", found));
+                            evidence = Some(format!(
+                                "Found {} timing-related APIs (potential timing evasion)",
+                                found
+                            ));
                         }
                     }
                     _ => {}
@@ -651,7 +728,8 @@ impl EvasionScanner {
             evidence,
             recommendations: if detected {
                 vec![
-                    "Implement anti-VM-detection countermeasures in analysis environment".to_string(),
+                    "Implement anti-VM-detection countermeasures in analysis environment"
+                        .to_string(),
                     "Use hardware-level debugging to avoid detection".to_string(),
                 ]
             } else {
@@ -718,7 +796,11 @@ pub fn to_scan_report_data(report: &EvasionReport) -> crate::output::convert::Sc
             title: d.technique.name.clone(),
             severity: d.technique.risk_level.to_severity().as_str().to_string(),
             category: evasion_category_for(&d.technique.category),
-            description: format!("{} (confidence: {:.0}%)", d.technique.description, d.confidence * 100.0),
+            description: format!(
+                "{} (confidence: {:.0}%)",
+                d.technique.description,
+                d.confidence * 100.0
+            ),
             location: report.target.clone(),
             evidence: d.evidence.clone(),
             remediation: d.recommendations.first().cloned(),
@@ -757,7 +839,10 @@ pub async fn run_cli(
         } else {
             eprintln!("NOTE: Defense-lab only. Performing real evasion detection checks.");
         }
-        eprintln!("Scanning {} techniques against target...", scanner.techniques().len());
+        eprintln!(
+            "Scanning {} techniques against target...",
+            scanner.techniques().len()
+        );
     }
 
     let report = scanner.scan(&target).await?;
@@ -769,15 +854,29 @@ pub async fn run_cli(
         if report.dry_run {
             buf.push_str("DRY-RUN: no real detection checks performed\n\n");
         }
-        buf.push_str(&format!("Evasion Detection Report - Target: {}\n", report.target));
-        buf.push_str(&format!("Techniques checked: {}\n", report.summary.total_techniques));
-        buf.push_str(&format!("Detected: {} | Not detected: {} | Rate: {:.0}%\n\n",
-            report.summary.detected, report.summary.not_detected, report.summary.detection_rate * 100.0));
+        buf.push_str(&format!(
+            "Evasion Detection Report - Target: {}\n",
+            report.target
+        ));
+        buf.push_str(&format!(
+            "Techniques checked: {}\n",
+            report.summary.total_techniques
+        ));
+        buf.push_str(&format!(
+            "Detected: {} | Not detected: {} | Rate: {:.0}%\n\n",
+            report.summary.detected,
+            report.summary.not_detected,
+            report.summary.detection_rate * 100.0
+        ));
 
         for d in &report.detections {
             if d.detected {
-                buf.push_str(&format!("  [{}] {} (confidence: {:.0}%)\n",
-                    d.technique.risk_level.as_str(), d.technique.name, d.confidence * 100.0));
+                buf.push_str(&format!(
+                    "  [{}] {} (confidence: {:.0}%)\n",
+                    d.technique.risk_level.as_str(),
+                    d.technique.name,
+                    d.confidence * 100.0
+                ));
                 if let Some(ref evidence) = d.evidence {
                     buf.push_str(&format!("    Evidence: {}\n", evidence));
                 }
@@ -842,8 +941,11 @@ mod tests {
     #[test]
     fn test_default_techniques_categories() {
         let techniques = EvasionScanner::default_techniques();
-        let mut categories: std::collections::HashSet<EvasionCategory> = std::collections::HashSet::new();
-        for t in &techniques { categories.insert(t.category); }
+        let mut categories: std::collections::HashSet<EvasionCategory> =
+            std::collections::HashSet::new();
+        for t in &techniques {
+            categories.insert(t.category);
+        }
         assert_eq!(categories.len(), 6);
         assert!(categories.contains(&EvasionCategory::Syscall));
         assert!(categories.contains(&EvasionCategory::HookBypass));
@@ -857,7 +959,11 @@ mod tests {
     fn test_techniques_have_mitre_ids() {
         let techniques = EvasionScanner::default_techniques();
         for t in &techniques {
-            assert!(t.mitre_id.is_some(), "Technique {} should have a MITRE ID", t.id);
+            assert!(
+                t.mitre_id.is_some(),
+                "Technique {} should have a MITRE ID",
+                t.id
+            );
         }
     }
 
@@ -867,13 +973,21 @@ mod tests {
         let mut ids: Vec<&str> = techniques.iter().map(|t| t.id.as_str()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), techniques.len(), "All technique IDs should be unique");
+        assert_eq!(
+            ids.len(),
+            techniques.len(),
+            "All technique IDs should be unique"
+        );
     }
 
     #[tokio::test]
     async fn test_dry_run_scan_produces_all_detected() {
         let scanner = EvasionScanner::new(true);
-        let target = EvasionTarget { target_type: EvasionTargetType::Process, path: None, pid: None };
+        let target = EvasionTarget {
+            target_type: EvasionTargetType::Process,
+            path: None,
+            pid: None,
+        };
         let report = scanner.scan(&target).await.unwrap();
         assert!(report.dry_run);
         assert_eq!(report.detections.len(), 16);
@@ -887,7 +1001,11 @@ mod tests {
     #[tokio::test]
     async fn test_dry_run_confidence_by_risk_level() {
         let scanner = EvasionScanner::new(true);
-        let target = EvasionTarget { target_type: EvasionTargetType::File, path: None, pid: None };
+        let target = EvasionTarget {
+            target_type: EvasionTargetType::File,
+            path: None,
+            pid: None,
+        };
         let report = scanner.scan(&target).await.unwrap();
         for d in &report.detections {
             let expected = match d.technique.risk_level {
@@ -896,25 +1014,41 @@ mod tests {
                 EvasionRisk::Medium => 0.65,
                 EvasionRisk::Low => 0.55,
             };
-            assert!((d.confidence - expected).abs() < f64::EPSILON,
-                "Confidence mismatch for {}: got {}, expected {}", d.technique.id, d.confidence, expected);
+            assert!(
+                (d.confidence - expected).abs() < f64::EPSILON,
+                "Confidence mismatch for {}: got {}, expected {}",
+                d.technique.id,
+                d.confidence,
+                expected
+            );
         }
     }
 
     #[tokio::test]
     async fn test_real_scan_nonexistent_target() {
         let scanner = EvasionScanner::new(false);
-        let target = EvasionTarget { target_type: EvasionTargetType::Process, path: Some("/nonexistent/binary".to_string()), pid: None };
+        let target = EvasionTarget {
+            target_type: EvasionTargetType::Process,
+            path: Some("/nonexistent/binary".to_string()),
+            pid: None,
+        };
         let report = scanner.scan(&target).await.unwrap();
         assert!(!report.dry_run);
         let detected_count = report.detections.iter().filter(|d| d.detected).count();
-        assert!(detected_count < report.detections.len(), "Non-existent target should have some not-detected results");
+        assert!(
+            detected_count < report.detections.len(),
+            "Non-existent target should have some not-detected results"
+        );
     }
 
     #[tokio::test]
     async fn test_scan_with_target_path() {
         let scanner = EvasionScanner::new(true);
-        let target = EvasionTarget { target_type: EvasionTargetType::File, path: Some("/usr/bin/ls".to_string()), pid: None };
+        let target = EvasionTarget {
+            target_type: EvasionTargetType::File,
+            path: Some("/usr/bin/ls".to_string()),
+            pid: None,
+        };
         let report = scanner.scan(&target).await.unwrap();
         assert!(report.target.contains("file:/usr/bin/ls"));
     }
@@ -922,19 +1056,41 @@ mod tests {
     #[tokio::test]
     async fn test_scan_with_pid() {
         let scanner = EvasionScanner::new(true);
-        let target = EvasionTarget { target_type: EvasionTargetType::Process, path: None, pid: Some(1234) };
+        let target = EvasionTarget {
+            target_type: EvasionTargetType::Process,
+            path: None,
+            pid: Some(1234),
+        };
         let report = scanner.scan(&target).await.unwrap();
         assert!(report.target.contains("pid=1234"));
     }
 
     #[test]
     fn test_evasion_category_for_mapping() {
-        assert_eq!(evasion_category_for(&EvasionCategory::Syscall), "evasion-syscall");
-        assert_eq!(evasion_category_for(&EvasionCategory::HookBypass), "evasion-hook-bypass");
-        assert_eq!(evasion_category_for(&EvasionCategory::Obfuscation), "evasion-obfuscation");
-        assert_eq!(evasion_category_for(&EvasionCategory::Injection), "evasion-injection");
-        assert_eq!(evasion_category_for(&EvasionCategory::AntiAnalysis), "evasion-anti-analysis");
-        assert_eq!(evasion_category_for(&EvasionCategory::TrafficObfuscation), "evasion-traffic-obfuscation");
+        assert_eq!(
+            evasion_category_for(&EvasionCategory::Syscall),
+            "evasion-syscall"
+        );
+        assert_eq!(
+            evasion_category_for(&EvasionCategory::HookBypass),
+            "evasion-hook-bypass"
+        );
+        assert_eq!(
+            evasion_category_for(&EvasionCategory::Obfuscation),
+            "evasion-obfuscation"
+        );
+        assert_eq!(
+            evasion_category_for(&EvasionCategory::Injection),
+            "evasion-injection"
+        );
+        assert_eq!(
+            evasion_category_for(&EvasionCategory::AntiAnalysis),
+            "evasion-anti-analysis"
+        );
+        assert_eq!(
+            evasion_category_for(&EvasionCategory::TrafficObfuscation),
+            "evasion-traffic-obfuscation"
+        );
     }
 
     #[test]
@@ -944,24 +1100,39 @@ mod tests {
             detections: vec![
                 EvasionDetection {
                     technique: EvasionTechnique {
-                        id: "evasion-syscall-001".to_string(), name: "Direct Syscall Detection".to_string(),
-                        mitre_id: Some("T1106".to_string()), category: EvasionCategory::Syscall,
-                        risk_level: EvasionRisk::High, description: "Test detection".to_string(),
+                        id: "evasion-syscall-001".to_string(),
+                        name: "Direct Syscall Detection".to_string(),
+                        mitre_id: Some("T1106".to_string()),
+                        category: EvasionCategory::Syscall,
+                        risk_level: EvasionRisk::High,
+                        description: "Test detection".to_string(),
                     },
-                    detected: true, confidence: 0.75, evidence: Some("test evidence".to_string()),
+                    detected: true,
+                    confidence: 0.75,
+                    evidence: Some("test evidence".to_string()),
                     recommendations: vec!["test rec".to_string()],
                 },
                 EvasionDetection {
                     technique: EvasionTechnique {
-                        id: "evasion-anti-001".to_string(), name: "VM Detection".to_string(),
-                        mitre_id: Some("T1497.001".to_string()), category: EvasionCategory::AntiAnalysis,
-                        risk_level: EvasionRisk::Medium, description: "Not detected".to_string(),
+                        id: "evasion-anti-001".to_string(),
+                        name: "VM Detection".to_string(),
+                        mitre_id: Some("T1497.001".to_string()),
+                        category: EvasionCategory::AntiAnalysis,
+                        risk_level: EvasionRisk::Medium,
+                        description: "Not detected".to_string(),
                     },
-                    detected: false, confidence: 0.0, evidence: None,
+                    detected: false,
+                    confidence: 0.0,
+                    evidence: None,
                     recommendations: vec!["none".to_string()],
                 },
             ],
-            summary: EvasionSummary { total_techniques: 2, detected: 1, not_detected: 1, detection_rate: 0.5 },
+            summary: EvasionSummary {
+                total_techniques: 2,
+                detected: 1,
+                not_detected: 1,
+                detection_rate: 0.5,
+            },
             timestamp: "2024-01-01T00:00:00Z".to_string(),
             dry_run: true,
         };
@@ -977,9 +1148,16 @@ mod tests {
     #[test]
     fn test_to_scan_report_data_empty() {
         let report = EvasionReport {
-            target: "empty".to_string(), detections: Vec::new(),
-            summary: EvasionSummary { total_techniques: 0, detected: 0, not_detected: 0, detection_rate: 0.0 },
-            timestamp: "2024-01-01T00:00:00Z".to_string(), dry_run: true,
+            target: "empty".to_string(),
+            detections: Vec::new(),
+            summary: EvasionSummary {
+                total_techniques: 0,
+                detected: 0,
+                not_detected: 0,
+                detection_rate: 0.0,
+            },
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+            dry_run: true,
         };
         let bridge = to_scan_report_data(&report);
         assert_eq!(bridge.findings.len(), 0);
@@ -988,9 +1166,16 @@ mod tests {
     #[test]
     fn test_serialization_roundtrip() {
         let report = EvasionReport {
-            target: "test".to_string(), detections: Vec::new(),
-            summary: EvasionSummary { total_techniques: 0, detected: 0, not_detected: 0, detection_rate: 0.0 },
-            timestamp: "2024-01-01T00:00:00Z".to_string(), dry_run: true,
+            target: "test".to_string(),
+            detections: Vec::new(),
+            summary: EvasionSummary {
+                total_techniques: 0,
+                detected: 0,
+                not_detected: 0,
+                detection_rate: 0.0,
+            },
+            timestamp: "2024-01-01T00:00:00Z".to_string(),
+            dry_run: true,
         };
         let json = serde_json::to_string(&report).unwrap();
         let deserialized: EvasionReport = serde_json::from_str(&json).unwrap();

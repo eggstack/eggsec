@@ -2658,7 +2658,10 @@ mod tests {
         };
 
         let result = Agent::new(config).await;
-        assert!(result.is_err(), "ManualPermissive enforcement should be rejected");
+        assert!(
+            result.is_err(),
+            "ManualPermissive enforcement should be rejected"
+        );
         let err_msg = match result {
             Ok(_) => panic!("Expected error"),
             Err(e) => e.to_string(),
@@ -2684,7 +2687,10 @@ mod tests {
         };
 
         let result = Agent::new(config).await;
-        assert!(result.is_err(), "ManualGuarded enforcement should be rejected");
+        assert!(
+            result.is_err(),
+            "ManualGuarded enforcement should be rejected"
+        );
         let err_msg = match result {
             Ok(_) => panic!("Expected error"),
             Err(e) => e.to_string(),
@@ -2721,7 +2727,10 @@ mod tests {
         };
 
         let result = Agent::new(config).await;
-        assert!(result.is_ok(), "None enforcement should be allowed (test path)");
+        assert!(
+            result.is_ok(),
+            "None enforcement should be allowed (test path)"
+        );
     }
 
     #[test]
@@ -2755,8 +2764,8 @@ mod tests {
     #[test]
     fn test_agent_strict_enforcement_ignores_manual_override() {
         use crate::config::{
-            EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope, ManualOverride,
-            OperationDescriptor, OperationMode, OperationRisk, IntendedUse,
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, IntendedUse, LoadedScope,
+            ManualOverride, OperationDescriptor, OperationMode, OperationRisk,
         };
 
         let enforcement = EnforcementContext::agent_strict(
@@ -2800,8 +2809,8 @@ mod tests {
     #[test]
     fn test_agent_strict_enforcement_requires_confirmation_is_denial() {
         use crate::config::{
-            EnforcementContext, EnforcementOutcome, ExecutionPolicy, LoadedScope,
-            OperationDescriptor, OperationMode, OperationRisk, IntendedUse,
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, IntendedUse, LoadedScope,
+            OperationDescriptor, OperationMode, OperationRisk,
         };
 
         let enforcement = EnforcementContext::agent_strict(

@@ -431,11 +431,19 @@ pub async fn run_integrations_task(
                                 id: Some(id.clone()),
                                 ..issue
                             };
-                            send_result(&result_tx, TaskResult::IntegrationsCreateIssue { issue: created }).await;
+                            send_result(
+                                &result_tx,
+                                TaskResult::IntegrationsCreateIssue { issue: created },
+                            )
+                            .await;
                         }
                         Err(e) => {
                             tracing::warn!("Failed to create issue: {}", e);
-                            send_result(&result_tx, TaskResult::Error(format!("Failed to create issue: {}", e))).await;
+                            send_result(
+                                &result_tx,
+                                TaskResult::Error(format!("Failed to create issue: {}", e)),
+                            )
+                            .await;
                         }
                     }
                 }
@@ -462,11 +470,19 @@ pub async fn run_integrations_task(
                 } else {
                     match tracker.search_issues(query).await {
                         Ok(issues) => {
-                            send_result(&result_tx, TaskResult::IntegrationsSearchIssues { issues }).await;
+                            send_result(
+                                &result_tx,
+                                TaskResult::IntegrationsSearchIssues { issues },
+                            )
+                            .await;
                         }
                         Err(e) => {
                             tracing::warn!("Failed to search issues: {}", e);
-                            send_result(&result_tx, TaskResult::Error(format!("Failed to search issues: {}", e))).await;
+                            send_result(
+                                &result_tx,
+                                TaskResult::Error(format!("Failed to search issues: {}", e)),
+                            )
+                            .await;
                         }
                     }
                 }
@@ -488,7 +504,11 @@ pub async fn run_integrations_task(
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Integrations task timed out after 60s");
-            send_result(&result_tx_timeout, TaskResult::Error("Integrations task timed out".to_string())).await;
+            send_result(
+                &result_tx_timeout,
+                TaskResult::Error("Integrations task timed out".to_string()),
+            )
+            .await;
             Ok(())
         }
     }
@@ -707,7 +727,11 @@ pub async fn run_vuln_task(
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Vuln task timed out after 120s");
-            send_result(&result_tx_timeout, TaskResult::Error("Vuln task timed out".to_string())).await;
+            send_result(
+                &result_tx_timeout,
+                TaskResult::Error("Vuln task timed out".to_string()),
+            )
+            .await;
             Ok(())
         }
     }
@@ -753,8 +777,8 @@ pub async fn run_wireless_active_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<super::runner::TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::wireless::active::ActiveAttackConfig;
     use eggsec::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
+    use eggsec::wireless::active::ActiveAttackConfig;
 
     send_progress(&progress_tx, 0, 2).await;
 
@@ -776,13 +800,15 @@ pub async fn run_wireless_active_task(
             tokio::time::timeout(
                 std::time::Duration::from_secs(60),
                 run_disassoc(&config, config.client.is_none()),
-            ).await
+            )
+            .await
         }
         _ => {
             tokio::time::timeout(
                 std::time::Duration::from_secs(60),
                 run_deauth(&config, config.client.is_none()),
-            ).await
+            )
+            .await
         }
     };
 
@@ -790,7 +816,11 @@ pub async fn run_wireless_active_task(
 
     match result {
         Ok(Ok(attack_result)) => {
-            send_result(&result_tx, super::runner::TaskResult::WirelessActive(attack_result)).await;
+            send_result(
+                &result_tx,
+                super::runner::TaskResult::WirelessActive(attack_result),
+            )
+            .await;
         }
         Ok(Err(e)) => {
             send_result(
@@ -802,7 +832,9 @@ pub async fn run_wireless_active_task(
         Err(_) => {
             send_result(
                 &result_tx,
-                super::runner::TaskResult::Error("Active wireless attack timed out after 60s".to_string()),
+                super::runner::TaskResult::Error(
+                    "Active wireless attack timed out after 60s".to_string(),
+                ),
             )
             .await;
         }

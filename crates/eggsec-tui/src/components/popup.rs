@@ -177,7 +177,10 @@ impl Popup {
                     .iter()
                     .map(|b| (b.chars().count() + 4).min(u16::MAX as usize) as u16)
                     .collect();
-                let total_width: u16 = button_widths.iter().copied().fold(0u16, |a, b| a.saturating_add(b));
+                let total_width: u16 = button_widths
+                    .iter()
+                    .copied()
+                    .fold(0u16, |a, b| a.saturating_add(b));
                 let spacing = (button_area.width.saturating_sub(total_width))
                     / (self.buttons.len().saturating_sub(1).max(1) as u16);
 
@@ -391,8 +394,8 @@ mod tests {
 
     #[test]
     fn test_scroll_offset_large_value() {
-        let mut popup = Popup::new("Test", PopupKind::Info)
-            .content(vec!["a".to_string(), "b".to_string()]);
+        let mut popup =
+            Popup::new("Test", PopupKind::Info).content(vec!["a".to_string(), "b".to_string()]);
         popup.scroll_offset = usize::MAX;
         let max_scroll = popup.content.len() - 1;
         assert_eq!(max_scroll, 1);

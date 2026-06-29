@@ -49,27 +49,27 @@ pub mod browser;
 #[cfg(feature = "finding-workflow")]
 pub mod workflow;
 
-mod spec;
 #[cfg(test)]
 mod handle_enter_regression;
 #[cfg(test)]
 mod input_accessibility;
-pub(crate) use spec::{
-    risk_from_group, spec_for, tab_specs, TabRiskGroup,
-};
+mod spec;
+pub(crate) use spec::{risk_from_group, spec_for, tab_specs, TabRiskGroup};
 
 #[cfg(test)]
 pub(crate) use spec::visible_tab_specs;
 
 pub use auth::AuthTab;
-#[cfg(feature = "c2")]
-pub use c2::C2Tab;
 #[cfg(feature = "headless-browser")]
 pub use browser::BrowserTab;
+#[cfg(feature = "c2")]
+pub use c2::C2Tab;
 pub use cluster::ClusterTab;
 #[cfg(feature = "compliance")]
 pub use compliance::ComplianceTab;
 pub use dashboard::DashboardTab;
+#[cfg(feature = "db-pentest")]
+pub use db_pentest::DbPentestTab;
 pub use fingerprint::FingerprintTab;
 pub use fuzz::FuzzTab;
 pub use graphql::GraphQlTab;
@@ -78,6 +78,8 @@ pub use history::HistoryTab;
 pub use hunt::HuntTab;
 #[cfg(feature = "external-integrations")]
 pub use integrations::IntegrationsTab;
+#[cfg(feature = "web-proxy")]
+pub use intercept::InterceptTab;
 pub use load::LoadTab;
 #[cfg(feature = "nse")]
 pub use nse::NseTab;
@@ -100,10 +102,6 @@ pub use waf::WafTab;
 pub use waf_stress::WafStressTab;
 #[cfg(feature = "wireless")]
 pub use wireless::WirelessTab;
-#[cfg(feature = "db-pentest")]
-pub use db_pentest::DbPentestTab;
-#[cfg(feature = "web-proxy")]
-pub use intercept::InterceptTab;
 #[cfg(feature = "finding-workflow")]
 pub use workflow::WorkflowTab;
 
@@ -289,7 +287,9 @@ impl Tab {
             Tab::Wireless => "  Enter            - Scan wireless networks",
             Tab::Intercept => "  Enter            - Start/stop interactive proxy intercept",
             #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => "  Enter            - Run db pentest (defense-lab; d-dry-run toggle, a-advanced)",
+            Tab::DbPentest => {
+                "  Enter            - Run db pentest (defense-lab; d-dry-run toggle, a-advanced)"
+            }
             #[cfg(not(feature = "db-pentest"))]
             Tab::DbPentest => "  Enter            - Db pentest (feature not enabled)",
         }
@@ -902,7 +902,11 @@ mod tests {
         let app = crate::App::new_for_testing(crate::state::create_shared_history());
         for tab in Tab::all() {
             let state = tab.as_tab_state(&app);
-            assert!(!state.is_running(), "tab {:?} should not be running at init", tab);
+            assert!(
+                !state.is_running(),
+                "tab {:?} should not be running at init",
+                tab
+            );
             let render = tab.as_tab_render(&app);
             let _ = render.breadcrumb();
         }

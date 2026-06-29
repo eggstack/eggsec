@@ -128,11 +128,10 @@ impl SecurityTool for ProxyTool {
                     targets_scanned: 0,
                     findings_count: 0,
                 },
-                errors: vec![crate::tool::ToolError::new(
-                    "PROXY_EXECUTION_FAILED",
-                    e.to_string(),
-                )
-                .with_error_type(crate::tool::ToolErrorType::Internal)],
+                errors: vec![
+                    crate::tool::ToolError::new("PROXY_EXECUTION_FAILED", e.to_string())
+                        .with_error_type(crate::tool::ToolErrorType::Internal),
+                ],
                 findings: vec![],
             }),
         }
@@ -318,7 +317,8 @@ impl SecurityTool for ProxyTool {
                         param_type: ParameterType::String,
                         required: true,
                         default: None,
-                        description: "URL pattern for the rule (e.g. '*.example.com/*')".to_string(),
+                        description: "URL pattern for the rule (e.g. '*.example.com/*')"
+                            .to_string(),
                     },
                     ParameterDef {
                         name: "rule_action".to_string(),
@@ -406,7 +406,12 @@ impl SecurityTool for ProxyTool {
 
         match action {
             "inspect_flow" | "forward_flow" | "drop_flow" | "replay_flow" => {
-                if !request.params.get("flow_index").and_then(|v| v.as_u64()).is_some() {
+                if !request
+                    .params
+                    .get("flow_index")
+                    .and_then(|v| v.as_u64())
+                    .is_some()
+                {
                     return Err(EggsecError::Validation(format!(
                         "Action '{}' requires a 'flow_index' parameter",
                         action
@@ -414,7 +419,12 @@ impl SecurityTool for ProxyTool {
                 }
             }
             "remove_rule" => {
-                if request.params.get("rule_id").and_then(|v| v.as_str()).is_none() {
+                if request
+                    .params
+                    .get("rule_id")
+                    .and_then(|v| v.as_str())
+                    .is_none()
+                {
                     return Err(EggsecError::Validation(
                         "Action 'remove_rule' requires a 'rule_id' parameter".to_string(),
                     ));
@@ -641,9 +651,13 @@ impl ProxyTool {
             .and_then(|v| v.as_u64())
             .ok_or_else(|| EggsecError::Validation("flow_index is required".to_string()))?;
 
-        let _flow = state.flows.iter().find(|f| f.index == flow_index).ok_or_else(|| {
-            EggsecError::Validation(format!("Flow at index {} not found", flow_index))
-        })?;
+        let _flow = state
+            .flows
+            .iter()
+            .find(|f| f.index == flow_index)
+            .ok_or_else(|| {
+                EggsecError::Validation(format!("Flow at index {} not found", flow_index))
+            })?;
 
         Ok(serde_json::json!({
             "action": action,

@@ -104,7 +104,10 @@ impl SmugglingBypass {
             method: "POST".to_string(),
             path: path.to_string(),
             headers: vec![
-                ("Content-Length".to_string(), format!("{}", chunk_encoded_len)),
+                (
+                    "Content-Length".to_string(),
+                    format!("{}", chunk_encoded_len),
+                ),
                 ("Transfer-Encoding".to_string(), "chunked".to_string()),
             ],
             body: clte_body.into_bytes(),

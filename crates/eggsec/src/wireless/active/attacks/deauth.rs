@@ -14,10 +14,10 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-#[cfg(target_os = "linux")]
-use tracing::{debug, info, warn};
 #[cfg(not(target_os = "linux"))]
 use tracing::info;
+#[cfg(target_os = "linux")]
+use tracing::{debug, info, warn};
 
 use super::super::{ActiveAttackConfig, ActiveWirelessAttackResult, ActiveWirelessFinding};
 use crate::types::Severity;
@@ -193,8 +193,7 @@ pub async fn inject_frames(
             fn if_nametoindex(name: *const i8) -> u32;
         }
 
-        let c_iface =
-            std::ffi::CString::new(interface).context("Invalid interface name")?;
+        let c_iface = std::ffi::CString::new(interface).context("Invalid interface name")?;
 
         let ifindex = unsafe { if_nametoindex(c_iface.as_ptr()) };
         if ifindex == 0 {
@@ -343,12 +342,10 @@ pub async fn run_deauth(
                 .to_string(),
         );
     }
-    recommendations.push(
-        "Monitor WIDS/WIPS for detection latency and alerting accuracy.".to_string(),
-    );
-    recommendations.push(
-        "Verify all legitimate clients reconnected within acceptable time.".to_string(),
-    );
+    recommendations
+        .push("Monitor WIDS/WIPS for detection latency and alerting accuracy.".to_string());
+    recommendations
+        .push("Verify all legitimate clients reconnected within acceptable time.".to_string());
     if config.dry_run {
         recommendations.push(
             "This was a dry run. No frames were transmitted. \
@@ -448,9 +445,8 @@ pub async fn run_disassoc(
             .to_string(),
     });
 
-    recommendations.push(
-        "Disassoc frames may bypass some client-side deauth protections.".to_string(),
-    );
+    recommendations
+        .push("Disassoc frames may bypass some client-side deauth protections.".to_string());
     recommendations.push("Monitor WIDS/WIPS for detection accuracy.".to_string());
     if config.dry_run {
         recommendations.push("This was a dry run. No frames were transmitted.".to_string());
@@ -482,27 +478,19 @@ mod tests {
 
     #[test]
     fn test_deauth_frame_length() {
-        let frame =
-            build_deauth_frame(&[0xAA; 6], Some(&[0xBB; 6]), reason_codes::STA_LEAVING);
+        let frame = build_deauth_frame(&[0xAA; 6], Some(&[0xBB; 6]), reason_codes::STA_LEAVING);
         // Radiotap(8) + FC(2) + Duration(2) + Addr1(6) + Addr2(6) + Addr3(6) + SeqCtrl(2) + Reason(2) = 34
         assert_eq!(frame.len(), 34);
     }
 
     #[test]
     fn test_deauth_frame_broadcast() {
-        let frame =
-            build_deauth_frame(&[0xAA; 6], None, reason_codes::UNSPECIFIED);
+        let frame = build_deauth_frame(&[0xAA; 6], None, reason_codes::UNSPECIFIED);
         // Radiotap(8) + FC(2) + Duration(2) + addr1(6) + addr2(6) + addr3(6) + SeqCtrl(2) + Reason(2)
         // addr1 (dest/broadcast) at offset 12
-        assert_eq!(
-            &frame[12..18],
-            &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-        );
+        assert_eq!(&frame[12..18], &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         // addr2 (src/BSSID) at offset 18
-        assert_eq!(
-            &frame[18..24],
-            &[0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA]
-        );
+        assert_eq!(&frame[18..24], &[0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA]);
     }
 
     #[test]
@@ -536,8 +524,7 @@ mod tests {
 
     #[test]
     fn test_disassoc_frame_length() {
-        let frame =
-            build_disassoc_frame(&[0xAA; 6], None, reason_codes::BSS_LEAVING);
+        let frame = build_disassoc_frame(&[0xAA; 6], None, reason_codes::BSS_LEAVING);
         assert_eq!(frame.len(), 34);
     }
 

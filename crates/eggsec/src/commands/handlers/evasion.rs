@@ -2,10 +2,7 @@ use crate::commands::handlers::CommandContext;
 use crate::config::OperationDescriptor;
 use anyhow::Result;
 
-pub async fn handle_evasion(
-    ctx: &CommandContext,
-    args: crate::cli::EvasionArgs,
-) -> Result<()> {
+pub async fn handle_evasion(ctx: &CommandContext, args: crate::cli::EvasionArgs) -> Result<()> {
     ctx.evaluate_and_enforce_operation(OperationDescriptor {
         operation: "evasion".to_string(),
         mode: crate::config::OperationMode::DefenseLab,

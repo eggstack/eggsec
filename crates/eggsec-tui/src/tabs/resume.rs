@@ -17,8 +17,7 @@ pub struct ResumeTab {
 
 impl ResumeTab {
     pub fn new() -> Self {
-        let inputs = crate::components::InputGroup::new()
-            .add(InputField::new("Session File Path"));
+        let inputs = crate::components::InputGroup::new().add(InputField::new("Session File Path"));
 
         Self {
             core: TabCore::new("Loading...", "Session Info").with_inputs(inputs),
