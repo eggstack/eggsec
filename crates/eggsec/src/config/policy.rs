@@ -986,8 +986,16 @@ impl OperationMetadata {
             risk: self.risk,
             intended_uses: self.intended_uses.to_vec(),
             target,
-            required_features: self.required_features.iter().map(|s| s.to_string()).collect(),
-            required_policy_flags: self.required_policy_flags.iter().map(|s| s.to_string()).collect(),
+            required_features: self
+                .required_features
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            required_policy_flags: self
+                .required_policy_flags
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             requires_private_or_local_target: matches!(
                 self.target_policy,
                 TargetPolicyKind::PrivateOrLocalRequired
@@ -1584,7 +1592,8 @@ mod operation_metadata_tests {
     #[test]
     fn agent_exposable_ops_require_explicit_scope() {
         for m in all_operation_metadata() {
-            if (m.agent_exposable || m.mcp_exposable) && m.target_policy != TargetPolicyKind::NoTarget
+            if (m.agent_exposable || m.mcp_exposable)
+                && m.target_policy != TargetPolicyKind::NoTarget
             {
                 assert!(
                     matches!(
@@ -1622,14 +1631,8 @@ mod operation_metadata_tests {
             assert_eq!(desc.operation, m.id);
             assert_eq!(desc.mode, m.mode);
             assert_eq!(desc.risk, m.risk);
-            assert_eq!(
-                desc.target,
-                Some("https://example.com".to_string())
-            );
-            assert_eq!(
-                desc.required_capabilities,
-                m.required_capabilities.to_vec()
-            );
+            assert_eq!(desc.target, Some("https://example.com".to_string()));
+            assert_eq!(desc.required_capabilities, m.required_capabilities.to_vec());
         }
     }
 
@@ -1736,9 +1739,63 @@ mod operation_metadata_tests {
                     has_nonbaseline,
                     "high-risk operation '{}' (risk {:?}) must declare at least one \
                      non-baseline capability — current capabilities: {:?}",
-                    m.id,
-                    m.risk,
-                    m.required_capabilities,
+                    m.id, m.risk, m.required_capabilities,
+                );
+            }
+        }
+    }
+
+    /// TUI descriptor generation must match metadata for representative tabs.
+    /// Verifies that metadata_for_tool_id() resolves TUI operation IDs and
+    /// descriptor_for_target() produces the expected risk, mode, and capabilities.
+    #[test]
+    fn tui_descriptor_generation_matches_metadata() {
+        // Representative TUI operation IDs (some canonical, some aliases)
+        let cases: &[(&str, OperationRisk, &[Capability])] = &[
+            (
+                "recon",
+                OperationRisk::SafeActive,
+                &[Capability::PassiveFingerprint],
+            ),
+            (
+                "scan-ports",
+                OperationRisk::SafeActive,
+                &[Capability::ActiveProbe],
+            ),
+            (
+                "fuzz",
+                OperationRisk::Intrusive,
+                &[Capability::HttpFuzzLowImpact],
+            ),
+            ("waf", OperationRisk::SafeActive, &[Capability::WafDetect]),
+            (
+                "load-test",
+                OperationRisk::LoadTest,
+                &[Capability::LoadTest],
+            ),
+        ];
+
+        for &(op_id, expected_risk, expected_caps) in cases {
+            let metadata = metadata_for_tool_id(op_id)
+                .unwrap_or_else(|| panic!("TUI operation '{}' should have metadata", op_id));
+            let desc = metadata.descriptor_for_target(Some("https://example.com".to_string()));
+            assert_eq!(
+                desc.risk, expected_risk,
+                "TUI tab '{}': expected risk {:?}, got {:?}",
+                op_id, expected_risk, desc.risk
+            );
+            assert_eq!(
+                desc.operation, metadata.id,
+                "TUI tab '{}': descriptor operation should be canonical ID '{}'",
+                op_id, metadata.id
+            );
+            for cap in expected_caps {
+                assert!(
+                    desc.required_capabilities.contains(cap),
+                    "TUI tab '{}': expected capability {:?} in {:?}",
+                    op_id,
+                    cap,
+                    desc.required_capabilities
                 );
             }
         }

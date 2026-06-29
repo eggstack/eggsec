@@ -15,17 +15,16 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
             // standalone defense-lab commands (wireless/mobile) when their feature is enabled.
             // This makes `eggsec <lab> --json -o out.json ; eggsec report convert out.json -f ...` work.
             // Try native ScanReportData first, then cascade through feature-gated defense-lab bridges.
-            let report: convert::ScanReportData = if let Ok(r) =
-                serde_json::from_str::<convert::ScanReportData>(&content)
-            {
-                r
-            } else if let Some(r) = try_bridge_defense_lab(&content) {
-                r
-            } else {
-                return Err(anyhow::anyhow!(
+            let report: convert::ScanReportData =
+                if let Ok(r) = serde_json::from_str::<convert::ScanReportData>(&content) {
+                    r
+                } else if let Some(r) = try_bridge_defense_lab(&content) {
+                    r
+                } else {
+                    return Err(anyhow::anyhow!(
                     "Failed to parse input as ScanReportData or any supported defense-lab format"
                 ));
-            };
+                };
 
             let output = match convert_args.format {
                 ReportFormat::Json => serde_json::to_string_pretty(&report)?,

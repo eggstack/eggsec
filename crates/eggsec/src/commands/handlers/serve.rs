@@ -1,9 +1,35 @@
 use crate::commands::handlers::CommandContext;
+use crate::config::{LoadedScope, Scope, ScopeSource};
 use anyhow::Result;
+
+/// Resolve the loaded scope for REST API execution.
+///
+/// Scope precedence for REST:
+/// - If `--scope-file` is provided to `serve`, that file takes precedence
+///   (REST-specific scope override).
+/// - Otherwise, the loaded top-level scope from the CLI/context is inherited.
+///
+/// This matches the CLI shape where `eggsec --scope global.toml serve --scope-file rest.toml`
+/// uses the REST-specific `scope_file`.
+fn resolve_rest_loaded_scope(
+    ctx: &CommandContext,
+    args: &crate::cli::ServeArgs,
+) -> Result<LoadedScope> {
+    if let Some(ref scope_file) = args.scope_file {
+        let scope = Scope::from_file(scope_file)?;
+        Ok(LoadedScope {
+            scope,
+            source: ScopeSource::CliScopeFile,
+            path: Some(scope_file.to_string()),
+        })
+    } else {
+        Ok(ctx.enforcement.loaded_scope.clone())
+    }
+}
 
 #[cfg(feature = "rest-api")]
 pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
-    use crate::config::{EnforcementContext, ExecutionSurface, LoadedScope, Scope, ScopeSource};
+    use crate::config::{EnforcementContext, ExecutionSurface};
     use crate::distributed::TlsConfig;
     use crate::tool::{create_default_registry, protocol::rest::create_router};
     use axum::serve;
@@ -11,16 +37,7 @@ pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> 
     use std::path::PathBuf;
     use tokio::net::TcpListener;
 
-    let loaded_scope = if let Some(ref scope_file) = args.scope_file {
-        let scope = Scope::from_file(scope_file)?;
-        LoadedScope {
-            scope,
-            source: ScopeSource::CliScopeFile,
-            path: Some(scope_file.to_string()),
-        }
-    } else {
-        ctx.enforcement.loaded_scope.clone()
-    };
+    let loaded_scope = resolve_rest_loaded_scope(ctx, &args)?;
 
     let enforcement = EnforcementContext::for_surface(
         ExecutionSurface::RestApi,
@@ -37,7 +54,12 @@ pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> 
     };
 
     let registry = create_default_registry();
-    let router = create_router(registry, args.api_key.clone(), enforcement, tls_config.clone());
+    let router = create_router(
+        registry,
+        args.api_key.clone(),
+        enforcement,
+        tls_config.clone(),
+    );
 
     let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
         .parse()

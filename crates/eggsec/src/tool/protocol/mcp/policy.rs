@@ -521,12 +521,9 @@ pub fn policy_decision_for_mcp_call_with_enforcement(
     arguments: &serde_json::Value,
     enforcement: &crate::config::EnforcementContext,
 ) -> crate::config::PolicyDecision {
-    let Some(descriptor) = operation_descriptor_for_mcp_call(
-        profile_policy,
-        tool_id,
-        capability,
-        arguments,
-    ) else {
+    let Some(descriptor) =
+        operation_descriptor_for_mcp_call(profile_policy, tool_id, capability, arguments)
+    else {
         // Missing metadata = unclassified tool. Fail closed.
         return crate::config::PolicyDecision::denied(
             tool_id,
@@ -1479,5 +1476,72 @@ mod tests {
     fn test_coding_agent_requires_explicit_scope() {
         let policy = McpProfilePolicy::coding_agent();
         assert!(policy.require_explicit_scope);
+    }
+
+    /// MCP descriptor generation must match metadata for representative tools.
+    /// Verifies that operation_descriptor_for_mcp_call() produces descriptors
+    /// consistent with the canonical metadata registry.
+    #[test]
+    fn mcp_descriptor_generation_matches_metadata() {
+        use crate::config::{metadata_for_tool_id, OperationRisk};
+
+        let policy = McpProfilePolicy::ops_agent();
+        let args_with_target =
+            serde_json::json!({"target": "https://example.com", "concurrency": 5});
+
+        let cases: &[(&str, OperationRisk)] = &[
+            ("recon", OperationRisk::SafeActive),
+            ("scan-ports", OperationRisk::SafeActive),
+            ("fuzz", OperationRisk::Intrusive),
+            ("waf-detect", OperationRisk::SafeActive),
+            ("load-test", OperationRisk::LoadTest),
+            ("stress-test", OperationRisk::StressTest),
+            ("packet", OperationRisk::RawPacket),
+        ];
+
+        for &(tool_id, expected_risk) in cases {
+            let desc = operation_descriptor_for_mcp_call(&policy, tool_id, None, &args_with_target)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "MCP tool '{}' should have metadata for descriptor generation",
+                        tool_id
+                    )
+                });
+
+            let metadata = metadata_for_tool_id(tool_id).unwrap();
+            assert_eq!(
+                desc.operation, metadata.id,
+                "MCP tool '{}': descriptor operation should be canonical ID '{}'",
+                tool_id, metadata.id
+            );
+            assert_eq!(
+                desc.risk, expected_risk,
+                "MCP tool '{}': expected risk {:?}, got {:?}",
+                tool_id, expected_risk, desc.risk
+            );
+            assert_eq!(
+                desc.target,
+                Some("https://example.com".to_string()),
+                "MCP tool '{}': target should be passed through",
+                tool_id
+            );
+            assert!(
+                desc.requires_explicit_scope,
+                "MCP tool '{}': ops-agent profile should require explicit scope",
+                tool_id
+            );
+        }
+    }
+
+    /// MCP descriptor generation must fail closed for unknown tools.
+    #[test]
+    fn mcp_descriptor_fails_closed_for_unknown_tool() {
+        let policy = McpProfilePolicy::ops_agent();
+        let args = serde_json::json!({"target": "https://example.com"});
+        let result = operation_descriptor_for_mcp_call(&policy, "nonexistent-tool", None, &args);
+        assert!(
+            result.is_none(),
+            "MCP descriptor for unknown tool should return None (fail closed)"
+        );
     }
 }

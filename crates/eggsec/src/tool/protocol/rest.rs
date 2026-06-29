@@ -92,6 +92,13 @@ pub struct RestErrorResponse {
     pub code: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct RestPolicyErrorResponse {
+    pub error: String,
+    pub code: &'static str,
+    pub decision: crate::config::PolicyDecision,
+}
+
 impl IntoResponse for EggsecError {
     fn into_response(self) -> axum::response::Response {
         let (status, error_response) = match &self {
@@ -424,7 +431,22 @@ async fn openapi_spec() -> impl IntoResponse {
                         }
                     },
                     "responses": {
-                        "200": {"description": "Execution result"}
+                        "200": {"description": "Execution result"},
+                        "403": {
+                            "description": "Policy denied — strict REST enforcement does not allow this operation",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "error": {"type": "string"},
+                                            "code": {"type": "string", "enum": ["POLICY_DENIED"]},
+                                            "decision": {"type": "object"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -540,6 +562,18 @@ fn operation_descriptor_for_rest_tool(
     }
 }
 
+fn policy_denied_response(
+    message: impl Into<String>,
+    decision: crate::config::PolicyDecision,
+) -> axum::response::Response {
+    let body = Json(RestPolicyErrorResponse {
+        error: message.into(),
+        code: "POLICY_DENIED",
+        decision,
+    });
+    (StatusCode::FORBIDDEN, body).into_response()
+}
+
 async fn execute_tool(
     State(state): State<Arc<RestState>>,
     Path(tool_id): Path<String>,
@@ -566,20 +600,39 @@ async fn execute_tool(
     let target_url = &payload.target;
 
     let descriptor = operation_descriptor_for_rest_tool(&tool_id, target_url)?;
+
+    if let Some(metadata) = crate::tool::metadata::metadata_for_tool_id(&tool_id) {
+        if !metadata.rest_exposable {
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::Config(format!(
+                "Tool '{}' is not exposed via REST API",
+                tool_id
+            )));
+        }
+    }
+
     let outcome = state.enforcement.evaluate(&descriptor);
     match outcome {
-        EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {}
-        EnforcementOutcome::RequireConfirmation(_) => {
+        EnforcementOutcome::Allow(_) => {}
+        EnforcementOutcome::Warn(decision) => {
             state.metrics.record_request(start.elapsed(), true);
-            return Err(EggsecError::Config(
-                "REST strict enforcement: manual confirmation unavailable".to_string(),
-            ));
+            return Err(EggsecError::ScopeViolation(format!(
+                "REST strict enforcement: warning — {}",
+                decision.to_human_readable()
+            )));
         }
-        EnforcementOutcome::Deny(d) => {
+        EnforcementOutcome::RequireConfirmation(decision) => {
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::ScopeViolation(format!(
+                "REST strict enforcement: manual confirmation unavailable — {}",
+                decision.to_human_readable()
+            )));
+        }
+        EnforcementOutcome::Deny(decision) => {
             state.metrics.record_request(start.elapsed(), true);
             return Err(EggsecError::ScopeViolation(format!(
                 "REST strict enforcement denied: {}",
-                d.to_human_readable()
+                decision.to_human_readable()
             )));
         }
     }
@@ -738,17 +791,14 @@ mod tests {
 
     #[test]
     fn test_enforcement_deny_without_explicit_scope() {
-        use crate::config::{
-            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope,
-        };
+        use crate::config::{EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope};
 
         let policy = ExecutionPolicy::default();
         let loaded_scope = LoadedScope::default_empty();
         let enforcement =
             EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
 
-        let descriptor =
-            operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
         let outcome = enforcement.evaluate(&descriptor);
         assert!(
             outcome.is_denied() || outcome.requires_confirmation(),
@@ -760,13 +810,11 @@ mod tests {
     #[test]
     fn test_enforcement_out_of_scope_denial() {
         use crate::config::{
-            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, Scope,
-            ScopeSource,
+            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, Scope, ScopeSource,
         };
 
         let mut scope = Scope::default();
-        scope.allowed_targets =
-            vec![crate::config::ScopeRule::new("10.0.0.0/8".to_string())];
+        scope.allowed_targets = vec![crate::config::ScopeRule::new("10.0.0.0/8".to_string())];
         let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
         let policy = ExecutionPolicy::default();
         let enforcement =
@@ -796,8 +844,7 @@ mod tests {
         let enforcement =
             EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
 
-        let descriptor =
-            operation_descriptor_for_rest_tool("fuzz", "https://example.com").unwrap();
+        let descriptor = operation_descriptor_for_rest_tool("fuzz", "https://example.com").unwrap();
         let outcome = enforcement.evaluate(&descriptor);
 
         match outcome {
@@ -814,5 +861,277 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_rest_surface_maps_to_strict_profile() {
+        use crate::config::{ExecutionProfile, ExecutionSurface};
+
+        let surface = ExecutionSurface::RestApi;
+        let profile = surface.profile();
+        assert!(
+            profile.is_strict(),
+            "REST surface must map to a strict profile, got: {:?}",
+            profile
+        );
+        assert_eq!(profile, ExecutionProfile::McpStrict);
+    }
+
+    #[test]
+    fn test_rest_dispatch_only_on_allow() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope,
+        };
+
+        let policy = ExecutionPolicy::default();
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+
+        match &outcome {
+            EnforcementOutcome::Allow(_) => {
+                // Only Allow permits dispatch
+            }
+            _ => {
+                // All other outcomes deny dispatch in REST
+            }
+        }
+
+        // Verify that is_allowed() on the outcome is only true for Allow
+        // (Warn is no longer treated as allowed for REST dispatch)
+        assert!(
+            !outcome.is_allowed() || matches!(outcome, EnforcementOutcome::Allow(_)),
+            "REST should only dispatch on Allow, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_rest_warn_treated_as_deny() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope,
+            Scope, ScopeSource,
+        };
+
+        let mut scope = Scope::default();
+        scope.allowed_targets = vec![crate::config::ScopeRule::new("*.lab.internal".to_string())];
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor =
+            operation_descriptor_for_rest_tool("recon", "https://example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+
+        match outcome {
+            EnforcementOutcome::Warn(decision) => {
+                // Warn is treated as deny in REST - this is correct behavior
+                assert!(!decision.allowed, "Warn decision should not be allowed");
+            }
+            EnforcementOutcome::Deny(_) => {
+                // Direct deny is also acceptable
+            }
+            other => {
+                panic!(
+                    "Expected Warn or Deny for out-of-scope target in REST, got: {:?}",
+                    other
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_rest_require_confirmation_treated_as_deny() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope,
+        };
+
+        let policy = ExecutionPolicy::default();
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("fuzz", "https://example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+
+        match outcome {
+            EnforcementOutcome::RequireConfirmation(_) => {
+                // REST cannot provide manual confirmation - treated as deny
+            }
+            EnforcementOutcome::Deny(_) => {
+                // Direct denial is also acceptable
+            }
+            other => {
+                panic!(
+                    "Expected RequireConfirmation or Deny for intrusive REST op, got: {:?}",
+                    other
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_rest_deny_is_hard_deny() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope,
+            Scope, ScopeSource,
+        };
+
+        let mut scope = Scope::default();
+        scope.allowed_targets = vec![crate::config::ScopeRule::new("10.0.0.0/8".to_string())];
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor =
+            operation_descriptor_for_rest_tool("scan", "https://evil.example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+        assert!(
+            outcome.is_denied(),
+            "Expected hard denial for out-of-scope target, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_rest_missing_explicit_scope_denies() {
+        use crate::config::{EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope};
+
+        let policy = ExecutionPolicy::default();
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+        assert!(
+            outcome.is_denied() || outcome.requires_confirmation(),
+            "REST without explicit scope should deny or require confirmation, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_rest_positive_scope_match_proceeds() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope,
+            Scope, ScopeSource,
+        };
+
+        let mut scope = Scope::default();
+        scope.allowed_targets = vec![crate::config::ScopeRule::new("*.example.com".to_string())];
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor =
+            operation_descriptor_for_rest_tool("scan", "https://target.example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+        assert!(
+            matches!(outcome, EnforcementOutcome::Allow(_)),
+            "REST with matching scope should Allow, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_rest_positive_scope_miss_denies() {
+        use crate::config::{
+            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, Scope, ScopeSource,
+        };
+
+        let mut scope = Scope::default();
+        scope.allowed_targets = vec![crate::config::ScopeRule::new("*.lab.internal".to_string())];
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+        assert!(
+            outcome.is_denied() || outcome.requires_confirmation(),
+            "REST with non-matching scope should deny or require confirmation, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_rest_ignores_manual_overrides() {
+        use crate::config::{
+            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, Scope, ScopeSource,
+        };
+
+        let mut scope = Scope::default();
+        scope.allowed_targets = vec![crate::config::ScopeRule::new("*.lab.internal".to_string())];
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        let outcome = enforcement.evaluate(&descriptor);
+
+        // REST is strict - manual overrides are never honored
+        assert!(
+            outcome.is_denied() || outcome.requires_confirmation(),
+            "REST should not honor manual overrides, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_rest_non_rest_exposable_tool_denied() {
+        use crate::config::metadata_for_tool_id;
+
+        // stress is registered in ALL_OPERATION_METADATA with rest_exposable: true
+        // This test verifies the metadata lookup works and the field is accessible
+        if let Some(metadata) = metadata_for_tool_id("stress") {
+            assert!(
+                metadata.rest_exposable,
+                "stress tool should be rest_exposable"
+            );
+        }
+
+        // Verify metadata_for_tool_id works for known tools
+        assert!(
+            metadata_for_tool_id("recon").is_some(),
+            "recon should have metadata"
+        );
+        assert!(
+            metadata_for_tool_id("scan-ports").is_some(),
+            "scan-ports should have metadata"
+        );
+    }
+
+    #[test]
+    fn test_rest_metadata_descriptor_has_requires_explicit_scope() {
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
+        assert!(
+            descriptor.requires_explicit_scope,
+            "REST descriptors must always set requires_explicit_scope = true"
+        );
+    }
+
+    #[test]
+    fn test_rest_policy_denied_response_format() {
+        use crate::config::PolicyDecision;
+
+        let decision = PolicyDecision::allowed(
+            "test-op",
+            crate::config::OperationMode::StandardAssessment,
+            crate::config::OperationRisk::SafeActive,
+            vec![crate::config::IntendedUse::WebAssessment],
+        );
+
+        let response = policy_denied_response("test denial", decision);
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 }

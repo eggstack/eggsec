@@ -566,14 +566,18 @@ mod tests {
             path: Some("scope.toml".to_string()),
         };
         let policy = ExecutionPolicy::default();
-        let enforcement =
-            EnforcementContext::for_surface(ExecutionSurface::TuiManual, policy.clone(), loaded_scope);
+        let enforcement = EnforcementContext::for_surface(
+            ExecutionSurface::TuiManual,
+            policy.clone(),
+            loaded_scope,
+        );
         let outcome = enforcement.evaluate(&desc);
         // Compute expected classes using the same function
         let expected_classes =
             confirmation_classes_for(&desc, outcome.decision(), &enforcement.execution_policy);
         // Compute via from_outcome
-        let result = TuiPreflightResult::from_outcome(&desc, &outcome, &enforcement.execution_policy);
+        let result =
+            TuiPreflightResult::from_outcome(&desc, &outcome, &enforcement.execution_policy);
         assert_eq!(
             result.required_confirmation_classes, expected_classes,
             "from_outcome should use the provided policy for class calculation"

@@ -222,7 +222,7 @@ Machine-accessible interfaces for automation and AI integration:
 
 | Protocol | Feature Flag | Purpose |
 |----------|--------------|---------|
-| REST API | `rest-api` | HTTP API server for agent integration; uses `EnforcementContext` with `McpStrict` profile by default |
+| REST API | `rest-api` | HTTP API server for agent integration; uses `EnforcementContext` with `McpStrict` profile by default; only `Allow` permits dispatch, `Warn`/`RequireConfirmation`/`Deny` return 403 with structured `POLICY_DENIED` response |
 | gRPC | `grpc-api` | High-performance gRPC API |
 | WebSocket | `ws-api` | Pub/sub event streaming |
 | MCP | Built-in | Model Context Protocol for AI agents |

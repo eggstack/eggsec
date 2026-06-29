@@ -321,12 +321,11 @@ impl App {
         if self.is_direct_launch_tab(self.current_tab) {
             if let Some(desc) = self.build_current_operation_descriptor() {
                 let outcome = self.enforcement_state.enforcement.evaluate(&desc);
-                self.enforcement_state.last_preflight =
-                    Some(TuiPreflightResult::from_outcome(
-                        &desc,
-                        &outcome,
-                        &self.enforcement_state.enforcement.execution_policy,
-                    ));
+                self.enforcement_state.last_preflight = Some(TuiPreflightResult::from_outcome(
+                    &desc,
+                    &outcome,
+                    &self.enforcement_state.enforcement.execution_policy,
+                ));
                 match outcome {
                     EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                         // Proceed to start the tab

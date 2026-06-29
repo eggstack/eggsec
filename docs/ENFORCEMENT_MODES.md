@@ -35,7 +35,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 
 **Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, or strict REST. Agent strict behavior must not become the default for normal CLI/TUI manual use.
 
-**REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. `RequireConfirmation` results in 403 Forbidden (no interactive confirmation possible). `Deny` results in 403 Forbidden. `Warn` allows execution. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
+**REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. Only `EnforcementOutcome::Allow` permits dispatch. `Warn`, `RequireConfirmation`, and `Deny` all result in HTTP 403 Forbidden with a structured `RestPolicyErrorResponse` (code: `POLICY_DENIED`, includes serialized `PolicyDecision`). REST is noninteractive and programmatic — warning-class ambiguity must not dispatch. Metadata `rest_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
 
 ## Outcome Semantics
 
@@ -48,7 +48,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 | `RequireConfirmation` | Dispatch permitted **only** after matching `ManualOverride` classes are present | Treated as deny | Treated as deny |
 | `Deny` | Dispatch never permitted | Dispatch never permitted | Dispatch never permitted |
 
-**Invariant**: Automated surfaces must treat `Warn` conservatively (as denial) and must treat `RequireConfirmation` as denial. Only `ManualPermissive` may dispatch on `Warn` or `RequireConfirmation` (with matching override).
+**Invariant**: Automated surfaces must treat `Warn` conservatively (as denial) and must treat `RequireConfirmation` as denial. Only `ManualPermissive` may dispatch on `Warn` or `RequireConfirmation` (with matching override). REST specifically: only `Allow` permits dispatch; `Warn`, `RequireConfirmation`, and `Deny` all return HTTP 403 with structured policy error.
 
 ## Manual Discretion Classes
 

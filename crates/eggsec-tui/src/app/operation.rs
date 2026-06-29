@@ -21,13 +21,12 @@ impl App {
         let op_id = spec.operation.unwrap();
 
         if let Some(metadata) = eggsec::config::operation_metadata(op_id) {
-            let mut descriptor = metadata.descriptor_for_target(
-                if target.as_deref().unwrap_or("").is_empty() {
+            let mut descriptor =
+                metadata.descriptor_for_target(if target.as_deref().unwrap_or("").is_empty() {
                     None
                 } else {
                     target
-                },
-            );
+                });
 
             // Tab-specific overrides for runtime details that metadata cannot know
             // (dry-run mode, advanced mode, etc.)
