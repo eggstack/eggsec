@@ -936,7 +936,7 @@ mod tests {
 
         let policy = McpProfilePolicy::for_profile(McpProfile::OpsAgent);
         let args = serde_json::json!({"target": "https://example.com"});
-        let desc = operation_descriptor_for_mcp_call(&policy, "scan", None, &args);
+        let desc = operation_descriptor_for_mcp_call(&policy, "scan", None, &args).unwrap();
 
         // Metadata lookup resolves "scan" alias to canonical "scan-ports"
         assert_eq!(desc.operation, "scan-ports");

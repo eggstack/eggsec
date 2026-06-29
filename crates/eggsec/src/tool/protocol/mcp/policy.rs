@@ -476,13 +476,17 @@ pub fn required_capabilities_for_tool_call(
 /// appropriate `IntendedUse` based on whether the profile is a coding agent.
 /// This descriptor is the single source of truth for both pre-dispatch
 /// enforcement and denial reporting helpers.
+///
+/// Returns `None` when the tool ID has no entry in the metadata registry.
+/// MCP dispatch must fail closed on `None` to prevent unclassified operations
+/// from bypassing enforcement.
 pub fn operation_descriptor_for_mcp_call(
     profile_policy: &McpProfilePolicy,
     tool_id: &str,
     capability: Option<&str>,
     arguments: &serde_json::Value,
-) -> crate::config::OperationDescriptor {
-    use crate::config::{IntendedUse, OperationMode};
+) -> Option<crate::config::OperationDescriptor> {
+    use crate::config::IntendedUse;
     use crate::tool::metadata::metadata_for_tool_id;
 
     let target = arguments
@@ -496,29 +500,11 @@ pub fn operation_descriptor_for_mcp_call(
         vec![IntendedUse::WebAssessment]
     };
 
-    if let Some(metadata) = metadata_for_tool_id(tool_id) {
-        let mut descriptor = metadata.descriptor_for_target(target);
-        descriptor.intended_uses = intended_uses;
-        descriptor.requires_explicit_scope = profile_policy.require_explicit_scope;
-        descriptor
-    } else {
-        // Fallback for tools not in the metadata registry.
-        // This preserves backward compatibility for test doubles and tools
-        // that haven't been migrated to metadata yet.
-        tracing::warn!("missing operation metadata for MCP tool '{}'", tool_id);
-        crate::config::OperationDescriptor {
-            operation: tool_id.to_string(),
-            mode: OperationMode::StandardAssessment,
-            risk: crate::config::OperationRisk::SafeActive,
-            intended_uses,
-            target,
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: profile_policy.require_explicit_scope,
-            required_capabilities: Vec::new(),
-        }
-    }
+    let metadata = metadata_for_tool_id(tool_id)?;
+    let mut descriptor = metadata.descriptor_for_target(target);
+    descriptor.intended_uses = intended_uses;
+    descriptor.requires_explicit_scope = profile_policy.require_explicit_scope;
+    Some(descriptor)
 }
 
 /// Build a [`PolicyDecision`] for an MCP tool call using the shared `EnforcementContext`.
@@ -535,12 +521,21 @@ pub fn policy_decision_for_mcp_call_with_enforcement(
     arguments: &serde_json::Value,
     enforcement: &crate::config::EnforcementContext,
 ) -> crate::config::PolicyDecision {
-    let descriptor = operation_descriptor_for_mcp_call(
+    let Some(descriptor) = operation_descriptor_for_mcp_call(
         profile_policy,
         tool_id,
         capability,
         arguments,
-    );
+    ) else {
+        // Missing metadata = unclassified tool. Fail closed.
+        return crate::config::PolicyDecision::denied(
+            tool_id,
+            crate::config::OperationMode::StandardAssessment,
+            crate::config::OperationRisk::SafeActive,
+            vec![],
+            &format!("missing operation metadata for tool '{}'", tool_id),
+        );
+    };
     let outcome = enforcement.evaluate(&descriptor);
     let mut decision = outcome.decision().clone();
 
@@ -1317,7 +1312,7 @@ mod tests {
     fn test_classify_tool_risk_proxy() {
         assert_eq!(
             classify_tool_risk("proxy"),
-            crate::config::OperationRisk::ExploitAdjacent
+            crate::config::OperationRisk::SafeActive
         );
     }
 

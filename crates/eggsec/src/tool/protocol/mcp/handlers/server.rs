@@ -456,12 +456,23 @@ impl McpServer {
 
         // Shared enforcement evaluation
         {
-            let descriptor = operation_descriptor_for_mcp_call(
+            let Some(descriptor) = operation_descriptor_for_mcp_call(
                 &self.policy,
                 &tool_id,
                 capability.as_deref(),
                 &arguments,
-            );
+            ) else {
+                // Missing metadata = unclassified tool. Fail closed.
+                return req.error_response(McpError {
+                    code: -32025,
+                    message: format!(
+                        "missing operation metadata for tool '{}' — \
+                         every MCP tool must have an entry in ALL_OPERATION_METADATA",
+                        tool_id
+                    ),
+                    data: None,
+                });
+            };
             let outcome = self.enforcement.evaluate(&descriptor);
             if let crate::config::EnforcementOutcome::Deny(decision)
             | crate::config::EnforcementOutcome::RequireConfirmation(decision) = outcome

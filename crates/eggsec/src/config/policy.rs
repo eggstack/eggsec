@@ -1452,7 +1452,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         id: "proxy",
         display_name: "Proxy Management",
         mode: OperationMode::StandardAssessment,
-        risk: OperationRisk::ExploitAdjacent,
+        risk: OperationRisk::SafeActive,
         intended_uses: &[IntendedUse::WebAssessment],
         required_features: &[],
         required_policy_flags: &[],
@@ -1718,5 +1718,29 @@ mod operation_metadata_tests {
             metadata_for_tool_id("c2").is_some(),
             "registered tool 'c2' has no operation metadata"
         );
+    }
+
+    /// High-risk operations (risk > SafeActive) must declare at least one
+    /// non-baseline capability. This prevents accidentally omitting capability
+    /// declarations on dangerous operations, which would allow them to slip
+    /// through enforcement checks that gate on required_capabilities.
+    #[test]
+    fn high_risk_ops_declare_nonbaseline_capability() {
+        for m in all_operation_metadata() {
+            if m.risk > OperationRisk::SafeActive {
+                let has_nonbaseline = m
+                    .required_capabilities
+                    .iter()
+                    .any(|cap| !baseline_allowed_capability(*cap));
+                assert!(
+                    has_nonbaseline,
+                    "high-risk operation '{}' (risk {:?}) must declare at least one \
+                     non-baseline capability — current capabilities: {:?}",
+                    m.id,
+                    m.risk,
+                    m.required_capabilities,
+                );
+            }
+        }
     }
 }

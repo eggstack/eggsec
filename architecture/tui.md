@@ -398,6 +398,12 @@ New rendering code should prefer explicit `&Theme` parameters (via `App::current
 
 TUI uses `EnforcementContext` directly (via `App.enforcement`, `manual_permissive` in runner.rs:82) for all target-bearing launches. Central gate in `App::update()` (mod.rs:322) before `spawn_task` (for handle_enter paths via `build_current_task`/`build_current_operation_descriptor`). For direct-launch tabs, `handle_enter()` now evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts. The old post-dispatch retroactive policy gate has been removed. `RequireConfirmation` surfaces via highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095, key_handler.rs:205) backed by `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input field. On confirm (mod.rs:787) it builds narrow `ManualOverride`, re-evaluates via the central `enforcement.evaluate`, and records via `decision.with_manual_override_record(mo.reason, confirmation_class_strings(...))` using stable kebab strings from `ConfirmationClass::as_str()`. `PendingAction` (confirmation.rs:4 for reset/save/etc.) remains separate and lower-precedence (`ConfirmPopup` overlay). `--strict-scope` affects profile selection for both CLI and TUI.
 
+### OperationMetadata as Descriptor Source of Truth
+
+TUI descriptor generation is driven by the canonical `OperationMetadata` registry (`config::policy::ALL_OPERATION_METADATA`). Each `TabSpec` declares an `operation: Option<&'static str>` field that maps to a metadata entry. `App::build_current_operation_descriptor()` (`app/operation.rs`) calls `eggsec::config::operation_metadata(op_id)` to look up the metadata and generates the `OperationDescriptor` via `metadata.descriptor_for_target(target)`.
+
+Tab-specific overrides are limited to runtime details that metadata cannot know (e.g., dry-run mode changing `Intrusive` to `SafeActive`). Such overrides are explicit and tested. Tabs without an `operation` field return `None` from `build_current_operation_descriptor()` and are not subject to target-bearing enforcement.
+
 ### Enforcement Posture Model (Phase 5)
 
 The TUI has a local enforcement posture model in `app/enforcement.rs` (`TuiEnforcementState`) that wraps `EnforcementContext` + `LoadedScope` for TUI-specific posture management.
