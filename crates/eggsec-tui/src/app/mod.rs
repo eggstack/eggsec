@@ -315,6 +315,38 @@ impl App {
             return;
         }
 
+        // Pre-dispatch policy gate for direct-launch tabs: evaluate BEFORE starting
+        // side effects. This prevents retroactive policy enforcement after the tab
+        // is already running.
+        if self.is_direct_launch_tab(self.current_tab) {
+            if let Some(desc) = self.build_current_operation_descriptor() {
+                let outcome = self.enforcement_state.enforcement.evaluate(&desc);
+                self.enforcement_state.last_preflight =
+                    Some(TuiPreflightResult::from_outcome(
+                        &desc,
+                        &outcome,
+                        &self.enforcement_state.enforcement.execution_policy,
+                    ));
+                match outcome {
+                    EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
+                        // Proceed to start the tab
+                    }
+                    EnforcementOutcome::RequireConfirmation(decision) => {
+                        // Block before any side effect; show confirmation overlay
+                        self.request_policy_confirmation(desc, decision, None);
+                        return;
+                    }
+                    EnforcementOutcome::Deny(d) => {
+                        // Block; show error without starting the tab
+                        self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                            d.to_human_readable(),
+                        ));
+                        return;
+                    }
+                }
+            }
+        }
+
         let is_running = {
             let mut dispatcher = self.dispatcher_mut();
             dispatcher.handle_enter();
@@ -368,15 +400,6 @@ impl App {
                 }
             }
         }
-
-        // Post-dispatch retroactive policy gate for direct-launch tabs (packet, stress, auth, cluster, etc.)
-        if self.is_direct_launch_tab(self.current_tab)
-            && self.current_tab.as_tab_state(self).is_running()
-        {
-            if let Some(desc) = self.build_current_operation_descriptor() {
-                self.evaluate_policy_and_dispatch(desc, None);
-            }
-        }
     }
 
     /// Central policy evaluation + dispatch. Handles the Allow/Warn/RequireConfirmation/Deny
@@ -388,8 +411,11 @@ impl App {
         task_config: Option<crate::workers::TaskConfig>,
     ) {
         let outcome = self.enforcement_state.enforcement.evaluate(&desc);
-        self.enforcement_state.last_preflight =
-            Some(TuiPreflightResult::from_outcome(&desc, &outcome));
+        self.enforcement_state.last_preflight = Some(TuiPreflightResult::from_outcome(
+            &desc,
+            &outcome,
+            &self.enforcement_state.enforcement.execution_policy,
+        ));
         match outcome {
             EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
                 if let Some(cfg) = task_config {
@@ -670,9 +696,10 @@ impl App {
                 match c {
                     eggsec::config::ConfirmationClass::OutOfScope
                     | eggsec::config::ConfirmationClass::TargetExpansion => {
-                        // low-risk scope discretion: the confirm itself acts like narrow --yes for these
-                        // (no allow_out_of_scope flag is exposed in TUI UI yet; the popup confirm is the signal)
-                        // We still record it; enforcement will see it via the record path below.
+                        // Narrow scope discretion: set allow_out_of_scope so ManualOverride::permits()
+                        // returns true for OutOfScope/TargetExpansion. This mirrors CLI --allow-out-of-scope
+                        // but is class-specific (not broad assume_yes).
+                        mo.allow_out_of_scope = true;
                     }
                     eggsec::config::ConfirmationClass::ExplicitExclusion => {
                         mo.allow_explicit_exclusion = true;

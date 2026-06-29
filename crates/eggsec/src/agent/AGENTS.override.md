@@ -28,7 +28,8 @@ These replace inline risk/capability mapping that was previously duplicated in `
 Prefer small test seams over making private fields public:
 - `ScanDispatcherTrait` - dispatch scans to tools
 - `AlertSenderTrait` - send alerts via router
-- `Agent::new_for_test(...)` - create agent with custom dispatch/alert
+- `Agent::new_for_test(...)` - create agent with custom dispatch/alert (no enforcement required)
+- `new_agent_for_test_default()` - convenience helper in `mod tests` for tests that need a default agent
 
 ## Observability
 
@@ -40,8 +41,8 @@ Logging is configured centrally in `logging/init.rs` via `init_logging()`:
 ## Config Hot-Reloading
 
 `agent/config_watcher.rs` provides `ConfigWatcher`:
-- Stored as `Option<ConfigWatcher>` field (`agent/mod.rs:139`)
-- Wired in `Agent::new()` at line 207
+- Stored as `Option<ConfigWatcher>` field (`agent/mod.rs:185`)
+- Wired in `Agent::new()` at config watcher creation
 - Use `EggsecConfigReloader` for portfolio + main config paths
 - Gracefully handles missing files via `.ok()`
 
@@ -79,7 +80,8 @@ All target commands in `commands/handlers/agent.rs` use consistent portfolio loa
 ## Test Best Practices
 
 - Use `tempfile::TempDir` for isolated tests
-- Avoid `AgentConfig::default()` for tests that write to memory/portfolio files
+- Use `new_agent_for_test_default()` for tests that need a basic agent (no enforcement, mock dispatch)
+- Avoid `AgentConfig::default()` with `Agent::new()` — it requires enforcement; use `new_for_test()` instead
 - Verify call sites with `rg` before removing/renaming APIs
 - Use `TaskStatus` enum for task state transitions in tests
 

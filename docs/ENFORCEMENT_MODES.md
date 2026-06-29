@@ -35,6 +35,8 @@ The contract below is the source of truth for how enforcement behaves per execut
 
 **Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, or strict REST. Agent strict behavior must not become the default for normal CLI/TUI manual use.
 
+**REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. `RequireConfirmation` results in 403 Forbidden (no interactive confirmation possible). `Deny` results in 403 Forbidden. `Warn` allows execution. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
+
 ## Outcome Semantics
 
 `EnforcementOutcome` wraps a `PolicyDecision` with profile-aware dispatch semantics:

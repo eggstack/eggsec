@@ -4,7 +4,7 @@ Specialized guidance for the terminal UI module.
 
 ## Policy Enforcement Alignment (2026-06-11)
 
-TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverride` model as CLI. All target-bearing launches gated by central `enforcement.evaluate` before spawn (app/mod.rs:322, via `build_current_operation_descriptor`) + retroactive gate for direct-launch tabs (mod.rs:366). Wireless active deauth/disassoc special-cases dry-run as `SafeActive` so it launches without a prompt; live mode remains `Intrusive` and uses the same policy confirmation overlay. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095) + `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input; confirm path uses narrow `ManualOverride`, re-eval, and `with_manual_override_record` + `confirmation_class_strings` (stable kebab). `PendingAction` (confirmation.rs:4) for UI actions stays separate/lower precedence. See runner.rs:82 (init), app/mod.rs:324-393 (gates + request/confirm_policy), key_handler.rs:205 (PolicyConfirm handling).
+TUI now shares the exact `EnforcementContext`/`RequireConfirmation`/`ManualOverride` model as CLI. All target-bearing launches gated by central `enforcement.evaluate` before spawn (app/mod.rs:322, via `build_current_operation_descriptor`). For direct-launch tabs, `handle_enter()` evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts (the old post-dispatch retroactive gate has been removed). Wireless active deauth/disassoc special-cases dry-run as `SafeActive` so it launches without a prompt; live mode remains `Intrusive` and uses the same policy confirmation overlay. `RequireConfirmation` uses highest-precedence `OverlayType::PolicyConfirm` (mod.rs:1095) + `PendingPolicyConfirmation` (confirmation.rs:59, state.rs:20) with reason input; confirm path uses narrow `ManualOverride`, re-eval, and `with_manual_override_record` + `confirmation_class_strings` (stable kebab). `PendingAction` (confirmation.rs:4) for UI actions stays separate/lower precedence. See runner.rs:82 (init), app/mod.rs:324-393 (gates + request/confirm_policy), key_handler.rs:205 (PolicyConfirm handling).
 
 ## Enforcement Posture Model (Phase 5)
 
@@ -1070,7 +1070,7 @@ pub struct TabSpec {
 ```
 
 Helper methods:
-- `spec.can_start_task()` → `supports_run && !direct_launch` (tabs with direct_launch use retroactive policy eval, not the standard run path)
+- `spec.can_start_task()` → `supports_run && !direct_launch` (tabs with direct_launch use pre-dispatch policy eval in handle_enter, not the standard run path)
 - `spec.shows_in_export()` → delegates to `supports_export`
 
 Assessment-category tabs always have `supports_run: true`. Use these flags in palette and UI code to conditionally enable/disable actions rather than hardcoding tab checks.

@@ -222,7 +222,7 @@ Machine-accessible interfaces for automation and AI integration:
 
 | Protocol | Feature Flag | Purpose |
 |----------|--------------|---------|
-| REST API | `rest-api` | HTTP API server for agent integration |
+| REST API | `rest-api` | HTTP API server for agent integration; uses `EnforcementContext` with `McpStrict` profile by default |
 | gRPC | `grpc-api` | High-performance gRPC API |
 | WebSocket | `ws-api` | Pub/sub event streaming |
 | MCP | Built-in | Model Context Protocol for AI agents |
@@ -607,7 +607,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 - **Location**: `~/.config/eggsec/eggsec.toml`
 - **Scope enforcement**: `TargetScope` validates targets before scanning
 - **TUI settings**: Partial save with field exposure control
-- **Policy evaluation**: All operations route through central `EnforcementContext::evaluate(descriptor)` (`config/policy_decision.rs`) which performs LoadedScope provenance, DenialClass downgrade (ManualPermissive only), positive capability checks for strict, and risk/feature/policy enforcement. Command handlers use `CommandContext::evaluate_and_enforce_operation()` which wraps it. Legacy direct `evaluate_operation_policy` is internal for base decisions; denial paths prefer the central evaluator. See [config.md](config.md).
+- **Policy evaluation**: All operations route through central `EnforcementContext::evaluate(descriptor)` (`config/policy_decision.rs`) which performs LoadedScope provenance, DenialClass downgrade (ManualPermissive only), positive capability checks for strict, and risk/feature/policy enforcement. Command handlers use `CommandContext::evaluate_and_enforce_operation()` which wraps it. REST API dispatch goes through `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and evaluates before every tool execution, using `McpStrict` profile by default. Legacy direct `evaluate_operation_policy` is internal for base decisions; denial paths prefer the central evaluator. See [config.md](config.md).
 - See [config.md](config.md) for details
 
 ### Logging & Tracing

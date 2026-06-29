@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 
 use super::auth::validate_api_key;
-use crate::config::Scope;
+use crate::config::{EnforcementContext, EnforcementOutcome, OperationDescriptor};
 use crate::distributed::TlsConfig;
 use crate::error::EggsecError;
 use crate::tool::ratelimit::RateLimitConfig;
@@ -28,7 +28,7 @@ pub struct RestState {
     pub dispatcher: ToolDispatcher,
     pub api_key: Option<String>,
     pub rate_limiter: RateLimiter,
-    pub scope: Option<Scope>,
+    pub enforcement: EnforcementContext,
     pub tls_config: Option<TlsConfig>,
     pub metrics: Arc<Metrics>,
 }
@@ -37,7 +37,7 @@ impl RestState {
     pub fn new(
         registry: ToolRegistry,
         api_key: Option<String>,
-        scope: Option<Scope>,
+        enforcement: EnforcementContext,
         tls_config: Option<TlsConfig>,
     ) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
@@ -47,7 +47,7 @@ impl RestState {
             dispatcher,
             api_key,
             rate_limiter,
-            scope,
+            enforcement,
             tls_config,
             metrics: Arc::new(Metrics::default()),
         }
@@ -188,13 +188,13 @@ impl<T> PaginatedResponse<T> {
 pub fn create_router(
     registry: ToolRegistry,
     api_key: Option<String>,
-    scope: Option<Scope>,
+    enforcement: EnforcementContext,
     tls_config: Option<TlsConfig>,
 ) -> Router {
     let state = Arc::new(RestState::new(
         registry,
         api_key.clone(),
-        scope,
+        enforcement,
         tls_config.clone(),
     ));
 
@@ -516,6 +516,92 @@ async fn get_tool(
     }))
 }
 
+fn operation_descriptor_for_rest_tool(
+    tool_id: &str,
+    target: &str,
+) -> OperationDescriptor {
+    use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk};
+
+    let risk = match tool_id {
+        "stress" | "waf-stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
+            OperationRisk::StressTest
+        }
+        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => {
+            OperationRisk::RawPacket
+        }
+        "proxy" | "tor" => OperationRisk::ExploitAdjacent,
+        "proxy-start"
+        | "proxy-stop"
+        | "proxy-status"
+        | "proxy-list-flows"
+        | "proxy-inspect-flow"
+        | "proxy-forward-flow"
+        | "proxy-drop-flow"
+        | "proxy-replay-flow"
+        | "proxy-add-rule"
+        | "proxy-list-rules"
+        | "proxy-remove-rule"
+        | "proxy-export-session" => OperationRisk::TrafficInterception,
+        "remote" | "exec" | "ssh" => OperationRisk::RemoteExecution,
+        "load" | "loadtest" | "http-bench" => OperationRisk::LoadTest,
+        "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
+        "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
+        "db-pentest" => OperationRisk::DbPentest,
+        "c2" => OperationRisk::C2Operation,
+        _ => OperationRisk::SafeActive,
+    };
+
+    let required_capabilities = match tool_id {
+        "recon" | "recon-all" | "subdomain" => vec![Capability::PassiveFingerprint],
+        "scan" | "scan-ports" | "fingerprint" => vec![Capability::ActiveProbe],
+        "endpoints" | "scan-endpoints" => vec![Capability::Crawl],
+        "fuzz" | "api-fuzz" => vec![Capability::HttpFuzzLowImpact],
+        "waf-detect" => vec![Capability::WafDetect],
+        "waf-bypass" => vec![Capability::WafBypassSimulation],
+        "waf-stress" | "stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
+            vec![Capability::WafStressTest]
+        }
+        "load" | "loadtest" | "http-bench" => vec![Capability::LoadTest],
+        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => {
+            vec![Capability::RawPacketProbe]
+        }
+        "auth-test" | "credential" | "brute" => vec![Capability::CredentialTesting],
+        "db-pentest" => vec![Capability::DatabaseAssessment],
+        "c2" => vec![Capability::C2Simulation],
+        "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
+        "proxy-start"
+        | "proxy-stop"
+        | "proxy-status"
+        | "proxy-list-flows"
+        | "proxy-inspect-flow"
+        | "proxy-forward-flow"
+        | "proxy-drop-flow"
+        | "proxy-replay-flow"
+        | "proxy-add-rule"
+        | "proxy-list-rules"
+        | "proxy-remove-rule"
+        | "proxy-export-session" => vec![Capability::TrafficInterception],
+        _ => Vec::new(),
+    };
+
+    OperationDescriptor {
+        operation: tool_id.to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk,
+        intended_uses: vec![IntendedUse::WebAssessment],
+        target: if target.is_empty() {
+            None
+        } else {
+            Some(target.to_string())
+        },
+        required_features: Vec::new(),
+        required_policy_flags: Vec::new(),
+        requires_private_or_local_target: false,
+        requires_explicit_scope: true,
+        required_capabilities,
+    }
+}
+
 async fn execute_tool(
     State(state): State<Arc<RestState>>,
     Path(tool_id): Path<String>,
@@ -540,13 +626,23 @@ async fn execute_tool(
     }
 
     let target_url = &payload.target;
-    if let Some(ref scope) = state.scope {
-        match scope.is_target_allowed(target_url) {
-            Ok(false) | Err(_) => {
-                state.metrics.record_request(start.elapsed(), true);
-                return Err(EggsecError::ScopeViolation(target_url.clone()));
-            }
-            Ok(true) => {}
+
+    let descriptor = operation_descriptor_for_rest_tool(&tool_id, target_url);
+    let outcome = state.enforcement.evaluate(&descriptor);
+    match outcome {
+        EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {}
+        EnforcementOutcome::RequireConfirmation(_) => {
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::Config(
+                "REST strict enforcement: manual confirmation unavailable".to_string(),
+            ));
+        }
+        EnforcementOutcome::Deny(d) => {
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::ScopeViolation(format!(
+                "REST strict enforcement denied: {}",
+                d.to_human_readable()
+            )));
         }
     }
 
@@ -669,6 +765,114 @@ mod tests {
                 limiter.check_rate_limit("client-2").is_ok(),
                 "Separate client should have own limit"
             );
+        }
+    }
+
+    #[test]
+    fn test_operation_descriptor_for_rest_tool_safe_active() {
+        let desc = operation_descriptor_for_rest_tool("recon", "https://example.com");
+        assert_eq!(desc.risk, crate::config::OperationRisk::SafeActive);
+        assert_eq!(
+            desc.required_capabilities,
+            vec![crate::config::Capability::PassiveFingerprint]
+        );
+    }
+
+    #[test]
+    fn test_operation_descriptor_for_rest_tool_intrusive() {
+        let desc = operation_descriptor_for_rest_tool("fuzz", "https://example.com");
+        assert_eq!(desc.risk, crate::config::OperationRisk::Intrusive);
+        assert_eq!(
+            desc.required_capabilities,
+            vec![crate::config::Capability::HttpFuzzLowImpact]
+        );
+    }
+
+    #[test]
+    fn test_operation_descriptor_for_rest_tool_stress() {
+        let desc = operation_descriptor_for_rest_tool("stress", "https://example.com");
+        assert_eq!(desc.risk, crate::config::OperationRisk::StressTest);
+        assert_eq!(
+            desc.required_capabilities,
+            vec![crate::config::Capability::WafStressTest]
+        );
+    }
+
+    #[test]
+    fn test_enforcement_deny_without_explicit_scope() {
+        use crate::config::{
+            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope,
+        };
+
+        let policy = ExecutionPolicy::default();
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com");
+        let outcome = enforcement.evaluate(&descriptor);
+        assert!(
+            outcome.is_denied() || outcome.requires_confirmation(),
+            "Expected deny or require-confirmation for REST without explicit scope, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_enforcement_out_of_scope_denial() {
+        use crate::config::{
+            EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, Scope,
+            ScopeSource,
+        };
+
+        let mut scope = Scope::default();
+        scope.allowed_targets =
+            vec![crate::config::ScopeRule::new("10.0.0.0/8".to_string())];
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor =
+            operation_descriptor_for_rest_tool("scan", "https://evil.example.com");
+        let outcome = enforcement.evaluate(&descriptor);
+        assert!(
+            outcome.is_denied(),
+            "Expected denial for out-of-scope target, got: {:?}",
+            outcome
+        );
+    }
+
+    #[test]
+    fn test_enforcement_require_confirmation_treated_as_deny() {
+        use crate::config::{
+            EnforcementContext, EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope,
+        };
+
+        let policy = ExecutionPolicy {
+            require_explicit_scope: false,
+            ..ExecutionPolicy::default()
+        };
+        let loaded_scope = LoadedScope::default_empty();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
+
+        let descriptor = operation_descriptor_for_rest_tool("fuzz", "https://example.com");
+        let outcome = enforcement.evaluate(&descriptor);
+
+        match outcome {
+            EnforcementOutcome::RequireConfirmation(_) => {
+                // REST cannot provide manual confirmation - treat as deny
+            }
+            EnforcementOutcome::Deny(_) => {
+                // Also acceptable - direct denial
+            }
+            other => {
+                panic!(
+                    "Expected RequireConfirmation or Deny for intrusive REST op without policy, got: {:?}",
+                    other
+                );
+            }
         }
     }
 }

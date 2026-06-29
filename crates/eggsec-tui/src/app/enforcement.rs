@@ -1,7 +1,7 @@
 use eggsec::config::{
     confirmation_classes_for, ConfirmationClass, EnforcementContext, EnforcementOutcome,
-    ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride, OperationDescriptor,
-    PolicyDecision, ScopeSource,
+    ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride,
+    OperationDescriptor, PolicyDecision, ScopeSource,
 };
 
 #[derive(Debug, Clone)]
@@ -65,7 +65,11 @@ impl TuiEnforcementState {
 
     pub fn preflight(&mut self, descriptor: &OperationDescriptor) -> TuiPreflightResult {
         let outcome = self.enforcement.evaluate(descriptor);
-        let result = TuiPreflightResult::from_outcome(descriptor, &outcome);
+        let result = TuiPreflightResult::from_outcome(
+            descriptor,
+            &outcome,
+            &self.enforcement.execution_policy,
+        );
         self.last_preflight = Some(result.clone());
         result
     }
@@ -136,7 +140,11 @@ impl TuiEnforcementState {
 }
 
 impl TuiPreflightResult {
-    pub fn from_outcome(descriptor: &OperationDescriptor, outcome: &EnforcementOutcome) -> Self {
+    pub fn from_outcome(
+        descriptor: &OperationDescriptor,
+        outcome: &EnforcementOutcome,
+        policy: &ExecutionPolicy,
+    ) -> Self {
         let decision = outcome.decision().clone();
         let outcome_kind = match outcome {
             EnforcementOutcome::Allow(_) => TuiPreflightOutcomeKind::Allow,
@@ -149,7 +157,7 @@ impl TuiPreflightResult {
 
         let required_confirmation_classes =
             if let EnforcementOutcome::RequireConfirmation(_) = outcome {
-                confirmation_classes_for(descriptor, &decision, &Default::default())
+                confirmation_classes_for(descriptor, &decision, policy)
             } else {
                 Vec::new()
             };
@@ -174,7 +182,7 @@ impl TuiPreflightResult {
                 ConfirmationClass::TargetExpansion => "--allow-out-of-scope".to_string(),
                 ConfirmationClass::PrivateResolution => "--allow-private-resolution".to_string(),
                 ConfirmationClass::CrossHostRedirect => "--allow-cross-host-redirect".to_string(),
-                ConfirmationClass::ExplicitExclusion => "--allow-out-of-scope".to_string(),
+                ConfirmationClass::ExplicitExclusion => "--allow-excluded-target".to_string(),
                 ConfirmationClass::HighRisk => "--allow-high-risk".to_string(),
                 ConfirmationClass::TrafficInterception => "--allow-web-proxy".to_string(),
                 ConfirmationClass::NonBaselineCapability => {
@@ -528,5 +536,94 @@ mod tests {
         assert!(!state
             .manual_override
             .permits(ConfirmationClass::TrafficInterception));
+    }
+
+    #[test]
+    fn from_outcome_uses_provided_policy() {
+        // Verify that from_outcome with the provided policy produces the same classes
+        // as confirmation_classes_for with that policy.
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![],
+            target: Some("10.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // Build a decision that would trigger RequireConfirmation
+        let scope = Scope {
+            allowed_targets: vec![ScopeRule::new("example.com".to_string())],
+            excluded_targets: vec![],
+            ..Default::default()
+        };
+        let loaded_scope = LoadedScope {
+            scope,
+            source: ScopeSource::ConfigFile,
+            path: Some("scope.toml".to_string()),
+        };
+        let policy = ExecutionPolicy::default();
+        let enforcement =
+            EnforcementContext::for_surface(ExecutionSurface::TuiManual, policy.clone(), loaded_scope);
+        let outcome = enforcement.evaluate(&desc);
+        // Compute expected classes using the same function
+        let expected_classes =
+            confirmation_classes_for(&desc, outcome.decision(), &enforcement.execution_policy);
+        // Compute via from_outcome
+        let result = TuiPreflightResult::from_outcome(&desc, &outcome, &enforcement.execution_policy);
+        assert_eq!(
+            result.required_confirmation_classes, expected_classes,
+            "from_outcome should use the provided policy for class calculation"
+        );
+    }
+
+    #[test]
+    fn explicit_exclusion_suggests_correct_cli_flag() {
+        let classes = vec![eggsec::config::ConfirmationClass::ExplicitExclusion];
+        let flags = TuiPreflightResult::cli_flags_for_classes(&classes);
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0], "--allow-excluded-target");
+    }
+
+    #[test]
+    fn from_outcome_out_of_scope_suggests_correct_flag() {
+        let classes = vec![eggsec::config::ConfirmationClass::OutOfScope];
+        let flags = TuiPreflightResult::cli_flags_for_classes(&classes);
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0], "--allow-out-of-scope");
+    }
+
+    #[test]
+    fn confirmation_classes_match_request_policy_confirmation() {
+        // Verify that preflight classes match what request_policy_confirmation
+        // would compute for the same descriptor/policy.
+        let mut state = test_state_with_positive_scope(ExecutionSurface::TuiManual);
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Passive,
+            intended_uses: vec![],
+            target: Some("10.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let result = state.preflight(&desc);
+        // Compute expected classes using the same function that request_policy_confirmation uses
+        let outcome = state.enforcement.evaluate(&desc);
+        let expected_classes = eggsec::config::confirmation_classes_for(
+            &desc,
+            outcome.decision(),
+            &state.enforcement.execution_policy,
+        );
+        assert_eq!(
+            result.required_confirmation_classes, expected_classes,
+            "Preflight classes should match request_policy_confirmation computation"
+        );
     }
 }

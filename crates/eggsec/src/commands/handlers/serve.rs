@@ -2,8 +2,8 @@ use crate::commands::handlers::CommandContext;
 use anyhow::Result;
 
 #[cfg(feature = "rest-api")]
-pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
-    use crate::config::Scope;
+pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
+    use crate::config::{EnforcementContext, ExecutionSurface, LoadedScope, Scope, ScopeSource};
     use crate::distributed::TlsConfig;
     use crate::tool::{create_default_registry, protocol::rest::create_router};
     use axum::serve;
@@ -11,11 +11,22 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
     use std::path::PathBuf;
     use tokio::net::TcpListener;
 
-    let scope = if let Some(ref scope_file) = args.scope_file {
-        Some(Scope::from_file(scope_file)?)
+    let loaded_scope = if let Some(ref scope_file) = args.scope_file {
+        let scope = Scope::from_file(scope_file)?;
+        LoadedScope {
+            scope,
+            source: ScopeSource::CliScopeFile,
+            path: Some(scope_file.to_string()),
+        }
     } else {
-        None
+        ctx.enforcement.loaded_scope.clone()
     };
+
+    let enforcement = EnforcementContext::for_surface(
+        ExecutionSurface::RestApi,
+        ctx.config.execution_policy.clone(),
+        loaded_scope,
+    );
 
     let tls_config = match (&args.tls_cert, &args.tls_key) {
         (Some(ref cert), Some(ref key)) => Some(TlsConfig {
@@ -26,7 +37,7 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
     };
 
     let registry = create_default_registry();
-    let router = create_router(registry, args.api_key.clone(), scope, tls_config.clone());
+    let router = create_router(registry, args.api_key.clone(), enforcement, tls_config.clone());
 
     let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
         .parse()

@@ -108,7 +108,7 @@ Priority order for hint resolution:
 
 `TabSpec` in `tabs/spec.rs` is the single source of truth for tab metadata. Key fields: `tab`, `stable_id`, `title`, `category`, `risk_group`, `feature`, `direct_launch`, `supports_run`, `supports_export`.
 
-`direct_launch` tabs start work inside their own `handle_enter` and get retroactively evaluated by `EnforcementContext::evaluate()`.
+`direct_launch` tabs start work inside their own `handle_enter`. `handle_enter()` now evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts. The old post-dispatch retroactive policy gate has been removed.
 
 ## Enforcement Posture Model
 
@@ -119,7 +119,7 @@ Priority order for hint resolution:
 
 **Ctrl+G** toggles between Manual and Guarded. `toggle_posture()` switches the surface field.
 
-**Preflight**: Advisory evaluation of a target via `preflight(target)`. Result displayed in status bar. Does not gate execution.
+**Preflight**: Advisory evaluation of a target via `preflight(target)`. Result displayed in status bar. `TuiPreflightResult::from_outcome()` now accepts `&ExecutionPolicy` parameter, computing confirmation classes using the active policy (not `Default::default()`). Does not gate execution.
 
 **Status bar**: Shows mode label ("Manual"/"Guarded"), scope provenance, rule counts, and preflight outcome.
 
@@ -145,7 +145,7 @@ pub enum OverlayType {
 
 Two separate flows:
 1. **PendingAction** — UI actions (reset/save/delete). Renders via `ConfirmPopup`.
-2. **PendingPolicyConfirmation** — Policy `RequireConfirmation` from `EnforcementContext::evaluate()`. Highest precedence. Builds narrow `ManualOverride` on confirm.
+2. **PendingPolicyConfirmation** — Policy `RequireConfirmation` from `EnforcementContext::evaluate()`. Highest precedence. Builds narrow `ManualOverride` on confirm. `confirm_policy_action()` now sets `mo.allow_out_of_scope = true` for `OutOfScope` and `TargetExpansion` classes, mirroring CLI `--allow-out-of-scope` behavior. `assume_yes` remains `false` (TUI confirm is narrow, not broad).
 
 ## TabError System
 ```rust

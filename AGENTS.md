@@ -166,7 +166,7 @@ Canonical reference points when updating guidance or skills:
 
 **Marker-only features (no deps, just build gating):**
 
-`tool-api`, `insecure-tls`, `rest-api`, `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
+`tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
 
 ### Key Types
 
@@ -198,7 +198,7 @@ Canonical reference points when updating guidance or skills:
 - **ExecutionSurface**: Introduces caller-origin semantics; `ExecutionProfile` describes enforcement behavior, `ExecutionSurface` describes where it comes from. Use `EnforcementContext::for_surface()` for centralized construction.
 - **Shared Policy Evaluator**: Use `EnforcementContext::evaluate()` (central) in `config/policy_decision.rs` instead of building policy checks inline
 - **TUI Enforcement Posture**: TUI uses `TuiEnforcementState` to wrap `EnforcementContext` + `LoadedScope`. Default is `ManualPermissive` (TuiManual). Toggle to `ManualGuarded` (TuiManualStrict) via Ctrl+G. Guarded mode denies scope ambiguity. Preflight evaluation is advisory and displayed in status bar.
-- **MCP/Agent Invariant**: For MCP/agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. Agent execution defensively rebuilds `AgentStrict` in the handler and validates it at runtime (`Agent::new()` rejects non-`AgentStrict` profiles). See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
+- **MCP/Agent/REST Invariant**: For MCP, agent, and REST execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. REST now carries `EnforcementContext` (via `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` in `handle_serve()`) and dispatches through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile). Agent execution defensively rebuilds `AgentStrict` in the handler and validates it at runtime (`Agent::new()` rejects non-`AgentStrict` profiles). See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
 - **eggsec-output Re-exports**: Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity`
 
 ### Codebase Health
@@ -218,7 +218,8 @@ Canonical reference points when updating guidance or skills:
 
 - **Scope Enforcement**: Private IP checks are deferred to scope rule evaluation in `is_target_allowed()` (`config/scope.rs`). Scope rules like `allow 10.0.0.0/8` correctly match private IPs before the fallback private-IP block.
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
-- **Manual Overrides**: `--yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-*` flags required for others. Strict profiles/MCP/agent never honor overrides.
+- **Manual Overrides**: `--yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-*` flags required for others. Strict profiles/MCP/agent/REST never honor overrides.
+- **REST Strict Enforcement**: REST API now uses `EnforcementContext` with `McpStrict` profile. `RequireConfirmation` and `Deny` both result in 403 Forbidden. `Warn` allows execution. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
 
 ### Key Patterns (Lessons Learned)
 
@@ -238,6 +239,7 @@ Canonical reference points when updating guidance or skills:
 - **Theme system**: 50 Halloy-format themes packaged via LZMA. `cyber-red` fallback always available in-code. `Theme::default()` returns `cyber-red`.
 - **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes. Background thread loading via `std::thread::spawn` + `std::sync::mpsc`.
 - **TUI enforcement toggle**: `TuiEnforcementState::toggle_posture()` switches between TuiManual and TuiManualStrict. TuiManualStrict does NOT honor manual overrides (unlike TuiManual).
+- **REST EnforcementContext**: `RestState` now carries `EnforcementContext` instead of `Option<Scope>`. `handle_serve()` constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)`. All REST dispatch goes through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile).
 
 ## Skills Directory
 

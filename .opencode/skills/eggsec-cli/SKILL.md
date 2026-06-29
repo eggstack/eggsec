@@ -134,7 +134,7 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | `handle_remote` | `handlers/cluster.rs` | - | Remote listener |
 | `handle_exec` | `handlers/cluster.rs` | - | Remote execution |
 | `handle_notify` | `handlers/notify.rs` | - | Notifications |
-| `handle_serve` | `handlers/notify.rs` | `rest-api` | REST API server |
+| `handle_serve` | `handlers/notify.rs` | `rest-api` | REST API server; uses `EnforcementContext` with `McpStrict` profile by default |
 | `handle_mcp_serve` | `handlers/notify.rs` | `rest-api` | MCP server |
 | `handle_agent` | `handlers/agent.rs` | `rest-api` | Autonomous agent |
 | `handle_ai_analyze` | `handlers/ai_analyze.rs` | `ai-integration` | AI analysis |

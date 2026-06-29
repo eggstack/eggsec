@@ -198,14 +198,18 @@ impl Agent {
     pub async fn new(config: AgentConfig) -> Result<Self> {
         // Validate enforcement context: production agent execution requires AgentStrict.
         // This rejects ManualPermissive, ManualGuarded, and other non-agent profiles.
-        // The None case (no enforcement) is allowed for test-only construction.
-        if let Some(ref enforcement) = config.enforcement {
-            if enforcement.execution_profile != crate::config::ExecutionProfile::AgentStrict {
-                anyhow::bail!(
-                    "security agent requires AgentStrict enforcement context; \
-                     manual or guarded profiles are not accepted"
-                );
-            }
+        // None enforcement is rejected — use Agent::new_for_test() for test-only construction.
+        let enforcement = config.enforcement.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Agent::new() requires an enforcement context; \
+                 use Agent::new_for_test() for test-only construction without enforcement"
+            )
+        })?;
+        if enforcement.execution_profile != crate::config::ExecutionProfile::AgentStrict {
+            anyhow::bail!(
+                "security agent requires AgentStrict enforcement context; \
+                 manual or guarded profiles are not accepted"
+            );
         }
 
         let registry = create_default_registry();
@@ -1185,16 +1189,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let config = AgentConfig::default();
-        let agent = Agent::new(config).await;
-        assert!(agent.is_ok());
+        let agent = new_agent_for_test_default().await;
+        assert_eq!(agent.event_handlers.len(), 0);
     }
 
     #[cfg(feature = "ai-integration")]
     #[tokio::test]
     async fn test_agent_with_ai_client() {
-        let config = AgentConfig::default();
-        let agent = Agent::new(config).await.unwrap();
+        let agent = new_agent_for_test_default().await;
         let ai_config = crate::config::AiConfig {
             provider: "openai".to_string(),
             model: Some("gpt-4".to_string()),
@@ -1212,23 +1214,20 @@ mod tests {
     #[cfg(feature = "ai-integration")]
     #[tokio::test]
     async fn test_agent_execute_scan_returns_result() {
-        let config = AgentConfig::default();
-        let agent = Agent::new(config).await.unwrap();
+        let agent = new_agent_for_test_default().await;
         let result = agent.execute_scan("https://example.com", "recon").await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_agent_stop() {
-        let config = AgentConfig::default();
-        let agent = Agent::new(config).await.unwrap();
+        let agent = new_agent_for_test_default().await;
         agent.stop().await;
     }
 
     #[tokio::test]
     async fn test_agent_portfolio_operations() {
-        let config = AgentConfig::default();
-        let agent = Agent::new(config).await.unwrap();
+        let agent = new_agent_for_test_default().await;
 
         let targets = agent.portfolio.get_all_targets();
         assert!(targets.is_empty());
@@ -1248,7 +1247,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_trigger_event_restores_handlers_on_success() {
-        let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+        let mut agent = new_agent_for_test_default().await;
 
         struct TestHandler;
         impl EventHandler for TestHandler {
@@ -1285,7 +1284,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_trigger_event_restores_handlers_on_error() {
-        let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+        let mut agent = new_agent_for_test_default().await;
 
         struct FailingHandler;
         impl EventHandler for FailingHandler {
@@ -1323,7 +1322,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_trigger_event_restores_handlers_on_panic() {
-        let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+        let mut agent = new_agent_for_test_default().await;
 
         struct PanickingHandler;
         impl EventHandler for PanickingHandler {
@@ -1472,6 +1471,20 @@ mod tests {
                 .push((alert, channel_names));
             Box::pin(async { Ok(()) })
         }
+    }
+
+    async fn new_agent_for_test_default() -> Agent {
+        let config = AgentConfig::default();
+        let dispatcher = MockDispatcher {
+            response: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            call_count: std::sync::Arc::new(std::sync::Mutex::new(0)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
+        };
+        Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -2720,17 +2733,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_agent_new_accepts_none_enforcement_for_testing() {
+    async fn test_agent_new_rejects_none_enforcement() {
         let config = AgentConfig {
             enforcement: None,
             ..AgentConfig::default()
         };
 
         let result = Agent::new(config).await;
-        assert!(
-            result.is_ok(),
-            "None enforcement should be allowed (test path)"
-        );
+        match result {
+            Ok(_) => panic!("None enforcement should be rejected by Agent::new()"),
+            Err(e) => {
+                let err_msg = e.to_string();
+                assert!(
+                    err_msg.contains("enforcement context"),
+                    "Expected enforcement context error, got: {}",
+                    err_msg
+                );
+            }
+        }
     }
 
     #[test]
