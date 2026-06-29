@@ -107,6 +107,17 @@ These invariants hold across all execution paths:
 6. **Re-evaluation**: Agent/MCP dispatch must re-evaluate enforcement immediately before dispatch.
 7. **Constructor intent**: Programmatic constructors for agent-facing servers should require explicit enforcement context or be clearly test-only.
 
+## Operation Metadata Integration (Phase 6)
+
+All protocol surfaces now derive `OperationDescriptor` from the canonical `OperationMetadata` registry:
+
+- **REST**: Uses `metadata_for_tool_id(tool_id)` with fallback for unknown tools. Always sets `requires_explicit_scope = true`.
+- **MCP**: Uses `metadata_for_tool_id(tool_id)` with profile-specific `intended_uses` and `requires_explicit_scope` from `McpProfilePolicy`.
+- **TUI**: Uses `operation_metadata(op_id)` from tab spec. Tab-specific overrides for wireless-advanced (DefenseLab mode) and db-pentest (DefenseLab mode).
+- **Agent**: Uses `metadata_for_tool_id(scan_type)` for known scan types. Falls back to keyword-based classification for unknown scan types.
+
+Missing metadata for an externally executable tool triggers a runtime warning (REST/MCP/agent) or uses a conservative fallback (agent only).
+
 ## Examples
 
 ### CLI manual scan with missing scope

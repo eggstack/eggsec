@@ -1,4 +1,4 @@
-use crate::config::{IntendedUse, OperationMode, OperationRisk};
+use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk};
 use serde::{Deserialize, Serialize};
 
 /// Metadata for a tool that describes its capabilities and risk profile
@@ -244,6 +244,12 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
 
     registry
 }
+
+// Re-export OperationMetadata and registry from config (canonical location).
+pub use crate::config::{
+    all_operation_metadata, metadata_for_tool_id, operation_metadata, OperationMetadata,
+    TargetPolicyKind, ALL_OPERATION_METADATA, ALL_OPERATION_METADATA_ALIASES,
+};
 
 #[cfg(test)]
 mod tests {

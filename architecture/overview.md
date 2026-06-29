@@ -607,8 +607,20 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 - **Location**: `~/.config/eggsec/eggsec.toml`
 - **Scope enforcement**: `TargetScope` validates targets before scanning
 - **TUI settings**: Partial save with field exposure control
+- **Profile management**: 18 built-in scan profiles
 - **Policy evaluation**: All operations route through central `EnforcementContext::evaluate(descriptor)` (`config/policy_decision.rs`) which performs LoadedScope provenance, DenialClass downgrade (ManualPermissive only), positive capability checks for strict, and risk/feature/policy enforcement. Command handlers use `CommandContext::evaluate_and_enforce_operation()` which wraps it. REST API dispatch goes through `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and evaluates before every tool execution, using `McpStrict` profile by default. Legacy direct `evaluate_operation_policy` is internal for base decisions; denial paths prefer the central evaluator. See [config.md](config.md).
 - See [config.md](config.md) for details
+
+### Operation Metadata (Phase 6)
+
+`OperationMetadata` provides a centralized, static registry of all externally invokable operations. Each entry declares the operation's ID, display name, mode, risk tier, intended uses, required features, required capabilities, target policy, and protocol exposure flags.
+
+The registry lives in `config::policy` and is accessible from all surfaces:
+- `eggsec::config::operation_metadata(id)` — canonical ID lookup
+- `eggsec::config::metadata_for_tool_id(tool_id)` — resolves aliases to canonical IDs
+- `eggsec::config::all_operation_metadata()` — returns the full static array
+
+Every `OperationDescriptor` is now generated from `OperationMetadata` via `descriptor_for_target()`. This eliminates drift between REST, MCP, TUI, and agent descriptor construction. Alias mapping (32 entries) ensures that alternate tool IDs (REST tool names, MCP tool names, registry IDs) all resolve to the same canonical metadata.
 
 ### Logging & Tracing
 

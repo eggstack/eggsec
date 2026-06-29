@@ -520,85 +520,31 @@ fn operation_descriptor_for_rest_tool(
     tool_id: &str,
     target: &str,
 ) -> OperationDescriptor {
-    use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk};
+    use crate::tool::metadata::metadata_for_tool_id;
 
-    let risk = match tool_id {
-        "stress" | "waf-stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
-            OperationRisk::StressTest
-        }
-        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => {
-            OperationRisk::RawPacket
-        }
-        "proxy" | "tor" => OperationRisk::ExploitAdjacent,
-        "proxy-start"
-        | "proxy-stop"
-        | "proxy-status"
-        | "proxy-list-flows"
-        | "proxy-inspect-flow"
-        | "proxy-forward-flow"
-        | "proxy-drop-flow"
-        | "proxy-replay-flow"
-        | "proxy-add-rule"
-        | "proxy-list-rules"
-        | "proxy-remove-rule"
-        | "proxy-export-session" => OperationRisk::TrafficInterception,
-        "remote" | "exec" | "ssh" => OperationRisk::RemoteExecution,
-        "load" | "loadtest" | "http-bench" => OperationRisk::LoadTest,
-        "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
-        "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
-        "db-pentest" => OperationRisk::DbPentest,
-        "c2" => OperationRisk::C2Operation,
-        _ => OperationRisk::SafeActive,
+    let target_opt = if target.is_empty() {
+        None
+    } else {
+        Some(target.to_string())
     };
-
-    let required_capabilities = match tool_id {
-        "recon" | "recon-all" | "subdomain" => vec![Capability::PassiveFingerprint],
-        "scan" | "scan-ports" | "fingerprint" => vec![Capability::ActiveProbe],
-        "endpoints" | "scan-endpoints" => vec![Capability::Crawl],
-        "fuzz" | "api-fuzz" => vec![Capability::HttpFuzzLowImpact],
-        "waf-detect" => vec![Capability::WafDetect],
-        "waf-bypass" => vec![Capability::WafBypassSimulation],
-        "waf-stress" | "stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
-            vec![Capability::WafStressTest]
+    if let Some(metadata) = metadata_for_tool_id(tool_id) {
+        let mut descriptor = metadata.descriptor_for_target(target_opt);
+        descriptor.requires_explicit_scope = true;
+        descriptor
+    } else {
+        tracing::warn!("missing operation metadata for REST tool '{}'", tool_id);
+        OperationDescriptor {
+            operation: tool_id.to_string(),
+            mode: crate::config::OperationMode::StandardAssessment,
+            risk: crate::config::OperationRisk::SafeActive,
+            intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+            target: target_opt,
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: Vec::new(),
         }
-        "load" | "loadtest" | "http-bench" => vec![Capability::LoadTest],
-        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => {
-            vec![Capability::RawPacketProbe]
-        }
-        "auth-test" | "credential" | "brute" => vec![Capability::CredentialTesting],
-        "db-pentest" => vec![Capability::DatabaseAssessment],
-        "c2" => vec![Capability::C2Simulation],
-        "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
-        "proxy-start"
-        | "proxy-stop"
-        | "proxy-status"
-        | "proxy-list-flows"
-        | "proxy-inspect-flow"
-        | "proxy-forward-flow"
-        | "proxy-drop-flow"
-        | "proxy-replay-flow"
-        | "proxy-add-rule"
-        | "proxy-list-rules"
-        | "proxy-remove-rule"
-        | "proxy-export-session" => vec![Capability::TrafficInterception],
-        _ => Vec::new(),
-    };
-
-    OperationDescriptor {
-        operation: tool_id.to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk,
-        intended_uses: vec![IntendedUse::WebAssessment],
-        target: if target.is_empty() {
-            None
-        } else {
-            Some(target.to_string())
-        },
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: true,
-        required_capabilities,
     }
 }
 

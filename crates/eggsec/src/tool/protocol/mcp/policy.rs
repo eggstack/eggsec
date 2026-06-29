@@ -448,33 +448,10 @@ fn infer_tool_category(tool_id: &str) -> ToolCategory {
 /// This is used when building [`PolicyDecision`] for MCP calls where
 /// real tool metadata may not be available.
 pub fn classify_tool_risk(tool_id: &str) -> crate::config::OperationRisk {
-    use crate::config::OperationRisk;
-    match tool_id {
-        "stress" | "waf-stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
-            OperationRisk::StressTest
-        }
-        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => OperationRisk::RawPacket,
-        "proxy" | "tor" => OperationRisk::ExploitAdjacent,
-        "proxy-start"
-        | "proxy-stop"
-        | "proxy-status"
-        | "proxy-list-flows"
-        | "proxy-inspect-flow"
-        | "proxy-forward-flow"
-        | "proxy-drop-flow"
-        | "proxy-replay-flow"
-        | "proxy-add-rule"
-        | "proxy-list-rules"
-        | "proxy-remove-rule"
-        | "proxy-export-session" => OperationRisk::TrafficInterception,
-        "remote" | "exec" | "ssh" => OperationRisk::RemoteExecution,
-        "load" | "loadtest" | "http-bench" => OperationRisk::LoadTest,
-        "fuzz" | "fuzzer" | "api-fuzz" => OperationRisk::Intrusive,
-        "credential" | "brute" | "auth-test" => OperationRisk::CredentialTesting,
-        "db-pentest" => OperationRisk::DbPentest,
-        "c2" => OperationRisk::C2Operation,
-        _ => OperationRisk::SafeActive,
-    }
+    use crate::tool::metadata::metadata_for_tool_id;
+    metadata_for_tool_id(tool_id)
+        .map(|m| m.risk)
+        .unwrap_or(crate::config::OperationRisk::SafeActive)
 }
 
 /// Map an MCP tool call to the capabilities it requires.
@@ -486,41 +463,10 @@ pub fn required_capabilities_for_tool_call(
     _capability: Option<&str>,
     _arguments: &serde_json::Value,
 ) -> Vec<crate::config::Capability> {
-    use crate::config::Capability;
-    match tool_id {
-        "recon" | "recon-all" | "subdomain" => vec![Capability::PassiveFingerprint],
-        "scan" | "scan-ports" | "fingerprint" => vec![Capability::ActiveProbe],
-        "endpoints" | "scan-endpoints" => vec![Capability::Crawl],
-        "fuzz" | "api-fuzz" => vec![Capability::HttpFuzzLowImpact],
-        "waf-detect" => vec![Capability::WafDetect],
-        "waf-bypass" => vec![Capability::WafBypassSimulation],
-        "waf-stress" | "stress" | "syn-flood" | "udp-flood" | "icmp-flood" => {
-            vec![Capability::WafStressTest]
-        }
-        "load" | "loadtest" | "http-bench" => vec![Capability::LoadTest],
-        "packet" | "raw-packet" | "packet-capture" | "packet-inspect" => {
-            vec![Capability::RawPacketProbe]
-        }
-        "auth-test" | "credential" | "brute" => vec![Capability::CredentialTesting],
-        "db-pentest" => vec![Capability::DatabaseAssessment],
-        "c2" => vec![Capability::C2Simulation],
-        "exec" | "remote" | "ssh" => vec![Capability::RemoteExecution],
-        "proxy-start"
-        | "proxy-stop"
-        | "proxy-status"
-        | "proxy-list-flows"
-        | "proxy-inspect-flow"
-        | "proxy-forward-flow"
-        | "proxy-drop-flow"
-        | "proxy-replay-flow"
-        | "proxy-add-rule"
-        | "proxy-list-rules"
-        | "proxy-remove-rule"
-        | "proxy-export-session" => {
-            vec![Capability::TrafficInterception]
-        }
-        _ => Vec::new(),
-    }
+    use crate::tool::metadata::metadata_for_tool_id;
+    metadata_for_tool_id(tool_id)
+        .map(|m| m.required_capabilities.to_vec())
+        .unwrap_or_default()
 }
 
 /// Build an [`OperationDescriptor`] for an MCP tool call.
@@ -536,9 +482,9 @@ pub fn operation_descriptor_for_mcp_call(
     capability: Option<&str>,
     arguments: &serde_json::Value,
 ) -> crate::config::OperationDescriptor {
-    use crate::config::{IntendedUse, OperationDescriptor, OperationMode};
+    use crate::config::{IntendedUse, OperationMode};
+    use crate::tool::metadata::metadata_for_tool_id;
 
-    let risk = classify_tool_risk(tool_id);
     let target = arguments
         .get("target")
         .and_then(|v| v.as_str())
@@ -550,17 +496,25 @@ pub fn operation_descriptor_for_mcp_call(
         vec![IntendedUse::WebAssessment]
     };
 
-    OperationDescriptor {
-        operation: tool_id.to_string(),
-        mode: OperationMode::StandardAssessment,
-        risk,
-        intended_uses,
-        target,
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: profile_policy.require_explicit_scope,
-        required_capabilities: required_capabilities_for_tool_call(tool_id, capability, arguments),
+    if let Some(metadata) = metadata_for_tool_id(tool_id) {
+        let mut descriptor = metadata.descriptor_for_target(target);
+        descriptor.intended_uses = intended_uses;
+        descriptor.requires_explicit_scope = profile_policy.require_explicit_scope;
+        descriptor
+    } else {
+        tracing::warn!("missing operation metadata for MCP tool '{}'", tool_id);
+        crate::config::OperationDescriptor {
+            operation: tool_id.to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: crate::config::OperationRisk::SafeActive,
+            intended_uses,
+            target,
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: profile_policy.require_explicit_scope,
+            required_capabilities: Vec::new(),
+        }
     }
 }
 

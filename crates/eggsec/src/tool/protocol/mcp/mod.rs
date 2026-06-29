@@ -560,7 +560,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "stress-test",
+                "name": "waf-stress",
                 "arguments": {"target": "http://localhost:8080"}
             })),
         };
@@ -929,7 +929,8 @@ mod tests {
         let args = serde_json::json!({"target": "https://example.com"});
         let desc = operation_descriptor_for_mcp_call(&policy, "scan", None, &args);
 
-        assert_eq!(desc.operation, "scan");
+        // Metadata lookup resolves "scan" alias to canonical "scan-ports"
+        assert_eq!(desc.operation, "scan-ports");
         assert!(desc.target.is_some());
         assert!(desc.requires_explicit_scope); // Ops and Coding both set true
                                                // required_capabilities populated by the helper (exact contents depend on registry mapping; non-emptiness for scan is typical)

@@ -939,3 +939,721 @@ mod tests {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Operation Metadata — single source of truth for OperationDescriptor generation
+// ---------------------------------------------------------------------------
+
+/// Target policy requirement for operation metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetPolicyKind {
+    NoTarget,
+    OptionalTarget,
+    TargetRequired,
+    ExplicitScopeRequired,
+    PrivateOrLocalRequired,
+}
+
+/// Canonical operation metadata — single source of truth for OperationDescriptor generation.
+///
+/// Every externally invokable Eggsec operation should have one `OperationMetadata`
+/// declaration. This drives policy descriptors, protocol exposure, capability/risk
+/// declarations, feature gates, and documentation.
+#[derive(Debug, Clone, Copy)]
+pub struct OperationMetadata {
+    pub id: &'static str,
+    pub display_name: &'static str,
+    pub mode: OperationMode,
+    pub risk: OperationRisk,
+    pub intended_uses: &'static [IntendedUse],
+    pub required_features: &'static [&'static str],
+    pub required_policy_flags: &'static [&'static str],
+    pub required_capabilities: &'static [Capability],
+    pub target_policy: TargetPolicyKind,
+    pub manual_exposable: bool,
+    pub tui_exposable: bool,
+    pub mcp_exposable: bool,
+    pub rest_exposable: bool,
+    pub agent_exposable: bool,
+}
+
+impl OperationMetadata {
+    /// Generate an `OperationDescriptor` from this metadata.
+    pub fn descriptor_for_target(&self, target: Option<String>) -> OperationDescriptor {
+        OperationDescriptor {
+            operation: self.id.to_string(),
+            mode: self.mode,
+            risk: self.risk,
+            intended_uses: self.intended_uses.to_vec(),
+            target,
+            required_features: self.required_features.iter().map(|s| s.to_string()).collect(),
+            required_policy_flags: self.required_policy_flags.iter().map(|s| s.to_string()).collect(),
+            requires_private_or_local_target: matches!(
+                self.target_policy,
+                TargetPolicyKind::PrivateOrLocalRequired
+            ),
+            requires_explicit_scope: matches!(
+                self.target_policy,
+                TargetPolicyKind::ExplicitScopeRequired | TargetPolicyKind::PrivateOrLocalRequired
+            ),
+            required_capabilities: self.required_capabilities.to_vec(),
+        }
+    }
+
+    /// Generate an `OperationDescriptor` from this metadata, overriding the risk tier.
+    /// Used for dry-run overrides and tab-specific risk adjustments.
+    pub fn descriptor_for_target_with_risk(
+        &self,
+        target: Option<String>,
+        risk: OperationRisk,
+    ) -> OperationDescriptor {
+        let mut descriptor = self.descriptor_for_target(target);
+        descriptor.risk = risk;
+        descriptor
+    }
+}
+
+/// Static registry of all operation metadata. Single source of truth for
+/// operation descriptors across REST, MCP, TUI, and agent surfaces.
+pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
+    OperationMetadata {
+        id: "recon",
+        display_name: "Reconnaissance",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::PassiveFingerprint],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "scan-ports",
+        display_name: "Port Scan",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "scan-endpoints",
+        display_name: "Endpoint Discovery",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::Crawl],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "fingerprint",
+        display_name: "Service Fingerprint",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "fuzz",
+        display_name: "Fuzzing",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::Intrusive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::HttpFuzzLowImpact],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "waf-detect",
+        display_name: "WAF Detection",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::WafDetect],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "waf-bypass",
+        display_name: "WAF Bypass Simulation",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::Intrusive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::WafBypassSimulation],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "waf-stress",
+        display_name: "WAF Stress Test",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::StressTest,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::WafStressTest],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "load-test",
+        display_name: "Load Test",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::LoadTest,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::LoadTest],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "stress-test",
+        display_name: "Stress Test",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::StressTest,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::WafStressTest],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "packet",
+        display_name: "Raw Packet",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::RawPacket,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::RawPacketProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "graphql",
+        display_name: "GraphQL Fuzzing",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::Intrusive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::HttpFuzzLowImpact],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "oauth",
+        display_name: "OAuth Testing",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::CredentialTesting,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::CredentialTesting],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "auth-test",
+        display_name: "Authentication Testing",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::CredentialTesting,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::CredentialTesting],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "nse",
+        display_name: "NSE Scripts",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["nse"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::NseSafe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "db-pentest",
+        display_name: "Database Pentesting",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::DbPentest,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["db-pentest"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::DatabaseAssessment],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "c2",
+        display_name: "C2 Simulation",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::C2Operation,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["c2"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::C2Simulation],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "proxy-intercept",
+        display_name: "Traffic Interception",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::TrafficInterception,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["web-proxy"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::TrafficInterception],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "wireless",
+        display_name: "Wireless Scanning",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["wireless"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::PassiveFingerprint],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "hunt",
+        display_name: "Vulnerability Hunting",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["advanced-hunting"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "browser",
+        display_name: "Headless Browser",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["headless-browser"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "compliance",
+        display_name: "Compliance Scanning",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["compliance"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "storage",
+        display_name: "Database Storage",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["database"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::DatabaseAssessment],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "integrations",
+        display_name: "External Integrations",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["external-integrations"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "workflow",
+        display_name: "Finding Workflow",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["finding-workflow"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "vuln",
+        display_name: "Vulnerability Management",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["vuln-management"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "pipeline",
+        display_name: "Security Pipeline",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::ActiveProbe],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "proxy",
+        display_name: "Proxy Management",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::ExploitAdjacent,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+    OperationMetadata {
+        id: "remote",
+        display_name: "Remote Execution",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::RemoteExecution,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::RemoteExecution],
+        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
+];
+
+/// Alias mapping: (alias_id, canonical_id).
+///
+/// REST and MCP tool IDs that resolve to the same canonical operation.
+pub static ALL_OPERATION_METADATA_ALIASES: &[(&str, &str)] = &[
+    ("scan", "scan-ports"),
+    ("fingerprint", "fingerprint"),
+    ("endpoints", "scan-endpoints"),
+    ("scan-endpoints", "scan-endpoints"),
+    ("waf", "waf-detect"),
+    ("waf_detect", "waf-detect"),
+    ("waf_bypass", "waf-bypass"),
+    ("waf_stress", "waf-stress"),
+    ("load", "load-test"),
+    ("loadtest", "load-test"),
+    ("http-bench", "load-test"),
+    ("stress", "stress-test"),
+    ("fuzzer", "fuzz"),
+    ("api-fuzz", "fuzz"),
+    ("proxy", "proxy-intercept"),
+    ("raw-packet", "packet"),
+    ("packet-capture", "packet"),
+    ("packet-inspect", "packet"),
+    ("recon-all", "recon"),
+    ("subdomain", "recon"),
+    ("credential", "auth-test"),
+    ("brute", "auth-test"),
+    ("syn-flood", "stress-test"),
+    ("udp-flood", "stress-test"),
+    ("icmp-flood", "stress-test"),
+    ("raw-packet-send", "packet"),
+    ("plan", "recon"),
+    ("scan_ports", "scan-ports"),
+    ("db-pentest-mcp", "db-pentest"),
+    ("exec", "remote"),
+    ("ssh", "remote"),
+    ("tor", "proxy"),
+];
+
+/// Look up operation metadata by its canonical ID.
+pub fn operation_metadata(id: &str) -> Option<&'static OperationMetadata> {
+    ALL_OPERATION_METADATA.iter().find(|m| m.id == id)
+}
+
+/// Look up operation metadata by tool ID, resolving aliases to canonical IDs.
+pub fn metadata_for_tool_id(tool_id: &str) -> Option<&'static OperationMetadata> {
+    if let Some(m) = operation_metadata(tool_id) {
+        return Some(m);
+    }
+    ALL_OPERATION_METADATA_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == tool_id)
+        .and_then(|(_, canonical)| operation_metadata(canonical))
+}
+
+/// Return a reference to all operation metadata entries.
+pub fn all_operation_metadata() -> &'static [OperationMetadata] {
+    ALL_OPERATION_METADATA
+}
+
+#[cfg(test)]
+mod operation_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn every_metadata_has_non_empty_id_and_display_name() {
+        for m in all_operation_metadata() {
+            assert!(!m.id.is_empty(), "metadata has empty id");
+            assert!(
+                !m.display_name.is_empty(),
+                "metadata has empty display_name for {}",
+                m.id
+            );
+        }
+    }
+
+    #[test]
+    fn every_metadata_id_is_unique() {
+        let mut seen = rustc_hash::FxHashSet::default();
+        for m in all_operation_metadata() {
+            assert!(seen.insert(m.id), "duplicate metadata id: {}", m.id);
+        }
+    }
+
+    #[test]
+    fn agent_exposable_ops_require_explicit_scope() {
+        for m in all_operation_metadata() {
+            if m.agent_exposable || m.mcp_exposable {
+                assert!(
+                    matches!(
+                        m.target_policy,
+                        TargetPolicyKind::ExplicitScopeRequired
+                            | TargetPolicyKind::PrivateOrLocalRequired
+                    ),
+                    "agent/mcp exposable op '{}' should require explicit scope via target_policy, got {:?}",
+                    m.id,
+                    m.target_policy
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn feature_gated_ops_declare_feature_name() {
+        for m in all_operation_metadata() {
+            if !m.required_features.is_empty() {
+                for f in m.required_features {
+                    assert!(
+                        !f.is_empty(),
+                        "metadata '{}' has empty required_feature",
+                        m.id
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn descriptor_generation_matches_metadata() {
+        for m in all_operation_metadata() {
+            let desc = m.descriptor_for_target(Some("https://example.com".to_string()));
+            assert_eq!(desc.operation, m.id);
+            assert_eq!(desc.mode, m.mode);
+            assert_eq!(desc.risk, m.risk);
+            assert_eq!(
+                desc.target,
+                Some("https://example.com".to_string())
+            );
+            assert_eq!(
+                desc.required_capabilities,
+                m.required_capabilities.to_vec()
+            );
+        }
+    }
+
+    #[test]
+    fn descriptor_with_target_none() {
+        for m in all_operation_metadata() {
+            let desc = m.descriptor_for_target(None);
+            assert_eq!(desc.target, None);
+        }
+    }
+
+    #[test]
+    fn rest_descriptor_from_metadata_matches_expected() {
+        // recon
+        let m = metadata_for_tool_id("recon").unwrap();
+        let desc = m.descriptor_for_target(Some("https://example.com".to_string()));
+        assert_eq!(desc.risk, OperationRisk::SafeActive);
+        assert!(desc
+            .required_capabilities
+            .contains(&Capability::PassiveFingerprint));
+        // fuzz
+        let m = metadata_for_tool_id("fuzz").unwrap();
+        let desc = m.descriptor_for_target(Some("https://example.com".to_string()));
+        assert_eq!(desc.risk, OperationRisk::Intrusive);
+        assert!(desc
+            .required_capabilities
+            .contains(&Capability::HttpFuzzLowImpact));
+        // stress
+        let m = metadata_for_tool_id("stress-test").unwrap();
+        let desc = m.descriptor_for_target(Some("https://example.com".to_string()));
+        assert_eq!(desc.risk, OperationRisk::StressTest);
+        assert!(desc
+            .required_capabilities
+            .contains(&Capability::WafStressTest));
+    }
+
+    #[test]
+    fn alias_lookup_matches_canonical() {
+        let canonical = metadata_for_tool_id("recon").unwrap();
+        let alias = metadata_for_tool_id("recon-all").unwrap();
+        assert_eq!(canonical.id, alias.id);
+        assert_eq!(canonical.risk, alias.risk);
+    }
+}

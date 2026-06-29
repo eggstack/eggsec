@@ -53,6 +53,10 @@ The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` o
 ### Tool Implementations
 `tool/implementations/` - Recon, scanner, fuzzer, waf, search, etc.
 
+### Operation Metadata (Phase 6)
+
+All `OperationDescriptor` instances should be generated from `OperationMetadata` via `metadata_for_tool_id(tool_id)` (alias-aware) or `operation_metadata(id)` (canonical ID lookup). This is the single source of truth for operation definitions used by REST, MCP, TUI, and agent surfaces. Descriptors are produced by `metadata.descriptor_for_target()`, with surface-specific overrides (e.g., REST always sets `requires_explicit_scope = true`) applied afterward.
+
 ### Pipeline Orchestrator
 `tool/orchestrator/mod.rs` handles parallel and sequential tool execution with `FxHashMap` for stage results.
 

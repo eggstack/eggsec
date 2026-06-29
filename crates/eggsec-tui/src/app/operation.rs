@@ -13,97 +13,94 @@ impl App {
     /// Build an OperationDescriptor for the current tab/action that is compatible with the
     /// shared enforcement evaluator (same risk/capability/operation strings used by CLI handlers).
     /// Returns None for tabs/operations that have no target-bearing networked action.
+    #[allow(unused_mut)]
     pub fn build_current_operation_descriptor(&self) -> Option<OperationDescriptor> {
         let tab = self.current_tab;
         let spec = crate::tabs::spec_for(tab).filter(|s| s.operation.is_some())?;
         let target = self.current_tab_target();
-        let risk = crate::tabs::risk_from_group(spec.risk_group);
-        let op = spec.operation.unwrap().to_string();
-        let required_capabilities: Vec<eggsec::config::Capability> = Vec::new();
-        let required_features: Vec<String> = spec
-            .feature
-            .map(|f| vec![f.to_string()])
-            .unwrap_or_default();
-        let descriptor = OperationDescriptor {
-            operation: op,
-            mode: OperationMode::StandardAssessment,
-            risk,
-            intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-            target: if target.as_deref().unwrap_or("").is_empty() {
-                None
-            } else {
-                target
-            },
-            required_features,
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: false,
-            required_capabilities,
-        };
+        let op_id = spec.operation.unwrap();
 
-        // Override descriptor for wireless active attacks (deauth/disassoc).
-        #[cfg(feature = "wireless-advanced")]
-        {
-            if self.current_tab == Tab::Wireless && self.tabs.wireless.active_mode {
-                if let Some((
-                    _interface,
-                    attack_type,
-                    _bssid,
-                    _client,
-                    _frame_count,
-                    _rate_limit,
-                    dry_run,
-                )) = self.tabs.wireless.active_attack_config()
-                {
-                    let risk = if dry_run {
-                        OperationRisk::SafeActive
-                    } else {
-                        OperationRisk::Intrusive
-                    };
-                    return Some(OperationDescriptor {
-                        operation: format!("wireless-{attack_type}"),
-                        mode: OperationMode::DefenseLab,
-                        risk,
-                        intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-                        required_features: vec!["wireless-advanced".to_string()],
-                        target: descriptor.target,
-                        required_policy_flags: Vec::new(),
-                        requires_private_or_local_target: false,
-                        requires_explicit_scope: false,
-                        required_capabilities: Vec::new(),
-                    });
+        if let Some(metadata) = eggsec::config::operation_metadata(op_id) {
+            let mut descriptor = metadata.descriptor_for_target(
+                if target.as_deref().unwrap_or("").is_empty() {
+                    None
+                } else {
+                    target
+                },
+            );
+
+            // Tab-specific overrides for runtime details that metadata cannot know
+            // (dry-run mode, advanced mode, etc.)
+
+            #[cfg(feature = "wireless-advanced")]
+            {
+                if self.current_tab == Tab::Wireless && self.tabs.wireless.active_mode {
+                    if let Some((
+                        _interface,
+                        attack_type,
+                        _bssid,
+                        _client,
+                        _frame_count,
+                        _rate_limit,
+                        dry_run,
+                    )) = self.tabs.wireless.active_attack_config()
+                    {
+                        let risk = if dry_run {
+                            OperationRisk::SafeActive
+                        } else {
+                            OperationRisk::Intrusive
+                        };
+                        descriptor.operation = format!("wireless-{attack_type}");
+                        descriptor.mode = OperationMode::DefenseLab;
+                        descriptor.risk = risk;
+                        descriptor.required_features = vec!["wireless-advanced".to_string()];
+                        return Some(descriptor);
+                    }
                 }
             }
-        }
 
-        // Override descriptor for Db Pentest tab (defense-lab, Intrusive when advanced).
-        #[cfg(feature = "db-pentest")]
-        {
-            if self.current_tab == Tab::DbPentest {
-                let is_advanced = self.tabs.db_pentest.advanced;
-                let dry = self.tabs.db_pentest.dry_run;
-                let risk = if is_advanced && !dry {
-                    OperationRisk::Intrusive
-                } else {
-                    OperationRisk::SafeActive
-                };
-                let req_features = vec!["db-pentest".to_string()];
-                return Some(OperationDescriptor {
-                    operation: "db-pentest".to_string(),
-                    mode: OperationMode::DefenseLab,
-                    risk,
-                    intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
-                    required_features: req_features,
-                    target: descriptor.target,
-                    required_policy_flags: Vec::new(),
-                    requires_private_or_local_target: false,
-                    requires_explicit_scope: false,
-                    required_capabilities: Vec::new(),
-                });
+            #[cfg(feature = "db-pentest")]
+            {
+                if self.current_tab == Tab::DbPentest {
+                    let is_advanced = self.tabs.db_pentest.advanced;
+                    let dry = self.tabs.db_pentest.dry_run;
+                    let risk = if is_advanced && !dry {
+                        OperationRisk::Intrusive
+                    } else {
+                        OperationRisk::SafeActive
+                    };
+                    descriptor.mode = OperationMode::DefenseLab;
+                    descriptor.risk = risk;
+                    return Some(descriptor);
+                }
             }
-        }
 
-        Some(descriptor)
+            Some(descriptor)
+        } else {
+            // Fallback for tabs without metadata entries
+            let risk = crate::tabs::risk_from_group(spec.risk_group);
+            let op = op_id.to_string();
+            let required_features: Vec<String> = spec
+                .feature
+                .map(|f| vec![f.to_string()])
+                .unwrap_or_default();
+            Some(OperationDescriptor {
+                operation: op,
+                mode: OperationMode::StandardAssessment,
+                risk,
+                intended_uses: vec![eggsec::config::IntendedUse::WebAssessment],
+                target: if target.as_deref().unwrap_or("").is_empty() {
+                    None
+                } else {
+                    target
+                },
+                required_features,
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: false,
+                required_capabilities: Vec::new(),
+            })
+        }
     }
 
     /// Best-effort extraction of the primary target string from the current tab (for descriptor).

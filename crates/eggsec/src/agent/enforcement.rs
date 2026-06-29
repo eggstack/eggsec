@@ -60,6 +60,16 @@ pub(crate) fn operation_descriptor_for_agent_scan(
     scan_type: &str,
     depth: ScanDepth,
 ) -> OperationDescriptor {
+    use crate::tool::metadata::metadata_for_tool_id;
+
+    // Try to match scan_type to known metadata
+    if let Some(metadata) = metadata_for_tool_id(scan_type) {
+        let mut descriptor = metadata.descriptor_for_target(Some(target.to_string()));
+        descriptor.requires_explicit_scope = true;
+        return descriptor;
+    }
+
+    // Fallback: keyword-based classification for unknown scan types
     OperationDescriptor {
         operation: scan_type.to_string(),
         mode: OperationMode::StandardAssessment,
@@ -256,9 +266,10 @@ mod tests {
         assert!(desc.target.as_deref() == Some("https://example.com"));
         assert!(desc.requires_explicit_scope);
         assert_eq!(desc.mode, OperationMode::StandardAssessment);
+        // Metadata is now the source of truth: recon uses PassiveFingerprint
         assert!(desc
             .required_capabilities
-            .contains(&Capability::ActiveProbe));
+            .contains(&Capability::PassiveFingerprint));
     }
 
     #[test]
