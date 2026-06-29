@@ -25,6 +25,7 @@
 
 pub mod agent;
 pub mod ai_schema;
+pub mod audit_summary;
 pub mod baseline;
 pub mod convert;
 pub mod csv;
@@ -48,6 +49,7 @@ pub use agent::{
     AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,
     RemediationEffort,
 };
+pub use audit_summary::AuditSummary;
 pub use convert::{
     convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
     load_scan_report, FindingData, PortData, ScanReportData, ServiceData,

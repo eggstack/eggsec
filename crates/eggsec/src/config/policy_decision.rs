@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::{
@@ -421,6 +422,13 @@ impl EnforcementContext {
         }
 
         outcome
+    }
+
+    pub fn policy_hash(&self) -> String {
+        let json = serde_json::to_vec(&self.execution_policy)
+            .expect("ExecutionPolicy is JSON-serializable");
+        let hash = Sha256::digest(&json);
+        hex::encode(hash)
     }
 }
 

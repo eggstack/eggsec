@@ -20,7 +20,7 @@ pub struct EnforcementAuditEvent {
     pub manual_override: Option<ManualOverrideAudit>, // Override details (only when confirmed)
     pub manual_override_ignored: bool, // True if override flags present but surface ignores them
     pub scope: ScopeAudit,          // Scope provenance summary
-    pub policy_hash: Option<String>, // Future: stable hash of execution policy
+    pub policy_hash: Option<String>, // SHA-256 hash of serialized ExecutionPolicy
     pub metadata_id: Option<String>, // Optional operation metadata ID
     pub correlation_id: Option<String>, // Optional request/correlation ID
 }
@@ -35,6 +35,7 @@ pub struct EnforcementAuditEvent {
 | `emit_audit_event()` | Log at appropriate tracing level (info for allow/warn/confirmed, warn for deny) |
 | `ScopeAudit::from_loaded_scope()` | Extract scope provenance summary |
 | `ManualOverrideAudit::from_override()` | Extract override details for confirmed decisions |
+| `EnforcementContext::policy_hash()` | SHA-256 hash of serialized ExecutionPolicy |
 
 ## Per-Surface Integration
 
@@ -64,7 +65,15 @@ pub struct EnforcementAuditEvent {
 ## Design Decisions
 
 - **UUID v4 for event_id**: Stable, unique, no coordination required
-- **Optional policy_hash**: Reserved for future use when stable serialization is guaranteed
+- **SHA-256 policy_hash**: Deterministic hash of serialized ExecutionPolicy; different policies produce different hashes
 - **No full payload serialization**: Audit events capture decisions, not request payloads
 - **Tracing-based emission**: Uses `tracing::info!`/`warn!` for structured logging; no separate audit database
 - **Purely observational**: Audit emission never changes control flow or return values
+
+## Agent Denial Recording
+
+The `Agent` struct maintains a bounded list of recent policy denial events (`recent_policy_denials`, max 50). Only `Deny` and `ConfirmationRequired` outcomes are recorded. This list is exposed via `Agent::recent_policy_denials()` and included in `AgentRuntimeStatus` as `recent_denial_count`.
+
+## AuditSummary (eggsec-output)
+
+`AuditSummary` in `eggsec-output` provides a summary of audit events from JSON, counting outcomes by type (allow/warn/confirmed/deny/confirmation-required), tracking surfaces used, and counting manual overrides ignored. This is useful for report generation without importing the full audit model.

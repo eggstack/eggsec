@@ -156,6 +156,7 @@ pub struct AgentRuntimeStatus {
     pub scans_failed: u64,
     pub alerts_sent: u64,
     pub last_preflight_denial: Option<AgentPreflightDenial>,
+    pub recent_denial_count: usize,
 }
 
 /// A recorded preflight denial from agent execution.
@@ -180,6 +181,7 @@ pub struct AgentRuntimePersisted {
     pub last_error: Option<String>,
     pub last_shutdown_at: Option<DateTime<Utc>>,
     pub last_preflight_denial: Option<AgentPreflightDenial>,
+    pub recent_denial_count: usize,
 }
 
 pub struct Agent {
@@ -209,6 +211,7 @@ pub struct Agent {
     alerts_sent: u64,
     last_error: Option<String>,
     last_preflight_denial: std::sync::Mutex<Option<AgentPreflightDenial>>,
+    recent_policy_denials: std::sync::Mutex<Vec<crate::audit::EnforcementAuditEvent>>,
 }
 
 impl Agent {
@@ -331,6 +334,7 @@ impl Agent {
             alerts_sent: 0,
             last_error: None,
             last_preflight_denial: std::sync::Mutex::new(None),
+            recent_policy_denials: std::sync::Mutex::new(Vec::new()),
         })
     }
 
@@ -378,6 +382,7 @@ impl Agent {
             alerts_sent: 0,
             last_error: None,
             last_preflight_denial: std::sync::Mutex::new(None),
+            recent_policy_denials: std::sync::Mutex::new(Vec::new()),
         })
     }
 
@@ -396,6 +401,23 @@ impl Agent {
 
     pub fn register_handler(&mut self, handler: Box<dyn EventHandler>) {
         self.event_handlers.push(handler);
+    }
+
+    pub fn record_policy_denial(&self, event: crate::audit::EnforcementAuditEvent) {
+        if event.outcome == crate::audit::AuditOutcome::Deny
+            || event.outcome == crate::audit::AuditOutcome::ConfirmationRequired
+        {
+            let mut denials = self.recent_policy_denials.lock().unwrap();
+            denials.push(event);
+            let len = denials.len();
+            if len > 50 {
+                denials.drain(0..len - 50);
+            }
+        }
+    }
+
+    pub fn recent_policy_denials(&self) -> Vec<crate::audit::EnforcementAuditEvent> {
+        self.recent_policy_denials.lock().unwrap().clone()
     }
 
     pub fn get_snapshot_path(&self) -> std::path::PathBuf {
@@ -431,6 +453,7 @@ impl Agent {
             scans_failed: self.scans_failed,
             alerts_sent: self.alerts_sent,
             last_preflight_denial: self.last_preflight_denial.lock().unwrap().clone(),
+            recent_denial_count: self.recent_policy_denials.lock().unwrap().len(),
         }
     }
 
@@ -446,6 +469,7 @@ impl Agent {
             last_error: self.last_error.clone(),
             last_shutdown_at: None,
             last_preflight_denial: self.last_preflight_denial.lock().unwrap().clone(),
+            recent_denial_count: self.recent_policy_denials.lock().unwrap().len(),
         }
     }
 
@@ -881,6 +905,7 @@ impl Agent {
                     None,
                 );
                 emit_audit_event(&audit_event);
+                self.record_policy_denial(audit_event);
             }
             if preflight_result.outcome_kind == crate::config::PreflightOutcomeKind::Deny {
                 tracing::warn!(
@@ -921,6 +946,7 @@ impl Agent {
                 None,
             );
             emit_audit_event(&audit_event);
+            self.record_policy_denial(audit_event);
 
             match outcome {
                 EnforcementOutcome::Allow(_) => {}
@@ -1265,6 +1291,10 @@ mod tests {
     use super::events::ScanCompleteEvent;
     use super::*;
     use crate::agent::constraints::{ForbiddenAction, OperationalConstraints};
+    use crate::config::{
+        EnforcementContext, EnforcementOutcome, ExecutionPolicy, IntendedUse, LoadedScope,
+        OperationDescriptor, OperationMode, OperationRisk,
+    };
     use std::future::Future;
     use std::pin::Pin;
 
@@ -2942,5 +2972,189 @@ mod tests {
             !matches!(outcome, EnforcementOutcome::RequireConfirmation(_)),
             "AgentStrict should never RequireConfirmation (treats as denial)"
         );
+    }
+
+    #[tokio::test]
+    async fn test_record_policy_denial_adds_deny_event() {
+        let agent = new_agent_for_test_default().await;
+        assert!(agent.recent_policy_denials().is_empty());
+
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("10.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let decision = crate::config::PolicyDecision::denied(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            "out of scope",
+        );
+        let outcome = EnforcementOutcome::Deny(decision);
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+        agent.record_policy_denial(event);
+        assert_eq!(agent.recent_policy_denials().len(), 1);
+        assert_eq!(
+            agent.recent_policy_denials()[0].outcome,
+            crate::audit::AuditOutcome::Deny
+        );
+    }
+
+    #[tokio::test]
+    async fn test_record_policy_denial_adds_confirmation_required() {
+        let agent = new_agent_for_test_default().await;
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome =
+            EnforcementOutcome::RequireConfirmation(crate::config::PolicyDecision::allowed(
+                "fuzz",
+                OperationMode::StandardAssessment,
+                OperationRisk::Intrusive,
+                vec![IntendedUse::WebAssessment],
+            ));
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+        agent.record_policy_denial(event);
+        assert_eq!(agent.recent_policy_denials().len(), 1);
+        assert_eq!(
+            agent.recent_policy_denials()[0].outcome,
+            crate::audit::AuditOutcome::ConfirmationRequired
+        );
+    }
+
+    #[tokio::test]
+    async fn test_record_policy_denial_ignores_allow() {
+        let agent = new_agent_for_test_default().await;
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = EnforcementOutcome::Allow(crate::config::PolicyDecision::allowed(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+        ));
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+        agent.record_policy_denial(event);
+        assert!(agent.recent_policy_denials().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_record_policy_denial_bounded_to_50() {
+        let agent = new_agent_for_test_default().await;
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        for i in 0..60 {
+            let desc = OperationDescriptor {
+                operation: format!("op-{}", i),
+                mode: OperationMode::StandardAssessment,
+                risk: OperationRisk::SafeActive,
+                intended_uses: vec![IntendedUse::WebAssessment],
+                target: Some("10.0.0.1".to_string()),
+                required_features: Vec::new(),
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: false,
+                required_capabilities: Vec::new(),
+            };
+            let decision = crate::config::PolicyDecision::denied(
+                &format!("op-{}", i),
+                OperationMode::StandardAssessment,
+                OperationRisk::SafeActive,
+                vec![IntendedUse::WebAssessment],
+                "denied",
+            );
+            let outcome = EnforcementOutcome::Deny(decision);
+            let event = crate::audit::audit_event_from_enforcement_outcome(
+                ExecutionSurface::SecurityAgent,
+                &enforcement,
+                &desc,
+                &outcome,
+                false,
+                false,
+                None,
+                &[],
+                None,
+                None,
+            );
+            agent.record_policy_denial(event);
+        }
+        let denials = agent.recent_policy_denials();
+        assert_eq!(denials.len(), 50);
+        assert_eq!(denials[0].operation_id, "op-10");
+        assert_eq!(denials[49].operation_id, "op-59");
     }
 }

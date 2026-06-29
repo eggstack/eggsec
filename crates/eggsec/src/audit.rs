@@ -143,7 +143,7 @@ pub fn audit_event_from_enforcement_outcome(
         manual_override: manual_override_audit,
         manual_override_ignored: override_ignored,
         scope: ScopeAudit::from_loaded_scope(&enforcement.loaded_scope),
-        policy_hash: None, // Best-effort; stable serialization not guaranteed yet
+        policy_hash: Some(enforcement.policy_hash()),
         metadata_id: metadata_id.map(String::from),
         correlation_id: correlation_id.map(String::from),
     }
@@ -518,5 +518,247 @@ mod tests {
         let audit = ManualOverrideAudit::from_override(&mo, &classes);
         assert_eq!(audit.reason.as_deref(), Some("reason"));
         assert_eq!(audit.classes, vec!["out-of-scope", "high-risk"]);
+    }
+
+    #[test]
+    fn policy_hash_is_stable() {
+        let enforcement = test_enforcement();
+        let h1 = enforcement.policy_hash();
+        let h2 = enforcement.policy_hash();
+        assert_eq!(h1, h2);
+        assert_eq!(h1.len(), 64);
+    }
+
+    #[test]
+    fn policy_hash_differs_for_different_policies() {
+        let scope = LoadedScope::default_empty();
+        let e1 = EnforcementContext::manual_permissive(ExecutionPolicy::default(), scope.clone());
+        let mut policy2 = ExecutionPolicy::default();
+        policy2.allow_intrusive_fuzzing = true;
+        let e2 = EnforcementContext::manual_permissive(policy2, scope);
+        assert_ne!(e1.policy_hash(), e2.policy_hash());
+    }
+
+    #[test]
+    fn rest_deny_outcome_produces_audit_event() {
+        let enforcement = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("10.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let decision = crate::config::PolicyDecision::denied(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            "target not in scope",
+        );
+        let outcome = EnforcementOutcome::Deny(decision);
+        let event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::RestApi,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            Some("req-abc-123"),
+            None,
+        );
+        assert_eq!(event.outcome, AuditOutcome::Deny);
+        assert_eq!(event.surface, ExecutionSurface::RestApi);
+        assert_eq!(event.correlation_id.as_deref(), Some("req-abc-123"));
+        assert!(!event.manual_override_ignored);
+        assert!(event.policy_hash.is_some());
+        assert_eq!(event.policy_hash.as_ref().unwrap().len(), 64);
+    }
+
+    #[test]
+    fn tui_confirm_outcome_produces_audit_event() {
+        let enforcement = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome =
+            EnforcementOutcome::RequireConfirmation(crate::config::PolicyDecision::allowed(
+                "fuzz",
+                OperationMode::StandardAssessment,
+                OperationRisk::Intrusive,
+                vec![IntendedUse::WebAssessment],
+            ));
+        let mo = ManualOverride {
+            allow_out_of_scope: true,
+            reason: Some("authorized testing".to_string()),
+            ..Default::default()
+        };
+        let classes = vec![ConfirmationClass::HighRisk];
+        let event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::TuiManual,
+            &enforcement,
+            &desc,
+            &outcome,
+            true,
+            false,
+            Some(&mo),
+            &classes,
+            None,
+            None,
+        );
+        assert_eq!(event.outcome, AuditOutcome::Confirmed);
+        assert_eq!(event.surface, ExecutionSurface::TuiManual);
+        assert!(event.manual_override.is_some());
+        let mo_audit = event.manual_override.unwrap();
+        assert_eq!(mo_audit.reason.as_deref(), Some("authorized testing"));
+        assert_eq!(mo_audit.classes, vec!["high-risk"]);
+        assert!(!event.manual_override_ignored);
+    }
+
+    #[test]
+    fn agent_denied_scan_produces_audit_event() {
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "stress-test".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::StressTest,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://target.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let decision = crate::config::PolicyDecision::denied(
+            "stress-test",
+            OperationMode::StandardAssessment,
+            OperationRisk::StressTest,
+            vec![IntendedUse::WebAssessment],
+            "stress testing not allowed in agent mode",
+        );
+        let outcome = EnforcementOutcome::Deny(decision);
+        let event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+        assert_eq!(event.outcome, AuditOutcome::Deny);
+        assert_eq!(event.surface, ExecutionSurface::SecurityAgent);
+        assert_eq!(event.profile, ExecutionProfile::AgentStrict);
+        assert!(event.manual_override.is_none());
+        assert!(!event.manual_override_ignored);
+        assert!(event.policy_hash.is_some());
+    }
+
+    #[test]
+    fn preflight_event_never_marks_confirmed() {
+        let enforcement = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = test_descriptor(Some("93.184.216.34"));
+        let outcome =
+            EnforcementOutcome::RequireConfirmation(crate::config::PolicyDecision::allowed(
+                "scan-ports",
+                OperationMode::StandardAssessment,
+                OperationRisk::SafeActive,
+                vec![IntendedUse::WebAssessment],
+            ));
+        let event = audit_event_from_preflight(
+            ExecutionSurface::CliManual,
+            &enforcement,
+            &desc,
+            &outcome,
+            None,
+            &[ConfirmationClass::OutOfScope],
+            None,
+        );
+        assert_eq!(event.outcome, AuditOutcome::ConfirmationRequired);
+        assert!(event.manual_override.is_none());
+    }
+
+    #[test]
+    fn emit_audit_event_does_not_panic() {
+        let enforcement = test_enforcement();
+        let desc = test_descriptor(Some("127.0.0.1"));
+        let outcome = EnforcementOutcome::Allow(crate::config::PolicyDecision::allowed(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+        ));
+        let event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::RestApi,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+        emit_audit_event(&event);
+    }
+
+    #[test]
+    fn emit_deny_event_does_not_panic() {
+        let enforcement = test_enforcement();
+        let desc = test_descriptor(Some("93.184.216.34"));
+        let decision = crate::config::PolicyDecision::denied(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            "denied",
+        );
+        let outcome = EnforcementOutcome::Deny(decision);
+        let event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::McpServer,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+        emit_audit_event(&event);
     }
 }

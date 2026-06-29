@@ -190,6 +190,7 @@ Canonical reference points when updating guidance or skills:
 - `PreflightOutcomeKind` - Simplified outcome enum for preflight results (`config::policy_decision`)
 - `EnforcementAuditEvent` - Normalized audit record for enforcement decisions (`audit.rs`)
 - `AuditOutcome` - Simplified audit outcome enum: Allow/Warn/Confirmed/Deny/ConfirmationRequired
+- `AuditSummary` - Audit event summary with outcome/surface counts for report generation (`eggsec-output::audit_summary`)
 - `ScopeAudit` - Scope provenance summary for audit events
 - `PayloadType` - Enum of 40 payload categories; lives in `fuzzer/payloads/mod.rs`, NOT `types.rs`
 - `McpProfile` / `McpProfilePolicy` - MCP agent profiles and per-profile tool visibility in `tool/protocol/mcp/`
@@ -218,7 +219,7 @@ Canonical reference points when updating guidance or skills:
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4626 (includes #[test] + #[tokio::test]) |
+| Tests | ~4640 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 878 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |

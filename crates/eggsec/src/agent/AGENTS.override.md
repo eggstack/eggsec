@@ -31,6 +31,10 @@ Agent enforcement decisions emit normalized `EnforcementAuditEvent` records via 
 
 Agent uses `ExecutionSurface::SecurityAgent` for audit records. Agent never accepts manual overrides.
 
+### Policy Denial Recording
+
+Agent maintains a bounded list of recent policy denial events (`recent_policy_denials`, max 50). Only `Deny` and `ConfirmationRequired` outcomes are recorded via `record_policy_denial()`. The list is exposed via `recent_policy_denials()` and included in `AgentRuntimeStatus` as `recent_denial_count`.
+
 ## Test Seams
 
 Prefer small test seams over making private fields public:
