@@ -620,7 +620,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "scan",
+                "name": "search",
                 "arguments": {"target": "https://example.com"}
             })),
         };
@@ -800,7 +800,9 @@ mod tests {
     #[async_trait]
     impl SecurityTool for DispatchRecordingTool {
         fn id(&self) -> &'static str {
-            "dispatch-recording-tool"
+            // Use a metadata-backed tool ID that is NOT in create_default_registry(),
+            // so registration succeeds and operation_descriptor_for_mcp_call resolves metadata.
+            "stress-test"
         }
         fn name(&self) -> &'static str {
             "Dispatch Recording Tool"
@@ -851,7 +853,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "dispatch-recording-tool",
+                "name": "stress-test",
                 "arguments": {"target": "https://example.com"}
             })),
         };
@@ -890,11 +892,18 @@ mod tests {
             .push(ScopeRule::new("example.com".to_string()));
         let loaded = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
 
+        // Use a policy that allows stress testing and the WafStressTest capability
+        let policy = ExecutionPolicy {
+            allow_stress_testing: true,
+            allowed_capabilities: vec![crate::config::Capability::WafStressTest],
+            ..ExecutionPolicy::default()
+        };
+
         let server = McpServer::with_enforcement(
             registry,
             Some("test-api-key".to_string()),
             McpProfile::OpsAgent,
-            EnforcementContext::mcp_strict(ExecutionPolicy::default(), loaded),
+            EnforcementContext::mcp_strict(policy, loaded),
         );
 
         let request = McpRequest {
@@ -903,7 +912,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "dispatch-recording-tool",
+                "name": "stress-test",
                 "arguments": {"target": "https://example.com"}
             })),
         };

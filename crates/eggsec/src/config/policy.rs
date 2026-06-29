@@ -1480,6 +1480,22 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         rest_exposable: true,
         agent_exposable: true,
     },
+    OperationMetadata {
+        id: "search",
+        display_name: "Web Search",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::Passive,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &[],
+        required_policy_flags: &[],
+        required_capabilities: &[],
+        target_policy: TargetPolicyKind::NoTarget,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+    },
 ];
 
 /// Alias mapping: (alias_id, canonical_id).
@@ -1568,14 +1584,15 @@ mod operation_metadata_tests {
     #[test]
     fn agent_exposable_ops_require_explicit_scope() {
         for m in all_operation_metadata() {
-            if m.agent_exposable || m.mcp_exposable {
+            if (m.agent_exposable || m.mcp_exposable) && m.target_policy != TargetPolicyKind::NoTarget
+            {
                 assert!(
                     matches!(
                         m.target_policy,
                         TargetPolicyKind::ExplicitScopeRequired
                             | TargetPolicyKind::PrivateOrLocalRequired
                     ),
-                    "agent/mcp exposable op '{}' should require explicit scope via target_policy, got {:?}",
+                    "agent/mcp exposable target-bearing op '{}' should require explicit scope via target_policy, got {:?}",
                     m.id,
                     m.target_policy
                 );
@@ -1655,5 +1672,51 @@ mod operation_metadata_tests {
         let alias = metadata_for_tool_id("recon-all").unwrap();
         assert_eq!(canonical.id, alias.id);
         assert_eq!(canonical.risk, alias.risk);
+    }
+
+    /// Every tool registered by `create_default_registry()` must have operation metadata.
+    /// This prevents new tools from being added without metadata, which would cause
+    /// runtime failures in REST, MCP, TUI, and agent surfaces.
+    #[test]
+    fn every_registered_tool_has_operation_metadata() {
+        // Tool IDs from tool::create_default_registry() (non-feature-gated)
+        let base_tool_ids = &[
+            "recon",
+            "scan-ports",
+            "fingerprint",
+            "scan-endpoints",
+            "fuzz",
+            "load",
+            "waf-detect",
+            "waf-bypass",
+            "waf-stress",
+            "pipeline",
+            "search",
+        ];
+
+        for &tool_id in base_tool_ids {
+            assert!(
+                metadata_for_tool_id(tool_id).is_some(),
+                "registered tool '{}' has no operation metadata — add an entry to ALL_OPERATION_METADATA or ALL_OPERATION_METADATA_ALIASES",
+                tool_id,
+            );
+        }
+
+        // Feature-gated tools: only check if the feature is enabled
+        #[cfg(feature = "web-proxy-mcp")]
+        assert!(
+            metadata_for_tool_id("proxy").is_some(),
+            "registered tool 'proxy' has no operation metadata"
+        );
+        #[cfg(feature = "db-pentest-mcp")]
+        assert!(
+            metadata_for_tool_id("db-pentest").is_some(),
+            "registered tool 'db-pentest' has no operation metadata"
+        );
+        #[cfg(feature = "c2-mcp")]
+        assert!(
+            metadata_for_tool_id("c2").is_some(),
+            "registered tool 'c2' has no operation metadata"
+        );
     }
 }

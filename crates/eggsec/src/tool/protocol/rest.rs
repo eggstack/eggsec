@@ -519,7 +519,7 @@ async fn get_tool(
 fn operation_descriptor_for_rest_tool(
     tool_id: &str,
     target: &str,
-) -> OperationDescriptor {
+) -> Result<OperationDescriptor, EggsecError> {
     use crate::tool::metadata::metadata_for_tool_id;
 
     let target_opt = if target.is_empty() {
@@ -530,21 +530,13 @@ fn operation_descriptor_for_rest_tool(
     if let Some(metadata) = metadata_for_tool_id(tool_id) {
         let mut descriptor = metadata.descriptor_for_target(target_opt);
         descriptor.requires_explicit_scope = true;
-        descriptor
+        Ok(descriptor)
     } else {
-        tracing::warn!("missing operation metadata for REST tool '{}'", tool_id);
-        OperationDescriptor {
-            operation: tool_id.to_string(),
-            mode: crate::config::OperationMode::StandardAssessment,
-            risk: crate::config::OperationRisk::SafeActive,
-            intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-            target: target_opt,
-            required_features: Vec::new(),
-            required_policy_flags: Vec::new(),
-            requires_private_or_local_target: false,
-            requires_explicit_scope: true,
-            required_capabilities: Vec::new(),
-        }
+        Err(EggsecError::Config(format!(
+            "missing operation metadata for REST tool '{}' — \
+             every registered tool must have an entry in ALL_OPERATION_METADATA",
+            tool_id
+        )))
     }
 }
 
@@ -573,7 +565,7 @@ async fn execute_tool(
 
     let target_url = &payload.target;
 
-    let descriptor = operation_descriptor_for_rest_tool(&tool_id, target_url);
+    let descriptor = operation_descriptor_for_rest_tool(&tool_id, target_url)?;
     let outcome = state.enforcement.evaluate(&descriptor);
     match outcome {
         EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {}
@@ -716,7 +708,7 @@ mod tests {
 
     #[test]
     fn test_operation_descriptor_for_rest_tool_safe_active() {
-        let desc = operation_descriptor_for_rest_tool("recon", "https://example.com");
+        let desc = operation_descriptor_for_rest_tool("recon", "https://example.com").unwrap();
         assert_eq!(desc.risk, crate::config::OperationRisk::SafeActive);
         assert_eq!(
             desc.required_capabilities,
@@ -726,7 +718,7 @@ mod tests {
 
     #[test]
     fn test_operation_descriptor_for_rest_tool_intrusive() {
-        let desc = operation_descriptor_for_rest_tool("fuzz", "https://example.com");
+        let desc = operation_descriptor_for_rest_tool("fuzz", "https://example.com").unwrap();
         assert_eq!(desc.risk, crate::config::OperationRisk::Intrusive);
         assert_eq!(
             desc.required_capabilities,
@@ -736,7 +728,7 @@ mod tests {
 
     #[test]
     fn test_operation_descriptor_for_rest_tool_stress() {
-        let desc = operation_descriptor_for_rest_tool("stress", "https://example.com");
+        let desc = operation_descriptor_for_rest_tool("stress", "https://example.com").unwrap();
         assert_eq!(desc.risk, crate::config::OperationRisk::StressTest);
         assert_eq!(
             desc.required_capabilities,
@@ -755,7 +747,8 @@ mod tests {
         let enforcement =
             EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
 
-        let descriptor = operation_descriptor_for_rest_tool("scan", "https://example.com");
+        let descriptor =
+            operation_descriptor_for_rest_tool("scan", "https://example.com").unwrap();
         let outcome = enforcement.evaluate(&descriptor);
         assert!(
             outcome.is_denied() || outcome.requires_confirmation(),
@@ -780,7 +773,7 @@ mod tests {
             EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
 
         let descriptor =
-            operation_descriptor_for_rest_tool("scan", "https://evil.example.com");
+            operation_descriptor_for_rest_tool("scan", "https://evil.example.com").unwrap();
         let outcome = enforcement.evaluate(&descriptor);
         assert!(
             outcome.is_denied(),
@@ -803,7 +796,8 @@ mod tests {
         let enforcement =
             EnforcementContext::for_surface(ExecutionSurface::RestApi, policy, loaded_scope);
 
-        let descriptor = operation_descriptor_for_rest_tool("fuzz", "https://example.com");
+        let descriptor =
+            operation_descriptor_for_rest_tool("fuzz", "https://example.com").unwrap();
         let outcome = enforcement.evaluate(&descriptor);
 
         match outcome {

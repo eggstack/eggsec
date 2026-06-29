@@ -502,6 +502,9 @@ pub fn operation_descriptor_for_mcp_call(
         descriptor.requires_explicit_scope = profile_policy.require_explicit_scope;
         descriptor
     } else {
+        // Fallback for tools not in the metadata registry.
+        // This preserves backward compatibility for test doubles and tools
+        // that haven't been migrated to metadata yet.
         tracing::warn!("missing operation metadata for MCP tool '{}'", tool_id);
         crate::config::OperationDescriptor {
             operation: tool_id.to_string(),
@@ -532,8 +535,12 @@ pub fn policy_decision_for_mcp_call_with_enforcement(
     arguments: &serde_json::Value,
     enforcement: &crate::config::EnforcementContext,
 ) -> crate::config::PolicyDecision {
-    let descriptor =
-        operation_descriptor_for_mcp_call(profile_policy, tool_id, capability, arguments);
+    let descriptor = operation_descriptor_for_mcp_call(
+        profile_policy,
+        tool_id,
+        capability,
+        arguments,
+    );
     let outcome = enforcement.evaluate(&descriptor);
     let mut decision = outcome.decision().clone();
 
