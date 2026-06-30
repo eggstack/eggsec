@@ -5,6 +5,11 @@ use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use tonic::{Request, Response, Status};
 
+use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
+use crate::config::{
+    EnforcementContext, EnforcementError, EnforcementOutcome, ExecutionSurface, OperationDescriptor,
+};
+use crate::tool::dispatcher::EnforcedDispatcher;
 use crate::tool::traits::{ParameterType, ToolCategory};
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest};
 
@@ -118,16 +123,22 @@ impl tonic::service::Interceptor for ApiKeyInterceptor {
 // Service implementation
 pub struct GrpcService {
     registry: ToolRegistry,
-    dispatcher: ToolDispatcher,
+    dispatcher: EnforcedDispatcher,
+    enforcement: EnforcementContext,
     api_key: Option<String>,
 }
 
 impl GrpcService {
-    pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
-        let dispatcher = ToolDispatcher::new(registry.clone());
+    pub fn new(
+        registry: ToolRegistry,
+        enforcement: EnforcementContext,
+        api_key: Option<String>,
+    ) -> Self {
+        let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(registry.clone()));
         Self {
             registry,
             dispatcher,
+            enforcement,
             api_key,
         }
     }
@@ -402,6 +413,34 @@ fn convert_proto_options(opts: &RequestOptions) -> crate::tool::request::Request
 }
 
 // ---------------------------------------------------------------------------
+// Operation descriptor builder for gRPC tools
+// ---------------------------------------------------------------------------
+
+fn operation_descriptor_for_grpc_tool(
+    tool_id: &str,
+    target: &str,
+) -> Result<OperationDescriptor, Status> {
+    use crate::tool::metadata::metadata_for_tool_id;
+
+    let target_opt = if target.is_empty() {
+        None
+    } else {
+        Some(target.to_string())
+    };
+    if let Some(metadata) = metadata_for_tool_id(tool_id) {
+        let mut descriptor = metadata.descriptor_for_target(target_opt);
+        descriptor.requires_explicit_scope = true;
+        Ok(descriptor)
+    } else {
+        Err(Status::invalid_argument(format!(
+            "missing operation metadata for gRPC tool '{}' — \
+             every registered tool must have an entry in ALL_OPERATION_METADATA",
+            tool_id
+        )))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Server implementation
 // ---------------------------------------------------------------------------
 
@@ -546,6 +585,105 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             .map(convert_proto_options)
             .unwrap_or_default();
 
+        let target_str = target.value.clone();
+
+        let descriptor = operation_descriptor_for_grpc_tool(&req.tool_id, &target_str)?;
+
+        if let Some(metadata) = crate::tool::metadata::metadata_for_tool_id(&req.tool_id) {
+            if !metadata.grpc_exposable {
+                return Err(Status::permission_denied(format!(
+                    "Tool '{}' is not exposed via gRPC API",
+                    req.tool_id
+                )));
+            }
+        }
+
+        let approved = match self
+            .service
+            .enforcement
+            .approve(ExecutionSurface::GrpcApi, descriptor.clone())
+        {
+            Ok(approved) => approved,
+            Err(EnforcementError::Denied { decision }) => {
+                let correlation_id = uuid::Uuid::new_v4().to_string();
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::GrpcApi,
+                    &self.service.enforcement,
+                    &descriptor,
+                    &EnforcementOutcome::Deny(decision.clone()),
+                    false,
+                    false,
+                    None,
+                    &[],
+                    Some(&correlation_id),
+                    None,
+                );
+                emit_audit_event(&audit_event);
+                return Err(Status::permission_denied(format!(
+                    "gRPC strict enforcement denied: {}",
+                    decision.to_human_readable()
+                )));
+            }
+            Err(EnforcementError::ConfirmationRequired {
+                decision,
+                required_classes,
+            }) => {
+                let correlation_id = uuid::Uuid::new_v4().to_string();
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::GrpcApi,
+                    &self.service.enforcement,
+                    &descriptor,
+                    &EnforcementOutcome::RequireConfirmation(decision.clone()),
+                    false,
+                    false,
+                    None,
+                    &required_classes,
+                    Some(&correlation_id),
+                    None,
+                );
+                emit_audit_event(&audit_event);
+                return Err(Status::permission_denied(format!(
+                    "gRPC strict enforcement: manual confirmation unavailable — {}",
+                    decision.to_human_readable()
+                )));
+            }
+            Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
+                let correlation_id = uuid::Uuid::new_v4().to_string();
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::GrpcApi,
+                    &self.service.enforcement,
+                    &descriptor,
+                    &EnforcementOutcome::Deny(decision.clone()),
+                    false,
+                    false,
+                    None,
+                    &[],
+                    Some(&correlation_id),
+                    None,
+                );
+                emit_audit_event(&audit_event);
+                return Err(Status::permission_denied(format!(
+                    "gRPC strict enforcement denied: {}",
+                    decision.to_human_readable()
+                )));
+            }
+        };
+
+        let correlation_id = uuid::Uuid::new_v4().to_string();
+        let audit_event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::GrpcApi,
+            &self.service.enforcement,
+            approved.descriptor(),
+            &EnforcementOutcome::Allow(approved.decision().clone()),
+            false,
+            false,
+            None,
+            &[],
+            Some(&correlation_id),
+            None,
+        );
+        emit_audit_event(&audit_event);
+
         let tool_request = ToolRequest::new(&req.tool_id, internal_target)
             .with_params(params)
             .with_options(options);
@@ -553,7 +691,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
         let response = self
             .service
             .dispatcher
-            .dispatch(tool_request)
+            .dispatch_checked(&approved, tool_request)
             .await
             .map_err(|e| Status::internal(format!("Tool execution failed: {}", e)))?;
 
@@ -585,6 +723,105 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             .map(convert_proto_options)
             .unwrap_or_default();
 
+        let target_str = target.value.clone();
+
+        let descriptor = operation_descriptor_for_grpc_tool(&req.tool_id, &target_str)?;
+
+        if let Some(metadata) = crate::tool::metadata::metadata_for_tool_id(&req.tool_id) {
+            if !metadata.grpc_exposable {
+                return Err(Status::permission_denied(format!(
+                    "Tool '{}' is not exposed via gRPC API",
+                    req.tool_id
+                )));
+            }
+        }
+
+        let approved = match self
+            .service
+            .enforcement
+            .approve(ExecutionSurface::GrpcApi, descriptor.clone())
+        {
+            Ok(approved) => approved,
+            Err(EnforcementError::Denied { decision }) => {
+                let correlation_id = uuid::Uuid::new_v4().to_string();
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::GrpcApi,
+                    &self.service.enforcement,
+                    &descriptor,
+                    &EnforcementOutcome::Deny(decision.clone()),
+                    false,
+                    false,
+                    None,
+                    &[],
+                    Some(&correlation_id),
+                    None,
+                );
+                emit_audit_event(&audit_event);
+                return Err(Status::permission_denied(format!(
+                    "gRPC strict enforcement denied: {}",
+                    decision.to_human_readable()
+                )));
+            }
+            Err(EnforcementError::ConfirmationRequired {
+                decision,
+                required_classes,
+            }) => {
+                let correlation_id = uuid::Uuid::new_v4().to_string();
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::GrpcApi,
+                    &self.service.enforcement,
+                    &descriptor,
+                    &EnforcementOutcome::RequireConfirmation(decision.clone()),
+                    false,
+                    false,
+                    None,
+                    &required_classes,
+                    Some(&correlation_id),
+                    None,
+                );
+                emit_audit_event(&audit_event);
+                return Err(Status::permission_denied(format!(
+                    "gRPC strict enforcement: manual confirmation unavailable — {}",
+                    decision.to_human_readable()
+                )));
+            }
+            Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
+                let correlation_id = uuid::Uuid::new_v4().to_string();
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::GrpcApi,
+                    &self.service.enforcement,
+                    &descriptor,
+                    &EnforcementOutcome::Deny(decision.clone()),
+                    false,
+                    false,
+                    None,
+                    &[],
+                    Some(&correlation_id),
+                    None,
+                );
+                emit_audit_event(&audit_event);
+                return Err(Status::permission_denied(format!(
+                    "gRPC strict enforcement denied: {}",
+                    decision.to_human_readable()
+                )));
+            }
+        };
+
+        let correlation_id = uuid::Uuid::new_v4().to_string();
+        let audit_event = audit_event_from_enforcement_outcome(
+            ExecutionSurface::GrpcApi,
+            &self.service.enforcement,
+            approved.descriptor(),
+            &EnforcementOutcome::Allow(approved.decision().clone()),
+            false,
+            false,
+            None,
+            &[],
+            Some(&correlation_id),
+            None,
+        );
+        emit_audit_event(&audit_event);
+
         let tool_request = ToolRequest::new(&req.tool_id, internal_target)
             .with_params(params)
             .with_options(options);
@@ -592,10 +829,7 @@ impl tool_service_server::ToolService for ToolServiceImpl {
         let request_id = tool_request.id.clone();
         let dispatcher = self.service.dispatcher.clone();
 
-        // TODO: Progress percentages are hardcoded. To provide real progress updates,
-        // the SecurityTool trait would need a progress callback or channel mechanism.
         let stream = async_stream::stream! {
-            // Send initial progress event
             yield Ok(ToolStreamEvent {
                 request_id: request_id.clone(),
                 event: Some(tool_stream_event::Event::Progress(ProgressEvent {
@@ -604,10 +838,8 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                 })),
             });
 
-            // Execute the tool
-            match dispatcher.dispatch(tool_request).await {
+            match dispatcher.dispatch_checked(&approved, tool_request).await {
                 Ok(response) => {
-                    // Send progress update: execution complete, streaming findings
                     yield Ok(ToolStreamEvent {
                         request_id: request_id.clone(),
                         event: Some(tool_stream_event::Event::Progress(ProgressEvent {
@@ -616,7 +848,6 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                         })),
                     });
 
-                    // Send findings as they come (batched)
                     for finding in &response.findings {
                         yield Ok(ToolStreamEvent {
                             request_id: request_id.clone(),
@@ -626,7 +857,6 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                         });
                     }
 
-                    // Send progress update: finalizing
                     yield Ok(ToolStreamEvent {
                         request_id: request_id.clone(),
                         event: Some(tool_stream_event::Event::Progress(ProgressEvent {
@@ -635,7 +865,6 @@ impl tool_service_server::ToolService for ToolServiceImpl {
                         })),
                     });
 
-                    // Send completion event
                     yield Ok(ToolStreamEvent {
                         request_id: request_id.clone(),
                         event: Some(tool_stream_event::Event::Complete(CompleteEvent {

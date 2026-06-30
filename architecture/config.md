@@ -120,7 +120,8 @@ This preserves hard denials for missing features, invalid targets, and all autom
 | `McpServer` | `McpStrict` | No |
 | `SecurityAgent` | `AgentStrict` | No |
 | `Ci` | `CiStrict` | No |
-| `RestApi` | `McpStrict` (placeholder) | No |
+| `RestApi` | `McpStrict` | No |
+| `GrpcApi` | `McpStrict` | No |
 
 Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for centralized construction.
 
@@ -141,8 +142,9 @@ Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for central
 - `scope()` - Returns the `LoadedScope`
 
 **Security enforcement:**
+- **Operation metadata is the source of truth**: `OperationMetadata` in `config::policy` is the single source of truth for `OperationDescriptor` generation. All surfaces (REST, MCP, gRPC, TUI, agent) use `metadata_for_tool_id()` or `operation_metadata()` to look up canonical operation definitions. Descriptors are generated via `metadata.descriptor_for_target()`. Missing metadata for an externally executable tool triggers a runtime error or conservative fallback.
 - MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; `EnforcementContext` is the sole policy/scope authority. Legacy helpers (`policy_decision_for_mcp_call`, `denial_from_violation`, `with_scope`, `with_scope_and_profile`) have been removed.
-- REST, MCP, and Agent dispatch paths use `EnforcedDispatcher` which requires an `ApprovedOperation` token before `dispatch_checked()`. This enforces type-level access control so strict programmatic surfaces cannot accidentally bypass policy.
+- REST, MCP, gRPC, and Agent dispatch paths use `EnforcedDispatcher` which requires an `ApprovedOperation` token before `dispatch_checked()`. This enforces type-level access control so strict programmatic surfaces cannot accidentally bypass policy.
 - Agent refuses to run without an explicit scope manifest; handler defensively rebuilds `AgentStrict` enforcement (defense-in-depth); `Agent::new()` rejects non-`AgentStrict` profiles; per-scan `enforcement.approve()` immediately before dispatch.
 - Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
 

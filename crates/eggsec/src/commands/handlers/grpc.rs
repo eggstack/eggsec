@@ -1,10 +1,10 @@
 use super::CommandContext;
 use crate::cli::GrpcServerArgs;
-use crate::config::OperationDescriptor;
-use crate::error::EggsecError;
+use crate::config::{
+    EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, OperationDescriptor,
+};
 use crate::tool::protocol::grpc::start_grpc_server;
 use crate::tool::protocol::grpc::GrpcService;
-use crate::tool::ToolDispatcher;
 use crate::tool::ToolRegistry;
 use tracing::info;
 
@@ -25,7 +25,12 @@ pub async fn handle_grpc_server(ctx: &CommandContext, args: GrpcServerArgs) -> a
     info!("Starting gRPC server on {}:{}", args.host, args.port);
 
     let registry = ToolRegistry::new();
-    let service = GrpcService::new(registry.clone(), args.api_key);
+    let enforcement = EnforcementContext::for_surface(
+        ExecutionSurface::GrpcApi,
+        ExecutionPolicy::default(),
+        LoadedScope::default_empty(),
+    );
+    let service = GrpcService::new(registry.clone(), enforcement, args.api_key);
 
     start_grpc_server(&args.host, args.port, service)
         .await

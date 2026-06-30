@@ -20,7 +20,7 @@ impl App {
         let target = self.current_tab_target();
         let op_id = spec.operation.unwrap();
 
-        if let Some(metadata) = eggsec::config::operation_metadata(op_id) {
+        if let Some(metadata) = eggsec::config::metadata_for_tool_id(op_id) {
             let mut descriptor =
                 metadata.descriptor_for_target(if target.as_deref().unwrap_or("").is_empty() {
                     None

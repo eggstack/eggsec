@@ -938,7 +938,7 @@ impl Agent {
                 enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
 
             let approved = enforcement
-                .approve(ExecutionSurface::SecurityAgent, descriptor)
+                .approve(ExecutionSurface::SecurityAgent, descriptor.clone())
                 .map_err(|e| match e {
                     EnforcementError::Denied { decision } => {
                         let reasons = decision.denied_reasons.join("; ");
@@ -948,6 +948,19 @@ impl Agent {
                             reasons = %reasons,
                             "agent enforcement denied"
                         );
+                        let audit_event = audit_event_from_enforcement_outcome(
+                            ExecutionSurface::SecurityAgent,
+                            enforcement,
+                            &descriptor,
+                            &crate::config::EnforcementOutcome::Deny(decision.clone()),
+                            false,
+                            false,
+                            None,
+                            &[],
+                            None,
+                            None,
+                        );
+                        emit_audit_event(&audit_event);
                         anyhow::anyhow!(
                             "agent enforcement denied {} on {}: {}",
                             scan_type,
@@ -968,6 +981,21 @@ impl Agent {
                             required_classes = ?classes,
                             "agent enforcement requires manual confirmation"
                         );
+                        let audit_event = audit_event_from_enforcement_outcome(
+                            ExecutionSurface::SecurityAgent,
+                            enforcement,
+                            &descriptor,
+                            &crate::config::EnforcementOutcome::RequireConfirmation(
+                                decision.clone(),
+                            ),
+                            false,
+                            false,
+                            None,
+                            &required_classes,
+                            None,
+                            None,
+                        );
+                        emit_audit_event(&audit_event);
                         anyhow::anyhow!(
                             "agent enforcement requires manual confirmation for {} on {}: {} (classes: {})",
                             scan_type,
@@ -978,6 +1006,19 @@ impl Agent {
                     }
                     EnforcementError::ManualOverrideUnavailable { decision, .. } => {
                         let reasons = decision.denied_reasons.join("; ");
+                        let audit_event = audit_event_from_enforcement_outcome(
+                            ExecutionSurface::SecurityAgent,
+                            enforcement,
+                            &descriptor,
+                            &crate::config::EnforcementOutcome::Deny(decision.clone()),
+                            false,
+                            false,
+                            None,
+                            &[],
+                            None,
+                            None,
+                        );
+                        emit_audit_event(&audit_event);
                         anyhow::anyhow!(
                             "agent enforcement denied {} on {}: {}",
                             scan_type,
@@ -1000,6 +1041,8 @@ impl Agent {
                 None,
             );
             emit_audit_event(&audit_event);
+            // Intentional no-op: record_policy_denial only records Deny/ConfirmationRequired,
+            // so it is a no-op on Allow outcomes. Kept for consistency with deny paths.
             self.record_policy_denial(audit_event);
             approved_token = Some(approved);
         }
@@ -1053,12 +1096,14 @@ impl Agent {
                     .await
                     .map_err(|e| anyhow::anyhow!("{:?}", e))
             } else {
+                // UNREACHABLE in production: enforcement.approve() always sets approved_token when enforced_dispatcher is Some
                 self.dispatcher
                     .dispatch(request)
                     .await
                     .map_err(|e| anyhow::anyhow!("{:?}", e))
             }
         } else {
+            // Test-only path: new_for_test() sets enforced_dispatcher to None
             self.dispatcher
                 .dispatch(request)
                 .await

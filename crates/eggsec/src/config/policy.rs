@@ -325,6 +325,8 @@ pub enum ExecutionSurface {
     Ci,
     /// REST API server entrypoint (strict by default, pending Phase 7).
     RestApi,
+    /// gRPC API server entrypoint (strict by default).
+    GrpcApi,
 }
 
 impl ExecutionSurface {
@@ -337,6 +339,7 @@ impl ExecutionSurface {
             Self::SecurityAgent => ExecutionProfile::AgentStrict,
             Self::Ci => ExecutionProfile::CiStrict,
             Self::RestApi => ExecutionProfile::McpStrict,
+            Self::GrpcApi => ExecutionProfile::McpStrict,
         }
     }
 
@@ -352,7 +355,7 @@ impl ExecutionSurface {
     pub fn is_agent_controlled(self) -> bool {
         matches!(
             self,
-            Self::McpServer | Self::SecurityAgent | Self::Ci | Self::RestApi
+            Self::McpServer | Self::SecurityAgent | Self::Ci | Self::RestApi | Self::GrpcApi
         )
     }
 
@@ -381,6 +384,7 @@ impl ExecutionSurface {
             Self::SecurityAgent => "Security agent",
             Self::Ci => "CI",
             Self::RestApi => "REST API",
+            Self::GrpcApi => "gRPC API",
         }
     }
 }
@@ -396,6 +400,7 @@ impl std::fmt::Display for ExecutionSurface {
             Self::SecurityAgent => write!(f, "security-agent"),
             Self::Ci => write!(f, "ci"),
             Self::RestApi => write!(f, "rest-api"),
+            Self::GrpcApi => write!(f, "grpc-api"),
         }
     }
 }
@@ -975,6 +980,7 @@ pub struct OperationMetadata {
     pub mcp_exposable: bool,
     pub rest_exposable: bool,
     pub agent_exposable: bool,
+    pub grpc_exposable: bool,
 }
 
 impl OperationMetadata {
@@ -1039,6 +1045,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "scan-ports",
@@ -1055,6 +1062,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "scan-endpoints",
@@ -1071,6 +1079,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "fingerprint",
@@ -1087,6 +1096,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "fuzz",
@@ -1103,6 +1113,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "waf-detect",
@@ -1119,6 +1130,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "waf-bypass",
@@ -1135,6 +1147,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "waf-stress",
@@ -1151,6 +1164,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "load-test",
@@ -1167,6 +1181,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "stress-test",
@@ -1183,6 +1198,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "packet",
@@ -1199,6 +1215,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "graphql",
@@ -1215,6 +1232,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "oauth",
@@ -1231,6 +1249,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "auth-test",
@@ -1247,6 +1266,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "nse",
@@ -1263,6 +1283,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "db-pentest",
@@ -1279,6 +1300,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "c2",
@@ -1295,6 +1317,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "proxy-intercept",
@@ -1311,6 +1334,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "wireless",
@@ -1327,6 +1351,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "hunt",
@@ -1343,6 +1368,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "browser",
@@ -1359,6 +1385,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "compliance",
@@ -1375,6 +1402,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "storage",
@@ -1391,6 +1419,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "integrations",
@@ -1407,6 +1436,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "workflow",
@@ -1423,6 +1453,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "vuln",
@@ -1439,6 +1470,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "pipeline",
@@ -1455,6 +1487,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "proxy",
@@ -1471,6 +1504,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "remote",
@@ -1487,6 +1521,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
     OperationMetadata {
         id: "search",
@@ -1503,6 +1538,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         mcp_exposable: true,
         rest_exposable: true,
         agent_exposable: true,
+        grpc_exposable: true,
     },
 ];
 
@@ -1538,6 +1574,7 @@ pub static ALL_OPERATION_METADATA_ALIASES: &[(&str, &str)] = &[
     ("raw-packet-send", "packet"),
     ("plan", "recon"),
     ("scan_ports", "scan-ports"),
+    ("scan-pipeline", "pipeline"),
     ("db-pentest-mcp", "db-pentest"),
     ("exec", "remote"),
     ("ssh", "remote"),

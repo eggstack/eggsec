@@ -1,5 +1,7 @@
 # Dual-Mode Enforcement Roadmap
 
+> **Status: IMPLEMENTED / CLOSED** — All 12 phases complete as of 2026-06-30. This document is now historical reference; the architecture is stable and enforced at the type level.
+
 ## Purpose
 
 Eggsec needs one unified enforcement vocabulary with two clearly separated operating postures:

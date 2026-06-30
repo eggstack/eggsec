@@ -42,6 +42,8 @@ pub struct StageToolResult {
 }
 
 impl Orchestrator {
+    /// **Enforcement note:** Callers must ensure policy enforcement has been applied
+    /// before constructing an Orchestrator for strict programmatic surfaces.
     pub fn new(dispatcher: ToolDispatcher) -> Self {
         Self {
             dispatcher,

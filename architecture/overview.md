@@ -224,8 +224,8 @@ Machine-accessible interfaces for automation and AI integration:
 
 | Protocol | Feature Flag | Purpose |
 |----------|--------------|---------|
-| REST API | `rest-api` | HTTP API server for agent integration; uses `EnforcementContext` with `McpStrict` profile by default; only `Allow` permits dispatch, `Warn`/`RequireConfirmation`/`Deny` return 403 with structured `POLICY_DENIED` response |
-| gRPC | `grpc-api` | High-performance gRPC API |
+| REST API | `rest-api` | HTTP API server for agent integration; uses `EnforcementContext` with `McpStrict` profile by default; only `Allow` permits dispatch, `Warn`/`RequireConfirmation`/`Deny` return 403 with structured `POLICY_DENIED` response; dispatch via `EnforcedDispatcher` |
+| gRPC | `grpc-api` | High-performance gRPC API; uses `EnforcementContext` with `McpStrict` profile; only `Allow` permits dispatch, `Warn`/`RequireConfirmation`/`Deny` fail with `Status::permission_denied`; dispatch via `EnforcedDispatcher` |
 | WebSocket | `ws-api` | Pub/sub event streaming |
 | MCP | Built-in | Model Context Protocol for AI agents |
 | OpenAI | Built-in | OpenAI tool protocol compatibility |
@@ -616,16 +616,16 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 - **Policy evaluation**: All operations route through central `EnforcementContext::evaluate(descriptor)` (`config/policy_decision.rs`) which performs LoadedScope provenance, DenialClass downgrade (ManualPermissive only), positive capability checks for strict, and risk/feature/policy enforcement. Command handlers use `CommandContext::evaluate_and_enforce_operation()` which wraps it. REST API dispatch goes through `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and evaluates before every tool execution, using `McpStrict` profile by default. Legacy direct `evaluate_operation_policy` is internal for base decisions; denial paths prefer the central evaluator. **Preflight**: `preflight_operation()` wraps the same `evaluate()` path for read-only policy checks across all surfaces (CLI, TUI, REST, MCP, agent) before dispatch, returning `PreflightResult` with outcome, confirmation classes, and suggested CLI flags. See [config.md](config.md).
 - See [config.md](config.md) for details
 
-### Operation Metadata (Phase 6)
+### Operation Metadata
 
-`OperationMetadata` provides a centralized, static registry of all externally invokable operations. Each entry declares the operation's ID, display name, mode, risk tier, intended uses, required features, required capabilities, target policy, and protocol exposure flags.
+`OperationMetadata` provides a centralized, static registry of all externally invokable operations and is the **single source of truth** for `OperationDescriptor` generation. Each entry declares the operation's ID, display name, mode, risk tier, intended uses, required features, required capabilities, target policy, and protocol exposure flags (`rest_exposable`, `mcp_exposable`, `grpc_exposable`).
 
 The registry lives in `config::policy` and is accessible from all surfaces:
 - `eggsec::config::operation_metadata(id)` — canonical ID lookup
 - `eggsec::config::metadata_for_tool_id(tool_id)` — resolves aliases to canonical IDs
 - `eggsec::config::all_operation_metadata()` — returns the full static array
 
-Every `OperationDescriptor` is now generated from `OperationMetadata` via `descriptor_for_target()`. This eliminates drift between REST, MCP, TUI, and agent descriptor construction. Alias mapping (32 entries) ensures that alternate tool IDs (REST tool names, MCP tool names, registry IDs) all resolve to the same canonical metadata.
+Every `OperationDescriptor` is generated from `OperationMetadata` via `descriptor_for_target()`. This eliminates drift between REST, MCP, gRPC, TUI, and agent descriptor construction. Alias mapping (32 entries) ensures that alternate tool IDs (REST tool names, MCP tool names, registry IDs, gRPC tool IDs) all resolve to the same canonical metadata.
 
 ### Normalized Audit Events (Phase 10)
 
@@ -663,7 +663,7 @@ Phase 12 moved enforcement from convention (call sites expected to evaluate firs
 
 MCP, Agent, CI, and high-risk TUI direct-launch paths follow the same pattern. CLI/TUI manual dispatch uses `approve_manual()` to support discretion classes.
 
-**Current adoption:** REST (`tool/protocol/rest.rs`), MCP (`tool/protocol/mcp/handlers/server.rs`), Agent (`agent/mod.rs`), and TUI task dispatch (`eggsec-tui/src/app/mod.rs`) all use `EnforcedDispatcher` + `ApprovedOperation`.
+**Current adoption:** REST (`tool/protocol/rest.rs`), MCP (`tool/protocol/mcp/handlers/server.rs`), Agent (`agent/mod.rs`), gRPC (`tool/protocol/grpc.rs`), and TUI task dispatch (`eggsec-tui/src/app/mod.rs`) all use `EnforcedDispatcher` + `ApprovedOperation`.
 
 ### Logging & Tracing
 
@@ -683,7 +683,7 @@ MCP, Agent, CI, and high-risk TUI direct-launch paths follow the same pattern. C
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: ~4470 (includes #[test] + #[tokio::test])
+- **Test count**: ~4840 (includes #[test] + #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---

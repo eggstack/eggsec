@@ -762,9 +762,13 @@ async fn execute_tool(
         _ => crate::tool::Target::url(&payload.target),
     };
 
+    let resolved_tool_id = crate::config::metadata_for_tool_id(&tool_id)
+        .map(|m| m.id.to_string())
+        .unwrap_or_else(|| tool_id.clone());
+
     let request = ToolRequest {
         id: uuid::Uuid::new_v4().to_string(),
-        tool: tool_id,
+        tool: resolved_tool_id,
         target,
         params: payload.params.unwrap_or_default(),
         options: payload.options.unwrap_or_default(),

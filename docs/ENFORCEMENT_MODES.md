@@ -3,7 +3,7 @@
 Eggsec intentionally supports two usage families with distinct enforcement postures:
 
 - **Manual operator posture** (CLI/TUI): Human-directed security assessment. Operators may proceed through warnings and explicit confirmations where appropriate. This mode is designed to remain productive and should not inherit agent-grade strictness by default.
-- **Automated agent posture** (MCP, security agent, CI, REST): Programmatic noninteractive execution. Strict, explicitly scoped, non-overridable. Manual overrides are never honored.
+- **Automated agent posture** (MCP, security agent, CI, REST, gRPC): Programmatic noninteractive execution. Strict, explicitly scoped, non-overridable. Manual overrides are never honored.
 
 The contract below is the source of truth for how enforcement behaves per execution surface. All later implementation phases must follow this contract to prevent drift in either direction: over-hardening manual use, or under-hardening agent use.
 
@@ -32,10 +32,13 @@ The contract below is the source of truth for how enforcement behaves per execut
 | Security agent | Agent strict | `AgentStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 | CI | Agent strict | `CiStrict` | Yes (target/networked operations) | No (treated as deny) | No (treated as deny) | No | No (single evaluation) |
 | REST API | Agent strict | `McpStrict` or `CiStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
+| gRPC API | Agent strict | `McpStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 
-**Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, or strict REST. Agent strict behavior must not become the default for normal CLI/TUI manual use.
+**Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, REST, or gRPC. Agent strict behavior must not become the default for normal CLI/TUI manual use.
 
 **REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. Only `EnforcementOutcome::Allow` permits dispatch. `Warn`, `RequireConfirmation`, and `Deny` all result in HTTP 403 Forbidden with a structured `RestPolicyErrorResponse` (code: `POLICY_DENIED`, includes serialized `PolicyDecision`). REST is noninteractive and programmatic — warning-class ambiguity must not dispatch. Metadata `rest_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
+
+**gRPC enforcement specifics**: gRPC API now constructs `GrpcService` with `EnforcementContext::for_surface(ExecutionSurface::GrpcApi, ...)` and dispatches every tool call through `EnforcementContext::approve()` → `EnforcedDispatcher::dispatch_checked()`. Only `EnforcementOutcome::Allow` produces an `ApprovedOperation` token; `Warn`, `RequireConfirmation`, and `Deny` all fail with `EnforcementError` and return gRPC `Status::permission_denied`. Metadata `grpc_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. Audit events emitted for all enforcement outcomes including denials.
 
 ## Outcome Semantics
 
@@ -99,13 +102,14 @@ The following conditions produce hard denial and must **never** be converted to 
 
 These invariants hold across all execution paths:
 
-1. **Manual permissive isolation**: Manual permissive behavior must not bleed into MCP, security agent, CI, or strict REST.
+1. **Manual permissive isolation**: Manual permissive behavior must not bleed into MCP, security agent, CI, REST, or gRPC.
 2. **Agent strict isolation**: Agent strict behavior must not become the default for normal CLI/TUI manual use.
 3. **Override scope**: Manual override flags are only honored in `ManualPermissive` contexts.
 4. **Scope provenance**: Scope provenance for automated networked execution must come from `LoadedScope`, not raw `Scope`.
 5. **Shared evaluation**: Every dispatch path must eventually flow through `EnforcementContext::evaluate()`.
 6. **Re-evaluation**: Agent/MCP dispatch must re-evaluate enforcement immediately before dispatch.
 7. **Constructor intent**: Programmatic constructors for agent-facing servers should require explicit enforcement context or be clearly test-only.
+8. **Type-level dispatch**: Strict programmatic surfaces (REST, MCP, Agent, gRPC) require an `ApprovedOperation` token before dispatch via `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` is not reachable from these surfaces.
 
 ## Operation Metadata Integration (Phase 6)
 
@@ -243,6 +247,7 @@ Phase 12 hardened enforcement from convention (call sites expected to evaluate f
 | REST | Complete | `tool/protocol/rest.rs` |
 | MCP | Complete | `tool/protocol/mcp/handlers/server.rs` |
 | Agent | Complete | `agent/mod.rs` |
+| gRPC | Complete | `tool/protocol/grpc.rs` |
 | TUI | Complete | `eggsec-tui/src/app/mod.rs` (direct-launch/high-risk tabs) |
 | CLI | Via `approve_manual()` | Command handlers via `evaluate_and_enforce_operation()` |
 
@@ -279,6 +284,7 @@ Every meaningful enforcement decision produces a normalized `EnforcementAuditEve
 | CLI | Yes | Accepted overrides include class+reason | None |
 | TUI | Yes | Accepted overrides include class+reason | None |
 | REST | Yes | Never (REST never confirms) | `generate_correlation_id()` |
+| gRPC | Yes | Never (gRPC never confirms) | `uuid::Uuid::new_v4()` |
 | MCP | Yes | Never (MCP never confirms) | JSON-RPC request id |
 | Agent | Yes | Never (Agent never confirms) | None |
 | CI | Via CLI handler | Never (CI never confirms) | None |
