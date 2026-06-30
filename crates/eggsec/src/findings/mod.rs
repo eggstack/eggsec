@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn different_findings_have_different_fingerprints() {
-        let mut f1 = create_test_finding();
+        let f1 = create_test_finding();
         let mut f2 = create_test_finding();
         f2.location.path = Some("/different".to_string());
         assert_ne!(f1.compute_fingerprint(), f2.compute_fingerprint());
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn fingerprint_changes_with_title() {
-        let mut f1 = create_test_finding();
+        let f1 = create_test_finding();
         let mut f2 = create_test_finding();
         f2.title = "Different Title".to_string();
         assert_ne!(f1.compute_fingerprint(), f2.compute_fingerprint());
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn fingerprint_changes_with_cwe() {
-        let mut f1 = create_test_finding();
+        let f1 = create_test_finding();
         let mut f2 = create_test_finding();
         f2.cwe = Some("CWE-89".to_string());
         assert_ne!(f1.compute_fingerprint(), f2.compute_fingerprint());
@@ -405,7 +405,7 @@ mod tests {
 
     #[test]
     fn fingerprint_changes_with_finding_type() {
-        let mut f1 = create_test_finding();
+        let f1 = create_test_finding();
         let mut f2 = create_test_finding();
         f2.finding_type = FindingType::Misconfiguration;
         assert_ne!(f1.compute_fingerprint(), f2.compute_fingerprint());
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn fingerprint_is_case_insensitive_for_title() {
-        let mut f1 = create_test_finding();
+        let f1 = create_test_finding();
         let mut f2 = create_test_finding();
         f2.title = "test finding".to_string();
         assert_eq!(f1.compute_fingerprint(), f2.compute_fingerprint());

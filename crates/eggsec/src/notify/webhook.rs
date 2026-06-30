@@ -88,7 +88,14 @@ impl WebhookNotifier {
                 type HmacSha256 = Hmac<Sha256>;
                 match HmacSha256::new_from_slice(secret.expose_secret().as_bytes()) {
                     Ok(mut mac) => {
-                        let canonical_json = serde_json::to_string(&payload_value).unwrap();
+                        let canonical_json = match serde_json::to_string(&payload_value) {
+                            Ok(json) => json,
+                            Err(e) => {
+                                results
+                                    .push(Err(format!("JSON signing serialization error: {}", e)));
+                                continue;
+                            }
+                        };
                         mac.update(canonical_json.as_bytes());
                         let result = mac.finalize();
                         let signature = format!("sha256={}", hex::encode(result.into_bytes()));

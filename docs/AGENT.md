@@ -56,6 +56,12 @@ State is persisted on:
 - Periodic snapshots (every 60 seconds during active scans)
 - Graceful shutdown
 
+State files are written through an atomic temporary-file-and-rename flow. Each
+write targets a concrete JSON file, creates a sibling `*.tmp` file, flushes it,
+and then renames it over the destination. Paths that do not resolve to a file
+name are rejected with context instead of panicking, so persistence failures can
+be reported cleanly by the agent.
+
 ## Graceful Shutdown
 
 The agent handles shutdown signals (`SIGTERM`, `SIGINT`) gracefully:

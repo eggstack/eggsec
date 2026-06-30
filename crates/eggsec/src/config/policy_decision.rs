@@ -1855,7 +1855,6 @@ mod tests {
 
     #[test]
     fn manual_guarded_denies_for_missing_explicit_scope() {
-        use super::super::scope::LoadedScope;
         // ManualGuarded denies via evaluate_enforcement when scope is None,
         // but EnforcementContext always provides Some(scope).
         // Test the direct evaluate_enforcement path with None scope instead.
@@ -2151,7 +2150,7 @@ mod tests {
     #[test]
     fn manual_permissive_does_not_downgrade_risk_policy_denial() {
         use super::super::scope::LoadedScope;
-        let mut policy = ExecutionPolicy::default();
+        let policy = ExecutionPolicy::default();
         // Intrusive not allowed by default policy
         let ctx = EnforcementContext::manual_permissive(policy, LoadedScope::default_empty());
         let descriptor = OperationDescriptor {

@@ -1,8 +1,7 @@
 use crate::cli::preflight::{PreflightArgs, PreflightProfile};
 use crate::commands::handlers::CommandContext;
 use crate::config::{
-    metadata_for_tool_id, preflight_operation, EnforcementContext, ExecutionSurface, LoadedScope,
-    ScopeSource,
+    metadata_for_tool_id, preflight_operation, EnforcementContext, ExecutionSurface,
 };
 use anyhow::Result;
 

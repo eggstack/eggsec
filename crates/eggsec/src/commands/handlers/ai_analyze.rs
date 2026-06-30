@@ -34,13 +34,7 @@ pub async fn handle_ai_analyze(
         serde_json::from_str(&input).context("Failed to parse findings JSON from stdin")?
     };
 
-    let findings_list = if findings_data.is_array() {
-        findings_data.as_array().unwrap().clone()
-    } else if let Some(findings) = findings_data.get("findings").and_then(|v| v.as_array()) {
-        findings.clone()
-    } else {
-        vec![findings_data]
-    };
+    let findings_list = normalize_findings_input(findings_data);
 
     eprintln!("Analyzing {} finding(s) with AI...", findings_list.len());
 
@@ -78,6 +72,18 @@ pub async fn handle_ai_analyze(
     }
 
     Ok(())
+}
+
+fn normalize_findings_input(findings_data: serde_json::Value) -> Vec<serde_json::Value> {
+    match findings_data {
+        serde_json::Value::Array(findings) => findings,
+        serde_json::Value::Object(mut obj) => match obj.remove("findings") {
+            Some(serde_json::Value::Array(findings)) => findings,
+            Some(findings) => vec![findings],
+            None => vec![serde_json::Value::Object(obj)],
+        },
+        finding => vec![finding],
+    }
 }
 
 fn parse_ai_analysis(
@@ -230,4 +236,45 @@ fn format_ai_output(output: &AiOutput) -> String {
     }
 
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_findings_input;
+
+    #[test]
+    fn normalize_findings_input_accepts_top_level_array() {
+        let findings = normalize_findings_input(serde_json::json!([
+            {"title": "one"},
+            {"title": "two"}
+        ]));
+
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0]["title"], "one");
+        assert_eq!(findings[1]["title"], "two");
+    }
+
+    #[test]
+    fn normalize_findings_input_accepts_findings_array_wrapper() {
+        let findings = normalize_findings_input(serde_json::json!({
+            "findings": [
+                {"title": "wrapped"}
+            ],
+            "scanner": "eggsec"
+        }));
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["title"], "wrapped");
+    }
+
+    #[test]
+    fn normalize_findings_input_preserves_single_finding_object() {
+        let findings = normalize_findings_input(serde_json::json!({
+            "title": "single",
+            "severity": "high"
+        }));
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["title"], "single");
+    }
 }

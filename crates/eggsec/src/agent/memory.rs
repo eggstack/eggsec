@@ -8,7 +8,7 @@ use rustc_hash::FxHashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -165,10 +165,13 @@ impl LongitudinalMemory {
     }
 
     async fn atomic_write(&self, path: &PathBuf, content: &str) -> Result<()> {
-        let tmp_path = path.with_file_name(format!(
-            "{}.tmp",
-            path.file_name().unwrap().to_string_lossy()
-        ));
+        let file_name = path.file_name().with_context(|| {
+            format!(
+                "Cannot atomically write path without file name: {}",
+                path.display()
+            )
+        })?;
+        let tmp_path = path.with_file_name(format!("{}.tmp", file_name.to_string_lossy()));
         let mut file = fs::File::create(&tmp_path).await?;
         file.write_all(content.as_bytes()).await?;
         file.flush().await?;
@@ -810,11 +813,27 @@ mod tests {
     async fn test_longitudinal_memory_new_creates_directories() {
         let temp_dir = TempDir::new().unwrap();
         let storage_dir = temp_dir.path().join("memory");
-        let memory = LongitudinalMemory::new(storage_dir.clone()).await.unwrap();
+        let _memory = LongitudinalMemory::new(storage_dir.clone()).await.unwrap();
 
         assert!(storage_dir.exists());
         assert!(storage_dir.join("targets").exists());
         assert!(storage_dir.join("patterns").exists());
+    }
+
+    #[tokio::test]
+    async fn atomic_write_rejects_paths_without_file_name() {
+        let temp_dir = TempDir::new().unwrap();
+        let memory = LongitudinalMemory::new(temp_dir.path().join("memory"))
+            .await
+            .unwrap();
+
+        let err = memory
+            .atomic_write(&PathBuf::from("/"), "{}")
+            .await
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Cannot atomically write path without file name"));
     }
 
     #[tokio::test]
