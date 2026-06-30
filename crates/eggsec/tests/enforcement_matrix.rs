@@ -2966,3 +2966,317 @@ fn agent_dispatch_path_approval_rejects_manual_override() {
         "Agent should reject manual override on automated surface"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Alias-aware dispatch_checked() tests
+// ---------------------------------------------------------------------------
+
+#[test]
+#[cfg(feature = "tool-api")]
+fn dispatch_checked_allows_alias_match() {
+    use eggsec::tool::{EnforcedDispatcher, Target, ToolDispatcher, ToolRegistry, ToolRequest};
+
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let desc = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("127.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = ctx
+        .approve(ExecutionSurface::McpServer, desc)
+        .expect("approve should succeed");
+
+    let registry = ToolRegistry::new();
+    let dispatcher = ToolDispatcher::new(registry);
+    let enforced = EnforcedDispatcher::new(dispatcher);
+
+    // Alias "scan" resolves to canonical "scan-ports" — alias matching should pass.
+    // The inner dispatcher will reject "scan" as unregistered, but that's fine —
+    // the important thing is it's NOT a "dispatch mismatch" error.
+    let request = ToolRequest::new("scan", Target::url("127.0.0.1"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(enforced.dispatch_checked(&approved, request));
+    match result {
+        Ok(_) => {} // Full dispatch succeeded (unexpected with empty registry, but fine)
+        Err(e) => {
+            let msg = format!("{}", e);
+            assert!(
+                !msg.contains("dispatch mismatch"),
+                "alias match should not produce dispatch mismatch error, got: {}",
+                msg
+            );
+            // Any other error (e.g., "Tool 'scan' not found") means alias matching passed
+        }
+    }
+}
+
+#[test]
+#[cfg(feature = "tool-api")]
+fn dispatch_checked_rejects_unrelated_alias() {
+    use eggsec::tool::{EnforcedDispatcher, Target, ToolDispatcher, ToolRegistry, ToolRequest};
+
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let desc = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("127.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = ctx
+        .approve(ExecutionSurface::McpServer, desc)
+        .expect("approve should succeed");
+
+    let registry = ToolRegistry::new();
+    let dispatcher = ToolDispatcher::new(registry);
+    let enforced = EnforcedDispatcher::new(dispatcher);
+
+    // "fuzz" is an unrelated tool — should fail
+    let request = ToolRequest::new("fuzz", Target::url("127.0.0.1"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(enforced.dispatch_checked(&approved, request));
+    assert!(
+        result.is_err(),
+        "dispatch_checked should reject unrelated alias"
+    );
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("dispatch mismatch"),
+        "error should mention dispatch mismatch, got: {}",
+        msg
+    );
+}
+
+#[test]
+#[cfg(feature = "tool-api")]
+fn dispatch_checked_allows_exact_match_after_alias_change() {
+    use eggsec::tool::{EnforcedDispatcher, Target, ToolDispatcher, ToolRegistry, ToolRequest};
+
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let desc = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("127.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = ctx
+        .approve(ExecutionSurface::McpServer, desc)
+        .expect("approve should succeed");
+
+    let registry = ToolRegistry::new();
+    let dispatcher = ToolDispatcher::new(registry);
+    let enforced = EnforcedDispatcher::new(dispatcher);
+
+    // Exact canonical match still works (inner dispatch will fail on empty registry,
+    // but the alias check should pass)
+    let request = ToolRequest::new("scan-ports", Target::url("127.0.0.1"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(enforced.dispatch_checked(&approved, request));
+    match result {
+        Ok(_) => {} // Full dispatch succeeded
+        Err(e) => {
+            let msg = format!("{}", e);
+            assert!(
+                !msg.contains("dispatch mismatch"),
+                "exact match should not produce dispatch mismatch error, got: {}",
+                msg
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Preflight/execution parity tests
+// ---------------------------------------------------------------------------
+
+use eggsec::config::preflight_operation;
+
+/// Assert that preflight outcome_kind matches the evaluate() classification.
+fn assert_preflight_parity(
+    surface: ExecutionSurface,
+    policy: ExecutionPolicy,
+    scope: LoadedScope,
+    desc: &OperationDescriptor,
+    label: &str,
+) {
+    let ctx = ctx_for_surface(surface, policy, scope);
+
+    let preflight = preflight_operation(surface, &ctx, desc.clone(), None);
+    let direct = ctx.evaluate(desc);
+
+    let kind_matches = match (&preflight.outcome_kind, &direct) {
+        (eggsec::config::PreflightOutcomeKind::Allow, EnforcementOutcome::Allow(_)) => true,
+        (eggsec::config::PreflightOutcomeKind::Warn, EnforcementOutcome::Warn(_)) => true,
+        (
+            eggsec::config::PreflightOutcomeKind::RequireConfirmation,
+            EnforcementOutcome::RequireConfirmation(_),
+        ) => true,
+        (eggsec::config::PreflightOutcomeKind::Deny, EnforcementOutcome::Deny(_)) => true,
+        _ => false,
+    };
+
+    assert!(
+        kind_matches,
+        "{}: preflight outcome_kind {:?} does not match evaluate outcome {:?}",
+        label, preflight.outcome_kind, direct
+    );
+
+    // Preflight must carry the same descriptor (operation, target, risk)
+    assert_eq!(preflight.descriptor.operation, desc.operation);
+    assert_eq!(preflight.descriptor.risk, desc.risk);
+    assert_eq!(preflight.descriptor.target, desc.target);
+}
+
+#[test]
+fn preflight_parity_cli_manual_safe_in_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::CliManual,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("127.0.0.1", OperationRisk::SafeActive),
+        "CliManual/SafeActive/in-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_cli_manual_safe_out_of_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::CliManual,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("93.184.216.34", OperationRisk::SafeActive),
+        "CliManual/SafeActive/out-of-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_rest_strict_safe_in_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::RestApi,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("127.0.0.1", OperationRisk::SafeActive),
+        "RestApi/SafeActive/in-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_rest_strict_intrusive_out_of_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::RestApi,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("93.184.216.34", OperationRisk::Intrusive),
+        "RestApi/Intrusive/out-of-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_mcp_strict_in_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::McpServer,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("127.0.0.1", OperationRisk::SafeActive),
+        "McpServer/SafeActive/in-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_mcp_strict_out_of_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::McpServer,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("93.184.216.34", OperationRisk::SafeActive),
+        "McpServer/SafeActive/out-of-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_agent_strict_in_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::SecurityAgent,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("127.0.0.1", OperationRisk::SafeActive),
+        "SecurityAgent/SafeActive/in-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_agent_strict_out_of_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::SecurityAgent,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("93.184.216.34", OperationRisk::SafeActive),
+        "SecurityAgent/SafeActive/out-of-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_tui_guarded_out_of_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::TuiManualStrict,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("93.184.216.34", OperationRisk::SafeActive),
+        "TuiManualStrict/SafeActive/out-of-scope",
+    );
+}
+
+#[test]
+fn preflight_parity_ci_strict_in_scope() {
+    assert_preflight_parity(
+        ExecutionSurface::Ci,
+        default_policy(),
+        loaded_explicit(scope_allow("127.0.0.1")),
+        &descriptor("127.0.0.1", OperationRisk::SafeActive),
+        "CiStrict/SafeActive/in-scope",
+    );
+}
+
+#[test]
+fn preflight_does_not_produce_approved_operation() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::RestApi, default_policy(), scope);
+
+    let preflight = preflight_operation(ExecutionSurface::RestApi, &ctx, desc.clone(), None);
+
+    // Preflight with Allow outcome should NOT produce an ApprovedOperation
+    // (it's advisory only — only approve/approve_manual produce tokens)
+    assert!(
+        matches!(
+            preflight.outcome_kind,
+            eggsec::config::PreflightOutcomeKind::Allow
+        ),
+        "Expected Allow for in-scope safe op"
+    );
+    // The fact that we get PreflightResult (not Result<ApprovedOperation>)
+    // proves preflight never dispatches
+    assert_eq!(preflight.surface, ExecutionSurface::RestApi);
+    assert!(!preflight.manual_override_honored);
+}

@@ -62,8 +62,8 @@ pub use policy_decision::{
 pub use presets::DefenseLabPreset;
 
 pub use policy::{
-    all_operation_metadata, metadata_for_tool_id, operation_metadata, OperationMetadata,
-    TargetPolicyKind, ALL_OPERATION_METADATA, ALL_OPERATION_METADATA_ALIASES,
+    all_operation_metadata, metadata_for_tool_id, operation_matches_tool_id, operation_metadata,
+    OperationMetadata, TargetPolicyKind, ALL_OPERATION_METADATA, ALL_OPERATION_METADATA_ALIASES,
 };
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,

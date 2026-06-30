@@ -3241,4 +3241,225 @@ mod tests {
         assert_eq!(denials[0].operation_id, "op-10");
         assert_eq!(denials[49].operation_id, "op-59");
     }
+
+    #[tokio::test]
+    async fn test_agent_deny_path_audit_event_fields() {
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("10.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let decision = crate::config::PolicyDecision::denied(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            "out of scope",
+        );
+        let outcome = EnforcementOutcome::Deny(decision);
+
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+
+        assert_eq!(event.surface, ExecutionSurface::SecurityAgent);
+        assert_eq!(
+            event.outcome,
+            crate::audit::AuditOutcome::Deny,
+            "deny path should produce AuditOutcome::Deny"
+        );
+        assert!(
+            !event.manual_override_ignored,
+            "agent deny path should not set override_ignored (override is unavailable, not ignored)"
+        );
+        assert!(
+            event.manual_override.is_none(),
+            "agent deny path should not record manual override audit"
+        );
+        assert!(
+            event.confirmation_classes.is_empty(),
+            "deny path should have empty confirmation_classes"
+        );
+        assert_eq!(event.operation_id, "scan-ports");
+        assert_eq!(event.target, Some("10.0.0.1".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_agent_confirmation_required_path_audit_event_fields() {
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "fuzz".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::Intrusive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("https://example.com".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let decision = crate::config::PolicyDecision::allowed(
+            "fuzz",
+            OperationMode::StandardAssessment,
+            OperationRisk::Intrusive,
+            vec![IntendedUse::WebAssessment],
+        );
+        let required_classes = vec![
+            crate::config::ConfirmationClass::HighRisk,
+            crate::config::ConfirmationClass::OutOfScope,
+        ];
+        let outcome = EnforcementOutcome::RequireConfirmation(decision);
+
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &required_classes,
+            None,
+            None,
+        );
+
+        assert_eq!(event.surface, ExecutionSurface::SecurityAgent);
+        assert_eq!(
+            event.outcome,
+            crate::audit::AuditOutcome::ConfirmationRequired,
+            "confirmation-required path should produce AuditOutcome::ConfirmationRequired"
+        );
+        assert!(!event.manual_override_ignored);
+        assert!(event.manual_override.is_none());
+        assert_eq!(event.confirmation_classes, required_classes);
+        assert_eq!(event.operation_id, "fuzz");
+    }
+
+    #[tokio::test]
+    async fn test_agent_manual_override_unavailable_path_audit_event_fields() {
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("10.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        // ManualOverrideUnavailable maps to Deny in the handler
+        let decision = crate::config::PolicyDecision::denied(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            "agent cannot apply manual overrides",
+        );
+        let outcome = EnforcementOutcome::Deny(decision);
+
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+
+        assert_eq!(event.surface, ExecutionSurface::SecurityAgent);
+        assert_eq!(
+            event.outcome,
+            crate::audit::AuditOutcome::Deny,
+            "ManualOverrideUnavailable mapped to Deny should produce AuditOutcome::Deny"
+        );
+        assert!(!event.manual_override_ignored);
+        assert!(event.confirmation_classes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_agent_allow_path_recorded_and_dropped() {
+        let agent = new_agent_for_test_default().await;
+        let enforcement = EnforcementContext::agent_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let desc = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: Vec::new(),
+            required_policy_flags: Vec::new(),
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: Vec::new(),
+        };
+        let outcome = EnforcementOutcome::Allow(crate::config::PolicyDecision::allowed(
+            "scan-ports",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+        ));
+
+        let event = crate::audit::audit_event_from_enforcement_outcome(
+            ExecutionSurface::SecurityAgent,
+            &enforcement,
+            &desc,
+            &outcome,
+            false,
+            false,
+            None,
+            &[],
+            None,
+            None,
+        );
+
+        assert_eq!(
+            event.outcome,
+            crate::audit::AuditOutcome::Allow,
+            "allow path should produce AuditOutcome::Allow"
+        );
+
+        // record_policy_denial should drop Allow events
+        agent.record_policy_denial(event);
+        assert!(
+            agent.recent_policy_denials().is_empty(),
+            "Allow events should be dropped by record_policy_denial"
+        );
+    }
 }

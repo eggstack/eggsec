@@ -15,6 +15,17 @@ Comprehensive reference of all security testing capabilities available in Eggsec
 
 ---
 
+## Enforcement Architecture
+
+All tool execution passes through scope validation and policy enforcement:
+
+- **Manual surfaces** (CLI, TUI): Operator-directed, supports manual overrides via `--yes` and confirmation flags
+- **Strict surfaces** (REST, MCP, security-agent, gRPC, CI): Noninteractive, requires `ApprovedOperation` token, no manual overrides
+- **Operation metadata** (`config::policy`): Single source of truth for operation descriptors, risk levels, capabilities, and exposure flags
+- **gRPC**: Strict posture (`McpStrict` profile), `grpc_exposable` per-tool control, `EnforcedDispatcher` for type-level dispatch
+
+---
+
 ## Reconnaissance Modules
 
 Eggsec includes 21+ reconnaissance modules for comprehensive target intelligence gathering:

@@ -11,6 +11,16 @@ All target-bearing operations go through scope validation:
 - Scope rules define allowed targets
 - Operations outside scope are rejected
 
+## Type-Level Enforcement
+
+Strict programmatic surfaces (REST, MCP, security-agent, gRPC, CI) require an `ApprovedOperation` token before dispatch. The token is produced exclusively by `EnforcementContext::approve()` or `approve_manual()` and verified by `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` calls are prohibited in strict surfaces and enforced by source-scan regression tests.
+
+Manual surfaces (CLI, TUI) do not require a token but still evaluate policy through `EnforcementContext::evaluate()`. The TUI pre-dispatch gate blocks side effects when the outcome is `Deny` or unresolved `RequireConfirmation`.
+
+## Operation Metadata
+
+`OperationMetadata` in `config::policy` is the single source of truth for all operation descriptors. Tool IDs are resolved to canonical metadata entries via `metadata_for_tool_id()`. Aliases (e.g., `scan` → `scan-ports`) are resolved at the metadata layer, not the dispatcher layer. `operation_matches_tool_id()` provides alias-aware comparison for dispatch verification.
+
 ## Operation Risk Tiers
 
 Eggsec classifies operations by risk level:

@@ -1,3 +1,5 @@
+> **Status: COMPLETED**
+
 # Phase 6 Handoff Plan: Metadata-Derived Operation Descriptors
 
 ## Goal

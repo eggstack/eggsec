@@ -118,9 +118,10 @@ impl EnforcedDispatcher {
     ) -> Result<ToolResponse, EggsecError> {
         let descriptor = approved.descriptor();
 
-        if request.tool != descriptor.operation {
+        if !crate::config::operation_matches_tool_id(&request.tool, &descriptor.operation) {
             return Err(EggsecError::Config(format!(
-                "dispatch mismatch: request tool '{}' does not match approved operation '{}'",
+                "dispatch mismatch: request tool '{}' does not match approved operation '{}' \
+                 (alias resolution attempted)",
                 request.tool, descriptor.operation
             )));
         }

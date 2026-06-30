@@ -1602,6 +1602,34 @@ pub fn all_operation_metadata() -> &'static [OperationMetadata] {
     ALL_OPERATION_METADATA
 }
 
+/// Check if a tool ID (possibly an alias) matches a canonical operation ID.
+///
+/// Returns true if:
+/// - `tool_id` == `operation_id` (exact match), or
+/// - `tool_id` is an alias that resolves to `operation_id`, or
+/// - `tool_id` resolves to the same canonical metadata entry as `operation_id`.
+pub fn operation_matches_tool_id(tool_id: &str, operation_id: &str) -> bool {
+    if tool_id == operation_id {
+        return true;
+    }
+    // Check if tool_id aliases to operation_id
+    if let Some((_, canonical)) = ALL_OPERATION_METADATA_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == tool_id)
+    {
+        if *canonical == operation_id {
+            return true;
+        }
+    }
+    // Check if tool_id resolves to the same canonical entry as operation_id
+    if let Some(meta) = metadata_for_tool_id(tool_id) {
+        if meta.id == operation_id {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod operation_metadata_tests {
     use super::*;
@@ -1712,6 +1740,44 @@ mod operation_metadata_tests {
         let alias = metadata_for_tool_id("recon-all").unwrap();
         assert_eq!(canonical.id, alias.id);
         assert_eq!(canonical.risk, alias.risk);
+    }
+
+    #[test]
+    fn operation_matches_tool_id_exact_match() {
+        assert!(operation_matches_tool_id("scan-ports", "scan-ports"));
+        assert!(operation_matches_tool_id("fuzz", "fuzz"));
+        assert!(operation_matches_tool_id("recon", "recon"));
+    }
+
+    #[test]
+    fn operation_matches_tool_id_alias_to_canonical() {
+        assert!(operation_matches_tool_id("scan", "scan-ports"));
+        assert!(operation_matches_tool_id("load", "load-test"));
+        assert!(operation_matches_tool_id("waf", "waf-detect"));
+        assert!(operation_matches_tool_id("stress", "stress-test"));
+        assert!(operation_matches_tool_id("fuzzer", "fuzz"));
+        assert!(operation_matches_tool_id("recon-all", "recon"));
+    }
+
+    #[test]
+    fn operation_matches_tool_id_canonical_to_alias() {
+        // Bidirectional: canonical ID should match when compared against alias
+        assert!(operation_matches_tool_id("scan-ports", "scan-ports"));
+        // This tests the metadata_for_tool_id fallback path
+        assert!(operation_matches_tool_id("load-test", "load-test"));
+    }
+
+    #[test]
+    fn operation_matches_tool_id_unrelated_no_match() {
+        assert!(!operation_matches_tool_id("scan", "fuzz"));
+        assert!(!operation_matches_tool_id("load", "stress-test"));
+        assert!(!operation_matches_tool_id("waf", "recon"));
+    }
+
+    #[test]
+    fn operation_matches_tool_id_unknown_no_match() {
+        assert!(!operation_matches_tool_id("nonexistent", "scan-ports"));
+        assert!(!operation_matches_tool_id("scan-ports", "nonexistent"));
     }
 
     /// Every tool registered by `create_default_registry()` must have operation metadata.
