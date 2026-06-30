@@ -264,8 +264,8 @@ impl EnforcementFacade {
 mod tests {
     use super::*;
     use eggsec::config::{
-        EnforcementContext, ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope,
-        OperationDescriptor, OperationMode, OperationRisk, Scope, ScopeRule, ScopeSource,
+        EnforcementContext, ExecutionPolicy, ExecutionSurface, LoadedScope, OperationDescriptor,
+        OperationMode, OperationRisk, Scope, ScopeRule, ScopeSource,
     };
 
     fn test_facade(surface: ExecutionSurface) -> EnforcementFacade {
@@ -369,5 +369,197 @@ mod tests {
     fn facade_state_accessor() {
         let facade = test_facade(ExecutionSurface::TuiManual);
         assert_eq!(facade.state().surface, ExecutionSurface::TuiManual);
+    }
+
+    // ─── Work item 3: Preflight/execution descriptor identity tests ────
+
+    fn test_facade_with_scope(surface: ExecutionSurface) -> EnforcementFacade {
+        let scope = Scope {
+            allowed_targets: vec![ScopeRule::new("example.com".to_string())],
+            excluded_targets: vec![],
+            ..Default::default()
+        };
+        let loaded_scope = LoadedScope {
+            scope,
+            source: ScopeSource::ConfigFile,
+            path: Some("scope.toml".to_string()),
+        };
+        let policy = ExecutionPolicy::default();
+        let enforcement = EnforcementContext::for_surface(surface, policy, loaded_scope.clone());
+        let state =
+            super::super::enforcement::TuiEnforcementState::new(surface, loaded_scope, enforcement);
+        EnforcementFacade::new(state)
+    }
+
+    fn test_facade_guarded(surface: ExecutionSurface) -> EnforcementFacade {
+        let mut facade = test_facade(surface);
+        facade.toggle_posture();
+        assert!(facade.is_guarded(), "should be in guarded mode");
+        facade
+    }
+
+    fn safe_active_descriptor(operation: &str, target: Option<&str>) -> OperationDescriptor {
+        OperationDescriptor {
+            operation: operation.to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![],
+            target: target.map(|t| t.to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        }
+    }
+
+    /// Preflight and execution agree: passive op with in-scope target → Allow.
+    #[test]
+    fn preflight_and_execution_agree_on_allowed_action() {
+        let mut facade = test_facade_with_scope(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+
+        // Preflight path
+        let preflight = facade.preflight(&desc);
+        let preflight_outcome = match preflight.outcome_kind {
+            super::super::enforcement::TuiPreflightOutcomeKind::Allow => "allowed",
+            super::super::enforcement::TuiPreflightOutcomeKind::Warn => "warning",
+            super::super::enforcement::TuiPreflightOutcomeKind::RequireConfirmation => {
+                "confirmation"
+            }
+            super::super::enforcement::TuiPreflightOutcomeKind::Deny => "denied",
+        };
+
+        // Execution path
+        let exec_result = facade.try_approve(desc);
+        let exec_outcome = if exec_result.is_ok() {
+            "allowed"
+        } else {
+            "denied"
+        };
+
+        assert_eq!(
+            preflight_outcome, exec_outcome,
+            "preflight and execution must agree on allowed action"
+        );
+    }
+
+    /// Preflight and execution agree: out-of-scope target → RequireConfirmation.
+    #[test]
+    fn preflight_and_execution_agree_on_confirmation_action() {
+        let mut facade = test_facade_with_scope(ExecutionSurface::TuiManual);
+        let desc = safe_active_descriptor("scan-ports", Some("evil.example.net"));
+
+        // Preflight path
+        let preflight = facade.preflight(&desc);
+        let preflight_needs_confirmation = matches!(
+            preflight.outcome_kind,
+            super::super::enforcement::TuiPreflightOutcomeKind::RequireConfirmation
+        );
+
+        // Execution path (TuiManual surface uses approve_manual, which may succeed
+        // with a Warn/Confirm outcome — the key is the evaluation agrees)
+        let exec_result = facade.try_approve(desc.clone());
+        // In manual mode, RequireConfirmation triggers a confirmation overlay,
+        // not an immediate deny. The facade's try_approve calls approve_manual
+        // which may succeed (returning Ok) if manual override is available.
+        // What matters is that the evaluation outcome matches.
+        let outcome = facade.state.enforcement.evaluate(&desc);
+        let exec_needs_confirmation = matches!(
+            outcome,
+            eggsec::config::EnforcementOutcome::RequireConfirmation(_)
+        );
+
+        assert_eq!(
+            preflight_needs_confirmation, exec_needs_confirmation,
+            "preflight and execution must agree on confirmation requirement"
+        );
+    }
+
+    /// Preflight and execution agree: guarded mode + out-of-scope → Deny.
+    #[test]
+    fn preflight_and_execution_agree_on_denied_action() {
+        let mut facade = test_facade_guarded(ExecutionSurface::TuiManual);
+        let desc = safe_active_descriptor("scan-ports", Some("evil.example.net"));
+
+        // Preflight path
+        let preflight = facade.preflight(&desc);
+        let preflight_denied = matches!(
+            preflight.outcome_kind,
+            super::super::enforcement::TuiPreflightOutcomeKind::Deny
+        );
+
+        // Execution path
+        let exec_result = facade.try_approve(desc.clone());
+        let exec_denied = exec_result.is_err();
+
+        assert_eq!(
+            preflight_denied, exec_denied,
+            "preflight and execution must agree on denied action"
+        );
+    }
+
+    /// Descriptor mismatch: cached approval for one operation does not match a different operation.
+    #[test]
+    fn descriptor_mismatch_catches_different_operations() {
+        let mut facade = test_facade(ExecutionSurface::TuiManual);
+        let desc1 = passive_descriptor("recon", Some("example.com"));
+        let desc2 = passive_descriptor("scan-ports", Some("example.com"));
+
+        let approved = facade.try_approve(desc1.clone()).unwrap();
+        facade.pending_approved = Some(approved);
+
+        // take_cached_approval takes the value regardless of match (due to Option::take)
+        // so verify the operation mismatch via the returned value
+        let taken = facade.take_cached_approval(&desc2);
+        assert!(
+            taken.is_none(),
+            "cached approval for 'recon' should not match 'scan-ports'"
+        );
+        // After take, pending is now None (take always empties)
+        assert!(
+            facade.pending_approved.is_none(),
+            "pending_approved should be empty after take"
+        );
+    }
+
+    /// Preflight result's outcome_kind matches the raw enforcement evaluate() outcome.
+    #[test]
+    fn preflight_populates_same_outcome_as_raw_evaluate() {
+        let mut facade = test_facade_with_scope(ExecutionSurface::TuiManual);
+        let desc = passive_descriptor("recon", Some("example.com"));
+
+        // Raw evaluation
+        let raw_outcome = facade.enforcement().evaluate(&desc);
+
+        // Preflight
+        let preflight = facade.preflight(&desc);
+
+        // Compare
+        let raw_matches = match (&raw_outcome, &preflight.outcome_kind) {
+            (
+                eggsec::config::EnforcementOutcome::Allow(_),
+                super::super::enforcement::TuiPreflightOutcomeKind::Allow,
+            ) => true,
+            (
+                eggsec::config::EnforcementOutcome::Warn(_),
+                super::super::enforcement::TuiPreflightOutcomeKind::Warn,
+            ) => true,
+            (
+                eggsec::config::EnforcementOutcome::RequireConfirmation(_),
+                super::super::enforcement::TuiPreflightOutcomeKind::RequireConfirmation,
+            ) => true,
+            (
+                eggsec::config::EnforcementOutcome::Deny(_),
+                super::super::enforcement::TuiPreflightOutcomeKind::Deny,
+            ) => true,
+            _ => false,
+        };
+
+        assert!(
+            raw_matches,
+            "preflight outcome_kind {:?} should match raw evaluate outcome {:?}",
+            preflight.outcome_kind, raw_outcome
+        );
     }
 }

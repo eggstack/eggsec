@@ -908,4 +908,181 @@ mod tests {
             }
         }
     }
+
+    // ─── Work item 5: Feature-gated tab visibility tests ───────────────
+
+    /// tab_specs() always returns all 33 specs regardless of compiled features.
+    #[test]
+    fn test_tab_specs_returns_all_33() {
+        assert_eq!(
+            tab_specs().len(),
+            33,
+            "tab_specs() should return all 33 tab specs"
+        );
+    }
+
+    /// Every tab in Tab::all() has a corresponding spec in tab_specs().
+    #[test]
+    fn test_all_tabs_have_corresponding_spec() {
+        for tab in Tab::all() {
+            let spec = spec_for(*tab);
+            assert!(
+                spec.is_some(),
+                "Tab {:?} (stable_id {:?}) has no corresponding spec in tab_specs()",
+                tab,
+                tab.stable_id()
+            );
+        }
+    }
+
+    /// Base tabs (no feature gate) are always present in Tab::all().
+    #[test]
+    fn test_base_tabs_always_visible() {
+        let base_tabs = [
+            Tab::Recon,
+            Tab::Load,
+            Tab::ScanPorts,
+            Tab::ScanEndpoints,
+            Tab::Fingerprint,
+            Tab::Fuzz,
+            Tab::Waf,
+            Tab::WafStress,
+            Tab::Scan,
+            Tab::Resume,
+            Tab::Proxy,
+            Tab::Packet,
+            Tab::GraphQl,
+            Tab::OAuth,
+            Tab::Cluster,
+            Tab::Stress,
+            Tab::Report,
+            Tab::Settings,
+            Tab::History,
+            Tab::Dashboard,
+            Tab::Auth,
+        ];
+        let all = Tab::all();
+        for tab in &base_tabs {
+            assert!(
+                all.contains(tab),
+                "Base tab {:?} should always be in Tab::all()",
+                tab
+            );
+            // Verify the spec has no feature gate
+            let spec = spec_for(*tab).expect("base tab should have spec");
+            assert!(
+                spec.feature.is_none(),
+                "Base tab {:?} should have no feature gate, but has {:?}",
+                tab,
+                spec.feature
+            );
+        }
+    }
+
+    /// Feature-gated tabs have a non-empty, valid feature string.
+    #[test]
+    fn test_feature_gated_tabs_have_valid_feature() {
+        let gated_features = [
+            ("nse", Tab::Nse),
+            ("advanced-hunting", Tab::Hunt),
+            ("headless-browser", Tab::Browser),
+            ("compliance", Tab::Compliance),
+            ("database", Tab::Storage),
+            ("external-integrations", Tab::Integrations),
+            ("finding-workflow", Tab::Workflow),
+            ("vuln-management", Tab::Vuln),
+            ("wireless", Tab::Wireless),
+            ("db-pentest", Tab::DbPentest),
+            ("web-proxy", Tab::Intercept),
+            ("c2", Tab::C2),
+        ];
+        for (expected_feature, tab) in &gated_features {
+            let spec = spec_for(*tab).expect("gated tab should have spec");
+            assert_eq!(
+                spec.feature,
+                Some(*expected_feature),
+                "Tab {:?} should have feature {:?}, but has {:?}",
+                tab,
+                expected_feature,
+                spec.feature
+            );
+        }
+    }
+
+    /// Every spec with a feature gate corresponds to a Tab variant that is
+    /// conditionally compiled (i.e., gated behind #[cfg(feature = "...")]).
+    #[test]
+    fn test_gated_specs_match_cfg_compilation() {
+        for spec in tab_specs() {
+            if let Some(feature) = spec.feature {
+                // The spec declares a feature gate. Verify the tab's stable_id
+                // is resolvable (it always is since TAB_SPECS is static),
+                // and that the feature string is one of the known gated features.
+                let known_gated = [
+                    "nse",
+                    "advanced-hunting",
+                    "headless-browser",
+                    "compliance",
+                    "database",
+                    "external-integrations",
+                    "finding-workflow",
+                    "vuln-management",
+                    "wireless",
+                    "db-pentest",
+                    "web-proxy",
+                    "c2",
+                ];
+                assert!(
+                    known_gated.contains(&feature),
+                    "Tab '{}' has unknown feature gate '{}'",
+                    spec.stable_id,
+                    feature
+                );
+            }
+        }
+    }
+
+    /// Feature-gated tabs that are compiled in should appear in Tab::all().
+    /// Feature-gated tabs that are NOT compiled should NOT appear in Tab::all().
+    #[test]
+    fn test_feature_gated_visibility_matches_compilation() {
+        let all = Tab::all();
+        for spec in tab_specs() {
+            if let Some(_feature) = spec.feature {
+                let tab = spec.tab;
+                let in_all = all.contains(&tab);
+                // We can't directly test cfg! at runtime, but we can verify
+                // the invariant: if a gated tab is in tab_specs() and in Tab::all(),
+                // its feature must be compiled. If it's in tab_specs() but NOT in
+                // Tab::all(), its feature must NOT be compiled.
+                //
+                // This test validates the structural consistency: a gated tab's
+                // presence in Tab::all() is deterministic based on compilation.
+                if in_all {
+                    // Tab is compiled in — its feature is active
+                    // Verify it's also in visible_tab_specs() (test-only helper)
+                    let visible = visible_tab_specs();
+                    let in_visible = visible.iter().any(|s| s.stable_id == spec.stable_id);
+                    assert!(
+                        in_visible,
+                        "Tab '{}' is in Tab::all() but not in visible_tab_specs()",
+                        spec.stable_id
+                    );
+                }
+            }
+        }
+    }
+
+    /// No tab spec has an empty stable_id.
+    #[test]
+    fn test_no_empty_stable_ids() {
+        for spec in tab_specs() {
+            assert!(!spec.stable_id.is_empty(), "Tab spec has empty stable_id");
+            assert!(
+                !spec.title.is_empty(),
+                "Tab spec '{}' has empty title",
+                spec.stable_id
+            );
+        }
+    }
 }

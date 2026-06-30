@@ -106,6 +106,58 @@ Manages the overall application state, event loop, and rendering.
 | Db Pentest | `db_pentest.rs` | Direct database security assessment (Phase 3-5: Postgres/MySQL/MSSQL/MongoDB/Redis, correlation engine, compliance mapping, evidence bundles) |
 | C2 | `c2.rs` | C2 (Command & Control) framework simulation for defense validation (depends on `c2` feature) |
 
+#### Per-Tab Metadata Inventory
+
+Each row below captures the tab's stable ID, operation ID (for descriptor building), feature gate, whether it uses the direct-launch pre-dispatch policy gate, whether it produces a task config, and whether it spawns side effects. Tabs without an operation ID do not participate in enforcement evaluation.
+
+| # | Tab | stable_id | operation | feature | direct_launch | TaskBuilder | Descriptor | Spawns |
+|---|-----|-----------|-----------|---------|---------------|-------------|------------|--------|
+| 0 | Recon | `recon` | `recon` | — | no | yes | yes | yes |
+| 1 | Load | `load` | `load-test` | — | no | yes | yes | yes |
+| 2 | Scan Ports | `scan_ports` | `scan-ports` | — | no | yes | yes | yes |
+| 3 | Scan Endpoints | `scan_endpoints` | `scan-endpoints` | — | no | yes | yes | yes |
+| 4 | Fingerprint | `fingerprint` | `fingerprint` | — | no | yes | yes | yes |
+| 5 | Fuzz | `fuzz` | `fuzz` | — | no | yes | yes | yes |
+| 6 | WAF | `waf` | `waf` | — | no | yes | yes | yes |
+| 7 | WAF Stress | `waf_stress` | `waf-stress` | — | no | yes | yes | yes |
+| 8 | Scan (Pipeline) | `scan` | `scan-pipeline` | — | no | yes | yes | yes |
+| 9 | Resume | `resume` | — | — | no | no | no | no |
+| 10 | Proxy | `proxy` | — | — | no | no | no | no |
+| 11 | Packet | `packet` | `packet` | — | **yes** | yes | yes | yes |
+| 12 | GraphQL | `graphql` | `graphql` | — | no | yes | yes | yes |
+| 13 | OAuth | `oauth` | `oauth` | — | **yes** | yes | yes | yes |
+| 14 | Cluster | `cluster` | — | — | **yes** | no¹ | no | no |
+| 15 | Stress | `stress` | `stress-test` | — | **yes** | no² | yes | no² |
+| 16 | Report | `report` | — | — | no | no | no | no |
+| 17 | NSE | `nse` | `nse` | `nse` | **yes** | no³ | yes | no³ |
+| 18 | Settings | `settings` | — | — | no | no | no | no |
+| 19 | History | `history` | — | — | no | no | no | no |
+| 20 | Dashboard | `dashboard` | — | — | no | no | no | no |
+| 21 | Hunt | `hunt` | `hunt` | `advanced-hunting` | **yes** | yes | yes | yes |
+| 22 | Browser | `browser` | `browser` | `headless-browser` | **yes** | yes | yes | yes |
+| 23 | Compliance | `compliance` | `compliance` | `compliance` | no | yes | yes | yes |
+| 24 | Storage | `storage` | `storage` | `database` | no | yes | yes | yes |
+| 25 | Integrations | `integrations` | `integrations` | `external-integrations` | no | yes | yes | yes |
+| 26 | Workflow | `workflow` | `workflow` | `finding-workflow` | no | yes | yes | yes |
+| 27 | Vuln | `vuln` | `vuln` | `vuln-management` | no | yes | yes | yes |
+| 28 | Wireless | `wireless` | `wireless` | `wireless` | **yes** | yes | yes | yes |
+| 29 | Auth Test | `auth` | `auth-test` | — | **yes** | yes | yes | yes |
+| 30 | Db Pentest | `db_pentest` | `db-pentest` | `db-pentest` | **yes** | yes | yes | yes |
+| 31 | Intercept | `intercept` | `proxy-intercept` | `web-proxy` | **yes** | yes | yes | yes |
+| 32 | C2 | `c2` | `c2` | `c2` | **yes** | yes | yes | yes |
+
+**Notes:**
+- ¹ Cluster's `build_task_config()` always returns `None` — handle_enter() handles UI actions locally.
+- ² Stress has `direct_launch: true` (pre-dispatch gate fires), but `build_current_task()` returns `None` — the tab manages its own start/stop state without spawning a tokio task.
+- ³ NSE has `direct_launch: true` and produces a descriptor, but has no `TaskBuilder` impl — `build_current_task()` returns `None`.
+
+**Summary counts:**
+- 33 total tabs (21 base + 12 feature-gated)
+- 26 have operation IDs (participate in enforcement evaluation)
+- 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`)
+- 24 produce tasks that spawn side effects
+- 7 have no operation/task/descriptor (Resume, Proxy, Cluster, Report, Settings, History, Dashboard)
+
 **Tab Traits** (`tabs/mod.rs`):
 - `TabState` - State: `state()`, `progress()`, `reset()`, `set_error()`
 - `TabInput` - Input: `handle_focus_next()`, `handle_char()`, `handle_enter()`, etc.
