@@ -392,6 +392,59 @@ impl Agent {
         })
     }
 
+    /// Test-only constructor that sets `enforced_dispatcher` to `Some(...)`.
+    ///
+    /// Used to verify the invariant that missing `ApprovedOperation` under a
+    /// production enforced dispatcher returns a hard error.
+    #[cfg(test)]
+    pub(crate) async fn new_for_test_with_enforced(
+        config: AgentConfig,
+        dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync>,
+        alert_router: Box<dyn AlertSenderTrait + Send + Sync>,
+        enforced_dispatcher: EnforcedDispatcher,
+    ) -> Result<Self> {
+        let registry = create_default_registry();
+        let portfolio = if let Some(ref path) = config.portfolio_path {
+            TargetPortfolio::load_from_file(path)?
+        } else {
+            TargetPortfolio::new()
+        };
+        let memory_dir = config.memory_dir.join("memory");
+        let memory = LongitudinalMemory::new(memory_dir).await?;
+        let constraint_checker = if let Some(constraints) = config.operational_constraints.clone() {
+            ConstraintChecker::new(constraints)
+        } else {
+            ConstraintChecker::new(OperationalConstraints::default())
+        };
+        Ok(Self {
+            config,
+            registry,
+            constraint_checker,
+            dispatcher,
+            enforced_dispatcher: Some(enforced_dispatcher),
+            #[cfg(feature = "ai-integration")]
+            ai_client: None,
+            scheduler: CronScheduler::new(),
+            portfolio,
+            memory,
+            alert_router,
+            event_handlers: Vec::new(),
+            running: Arc::new(tokio::sync::RwLock::new(false)),
+            shutdown_notify: tokio::sync::Notify::new(),
+            config_watcher: None,
+            started_at: None,
+            last_tick_at: None,
+            last_scan_started_at: None,
+            last_scan_completed_at: None,
+            scans_completed: 0,
+            scans_failed: 0,
+            alerts_sent: 0,
+            last_error: None,
+            last_preflight_denial: std::sync::Mutex::new(None),
+            recent_policy_denials: std::sync::Mutex::new(Vec::new()),
+        })
+    }
+
     #[cfg(feature = "ai-integration")]
     pub async fn with_ai_client(mut self, ai_config: crate::config::AiConfig) -> Self {
         match AiClient::new(ai_config.clone()) {
@@ -2847,6 +2900,56 @@ mod tests {
         // For this test we instead assert success path executed. (Call count verification is indirect via success.)
         // To directly count, we would expose a getter on Agent in test cfg, but success + no error is sufficient
         // alongside the denial test above to prove the gate is pre-dispatch.
+    }
+
+    #[tokio::test]
+    async fn test_agent_enforced_dispatcher_missing_approved_operation_returns_invariant_error() {
+        use crate::tool::dispatcher::EnforcedDispatcher;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        // Build an enforced dispatcher (production-style).
+        let tool_dispatcher = crate::tool::ToolDispatcher::new(crate::tool::ToolRegistry::new());
+        let enforced = EnforcedDispatcher::new(tool_dispatcher);
+
+        // Use a mock dispatcher that would fail if called — we must never reach it.
+        let dispatcher = MockDispatcher::new(None);
+        let alert_sender = MockAlertSender {
+            sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test_with_enforced(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+            enforced,
+        )
+        .await
+        .unwrap();
+
+        // Call execute_scan_with_depth WITHOUT an approved_token.
+        // This must return the invariant error — never dispatch.
+        let result = agent
+            .execute_scan_with_depth(
+                "https://example.com",
+                "recon",
+                crate::agent::portfolio::ScanDepth::Shallow,
+                None, // approved_token = None
+                crate::tool::request::TargetType::Url,
+                None,
+            )
+            .await;
+
+        assert!(result.is_err(), "must fail when approved_token is missing");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("security-agent dispatch reached without ApprovedOperation"),
+            "expected invariant violation error, got: {}",
+            err
+        );
     }
 
     // --- Phase 3: AgentStrict enforcement defense-in-depth ---

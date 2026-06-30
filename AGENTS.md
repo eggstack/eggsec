@@ -239,7 +239,7 @@ Canonical reference points when updating guidance or skills:
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4840 (includes #[test] + #[tokio::test]) |
+| Tests | ~4866 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 878 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |

@@ -1,6 +1,8 @@
 # Dual-Mode Enforcement Closure Verification Plan
 
 > **Status: COMPLETE** — Closed 2026-06-30. All workstreams verified; documentation updated to reflect implemented architecture.
+>
+> **Final correction (2026-06-30):** Agent `execute_scan_with_depth()` raw dispatch fallback was replaced with a hard invariant error (`plans/dual-mode-enforcement-final-closure-correction.md`). Regression test allowlist narrowed from broad `src/agent` prefix to structured `path_suffix + line_contains` entries. Direct unit test (`test_agent_enforced_dispatcher_missing_approved_operation_returns_invariant_error`) added to confirm the invariant. Dual-mode enforcement roadmap is now fully closed.
 
 ## Goal
 
