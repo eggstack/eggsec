@@ -32,7 +32,7 @@ For the full capability matrix with risk tiers, feature gates, surface exposure,
 
 ## Architecture
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the workspace crate ownership table, enforcement model, frontend execution flows, side-effecting execution path inventory, and transitional API register. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 30 normative invariants that all code must preserve.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the workspace crate ownership table, enforcement model, frontend execution flows, side-effecting execution path inventory, and transitional API register. See [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) for the command registry inventory and dispatch architecture. See [`docs/ARCHITECTURE_INVARIANTS.md`](docs/ARCHITECTURE_INVARIANTS.md) for the 30 normative invariants that all code must preserve.
 
 ## What Eggsec is not
 

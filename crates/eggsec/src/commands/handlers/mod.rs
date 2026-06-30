@@ -223,6 +223,21 @@ impl CommandContext {
         self
     }
 
+    /// Build an `OperationDescriptor` from the command registry for the given
+    /// command ID and target. Returns `None` if the command has no registry
+    /// entry with operation metadata (config/helper/server commands).
+    ///
+    /// This is the preferred way to build descriptors for registry-backed
+    /// commands. It delegates to `OperationMetadata::descriptor_for_target()`
+    /// to ensure consistency with the canonical metadata source.
+    pub fn describe_from_registry(
+        &self,
+        command_id: &str,
+        target: Option<String>,
+    ) -> Option<OperationDescriptor> {
+        crate::commands::registry::build_descriptor_for_command(command_id, target)
+    }
+
     #[deprecated(
         note = "Unused legacy helper. Scope checks are centralized in EnforcementContext::evaluate()."
     )]

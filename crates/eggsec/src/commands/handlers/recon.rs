@@ -1,23 +1,14 @@
 use crate::commands::handlers::CommandContext;
-use crate::config::OperationDescriptor;
 use anyhow::Result;
 
 pub async fn handle_recon(ctx: &CommandContext, mut args: crate::cli::ReconArgs) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "recon".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(
-            crate::utils::extract_target_from_url(&args.target)
-                .unwrap_or_else(|| args.target.clone()),
-        ),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    let target = Some(
+        crate::utils::extract_target_from_url(&args.target).unwrap_or_else(|| args.target.clone()),
+    );
+    let descriptor = ctx
+        .describe_from_registry("recon", target)
+        .expect("recon should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.target.clone();
     let scan_id = format!("recon-{}", chrono::Utc::now().timestamp());

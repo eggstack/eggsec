@@ -40,6 +40,8 @@ The architecture enforces a critical invariant: **authorization is centralized; 
     └──────────────────────────────────────────┘
 ```
 
+The **command registry** (`commands/registry.rs`) provides static, inspectable metadata for CLI/TUI dispatch. Pilot commands (recon, scan-ports, scan-endpoints, fingerprint) use registry-based descriptor generation. Legacy commands remain on inline descriptor construction. The registry is metadata and routing, not authorization — `EnforcementContext::evaluate()` remains the mandatory pre-dispatch gate. See [COMMAND_REGISTRY.md](COMMAND_REGISTRY.md) for the full inventory.
+
 ## 2. Workspace Crate Ownership
 
 | Crate | Role | Policy Decisions | Execution | Frontend | Dependency-Light | Notes |
@@ -247,13 +249,13 @@ cat findings.json | eggsec ci --baseline baseline.json
 
 | Operation Family | Handler File | Operation ID | Risk | Feature Gate | Descriptor | Enforcement | Extra Runtime Gate |
 |-----------------|-------------|-------------|------|-------------|:---:|:---:|-------------------|
-| Port scan | `scan.rs` | `scan-ports` | SafeActive | — | ✓ | ✓ | — |
-| Endpoint scan | `scan.rs` | `scan-endpoints` | SafeActive | — | ✓ | ✓ | — |
-| Fingerprint | `scan.rs` | `fingerprint` | SafeActive | — | ✓ | ✓ | — |
+| Port scan | `scan.rs` | `scan-ports` | SafeActive | — | ✓ (registry) | ✓ | — |
+| Endpoint scan | `scan.rs` | `scan-endpoints` | SafeActive | — | ✓ (registry) | ✓ | — |
+| Fingerprint | `scan.rs` | `fingerprint` | SafeActive | — | ✓ (registry) | ✓ | — |
 | NSE script | `scan.rs` | `nse` | Intrusive | `nse` | ✓ | ✓ | — |
 | Pipeline scan | `scan.rs` | `scan` | SafeActive | — | ✓ | ✓ | — |
 | Resume scan | `scan.rs` | `scan-resume` | SafeActive | — | ✓ | ✓ | — |
-| Recon | `recon.rs` | `recon` | SafeActive | — | ✓ | ✓ | — |
+| Recon | `recon.rs` | `recon` | SafeActive | — | ✓ (registry) | ✓ | — |
 | Fuzz | `fuzz.rs` | `fuzz` | Intrusive | — | ✓ | ✓ | — |
 | WAF detect | `fuzz.rs` | `waf-detect` | Intrusive | — | ✓ | ✓ | — |
 | WAF stress | `fuzz.rs` | `waf-stress` | Intrusive | — | ✓ | ✓ | — |
@@ -312,6 +314,7 @@ cat findings.json | eggsec ci --baseline baseline.json
 | Central command match growth | `commands/handlers/mod.rs` | Growing match arms in `handle_command()`. | **Keep for now**. Monitor; refactor in Phase 2 if needed. |
 | Domain logic in main crate | Various modules in `eggsec/src/` | Some domain logic still embedded (e.g., scanner, fuzzer internals). | **Keep for now**. Domain extraction is a Phase 2+ concern. |
 | CI handler dispatch invariant | `commands/handlers/ci.rs:5` | **Tested (Phase 2)**. Regression test `ci_handler_has_no_dispatch_path`. | **Test**. Add regression test verifying no `ToolDispatcher` import in CI handler. |
+| Command registry (Phase 6) | `commands/registry.rs` | **Active (Phase 6)**. Static metadata for CLI/TUI dispatch. Pilot: 4 commands use registry-based descriptors. | **Keep**. Incremental migration; legacy fallback for non-pilot commands. |
 
 ## 7. Architecture Invariants
 
@@ -344,3 +347,4 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 | gRPC enforcement | `crates/eggsec/src/tool/protocol/grpc.rs` |
 | Agent enforcement | `crates/eggsec/src/agent/mod.rs` |
 | Enforced dispatch regression test | `crates/eggsec/tests/enforced_dispatch_regression.rs` |
+| Command registry | `crates/eggsec/src/commands/registry.rs` |

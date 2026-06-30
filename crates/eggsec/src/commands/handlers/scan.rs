@@ -6,18 +6,10 @@ pub async fn handle_scan_ports(
     ctx: &CommandContext,
     mut args: crate::cli::PortScanArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "scan-ports".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.host.clone()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    let descriptor = ctx
+        .describe_from_registry("scan-ports", Some(args.host.clone()))
+        .expect("scan-ports should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.host.clone();
     let scan_id = format!("port-{}", chrono::Utc::now().timestamp());
@@ -47,18 +39,10 @@ pub async fn handle_scan_endpoints(
     ctx: &CommandContext,
     mut args: crate::cli::EndpointScanArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "scan-endpoints".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.url.clone()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    let descriptor = ctx
+        .describe_from_registry("scan-endpoints", Some(args.url.clone()))
+        .expect("scan-endpoints should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.url.clone();
     let scan_id = format!("endpoint-{}", chrono::Utc::now().timestamp());
@@ -88,18 +72,10 @@ pub async fn handle_fingerprint(
     ctx: &CommandContext,
     mut args: crate::cli::FingerprintArgs,
 ) -> Result<()> {
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
-        operation: "fingerprint".to_string(),
-        mode: crate::config::OperationMode::StandardAssessment,
-        risk: crate::config::OperationRisk::SafeActive,
-        intended_uses: vec![crate::config::IntendedUse::WebAssessment],
-        target: Some(args.host.clone()),
-        required_features: Vec::new(),
-        required_policy_flags: Vec::new(),
-        requires_private_or_local_target: false,
-        requires_explicit_scope: false,
-        required_capabilities: Vec::new(),
-    })?;
+    let descriptor = ctx
+        .describe_from_registry("fingerprint", Some(args.host.clone()))
+        .expect("fingerprint should have registry metadata");
+    ctx.evaluate_and_enforce_operation(descriptor)?;
     args.json |= ctx.json;
     let target = args.host.clone();
     let scan_id = format!("fingerprint-{}", chrono::Utc::now().timestamp());
