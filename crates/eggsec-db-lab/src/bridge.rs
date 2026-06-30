@@ -73,6 +73,131 @@ pub fn to_scan_report_data_db(result: &DbPentestReport) -> ScanReportData {
     }
 }
 
+/// Convert a DbPentestReport into the normalized ReportEnvelope.
+///
+/// This produces the new normalized envelope alongside the existing `to_scan_report_data_db()`
+/// bridge. DB-specific details (db_type, dry_run, queries_executed, correlation, compliance)
+/// are preserved in findings' evidence items and the envelope's metadata.
+pub fn to_report_envelope(result: &DbPentestReport) -> eggsec_output::envelope::ReportEnvelope {
+    use eggsec_output::envelope::{
+        BaselineSummary, EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord, RedactionState,
+    };
+
+    let mut findings: Vec<FindingRecord> = result
+        .findings
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let finding_id = format!("db-{}-{}", result.db_type, i);
+            let mut record = FindingRecord::new(
+                &finding_id,
+                "db-pentest",
+                "db-pentest",
+                f.severity,
+                &f.title,
+                &f.description,
+            )
+            .with_category(&f.category)
+            .with_location(&result.target)
+            .with_remediation(&f.recommendation);
+
+            if let Some(ref evidence_text) = f.evidence {
+                let ev_id = format!("{}-ev-{}", finding_id, 0);
+                let ev_source = EvidenceSource {
+                    tool: "eggsec-db-lab".to_string(),
+                    module: Some("db-pentest".to_string()),
+                    run_id: None,
+                };
+                record = record.with_evidence(
+                    EvidenceItem::new(
+                        ev_id,
+                        EvidenceKind::DatabaseFinding,
+                        ev_source,
+                        evidence_text,
+                    )
+                    .with_data_ref(evidence_text.clone())
+                    .with_redaction(RedactionState::PartiallyRedacted),
+                );
+            }
+            record
+        })
+        .collect();
+
+    // Add correlation evidence if present
+    if let Some(ref correlation) = result.correlation {
+        if !correlation.correlations.is_empty() {
+            let ev_id = format!("db-{}-correlation", result.db_type);
+            let summary = format!(
+                "{} correlations found (avg confidence {}%)",
+                correlation.summary.total_correlations, correlation.summary.avg_confidence
+            );
+            let corr_finding = FindingRecord::new(
+                &ev_id,
+                "db-pentest",
+                "db-pentest",
+                eggsec_core::types::Severity::Info,
+                "DB correlation summary",
+                summary.clone(),
+            )
+            .with_category(format!("db-{}-correlation", result.db_type))
+            .with_location(&result.target)
+            .with_evidence(
+                EvidenceItem::new(
+                    format!("{}-ev-0", ev_id),
+                    EvidenceKind::Correlation,
+                    EvidenceSource {
+                        tool: "eggsec-db-lab".to_string(),
+                        module: Some("correlation-engine".to_string()),
+                        run_id: None,
+                    },
+                    summary,
+                )
+                .with_redaction(RedactionState::None),
+            );
+            findings.push(corr_finding);
+        }
+    }
+
+    // Add execution metadata as a summary finding
+    let metadata_finding = FindingRecord::new(
+        "metadata-db-pentest",
+        "db-pentest",
+        "db-pentest",
+        eggsec_core::types::Severity::Info,
+        "DB pentest execution metadata",
+        format!(
+            "db_type={} scan_type={} queries_executed={} dry_run={} manifest_matched={} duration_ms={}",
+            result.db_type, result.scan_type, result.queries_executed, result.dry_run, result.manifest_matched, result.duration_ms
+        ),
+    )
+    .with_category(format!("db-{}-info", result.db_type))
+    .with_location(&result.target);
+    findings.push(metadata_finding);
+
+    let mut envelope = eggsec_output::envelope::ReportEnvelope::new("db-pentest")
+        .with_domain_id("db-pentest")
+        .with_target(&result.target)
+        .with_tool_metadata(eggsec_output::envelope::ToolMetadata {
+            tool_name: "eggsec-db-lab".to_string(),
+            tool_version: None,
+            eggsec_version: None,
+        });
+
+    for finding in findings {
+        envelope = envelope.with_finding(finding);
+    }
+
+    // Add baseline summary if available
+    if let Some(ref regression_summary) = result.regression_summary {
+        let mut baseline = BaselineSummary::new("db-pentest");
+        baseline.summary = Some(regression_summary.clone());
+        envelope = envelope.with_baseline(baseline);
+    }
+
+    envelope.refresh_evidence_manifest();
+    envelope
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -58,11 +58,11 @@ They are available across all surfaces where their exposure flags permit.
 Operations grouped by capability domain. Each domain declares a `DomainDescriptor` with
 integrated CLI, TUI, tool, and report adapters.
 
-| Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Baseline | Strict | Scope | Docs |
-|--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|------|
-| db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | DATABASE_PENTEST.md |
-| mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | optional target | MOBILE.md |
-| mobile-dynamic | defense-lab | mobile-dynamic | Intrusive | `mobile-dynamic` | Y | Y | N | always | always | always | N | optional target | MOBILE.md |
+| Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Baseline | Strict | Scope | Normalized Report | Docs |
+|--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|-------------------|------|
+| db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | Y | DATABASE_PENTEST.md |
+| mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | optional target | Y | MOBILE.md |
+| mobile-dynamic | defense-lab | mobile-dynamic | Intrusive | `mobile-dynamic` | Y | Y | N | always | always | always | N | optional target | N | MOBILE.md |
 
 ## Risk Tiers
 

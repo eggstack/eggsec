@@ -324,6 +324,92 @@ pub fn to_scan_report_data(result: &MobileScanReport) -> eggsec_output::convert:
     }
 }
 
+/// Convert a MobileScanReport into the normalized ReportEnvelope.
+///
+/// This produces the new normalized envelope alongside the existing `to_scan_report_data()`
+/// bridge. Domain-specific details (platform, app_id, version) are preserved in the
+/// findings' category strings and evidence items.
+pub fn to_report_envelope(result: &MobileScanReport) -> eggsec_output::envelope::ReportEnvelope {
+    use eggsec_output::envelope::{
+        EvidenceItem, EvidenceKind, EvidenceSource, FindingRecord, RedactionState,
+    };
+
+    let mut findings: Vec<FindingRecord> = result
+        .findings
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let finding_id = format!("{}-static-{}", result.platform.as_str(), i);
+            let category = format!("mobile-{}-{}", result.platform.as_str(), f.category);
+            let mut record = FindingRecord::new(
+                &finding_id,
+                "mobile-static",
+                "mobile-static",
+                f.severity,
+                &f.title,
+                &f.description,
+            )
+            .with_category(&category)
+            .with_location(&result.target)
+            .with_remediation(&f.recommendation);
+
+            if let Some(ref evidence_text) = f.evidence {
+                let ev_id = format!("{}-ev-{}", finding_id, 0);
+                let ev_source = EvidenceSource {
+                    tool: "eggsec-mobile-lab".to_string(),
+                    module: Some("static-analysis".to_string()),
+                    run_id: None,
+                };
+                record = record.with_evidence(
+                    EvidenceItem::new(
+                        ev_id,
+                        EvidenceKind::StaticAnalysis,
+                        ev_source,
+                        evidence_text,
+                    )
+                    .with_data_ref(evidence_text.clone())
+                    .with_redaction(RedactionState::None),
+                );
+            }
+            record
+        })
+        .collect();
+
+    let metadata_finding = FindingRecord::new(
+        "metadata-static",
+        "mobile-static",
+        "mobile-static",
+        eggsec_core::types::Severity::Info,
+        "Mobile static analysis execution metadata",
+        format!(
+            "platform={} target={} findings={} duration_ms={}",
+            result.platform.as_str(),
+            result.target,
+            result.findings.len(),
+            result.duration_ms
+        ),
+    )
+    .with_category(format!("mobile-{}-metadata", result.platform.as_str()))
+    .with_location(&result.target);
+    findings.push(metadata_finding);
+
+    let mut envelope = eggsec_output::envelope::ReportEnvelope::new("mobile-static")
+        .with_domain_id("mobile-static")
+        .with_target(&result.target)
+        .with_tool_metadata(eggsec_output::envelope::ToolMetadata {
+            tool_name: "eggsec-mobile-lab".to_string(),
+            tool_version: result.version.clone(),
+            eggsec_version: None,
+        });
+
+    for finding in findings {
+        envelope = envelope.with_finding(finding);
+    }
+
+    envelope.refresh_evidence_manifest();
+    envelope
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

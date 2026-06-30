@@ -16,6 +16,11 @@ remain in `crates/eggsec/src/output/`.
 
 ## Key Types and Patterns
 
+### Normalized Report Envelope
+The `envelope` module (`eggsec_output::envelope`) provides protocol-neutral report types for cross-domain report unification. Domain crates convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()` functions. This module is always available (no feature gate).
+
+Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `BaselineSummary`, `ToolMetadata`, `EvidenceKind`, `EvidenceSource`, `RedactionState`.
+
 ### Report Formats
 `output/` supports multiple output formats:
 - JSON (via `convert_to_json()`)

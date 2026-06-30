@@ -31,6 +31,7 @@ pub mod convert;
 pub mod csv;
 pub mod dedup;
 pub mod diff;
+pub mod envelope;
 pub mod escape;
 pub mod html;
 pub mod junit;
@@ -57,6 +58,10 @@ pub use convert::{
 };
 pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
 pub use diff::DiffSummary;
+pub use envelope::{
+    BaselineSummary, EvidenceItem, EvidenceKind, EvidenceManifest, EvidenceSource, FindingRecord,
+    RedactionState, ReportEnvelope, ToolMetadata,
+};
 pub use junit::{JUnitBuilder, JUnitReport, JUnitTestResult};
 pub use policy_summary::PolicySummary;
 pub use sarif::{SarifBuilder, SarifReport};

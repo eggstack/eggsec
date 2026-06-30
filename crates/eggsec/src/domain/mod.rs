@@ -129,6 +129,8 @@ pub struct ReportIntegration {
     pub operation_id: &'static str,
     /// Whether evidence bundles are supported for this report.
     pub evidence_bundle_supported: bool,
+    /// Whether the domain supports the normalized ReportEnvelope bridge.
+    pub normalized_report_supported: bool,
 }
 
 /// Whether dry-run mode is supported by this domain.
@@ -468,6 +470,7 @@ const DB_PENTEST_REPORT: ReportIntegration = ReportIntegration {
     report_kind: "db-pentest",
     operation_id: "db-pentest",
     evidence_bundle_supported: true,
+    normalized_report_supported: true,
 };
 
 #[allow(dead_code)]
@@ -531,6 +534,7 @@ const MOBILE_STATIC_REPORT: ReportIntegration = ReportIntegration {
     report_kind: "mobile-static",
     operation_id: "mobile-static",
     evidence_bundle_supported: false,
+    normalized_report_supported: true,
 };
 
 #[allow(dead_code)]
@@ -593,6 +597,7 @@ const MOBILE_DYNAMIC_REPORT: ReportIntegration = ReportIntegration {
     report_kind: "mobile-dynamic",
     operation_id: "mobile-dynamic",
     evidence_bundle_supported: true,
+    normalized_report_supported: false,
 };
 
 #[allow(dead_code)]

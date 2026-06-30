@@ -179,6 +179,7 @@ Canonical reference points when updating guidance or skills:
 - `architecture/c2.md` - C2 framework
 - `architecture/audit.md` - Normalized audit events for enforcement decisions
 - `architecture/domain_contract.md` - Domain module contract (Phase 3): static metadata descriptors for capability domains
+- `architecture/report_envelope.md` - Normalized report/evidence envelope for cross-domain report unification
 
 ### Feature Flags
 
@@ -202,6 +203,8 @@ Canonical reference points when updating guidance or skills:
 **Marker-only features (no deps, just build gating):**
 
 `tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default; includes `POST /api/v1/tools/{tool_id}/preflight` endpoint), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
+
+> **Note**: The `eggsec-output::envelope` module (normalized report/evidence types) is always available — no feature gate required.
 
 ### Key Types
 
@@ -242,6 +245,15 @@ Canonical reference points when updating guidance or skills:
 - `CommandCategory` - Classification enum for command registry entries: `SideEffectingNetwork`, `LocalFileDomain`, `PassiveAnalytical`, `ConfigOutputHelper`, `FrontendServer`, `LegacySpecial`.
 - `ToolRegistration` - Canonical tool registration metadata, single source of truth for tool listing across MCP, REST, gRPC, and agent surfaces. Defined in `tool::registration`.
 - `ToolRegistrationSource` - Origin enum for tool registrations: `Base`, `FeatureGated(&str)`, `Domain(&str)`.
+- `ReportEnvelope` - Normalized report container (`eggsec-output::envelope`); preserves report identity, findings, evidence, policy, and baseline summaries
+- `FindingRecord` - Normalized finding record within a ReportEnvelope; includes evidence items, references, and category
+- `EvidenceItem` - Single evidence entry with kind, source, redaction state, and optional data reference
+- `EvidenceManifest` - Manifest of all evidence items in a report; tracks total/redacted counts and provenance
+- `BaselineSummary` - Standardized baseline comparison result; added/resolved/unchanged counts with severity deltas
+- `ToolMetadata` - Tool/version metadata for report envelopes
+- `EvidenceKind` - Category of evidence data (HttpRequest, DatabaseFinding, MobileManifest, TrafficCapture, etc.)
+- `EvidenceSource` - Provenance of evidence (tool, module, run_id)
+- `RedactionState` - Sensitivity classification: None, FullyRedacted, PartiallyRedacted, Summarized
 
 ### Important Patterns
 
@@ -269,6 +281,9 @@ Canonical reference points when updating guidance or skills:
 - **Domain Module Contract**: `DomainDescriptor` in `domain/mod.rs` is the static metadata contract for capability domains. Domains declare operations, feature gates, CLI/TUI/MCP/report integrations, and dry-run/evidence support. Descriptors are `const`-constructible, authorization-neutral, and never perform network I/O. `all_domain_descriptors()` returns all known domains regardless of feature state; check `required_feature` before use. Pilot domain: `db-pentest`. Use `all_domain_descriptors()` for the registry, `domain_descriptor_by_id()` for lookup.
 - **Command Registry**: `commands/registry.rs` has `CommandRegistration` and `REGISTERED_COMMANDS` static array. `CommandContext::describe_from_registry()` builds `OperationDescriptor` from registry metadata. Pilot commands (recon, scan-ports, scan-endpoints, fingerprint) use registry-based descriptor generation; legacy commands remain on inline construction. `suggest_command()` provides edit-distance suggestions for unknown commands. See `docs/COMMAND_REGISTRY.md`.
 - **Tool Registration Builder**: `tool::registration` provides `all_tool_registrations()`, `mcp_tool_registrations()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`. These derive from `OperationMetadata` and `DomainDescriptor` `ToolIntegration`. Protocol listing functions now filter through registration metadata. See `docs/TOOL_REGISTRATION.md`.
+- **Normalized Report Envelope**: `ReportEnvelope` in `eggsec-output::envelope` is the protocol-neutral report contract. Domain crates convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()` functions. The envelope preserves report identity, finding records, evidence manifests, policy summaries, and baseline summaries. Domain bridges (mobile-static, db-pentest) produce envelopes alongside existing `to_scan_report_data()` bridges. See `docs/REPORT_EVIDENCE_MODEL.md`.
+- **Evidence Redaction Model**: `RedactionState` in `eggsec-output::envelope` classifies evidence sensitivity. `EvidenceManifest.redacted_items` tracks redacted count. Domains classify evidence as `None`, `FullyRedacted`, `PartiallyRedacted`, or `Summarized` based on content sensitivity.
+- **Domain Descriptor Report Metadata**: `ReportIntegration` in `domain/mod.rs` includes `normalized_report_supported: bool` flag indicating whether a domain has implemented the `to_report_envelope()` bridge. Currently `true` for db-pentest and mobile-static.
 
 ### Codebase Health
 
