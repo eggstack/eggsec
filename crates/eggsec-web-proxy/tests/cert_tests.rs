@@ -1,4 +1,4 @@
-use eggsec::proxy::intercept::{CertGenerator, CertMaterial};
+use eggsec_web_proxy::intercept::{CertGenerator, CertMaterial};
 use std::time::Duration;
 
 fn assert_valid_material(cert: &CertMaterial) {

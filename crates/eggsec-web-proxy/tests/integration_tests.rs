@@ -5,8 +5,8 @@
 
 #[cfg(test)]
 mod integration_tests {
-    use eggsec::proxy::intercept::protocols::*;
-    use eggsec::proxy::intercept::types::*;
+    use eggsec_web_proxy::intercept::protocols::*;
+    use eggsec_web_proxy::intercept::types::*;
     use std::collections::HashMap;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};

@@ -5,8 +5,8 @@
 
 #[cfg(test)]
 mod stress_tests {
-    use eggsec::proxy::intercept::protocols::*;
-    use eggsec::proxy::intercept::types::*;
+    use eggsec_web_proxy::intercept::protocols::*;
+    use eggsec_web_proxy::intercept::types::*;
     use futures::{stream, StreamExt};
     use std::collections::HashMap;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -234,7 +234,7 @@ mod stress_tests {
     /// Stress test: Rule evaluation with 10,000 rules.
     #[tokio::test]
     async fn test_stress_10000_rules() {
-        use eggsec::proxy::intercept::{
+        use eggsec_web_proxy::intercept::{
             EnhancedRule, EnhancedRuleSet, RuleAction, RuleCondition, RuleContext,
         };
 
@@ -263,7 +263,7 @@ mod stress_tests {
     /// Stress test: Plugin registry with 100 plugins.
     #[tokio::test]
     async fn test_stress_100_plugins() {
-        use eggsec::proxy::intercept::plugins::*;
+        use eggsec_web_proxy::intercept::plugins::*;
 
         struct TestHandler {
             id: String,
@@ -323,7 +323,7 @@ mod stress_tests {
     /// Stress test: Evidence bundle with 1000 flows.
     #[tokio::test]
     async fn test_stress_evidence_bundle_1000_flows() {
-        use eggsec::proxy::intercept::EvidenceBundle;
+        use eggsec_web_proxy::intercept::EvidenceBundle;
 
         let mut report = WebProxySessionReport::new("127.0.0.1:8080", true);
 

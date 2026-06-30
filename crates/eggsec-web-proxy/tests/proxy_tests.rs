@@ -2,8 +2,8 @@
 //!
 //! Tests proxy configuration, pool operations, and rotation strategies.
 
-use eggsec::proxy::ProxyHealth;
-use eggsec::proxy::{ProxyConfig, ProxyEntry, ProxyPool, ProxyType};
+use eggsec_web_proxy::ProxyHealth;
+use eggsec_web_proxy::{ProxyConfig, ProxyEntry, ProxyPool, ProxyType};
 use std::str::FromStr;
 
 #[test]

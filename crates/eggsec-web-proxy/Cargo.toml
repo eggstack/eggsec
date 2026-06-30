@@ -1,0 +1,105 @@
+[package]
+name = "eggsec-web-proxy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Web proxy and MITM interception domain crate for Eggsec defense-lab security assessment"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords = ["security", "proxy", "mitm", "intercept", "defense-lab"]
+categories = ["command-line-utilities", "development-tools::testing"]
+
+[dependencies]
+# Shared types from core
+eggsec-core = { path = "../eggsec-core" }
+# Output bridge (for ScanReportData, FindingData)
+eggsec-output = { path = "../eggsec-output" }
+
+# TLS / certificate generation
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["ring"] }
+rustls-pki-types = "1"
+rcgen = { version = "0.14", features = ["pem"] }
+
+# WebSocket interception
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
+
+# HTTP/2 interception
+h2 = { version = "0.4", optional = true }
+http = { version = "1", optional = true }
+
+# gRPC protobuf decoding
+prost = { version = "0.14", optional = true }
+prost-types = { version = "0.14", optional = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# HTTP client (health checks)
+reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking", "cookies"], default-features = false }
+
+# Concurrent collections
+dashmap.workspace = true
+
+# Random selection
+rand.workspace = true
+
+# Serialization
+serde = { workspace = true }
+serde_json.workspace = true
+serde_yaml_neo = "0.11"
+
+# Time
+chrono.workspace = true
+
+# Base64 (proxy auth)
+base64.workspace = true
+
+# Async utilities
+futures = "0.3"
+
+# Bytes (HTTP/2 body)
+bytes = "1"
+
+# Performance
+rustc-hash.workspace = true
+
+# Tracing
+tracing.workspace = true
+
+# Error handling
+anyhow.workspace = true
+
+# Compression (evidence bundles)
+flate2.workspace = true
+
+# Mutex/RwLock for shared state
+parking_lot = "0.12"
+
+# HMAC/SHA256 for bundle signing
+hmac = "0.12"
+sha2 = "0.10"
+
+# Hex encoding for signatures and protobuf
+hex = "0.4"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = []
+
+# Core web proxy feature (enables intercept, protocols, rules)
+web-proxy = ["dep:tokio-tungstenite", "dep:h2", "dep:http", "dep:prost", "dep:prost-types"]
+
+# MCP tool schema types (marker only)
+web-proxy-mcp = ["web-proxy"]
+
+# Transparent proxy (Linux iptables/nftables)
+transparent-proxy = ["web-proxy"]
+
+# Dynamic plugin loading
+dynamic-plugins = ["web-proxy"]
