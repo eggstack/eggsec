@@ -8,6 +8,13 @@
 >
 > See [METADATA_OWNERSHIP.md](METADATA_OWNERSHIP.md) for the update workflow and ownership model.
 
+> **Exposure semantics**: `MCP/API`, `REST`, and `Agent` columns indicate whether the operation's
+> `OperationMetadata` permits programmatic registration under the relevant feature and profile.
+> `Y` means the metadata flag is set — it does **not** mean the operation executes safely by default
+> or is baseline-agent-safe. Strict programmatic surfaces (MCP, REST, agent, gRPC) require explicit
+> scope manifest, policy approval, and `EnforcementContext::evaluate()` before dispatch. High-risk
+> operations with `Y` exposure flags still require non-baseline capabilities and strict policy gates.
+
 ## Standalone Operations
 
 These operations are registered in `ALL_OPERATION_METADATA` and are not part of a specific domain.
@@ -54,8 +61,8 @@ integrated CLI, TUI, tool, and report adapters.
 | Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Baseline | Strict | Scope | Docs |
 |--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|------|
 | db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | DATABASE_PENTEST.md |
-| mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | explicit scope | MOBILE.md |
-| mobile-dynamic | defense-lab | mobile-dynamic | Intrusive | `mobile-dynamic` | Y | Y | N | always | always | always | Y | explicit scope | MOBILE.md |
+| mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | optional target | MOBILE.md |
+| mobile-dynamic | defense-lab | mobile-dynamic | Intrusive | `mobile-dynamic` | Y | Y | N | always | always | always | N | optional target | MOBILE.md |
 
 ## Risk Tiers
 
@@ -99,6 +106,7 @@ integrated CLI, TUI, tool, and report adapters.
 | EvasionTesting | No | Defense evasion technique detection |
 | DatabaseAssessment | No | Direct database security checks |
 | C2Simulation | No | C2 framework simulation |
+| MobileDynamicAnalysis | No | Android dynamic/runtime lab testing via ADB, logcat, proxy, and Frida instrumentation |
 
 ## Feature Gating Summary
 

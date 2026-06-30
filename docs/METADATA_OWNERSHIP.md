@@ -16,7 +16,7 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 | Operation ID, risk, capabilities, feature gates | `ALL_OPERATION_METADATA` in `config/policy.rs` | Policy enforcement, preflight, REST/MCP/gRPC registration, TUI tabs |
 | Tool aliases | `ALL_OPERATION_METADATA_ALIASES` in `config/policy.rs` | `metadata_for_tool_id()` resolver |
 | Domain category, integrations, dry-run/evidence/baseline | `DomainDescriptor` in `domain/mod.rs` | Capability matrix generation, preflight domain info, documentation |
-| Capability matrix | `docs/CAPABILITY_MATRIX.md` | Humans, CI validation |
+| Capability matrix | `docs/CAPABILITY_MATRIX.md` | Humans (manually maintained from OperationMetadata + DomainDescriptor; metadata consistency tests validate underlying structures) |
 | Consistency tests | `tests/metadata_consistency.rs` | CI, development validation |
 
 ## Ownership Rules
@@ -45,6 +45,23 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 3. Run the full metadata consistency test suite.
 4. If removing or renaming an operation, update all aliases and integration points.
 
+## Programmatic Exposure Semantics
+
+The `mcp_exposable`, `rest_exposable`, `agent_exposable`, and `grpc_exposable` flags on `OperationMetadata` indicate whether an operation **may** be registered on the relevant programmatic surface when the required feature is compiled and the runtime policy approves.
+
+These flags do **not** mean:
+- The operation executes safely by default
+- The operation is baseline-agent-safe
+- No scope manifest is required
+- `EnforcementContext::evaluate()` will permit dispatch
+
+Strict programmatic surfaces (MCP, REST, agent, gRPC) always require:
+1. Explicit scope manifest (`LoadedScope`)
+2. `EnforcementContext::evaluate()` approval
+3. For strict profiles: `ApprovedOperation` token before dispatch
+
+High-risk operations (risk > `SafeActive`) with programmatic exposure flags still require non-baseline capabilities and strict policy gates. The `docs/CAPABILITY_MATRIX.md` Standalone Operations table documents these flags as metadata-level exposure permissions, not default runtime behavior.
+
 ## Validation Pipeline
 
 The following tests validate metadata consistency:
@@ -69,6 +86,12 @@ The following tests validate metadata consistency:
 | `domain_docs_urls_are_nonempty_when_present` | Docs URLs are non-empty strings |
 | `all_domains_declare_dry_run_support` | Every domain declares dry-run support |
 | `all_domains_declare_baseline_support` | Every domain declares baseline support |
+| `mobile_dynamic_strict_surface_support_is_false` | Safety: mobile-dynamic strict surface support is false |
+| `mobile_dynamic_requires_explicit_scope_is_false` | Safety: mobile-dynamic does not require explicit scope |
+| `mobile_dynamic_declares_dynamic_analysis_capability` | mobile-dynamic declares MobileDynamicAnalysis capability |
+| `mobile_static_requires_explicit_scope_is_false` | Safety: mobile-static does not require explicit scope |
+| `high_risk_agent_exposable_ops_are_not_baseline_safe` | Safety: high-risk agent ops are not baseline-safe |
+| `domain_docs_urls_reference_existing_files` | Local docs URLs reference existing files |
 
 ## Safety Invariants
 
@@ -83,3 +106,11 @@ The following tests validate metadata consistency:
 - **Phase 3**: Introduced `DomainDescriptor` and `OperationIntegration` for the `db-pentest` pilot domain.
 - **Phase 4**: Added `CapabilityMatrixRow`, `generate_capability_matrix()`, `BaselineSupport`, `docs_url`, `strict_surface_support`, metadata consistency tests, and `docs/CAPABILITY_MATRIX.md`.
 - **Phase 5** (future): Extract additional domains to the contract, slim the main crate.
+
+## Exposure Model Decision
+
+The project uses **Model A** (broad programmatic exposure flags with explicit semantics):
+- High-risk operations may have `mcp_exposable`/`rest_exposable`/`agent_exposable` set to `true`
+- This means metadata permits registration when compiled, registered, scoped, and policy-authorized
+- It does **not** mean default safe execution or baseline agent safety
+- Strict surfaces require `EnforcementContext::evaluate()` and `ApprovedOperation` tokens

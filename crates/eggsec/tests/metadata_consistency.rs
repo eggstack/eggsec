@@ -178,23 +178,22 @@ fn no_alias_maps_to_self() {
 
 // ─── Capability Matrix Consistency ─────────────────────────────────────────
 
-/// The capability matrix should produce rows when domains are registered.
-/// With no features enabled, the domain registry is empty (no rows).
-/// With db-pentest enabled, at least one row should appear.
+/// The capability matrix should produce rows for all known domain descriptors,
+/// independent of compile-time feature state. `available_domain_descriptors()`
+/// is the filtered view for currently compiled features.
 #[test]
 fn capability_matrix_has_rows_when_domains_registered() {
     let rows = generate_capability_matrix();
-    // Every row should have non-empty fields regardless of feature state.
+    // All known domain descriptors produce rows regardless of feature state.
+    assert!(
+        !rows.is_empty(),
+        "capability matrix should have rows for all known domain descriptors"
+    );
+    // Every row should have non-empty fields.
     for row in &rows {
         assert!(!row.domain_id.is_empty());
         assert!(!row.operation_id.is_empty());
     }
-    // When db-pentest is enabled, rows should be non-empty.
-    #[cfg(feature = "db-pentest")]
-    assert!(
-        !rows.is_empty(),
-        "capability matrix is empty — db-pentest domain should produce rows"
-    );
 }
 
 /// Every capability matrix row should have non-empty required fields.
@@ -630,25 +629,23 @@ fn high_risk_agent_exposable_requires_capability_and_policy() {
 
 // ─── Domain Docs URL File Validation ──────────────────────────────────────
 
-/// If a domain declares a docs_url starting with "docs/", the referenced file should exist.
+/// If a domain declares a docs_url starting with "docs/", the referenced file
+/// must exist relative to the workspace root. This prevents doc drift.
 #[test]
 fn domain_docs_urls_reference_existing_files() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir.join("../..");
     for domain in all_domain_descriptors() {
         if let Some(url) = domain.docs_url {
             if url.starts_with("docs/") {
-                let path = std::path::Path::new(url);
-                // Only check if we're running from the workspace root.
-                // The file check is best-effort for local docs paths.
-                if path.exists() {
-                    // File exists — good.
-                } else {
-                    // In CI or different working directory, the file may not be
-                    // resolvable. Document the claim but don't fail the test.
-                    eprintln!(
-                        "NOTE: domain '{}' docs_url '{}' — file not found from current directory (may be expected in CI)",
-                        domain.id, url
-                    );
-                }
+                let path = workspace_root.join(url);
+                assert!(
+                    path.exists(),
+                    "domain '{}' docs_url '{}' does not exist at '{}'",
+                    domain.id,
+                    url,
+                    path.display()
+                );
             }
         }
     }
@@ -695,4 +692,88 @@ fn db_pentest_mcp_opt_in_semantics() {
         !tool.mcp_exposed_by_default,
         "db-pentest must not be MCP-exposed by default"
     );
+}
+
+// ─── Mobile Row Drift Guards ─────────────────────────────────────────────
+
+/// mobile-dynamic must not have strict surface support.
+#[test]
+fn mobile_dynamic_strict_surface_support_is_false() {
+    let domain = all_domain_descriptors()
+        .iter()
+        .find(|d| d.id == "mobile-dynamic")
+        .expect("mobile-dynamic domain should exist");
+    assert!(
+        !domain.strict_surface_support,
+        "mobile-dynamic must not have strict_surface_support = true"
+    );
+}
+
+/// mobile-dynamic scope must not require explicit scope.
+#[test]
+fn mobile_dynamic_requires_explicit_scope_is_false() {
+    let domain = all_domain_descriptors()
+        .iter()
+        .find(|d| d.id == "mobile-dynamic")
+        .expect("mobile-dynamic domain should exist");
+    for op in domain.operations {
+        assert!(
+            !op.requires_explicit_scope,
+            "mobile-dynamic operation '{}' must not require explicit scope",
+            op.operation_id
+        );
+    }
+}
+
+/// mobile-dynamic must declare MobileDynamicAnalysis capability.
+#[test]
+fn mobile_dynamic_declares_dynamic_analysis_capability() {
+    let domain = all_domain_descriptors()
+        .iter()
+        .find(|d| d.id == "mobile-dynamic")
+        .expect("mobile-dynamic domain should exist");
+    for op in domain.operations {
+        assert!(
+            op.capabilities
+                .contains(&eggsec::config::Capability::MobileDynamicAnalysis),
+            "mobile-dynamic operation '{}' must declare MobileDynamicAnalysis capability",
+            op.operation_id
+        );
+    }
+}
+
+/// mobile-static scope must not require explicit scope.
+#[test]
+fn mobile_static_requires_explicit_scope_is_false() {
+    let domain = all_domain_descriptors()
+        .iter()
+        .find(|d| d.id == "mobile-static")
+        .expect("mobile-static domain should exist");
+    for op in domain.operations {
+        assert!(
+            !op.requires_explicit_scope,
+            "mobile-static operation '{}' must not require explicit scope",
+            op.operation_id
+        );
+    }
+}
+
+/// High-risk agent-exposable operations must be blocked by default policy
+/// (i.e. they require strict policy approval, not baseline allowance).
+#[test]
+fn high_risk_agent_exposable_ops_are_not_baseline_safe() {
+    use eggsec::config::OperationRisk;
+    for m in all_operation_metadata() {
+        if m.agent_exposable && m.risk > OperationRisk::SafeActive {
+            // These operations must have non-empty required_features or
+            // required_capabilities, meaning they need explicit opt-in.
+            let has_gate = !m.required_capabilities.is_empty() || !m.required_features.is_empty();
+            assert!(
+                has_gate,
+                "high-risk agent-exposable operation '{}' (risk {:?}) must have \
+                 non-baseline capability or feature gate — it cannot be baseline-safe",
+                m.id, m.risk
+            );
+        }
+    }
 }
