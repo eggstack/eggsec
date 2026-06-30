@@ -228,7 +228,7 @@ Canonical reference points when updating guidance or skills:
 - `EnforcedDispatcher` - Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
-- `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`. Split MCP fields: `mcp_exposed_by_default: bool` and `required_mcp_feature: Option<&'static str>`.
+- `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`. Fields: `tool_integration: bool`, `mcp_exposed_by_default: bool`, `required_mcp_feature: Option<&'static str>`, `rest_exposable: bool`, `agent_exposable: bool`.
 - `Capability` - Enum of domain capability categories used in `DomainDescriptor` operations (e.g. `MobileDynamicAnalysis`). Defined in `config::policy`.
 - `DryRunSupport` - Enum for dry-run support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `EvidenceSupport` - Enum for evidence bundle support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
