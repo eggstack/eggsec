@@ -238,6 +238,8 @@ Canonical reference points when updating guidance or skills:
 - `BaselineSupport` - Enum for baseline/regression support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `CommandRegistration` - Static metadata for registered commands (`commands/registry.rs`); declares command ID, operation ID, category, feature gate, and visibility flags. Registry is metadata and routing, not authorization.
 - `CommandCategory` - Classification enum for command registry entries: `SideEffectingNetwork`, `LocalFileDomain`, `PassiveAnalytical`, `ConfigOutputHelper`, `FrontendServer`, `LegacySpecial`.
+- `ToolRegistration` - Canonical tool registration metadata, single source of truth for tool listing across MCP, REST, gRPC, and agent surfaces. Defined in `tool::registration`.
+- `ToolRegistrationSource` - Origin enum for tool registrations: `Base`, `FeatureGated(&str)`, `Domain(&str)`.
 
 ### Important Patterns
 
@@ -264,12 +266,13 @@ Canonical reference points when updating guidance or skills:
 - **CI has no dispatch path**: The CI handler is a passive quality gate that processes pre-existing findings from stdin; it does not dispatch tools.
 - **Domain Module Contract**: `DomainDescriptor` in `domain/mod.rs` is the static metadata contract for capability domains. Domains declare operations, feature gates, CLI/TUI/MCP/report integrations, and dry-run/evidence support. Descriptors are `const`-constructible, authorization-neutral, and never perform network I/O. `all_domain_descriptors()` returns all known domains regardless of feature state; check `required_feature` before use. Pilot domain: `db-pentest`. Use `all_domain_descriptors()` for the registry, `domain_descriptor_by_id()` for lookup.
 - **Command Registry**: `commands/registry.rs` has `CommandRegistration` and `REGISTERED_COMMANDS` static array. `CommandContext::describe_from_registry()` builds `OperationDescriptor` from registry metadata. Pilot commands (recon, scan-ports, scan-endpoints, fingerprint) use registry-based descriptor generation; legacy commands remain on inline construction. `suggest_command()` provides edit-distance suggestions for unknown commands. See `docs/COMMAND_REGISTRY.md`.
+- **Tool Registration Builder**: `tool::registration` provides `all_tool_registrations()`, `mcp_tool_registrations()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`. These derive from `OperationMetadata` and `DomainDescriptor` `ToolIntegration`. Protocol listing functions now filter through registration metadata. See `docs/TOOL_REGISTRATION.md`.
 
 ### Codebase Health
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4866 (includes #[test] + #[tokio::test]) |
+| Tests | ~4876 (includes #[test] + #[tokio::test]) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 878 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |

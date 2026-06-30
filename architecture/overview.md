@@ -632,6 +632,8 @@ The registry lives in `config::policy` and is accessible from all surfaces:
 
 Every `OperationDescriptor` is generated from `OperationMetadata` via `descriptor_for_target()`. This eliminates drift between REST, MCP, gRPC, TUI, and agent descriptor construction. Alias mapping (32 entries) ensures that alternate tool IDs (REST tool names, MCP tool names, registry IDs, gRPC tool IDs) all resolve to the same canonical metadata.
 
+**Tool Registration Builder** (`tool::registration`): Derives per-protocol tool listings from `OperationMetadata` and `DomainDescriptor` `ToolIntegration`. Builder functions (`mcp_tool_registrations()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`) filter by exposure flags, replacing direct `registry.list()` calls. Each `ToolRegistration` carries tool ID, operation ID, exposure flags, source (`Base`/`FeatureGated`/`Domain`), and optional MCP feature gate. Registration is computed metadata — it does not grant authorization and is not a third static registry. See [TOOL_REGISTRATION.md](../docs/TOOL_REGISTRATION.md).
+
 ### Normalized Audit Events (Phase 10)
 
 `audit.rs` provides a single `EnforcementAuditEvent` model for consistent audit records across all execution surfaces. Every meaningful enforcement decision (allow, warn, deny, confirmation-required, confirmed override) produces an audit event with surface, profile, operation, target, outcome, scope provenance, and optional correlation ID.

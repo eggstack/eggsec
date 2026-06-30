@@ -496,6 +496,7 @@ See [docker-compose.yml](docker-compose.yml) for Docker configuration.
 - [Wireless Testing](docs/WIRELESS.md) - WiFi scanning and active attacks (passive recon + deauth/disassoc)
 - [Mobile Analysis](docs/MOBILE.md) - APK/IPA static and dynamic analysis (ADB, Frida, correlation)
 - [Auth Testing Lab](docs/AUTH_LAB.md) - Authentication control validation (brute-force, lockout, MFA)
+- [Tool Registration](docs/TOOL_REGISTRATION.md) - Registration inventory, protocol listing, enforcement paths
 - [Usage Guide](docs/USAGE.md) - Comprehensive usage reference, output models, command examples
 
 ## Security Considerations

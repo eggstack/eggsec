@@ -62,6 +62,27 @@ Strict programmatic surfaces (MCP, REST, agent, gRPC) always require:
 
 High-risk operations (risk > `SafeActive`) with programmatic exposure flags still require non-baseline capabilities and strict policy gates. The `docs/CAPABILITY_MATRIX.md` Standalone Operations table documents these flags as metadata-level exposure permissions, not default runtime behavior.
 
+## Tool Registration (Phase 7)
+
+`ToolRegistration` (`tool::registration`) is a **derived metadata source** that bridges `OperationMetadata` and `DomainDescriptor` `ToolIntegration` to produce per-protocol tool listings. It is not a third static registry — it is computed from the two existing ones.
+
+Each `ToolRegistration` carries:
+- Tool ID, display name, operation ID
+- Protocol exposure flags (`rest_exposable`, `mcp_exposable`, `grpc_exposable`, `agent_exposable`)
+- Source: `Base`, `FeatureGated(&str)`, or `Domain(&str)`
+- Required MCP feature (if any)
+
+Builder functions filter registrations by protocol:
+- `all_tool_registrations()` — full inventory
+- `mcp_tool_registrations()` — tools with `mcp_exposable = true`
+- `rest_tool_registrations()` — tools with `rest_exposable = true`
+- `grpc_tool_registrations()` — tools with `grpc_exposable = true`
+- `agent_tool_registrations()` — tools with `agent_exposable = true`
+
+These functions derive from `OperationMetadata` (base + feature-gated tools) and `DomainDescriptor::ToolIntegration` (domain tools). Protocol listing functions (MCP, REST, gRPC, Agent) now filter through registration metadata, replacing the previous direct `registry.list()` approach.
+
+Registration does **not** grant authorization. The `EnforcementContext::evaluate()` gate remains the sole authorization path.
+
 ## Validation Pipeline
 
 The following tests validate metadata consistency:

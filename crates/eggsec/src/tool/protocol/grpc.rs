@@ -1,6 +1,7 @@
 // This file provides the gRPC service implementation
 // The proto-generated code is in eggsec.tool.v1 module
 
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use tonic::{Request, Response, Status};
@@ -10,6 +11,7 @@ use crate::config::{
     EnforcementContext, EnforcementError, EnforcementOutcome, ExecutionSurface, OperationDescriptor,
 };
 use crate::tool::dispatcher::EnforcedDispatcher;
+use crate::tool::registration::grpc_tool_registrations;
 use crate::tool::traits::{ParameterType, ToolCategory};
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest};
 
@@ -515,6 +517,16 @@ impl tool_service_server::ToolService for ToolServiceImpl {
             })?;
             self.service.registry.list_by_category(category)
         };
+
+        // Filter by ToolRegistration grpc_exposable (see docs/TOOL_REGISTRATION.md)
+        let grpc_exposable: FxHashSet<&str> = grpc_tool_registrations()
+            .iter()
+            .map(|r| r.tool_id)
+            .collect();
+        let tool_infos: Vec<_> = tool_infos
+            .into_iter()
+            .filter(|t| grpc_exposable.contains(t.id.as_str()))
+            .collect();
 
         let categories: Vec<String> = self
             .service

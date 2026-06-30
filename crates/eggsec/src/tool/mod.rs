@@ -46,6 +46,7 @@ pub mod state;
 pub mod traits;
 
 pub mod implementations;
+pub mod registration;
 
 #[cfg(feature = "rest-api")]
 pub mod agents {
@@ -72,6 +73,10 @@ pub use orchestrator::{
     ExecutionResult, Orchestrator, StageProgress, StageResult, StageToolResult,
 };
 pub use planner::{ChainPlanner, ExecutionPlan, PlanRequest, PlanValidation};
+pub use registration::{
+    agent_tool_registrations, all_tool_registrations, grpc_tool_registrations,
+    mcp_tool_registrations, rest_tool_registrations, ToolRegistration, ToolRegistrationSource,
+};
 pub use registry::{ToolInfo, ToolRegistry};
 pub use response::{
     Finding, FindingType, ProgressUpdate, ResponseMetadata, ResponseSeverity, ResponseStatus,
@@ -85,6 +90,11 @@ pub use session::{
 pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus as ToolSessionStatus};
 pub use traits::{AttackSurface, ToolCapability, ToolCategory, ToolResult};
 
+/// Creates the default tool registry with all base and feature-gated tools.
+///
+/// Registration model and protocol exposure rules are documented in
+/// `docs/TOOL_REGISTRATION.md`. Do not add safety posture comments here;
+/// that information lives in `OperationMetadata` and `ToolRegistration`.
 pub fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();
 

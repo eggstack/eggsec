@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use crate::distributed::TlsConfig;
 use crate::error::EggsecError;
 use crate::tool::dispatcher::EnforcedDispatcher;
 use crate::tool::ratelimit::RateLimitConfig;
+use crate::tool::registration::rest_tool_registrations;
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
 use crate::utils::rate_limiter::RateLimiter;
 
@@ -520,6 +522,17 @@ async fn list_tools(
     }
 
     let tools = state.registry.list();
+
+    // Filter by ToolRegistration rest_exposable (see docs/TOOL_REGISTRATION.md)
+    let rest_exposable: FxHashSet<&str> = rest_tool_registrations()
+        .iter()
+        .map(|r| r.tool_id)
+        .collect();
+    let tools: Vec<_> = tools
+        .into_iter()
+        .filter(|t| rest_exposable.contains(t.id.as_str()))
+        .collect();
+
     let total = tools.len();
 
     let items: Vec<ToolListItem> = tools
@@ -652,6 +665,23 @@ async fn execute_tool(
     }
 
     let target_url = &payload.target;
+
+    // Phase 7: Verify tool has a canonical registration before proceeding
+    if let Some(reg) = crate::tool::registration::resolve_tool_registration(&tool_id) {
+        tracing::debug!(
+            tool_id = %tool_id,
+            operation_id = %reg.operation_id,
+            source = ?reg.source,
+            "resolved tool registration"
+        );
+    } else {
+        // Tool exists in registry but has no canonical registration metadata.
+        // This is a legacy tool that should be migrated.
+        tracing::warn!(
+            tool_id = %tool_id,
+            "tool has no canonical registration — metadata-driven listing may not include it"
+        );
+    }
 
     let descriptor = operation_descriptor_for_rest_tool(&tool_id, target_url)?;
 

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Interval};
@@ -30,6 +30,7 @@ use crate::tool::protocol::mcp::streaming::StreamEvent;
 use crate::tool::protocol::mcp::types::{
     McpError, McpRequest, McpResource, McpResponse, McpRoot, McpTool,
 };
+use crate::tool::registration::mcp_tool_registrations;
 
 #[derive(Clone)]
 pub struct McpServer {
@@ -323,6 +324,18 @@ impl McpServer {
         let all_tools = self.registry.list();
         let tools = self.policy.filter_tools(all_tools);
 
+        // Filter by ToolRegistration mcp_exposed_by_default (see docs/TOOL_REGISTRATION.md)
+        let profile_name = self.profile.as_str();
+        let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
+            .iter()
+            .map(|r| r.tool_id)
+            .collect();
+
+        let tools: Vec<_> = tools
+            .into_iter()
+            .filter(|info| mcp_exposable.contains(info.id.as_str()))
+            .collect();
+
         let mcp_tools: Vec<McpTool> = tools
             .into_iter()
             .map(|info| {
@@ -380,6 +393,19 @@ impl McpServer {
     async fn handle_tools_list_by_category(&self, req: McpRequest) -> McpResponse {
         let all_tools = self.registry.list();
         let tools = self.policy.filter_tools(all_tools);
+
+        // Filter by ToolRegistration mcp_exposed_by_default (see docs/TOOL_REGISTRATION.md)
+        let profile_name = self.profile.as_str();
+        let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
+            .iter()
+            .map(|r| r.tool_id)
+            .collect();
+
+        let tools: Vec<_> = tools
+            .into_iter()
+            .filter(|info| mcp_exposable.contains(info.id.as_str()))
+            .collect();
+
         let total_tools = tools.len();
 
         let mut categorized: FxHashMap<String, Vec<McpTool>> = FxHashMap::default();
