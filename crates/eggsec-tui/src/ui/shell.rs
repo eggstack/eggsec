@@ -375,7 +375,7 @@ fn get_preflight_status(
 
     // Advisory only: run the real central evaluator (no side effects, same as launch path).
     let will = if let Some(ref desc) = desc_opt {
-        match app.enforcement_state.enforcement.evaluate(desc) {
+        match app.enforcement_state.enforcement().evaluate(desc) {
             EnforcementOutcome::Allow(_) => "run",
             EnforcementOutcome::Warn(_) => "warn",
             EnforcementOutcome::RequireConfirmation(_) => "confirm",
@@ -407,7 +407,7 @@ fn get_preflight_status(
     } else {
         match app
             .enforcement_state
-            .loaded_scope
+            .loaded_scope()
             .scope
             .is_target_allowed(target.as_str())
         {

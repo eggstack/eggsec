@@ -244,10 +244,10 @@ impl App {
             }
         }
 
-        if let Some(ref p) = self.enforcement_state.loaded_scope.path {
-            if self.enforcement_state.loaded_scope.source
+        if let Some(ref p) = self.enforcement_state.state().loaded_scope.path {
+            if self.enforcement_state.state().loaded_scope.source
                 == eggsec::config::ScopeSource::CliScopeFile
-                || self.enforcement_state.loaded_scope.source
+                || self.enforcement_state.state().loaded_scope.source
                     == eggsec::config::ScopeSource::ConfigFile
             {
                 out.push_str(&format!(" --scope {}", shell_escape(p)));

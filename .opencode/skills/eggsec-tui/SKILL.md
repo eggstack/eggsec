@@ -112,7 +112,7 @@ Priority order for hint resolution:
 
 ## Enforcement Posture Model
 
-`TuiEnforcementState` in `app/enforcement.rs` manages the TUI-local enforcement posture.
+`EnforcementFacade` in `app/enforcement_facade.rs` wraps `TuiEnforcementState` and provides focused enforcement evaluation and approval methods.
 
 - **Manual** (default): `TuiManual` / `ManualPermissive`. Warnings for scope ambiguity; `RequireConfirmation` with confirm/override for discretion cases. Manual overrides honored.
 - **Guarded**: `TuiManualStrict` / `ManualGuarded`. Hard enforcement, no discretion, no manual overrides.
@@ -123,9 +123,13 @@ Priority order for hint resolution:
 
 **Status bar**: Shows mode label ("Manual"/"Guarded"), scope provenance, rule counts, and preflight outcome.
 
+**TUI Action/Tab Metadata Registry**: `TuiActionSpec` and `TuiTabSpec` in `app/action_spec.rs` provide metadata-backed descriptors that point to canonical `OperationMetadata` entries. Pilot covers recon, scan-ports, fuzz, and db-pentest. Tests verify metadata resolution, feature string validity, and risk consistency.
+
 **Tests:**
 ```bash
 cargo test --lib -p eggsec-tui tui::app::enforcement
+cargo test --lib -p eggsec-tui tui::app::action_spec
+cargo test --lib -p eggsec-tui tui::app::enforcement_facade
 ```
 
 ## Overlay Precedence

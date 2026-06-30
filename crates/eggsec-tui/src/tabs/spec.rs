@@ -674,6 +674,11 @@ pub fn spec_for(tab: Tab) -> Option<&'static TabSpec> {
     TAB_SPECS.iter().find(|s| s.tab == tab)
 }
 
+#[allow(dead_code)]
+pub fn spec_for_id(stable_id: &str) -> Option<&'static TabSpec> {
+    TAB_SPECS.iter().find(|s| s.stable_id == stable_id)
+}
+
 impl TabSpec {
     /// Whether this tab can start a scan/task (test-only metadata)
     #[allow(dead_code)]

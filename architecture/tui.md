@@ -50,6 +50,9 @@ Manages the overall application state, event loop, and rendering.
 | `key_handler.rs` | Priority-based key processing: `decode_global_shortcuts`, `decode_mode_specific_input`, `decode_topmost_overlay` (all return `Vec<UiAction>`); `handle_key_event` orchestrates decode + apply |
 | `state_update.rs` | Async task result handling and routing |
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
+| `enforcement.rs` | `TuiEnforcementState`, `TuiPreflightResult` — TUI-local enforcement posture model |
+| `enforcement_facade.rs` | `EnforcementFacade` — extracted enforcement evaluation/approval logic (Phase 8) |
+| `action_spec.rs` | `TuiActionSpec`, `TuiTabSpec` — metadata-backed TUI action/tab registry (Phase 8) |
 | `theme_runtime.rs` | Theme loader lifecycle helpers and deferred restore handling |
 | `input.rs` | `InputMode` enum: `Normal`, `Insert` |
 | `navigation.rs` | Tab navigation helpers (next/prev tab, edge detection) |
@@ -433,7 +436,51 @@ pub struct TuiEnforcementState {
 
 **CLI-equivalent preview:** The confirmation overlay includes a CLI-equivalent flag preview so users can see what flags would reproduce the current posture on the command line.
 
-**App integration:** `App.enforcement_state: TuiEnforcementState` replaces the previous `App.enforcement` + `App.loaded_scope` fields. The state owns the enforcement context, loaded scope, and preflight cache.
+**App integration:** `App.enforcement_state: EnforcementFacade` wraps `TuiEnforcementState` and provides focused evaluation/approval methods. The facade owns the enforcement context, loaded scope, preflight cache, and cached approval token.
+
+### EnforcementFacade (Phase 8)
+
+`EnforcementFacade` (`app/enforcement_facade.rs`) extracts enforcement evaluation and approval logic from `App` into a focused struct:
+
+```rust
+pub struct EnforcementFacade {
+    pub state: TuiEnforcementState,
+    pub(crate) pending_approved: Option<ApprovedOperation>,
+}
+```
+
+**Responsibilities:**
+- `try_approve(desc)` — evaluate + audit + approve/reject
+- `evaluate_and_try_approve(desc)` — consume cached approval or re-evaluate
+- `take_cached_approval(desc)` — consume matching cached token
+- `confirm_override(descriptor, classes, reason)` — build ManualOverride + approve
+- `audit_confirmed_override(...)` — emit audit event for confirmed override
+- Delegation methods: `toggle_posture()`, `mode_label()`, `status_string()`, `scope_label()`, `preflight()`, `enforcement()`, `loaded_scope()`
+
+App retains UI-level flows (`request_policy_confirmation`, `confirm_policy_action`, `cancel_policy_action`) because they touch overlay state. The facade handles the policy evaluation core.
+
+### TUI Action/Tab Metadata Registry (Phase 8)
+
+`TuiActionSpec` and `TuiTabSpec` (`app/action_spec.rs`) provide metadata-backed descriptors that point to canonical `OperationMetadata` entries:
+
+```rust
+pub struct TuiActionSpec {
+    pub action_id: &'static str,
+    pub operation_id: &'static str,  // maps to OperationMetadata
+    pub tab_id: &'static str,
+    pub feature: Option<&'static str>,
+    pub manual_only: bool,
+}
+```
+
+Pilot coverage: recon, scan-ports, fuzz, db-pentest. Tests verify:
+- Every pilot action resolves to `OperationMetadata`
+- Every pilot tab ID maps to a valid `TabSpec`
+- Feature strings are non-empty when present
+- Intrusive actions are manual-only
+- Domain references resolve to known `DomainDescriptor` entries
+
+Other tabs continue to use `TabSpec` + `build_current_operation_descriptor()` and can be migrated incrementally.
 
 ### Adding a New Tab
 

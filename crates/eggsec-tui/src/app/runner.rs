@@ -87,7 +87,9 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     let surface = eggsec::config::ExecutionSurface::TuiManual;
     let enforcement =
         eggsec::config::EnforcementContext::for_surface(surface, policy, loaded_scope.clone());
-    app.enforcement_state = super::TuiEnforcementState::new(surface, loaded_scope, enforcement);
+    app.enforcement_state = super::enforcement_facade::EnforcementFacade::new(
+        super::TuiEnforcementState::new(surface, loaded_scope, enforcement),
+    );
     let res = run_app(&mut terminal, &mut app);
 
     if let Err(e) = app.session_manager.save_quick(&app) {

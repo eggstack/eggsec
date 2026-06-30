@@ -22,7 +22,7 @@ pub struct TuiEnforcementState {
 }
 ```
 
-**Accessing from App:** `App.enforcement_state: TuiEnforcementState` replaces the previous `App.enforcement` + `App.loaded_scope` fields.
+**Accessing from App:** `App.enforcement_state: EnforcementFacade` wraps `TuiEnforcementState` and provides focused evaluation/approval methods. The facade owns the enforcement context, loaded scope, preflight cache, and cached approval token.
 
 **Key methods:**
 - `toggle_posture()` — switches between TuiManual (ManualPermissive) and TuiManualStrict (ManualGuarded)
@@ -53,10 +53,12 @@ The confirmation overlay includes a CLI-equivalent flag preview showing what fla
 
 ### Tests
 
-22 unit tests cover `TuiEnforcementState` including toggle behavior, preflight evaluation, mode labels, scope labels, and guard/honors-override queries. Run with:
+22 unit tests cover `TuiEnforcementState` including toggle behavior, preflight evaluation, mode labels, scope labels, and guard/honors-override queries. 8 unit tests cover `EnforcementFacade` including try_approve, cached approval, confirm_override, and state accessors. Run with:
 
 ```bash
 cargo test --lib -p eggsec-tui tui::app::enforcement
+cargo test --lib -p eggsec-tui tui::app::enforcement_facade
+cargo test --lib -p eggsec-tui tui::app::action_spec
 ```
 
 ### Audit Integration (Phase 10)
@@ -96,7 +98,26 @@ Only executable operations produce audit events. TUI uses `ExecutionSurface::Tui
 
 - **Configurable auto-save interval**: Settings > Session panel now allows configuring auto-save interval (previously hardcoded to 30s)
 
-## Module Structure
+## Phase 8: TUI Architecture Tightening (2026-06-30)
+
+### EnforcementFacade Extraction
+
+`EnforcementFacade` (`app/enforcement_facade.rs`) extracts enforcement evaluation and approval logic from `App` into a focused struct:
+
+- `try_approve(desc)` — evaluate + audit + approve/reject
+- `evaluate_and_try_approve(desc)` — consume cached approval or re-evaluate
+- `take_cached_approval(desc)` — consume matching cached token
+- `confirm_override(descriptor, classes, reason)` — build ManualOverride + approve
+- `audit_confirmed_override(...)` — emit audit event for confirmed override
+- Delegation methods: `toggle_posture()`, `mode_label()`, `status_string()`, `preflight()`, `enforcement()`, `loaded_scope()`
+
+App retains UI-level flows (`request_policy_confirmation`, `confirm_policy_action`, `cancel_policy_action`) because they touch overlay state.
+
+### TUI Action/Tab Metadata Registry
+
+`TuiActionSpec` and `TuiTabSpec` (`app/action_spec.rs`) provide metadata-backed descriptors pointing to canonical `OperationMetadata`. Pilot: recon, scan-ports, fuzz, db-pentest. Tests verify metadata resolution, feature string validity, risk consistency, and domain reference validity.
+
+### Module Structure
 
 ```
 crates/eggsec-tui/src/
@@ -110,6 +131,9 @@ crates/eggsec-tui/src/
 │   ├── notifications.rs # Notification and NotificationSeverity types
 │   ├── bookmarks.rs    # Bookmark helper functions
 │   ├── confirmation.rs  # PendingAction enum
+│   ├── enforcement.rs   # TuiEnforcementState, TuiPreflightResult
+│   ├── enforcement_facade.rs # EnforcementFacade (Phase 8 extraction)
+│   ├── action_spec.rs   # TuiActionSpec, TuiTabSpec (Phase 8 metadata registry)
 │   ├── help_config.rs   # Static help content
 │   ├── navigation.rs   # Tab navigation, scrolling
 │   ├── command.rs      # Command palette commands
