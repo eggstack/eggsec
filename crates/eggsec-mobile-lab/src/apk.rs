@@ -1208,4 +1208,48 @@ mod tests {
         assert_eq!(r.findings.len(), 1);
         assert_eq!(r.findings[0].severity, Severity::High);
     }
+
+    #[tokio::test]
+    async fn invalid_zip_input_returns_error_not_panic() {
+        use std::io::Cursor;
+        let tmp = NamedTempFile::new().unwrap();
+        // Write random bytes that are not a valid ZIP
+        std::fs::write(tmp.path(), b"this is not a zip file at all").unwrap();
+        let result = analyze_apk(tmp.path()).await;
+        assert!(result.is_err(), "invalid input should return error");
+        let err_msg = format!("{}", result.unwrap_err());
+        // Should produce a meaningful error, not a panic
+        assert!(
+            err_msg.contains("zip") || err_msg.contains("XML") || err_msg.contains("invalid"),
+            "error should mention the issue: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_zip_returns_error_not_panic() {
+        let tmp = NamedTempFile::new().unwrap();
+        // Create a valid but empty ZIP (no AndroidManifest.xml)
+        let mut archive = Vec::new();
+        {
+            let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
+            let opts = zip::write::FileOptions::<()>::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            // Add a file that isn't AndroidManifest.xml
+            zw.start_file("dummy.txt", opts).unwrap();
+            zw.write_all(b"not a manifest").unwrap();
+            zw.finish().unwrap();
+        }
+        std::fs::write(tmp.path(), &archive).unwrap();
+        let result = analyze_apk(tmp.path()).await;
+        assert!(result.is_err(), "empty/invalid APK should return error");
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(
+            err_msg.contains("manifest")
+                || err_msg.contains("AndroidManifest")
+                || err_msg.contains("not found"),
+            "error should mention missing manifest: {}",
+            err_msg
+        );
+    }
 }

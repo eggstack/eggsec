@@ -3163,4 +3163,102 @@ W/PackageManager: permission denied: READ_SMS
             .iter()
             .any(|n| n.contains("new categories observed vs baseline")));
     }
+
+    #[test]
+    fn evidence_bundle_manifest_has_required_fields() {
+        let mut r = DynamicMobileReport::new("manifest_test.apk");
+        r.findings.push(DynamicMobileFinding {
+            category: "runtime-permission".into(),
+            severity: Severity::Low,
+            title: "test finding".into(),
+            description: "test desc".into(),
+            recommendation: "test rec".into(),
+            evidence: None,
+            static_correlation: None,
+        });
+        r.actions_performed
+            .push("dry-run: simulated install".into());
+        r.frida_instrumentation = Some(crate::FridaInstrumentation {
+            note: "test".into(),
+            structured_results: vec![serde_json::json!({"type": "method_trace"})],
+            regression_notes: vec!["regression note".into()],
+            ..Default::default()
+        });
+
+        let ts = crate::TrafficSummary::new();
+        let tmp = std::env::temp_dir().join(format!(
+            "eggsec_bundle_manifest_{}.json.gz",
+            std::process::id()
+        ));
+        let path = tmp.to_string_lossy().to_string();
+        let out = export_evidence_bundle(&r, Some(&ts), &path).expect("bundle write");
+        assert!(std::path::Path::new(&out).exists());
+
+        // Read and decompress the bundle to verify manifest structure
+        let compressed = std::fs::read(&path).expect("read bundle");
+        let mut decoder = flate2::read::GzDecoder::new(&compressed[..]);
+        let mut json_str = String::new();
+        std::io::Read::read_to_string(&mut decoder, &mut json_str).expect("decompress");
+        let val: serde_json::Value = serde_json::from_str(&json_str).expect("parse json");
+
+        // Verify bundle_manifest exists with required fields
+        let manifest = val.get("bundle_manifest").expect("bundle_manifest present");
+        assert_eq!(
+            manifest.get("version").expect("version").as_str(),
+            Some("1")
+        );
+        let contents = manifest
+            .get("contents")
+            .expect("contents")
+            .as_array()
+            .expect("contents is array");
+        assert!(contents.iter().any(|c| c.as_str() == Some("report")));
+        assert!(contents
+            .iter()
+            .any(|c| c.as_str() == Some("traffic_summary")));
+        assert!(contents
+            .iter()
+            .any(|c| c.as_str() == Some("frida_structured")));
+        assert!(contents
+            .iter()
+            .any(|c| c.as_str() == Some("regression_notes")));
+        assert_eq!(
+            manifest
+                .get("frida_structured_count")
+                .expect("frida_structured_count")
+                .as_u64(),
+            Some(1)
+        );
+        assert_eq!(
+            manifest
+                .get("regression_notes_count")
+                .expect("regression_notes_count")
+                .as_u64(),
+            Some(1)
+        );
+        assert_eq!(
+            manifest
+                .get("findings_count")
+                .expect("findings_count")
+                .as_u64(),
+            Some(1)
+        );
+        assert_eq!(
+            manifest
+                .get("actions_count")
+                .expect("actions_count")
+                .as_u64(),
+            Some(1)
+        );
+
+        // Verify top-level structure
+        assert!(val.get("report").expect("report").is_object());
+        assert!(val
+            .get("traffic_summary")
+            .expect("traffic_summary")
+            .is_object());
+        assert!(val.get("exported_at").expect("exported_at").is_string());
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

@@ -52,6 +52,8 @@ integrated CLI, TUI, tool, and report adapters.
 | Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Baseline | Strict | Scope | Docs |
 |--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|------|
 | db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | DATABASE_PENTEST.md |
+| mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | explicit scope | MOBILE.md |
+| mobile-dynamic | defense-lab | mobile-dynamic | SafeActive | `mobile-dynamic` | Y | Y | N | always | always | always | Y | explicit scope | MOBILE.md |
 
 ## Risk Tiers
 
@@ -105,6 +107,8 @@ integrated CLI, TUI, tool, and report adapters.
 | `c2` | c2 | Stable |
 | `web-proxy` | proxy-intercept | Stable |
 | `wireless` | wireless | Stable |
+| `mobile` | mobile-static | Stable |
+| `mobile-dynamic` | mobile-dynamic | Stable |
 | `advanced-hunting` | hunt | Stable |
 | `headless-browser` | browser | Stable |
 | `compliance` | compliance | Stable |
