@@ -1547,9 +1547,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
 /// REST and MCP tool IDs that resolve to the same canonical operation.
 pub static ALL_OPERATION_METADATA_ALIASES: &[(&str, &str)] = &[
     ("scan", "scan-ports"),
-    ("fingerprint", "fingerprint"),
     ("endpoints", "scan-endpoints"),
-    ("scan-endpoints", "scan-endpoints"),
     ("waf", "waf-detect"),
     ("waf_detect", "waf-detect"),
     ("waf_bypass", "waf-bypass"),

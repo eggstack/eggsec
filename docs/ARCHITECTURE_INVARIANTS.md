@@ -32,7 +32,7 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 13. **No silent error suppression**: Enforcement errors must be logged or propagated. `let _ =` on enforcement results is a bug.
 
-14. **Operation metadata consistency**: All operation IDs, risk levels, capabilities, and surface exposure flags must be defined in the static `ALL_OPERATION_METADATA` registry. Individual surfaces must not hardcode divergent metadata.
+14. **Operation metadata consistency**: All operation IDs, risk levels, capabilities, and surface exposure flags must be defined in the static `ALL_OPERATION_METADATA` registry. `DomainDescriptor` operation IDs must resolve to matching `OperationMetadata` entries. `docs/CAPABILITY_MATRIX.md` must stay consistent with metadata (validated by `tests/metadata_consistency.rs`). Individual surfaces must not hardcode divergent metadata.
 
 ## Frontend Invariants
 

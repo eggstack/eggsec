@@ -123,7 +123,11 @@ Surfaces that `honors_manual_override()` are only `CliManual` and `TuiManual`. A
 
 ### OperationMetadata
 
-`OperationMetadata` lives in `config::policy` and is the canonical source of truth for `OperationDescriptor` generation across all surfaces (REST, MCP, TUI, agent). It is a static registry of 29 operations with 32 alias mappings. Use `metadata_for_tool_id(tool_id)` to resolve any tool ID (including aliases like "scan" → "scan-ports") to its canonical `OperationMetadata`, then call `descriptor_for_target()` to generate an `OperationDescriptor` with surface-specific overrides applied.
+`OperationMetadata` lives in `config::policy` and is the canonical source of truth for `OperationDescriptor` generation across all surfaces (REST, MCP, TUI, agent). It is a static registry of 29 operations with 30 alias mappings. Use `metadata_for_tool_id(tool_id)` to resolve any tool ID (including aliases like "scan" → "scan-ports") to its canonical `OperationMetadata`, then call `descriptor_for_target()` to generate an `OperationDescriptor` with surface-specific overrides applied.
+
+### DomainDescriptor and Capability Matrix
+
+`DomainDescriptor` in `domain/mod.rs` groups operations under a domain umbrella with CLI/TUI/tool/report integrations. `generate_capability_matrix()` produces `CapabilityMatrixRow` entries from domain metadata. `docs/CAPABILITY_MATRIX.md` is the canonical human-readable matrix. Tests in `tests/metadata_consistency.rs` validate cross-references between `DomainDescriptor` and `OperationMetadata`.
 
 ### Capability Declarations
 ```rust

@@ -26,25 +26,9 @@ Eggsec is a command-line security assessment tool designed for security professi
 
 ### Core Capabilities
 
-| Category | Capabilities |
-|----------|-------------|
-| **Reconnaissance** | DNS enumeration, subdomain discovery, WHOIS, tech stack detection, CVE mapping, cloud asset discovery, CORS analysis |
-| **Web Security** | SQLi, XSS, SSRF, Path Traversal, ReDoS, Header Injection, SSTI, IDOR testing |
-| **API Security** | GraphQL introspection/injection, JWT analysis, OAuth/OIDC testing, gRPC fuzzing |
-| **Scanning** | Port scanning, service fingerprinting (42+ protocols), endpoint discovery |
-| **WAF** | Detection of 34 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
-| **Load Testing** | High-concurrency HTTP testing with detailed metrics |
-| **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
-| **Auth Control Validation** | Brute-force, credential stuffing, lockout/MFA/rate-limit/timing testing via `eggsec auth-test` / TUI Auth tab (standalone defense-lab CLI + TUI tab; runtime policy gate only via `CredentialTesting` + `allow_credential_testing`; local `AuthTestReport`/`AuthFinding` only; for validating auth controls in authorized labs, not credential attacks; see docs/AUTH_LAB.md + architecture/auth.md) |
-| **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
-| **Web Proxy / Traffic Interception** | MITM proxy for capturing and inspecting HTTP/HTTPS traffic in authorized lab environments (requires `web-proxy` feature; dry-run always safe; Phase 2 adds interactive TUI with flow inspection, header/body editing, forward/drop/replay, HAR export, and manipulation audit trail; Phase 4 adds pipeline profile `ScanProfile::WebProxy`, MCP proxy surface via `web-proxy-mcp`, evidence bundle v2, performance optimizations (`FlowBuffer`, `ProxyMetrics`), real WebSocket/HTTP2 backends; real interception requires `--allow-web-proxy`; see `docs/WEB_PROXY.md`) |
-| **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
-| **Repeatable Profiles** | 18 pipeline profiles, session resumption, multiple output formats |
-| **Mobile Static Analysis** | APK/IPA manifest/config checks for lab use (requires `--features mobile`; static-only; no execution or device interaction; dynamic under `mobile-dynamic` feature; standalone defense-lab CLI + optional `to_scan_report_data` bridge; see docs/MOBILE.md) |
-| **Database Pentesting (lab)** | Direct Postgres/MySQL/MSSQL/MongoDB/Redis checks for authorized lab use (requires `--features db-pentest`; standalone defense-lab; dry-run always safe; real runs require `--allow-db-pentest`; advanced gated checks require `--allow-db-pentest-advanced`; local `DbPentestReport`/`DbFinding` + optional `to_scan_report_data_db` bridge via report convert; Phase 1–4: postgres/mysql/mssql + TUI tab + pipeline + advanced checks + correlation engine; Phase 5 (complete 2026-06-12): MongoDB + Redis engines (marker features `db-pentest-mongodb`, `db-pentest-redis`), compliance mapping (OWASP/PCI/HIPAA/SOC2), MCP opt-in (`db-pentest-mcp`); Phase 6 (complete 2026-06-14): baseline capture + regression comparison (`--baseline`, `--capture-baseline`, `--baseline-label`), MCP deepening (baseline ops, parameterized calls), extended compliance (NIST/ISO27001); see docs/DATABASE_PENTEST.md) |
-| **Evasion Detection (lab)** | Detect common defense evasion techniques (syscalls, hook bypass, obfuscation, injection, anti-analysis, traffic obfuscation) mapped to MITRE ATT&CK IDs with confidence scores (requires `--features evasion`; standalone defense-lab; dry-run always safe; real runs require explicit authorization; local `EvasionReport`/`EvasionDetection` + optional `to_scan_report_data` bridge via report convert; 16 built-in techniques across 6 categories; no MCP/agent/TUI/pipeline integration) |
-| **Post-Exploitation Simulation (lab)** | Simulate post-exploitation techniques for purple teaming (requires `--features postex`; standalone defense-lab; dry-run always safe; real runs require `--allow-postex` + scope; reversible actions in lab mode; MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access; local `PostexReport`/`PostexFinding` + optional `to_scan_report_data` bridge; no MCP/agent/TUI/pipeline integration) |
-| **C2 Framework (lab)** | Simulate C2 operations for defense validation and purple teaming (requires `--features c2`; depends on postex + evasion; standalone defense-lab; dry-run always safe; real runs require `--allow-c2`; MITRE ATT&CK profiles: APT29, Carbanak; beaconing, tasking, campaign orchestration, OPSEC scoring; local `C2Report`/`C2Campaign` + optional `to_scan_report_data` bridge; no MCP/agent/TUI/pipeline integration) |
+Eggsec covers reconnaissance, web security fuzzing, API testing, WAF validation, load/stress testing, auth control validation, proxy management, traffic interception, distributed scanning, mobile static/dynamic analysis, database pentesting, evasion detection, post-exploitation simulation, and C2 defense validation.
+
+For the full capability matrix with risk tiers, feature gates, surface exposure, and scope requirements, see [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md).
 
 ## Architecture
 
@@ -495,6 +479,7 @@ See [docker-compose.yml](docker-compose.yml) for Docker configuration.
 
 - [Safety and Scope Enforcement](docs/SAFETY.md) - Authorization, risk tiers, scope rules
 - [Enforcement Modes](docs/ENFORCEMENT_MODES.md) - Dual-mode enforcement contract, manual vs. automated postures
+- [Capability Matrix](docs/CAPABILITY_MATRIX.md) - Canonical operation/risk/feature/exposure matrix (derived from metadata)
 - [Canonical Findings Schema](docs/FINDINGS_SCHEMA.md) - Finding structure, fingerprinting, redaction
 - [Auth Context Configuration](docs/AUTH_CONTEXT.md) - Multi-role testing, env interpolation
 - [Baselines and Differential Scans](docs/BASELINES_AND_DIFFS.md) - Comparing scan results over time

@@ -3,6 +3,7 @@ use crate::commands::handlers::CommandContext;
 use crate::config::{
     metadata_for_tool_id, preflight_operation, EnforcementContext, ExecutionSurface,
 };
+use crate::domain::domain_descriptor_by_id;
 use anyhow::Result;
 
 pub async fn handle_preflight(ctx: &CommandContext, args: PreflightArgs) -> Result<()> {
@@ -47,9 +48,32 @@ pub async fn handle_preflight(ctx: &CommandContext, args: PreflightArgs) -> Resu
     let result = preflight_operation(surface, &enforcement, descriptor, manual_override);
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        // Enrich JSON output with domain metadata if available.
+        let mut value = serde_json::to_value(&result)?;
+        if let Some(domain) = domain_descriptor_by_id(&args.operation) {
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert(
+                    "domain".to_string(),
+                    serde_json::json!({
+                        "id": domain.id,
+                        "display_name": domain.display_name,
+                        "description": domain.description,
+                        "category": domain.category.to_string(),
+                    }),
+                );
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
-        println!("{}", result.to_human_readable());
+        let mut output = result.to_human_readable();
+        // Append domain metadata to human-readable output if available.
+        if let Some(domain) = domain_descriptor_by_id(&args.operation) {
+            output.push_str(&format!(
+                "\nDomain: {} ({})\nDescription: {}",
+                domain.display_name, domain.category, domain.description
+            ));
+        }
+        println!("{}", output);
     }
 
     Ok(())

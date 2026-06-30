@@ -216,6 +216,9 @@ Canonical reference points when updating guidance or skills:
 - `EnforcedDispatcher` - Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
+- `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`.
+- `DryRunSupport` - Enum for dry-run support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
+- `EvidenceSupport` - Enum for evidence bundle support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 
 ### Important Patterns
 
@@ -230,6 +233,7 @@ Canonical reference points when updating guidance or skills:
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 - **ExecutionSurface**: Introduces caller-origin semantics; `ExecutionProfile` describes enforcement behavior, `ExecutionSurface` describes where it comes from. Use `EnforcementContext::for_surface()` for centralized construction.
 - **Operation Metadata**: `OperationMetadata` in `config::policy` is the single source of truth for `OperationDescriptor` generation. All surfaces (REST, MCP, TUI, agent) use `metadata_for_tool_id()` or `operation_metadata()` to look up canonical operation definitions. Alias mapping resolves alternate tool IDs (e.g., "scan" → "scan-ports", "fuzz" → "fuzz") to canonical metadata. Descriptors are generated via `metadata.descriptor_for_target()`. Surface-specific overrides (e.g., REST always sets `requires_explicit_scope = true`, MCP uses profile policy) are applied after metadata lookup.
+- **Domain Contract**: `DomainDescriptor` in `domain/mod.rs` groups operations under a domain umbrella with CLI/TUI/tool/report integrations. `generate_capability_matrix()` produces `CapabilityMatrixRow` entries from domain metadata. `docs/CAPABILITY_MATRIX.md` is the canonical human-readable matrix. Tests in `tests/metadata_consistency.rs` validate cross-references between `DomainDescriptor` and `OperationMetadata`.
 - **Shared Policy Evaluator**: Use `EnforcementContext::evaluate()` (central) in `config/policy_decision.rs` instead of building policy checks inline
 - **Shared Preflight**: `preflight_operation()` in `config::policy_decision` is the single entry point for all surfaces. CLI, TUI, REST, MCP, and agent all use it. It evaluates the same `EnforcementContext::evaluate()` path as dispatch without executing the tool. CLI has a standalone `preflight` command. REST has `POST /api/v1/tools/{tool_id}/preflight`. MCP has `eggsec_preflight` tool. Agent logs preflight results before dispatch.
 - **Normalized Audit Events**: `audit.rs` provides `EnforcementAuditEvent` for consistent audit records across all surfaces (CLI, TUI, REST, MCP, Agent, gRPC). `audit_event_from_enforcement_outcome()` builds events from enforcement decisions. `emit_audit_event()` logs at appropriate tracing levels (info for allow/warn/confirmed, warn for deny/confirmation-required). Manual confirmations record class and reason. Automated surfaces never record accepted manual overrides. Scope provenance included.

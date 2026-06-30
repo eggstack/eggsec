@@ -20,6 +20,7 @@ The central type. A static, `const`-constructible metadata struct declaring ever
 pub struct DomainDescriptor {
     pub id: &'static str,
     pub display_name: &'static str,
+    pub description: &'static str,
     pub category: DomainCategory,
     pub required_feature: Option<&'static str>,
     pub operations: &'static [OperationIntegration],
@@ -59,9 +60,12 @@ Classifies domains by their risk and operating mode:
 ```rust
 pub fn all_domain_descriptors() -> &'static [DomainDescriptor];
 pub fn domain_descriptor_by_id(id: &str) -> Option<&'static DomainDescriptor>;
+pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow>;
 ```
 
 The registry returns all known domains. Domains behind disabled features are included (their `required_feature` field indicates gating). Consumers should check feature availability before use.
+
+`generate_capability_matrix()` produces `CapabilityMatrixRow` entries from all registered domain descriptors, suitable for documentation generation and validation. `docs/CAPABILITY_MATRIX.md` is the canonical human-readable output.
 
 ## Pilot Domain: db-pentest
 
@@ -112,9 +116,9 @@ The `db-pentest` domain is the first pilot implementation:
 
 ## Phase Handoff
 
-This contract was defined in Phase 3 of the architecture extensibility plan. Future phases will:
+This contract was defined in Phase 3 of the architecture extensibility plan. Phase 4 completed metadata unification:
 
-- **Phase 4**: Consume descriptors for doc generation, policy explain output, capability matrices.
+- **Phase 4 (complete)**: Added `description` field, `CapabilityMatrixRow` type, `generate_capability_matrix()`, `docs/CAPABILITY_MATRIX.md`, metadata consistency tests (`tests/metadata_consistency.rs`), preflight domain metadata integration, and README simplification.
 - **Phase 5**: Migrate additional domains to the contract.
 - **Future**: Consider `eggsec-domain-core` crate extraction if the contract outgrows the main crate.
 

@@ -151,6 +151,41 @@ pub enum EvidenceSupport {
     NotSupported,
 }
 
+/// A single row in the capability matrix, generated from domain and operation metadata.
+#[derive(Debug, Clone)]
+pub struct CapabilityMatrixRow {
+    /// Domain ID.
+    pub domain_id: &'static str,
+    /// Domain display name.
+    pub domain_name: &'static str,
+    /// Domain category.
+    pub category: DomainCategory,
+    /// Operation ID.
+    pub operation_id: &'static str,
+    /// Operation display name.
+    pub operation_name: &'static str,
+    /// Cargo feature gate (if any).
+    pub feature: Option<&'static str>,
+    /// Risk tier.
+    pub risk: OperationRisk,
+    /// Capabilities.
+    pub capabilities: &'static [Capability],
+    /// CLI exposure.
+    pub cli: bool,
+    /// TUI exposure.
+    pub tui: bool,
+    /// MCP/API exposure.
+    pub mcp_api: bool,
+    /// Dry-run support description.
+    pub dry_run: &'static str,
+    /// Evidence/report support description.
+    pub evidence_report: &'static str,
+    /// Scope requirement description.
+    pub scope_requirement: &'static str,
+    /// Notes.
+    pub notes: &'static str,
+}
+
 /// A static descriptor for a capability domain.
 ///
 /// `DomainDescriptor` declares what a domain can do without performing
@@ -169,6 +204,8 @@ pub struct DomainDescriptor {
     pub id: &'static str,
     /// Human-readable display name.
     pub display_name: &'static str,
+    /// Brief description of the domain's purpose.
+    pub description: &'static str,
     /// Classification category.
     pub category: DomainCategory,
     /// Cargo feature flag required to compile this domain (if any).
@@ -218,6 +255,68 @@ pub fn all_domain_descriptors() -> &'static [DomainDescriptor] {
 /// Look up a domain descriptor by its ID.
 pub fn domain_descriptor_by_id(id: &str) -> Option<&'static DomainDescriptor> {
     all_domain_descriptors().iter().find(|d| d.id == id)
+}
+
+/// Generate capability matrix rows from all registered domain descriptors.
+///
+/// Each operation in each domain produces one row. Operations not in any
+/// domain (standalone operations from `ALL_OPERATION_METADATA`) are not
+/// included — use `all_operation_metadata()` for a complete operation list.
+pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
+    let mut rows = Vec::new();
+    for domain in all_domain_descriptors() {
+        for op in domain.operations {
+            let dry_run = match domain.dry_run {
+                DryRunSupport::AlwaysAvailable => "always",
+                DryRunSupport::FeatureGated(f) => f,
+                DryRunSupport::NotSupported => "no",
+            };
+            let evidence_report = match domain.evidence {
+                EvidenceSupport::AlwaysAvailable => "always",
+                EvidenceSupport::FeatureGated(f) => f,
+                EvidenceSupport::NotSupported => "no",
+            };
+            let scope = if op.requires_explicit_scope {
+                "explicit scope required"
+            } else if op.requires_private_or_local_target {
+                "private/local target"
+            } else {
+                "standard scope"
+            };
+            let has_cli = domain.cli.iter().any(|c| c.operation_id == op.operation_id);
+            let has_tui = domain.tui.iter().any(|t| t.operation_id == op.operation_id);
+            let has_mcp = domain
+                .tools
+                .iter()
+                .any(|t| t.operation_id == op.operation_id);
+
+            let feature = if op.required_features.is_empty() {
+                domain.required_feature
+            } else {
+                Some(op.required_features[0])
+            };
+
+            let notes = "";
+            rows.push(CapabilityMatrixRow {
+                domain_id: domain.id,
+                domain_name: domain.display_name,
+                category: domain.category,
+                operation_id: op.operation_id,
+                operation_name: op.display_name,
+                feature,
+                risk: op.risk,
+                capabilities: op.capabilities,
+                cli: has_cli,
+                tui: has_tui,
+                mcp_api: has_mcp,
+                dry_run,
+                evidence_report,
+                scope_requirement: scope,
+                notes,
+            });
+        }
+    }
+    rows
 }
 
 // ─── Pilot Domain: db-pentest ───────────────────────────────────────────────
@@ -276,6 +375,7 @@ const DB_PENTEST_REPORT: ReportIntegration = ReportIntegration {
 const DB_PENTEST_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
     id: "db-pentest",
     display_name: "Database Pentesting",
+    description: "Direct Postgres/MySQL/MSSQL/MongoDB/Redis security checks for authorized lab use",
     category: DomainCategory::DefenseLab,
     required_feature: Some("db-pentest"),
     operations: &[DB_PENTEST_OPERATION],
@@ -486,6 +586,81 @@ mod tests {
             // Only metadata accessors are available.
             assert!(!d.id.is_empty());
             assert!(!d.operations.is_empty());
+        }
+    }
+
+    #[test]
+    fn all_domain_operation_ids_have_metadata() {
+        use crate::config::metadata_for_tool_id;
+        for domain in all_domain_descriptors() {
+            for op in domain.operations {
+                assert!(
+                    metadata_for_tool_id(op.operation_id).is_some(),
+                    "domain '{}' operation '{}' has no matching OperationMetadata",
+                    domain.id,
+                    op.operation_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn domain_ids_are_unique() {
+        let mut seen = rustc_hash::FxHashSet::default();
+        for domain in all_domain_descriptors() {
+            assert!(seen.insert(domain.id), "duplicate domain id: {}", domain.id);
+        }
+    }
+
+    #[test]
+    fn domain_operation_ids_within_domain_are_unique() {
+        for domain in all_domain_descriptors() {
+            let mut seen = rustc_hash::FxHashSet::default();
+            for op in domain.operations {
+                assert!(
+                    seen.insert(op.operation_id),
+                    "domain '{}' has duplicate operation id: {}",
+                    domain.id,
+                    op.operation_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn capability_matrix_generation_works() {
+        let rows = generate_capability_matrix();
+        // With no features enabled the domain registry is empty.
+        // With db-pentest enabled, at least one row should appear.
+        // Either way, every row produced should have non-empty fields.
+        for row in &rows {
+            assert!(!row.domain_id.is_empty());
+            assert!(!row.operation_id.is_empty());
+            assert!(!row.operation_name.is_empty());
+        }
+        // When db-pentest is enabled, rows should be non-empty.
+        #[cfg(feature = "db-pentest")]
+        assert!(
+            !rows.is_empty(),
+            "capability matrix should have rows with db-pentest enabled"
+        );
+    }
+
+    #[test]
+    fn capability_matrix_pilot_domain_row_present() {
+        #[cfg(feature = "db-pentest")]
+        {
+            let rows = generate_capability_matrix();
+            let db_row = rows.iter().find(|r| r.operation_id == "db-pentest");
+            assert!(
+                db_row.is_some(),
+                "db-pentest should appear in capability matrix"
+            );
+            let row = db_row.unwrap();
+            assert_eq!(row.domain_id, "db-pentest");
+            assert_eq!(row.category, DomainCategory::DefenseLab);
+            assert!(row.dry_run == "always");
+            assert!(row.evidence_report == "always");
         }
     }
 }
