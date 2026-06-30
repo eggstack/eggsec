@@ -145,6 +145,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 Canonical reference points when updating guidance or skills:
 
+- `docs/ARCHITECTURE.md` - Workspace crate ownership, enforcement model, execution flows, side-effecting path inventory, transitional APIs
+- `docs/ARCHITECTURE_INVARIANTS.md` - 30 normative invariants for enforcement, execution, and structure
 - `architecture/overview.md` - System-wide architecture, module index, data flow
 - `architecture/tui.md` - TUI event loop, key handling, overlays, tab routing, session persistence
 - `architecture/config.md` - Config loading, scope enforcement, TUI settings save semantics

@@ -711,7 +711,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 
 | Category | Documents |
 |----------|-----------|
-| **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md) |
+| **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md), [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [../docs/ARCHITECTURE_INVARIANTS.md](../docs/ARCHITECTURE_INVARIANTS.md) |
 | **Security** | [scanner.md](scanner.md), [fuzzer.md](fuzzer.md), [waf.md](waf.md), [recon.md](recon.md), [auth.md](auth.md), [hunt.md](hunt.md) |
 | **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md) |
 | **Output** | [output.md](output.md), [findings.md](findings.md), [diff.md](diff.md), [workflow.md](workflow.md) |

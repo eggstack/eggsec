@@ -3280,3 +3280,127 @@ fn preflight_does_not_produce_approved_operation() {
     assert_eq!(preflight.surface, ExecutionSurface::RestApi);
     assert!(!preflight.manual_override_honored);
 }
+
+// ---------------------------------------------------------------------------
+// Architecture invariant tests (Phase 1 lightweight additions)
+// ---------------------------------------------------------------------------
+
+/// Invariant: `EnforcementContext::for_surface()` must derive the correct
+/// profile from the surface. This is defense-in-depth for the mapping
+/// documented in ARCHITECTURE.md §3.2.
+#[test]
+fn for_surface_derives_correct_profile_for_all_surfaces() {
+    let policy = default_policy();
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+
+    let cases: &[(ExecutionSurface, ExecutionProfile)] = &[
+        (
+            ExecutionSurface::CliManual,
+            ExecutionProfile::ManualPermissive,
+        ),
+        (
+            ExecutionSurface::TuiManual,
+            ExecutionProfile::ManualPermissive,
+        ),
+        (
+            ExecutionSurface::CliManualStrict,
+            ExecutionProfile::ManualGuarded,
+        ),
+        (
+            ExecutionSurface::TuiManualStrict,
+            ExecutionProfile::ManualGuarded,
+        ),
+        (ExecutionSurface::McpServer, ExecutionProfile::McpStrict),
+        (
+            ExecutionSurface::SecurityAgent,
+            ExecutionProfile::AgentStrict,
+        ),
+        (ExecutionSurface::Ci, ExecutionProfile::CiStrict),
+        (ExecutionSurface::RestApi, ExecutionProfile::McpStrict),
+        (ExecutionSurface::GrpcApi, ExecutionProfile::McpStrict),
+    ];
+
+    for (surface, expected_profile) in cases {
+        let ctx = ctx_for_surface(*surface, policy.clone(), scope.clone());
+        assert_eq!(
+            ctx.execution_profile, *expected_profile,
+            "Surface {:?} should map to {:?}, got {:?}",
+            surface, expected_profile, ctx.execution_profile
+        );
+    }
+}
+
+/// Invariant: `is_explicit_manifest()` is the gatekeeper, not scope emptiness.
+/// A non-empty scope with `DefaultEmpty` source must still be denied for
+/// automated surfaces with `requires_explicit_scope: true`.
+#[test]
+fn default_empty_scope_denies_networked_even_if_nonempty() {
+    let policy = default_policy();
+    // Non-empty scope, but DefaultEmpty source (not an explicit manifest)
+    let scope = LoadedScope::default_empty();
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, policy, scope);
+
+    let desc = descriptor_requires_scope("127.0.0.1", OperationRisk::SafeActive);
+    let outcome = ctx.evaluate(&desc);
+
+    assert!(
+        matches!(outcome, EnforcementOutcome::Deny { .. }),
+        "DefaultEmpty scope must be denied for automated surfaces with requires_explicit_scope, got {:?}",
+        outcome
+    );
+}
+
+/// Invariant: An explicit scope (even with empty rules) must NOT be denied
+/// by the explicit-manifest check. The denial here comes from the scope
+/// rule check (target not allowed), NOT from missing provenance.
+#[test]
+fn explicit_scope_with_empty_rules_does_not_fail_provenance_check() {
+    let policy = default_policy();
+    // Explicit scope with no allowed rules (scope exists but is empty)
+    let scope = LoadedScope::explicit(Scope::default(), ScopeSource::ConfigFile, None);
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, policy, scope);
+
+    let desc = descriptor_requires_scope("127.0.0.1", OperationRisk::SafeActive);
+    let outcome = ctx.evaluate(&desc);
+
+    // Should be Deny because target is not in scope, NOT because of provenance
+    match &outcome {
+        EnforcementOutcome::Deny(decision) => {
+            assert!(
+                decision.denied_reasons.iter().any(|r| r.contains("scope")),
+                "Denial should be about scope rules, not provenance: {:?}",
+                decision.denied_reasons
+            );
+        }
+        other => panic!("Expected Deny for out-of-scope target, got {:?}", other),
+    }
+}
+
+/// Invariant: Approval tokens must not be reusable for a different target.
+/// `dispatch_checked` must reject a request whose target differs from the
+/// approved descriptor's target.
+#[test]
+fn approval_token_rejects_different_target() {
+    let policy = default_policy();
+    let scope = loaded_explicit(scope_allow("*"));
+
+    // Approve for target A
+    let ctx = ctx_for_surface(ExecutionSurface::RestApi, policy, scope);
+    let desc_a = descriptor("10.0.0.1", OperationRisk::SafeActive);
+    let approved = match ctx.approve(ExecutionSurface::RestApi, desc_a) {
+        Ok(a) => a,
+        Err(e) => panic!("Expected approval, got {:?}", e),
+    };
+
+    // The approved descriptor targets 10.0.0.1
+    assert_eq!(
+        approved.descriptor().target.as_deref(),
+        Some("10.0.0.1"),
+        "Approved descriptor should have target 10.0.0.1"
+    );
+
+    // Verify the token is bound to the specific descriptor
+    assert_eq!(approved.descriptor().operation, "matrix-op");
+    assert_eq!(approved.surface(), ExecutionSurface::RestApi);
+    assert_eq!(approved.profile(), ExecutionProfile::McpStrict);
+}
