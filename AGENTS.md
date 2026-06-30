@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 9 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, and `eggsec-db-lab`. See `README.md` for features and `architecture/overview.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 10 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, and `eggsec-web-proxy`. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Quick Reference
 
@@ -27,6 +27,8 @@ cargo test -p eggsec-core
 cargo test -p eggsec-tool-core
 cargo test -p eggsec-output
 cargo test -p eggsec-db-lab
+cargo check -p eggsec-web-proxy
+cargo test -p eggsec-web-proxy
 cargo test --lib -p eggsec
 cargo test --test negative_tests -p eggsec
 cargo test --test scanner_tests -p eggsec
@@ -64,7 +66,12 @@ cargo check -p eggsec --features mobile-dynamic
 cargo test --lib -p eggsec --features mobile-dynamic
 cargo clippy --lib -p eggsec --features mobile-dynamic
 
-# web-proxy
+# web-proxy (domain crate)
+cargo check -p eggsec-web-proxy
+cargo test -p eggsec-web-proxy
+cargo clippy -p eggsec-web-proxy
+
+# web-proxy (main crate with adapter)
 cargo check -p eggsec --features web-proxy
 cargo test --lib -p eggsec --features web-proxy
 cargo clippy --lib -p eggsec --features web-proxy
@@ -201,6 +208,9 @@ Canonical reference points when updating guidance or skills:
 - `ScopeAudit` - Scope provenance summary for audit events
 - `PayloadType` - Enum of 40 payload categories; lives in `fuzzer/payloads/mod.rs`, NOT `types.rs`
 - `McpProfile` / `McpProfilePolicy` - MCP agent profiles and per-profile tool visibility in `tool/protocol/mcp/`
+- `ApprovedOperation` - Proof-of-enforcement token with private fields; produced exclusively by `EnforcementContext::approve()` or `approve_manual()`. Read-only accessors: `descriptor()`, `decision()`, `surface()`, `profile()`, `audit_event_id()`.
+- `EnforcementError` - Structured error from `approve()`/`approve_manual()`: `Denied`, `ConfirmationRequired`, `ManualOverrideUnavailable`.
+- `EnforcedDispatcher` - Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`.
 
 ### Important Patterns
 
@@ -221,12 +231,15 @@ Canonical reference points when updating guidance or skills:
 - **TUI Enforcement Posture**: TUI uses `TuiEnforcementState` to wrap `EnforcementContext` + `LoadedScope`. Default is `ManualPermissive` (TuiManual). Toggle to `ManualGuarded` (TuiManualStrict) via Ctrl+G. Guarded mode denies scope ambiguity. Preflight evaluation is advisory and displayed in status bar.
 - **MCP/Agent/REST Invariant**: For MCP, agent, and REST execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope must come from `LoadedScope`. REST now carries `EnforcementContext` (via `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` in `handle_serve()`) and dispatches through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile). Agent execution defensively rebuilds `AgentStrict` in the handler and validates it at runtime (`Agent::new()` rejects non-`AgentStrict` profiles). See `docs/ENFORCEMENT_MODES.md` for the canonical dual-mode enforcement contract.
 - **eggsec-output Re-exports**: Use `eggsec_output::Severity` rather than reaching into `eggsec_output::agent::Severity`
+- **Type-Level Enforcement**: Strict programmatic surfaces (REST, MCP, Agent) require an `ApprovedOperation` token before dispatch. `EnforcedDispatcher::dispatch_checked()` verifies the request matches the approved descriptor (tool name and target). Manual surfaces (CLI, TUI) use `approve_manual()` which supports `Warn` outcomes and manual override.
+- **EnforcementError Mapping**: Each surface maps `EnforcementError` to its native error type (REST → HTTP 403, MCP → error `-32025`, Agent → `anyhow::bail!`).
+- **CI has no dispatch path**: The CI handler is a passive quality gate that processes pre-existing findings from stdin; it does not dispatch tools.
 
 ### Codebase Health
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4640 (includes #[test] + #[tokio::test]) |
+| Tests | ~4900 (includes #[test] + #[tokio::test] + enforcement_matrix) |
 | Clippy | ~54 warnings (pre-existing, none in ai module) |
 | Source files | 878 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |
@@ -261,6 +274,8 @@ Canonical reference points when updating guidance or skills:
 - **Theme loader**: `theme/loader.rs` parses Halloy `.toml` themes. Background thread loading via `std::thread::spawn` + `std::sync::mpsc`.
 - **TUI enforcement toggle**: `TuiEnforcementState::toggle_posture()` switches between TuiManual and TuiManualStrict. TuiManualStrict does NOT honor manual overrides (unlike TuiManual).
 - **REST EnforcementContext**: `RestState` now carries `EnforcementContext` instead of `Option<Scope>`. `handle_serve()` constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)`. All REST dispatch goes through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile). Only `Allow` permits dispatch; `Warn`/`RequireConfirmation`/`Deny` all return HTTP 403. Metadata `rest_exposable` is enforced. See `docs/ENFORCEMENT_MODES.md`.
+- **EnforcedDispatcher**: REST and MCP store `EnforcedDispatcher` (not raw `ToolDispatcher`) to structurally prevent bypass.
+- **TUI pending_approved**: TUI caches `ApprovedOperation` in `pending_approved` field for reuse between pre-dispatch gate and `evaluate_policy_and_dispatch()`.
 
 ## Skills Directory
 

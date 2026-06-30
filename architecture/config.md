@@ -134,13 +134,16 @@ Use `EnforcementContext::for_surface(surface, policy, loaded_scope)` for central
 
 **Key methods:**
 - `evaluate(descriptor)` - Central evaluator; returns `EnforcementOutcome` (Allow/Warn/RequireConfirmation/Deny) wrapping `PolicyDecision`. Handles provenance, DenialClass downgrades, and capability checks internally. (RequireConfirmation is produced only for ManualPermissive discretion cases per 2026-06-10 plan with narrow `--yes` + dedicated `--allow-*` semantics; automated profiles treat it as denial.)
+- `approve(surface, descriptor)` - Strict approval: returns `ApprovedOperation` only for `Allow` outcomes. `Warn`, `RequireConfirmation`, and `Deny` fail with `EnforcementError`. Use for REST, MCP, Agent, CI.
+- `approve_manual(surface, descriptor, manual_override)` - Manual approval: supports `Warn` (approved with warning) and `RequireConfirmation` with matching override on `ManualPermissive` surfaces. Strict/automated surfaces reject overrides. Use for CLI/TUI.
 - `requires_explicit_manifest_for(descriptor)` / `require_explicit_scope_for_networked()` - Provenance helpers used by `evaluate`.
 - `profile()` - Returns the `ExecutionProfile`
 - `scope()` - Returns the `LoadedScope`
 
 **Security enforcement:**
 - MCP tools/call handler evaluates `self.enforcement.evaluate()` BEFORE dispatch to any tool; `EnforcementContext` is the sole policy/scope authority. Legacy helpers (`policy_decision_for_mcp_call`, `denial_from_violation`, `with_scope`, `with_scope_and_profile`) have been removed.
-- Agent refuses to run without an explicit scope manifest; handler defensively rebuilds `AgentStrict` enforcement (defense-in-depth); `Agent::new()` rejects non-`AgentStrict` profiles; per-scan `enforcement.evaluate` immediately before dispatch.
+- REST, MCP, and Agent dispatch paths use `EnforcedDispatcher` which requires an `ApprovedOperation` token before `dispatch_checked()`. This enforces type-level access control so strict programmatic surfaces cannot accidentally bypass policy.
+- Agent refuses to run without an explicit scope manifest; handler defensively rebuilds `AgentStrict` enforcement (defense-in-depth); `Agent::new()` rejects non-`AgentStrict` profiles; per-scan `enforcement.approve()` immediately before dispatch.
 - Strict profiles require `is_explicit_manifest() == true` for networked operations (enforced centrally inside `evaluate`).
 
 ### Preflight System (`preflight_operation()`)

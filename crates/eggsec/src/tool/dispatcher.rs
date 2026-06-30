@@ -1,3 +1,4 @@
+use crate::config::ApprovedOperation;
 use crate::error::EggsecError;
 use crate::tool::response::{ResponseMetadata, ResponseStatus};
 use crate::tool::{ToolRegistry, ToolRequest, ToolResponse};
@@ -85,5 +86,80 @@ impl ToolDispatcher {
 impl Default for ToolDispatcher {
     fn default() -> Self {
         Self::new(ToolRegistry::new())
+    }
+}
+
+/// Wrapper around [`ToolDispatcher`] that requires an [`ApprovedOperation`]
+/// token before dispatching. This enforces type-level access control so
+/// strict programmatic surfaces cannot accidentally bypass policy.
+#[derive(Clone)]
+pub struct EnforcedDispatcher {
+    inner: ToolDispatcher,
+}
+
+impl EnforcedDispatcher {
+    pub fn new(inner: ToolDispatcher) -> Self {
+        Self { inner }
+    }
+
+    /// Dispatch a tool request, verifying it matches the approved operation.
+    ///
+    /// Checks that:
+    /// - The tool name in the request matches the approved descriptor's operation.
+    /// - If the descriptor has a target, it matches the request's target parameter.
+    ///
+    /// Fails closed on any mismatch.
+    pub async fn dispatch_checked(
+        &self,
+        approved: &ApprovedOperation,
+        request: ToolRequest,
+    ) -> Result<ToolResponse, EggsecError> {
+        let descriptor = approved.descriptor();
+
+        if request.tool != descriptor.operation {
+            return Err(EggsecError::Config(format!(
+                "dispatch mismatch: request tool '{}' does not match approved operation '{}'",
+                request.tool, descriptor.operation
+            )));
+        }
+
+        if let Some(ref expected_target) = descriptor.target {
+            let expected_str = expected_target.as_str();
+            let matches = request.target.value == expected_str
+                || request
+                    .params
+                    .get("target")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v == expected_str)
+                    .unwrap_or(false);
+            if !matches {
+                return Err(EggsecError::Config(format!(
+                    "dispatch mismatch: request target '{}' does not match approved target '{}'",
+                    request.target.value, expected_target
+                )));
+            }
+        }
+
+        self.inner.dispatch(request).await
+    }
+
+    /// Access the underlying dispatcher (for cases where the caller has
+    /// already obtained an approval token through another path).
+    pub fn inner(&self) -> &ToolDispatcher {
+        &self.inner
+    }
+
+    pub fn with_history(self, history: super::history::ExecutionHistory) -> Self {
+        Self {
+            inner: self.inner.with_history(history),
+        }
+    }
+
+    pub fn history(&self) -> Option<super::history::ExecutionHistory> {
+        self.inner.history()
+    }
+
+    pub fn registry(&self) -> &ToolRegistry {
+        self.inner.registry()
     }
 }

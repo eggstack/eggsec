@@ -13,9 +13,12 @@ use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 
 use super::auth::validate_api_key;
 use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
-use crate::config::{EnforcementContext, EnforcementOutcome, OperationDescriptor};
+use crate::config::{
+    EnforcementContext, EnforcementError, EnforcementOutcome, ExecutionSurface, OperationDescriptor,
+};
 use crate::distributed::TlsConfig;
 use crate::error::EggsecError;
+use crate::tool::dispatcher::EnforcedDispatcher;
 use crate::tool::ratelimit::RateLimitConfig;
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
 use crate::utils::rate_limiter::RateLimiter;
@@ -26,7 +29,7 @@ const MAX_URL_LENGTH: usize = 2048;
 #[derive(Clone)]
 pub struct RestState {
     pub registry: ToolRegistry,
-    pub dispatcher: ToolDispatcher,
+    pub dispatcher: EnforcedDispatcher,
     pub api_key: Option<String>,
     pub rate_limiter: RateLimiter,
     pub enforcement: EnforcementContext,
@@ -41,7 +44,7 @@ impl RestState {
         enforcement: EnforcementContext,
         tls_config: Option<TlsConfig>,
     ) -> Self {
-        let dispatcher = ToolDispatcher::new(registry.clone());
+        let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(registry.clone()));
         let rate_limiter = RateLimiter::new(RateLimitConfig::standard().requests_per_minute);
         Self {
             registry,
@@ -662,45 +665,93 @@ async fn execute_tool(
         }
     }
 
-    let outcome = state.enforcement.evaluate(&descriptor);
-    let correlation_id = generate_correlation_id();
-    let audit_event = audit_event_from_enforcement_outcome(
-        crate::config::ExecutionSurface::RestApi,
-        &state.enforcement,
-        &descriptor,
-        &outcome,
-        false, // confirmed — REST never confirms
-        false, // override_ignored — no overrides attempted in REST
-        None,  // manual_override — REST never provides manual overrides
-        &[],   // required_classes — REST never confirms
-        Some(&correlation_id),
-        None, // metadata_id — not available at dispatch
-    );
-    emit_audit_event(&audit_event);
-    match outcome {
-        EnforcementOutcome::Allow(_) => {}
-        EnforcementOutcome::Warn(decision) => {
-            state.metrics.record_request(start.elapsed(), true);
-            return Err(EggsecError::ScopeViolation(format!(
-                "REST strict enforcement: warning — {}",
-                decision.to_human_readable()
-            )));
-        }
-        EnforcementOutcome::RequireConfirmation(decision) => {
-            state.metrics.record_request(start.elapsed(), true);
-            return Err(EggsecError::ScopeViolation(format!(
-                "REST strict enforcement: manual confirmation unavailable — {}",
-                decision.to_human_readable()
-            )));
-        }
-        EnforcementOutcome::Deny(decision) => {
+    let approved = match state
+        .enforcement
+        .approve(ExecutionSurface::RestApi, descriptor.clone())
+    {
+        Ok(approved) => approved,
+        Err(EnforcementError::Denied { decision }) => {
+            let correlation_id = generate_correlation_id();
+            let audit_event = audit_event_from_enforcement_outcome(
+                ExecutionSurface::RestApi,
+                &state.enforcement,
+                &descriptor,
+                &EnforcementOutcome::Deny(decision.clone()),
+                false,
+                false,
+                None,
+                &[],
+                Some(&correlation_id),
+                None,
+            );
+            emit_audit_event(&audit_event);
             state.metrics.record_request(start.elapsed(), true);
             return Err(EggsecError::ScopeViolation(format!(
                 "REST strict enforcement denied: {}",
                 decision.to_human_readable()
             )));
         }
-    }
+        Err(EnforcementError::ConfirmationRequired {
+            decision,
+            required_classes,
+        }) => {
+            let correlation_id = generate_correlation_id();
+            let audit_event = audit_event_from_enforcement_outcome(
+                ExecutionSurface::RestApi,
+                &state.enforcement,
+                &descriptor,
+                &EnforcementOutcome::RequireConfirmation(decision.clone()),
+                false,
+                false,
+                None,
+                &required_classes,
+                Some(&correlation_id),
+                None,
+            );
+            emit_audit_event(&audit_event);
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::ScopeViolation(format!(
+                "REST strict enforcement: manual confirmation unavailable — {}",
+                decision.to_human_readable()
+            )));
+        }
+        Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
+            let correlation_id = generate_correlation_id();
+            let audit_event = audit_event_from_enforcement_outcome(
+                ExecutionSurface::RestApi,
+                &state.enforcement,
+                &descriptor,
+                &EnforcementOutcome::Deny(decision.clone()),
+                false,
+                false,
+                None,
+                &[],
+                Some(&correlation_id),
+                None,
+            );
+            emit_audit_event(&audit_event);
+            state.metrics.record_request(start.elapsed(), true);
+            return Err(EggsecError::ScopeViolation(format!(
+                "REST strict enforcement denied: {}",
+                decision.to_human_readable()
+            )));
+        }
+    };
+
+    let correlation_id = generate_correlation_id();
+    let audit_event = audit_event_from_enforcement_outcome(
+        ExecutionSurface::RestApi,
+        &state.enforcement,
+        approved.descriptor(),
+        &EnforcementOutcome::Allow(approved.decision().clone()),
+        false,
+        false,
+        None,
+        &[],
+        Some(&correlation_id),
+        None,
+    );
+    emit_audit_event(&audit_event);
 
     let target_type = payload.target_type.as_deref().unwrap_or("url");
 
@@ -720,7 +771,7 @@ async fn execute_tool(
         cancellation_token: None,
     };
 
-    match state.dispatcher.dispatch(request).await {
+    match state.dispatcher.dispatch_checked(&approved, request).await {
         Ok(response) => {
             state
                 .metrics

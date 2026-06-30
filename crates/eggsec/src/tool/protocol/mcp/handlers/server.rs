@@ -8,8 +8,8 @@ use crate::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use crate::config::ExecutionSurface;
 use crate::tool::ratelimit::RateLimitConfig;
 use crate::tool::{
-    CancellationToken, ExecutionHistory, RequestOptions, SessionManager, Target, ToolDispatcher,
-    ToolRegistry, ToolRequest, ToolResponse,
+    CancellationToken, EnforcedDispatcher, ExecutionHistory, RequestOptions, SessionManager,
+    Target, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse,
 };
 use crate::utils::rate_limiter::RateLimiter;
 
@@ -34,7 +34,7 @@ use crate::tool::protocol::mcp::types::{
 #[derive(Clone)]
 pub struct McpServer {
     pub(crate) registry: ToolRegistry,
-    dispatcher: ToolDispatcher,
+    dispatcher: EnforcedDispatcher,
     api_key: Option<String>,
     rate_limiter: RateLimiter,
     session_manager: Option<SessionManager>,
@@ -84,7 +84,7 @@ impl McpServer {
         profile: McpProfile,
         enforcement: crate::config::EnforcementContext,
     ) -> Self {
-        let dispatcher = ToolDispatcher::new(registry.clone());
+        let dispatcher = EnforcedDispatcher::new(ToolDispatcher::new(registry.clone()));
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
 
         let pending_cancellations = Arc::new(RwLock::new(FxHashMap::default()));
@@ -491,54 +491,83 @@ impl McpServer {
             }
         }
 
-        // Shared enforcement evaluation
+        // Shared enforcement approval (strict: only Allow succeeds)
+        let Some(descriptor) = operation_descriptor_for_mcp_call(
+            &self.policy,
+            &tool_id,
+            capability.as_deref(),
+            &arguments,
+        ) else {
+            // Missing metadata = unclassified tool. Fail closed.
+            return req.error_response(McpError {
+                code: -32025,
+                message: format!(
+                    "missing operation metadata for tool '{}' — \
+                     every MCP tool must have an entry in ALL_OPERATION_METADATA",
+                    tool_id
+                ),
+                data: None,
+            });
+        };
+
+        let approved = match self
+            .enforcement
+            .approve(ExecutionSurface::McpServer, descriptor.clone())
         {
-            let Some(descriptor) = operation_descriptor_for_mcp_call(
-                &self.policy,
-                &tool_id,
-                capability.as_deref(),
-                &arguments,
-            ) else {
-                // Missing metadata = unclassified tool. Fail closed.
-                return req.error_response(McpError {
-                    code: -32025,
-                    message: format!(
-                        "missing operation metadata for tool '{}' — \
-                         every MCP tool must have an entry in ALL_OPERATION_METADATA",
-                        tool_id
-                    ),
-                    data: None,
-                });
-            };
-            let outcome = self.enforcement.evaluate(&descriptor);
+            Ok(approved) => {
+                // Emit audit event for allow outcome
+                let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::McpServer,
+                    &self.enforcement,
+                    approved.descriptor(),
+                    &crate::config::EnforcementOutcome::Allow(approved.decision().clone()),
+                    false, // confirmed: MCP never confirms
+                    false, // override_ignored: MCP never accepts overrides
+                    None,  // manual_override: MCP never has manual overrides
+                    &[],   // required_classes: MCP never has required classes
+                    correlation_id,
+                    None, // metadata_id
+                );
+                emit_audit_event(&audit_event);
+                approved
+            }
+            Err(e) => {
+                let decision = e.decision();
+                // Emit audit event for deny outcome
+                let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
+                let outcome = match &e {
+                    crate::config::EnforcementError::Denied { decision } => {
+                        crate::config::EnforcementOutcome::Deny(decision.clone())
+                    }
+                    crate::config::EnforcementError::ConfirmationRequired { decision, .. } => {
+                        crate::config::EnforcementOutcome::RequireConfirmation(decision.clone())
+                    }
+                    crate::config::EnforcementError::ManualOverrideUnavailable {
+                        decision, ..
+                    } => crate::config::EnforcementOutcome::Deny(decision.clone()),
+                };
+                let audit_event = audit_event_from_enforcement_outcome(
+                    ExecutionSurface::McpServer,
+                    &self.enforcement,
+                    &descriptor,
+                    &outcome,
+                    false,
+                    false,
+                    None,
+                    &[],
+                    correlation_id,
+                    None,
+                );
+                emit_audit_event(&audit_event);
 
-            // Emit audit event for every enforcement outcome
-            let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
-            let audit_event = audit_event_from_enforcement_outcome(
-                ExecutionSurface::McpServer,
-                &self.enforcement,
-                &descriptor,
-                &outcome,
-                false, // confirmed: MCP never confirms
-                false, // override_ignored: MCP never accepts overrides
-                None,  // manual_override: MCP never has manual overrides
-                &[],   // required_classes: MCP never has required classes
-                correlation_id,
-                None, // metadata_id
-            );
-            emit_audit_event(&audit_event);
-
-            if let crate::config::EnforcementOutcome::Deny(decision)
-            | crate::config::EnforcementOutcome::RequireConfirmation(decision) = outcome
-            {
-                // RequireConfirmation is treated as hard denial for MCP (no override path, no agent-visible fields).
                 return req.error_response(McpError {
                     code: -32025,
                     message: format!("Enforcement denied: {}", decision.denied_reasons.join("; ")),
-                    data: Some(serde_json::to_value(&decision).unwrap_or_default()),
+                    data: Some(serde_json::to_value(decision).unwrap_or_default()),
                 });
             }
-        }
+        };
 
         let target_type = arguments
             .get("target_type")
@@ -570,7 +599,7 @@ impl McpServer {
             .with_params(request_args)
             .with_options(options);
 
-        match self.dispatcher.dispatch(request).await {
+        match self.dispatcher.dispatch_checked(&approved, request).await {
             Ok(response) => {
                 let content = if self.profile.is_coding_agent() {
                     let output = self.build_coding_agent_output(&target_value, &response);

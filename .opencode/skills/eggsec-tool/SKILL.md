@@ -26,9 +26,9 @@ Tool abstraction layer workflows and patterns for security tool integration.
 
 ### MCP Enforcement Boundary
 
-The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` only for test/legacy constructors (always `None` under production `with_enforcement`). All MCP tool executions pass through the mandatory `EnforcementContext::evaluate(descriptor)` pre-dispatch gate (via `policy_decision_for_mcp_call_with_enforcement` + `operation_descriptor_for_mcp_call`); `McpProfilePolicy` overlays. Production `create_mcp_router`/`run_stdio` take only `enforcement: EnforcementContext` (scope provenance is `enforcement.loaded_scope`).
+The MCP server (`handlers/server.rs`) stores legacy `scope`/`execution_policy` only for test/legacy constructors (always `None` under production `with_enforcement`). All MCP tool executions pass through the mandatory `EnforcementContext::approve(McpServer, descriptor)` call (Phase 12 type-level dispatch), which produces an `ApprovedOperation` token only on `Allow`. The token is then passed to `EnforcedDispatcher::dispatch_checked()` which verifies the request matches the approved descriptor before dispatch. `McpProfilePolicy` overlays. Production `create_mcp_router`/`run_stdio` take only `enforcement: EnforcementContext` (scope provenance is `enforcement.loaded_scope`).
 
-> For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
+> For MCP and autonomous-agent execution, `EnforcementContext::approve()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 
 ### Agent Routes (REST API)
 `tool/protocol/agent_routes.rs` - Agent and task management:

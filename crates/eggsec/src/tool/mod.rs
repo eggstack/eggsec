@@ -64,6 +64,7 @@ pub use eggsec_tool_core::{
     ToolError, ToolErrorType, ToolRequest, ToolResponse,
 };
 
+pub use dispatcher::EnforcedDispatcher;
 pub use dispatcher::ToolDispatcher;
 pub use history::{ExecutionEntry, ExecutionHistory};
 pub use openapi::OpenApiGenerator;

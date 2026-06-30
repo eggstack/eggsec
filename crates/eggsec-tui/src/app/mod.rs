@@ -52,8 +52,9 @@ use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use eggsec::audit::{audit_event_from_enforcement_outcome, emit_audit_event};
 use eggsec::config::{
-    confirmation_classes_for, ConfirmationClass, EnforcementOutcome, ExecutionPolicy, LoadedScope,
-    ManualOverride, OperationDescriptor,
+    confirmation_classes_for, ApprovedOperation, ConfirmationClass, EnforcementError,
+    EnforcementOutcome, ExecutionPolicy, ExecutionSurface, LoadedScope, ManualOverride,
+    OperationDescriptor,
 };
 use eggsec::types::OutputFormat;
 use rustc_hash::FxHashSet;
@@ -99,6 +100,10 @@ pub struct App {
 
     /// First-class enforcement posture state (wraps EnforcementContext + LoadedScope).
     pub enforcement_state: TuiEnforcementState,
+
+    /// Cached approval token from the pre-dispatch gate in `handle_enter()`.
+    /// Consumed by `evaluate_policy_and_dispatch()` to avoid redundant evaluation.
+    pub(crate) pending_approved: Option<ApprovedOperation>,
 }
 
 impl App {
@@ -139,6 +144,7 @@ impl App {
             bookmarks: FxHashSet::default(),
             theme_load: ThemeLoadState::default(),
             enforcement_state: TuiEnforcementState::new(surface, loaded_scope, enforcement),
+            pending_approved: None,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -229,6 +235,7 @@ impl App {
                     enforcement,
                 )
             },
+            pending_approved: None,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -318,49 +325,29 @@ impl App {
 
         // Pre-dispatch policy gate for direct-launch tabs: evaluate BEFORE starting
         // side effects. This prevents retroactive policy enforcement after the tab
-        // is already running.
+        // is already running. The `ApprovedOperation` token is cached in
+        // `self.pending_approved` so `evaluate_policy_and_dispatch()` can reuse it
+        // without redundant evaluation.
         if self.is_direct_launch_tab(self.current_tab) {
             if let Some(desc) = self.build_current_operation_descriptor() {
-                let outcome = self.enforcement_state.enforcement.evaluate(&desc);
-                self.enforcement_state.last_preflight = Some(TuiPreflightResult::from_outcome(
-                    &desc,
-                    &outcome,
-                    &self.enforcement_state.enforcement.execution_policy,
-                ));
-                let required_classes: Vec<ConfirmationClass> = match &outcome {
-                    EnforcementOutcome::RequireConfirmation(decision) => confirmation_classes_for(
-                        &desc,
-                        decision,
-                        &self.enforcement_state.enforcement.execution_policy,
-                    ),
-                    _ => vec![],
-                };
-                let audit = audit_event_from_enforcement_outcome(
-                    self.enforcement_state.surface,
-                    &self.enforcement_state.enforcement,
-                    &desc,
-                    &outcome,
-                    false,
-                    false,
-                    None,
-                    &required_classes,
-                    None,
-                    None,
-                );
-                emit_audit_event(&audit);
-                match outcome {
-                    EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
+                match self.try_approve(desc.clone()) {
+                    Ok(approved) => {
+                        self.pending_approved = Some(approved);
                         // Proceed to start the tab
                     }
-                    EnforcementOutcome::RequireConfirmation(decision) => {
+                    Err(EnforcementError::ConfirmationRequired {
+                        decision,
+                        required_classes: _,
+                    }) => {
                         // Block before any side effect; show confirmation overlay
                         self.request_policy_confirmation(desc, decision, None);
                         return;
                     }
-                    EnforcementOutcome::Deny(d) => {
+                    Err(EnforcementError::Denied { decision })
+                    | Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
                         // Block; show error without starting the tab
                         self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
-                            d.to_human_readable(),
+                            decision.to_human_readable(),
                         ));
                         return;
                     }
@@ -417,20 +404,73 @@ impl App {
                 if let Some(desc) = self.build_current_operation_descriptor() {
                     self.evaluate_policy_and_dispatch(desc, Some(task_config));
                 } else {
-                    self.spawn_task(Some(task_config));
+                    // No operation descriptor available; spawn without approval token
+                    self.spawn_task(Some(task_config), None);
                 }
             }
         }
     }
 
-    /// Central policy evaluation + dispatch. Handles the Allow/Warn/RequireConfirmation/Deny
-    /// outcome from `EnforcementContext::evaluate()`, stopping the tab and requesting
-    /// confirmation or surfacing errors as needed.
+    /// Central policy evaluation + dispatch. Uses the `ApprovedOperation` token
+    /// to structurally gate `spawn_task()`. Handles `EnforcementError` variants
+    /// for confirmation/denial flows.
+    ///
+    /// If a cached `ApprovedOperation` from the pre-dispatch gate exists (set in
+    /// `handle_enter()`), it is consumed here to avoid redundant evaluation.
     fn evaluate_policy_and_dispatch(
         &mut self,
         desc: OperationDescriptor,
         task_config: Option<crate::workers::TaskConfig>,
     ) {
+        // Consume cached approval from the pre-dispatch gate if available
+        let approved = if let Some(cached) = self.pending_approved.take() {
+            // Verify the cached token matches the descriptor
+            if cached.descriptor().operation == desc.operation {
+                Ok(cached)
+            } else {
+                // Stale token; re-evaluate
+                self.try_approve(desc.clone())
+            }
+        } else {
+            self.try_approve(desc.clone())
+        };
+
+        match approved {
+            Ok(approved_op) => {
+                if let Some(cfg) = task_config {
+                    self.spawn_task(Some(cfg), Some(approved_op));
+                }
+            }
+            Err(EnforcementError::ConfirmationRequired {
+                decision,
+                required_classes: _,
+            }) => {
+                // Stop the tab before showing confirmation overlay
+                {
+                    let mut tab = self.current_tab;
+                    tab.as_tab_input(self).stop();
+                }
+                self.request_policy_confirmation(desc, decision, task_config);
+            }
+            Err(EnforcementError::Denied { decision })
+            | Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
+                {
+                    let mut tab = self.current_tab;
+                    tab.as_tab_input(self).stop();
+                }
+                self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                    decision.to_human_readable(),
+                ));
+            }
+        }
+    }
+
+    /// Attempt to approve an operation using the appropriate enforcement path
+    /// based on the current TUI surface.
+    fn try_approve(
+        &mut self,
+        desc: OperationDescriptor,
+    ) -> Result<ApprovedOperation, EnforcementError> {
         let outcome = self.enforcement_state.enforcement.evaluate(&desc);
         self.enforcement_state.last_preflight = Some(TuiPreflightResult::from_outcome(
             &desc,
@@ -458,29 +498,17 @@ impl App {
             None,
         );
         emit_audit_event(&audit);
-        match outcome {
-            EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
-                if let Some(cfg) = task_config {
-                    self.spawn_task(Some(cfg));
-                }
-                // For direct-launch tabs, the tab already started; nothing more to do.
-            }
-            EnforcementOutcome::RequireConfirmation(decision) => {
-                {
-                    let mut tab = self.current_tab;
-                    tab.as_tab_input(self).stop();
-                }
-                self.request_policy_confirmation(desc, decision, task_config);
-            }
-            EnforcementOutcome::Deny(d) => {
-                {
-                    let mut tab = self.current_tab;
-                    tab.as_tab_input(self).stop();
-                }
-                self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
-                    d.to_human_readable(),
-                ));
-            }
+
+        match self.enforcement_state.surface {
+            ExecutionSurface::TuiManual => self.enforcement_state.enforcement.approve_manual(
+                self.enforcement_state.surface,
+                desc,
+                Some(&self.enforcement_state.manual_override),
+            ),
+            _ => self
+                .enforcement_state
+                .enforcement
+                .approve(self.enforcement_state.surface, desc),
         }
     }
 
@@ -773,83 +801,71 @@ impl App {
             // Track the override centrally so subsequent preflight/eval calls see it.
             self.enforcement_state.manual_override = mo.clone();
 
-            // Re-evaluate using the same central path the CLI uses (EnforcementContext).
-            let outcome = self
-                .enforcement_state
-                .enforcement
-                .evaluate(&pending.descriptor);
-            match outcome {
-                EnforcementOutcome::Allow(_) | EnforcementOutcome::Warn(_) => {
-                    // already allowed; unusual after we got RequireConfirmation, but proceed
-                    tracing::info!(operation = %pending.descriptor.operation, "policy allowed after re-eval (no override needed)");
-                    if let Some(cfg) = pending.captured_task_config {
-                        self.spawn_task(Some(cfg));
-                    }
-                    self.enforcement_state.last_preflight = None;
-                    self.needs_redraw = true;
-                }
-                EnforcementOutcome::RequireConfirmation(ref decision) => {
-                    // Check if our constructed override permits all required classes
-                    let required_now = confirmation_classes_for(
+            // Re-evaluate using approve_manual/approve to produce an ApprovedOperation.
+            let result = match self.enforcement_state.surface {
+                ExecutionSurface::TuiManual => self.enforcement_state.enforcement.approve_manual(
+                    self.enforcement_state.surface,
+                    pending.descriptor.clone(),
+                    Some(&mo),
+                ),
+                _ => self
+                    .enforcement_state
+                    .enforcement
+                    .approve(self.enforcement_state.surface, pending.descriptor.clone()),
+            };
+            match result {
+                Ok(approved_op) => {
+                    let decision = approved_op.decision();
+                    let classes_vec =
+                        eggsec::config::confirmation_class_strings(&pending.required_classes);
+                    let audit = audit_event_from_enforcement_outcome(
+                        self.enforcement_state.surface,
+                        &self.enforcement_state.enforcement,
                         &pending.descriptor,
-                        &decision,
-                        &self.enforcement_state.enforcement.execution_policy,
+                        &EnforcementOutcome::RequireConfirmation(decision.clone()),
+                        true,
+                        false,
+                        Some(&mo),
+                        &pending.required_classes,
+                        None,
+                        None,
                     );
-                    let permitted = required_now.iter().all(|c| mo.permits(*c));
-                    if permitted {
-                        let classes_vec = eggsec::config::confirmation_class_strings(&required_now);
-                        let audit = audit_event_from_enforcement_outcome(
-                            self.enforcement_state.surface,
-                            &self.enforcement_state.enforcement,
-                            &pending.descriptor,
-                            &outcome,
-                            true,
-                            false,
-                            Some(&mo),
-                            &required_now,
-                            None,
-                            None,
-                        );
-                        emit_audit_event(&audit);
-                        tracing::warn!(
-                            operation = %decision.operation,
-                            target = ?decision.target_original,
-                            classes = ?classes_vec,
-                            reason = ?mo.reason,
-                            "manual enforcement override accepted (TUI)"
-                        );
-                        let mut out = decision.clone();
-                        if !out.manual_override_used {
-                            out = out.with_manual_override_record(mo.reason.clone(), classes_vec);
-                        }
-                        // Notify user (mirrors CLI "manual enforcement override accepted")
-                        self.overlay.notification =
-                            Some(crate::app::notifications::Notification::new(
-                                format!("Policy override accepted for: {}", out.operation),
-                                crate::app::notifications::NotificationSeverity::Warning,
-                            ));
-                        if let Some(cfg) = pending.captured_task_config {
-                            self.spawn_task(Some(cfg));
-                        }
-                    } else {
-                        // Still not permitted (should not happen for the classes we mapped)
-                        self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
-                            "Manual override did not satisfy all required confirmation classes"
-                                .to_string(),
-                        ));
-                    }
-                    self.enforcement_state.last_preflight = None;
-                    self.needs_redraw = true;
-                }
-                EnforcementOutcome::Deny(d) => {
-                    // Became a hard deny (profile or other change); surface it
-                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
-                        d.to_human_readable(),
+                    emit_audit_event(&audit);
+                    tracing::warn!(
+                        operation = %decision.operation,
+                        target = ?decision.target_original,
+                        classes = ?classes_vec,
+                        reason = ?mo.reason,
+                        "manual enforcement override accepted (TUI)"
+                    );
+                    // Notify user (mirrors CLI "manual enforcement override accepted")
+                    self.overlay.notification = Some(crate::app::notifications::Notification::new(
+                        format!("Policy override accepted for: {}", decision.operation),
+                        crate::app::notifications::NotificationSeverity::Warning,
                     ));
-                    self.enforcement_state.last_preflight = None;
-                    self.needs_redraw = true;
+                    if let Some(cfg) = pending.captured_task_config {
+                        self.spawn_task(Some(cfg), Some(approved_op));
+                    }
+                }
+                Err(EnforcementError::Denied { decision }) => {
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        decision.to_human_readable(),
+                    ));
+                }
+                Err(EnforcementError::ConfirmationRequired { decision, .. }) => {
+                    // Still not permitted (should not happen for the classes we mapped)
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        decision.to_human_readable(),
+                    ));
+                }
+                Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        decision.to_human_readable(),
+                    ));
                 }
             }
+            self.enforcement_state.last_preflight = None;
+            self.needs_redraw = true;
         }
     }
 

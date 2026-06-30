@@ -207,6 +207,51 @@ cargo test --test enforcement_matrix -p eggsec
 cargo test -p eggsec --features rest-api --test enforcement_matrix
 ```
 
+## Phase 12: Type-Level Enforcement Dispatch
+
+Phase 12 hardened enforcement from convention (call sites expected to evaluate first) to type-level structure. Strict programmatic surfaces cannot dispatch a tool without an `ApprovedOperation` token, enforced structurally rather than by discipline at call sites.
+
+### Core Types
+
+**`ApprovedOperation`** (`config/policy_decision.rs`): Proof-of-enforcement token with private fields. Produced exclusively by `EnforcementContext::approve()` or `approve_manual()`. Read-only accessors: `descriptor()`, `decision()`, `surface()`, `profile()`, `audit_event_id()`. Cannot be constructed outside enforcement code.
+
+**`EnforcementError`** (`config/policy_decision.rs`): Structured error from `approve()`/`approve_manual()`:
+- `Denied { decision }` - Policy denied the operation (`Deny` and `Warn` on strict surfaces).
+- `ConfirmationRequired { decision, required_classes }` - Manual confirmation needed.
+- `ManualOverrideUnavailable { surface, decision }` - Override not supported on this surface.
+
+**`EnforcedDispatcher`** (`tool/dispatcher.rs`): Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`. Verifies request tool name and target match the approved descriptor; fails closed on mismatch.
+
+### Approval Methods
+
+- `EnforcementContext::approve(surface, descriptor)` - Strict: only `Allow` produces a token. `Warn`, `RequireConfirmation`, and `Deny` all fail with `EnforcementError`. Used by REST, MCP, Agent, CI.
+- `EnforcementContext::approve_manual(surface, descriptor, manual_override)` - Manual permissive: supports `Warn` (approved with warning) and `RequireConfirmation` when matching override flags are present. Strict/automated surfaces reject overrides. Used by CLI/TUI.
+
+### Dispatch Flow
+
+```
+1. Build OperationDescriptor from OperationMetadata
+2. let approved = enforcement.approve(surface, descriptor)?;
+3. Build ToolRequest
+4. dispatcher.dispatch_checked(&approved, request).await
+```
+
+### Adoption Status
+
+| Surface | Status | Entry Point |
+|---------|--------|-------------|
+| REST | Complete | `tool/protocol/rest.rs` |
+| MCP | Complete | `tool/protocol/mcp/handlers/server.rs` |
+| Agent | Complete | `agent/mod.rs` |
+| TUI | Complete | `eggsec-tui/src/app/mod.rs` (direct-launch/high-risk tabs) |
+| CLI | Via `approve_manual()` | Command handlers via `evaluate_and_enforce_operation()` |
+
+### Non-Goals
+
+- `evaluate()` is retained for preflight, diagnostics, and advisory checks.
+- Policy semantics are unchanged.
+- Raw `ToolDispatcher::dispatch()` is not removed but `EnforcedDispatcher` is preferred in all protocol/agent code.
+
 ## Audit Trail
 
 Every meaningful enforcement decision produces a normalized `EnforcementAuditEvent` via `audit.rs`.

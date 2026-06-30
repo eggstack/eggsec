@@ -102,6 +102,8 @@ eggsec-agent = { path = "../eggsec-agent" }
 eggsec-nse = { path = "../eggsec-nse", optional = true }
 # Database pentesting domain crate (extracted from db_pentest module)
 eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
+# Web proxy domain crate (extracted from proxy module)
+eggsec-web-proxy = { path = "../eggsec-web-proxy", optional = true }
 ssh2 = { version = "0.9", optional = true }
 
 [dependencies.libc]
@@ -409,16 +411,16 @@ api-schema = []
 # Web proxy for interception and modification of HTTP/HTTPS traffic
 # Pulls in tokio-tungstenite for real WebSocket frame interception and h2 for HTTP/2 ALPN + stream demux.
 # Also includes prost for gRPC protobuf message decoding/encoding.
-web-proxy = ["dep:tokio-tungstenite", "dep:h2", "dep:http", "dep:prost", "dep:prost-types"]
+web-proxy = ["dep:eggsec-web-proxy", "eggsec-web-proxy/web-proxy", "dep:tokio-tungstenite", "dep:h2", "dep:http", "dep:prost", "dep:prost-types"]
 # Optional MCP/agent exposure for web-proxy. When enabled, registers proxy control tools as MCP tools.
 # Default behavior (without this marker) keeps web-proxy as standalone defense-lab surface only.
 # Real runs via MCP require EnforcementContext + policy confirmation.
-web-proxy-mcp = ["web-proxy"]
+web-proxy-mcp = ["web-proxy", "eggsec-web-proxy/web-proxy-mcp"]
 # Transparent proxy mode (Linux iptables/nftables REDIRECT). Marker feature; no new deps.
-transparent-proxy = ["web-proxy"]
+transparent-proxy = ["web-proxy", "eggsec-web-proxy/transparent-proxy"]
 # Dynamic plugin loading from shared libraries (.so/.dylib). Marker feature; no new deps.
 # SECURITY WARNING: Only load plugins from trusted sources!
-dynamic-plugins = ["web-proxy"]
+dynamic-plugins = ["web-proxy", "eggsec-web-proxy/dynamic-plugins"]
 
 [dev-dependencies]
 wiremock = "0.6"

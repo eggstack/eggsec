@@ -3,8 +3,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::{
-    DenialClass, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor,
-    OperationMode, OperationRisk, Scope,
+    DenialClass, ExecutionPolicy, ExecutionProfile, ExecutionSurface, IntendedUse,
+    OperationDescriptor, OperationMode, OperationRisk, Scope,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,6 +241,101 @@ impl EnforcementOutcome {
     }
 }
 
+/// Structured error returned by [`EnforcementContext::approve`] and
+/// [`EnforcementContext::approve_manual`] when an operation is not authorized.
+#[derive(Debug, thiserror::Error)]
+pub enum EnforcementError {
+    /// Operation denied by policy (Deny outcome).
+    #[error("operation denied by policy")]
+    Denied { decision: PolicyDecision },
+
+    /// Manual confirmation required but not available for this surface.
+    #[error("manual confirmation required")]
+    ConfirmationRequired {
+        decision: PolicyDecision,
+        required_classes: Vec<ConfirmationClass>,
+    },
+
+    /// Manual override is unavailable for this execution surface.
+    #[error("manual override unavailable for surface {surface}")]
+    ManualOverrideUnavailable {
+        surface: ExecutionSurface,
+        decision: PolicyDecision,
+    },
+}
+
+impl EnforcementError {
+    /// Returns a reference to the inner `PolicyDecision`.
+    pub fn decision(&self) -> &PolicyDecision {
+        match self {
+            Self::Denied { decision }
+            | Self::ConfirmationRequired { decision, .. }
+            | Self::ManualOverrideUnavailable { decision, .. } => decision,
+        }
+    }
+}
+
+/// Proof that an operation has passed enforcement evaluation.
+///
+/// This token is produced exclusively by [`EnforcementContext::approve`] or
+/// [`EnforcementContext::approve_manual`]. Strict programmatic surfaces
+/// (REST, MCP, Agent, CI) require an `ApprovedOperation` before dispatching
+/// a tool, ensuring enforcement is structurally impossible to bypass.
+///
+/// Fields are private; access is via read-only accessors.
+#[derive(Debug, Clone)]
+pub struct ApprovedOperation {
+    descriptor: OperationDescriptor,
+    decision: PolicyDecision,
+    surface: ExecutionSurface,
+    profile: ExecutionProfile,
+    audit_event_id: Option<String>,
+}
+
+impl ApprovedOperation {
+    /// Construct an approved operation. Only enforcement code should call this.
+    pub(crate) fn new(
+        descriptor: OperationDescriptor,
+        decision: PolicyDecision,
+        surface: ExecutionSurface,
+        profile: ExecutionProfile,
+        audit_event_id: Option<String>,
+    ) -> Self {
+        Self {
+            descriptor,
+            decision,
+            surface,
+            profile,
+            audit_event_id,
+        }
+    }
+
+    /// The operation descriptor that was approved.
+    pub fn descriptor(&self) -> &OperationDescriptor {
+        &self.descriptor
+    }
+
+    /// The policy decision underlying this approval.
+    pub fn decision(&self) -> &PolicyDecision {
+        &self.decision
+    }
+
+    /// The execution surface that produced this approval.
+    pub fn surface(&self) -> ExecutionSurface {
+        self.surface
+    }
+
+    /// The execution profile that produced this approval.
+    pub fn profile(&self) -> ExecutionProfile {
+        self.profile
+    }
+
+    /// Optional audit event ID associated with this approval.
+    pub fn audit_event_id(&self) -> Option<&str> {
+        self.audit_event_id.as_deref()
+    }
+}
+
 /// Categories of conditions that trigger `RequireConfirmation` under `ManualPermissive`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -422,6 +517,120 @@ impl EnforcementContext {
         }
 
         outcome
+    }
+
+    /// Approve an operation for dispatch on a strict automated surface.
+    ///
+    /// Only `Allow` outcomes produce an `ApprovedOperation`. `Warn`,
+    /// `RequireConfirmation`, and `Deny` all fail with [`EnforcementError`].
+    ///
+    /// Use this for REST, MCP, Agent, and CI surfaces.
+    pub fn approve(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+    ) -> Result<ApprovedOperation, EnforcementError> {
+        let outcome = self.evaluate(&descriptor);
+        match outcome {
+            EnforcementOutcome::Allow(decision) => Ok(ApprovedOperation::new(
+                descriptor,
+                decision,
+                surface,
+                self.execution_profile,
+                None,
+            )),
+            EnforcementOutcome::Warn(decision) => Err(EnforcementError::Denied { decision }),
+            EnforcementOutcome::RequireConfirmation(decision) => {
+                let required_classes =
+                    confirmation_classes_for(&descriptor, &decision, &self.execution_policy);
+                Err(EnforcementError::ConfirmationRequired {
+                    decision,
+                    required_classes,
+                })
+            }
+            EnforcementOutcome::Deny(decision) => Err(EnforcementError::Denied { decision }),
+        }
+    }
+
+    /// Approve an operation for dispatch on a manual surface with optional override.
+    ///
+    /// For permissive manual surfaces (`CliManual`, `TuiManual`), this supports
+    /// `Warn` outcomes (approved with warning recorded) and `RequireConfirmation`
+    /// when a matching manual override is present. For strict or automated surfaces,
+    /// manual overrides are rejected.
+    ///
+    /// Use this for CLI and TUI manual dispatch paths.
+    pub fn approve_manual(
+        &self,
+        surface: ExecutionSurface,
+        descriptor: OperationDescriptor,
+        manual_override: Option<&ManualOverride>,
+    ) -> Result<ApprovedOperation, EnforcementError> {
+        let outcome = self.evaluate(&descriptor);
+        match outcome {
+            EnforcementOutcome::Allow(decision) => Ok(ApprovedOperation::new(
+                descriptor,
+                decision,
+                surface,
+                self.execution_profile,
+                None,
+            )),
+            EnforcementOutcome::Warn(decision) => {
+                if surface.honors_manual_override() {
+                    Ok(ApprovedOperation::new(
+                        descriptor,
+                        decision,
+                        surface,
+                        self.execution_profile,
+                        None,
+                    ))
+                } else {
+                    Err(EnforcementError::Denied { decision })
+                }
+            }
+            EnforcementOutcome::RequireConfirmation(decision) => {
+                if !surface.honors_manual_override() {
+                    let required_classes =
+                        confirmation_classes_for(&descriptor, &decision, &self.execution_policy);
+                    return Err(EnforcementError::ConfirmationRequired {
+                        decision,
+                        required_classes,
+                    });
+                }
+                let override_ = match manual_override {
+                    Some(o) => o,
+                    None => {
+                        let required_classes = confirmation_classes_for(
+                            &descriptor,
+                            &decision,
+                            &self.execution_policy,
+                        );
+                        return Err(EnforcementError::ConfirmationRequired {
+                            decision,
+                            required_classes,
+                        });
+                    }
+                };
+                let required_classes =
+                    confirmation_classes_for(&descriptor, &decision, &self.execution_policy);
+                let all_permitted = required_classes.iter().all(|c| override_.permits(*c));
+                if all_permitted {
+                    Ok(ApprovedOperation::new(
+                        descriptor,
+                        decision,
+                        surface,
+                        self.execution_profile,
+                        None,
+                    ))
+                } else {
+                    Err(EnforcementError::ConfirmationRequired {
+                        decision,
+                        required_classes,
+                    })
+                }
+            }
+            EnforcementOutcome::Deny(decision) => Err(EnforcementError::Denied { decision }),
+        }
     }
 
     pub fn policy_hash(&self) -> String {
@@ -2594,5 +2803,474 @@ mod tests {
             direct.is_allowed(),
             "Preflight outcome should match direct evaluate outcome"
         );
+    }
+
+    // --- Phase 12: Type-level enforcement dispatch tests ---
+
+    #[test]
+    fn approve_returns_approved_operation_on_allow() {
+        use super::super::scope::LoadedScope;
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx = EnforcementContext::mcp_strict(ExecutionPolicy::default(), scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(
+            result.is_ok(),
+            "approve() should succeed for Allow outcome, got {:?}",
+            result.err()
+        );
+        let approved = result.unwrap();
+        assert_eq!(approved.descriptor().operation, "scan-ports");
+        assert_eq!(
+            approved.surface(),
+            super::super::ExecutionSurface::McpServer
+        );
+        assert_eq!(approved.profile(), ExecutionProfile::McpStrict);
+        assert!(approved.decision().allowed);
+    }
+
+    #[test]
+    fn approve_rejects_warn_for_strict_surface() {
+        use super::super::scope::LoadedScope;
+        // ManualPermissive + empty scope + safe op with target = Warn (scope ambiguous)
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // Verify evaluate produces Warn
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(
+            matches!(outcome, EnforcementOutcome::Warn(_)),
+            "expected Warn, got {:?}",
+            outcome
+        );
+        // approve() should reject Warn -> Err(Denied)
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(result.is_err(), "approve() should reject Warn outcome");
+        match result.unwrap_err() {
+            EnforcementError::Denied { .. } => {}
+            other => panic!("expected Denied, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn approve_rejects_require_confirmation_for_strict_surface() {
+        use super::super::scope::LoadedScope;
+        // Permissive + out-of-scope with positive rules = RequireConfirmation
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // Verify evaluate produces RequireConfirmation
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(
+            outcome.requires_confirmation(),
+            "expected RequireConfirmation, got {:?}",
+            outcome
+        );
+        // approve() should return Err(ConfirmationRequired)
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(
+            result.is_err(),
+            "approve() should reject RequireConfirmation"
+        );
+        match result.unwrap_err() {
+            EnforcementError::ConfirmationRequired {
+                required_classes, ..
+            } => {
+                assert!(!required_classes.is_empty(), "should have required classes");
+            }
+            other => panic!("expected ConfirmationRequired, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn approve_rejects_deny_for_all_surfaces() {
+        use super::super::scope::LoadedScope;
+        // MCP strict + missing scope for networked op = Deny
+        let ctx = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        // Verify evaluate produces Deny
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(outcome.is_denied(), "expected Deny, got {:?}", outcome);
+        // approve() should return Err(Denied)
+        let result = ctx.approve(super::super::ExecutionSurface::McpServer, descriptor);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            EnforcementError::Denied { .. } => {}
+            other => panic!("expected Denied, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn approve_manual_accepts_warn_on_permissive_surface() {
+        use super::super::scope::LoadedScope;
+        // ManualPermissive + empty scope + safe op + target = Warn
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // Verify evaluate produces Warn
+        let outcome = ctx.evaluate(&descriptor);
+        assert!(
+            matches!(outcome, EnforcementOutcome::Warn(_)),
+            "expected Warn, got {:?}",
+            outcome
+        );
+        // approve_manual with TuiManual (permissive) should accept
+        let result =
+            ctx.approve_manual(super::super::ExecutionSurface::TuiManual, descriptor, None);
+        assert!(
+            result.is_ok(),
+            "approve_manual should accept Warn on permissive surface, got {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn approve_manual_rejects_warn_on_automated_surface() {
+        use super::super::scope::LoadedScope;
+        // ManualPermissive + empty scope + safe op + target = Warn
+        let ctx = EnforcementContext::manual_permissive(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // approve_manual with McpServer (automated) should reject Warn
+        let result =
+            ctx.approve_manual(super::super::ExecutionSurface::McpServer, descriptor, None);
+        assert!(
+            result.is_err(),
+            "approve_manual should reject Warn on automated surface"
+        );
+        match result.unwrap_err() {
+            EnforcementError::Denied { .. } => {}
+            other => panic!("expected Denied, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn approve_manual_accepts_confirmation_with_matching_override() {
+        use super::super::scope::LoadedScope;
+        // Permissive + out-of-scope with positive rules = RequireConfirmation
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let mut mo = ManualOverride::default();
+        mo.allow_out_of_scope = true;
+        // approve_manual with TuiManual should accept with matching override
+        let result = ctx.approve_manual(
+            super::super::ExecutionSurface::TuiManual,
+            descriptor,
+            Some(&mo),
+        );
+        assert!(
+            result.is_ok(),
+            "approve_manual should accept with matching override, got {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn approve_manual_rejects_confirmation_without_override() {
+        use super::super::scope::LoadedScope;
+        // Permissive + out-of-scope with positive rules = RequireConfirmation
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        // No override -> should reject
+        let result =
+            ctx.approve_manual(super::super::ExecutionSurface::TuiManual, descriptor, None);
+        assert!(
+            result.is_err(),
+            "approve_manual should reject without override"
+        );
+        match result.unwrap_err() {
+            EnforcementError::ConfirmationRequired {
+                required_classes, ..
+            } => {
+                assert!(!required_classes.is_empty());
+            }
+            other => panic!("expected ConfirmationRequired, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn approve_manual_rejects_override_on_guarded_surface() {
+        use super::super::scope::LoadedScope;
+        // Permissive context produces RequireConfirmation for out-of-scope
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx = EnforcementContext::manual_permissive(ExecutionPolicy::default(), scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let mut mo = ManualOverride::default();
+        mo.allow_out_of_scope = true;
+        // TuiManualStrict (guarded) -> honors_manual_override() is false
+        let result = ctx.approve_manual(
+            super::super::ExecutionSurface::TuiManualStrict,
+            descriptor,
+            Some(&mo),
+        );
+        assert!(
+            result.is_err(),
+            "approve_manual should reject override on guarded surface"
+        );
+        match result.unwrap_err() {
+            EnforcementError::ConfirmationRequired { .. } => {}
+            other => panic!("expected ConfirmationRequired, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn approved_operation_accessors_return_correct_values() {
+        use super::super::scope::LoadedScope;
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx = EnforcementContext::agent_strict(ExecutionPolicy::default(), scope);
+        let descriptor = OperationDescriptor {
+            operation: "scan-ports".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        let surface = super::super::ExecutionSurface::SecurityAgent;
+        let result = ctx.approve(surface, descriptor).unwrap();
+
+        assert_eq!(result.descriptor().operation, "scan-ports");
+        assert_eq!(result.descriptor().target.as_deref(), Some("127.0.0.1"));
+        assert!(result.decision().allowed);
+        assert_eq!(
+            result.surface(),
+            super::super::ExecutionSurface::SecurityAgent
+        );
+        assert_eq!(result.profile(), ExecutionProfile::AgentStrict);
+        assert!(result.audit_event_id().is_none());
+    }
+
+    #[test]
+    fn enforcement_error_decision_reference() {
+        use super::super::scope::LoadedScope;
+        // Test Denied variant
+        let ctx_deny = EnforcementContext::mcp_strict(
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let descriptor_deny = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("127.0.0.1".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: true,
+            required_capabilities: vec![],
+        };
+        let err_deny = ctx_deny
+            .approve(super::super::ExecutionSurface::McpServer, descriptor_deny)
+            .unwrap_err();
+        let decision_deny = err_deny.decision();
+        assert!(!decision_deny.allowed);
+
+        // Test ConfirmationRequired variant
+        let scope = LoadedScope::explicit(
+            super::super::Scope {
+                allowed_targets: vec![super::super::ScopeRule::new("127.0.0.1".to_string())],
+                ..Default::default()
+            },
+            super::super::ScopeSource::ConfigFile,
+            None,
+        );
+        let ctx_confirm = EnforcementContext::manual_permissive(ExecutionPolicy::default(), scope);
+        let descriptor_confirm = OperationDescriptor {
+            operation: "scan".to_string(),
+            mode: OperationMode::StandardAssessment,
+            risk: OperationRisk::SafeActive,
+            intended_uses: vec![IntendedUse::WebAssessment],
+            target: Some("93.184.216.34".to_string()),
+            required_features: vec![],
+            required_policy_flags: vec![],
+            requires_private_or_local_target: false,
+            requires_explicit_scope: false,
+            required_capabilities: vec![],
+        };
+        let err_confirm = ctx_confirm
+            .approve_manual(
+                super::super::ExecutionSurface::TuiManual,
+                descriptor_confirm,
+                None,
+            )
+            .unwrap_err();
+        let decision_confirm = err_confirm.decision();
+        assert!(!decision_confirm.allowed);
+
+        // Test ManualOverrideUnavailable variant (constructed directly)
+        let decision_manual = PolicyDecision::denied(
+            "test",
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![],
+            "manual override unavailable",
+        );
+        let err_manual = EnforcementError::ManualOverrideUnavailable {
+            surface: super::super::ExecutionSurface::McpServer,
+            decision: decision_manual,
+        };
+        let decision_ref = err_manual.decision();
+        assert!(!decision_ref.allowed);
+        assert!(decision_ref
+            .denied_reasons
+            .iter()
+            .any(|r| r.contains("manual override unavailable")));
     }
 }

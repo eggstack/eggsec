@@ -24,7 +24,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 
 Once arguments are parsed, the `main` function initializes a `CommandContext` and calls `handle_command` via `src/commands/mod.rs` re-exports. The implementation lives in `src/commands/handlers/mod.rs`.
 
-- **`CommandContext`**: Carries global state including the loaded `EggsecConfig`, `Scope`, output preferences, and `execution_profile` (defaults to `ManualPermissive`; set to `ManualGuarded` by `--strict-scope`, `CiStrict` in CI mode).
+- **`CommandContext`**: Carries global state including the loaded `EggsecConfig`, `Scope`, output preferences, `EnforcementContext`, and `execution_profile` (defaults to `ManualPermissive`; set to `ManualGuarded` by `--strict-scope`, `CiStrict` in CI mode). `evaluate_and_enforce_operation()` produces an `ApprovedOperation` token via `approve_manual()` (Phase 12 type-level dispatch).
 - **`handle_command`**: A large exhaustive match statement that dispatches to the correct handler based on the subcommand.
   Because it is exhaustive (no wildcard arm), adding/removing `Commands` variants requires updating dispatch at compile time.
 
@@ -44,7 +44,7 @@ Examples:
 pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
     let target = crate::utils::extract_target_from_url(&args.url)
         .unwrap_or_else(|| args.url.clone());
-    ctx.evaluate_and_enforce_operation(OperationDescriptor {
+    let approved = ctx.evaluate_and_enforce_operation(OperationDescriptor {
         operation: "fuzz".to_string(),
         mode: crate::config::OperationMode::StandardAssessment,
         risk: crate::config::OperationRisk::Intrusive,
@@ -55,7 +55,8 @@ pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
         requires_private_or_local_target: false,
         requires_explicit_scope: false,
     })?;
-    // ... proceed
+    // approved is an ApprovedOperation token — carries decision, surface, profile
+    // ... proceed with dispatch
 }
 
 // Error handling - return Result, never std::process::exit()
@@ -67,11 +68,12 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 
 ### `evaluate_and_enforce_operation()` Method
 
-`CommandContext::evaluate_and_enforce_operation()` wraps `self.enforcement.evaluate(&descriptor)` (central `EnforcementContext::evaluate` in `config/policy_decision.rs`) with profile-aware scope enforcement and structured denial output. The central `evaluate` performs LoadedScope provenance checks, DenialClass downgrade (ManualPermissive only), positive capability checks for strict profiles, and risk/feature/policy enforcement; legacy direct `evaluate_enforcement`/`evaluate_operation_policy` calls are internal/deprecated for denial paths.
-1. Calls `self.enforcement.evaluate(&descriptor)`
-2. On `Allow`: returns the `PolicyDecision`
-3. On `Warn`: logs warnings and returns the `PolicyDecision` (manual permissive mode)
-4. On `Deny`: returns an error containing the `PolicyDecision` details (JSON or human-readable)
+`CommandContext::evaluate_and_enforce_operation()` wraps `self.enforcement.approve_manual(&descriptor)` (Phase 12 `EnforcementContext::approve_manual` in `config/policy_decision.rs`) with profile-aware scope enforcement and structured denial output. For `ManualPermissive`, it produces an `ApprovedOperation` token on `Allow`, `Warn` (with warning), or `RequireConfirmation` with matching override. Strict profiles treat `Warn` and `RequireConfirmation` as denial. The method maps `EnforcementError` variants to structured CLI error output.
+1. Calls `self.enforcement.approve_manual(surface, &descriptor, Some(&self.manual_override))`
+2. On `Ok(approved)`: returns the `ApprovedOperation` (carries decision, surface, profile, audit_event_id)
+3. On `Err(EnforcementError::Denied)`: returns an error with the `PolicyDecision` details
+4. On `Err(EnforcementError::ConfirmationRequired)`: returns an error listing the required override flags
+5. On `Err(EnforcementError::ManualOverrideUnavailable)`: returns an error for strict surfaces
 
 ## Workflow
 

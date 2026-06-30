@@ -2558,3 +2558,151 @@ fn metadata_recon_out_of_scope_denies_on_automated() {
         );
     }
 }
+
+// ===========================================================================
+// 22. Phase 12: Type-level enforcement dispatch tests
+// ===========================================================================
+
+#[test]
+fn approve_strict_surface_allows_in_scope_target() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    for surface in AUTOMATED_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let result = ctx.approve(*surface, desc.clone());
+        assert!(
+            result.is_ok(),
+            "{}: approve with in-scope target should succeed, got {:?}",
+            surface,
+            result.err()
+        );
+        let approved = result.unwrap();
+        assert_eq!(approved.surface(), *surface);
+        assert_eq!(approved.profile(), surface.profile());
+    }
+}
+
+#[test]
+fn approve_strict_surface_denies_out_of_scope() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
+    for surface in AUTOMATED_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let result = ctx.approve(*surface, desc.clone());
+        assert!(
+            result.is_err(),
+            "{}: approve with out-of-scope should fail",
+            surface
+        );
+        match result.unwrap_err() {
+            eggsec::config::EnforcementError::Denied { .. } => {}
+            other => panic!("{}: expected Denied, got {:?}", surface, other),
+        }
+    }
+}
+
+#[test]
+fn approve_strict_surface_denies_missing_scope() {
+    let desc = descriptor_requires_scope("127.0.0.1", OperationRisk::SafeActive);
+    for surface in AUTOMATED_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), LoadedScope::default_empty());
+        let result = ctx.approve(*surface, desc.clone());
+        assert!(
+            result.is_err(),
+            "{}: approve with missing scope should fail",
+            surface
+        );
+        match result.unwrap_err() {
+            eggsec::config::EnforcementError::Denied { .. } => {}
+            other => panic!("{}: expected Denied, got {:?}", surface, other),
+        }
+    }
+}
+
+#[test]
+#[cfg(feature = "tool-api")]
+fn dispatch_checked_rejects_tool_mismatch() {
+    use eggsec::tool::{EnforcedDispatcher, Target, ToolDispatcher, ToolRegistry, ToolRequest};
+
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let desc = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("127.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = ctx
+        .approve(ExecutionSurface::McpServer, desc)
+        .expect("approve should succeed");
+
+    let registry = ToolRegistry::new();
+    let dispatcher = ToolDispatcher::new(registry);
+    let enforced = EnforcedDispatcher::new(dispatcher);
+
+    // Request tool "fuzz" does not match approved "scan-ports"
+    let request = ToolRequest::new("fuzz", Target::url("127.0.0.1"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(enforced.dispatch_checked(&approved, request));
+    assert!(
+        result.is_err(),
+        "dispatch_checked should reject tool mismatch"
+    );
+    let err = result.unwrap_err();
+    let msg = format!("{}", err);
+    assert!(
+        msg.contains("dispatch mismatch"),
+        "error should mention dispatch mismatch, got: {}",
+        msg
+    );
+}
+
+#[test]
+#[cfg(feature = "tool-api")]
+fn dispatch_checked_rejects_target_mismatch() {
+    use eggsec::tool::{EnforcedDispatcher, Target, ToolDispatcher, ToolRegistry, ToolRequest};
+
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let desc = OperationDescriptor {
+        operation: "scan-ports".to_string(),
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::SafeActive,
+        intended_uses: vec![],
+        target: Some("127.0.0.1".to_string()),
+        required_features: vec![],
+        required_policy_flags: vec![],
+        requires_private_or_local_target: false,
+        requires_explicit_scope: false,
+        required_capabilities: vec![],
+    };
+    let approved = ctx
+        .approve(ExecutionSurface::McpServer, desc)
+        .expect("approve should succeed");
+
+    let registry = ToolRegistry::new();
+    let dispatcher = ToolDispatcher::new(registry);
+    let enforced = EnforcedDispatcher::new(dispatcher);
+
+    // Request target "https://other.com" does not match approved "127.0.0.1"
+    let request = ToolRequest::new("scan-ports", Target::url("https://other.com"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(enforced.dispatch_checked(&approved, request));
+    assert!(
+        result.is_err(),
+        "dispatch_checked should reject target mismatch"
+    );
+    let err = result.unwrap_err();
+    let msg = format!("{}", err);
+    assert!(
+        msg.contains("dispatch mismatch"),
+        "error should mention dispatch mismatch, got: {}",
+        msg
+    );
+}

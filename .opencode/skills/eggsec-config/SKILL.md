@@ -81,14 +81,26 @@ impl EggsecConfig {
 use eggsec::config::EnforcementContext;
 
 let enforcement = EnforcementContext::mcp_strict(policy, loaded_scope);
+
+// Strict surfaces (REST, MCP, Agent, CI): only Allow produces token
+let approved = enforcement.approve(ExecutionSurface::RestApi, descriptor)?;
+
+// Manual surfaces (CLI, TUI): supports Warn and RequireConfirmation with override
+let approved = enforcement.approve_manual(
+    ExecutionSurface::CliManual, descriptor, Some(&manual_override)
+)?;
+
+// Preflight/advisory: read-only evaluation without gating
 let outcome = enforcement.evaluate(&descriptor);
-match outcome {
-    EnforcementOutcome::Allow(decision) => { /* proceed */ }
-    EnforcementOutcome::Warn(decision) => { /* log warnings, proceed (CLI/TUI); deny (REST/MCP/Agent/CI) */ }
-    EnforcementOutcome::RequireConfirmation(decision) => { /* manual-only (ManualPermissive); convert to proceed only if matching ManualOverride present (narrow --yes for out-of-scope/target-expansion only; dedicated --allow-private-resolution / --allow-cross-host-redirect etc. for others); else treat as Deny. Strict profiles/MCP/agent/REST never honor overrides. */ }
-    EnforcementOutcome::Deny(decision) => { /* deny */ }
-}
 ```
+
+**`approve()`** (Phase 12): Strict approval. Only `Allow` outcomes produce an `ApprovedOperation` token. `Warn`, `RequireConfirmation`, and `Deny` fail with `EnforcementError`. Used by REST, MCP, Agent, CI dispatch paths.
+
+**`approve_manual()`** (Phase 12): Manual approval. Supports `Warn` (approved with warning) and `RequireConfirmation` when matching `ManualOverride` flags are present on `ManualPermissive` surfaces. Strict/automated surfaces reject overrides. Used by CLI/TUI.
+
+**`evaluate()`**: Central boundary for preflight/diagnostics. Returns `EnforcementOutcome` without producing a token. Still used by preflight system and advisory checks.
+
+**`EnforcedDispatcher`**: `ToolDispatcher` wrapper requiring `ApprovedOperation` before `dispatch_checked()`. REST, MCP, and Agent store `EnforcedDispatcher` to structurally prevent bypass. Verifies tool name and target match the approved descriptor; fails closed on mismatch.
 
 `EnforcementContext::evaluate(descriptor)` is the central boundary (provenance via LoadedScope, DenialClass downgrade for ManualPermissive only on safe scope misses, positive capability checks for strict, per-scan agent re-eval). Agent execution defensively rebuilds `AgentStrict` in the handler (defense-in-depth); `Agent::new()` validates profile at runtime. `evaluate_and_enforce_operation` (CLI handlers) matches on `RequireConfirmation` only for `ManualPermissive` + matching `ManualOverride` (narrow --yes semantics for out-of-scope/target-expansion; dedicated private/redirect flags for their classes; stable kebab audit via as_str/confirmation_class_strings). All other profiles treat it as `Deny`; strict profiles/MCP/agent/REST never honor overrides. REST specifically: only `Allow` permits dispatch; `Warn`, `RequireConfirmation`, and `Deny` all return HTTP 403 with structured `POLICY_DENIED` response. Preferred MCP production constructor: `McpServer::with_enforcement`. Legacy direct `evaluate_enforcement` / `evaluate_operation_policy` deprecated for denial paths; prefer with-enforcement path. Profiles: `ManualPermissive` (default CLI), `ManualGuarded` (--strict-scope), `CiStrict` (CI), `McpStrict` (MCP/REST), `AgentStrict` (agent).
 

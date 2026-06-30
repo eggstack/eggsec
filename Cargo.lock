@@ -1748,6 +1748,7 @@ dependencies = [
  "eggsec-nse",
  "eggsec-output",
  "eggsec-tool-core",
+ "eggsec-web-proxy",
  "eventsource-stream",
  "flate2",
  "futures",
@@ -1992,6 +1993,43 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "eggsec-web-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "criterion",
+ "dashmap",
+ "eggsec-core",
+ "eggsec-output",
+ "flate2",
+ "futures",
+ "h2",
+ "hex",
+ "hmac",
+ "http",
+ "parking_lot",
+ "prost",
+ "prost-types",
+ "rand 0.8.5",
+ "rcgen",
+ "reqwest",
+ "rustc-hash",
+ "rustls 0.23.36",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "serde_yaml_neo",
+ "sha2",
+ "tokio",
+ "tokio-rustls 0.26.4",
+ "tokio-tungstenite 0.26.2",
+ "tracing",
 ]
 
 [[package]]

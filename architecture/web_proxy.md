@@ -67,6 +67,8 @@ Standalone defense-lab surface for interactive MITM (Man-in-the-Middle) HTTP/HTT
 
 **Phase 5 (complete, 2026-06-13)**. Phase 5 polish: attack narrative generation (`proxy/intercept/narrative.rs`), bundle comparison (`compare_bundles`), TUI timeline view, TUI search/filter, documentation accuracy, cross-references, AGENTS.md alignment, governance documentation, release migration guidance, security audit, 33 red-team adversarial tests. Phase 5 advanced: protocol handler plugin system (`ProtocolHandler` trait + `PluginRegistry` + `NonStandardPortHandler` example in `proxy/intercept/plugins.rs`), temporal + behavioral correlation engine (`CorrelationEngine` + `TemporalCorrelation` + `BehavioralPattern` in `proxy/intercept/correlation.rs`), gRPC streaming frame tracking (`GrpcStreamFrame` + `GrpcStreamingState` + `GrpcSecurityFinding` + `detect_grpc_security_issues` in `proxy/intercept/protocols.rs`), criterion benchmark suite (`benches/proxy_benchmarks.rs`), `FlowBuffer` O(1) eviction (Vec→VecDeque), `ProxyMetrics` methods, ADRs (ADR-005 plugin system, ADR-006 correlation engine). Transparent proxy (Linux iptables) and dynamic plugin loading deferred.
 
+**Domain Crate Extraction (Phase 11b, 2026-06-30)**: All domain logic extracted to `eggsec-web-proxy` crate. The main `eggsec` crate now contains a thin adapter layer that re-exports types for backward compatibility. See `crates/eggsec-web-proxy/` for domain code.
+
 ## Policy Integration
 
 - `EnforcementContext` central gate via `OperationDescriptor` (`operation: "proxy-intercept"`, `mode: DefenseLab`, `risk: TrafficInterception` for real / `SafeActive` for dry-run, `required_features: ["web-proxy"]`).

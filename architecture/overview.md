@@ -33,6 +33,7 @@ Eggsec is organized as a Cargo workspace. The first-level crate boundary is:
 - **`eggsec-output`**: report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown). Extracted from `eggsec` to reduce its dependency surface; modules with deep engine coupling (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`) remain in `eggsec`.
 - **`eggsec-agent`**: agent coordination primitives extracted from `eggsec::tool::agents` (registry, scheduler, lifecycle, communication, delegation, aggregation). Depends on `eggsec-core` but not the main engine crate.
 - **`eggsec-db-lab`**: database pentesting domain crate extracted from `eggsec::db_pentest`. Owns domain execution logic, types, and tests for Postgres/MySQL/MSSQL/MongoDB/Redis security checks. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
+- **`eggsec-web-proxy`**: web proxy and MITM interception domain crate extracted from `eggsec::proxy`. Owns proxy pool management, intercept server, TLS certificate generation, protocol handlers (WebSocket/HTTP2/gRPC), rule engine, correlation engine, and evidence bundles. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
 
 New modules should avoid adding heavy runtime dependencies to `eggsec-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `eggsec` crate or in `eggsec-tui` as appropriate.
 
@@ -512,6 +513,9 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 
 | Module | Key Type | Purpose |
 |--------|----------|---------|
+| Config | `ApprovedOperation` | Proof-of-enforcement token for type-level dispatch (Phase 12) |
+| Config | `EnforcementError` | Structured error from `approve()`/`approve_manual()` |
+| Config | `EnforcedDispatcher` | `ToolDispatcher` wrapper requiring approval token before dispatch |
 | Scanner | `FingerprintResults` | Service identification results |
 | Scanner | `TimingPreset` | Scan speed configuration |
 | Scanner | `SpoofConfig` | IP spoofing configuration |
@@ -634,6 +638,33 @@ Key functions:
 
 Manual confirmations record class and reason. Automated surfaces (REST, MCP, Agent, CI) never record accepted manual overrides.
 
+### Type-Level Enforcement Dispatch (Phase 12)
+
+Phase 12 moved enforcement from convention (call sites expected to evaluate first) to type-level structure. Strict programmatic surfaces cannot dispatch a tool without an `ApprovedOperation` token, enforced structurally rather than by convention.
+
+**`ApprovedOperation`** (`config/policy_decision.rs`): A proof-of-enforcement token with private fields, produced exclusively by `EnforcementContext::approve()` (strict surfaces) or `approve_manual()` (manual surfaces). Read-only accessors: `descriptor()`, `decision()`, `surface()`, `profile()`, `audit_event_id()`. Cannot be constructed outside enforcement code.
+
+**`EnforcementError`** (`config/policy_decision.rs`): Structured error from `approve()`/`approve_manual()` with three variants:
+- `Denied { decision }` - Policy denied the operation (covers `Deny` and `Warn` on strict surfaces).
+- `ConfirmationRequired { decision, required_classes }` - Manual confirmation needed.
+- `ManualOverrideUnavailable { surface, decision }` - Override not supported on this surface.
+
+**`EnforcedDispatcher`** (`tool/dispatcher.rs`): Wrapper around `ToolDispatcher` that requires an `ApprovedOperation` before dispatch via `dispatch_checked()`. Verifies the request's tool name and target match the approved descriptor, failing closed on any mismatch. Used by REST, MCP, and Agent dispatch paths.
+
+**Approval methods:**
+- `EnforcementContext::approve(surface, descriptor)` - Strict: only `Allow` outcomes produce a token. `Warn`, `RequireConfirmation`, and `Deny` all fail with `EnforcementError`.
+- `EnforcementContext::approve_manual(surface, descriptor, manual_override)` - Manual permissive: supports `Warn` (approved with warning) and `RequireConfirmation` when matching `ManualOverride` flags are present. Strict/automated surfaces reject overrides.
+
+**Surface dispatch flow (REST example):**
+1. Build `OperationDescriptor` from `OperationMetadata`.
+2. `let approved = enforcement.approve(ExecutionSurface::RestApi, descriptor)?;`
+3. Build `ToolRequest`.
+4. `dispatcher.dispatch_checked(&approved, request).await`
+
+MCP, Agent, CI, and high-risk TUI direct-launch paths follow the same pattern. CLI/TUI manual dispatch uses `approve_manual()` to support discretion classes.
+
+**Current adoption:** REST (`tool/protocol/rest.rs`), MCP (`tool/protocol/mcp/handlers/server.rs`), Agent (`agent/mod.rs`), and TUI task dispatch (`eggsec-tui/src/app/mod.rs`) all use `EnforcedDispatcher` + `ApprovedOperation`.
+
 ### Logging & Tracing
 
 - **Framework**: `tracing` with structured spans
@@ -696,4 +727,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-06-12*
+*Last updated: 2026-06-30*

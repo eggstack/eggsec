@@ -38,10 +38,12 @@ use crate::audit::{
 };
 use crate::config::preflight_operation;
 use crate::config::EggsecConfig;
+use crate::config::EnforcementError;
 use crate::config::ExecutionSurface;
 use crate::output::schedule::CronScheduler;
 use crate::tool::{
-    create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse,
+    create_default_registry, EnforcedDispatcher, ToolDispatcher, ToolRegistry, ToolRequest,
+    ToolResponse,
 };
 
 pub use config_watcher::{ConfigReloader, ConfigWatcher, EggsecConfigReloader};
@@ -190,6 +192,7 @@ pub struct Agent {
     registry: ToolRegistry,
     constraint_checker: ConstraintChecker,
     dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync>,
+    enforced_dispatcher: Option<EnforcedDispatcher>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
     scheduler: CronScheduler,
@@ -233,8 +236,9 @@ impl Agent {
         }
 
         let registry = create_default_registry();
-        let dispatcher = ToolDispatcher::new(registry.clone());
-        let dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync> = Box::new(dispatcher);
+        let tool_dispatcher = ToolDispatcher::new(registry.clone());
+        let enforced_dispatcher = Some(EnforcedDispatcher::new(tool_dispatcher.clone()));
+        let dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync> = Box::new(tool_dispatcher);
 
         let portfolio = if let Some(ref path) = config.portfolio_path {
             TargetPortfolio::load_from_file(path)?
@@ -315,6 +319,7 @@ impl Agent {
             registry,
             constraint_checker,
             dispatcher,
+            enforced_dispatcher,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
             scheduler: CronScheduler::new(),
@@ -363,6 +368,7 @@ impl Agent {
             registry,
             constraint_checker,
             dispatcher,
+            enforced_dispatcher: None,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
             scheduler: CronScheduler::new(),
@@ -925,19 +931,67 @@ impl Agent {
             }
         }
 
-        if let Some(ref enforcement) = self.config.enforcement {
-            use crate::config::EnforcementOutcome;
+        let mut approved_token: Option<crate::config::ApprovedOperation> = None;
 
+        if let Some(ref enforcement) = self.config.enforcement {
             let descriptor =
                 enforcement::operation_descriptor_for_agent_scan(target, scan_type, depth);
 
-            let outcome = enforcement.evaluate(&descriptor);
+            let approved = enforcement
+                .approve(ExecutionSurface::SecurityAgent, descriptor)
+                .map_err(|e| match e {
+                    EnforcementError::Denied { decision } => {
+                        let reasons = decision.denied_reasons.join("; ");
+                        tracing::warn!(
+                            operation = %scan_type,
+                            target = %target,
+                            reasons = %reasons,
+                            "agent enforcement denied"
+                        );
+                        anyhow::anyhow!(
+                            "agent enforcement denied {} on {}: {}",
+                            scan_type,
+                            target,
+                            reasons
+                        )
+                    }
+                    EnforcementError::ConfirmationRequired {
+                        decision,
+                        required_classes,
+                    } => {
+                        let reasons = decision.denied_reasons.join("; ");
+                        let classes: Vec<_> = required_classes.iter().map(|c| c.as_str()).collect();
+                        tracing::warn!(
+                            operation = %scan_type,
+                            target = %target,
+                            reasons = %reasons,
+                            required_classes = ?classes,
+                            "agent enforcement requires manual confirmation"
+                        );
+                        anyhow::anyhow!(
+                            "agent enforcement requires manual confirmation for {} on {}: {} (classes: {})",
+                            scan_type,
+                            target,
+                            reasons,
+                            classes.join(", ")
+                        )
+                    }
+                    EnforcementError::ManualOverrideUnavailable { decision, .. } => {
+                        let reasons = decision.denied_reasons.join("; ");
+                        anyhow::anyhow!(
+                            "agent enforcement denied {} on {}: {}",
+                            scan_type,
+                            target,
+                            reasons
+                        )
+                    }
+                })?;
 
             let audit_event = audit_event_from_enforcement_outcome(
                 ExecutionSurface::SecurityAgent,
                 enforcement,
-                &descriptor,
-                &outcome,
+                approved.descriptor(),
+                &crate::config::EnforcementOutcome::Allow(approved.decision().clone()),
                 false,
                 false,
                 None,
@@ -947,36 +1001,7 @@ impl Agent {
             );
             emit_audit_event(&audit_event);
             self.record_policy_denial(audit_event);
-
-            match outcome {
-                EnforcementOutcome::Allow(_) => {}
-                EnforcementOutcome::Warn(decision) => {
-                    if enforcement.execution_profile.is_automated() {
-                        anyhow::bail!(
-                            "agent strict enforcement warning treated as denial for {} on {}: {}",
-                            scan_type,
-                            target,
-                            decision.denied_reasons.join("; ")
-                        );
-                    }
-                    tracing::warn!(
-                        target = %target,
-                        scan_type = %scan_type,
-                        reasons = ?decision.denied_reasons,
-                        "agent enforcement warning (non-strict profile)"
-                    );
-                }
-                EnforcementOutcome::RequireConfirmation(decision)
-                | EnforcementOutcome::Deny(decision) => {
-                    // RequireConfirmation is always denial for agent (strict) profiles.
-                    anyhow::bail!(
-                        "agent enforcement denied {} on {}: {}",
-                        scan_type,
-                        target,
-                        decision.denied_reasons.join("; ")
-                    );
-                }
-            }
+            approved_token = Some(approved);
         }
 
         let params = match depth {
@@ -1021,10 +1046,24 @@ impl Agent {
             cancellation_token: token_handle,
         };
 
-        self.dispatcher
-            .dispatch(request)
-            .await
-            .map_err(|e| anyhow::anyhow!("{:?}", e))
+        if let Some(ref enforced) = self.enforced_dispatcher {
+            if let Some(ref approved) = approved_token {
+                enforced
+                    .dispatch_checked(approved, request)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{:?}", e))
+            } else {
+                self.dispatcher
+                    .dispatch(request)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{:?}", e))
+            }
+        } else {
+            self.dispatcher
+                .dispatch(request)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e))
+        }
     }
 
     fn process_findings(&self, response: &ToolResponse) -> Vec<crate::tool::response::Finding> {

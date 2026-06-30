@@ -76,3 +76,5 @@ See `architecture/web_proxy.md` and `docs/WEB_PROXY.md` for full details.
 ## Implementation Status
 
 Fully implemented. Complete proxy management with pool, rotation, health checking, SOCKS/HTTP CONNECT, proxy chaining, background health checks, and an intercepting proxy submodule with dynamic TLS. Includes an `AGENTS.override.md` for specialized guidance.
+
+**Domain Crate Extraction (Phase 11b, 2026-06-30)**: All domain logic extracted to `eggsec-web-proxy` crate. The main `eggsec` crate now contains a thin adapter layer that re-exports types for backward compatibility. See `crates/eggsec-web-proxy/` for domain code.

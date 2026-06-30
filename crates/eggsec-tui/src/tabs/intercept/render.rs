@@ -3,6 +3,9 @@ use super::utils::{format_bytes, truncate_str};
 use super::InterceptTab;
 use crate::components::empty_state_paragraph;
 use crate::tc;
+use eggsec::proxy::intercept::correlation::{
+    ConfidenceScorer, CorrelationEngine, CorrelationSource,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},

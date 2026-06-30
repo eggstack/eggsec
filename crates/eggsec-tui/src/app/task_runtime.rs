@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::workers;
+use eggsec::config::ApprovedOperation;
 
 impl super::App {
     pub fn has_active_task(&self) -> bool {
@@ -86,7 +87,11 @@ impl super::App {
         self.task_state.tab = None;
     }
 
-    pub(crate) fn spawn_task(&mut self, config: Option<workers::TaskConfig>) {
+    pub(crate) fn spawn_task(
+        &mut self,
+        config: Option<workers::TaskConfig>,
+        _approved: Option<ApprovedOperation>,
+    ) {
         if let Some(config) = config {
             if self.has_active_task() {
                 tracing::warn!(
