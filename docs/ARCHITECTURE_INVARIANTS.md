@@ -16,7 +16,7 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 6. **Scope provenance**: Automated networked operations requiring explicit scope must check `LoadedScope::is_explicit_manifest()`. `DefaultEmpty` scope must not satisfy this requirement.
 
-7. **Domain crates don't authorize**: Domain crates (`eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-nse`) must not decide authorization. They declare capabilities and execute; enforcement is the caller's responsibility.
+7. **Domain crates don't authorize**: Domain crates (`eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-nse`) must not decide authorization. They declare capabilities and execute; enforcement is the caller's responsibility.
 
 8. **Feature gates ≠ authorization**: Feature gates are compile-time guards, not authorization. Runtime policy evaluation via `EnforcementContext::evaluate()` must still apply even when features are enabled.
 

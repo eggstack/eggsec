@@ -4,7 +4,7 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 10 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, and `eggsec-web-proxy`. See `README.md` for features and `architecture/overview.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 11 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, and `eggsec-mobile-lab`. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Quick Reference
 
@@ -23,10 +23,12 @@ cargo check -p eggsec-cli
 cargo check -p eggsec-nse
 cargo check -p eggsec-output
 cargo check -p eggsec-db-lab
+cargo check -p eggsec-mobile-lab
 cargo test -p eggsec-core
 cargo test -p eggsec-tool-core
 cargo test -p eggsec-output
 cargo test -p eggsec-db-lab
+cargo test -p eggsec-mobile-lab
 cargo check -p eggsec-web-proxy
 cargo test -p eggsec-web-proxy
 cargo test --lib -p eggsec
@@ -65,6 +67,16 @@ cargo clippy --lib -p eggsec --features wireless-advanced
 cargo check -p eggsec --features mobile-dynamic
 cargo test --lib -p eggsec --features mobile-dynamic
 cargo clippy --lib -p eggsec --features mobile-dynamic
+
+# mobile-lab (domain crate)
+cargo check -p eggsec-mobile-lab
+cargo test -p eggsec-mobile-lab
+cargo clippy -p eggsec-mobile-lab
+
+# mobile-dynamic (domain crate with feature)
+cargo check -p eggsec-mobile-lab --features mobile-dynamic
+cargo test -p eggsec-mobile-lab --features mobile-dynamic
+cargo clippy -p eggsec-mobile-lab --features mobile-dynamic
 
 # web-proxy (domain crate)
 cargo check -p eggsec-web-proxy
@@ -173,8 +185,8 @@ Canonical reference points when updating guidance or skills:
 |---------|--------|------------|-------|
 | `wireless` | WiFi recon | `wireless-tools` (iwlist) | Passive scans; root/CAP_NET_ADMIN for real; TUI tab present |
 | `wireless-advanced` | WiFi active | (needs wireless) | deauth/disassoc; `--allow-active-wireless`; policy gated `Intrusive` |
-| `mobile` | APK/IPA static | none | Pure-Rust parsers; local file only |
-| `mobile-dynamic` | Mobile dynamic | ADB + device | Phase 1-4a complete; `--allow-dynamic-mobile` for real |
+| `mobile` | APK/IPA static | none | Pure-Rust parsers; local file only; domain crate: `eggsec-mobile-lab` |
+| `mobile-dynamic` | Mobile dynamic | ADB + device | Phase 1-4a complete; `--allow-dynamic-mobile` for real; domain crate: `eggsec-mobile-lab` |
 | `db-pentest` | DB security | none (drivers) | Postgres/MySQL/MSSQL/MongoDB/Redis; `--allow-db-pentest` for real |
 | `web-proxy` | MITM proxy | none | `--allow-web-proxy` + policy for real interception |
 | `evasion` | Evasion detection | none | `--allow-evasion-testing` for real |

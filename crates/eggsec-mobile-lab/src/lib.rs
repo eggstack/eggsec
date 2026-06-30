@@ -1,0 +1,414 @@
+//! Mobile App Security Analysis Domain Crate (defense-lab surface).
+//!
+//! Standalone defense-lab surface for Android APK/iOS IPA static analysis and
+//! Android dynamic runtime testing in authorized lab environments. Gated behind
+//! `mobile` and `mobile-dynamic` feature flags.
+//!
+//! This crate owns domain execution logic, types, and tests, but does NOT decide
+//! whether an operation is allowed. Enforcement stays in the main `eggsec` crate.
+//!
+//! Key entry points:
+//! - `run_static_cli(args, config)` for static analysis dispatch.
+//! - `run_dynamic_cli(args, config)` for dynamic analysis dispatch.
+//! - `to_scan_report_data(report)` for static report bridge.
+//! - `to_scan_report_data_dynamic(report)` for dynamic report bridge.
+
+pub mod apk;
+pub mod ipa;
+
+#[cfg(feature = "mobile-dynamic")]
+pub mod adb;
+#[cfg(feature = "mobile-dynamic")]
+pub mod dynamic;
+#[cfg(feature = "mobile-dynamic")]
+pub mod runtime;
+#[cfg(feature = "mobile-dynamic")]
+pub mod traffic;
+
+#[cfg(feature = "mobile-dynamic")]
+pub mod frida;
+
+pub use apk::analyze_apk;
+pub use ipa::analyze_ipa;
+
+#[cfg(feature = "mobile-dynamic")]
+pub use dynamic::{
+    capture_baseline, compare_to_baseline, correlate_findings, correlate_reports,
+    export_evidence_bundle, format_dynamic_report, run_baseline_compare_workflow, run_dynamic_cli,
+    to_scan_report_data_dynamic, CorrelatedFinding, CorrelationEngine, CorrelationResult,
+    CorrelationSummary, CorrelationType, DynamicMobileArgs, DynamicMobileFinding,
+    DynamicMobileReport, LabManifest, MobileBaseline,
+};
+#[cfg(feature = "mobile-dynamic")]
+pub use traffic::{parse_traffic_capture, TrafficSummary};
+
+#[cfg(feature = "mobile-dynamic")]
+pub use frida::{
+    basic_method_trace, connect, execute_script, resolve_frida_script_spec, run_frida_spec,
+    FridaInstrumentation, FridaScriptResult, FridaSession, FRIDA_LIB_COMMON_HOOKS,
+};
+
+use eggsec_core::types::Severity;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+/// Domain-specific error type for mobile analysis operations.
+#[derive(Debug, thiserror::Error)]
+pub enum MobileError {
+    #[error("Validation error: {0}")]
+    Validation(String),
+
+    #[error("Parse error: {0}")]
+    Parse(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("anyhow error: {0}")]
+    Anyhow(#[from] anyhow::Error),
+}
+
+/// Convenience result type for mobile domain operations.
+pub type Result<T> = std::result::Result<T, MobileError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MobilePlatform {
+    Android,
+    Ios,
+}
+
+impl MobilePlatform {
+    pub fn as_str(&self) -> &str {
+        match self {
+            MobilePlatform::Android => "android",
+            MobilePlatform::Ios => "ios",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MobileFinding {
+    pub category: String,
+    pub severity: Severity,
+    pub title: String,
+    pub description: String,
+    pub recommendation: String,
+    /// Optional structured evidence (e.g. permission name, component, key pattern)
+    pub evidence: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MobileScanReport {
+    pub target: String,
+    pub scan_type: String,
+    pub platform: MobilePlatform,
+    pub app_id: Option<String>,
+    pub version: Option<String>,
+    pub timestamp: String,
+    pub findings: Vec<MobileFinding>,
+    pub recommendations: Vec<String>,
+    pub duration_ms: u64,
+}
+
+impl MobileScanReport {
+    pub fn new(path: &str, platform: MobilePlatform) -> Self {
+        Self {
+            target: path.to_string(),
+            scan_type: "mobile-static".to_string(),
+            platform,
+            app_id: None,
+            version: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            findings: Vec::new(),
+            recommendations: Vec::new(),
+            duration_ms: 0,
+        }
+    }
+}
+
+/// High-level entry for CLI handlers. Validates path, dispatches to APK or IPA
+/// parser, runs analysis, formats output (json/human), writes -o if provided.
+pub async fn run_static_cli(
+    path: &Path,
+    json: bool,
+    output: Option<&str>,
+    quiet: bool,
+) -> Result<()> {
+    let start = std::time::Instant::now();
+
+    if !path.exists() {
+        return Err(MobileError::Validation(format!(
+            "Path does not exist: {}",
+            path.display()
+        )));
+    }
+    if !path.is_file() {
+        return Err(MobileError::Validation(format!(
+            "Path is not a file: {}",
+            path.display()
+        )));
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if !matches!(ext.as_str(), "apk" | "ipa") {
+        return Err(MobileError::Validation(
+            "Mobile static analysis supports only .apk (Android) or .ipa (iOS) files".to_string(),
+        ));
+    }
+
+    // Size guard (defensive; static analysis should be bounded)
+    if let Ok(meta) = std::fs::metadata(path) {
+        const MAX: u64 = 200 * 1024 * 1024; // 200 MiB
+        if meta.len() > MAX {
+            return Err(MobileError::Validation(format!(
+                "Mobile artifact too large for static analysis ({} bytes > {} MiB limit)",
+                meta.len(),
+                MAX / 1024 / 1024
+            )));
+        }
+    }
+
+    if !quiet {
+        eprintln!(
+            "NOTE: Mobile static analysis is for authorized lab/defensive validation use only. \
+             Provide your own test builds. No dynamic analysis or instrumentation is performed."
+        );
+    }
+
+    let mut report = if ext == "apk" {
+        let mut r = apk::analyze_apk(path)
+            .await
+            .map_err(|e| MobileError::Internal(format!("APK analysis failed: {}", e)))?;
+        r.scan_type = "mobile-static".to_string();
+        r.timestamp = chrono::Utc::now().to_rfc3339();
+        r.duration_ms = start.elapsed().as_millis() as u64;
+        r
+    } else {
+        let mut r = ipa::analyze_ipa(path)
+            .await
+            .map_err(|e| MobileError::Internal(format!("IPA analysis failed: {}", e)))?;
+        r.scan_type = "mobile-static".to_string();
+        r.timestamp = chrono::Utc::now().to_rfc3339();
+        r.duration_ms = start.elapsed().as_millis() as u64;
+        r
+    };
+
+    // Always compute general recommendations (high-signal, lab-focused)
+    report.recommendations = build_general_recommendations(&report);
+
+    let output_str = if json {
+        serde_json::to_string_pretty(&report)
+            .map_err(|e| MobileError::Internal(format!("JSON serialization failed: {}", e)))?
+    } else {
+        format_mobile_report(&report)
+    };
+
+    if let Some(out_path) = output {
+        tokio::fs::write(out_path, &output_str)
+            .await
+            .map_err(|e| MobileError::Internal(format!("Failed to write output: {}", e)))?;
+        if !quiet {
+            eprintln!("Results written to {}", out_path);
+        }
+    } else {
+        println!("{}", output_str);
+    }
+
+    Ok(())
+}
+
+fn build_general_recommendations(report: &MobileScanReport) -> Vec<String> {
+    let mut recs = Vec::new();
+    if report.findings.is_empty() {
+        recs.push("No high-signal static issues detected in manifest/config surface. Expand testing with code review, dependency analysis, and (in lab) dynamic instrumentation under explicit authorization.".to_string());
+    } else {
+        recs.push(
+            "Review all findings in the context of the app's data classification and threat model."
+                .to_string(),
+        );
+        recs.push("Prefer platform secure storage (Android Keystore / iOS Keychain) and strong transport (TLS 1.2+ with pinning where feasible).".to_string());
+    }
+    recs.push("This is static analysis only. Combine with SAST/dependency scanning, manual review, and authorized dynamic testing for comprehensive coverage.".to_string());
+    recs.push(
+        "Ensure test builds are provenance-controlled and destroyed after lab use.".to_string(),
+    );
+    recs
+}
+
+pub fn format_mobile_report(report: &MobileScanReport) -> String {
+    let mut buf = String::new();
+    buf.push_str(&format!(
+        "Mobile Static Analysis ({})\n",
+        report.platform.as_str()
+    ));
+    buf.push_str(&format!("Target: {}\n", report.target));
+    if let Some(ref id) = report.app_id {
+        buf.push_str(&format!("App ID: {}\n", id));
+    }
+    if let Some(ref v) = report.version {
+        buf.push_str(&format!("Version: {}\n", v));
+    }
+    buf.push_str(&format!("Findings: {}\n\n", report.findings.len()));
+
+    if !report.findings.is_empty() {
+        buf.push_str("Findings:\n");
+        for (i, f) in report.findings.iter().enumerate() {
+            buf.push_str(&format!(
+                "  {}. [{}] {} ({})\n     {}\n     Rec: {}\n",
+                i + 1,
+                f.severity.as_str(),
+                f.title,
+                f.category,
+                f.description,
+                f.recommendation
+            ));
+            if let Some(ref ev) = f.evidence {
+                buf.push_str(&format!("     Evidence: {}\n", ev));
+            }
+            buf.push('\n');
+        }
+    }
+
+    if !report.recommendations.is_empty() {
+        buf.push_str("Recommendations:\n");
+        for r in &report.recommendations {
+            buf.push_str(&format!("  - {}\n", r));
+        }
+        buf.push('\n');
+    }
+
+    buf.push_str(&format!("Duration: {} ms\n", report.duration_ms));
+    buf
+}
+
+/// Convert a MobileScanReport into the unified ScanReportData for JSON/SARIF/JUnit/etc.
+pub fn to_scan_report_data(result: &MobileScanReport) -> eggsec_output::convert::ScanReportData {
+    use eggsec_output::convert::FindingData;
+
+    let findings: Vec<FindingData> = result
+        .findings
+        .iter()
+        .map(|f| FindingData {
+            title: f.title.clone(),
+            severity: f.severity.as_str().to_string(),
+            category: format!("mobile-{}-{}", result.platform.as_str(), f.category),
+            description: f.description.clone(),
+            location: result.target.clone(),
+            evidence: f.evidence.clone(),
+            remediation: Some(f.recommendation.clone()),
+            cwe_ids: Vec::new(),
+        })
+        .collect();
+
+    eggsec_output::convert::ScanReportData {
+        target: result.target.clone(),
+        scan_type: result.scan_type.clone(),
+        timestamp: result.timestamp.clone(),
+        findings,
+        open_ports: Vec::new(),
+        services: Vec::new(),
+        duration_ms: result.duration_ms,
+        wireless_networks: Vec::new(),
+        policy_summary: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_new_sets_defaults() {
+        let r = MobileScanReport::new("/tmp/test.apk", MobilePlatform::Android);
+        assert_eq!(r.target, "/tmp/test.apk");
+        assert_eq!(r.scan_type, "mobile-static");
+        assert!(r.findings.is_empty());
+        assert_eq!(r.platform, MobilePlatform::Android);
+    }
+
+    #[test]
+    fn format_empty_report_has_no_findings_section() {
+        let mut r = MobileScanReport::new("x.apk", MobilePlatform::Android);
+        r.recommendations = vec!["rec1".into()];
+        let s = format_mobile_report(&r);
+        assert!(s.contains("Findings: 0"));
+        assert!(s.contains("rec1"));
+    }
+
+    #[test]
+    fn to_scan_report_data_produces_valid_bridge() {
+        let mut r = MobileScanReport::new("test.apk", MobilePlatform::Android);
+        r.app_id = Some("com.example".into());
+        r.findings.push(MobileFinding {
+            category: "manifest".into(),
+            severity: Severity::High,
+            title: "t".into(),
+            description: "d".into(),
+            recommendation: "r".into(),
+            evidence: Some("e".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.target, "test.apk");
+        assert_eq!(data.scan_type, "mobile-static");
+        assert_eq!(data.findings.len(), 1);
+        assert_eq!(data.findings[0].severity, "high");
+        assert_eq!(data.findings[0].category, "mobile-android-manifest");
+        assert_eq!(data.findings[0].remediation.as_deref(), Some("r"));
+        assert_eq!(data.findings[0].evidence.as_deref(), Some("e"));
+        assert!(data.wireless_networks.is_empty());
+        assert!(data.policy_summary.is_none());
+    }
+
+    #[test]
+    fn to_scan_report_data_ios_and_multiple_and_empty_and_roundtrip() {
+        // iOS platform category
+        let mut r = MobileScanReport::new("app.ipa", MobilePlatform::Ios);
+        r.findings.push(MobileFinding {
+            category: "transport".into(),
+            severity: Severity::Medium,
+            title: "weak transport".into(),
+            description: "desc".into(),
+            recommendation: "rec".into(),
+            evidence: None,
+        });
+        r.findings.push(MobileFinding {
+            category: "secret".into(),
+            severity: Severity::High,
+            title: "hardcoded".into(),
+            description: "d2".into(),
+            recommendation: "r2".into(),
+            evidence: Some("key=...".into()),
+        });
+        let data = to_scan_report_data(&r);
+        assert_eq!(data.target, "app.ipa");
+        assert_eq!(data.scan_type, "mobile-static");
+        assert_eq!(data.findings.len(), 2);
+        assert_eq!(data.findings[0].category, "mobile-ios-transport");
+        assert_eq!(data.findings[1].category, "mobile-ios-secret");
+        assert_eq!(data.findings[1].evidence.as_deref(), Some("key=..."));
+        assert!(data.wireless_networks.is_empty());
+
+        // empty findings still produces valid bridge (0 findings)
+        let r2 = MobileScanReport::new("empty.apk", MobilePlatform::Android);
+        let d2 = to_scan_report_data(&r2);
+        assert_eq!(d2.findings.len(), 0);
+        assert_eq!(d2.target, "empty.apk");
+
+        // serde roundtrip of bridged data
+        let json = serde_json::to_string(&data).unwrap();
+        let back: eggsec_output::convert::ScanReportData = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.findings.len(), 2);
+        assert_eq!(back.findings[0].category, "mobile-ios-transport");
+    }
+}

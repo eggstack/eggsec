@@ -116,7 +116,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ### Workspace Layout
 
-Eggsec is organized as a Cargo workspace with eight crates:
+Eggsec is organized as a Cargo workspace with nine crates:
 
 | Crate | Purpose |
 |-------|---------|
@@ -128,6 +128,9 @@ Eggsec is organized as a Cargo workspace with eight crates:
 | `eggsec-cli` | CLI binary entry point |
 | `eggsec-output` | Report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) |
 | `eggsec-agent` | Agent coordination primitives (registry, scheduler, lifecycle, communication) |
+| `eggsec-db-lab` | Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis security checks) |
+| `eggsec-web-proxy` | Web proxy and MITM interception domain crate (proxy pool, intercept server, TLS, protocol handlers) |
+| `eggsec-mobile-lab` | Mobile app security analysis domain crate (APK/IPA static + Android dynamic runtime testing) |
 
 ### Prerequisites
 

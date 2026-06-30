@@ -1745,6 +1745,7 @@ dependencies = [
  "eggsec-agent",
  "eggsec-core",
  "eggsec-db-lab",
+ "eggsec-mobile-lab",
  "eggsec-nse",
  "eggsec-output",
  "eggsec-tool-core",
@@ -1895,6 +1896,29 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "eggsec-mobile-lab"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "eggsec-core",
+ "eggsec-output",
+ "flate2",
+ "plist",
+ "quick-xml 0.31.0",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
+ "uuid",
+ "zip",
 ]
 
 [[package]]

@@ -54,6 +54,7 @@ The architecture enforces a critical invariant: **authorization is centralized; 
 | `eggsec-nse` | NSE compatibility | No | Domain execution | No | Yes | Lua VM, 166 NSE libraries. Optional. |
 | `eggsec-db-lab` | DB pentest domain | No | Domain execution | No | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks. |
 | `eggsec-web-proxy` | Web proxy domain | No | Domain execution | No | Yes | MITM intercept, TLS, protocol handlers. |
+| `eggsec-mobile-lab` | Mobile analysis domain | No | Domain execution | No | Yes | APK/IPA static analysis + Android dynamic runtime testing (ADB, Frida, behavioral correlation). |
 
 **Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-output`, `eggsec-agent`) have no internal workspace dependencies. The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends.
 

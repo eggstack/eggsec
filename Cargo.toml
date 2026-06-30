@@ -10,6 +10,7 @@ members = [
     "crates/eggsec-agent",
     "crates/eggsec-db-lab",
     "crates/eggsec-web-proxy",
+    "crates/eggsec-mobile-lab",
 ]
 resolver = "2"
 

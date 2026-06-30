@@ -104,6 +104,8 @@ eggsec-nse = { path = "../eggsec-nse", optional = true }
 eggsec-db-lab = { path = "../eggsec-db-lab", optional = true }
 # Web proxy domain crate (extracted from proxy module)
 eggsec-web-proxy = { path = "../eggsec-web-proxy", optional = true }
+# Mobile lab domain crate (extracted from mobile module)
+eggsec-mobile-lab = { path = "../eggsec-mobile-lab", optional = true }
 ssh2 = { version = "0.9", optional = true }
 
 [dependencies.libc]
@@ -391,7 +393,7 @@ postex = []
 c2 = ["postex", "evasion"]
 
   # Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
-  mobile = ["zip", "plist"]
+  mobile = ["dep:eggsec-mobile-lab", "zip", "plist"]
 
   # Mobile dynamic/runtime testing (Android ADB + logcat analysis + Frida instrumentation for lab/defense use only).
   # Depends on base mobile static. Standalone defense-lab surface; heavily gated.
@@ -403,7 +405,7 @@ c2 = ["postex", "evasion"]
   # Key Decision: no separate mobile-frida sub-feature). Governed by runtime --allow-frida flag + EnforcementContext
   # policy gates (Intrusive tier for real ops). Dry-run always safe. Standalone defense-lab only; no MCP/agent exposure.
   # Prefer frida CLI fallback for Phase 3a (no heavy crate dep in this pass).
-  mobile-dynamic = ["mobile"]
+  mobile-dynamic = ["mobile", "eggsec-mobile-lab/mobile-dynamic"]
 
 # OpenAPI schema ingestion and fuzz target generation
 api-schema = []

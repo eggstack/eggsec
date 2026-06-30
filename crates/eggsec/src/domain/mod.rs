@@ -267,6 +267,10 @@ pub fn all_domain_descriptors() -> &'static [DomainDescriptor] {
         // ── Defense Lab ──
         #[cfg(feature = "db-pentest")]
         DB_PENTEST_DESCRIPTOR,
+        #[cfg(feature = "mobile")]
+        MOBILE_STATIC_DESCRIPTOR,
+        #[cfg(feature = "mobile-dynamic")]
+        MOBILE_DYNAMIC_DESCRIPTOR,
         // (future: web-proxy, evasion, postex, etc.)
 
         // ── Hazardous Lab ──
@@ -432,6 +436,131 @@ const DB_PENTEST_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
     baseline: BaselineSupport::AlwaysAvailable,
     strict_surface_support: true,
     docs_url: Some("docs/DATABASE_PENTEST.md"),
+};
+
+// ─── Mobile Domain: mobile-static ──────────────────────────────────────────
+#[allow(dead_code)]
+const MOBILE_STATIC_OPERATION: OperationIntegration = OperationIntegration {
+    operation_id: "mobile-static",
+    display_name: "Mobile Static Analysis",
+    mode: OperationMode::StandardAssessment,
+    risk: OperationRisk::SafeActive,
+    capabilities: &[],
+    intended_uses: &[IntendedUse::WebAssessment],
+    required_features: &["mobile"],
+    requires_explicit_scope: false,
+    requires_private_or_local_target: false,
+};
+
+#[allow(dead_code)]
+const MOBILE_STATIC_CLI: CliIntegration = CliIntegration {
+    command_id: "mobile",
+    operation_id: "mobile-static",
+    feature: Some("mobile"),
+};
+
+#[allow(dead_code)]
+const MOBILE_STATIC_TUI: TuiIntegration = TuiIntegration {
+    tab_id: "mobile",
+    operation_id: "mobile-static",
+    feature: Some("mobile"),
+};
+
+#[allow(dead_code)]
+const MOBILE_STATIC_TOOL: ToolIntegration = ToolIntegration {
+    tool_id: "mobile-static",
+    operation_id: "mobile-static",
+    mcp_exposed_by_default: false,
+    required_mcp_feature: None,
+};
+
+#[allow(dead_code)]
+const MOBILE_STATIC_REPORT: ReportIntegration = ReportIntegration {
+    report_kind: "mobile-static",
+    operation_id: "mobile-static",
+    evidence_bundle_supported: false,
+};
+
+#[allow(dead_code)]
+const MOBILE_STATIC_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
+    id: "mobile-static",
+    display_name: "Mobile Static Analysis",
+    description: "Android APK and iOS IPA static security analysis for authorized lab use",
+    category: DomainCategory::DefenseLab,
+    required_feature: Some("mobile"),
+    operations: &[MOBILE_STATIC_OPERATION],
+    cli: &[MOBILE_STATIC_CLI],
+    tui: &[MOBILE_STATIC_TUI],
+    tools: &[MOBILE_STATIC_TOOL],
+    reports: &[MOBILE_STATIC_REPORT],
+    dry_run: DryRunSupport::AlwaysAvailable,
+    evidence: EvidenceSupport::NotSupported,
+    baseline: BaselineSupport::NotSupported,
+    strict_surface_support: true,
+    docs_url: Some("docs/MOBILE.md"),
+};
+
+// ─── Mobile Domain: mobile-dynamic ─────────────────────────────────────────
+#[allow(dead_code)]
+const MOBILE_DYNAMIC_OPERATION: OperationIntegration = OperationIntegration {
+    operation_id: "mobile-dynamic",
+    display_name: "Mobile Dynamic Analysis",
+    mode: OperationMode::DefenseLab,
+    risk: OperationRisk::SafeActive,
+    capabilities: &[],
+    intended_uses: &[IntendedUse::WebAssessment],
+    required_features: &["mobile-dynamic"],
+    requires_explicit_scope: false,
+    requires_private_or_local_target: false,
+};
+
+#[allow(dead_code)]
+const MOBILE_DYNAMIC_CLI: CliIntegration = CliIntegration {
+    command_id: "mobile",
+    operation_id: "mobile-dynamic",
+    feature: Some("mobile-dynamic"),
+};
+
+#[allow(dead_code)]
+const MOBILE_DYNAMIC_TUI: TuiIntegration = TuiIntegration {
+    tab_id: "mobile",
+    operation_id: "mobile-dynamic",
+    feature: Some("mobile-dynamic"),
+};
+
+#[allow(dead_code)]
+const MOBILE_DYNAMIC_TOOL: ToolIntegration = ToolIntegration {
+    tool_id: "mobile-dynamic",
+    operation_id: "mobile-dynamic",
+    mcp_exposed_by_default: false,
+    required_mcp_feature: None,
+};
+
+#[allow(dead_code)]
+const MOBILE_DYNAMIC_REPORT: ReportIntegration = ReportIntegration {
+    report_kind: "mobile-dynamic",
+    operation_id: "mobile-dynamic",
+    evidence_bundle_supported: true,
+};
+
+#[allow(dead_code)]
+const MOBILE_DYNAMIC_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
+    id: "mobile-dynamic",
+    display_name: "Mobile Dynamic Analysis",
+    description:
+        "Android dynamic runtime testing via ADB, logcat, proxy, and Frida for authorized lab use",
+    category: DomainCategory::DefenseLab,
+    required_feature: Some("mobile-dynamic"),
+    operations: &[MOBILE_DYNAMIC_OPERATION],
+    cli: &[MOBILE_DYNAMIC_CLI],
+    tui: &[MOBILE_DYNAMIC_TUI],
+    tools: &[MOBILE_DYNAMIC_TOOL],
+    reports: &[MOBILE_DYNAMIC_REPORT],
+    dry_run: DryRunSupport::AlwaysAvailable,
+    evidence: EvidenceSupport::AlwaysAvailable,
+    baseline: BaselineSupport::AlwaysAvailable,
+    strict_surface_support: true,
+    docs_url: Some("docs/MOBILE.md"),
 };
 
 #[cfg(test)]

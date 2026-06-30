@@ -1,0 +1,62 @@
+[package]
+name = "eggsec-mobile-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Mobile app security analysis domain crate for Eggsec defense-lab security assessment"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords = ["security", "mobile", "android", "ios", "defense-lab"]
+categories = ["command-line-utilities", "development-tools::testing"]
+
+[dependencies]
+# Shared types from core
+eggsec-core = { path = "../eggsec-core" }
+# Output bridge (for ScanReportData)
+eggsec-output = { path = "../eggsec-output" }
+
+# Serialization
+serde = { workspace = true }
+serde_json.workspace = true
+toml = "0.8"
+
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
+
+# Time
+chrono.workspace = true
+
+# Compression (evidence bundles)
+flate2.workspace = true
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "fs", "time", "macros"] }
+
+# Tracing
+tracing.workspace = true
+
+# ZIP parsing (APK/IPA)
+zip = "2"
+
+# iOS plist parsing
+plist = { version = "1.7", features = ["serde"] }
+
+# XML parsing (text AndroidManifest.xml fallback)
+quick-xml = { version = "0.31", features = ["serialize"] }
+
+# Regex (IPA secret pattern detection)
+regex = { workspace = true }
+
+# UUID (Frida script temp files)
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = []
+mobile-dynamic = []

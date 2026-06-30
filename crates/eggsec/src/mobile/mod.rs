@@ -1,137 +1,70 @@
-//! Mobile app security static analysis module (feature-gated behind `mobile`).
+//! Mobile app security analysis module (feature-gated behind `mobile`).
 //!
-//! Phase 1 (per plans/mobile-first-handoff-plan.md): reliable static analysis of
-//! Android APKs and iOS IPAs in authorized lab/defense-validation environments.
-//! Focus on high-signal manifest/config findings only (no dynamic instrumentation,
-//! no Frida, no active exploitation, no full decompilation).
+//! Domain logic is owned by the `eggsec-mobile-lab` crate. This module provides
+//! a thin adapter layer that re-exports types for backward compatibility and
+//! bridges the handler to the domain crate.
 //!
-//! Safety: pure-Rust ZIP + plist + bounded AXML extraction. No shelling out.
-//! All operations are offline on user-supplied lab binaries. Explicit lab-only framing.
-//!
-//! Dynamic mobile (Android ADB core + runtime logcat analysis + Phase 2 proxy
-//! foundation + runtime permission operations + final/close-out polish + correlation)
-//! Phase 2 closed 2026-06-12 (all under single `mobile-dynamic` feature per M1 decision in
-//! combined closeout+kickoff plan; no sub-feature split).
-//! is available under the additional `mobile-dynamic` feature flag. See:
-//!
-//! - plans/mobile-dynamic-phase1-implementation-handoff-plan.md (Phase 1 — executed)
-//! - plans/mobile-dynamic-phase2-implementation-handoff-plan.md (Phase 2 closed 2026-06-12 per closeout-and-phase3-kickoff-plan.md — executed)
-//! - plans/mobile-dynamic-phase2-final-polish-handoff-plan.md (final polish — executed)
-//! - plans/mobile-dynamic-phase2-closeout-and-phase3-kickoff-plan.md (combined close-out — executed 2026-06-12)
-//! - plans/dynamic-mobile-testing-loadout-design-plan.md (parent design)
-//!
-//! Modules (all under cfg(feature = "mobile-dynamic")):
-//!   - dynamic.rs: public API + run_dynamic_cli + report types + bridge + correlate_findings
-//!   - adb.rs: pure-Rust TCP primary + external adb convenience
-//!   - runtime.rs: high-signal logcat parser
-//!   - traffic.rs: traffic-capture summary parser (Phase 2 closed)
-//!
-//! Standalone defense-lab surface. Re-exports and types added under cfg(feature = "mobile-dynamic").
+//! Key entry points (delegated to domain crate):
+//! - `run_cli(args, config)` for static analysis dispatch.
+//! - `run_dynamic_cli(args, config)` for dynamic analysis dispatch.
+//! - `to_scan_report_data(report)` for static report bridge.
+//! - `to_scan_report_data_dynamic(report)` for dynamic report bridge.
 
+use crate::config::EggsecConfig;
 use crate::error::{EggsecError, Result};
-use crate::types::Severity;
-use serde::{Deserialize, Serialize};
-use std::path::Path;
 
-pub mod apk;
-pub mod ipa;
+// Re-export all domain types from eggsec-mobile-lab
+pub use eggsec_mobile_lab::{
+    // Static analysis functions
+    analyze_apk,
+    analyze_ipa,
+    // Static analysis entry points and formatting
+    format_mobile_report,
+    to_scan_report_data,
+    // Dynamic types (cfg-gated in domain crate)
+    // Static analysis types
+    MobileFinding,
+    MobilePlatform,
+    MobileScanReport,
+};
 
-#[cfg(feature = "mobile-dynamic")]
-pub mod adb;
-#[cfg(feature = "mobile-dynamic")]
-pub mod dynamic;
-#[cfg(feature = "mobile-dynamic")]
-pub mod runtime;
-#[cfg(feature = "mobile-dynamic")]
-pub mod traffic;
+// Re-export dynamic submodule for backward compatibility
+pub use eggsec_mobile_lab::apk;
+pub use eggsec_mobile_lab::ipa;
 
+// Re-export dynamic types (cfg-gated)
 #[cfg(feature = "mobile-dynamic")]
-pub mod frida;
-
-// Re-export key dynamic types at crate::mobile level for handler/report bridge ergonomics (cfg-gated).
+pub use eggsec_mobile_lab::frida::{
+    basic_method_trace, connect, execute_script, resolve_frida_script_spec, run_frida_spec,
+    FridaInstrumentation, FridaScriptResult, FridaSession, FRIDA_LIB_COMMON_HOOKS,
+};
 #[cfg(feature = "mobile-dynamic")]
-pub use dynamic::{
+pub use eggsec_mobile_lab::traffic::{parse_traffic_capture, TrafficSummary};
+#[cfg(feature = "mobile-dynamic")]
+pub use eggsec_mobile_lab::{
     capture_baseline, compare_to_baseline, correlate_findings, correlate_reports,
-    export_evidence_bundle, format_dynamic_report, run_baseline_compare_workflow, run_dynamic_cli,
+    export_evidence_bundle, format_dynamic_report, run_baseline_compare_workflow,
     to_scan_report_data_dynamic, CorrelatedFinding, CorrelationEngine, CorrelationResult,
     CorrelationSummary, CorrelationType, DynamicMobileArgs, DynamicMobileFinding,
     DynamicMobileReport, LabManifest, MobileBaseline,
 };
+
+// Re-export submodules for backward compatibility
 #[cfg(feature = "mobile-dynamic")]
-pub use traffic::{parse_traffic_capture, TrafficSummary};
-
+pub use eggsec_mobile_lab::adb;
 #[cfg(feature = "mobile-dynamic")]
-pub use frida::{
-    basic_method_trace, connect, execute_script, resolve_frida_script_spec, run_frida_spec,
-    FridaInstrumentation, FridaScriptResult, FridaSession, FRIDA_LIB_COMMON_HOOKS,
-};
+pub use eggsec_mobile_lab::dynamic;
+#[cfg(feature = "mobile-dynamic")]
+pub use eggsec_mobile_lab::frida;
+#[cfg(feature = "mobile-dynamic")]
+pub use eggsec_mobile_lab::runtime;
+#[cfg(feature = "mobile-dynamic")]
+pub use eggsec_mobile_lab::traffic;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MobilePlatform {
-    Android,
-    Ios,
-}
-
-impl MobilePlatform {
-    pub fn as_str(&self) -> &str {
-        match self {
-            MobilePlatform::Android => "android",
-            MobilePlatform::Ios => "ios",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MobileFinding {
-    pub category: String,
-    pub severity: Severity,
-    pub title: String,
-    pub description: String,
-    pub recommendation: String,
-    /// Optional structured evidence (e.g. permission name, component, key pattern)
-    pub evidence: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MobileScanReport {
-    pub target: String,
-    pub scan_type: String,
-    pub platform: MobilePlatform,
-    pub app_id: Option<String>,
-    pub version: Option<String>,
-    pub timestamp: String,
-    pub findings: Vec<MobileFinding>,
-    pub recommendations: Vec<String>,
-    pub duration_ms: u64,
-}
-
-impl MobileScanReport {
-    pub fn new(path: &str, platform: MobilePlatform) -> Self {
-        Self {
-            target: path.to_string(),
-            scan_type: "mobile-static".to_string(),
-            platform,
-            app_id: None,
-            version: None,
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            findings: Vec::new(),
-            recommendations: Vec::new(),
-            duration_ms: 0,
-        }
-    }
-}
-
-/// High-level entry for CLI handlers. Validates path, dispatches to APK or IPA
-/// parser, runs analysis, formats output (json/human), writes -o if provided.
-///
-/// Supports legacy direct path form (MobileArgs { path: Some(..), command: None, ... })
-/// and new subcommand form (command: Some(MobileSubcommand::Static(MobileStaticArgs { path, .. })))
-/// with common flags merged (subcommand flags take precedence for static).
-pub async fn run_cli(
-    args: crate::cli::MobileArgs,
-    _config: &crate::config::EggsecConfig,
-) -> Result<()> {
-    let start = std::time::Instant::now();
+/// High-level entry for CLI handlers (static analysis).
+/// Delegates to the domain crate's `run_static_cli`.
+pub async fn run_cli(args: crate::cli::MobileArgs, _config: &EggsecConfig) -> Result<()> {
+    let _start = std::time::Instant::now();
 
     // Resolve effective static path + flags from legacy direct or 'static' subcommand.
     let (eff_path, eff_json, eff_output, eff_quiet) = match &args.command {
@@ -148,181 +81,19 @@ pub async fn run_cli(
         }
     };
 
-    let path = Path::new(&eff_path);
-    if !path.exists() {
-        return Err(EggsecError::Validation(format!(
-            "Path does not exist: {}",
-            eff_path
-        )));
-    }
-    if !path.is_file() {
-        return Err(EggsecError::Validation(format!(
-            "Path is not a file: {}",
-            eff_path
-        )));
-    }
-
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-
-    if !matches!(ext.as_str(), "apk" | "ipa") {
-        return Err(EggsecError::Validation(
-            "Mobile static analysis supports only .apk (Android) or .ipa (iOS) files".to_string(),
-        ));
-    }
-
-    // Size guard (defensive; static analysis should be bounded)
-    if let Ok(meta) = std::fs::metadata(path) {
-        const MAX: u64 = 200 * 1024 * 1024; // 200 MiB
-        if meta.len() > MAX {
-            return Err(EggsecError::Validation(format!(
-                "Mobile artifact too large for static analysis ({} bytes > {} MiB limit)",
-                meta.len(),
-                MAX / 1024 / 1024
-            )));
-        }
-    }
-
-    if !eff_quiet {
-        eprintln!(
-            "NOTE: Mobile static analysis is for authorized lab/defensive validation use only. \
-             Provide your own test builds. No dynamic analysis or instrumentation is performed."
-        );
-    }
-
-    let mut report = if ext == "apk" {
-        let mut r = apk::analyze_apk(path).await?;
-        r.scan_type = "mobile-static".to_string();
-        r.timestamp = chrono::Utc::now().to_rfc3339();
-        r.duration_ms = start.elapsed().as_millis() as u64;
-        r
-    } else {
-        let mut r = ipa::analyze_ipa(path).await?;
-        r.scan_type = "mobile-static".to_string();
-        r.timestamp = chrono::Utc::now().to_rfc3339();
-        r.duration_ms = start.elapsed().as_millis() as u64;
-        r
-    };
-
-    // Always compute general recommendations (high-signal, lab-focused)
-    report.recommendations = build_general_recommendations(&report);
-
-    let output = if eff_json {
-        serde_json::to_string_pretty(&report)?
-    } else {
-        format_mobile_report(&report)
-    };
-
-    if let Some(ref out_path) = eff_output {
-        tokio::fs::write(out_path, &output).await?;
-        if !eff_quiet {
-            eprintln!("Results written to {}", out_path);
-        }
-    } else {
-        println!("{}", output);
-    }
-
-    Ok(())
+    let path = std::path::Path::new(&eff_path);
+    eggsec_mobile_lab::run_static_cli(path, eff_json, eff_output.as_deref(), eff_quiet)
+        .await
+        .map_err(|e| EggsecError::Validation(e.to_string()))
 }
 
-fn build_general_recommendations(report: &MobileScanReport) -> Vec<String> {
-    let mut recs = Vec::new();
-    if report.findings.is_empty() {
-        recs.push("No high-signal static issues detected in manifest/config surface. Expand testing with code review, dependency analysis, and (in lab) dynamic instrumentation under explicit authorization.".to_string());
-    } else {
-        recs.push(
-            "Review all findings in the context of the app's data classification and threat model."
-                .to_string(),
-        );
-        recs.push("Prefer platform secure storage (Android Keystore / iOS Keychain) and strong transport (TLS 1.2+ with pinning where feasible).".to_string());
-    }
-    recs.push("This is static analysis only. Combine with SAST/dependency scanning, manual review, and authorized dynamic testing for comprehensive coverage.".to_string());
-    recs.push(
-        "Ensure test builds are provenance-controlled and destroyed after lab use.".to_string(),
-    );
-    recs
-}
-
-fn format_mobile_report(report: &MobileScanReport) -> String {
-    let mut buf = String::new();
-    buf.push_str(&format!(
-        "Mobile Static Analysis ({})\n",
-        report.platform.as_str()
-    ));
-    buf.push_str(&format!("Target: {}\n", report.target));
-    if let Some(ref id) = report.app_id {
-        buf.push_str(&format!("App ID: {}\n", id));
-    }
-    if let Some(ref v) = report.version {
-        buf.push_str(&format!("Version: {}\n", v));
-    }
-    buf.push_str(&format!("Findings: {}\n\n", report.findings.len()));
-
-    if !report.findings.is_empty() {
-        buf.push_str("Findings:\n");
-        for (i, f) in report.findings.iter().enumerate() {
-            buf.push_str(&format!(
-                "  {}. [{}] {} ({})\n     {}\n     Rec: {}\n",
-                i + 1,
-                f.severity.as_str(),
-                f.title,
-                f.category,
-                f.description,
-                f.recommendation
-            ));
-            if let Some(ref ev) = f.evidence {
-                buf.push_str(&format!("     Evidence: {}\n", ev));
-            }
-            buf.push('\n');
-        }
-    }
-
-    if !report.recommendations.is_empty() {
-        buf.push_str("Recommendations:\n");
-        for r in &report.recommendations {
-            buf.push_str(&format!("  - {}\n", r));
-        }
-        buf.push('\n');
-    }
-
-    buf.push_str(&format!("Duration: {} ms\n", report.duration_ms));
-    buf
-}
-
-/// Convert a MobileScanReport into the unified ScanReportData for JSON/SARIF/JUnit/etc.
-/// consumers (mirrors wireless::to_scan_report_data pattern).
-pub fn to_scan_report_data(result: &MobileScanReport) -> crate::output::convert::ScanReportData {
-    use crate::output::convert::FindingData;
-
-    let findings: Vec<FindingData> = result
-        .findings
-        .iter()
-        .map(|f| FindingData {
-            title: f.title.clone(),
-            severity: f.severity.as_str().to_string(),
-            category: format!("mobile-{}-{}", result.platform.as_str(), f.category),
-            description: f.description.clone(),
-            location: result.target.clone(),
-            evidence: f.evidence.clone(),
-            remediation: Some(f.recommendation.clone()),
-            cwe_ids: Vec::new(),
-        })
-        .collect();
-
-    crate::output::convert::ScanReportData {
-        target: result.target.clone(),
-        scan_type: result.scan_type.clone(),
-        timestamp: result.timestamp.clone(),
-        findings,
-        open_ports: Vec::new(),
-        services: Vec::new(),
-        duration_ms: result.duration_ms,
-        wireless_networks: Vec::new(),
-        policy_summary: None,
-    }
+/// High-level entry for CLI handlers (dynamic analysis).
+/// Delegates to the domain crate's `run_dynamic_cli`.
+#[cfg(feature = "mobile-dynamic")]
+pub async fn run_dynamic_cli(args: DynamicMobileArgs, _config: &EggsecConfig) -> Result<()> {
+    eggsec_mobile_lab::run_dynamic_cli(args)
+        .await
+        .map_err(|e| EggsecError::Validation(e.to_string()))
 }
 
 #[cfg(test)]
@@ -353,7 +124,7 @@ mod tests {
         r.app_id = Some("com.example".into());
         r.findings.push(MobileFinding {
             category: "manifest".into(),
-            severity: Severity::High,
+            severity: crate::types::Severity::High,
             title: "t".into(),
             description: "d".into(),
             recommendation: "r".into(),
@@ -377,7 +148,7 @@ mod tests {
         let mut r = MobileScanReport::new("app.ipa", MobilePlatform::Ios);
         r.findings.push(MobileFinding {
             category: "transport".into(),
-            severity: Severity::Medium,
+            severity: crate::types::Severity::Medium,
             title: "weak transport".into(),
             description: "desc".into(),
             recommendation: "rec".into(),
@@ -385,7 +156,7 @@ mod tests {
         });
         r.findings.push(MobileFinding {
             category: "secret".into(),
-            severity: Severity::High,
+            severity: crate::types::Severity::High,
             title: "hardcoded".into(),
             description: "d2".into(),
             recommendation: "r2".into(),
@@ -419,7 +190,7 @@ mod tests {
         let mut r = MobileScanReport::new("vuln.apk", MobilePlatform::Android);
         r.findings.push(MobileFinding {
             category: "permission".into(),
-            severity: Severity::Medium,
+            severity: crate::types::Severity::Medium,
             title: "overprivileged permission".into(),
             description: "app requests READ_SMS".into(),
             recommendation: "remove if not needed".into(),
@@ -445,7 +216,7 @@ mod tests {
         let mut r = MobileScanReport::new("app.ipa", MobilePlatform::Ios);
         r.findings.push(MobileFinding {
             category: "secret".into(),
-            severity: Severity::High,
+            severity: crate::types::Severity::High,
             title: "hardcoded secret".into(),
             description: "api key in plist".into(),
             recommendation: "use keychain".into(),
@@ -467,7 +238,7 @@ mod tests {
         let mut r = MobileScanReport::new("app.apk", MobilePlatform::Android);
         r.findings.push(MobileFinding {
             category: "exported-component".into(),
-            severity: Severity::High,
+            severity: crate::types::Severity::High,
             title: "Exported activity".into(),
             description: "MainActivity is exported".into(),
             recommendation: "Restrict export or add permission protection".into(),
@@ -475,7 +246,7 @@ mod tests {
         });
         r.findings.push(MobileFinding {
             category: "hardcoded-secret".into(),
-            severity: Severity::High,
+            severity: crate::types::Severity::High,
             title: "Hardcoded secret".into(),
             description: "api key in asset".into(),
             recommendation: "Remove secret".into(),

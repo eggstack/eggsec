@@ -34,6 +34,7 @@ Eggsec is organized as a Cargo workspace. The first-level crate boundary is:
 - **`eggsec-agent`**: agent coordination primitives extracted from `eggsec::tool::agents` (registry, scheduler, lifecycle, communication, delegation, aggregation). Depends on `eggsec-core` but not the main engine crate.
 - **`eggsec-db-lab`**: database pentesting domain crate extracted from `eggsec::db_pentest`. Owns domain execution logic, types, and tests for Postgres/MySQL/MSSQL/MongoDB/Redis security checks. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
 - **`eggsec-web-proxy`**: web proxy and MITM interception domain crate extracted from `eggsec::proxy`. Owns proxy pool management, intercept server, TLS certificate generation, protocol handlers (WebSocket/HTTP2/gRPC), rule engine, correlation engine, and evidence bundles. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
+- **`eggsec-mobile-lab`**: mobile app security analysis domain crate extracted from `eggsec::mobile`. Owns APK/IPA static analysis (manifest, permissions, transport config, secrets, debug/backup/exported components) and Android dynamic runtime testing (ADB, Frida instrumentation, behavioral correlation, traffic capture). Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
 
 New modules should avoid adding heavy runtime dependencies to `eggsec-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `eggsec` crate or in `eggsec-tui` as appropriate.
 
@@ -141,6 +142,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`mobile/`](../crates/eggsec/src/mobile/) | Static analysis of Android APKs and iOS IPAs (Phase 1: pure-Rust manifest/config findings; SafeActive; standalone CLI + optional report bridge). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. | [mobile.md](mobile.md) |
+| [`eggsec-mobile-lab`](../crates/eggsec-mobile-lab/) | Mobile app security analysis domain crate: APK/IPA static analysis + Android dynamic runtime testing (ADB, Frida, behavioral correlation, traffic capture). Defense-lab only. | [mobile.md](mobile.md) |
 | [`db_pentest/`](../crates/eggsec/src/db_pentest/) | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP). Defense-lab only. TUI tab, native pipeline stage, evidence bundles. | [database_pentest.md](database_pentest.md) |
 | [`postex/`](../crates/eggsec/src/postex/) | Post-exploitation and LOTL simulation for purple teaming (MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access). Defense-lab only; dry-run always safe. | [postex.md](postex.md) |
 
@@ -430,11 +432,11 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `wireless` | `wireless/` | WiFi scanning (passive recon + security analysis + rogue heuristic; --repeat/--known-good/--dry-run/--detect-suspicious; WPS/hidden/transition). **Passive = Phase 0 (2026-06-11)**; active gated by `wireless-advanced` (see `plans/wireless-active-attacks-loadout-design-plan.md`). |
 | `wireless-advanced` | `wireless/active/` | Active WiFi attacks (deauth/disassoc frame crafting + injection). Lab-only (`--allow-active-wireless`); Phase 1 complete 2026-06-12. |
 | `mobile` | `mobile/` | Static analysis of Android APKs and iOS IPAs (marker-only; zip/plist optional; pure-Rust Phase 1). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
+| `mobile-dynamic` | `mobile/` | Android dynamic testing (ADB + Frida + behavioral correlation). Domain crate: `eggsec-mobile-lab`. |
 | `pdf` | `output/pdf` | PDF report generation |
-| `mobile` | `mobile/` | Static mobile app analysis (APK/IPA; Phase 1 static only). Dynamic future per `plans/dynamic-mobile-testing-loadout-design-plan.md`. |
-| `db-pentest` | `db_pentest/` | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP via `db-pentest-mcp` marker). Defense-lab only. TUI tab + native pipeline stage. |
+| `db-pentest` | `db_pentest/` | Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; Phase 1-5: checks + correlation + compliance + optional MCP via `db-pentest-mcp` marker). Defense-lab only. TUI tab + native pipeline stage. Domain crate: `eggsec-db-lab`. |
 | `postex` | `postex/` | Post-exploitation and LOTL simulation for purple teaming (MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access). Defense-lab only; dry-run always safe; real requires `--allow-postex`. |
-| `web-proxy` | `proxy/intercept/` | Standalone defense-lab MITM web proxy for HTTP/HTTPS/WebSocket/HTTP2/gRPC traffic interception. Dry-run always safe; real interception requires `--allow-web-proxy` + policy. TUI `Tab::Intercept` (interactive flow inspection, editing, HAR export, manipulation audit trail). |
+| `web-proxy` | `proxy/intercept/` | Standalone defense-lab MITM web proxy for HTTP/HTTPS/WebSocket/HTTP2/gRPC traffic interception. Dry-run always safe; real interception requires `--allow-web-proxy` + policy. TUI `Tab::Intercept` (interactive flow inspection, editing, HAR export, manipulation audit trail). Domain crate: `eggsec-web-proxy`. |
 | `web-proxy-mcp` | `proxy/mcp.rs` | Optional MCP tool exposure for web proxy (12 tools: list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle). Marker feature; requires `web-proxy`. |
 | `full` | All | All features combined |
 

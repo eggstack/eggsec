@@ -1,16 +1,22 @@
 # Mobile Module Override
 
+> **Phase 5 Extraction**: Domain logic has been extracted to `crates/eggsec-mobile-lab/`.
+> This adapter module re-exports types and bridges handlers to the domain crate.
+> Enforcement, CLI parsing, and policy remain in the main crate.
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `crates/eggsec/src/mobile/mod.rs` | Module entry, public types (MobilePlatform, MobileFinding, MobileScanReport), run_cli dispatcher, format_mobile_report, to_scan_report_data bridge to unified reports; cfg-gated reexports + run_dynamic_cli for dynamic |
-| `crates/eggsec/src/mobile/apk.rs` | Android APK static analysis (ZIP + AndroidManifest.xml binary/text AXML parsing, permissions, components, network-security-config, secrets, debug certs) |
-| `crates/eggsec/src/mobile/ipa.rs` | iOS IPA static analysis (ZIP + Info.plist + embedded.mobileprovision + _CodeSignature, get-task-allow, provisioning profile risks) |
-| `crates/eggsec/src/mobile/dynamic.rs` | Dynamic types (DynamicMobileReport/Finding, LabManifest, DynamicMobileArgs), run_dynamic_cli dispatcher, format_dynamic_report, to_scan_report_data_dynamic bridge |
-| `crates/eggsec/src/mobile/adb.rs` | Pure-Rust ADB TCP framing (CNXN/OPEN/WRTE etc.) + AdbClient/AdbConnection (list, connect, shell, sync_push, install, launch, uninstall, capture_logcat); external `adb` only for discovery |
-| `crates/eggsec/src/mobile/runtime.rs` | High-signal logcat parser (parse_logcat_findings): runtime-permission, crash-log, cleartext-observed, log-secret-leak (basic redaction) |
-| `crates/eggsec/src/mobile/traffic.rs` | Phase 2 (closed 2026-06-12): TrafficSummary + parse_traffic_capture (summary-only parser for mitmproxy-style captures; domains/counts/cleartext/suspicious; feeds report + bridge info findings) |
+| `crates/eggsec/src/mobile/mod.rs` | Thin adapter layer: re-exports types from `eggsec-mobile-lab`, bridges handlers to domain crate |
+| `crates/eggsec-mobile-lab/src/lib.rs` | Domain crate entry: types, static analysis entry points, formatting, bridge |
+| `crates/eggsec-mobile-lab/src/apk.rs` | Android APK static analysis (ZIP + AndroidManifest.xml binary/text AXML parsing) |
+| `crates/eggsec-mobile-lab/src/ipa.rs` | iOS IPA static analysis (ZIP + Info.plist + embedded.mobileprovision + _CodeSignature) |
+| `crates/eggsec-mobile-lab/src/dynamic.rs` | Dynamic types, run_dynamic_cli, formatting, bridge, correlation, baseline |
+| `crates/eggsec-mobile-lab/src/adb.rs` | Pure-Rust ADB TCP framing + AdbClient/AdbConnection |
+| `crates/eggsec-mobile-lab/src/runtime.rs` | High-signal logcat parser |
+| `crates/eggsec-mobile-lab/src/traffic.rs` | TrafficSummary + parse_traffic_capture |
+| `crates/eggsec-mobile-lab/src/frida.rs` | Frida instrumentation (connect/execute/builtins/library scripts) |
 
 ## Implementation Notes
 
@@ -32,11 +38,18 @@
 - Run with feature:
 
 ```bash
+# Domain crate (standalone)
+cargo check -p eggsec-mobile-lab
+cargo test -p eggsec-mobile-lab
+cargo check -p eggsec-mobile-lab --features mobile-dynamic
+cargo test -p eggsec-mobile-lab --features mobile-dynamic
+
+# Main crate (adapter + integration)
 cargo check -p eggsec --features mobile
-cargo test --lib -p eggsec mobile::
+cargo test --lib -p eggsec --features mobile
 cargo clippy --lib -p eggsec --features mobile
 
-# Dynamic (P1)
+# Dynamic
 cargo check -p eggsec --features mobile-dynamic
 cargo test --lib -p eggsec --features mobile-dynamic
 cargo clippy --lib -p eggsec --features mobile-dynamic
