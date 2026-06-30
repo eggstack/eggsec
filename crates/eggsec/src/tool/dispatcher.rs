@@ -31,7 +31,9 @@ impl ToolDispatcher {
         self.history.read().clone()
     }
 
-    pub async fn dispatch(&self, request: ToolRequest) -> Result<ToolResponse, EggsecError> {
+    /// Raw dispatch — prefer `EnforcedDispatcher::dispatch_checked()` for strict surfaces.
+    #[doc(hidden)]
+    pub(crate) async fn dispatch(&self, request: ToolRequest) -> Result<ToolResponse, EggsecError> {
         if request.is_cancelled() {
             return Err(EggsecError::Cancelled);
         }

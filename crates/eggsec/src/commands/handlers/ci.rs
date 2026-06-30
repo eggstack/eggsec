@@ -1,3 +1,9 @@
+//! CI handler — passive quality gate for pre-existing scan findings.
+//!
+//! This handler reads findings from stdin, compares against baselines and severity thresholds,
+//! and returns pass/fail. It does **not** dispatch any tools and therefore has no enforcement
+//! dispatch path (Phase 12 Step 5 is not applicable).
+
 use crate::cli::ci::CiArgs;
 use crate::commands::handlers::CommandContext;
 use crate::output::agent::{AgentFinding, FindingSummary};

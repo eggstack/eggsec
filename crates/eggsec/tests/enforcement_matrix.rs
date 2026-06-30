@@ -2706,3 +2706,263 @@ fn dispatch_checked_rejects_target_mismatch() {
         msg
     );
 }
+
+// ---------------------------------------------------------------------------
+// approve_manual() tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn approve_manual_permissive_with_override_on_warn_outcome() {
+    // Warn is produced for private/local targets with no scope under ManualPermissive
+    let desc = descriptor_private_or_local("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(
+        ExecutionSurface::TuiManual,
+        default_policy(),
+        LoadedScope::default_empty(),
+    );
+    let outcome = ctx.evaluate(&desc);
+    assert!(
+        matches!(outcome, eggsec::config::EnforcementOutcome::Warn(_)),
+        "expected Warn outcome for private/local target with no scope, got {:?}",
+        outcome
+    );
+
+    let override_ = ManualOverride::default();
+    let result = ctx.approve_manual(ExecutionSurface::TuiManual, desc.clone(), Some(&override_));
+    assert!(
+        result.is_ok(),
+        "approve_manual should succeed with override on permissive surface, got {:?}",
+        result.err()
+    );
+    let approved = result.unwrap();
+    assert_eq!(approved.surface(), ExecutionSurface::TuiManual);
+}
+
+#[test]
+fn approve_manual_permissive_without_override_on_warn_outcome() {
+    // Warn is produced for private/local targets with no scope under ManualPermissive
+    let desc = descriptor_private_or_local("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(
+        ExecutionSurface::TuiManual,
+        default_policy(),
+        LoadedScope::default_empty(),
+    );
+    let outcome = ctx.evaluate(&desc);
+    assert!(
+        matches!(outcome, eggsec::config::EnforcementOutcome::Warn(_)),
+        "expected Warn outcome for private/local target with no scope"
+    );
+
+    let result = ctx.approve_manual(ExecutionSurface::TuiManual, desc, None);
+    assert!(
+        result.is_ok(),
+        "approve_manual should succeed without override on permissive surface (Warn is allowed), got {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn approve_manual_strict_surface_rejects_require_confirmation() {
+    // Use excluded target to get RequireConfirmation on permissive surface,
+    // which becomes Denied on strict surface
+    let scope = loaded_explicit(scope_wildcard_excluding("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::TuiManualStrict, default_policy(), scope);
+    let result = ctx.approve_manual(ExecutionSurface::TuiManualStrict, desc, None);
+    assert!(
+        result.is_err(),
+        "approve_manual on strict surface should reject RequireConfirmation"
+    );
+    match result.unwrap_err() {
+        eggsec::config::EnforcementError::Denied { .. } => {}
+        other => panic!("expected Denied, got {:?}", other),
+    }
+}
+
+#[test]
+fn approve_manual_automated_surface_rejects_override() {
+    // Use out-of-scope target to get Deny on automated surfaces
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
+    for surface in AUTOMATED_SURFACES {
+        let ctx = ctx_for_surface(*surface, default_policy(), scope.clone());
+        let override_ = ManualOverride {
+            assume_yes: true,
+            allow_out_of_scope: true,
+            allow_high_risk: true,
+            ..Default::default()
+        };
+        let result = ctx.approve_manual(*surface, desc.clone(), Some(&override_));
+        assert!(
+            result.is_err(),
+            "{}: approve_manual with override should fail on automated surface",
+            surface
+        );
+        match result.unwrap_err() {
+            eggsec::config::EnforcementError::Denied { .. } => {}
+            other => panic!("{}: expected Denied, got {:?}", surface, other),
+        }
+    }
+}
+
+#[test]
+fn approve_manual_permissive_requires_confirmation_when_override_missing_class() {
+    let scope = loaded_explicit(scope_wildcard_excluding("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::TuiManual, default_policy(), scope);
+    let outcome = ctx.evaluate(&desc);
+    assert!(
+        matches!(
+            outcome,
+            eggsec::config::EnforcementOutcome::RequireConfirmation(_)
+        ),
+        "expected RequireConfirmation for excluded target, got {:?}",
+        outcome
+    );
+
+    let override_ = ManualOverride {
+        allow_out_of_scope: false,
+        ..Default::default()
+    };
+    let result = ctx.approve_manual(ExecutionSurface::TuiManual, desc, Some(&override_));
+    assert!(
+        result.is_err(),
+        "approve_manual should require confirmation when override missing class"
+    );
+    match result.unwrap_err() {
+        eggsec::config::EnforcementError::ConfirmationRequired {
+            required_classes, ..
+        } => {
+            assert!(
+                required_classes.contains(&eggsec::config::ConfirmationClass::ExplicitExclusion)
+                    || required_classes.contains(&eggsec::config::ConfirmationClass::OutOfScope),
+                "expected ExplicitExclusion or OutOfScope in required classes, got {:?}",
+                required_classes
+            );
+        }
+        other => panic!("expected ConfirmationRequired, got {:?}", other),
+    }
+}
+
+#[test]
+fn approve_manual_permissive_succeeds_with_full_override() {
+    let scope = loaded_explicit(scope_wildcard_excluding("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::TuiManual, default_policy(), scope);
+
+    let override_ = ManualOverride {
+        allow_out_of_scope: true,
+        allow_explicit_exclusion: true,
+        ..Default::default()
+    };
+    let result = ctx.approve_manual(ExecutionSurface::TuiManual, desc, Some(&override_));
+    assert!(
+        result.is_ok(),
+        "approve_manual should succeed with full override, got {:?}",
+        result.err()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// MCP and Agent dispatch-path approval tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mcp_dispatch_path_approval_succeeds_in_scope() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let result = ctx.approve(ExecutionSurface::McpServer, desc);
+    assert!(
+        result.is_ok(),
+        "MCP approval should succeed for in-scope target, got {:?}",
+        result.err()
+    );
+    let approved = result.unwrap();
+    assert_eq!(approved.surface(), ExecutionSurface::McpServer);
+    assert_eq!(approved.profile(), ExecutionProfile::McpStrict);
+}
+
+#[test]
+fn mcp_dispatch_path_approval_rejects_out_of_scope() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let result = ctx.approve(ExecutionSurface::McpServer, desc);
+    assert!(
+        result.is_err(),
+        "MCP approval should reject out-of-scope target"
+    );
+    match result.unwrap_err() {
+        eggsec::config::EnforcementError::Denied { .. } => {}
+        other => panic!("expected Denied, got {:?}", other),
+    }
+}
+
+#[test]
+fn mcp_dispatch_path_approval_rejects_manual_override() {
+    // Use out-of-scope target to get Deny on automated surface
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::McpServer, default_policy(), scope);
+    let override_ = ManualOverride {
+        assume_yes: true,
+        allow_out_of_scope: true,
+        ..Default::default()
+    };
+    let result = ctx.approve_manual(ExecutionSurface::McpServer, desc, Some(&override_));
+    assert!(
+        result.is_err(),
+        "MCP should reject manual override on automated surface"
+    );
+}
+
+#[test]
+fn agent_dispatch_path_approval_succeeds_in_scope() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("127.0.0.1", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::SecurityAgent, default_policy(), scope);
+    let result = ctx.approve(ExecutionSurface::SecurityAgent, desc);
+    assert!(
+        result.is_ok(),
+        "Agent approval should succeed for in-scope target, got {:?}",
+        result.err()
+    );
+    let approved = result.unwrap();
+    assert_eq!(approved.surface(), ExecutionSurface::SecurityAgent);
+    assert_eq!(approved.profile(), ExecutionProfile::AgentStrict);
+}
+
+#[test]
+fn agent_dispatch_path_approval_rejects_out_of_scope() {
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::SecurityAgent, default_policy(), scope);
+    let result = ctx.approve(ExecutionSurface::SecurityAgent, desc);
+    assert!(
+        result.is_err(),
+        "Agent approval should reject out-of-scope target"
+    );
+    match result.unwrap_err() {
+        eggsec::config::EnforcementError::Denied { .. } => {}
+        other => panic!("expected Denied, got {:?}", other),
+    }
+}
+
+#[test]
+fn agent_dispatch_path_approval_rejects_manual_override() {
+    // Use out-of-scope target to get Deny on automated surface
+    let scope = loaded_explicit(scope_allow("127.0.0.1"));
+    let desc = descriptor("93.184.216.34", OperationRisk::SafeActive);
+    let ctx = ctx_for_surface(ExecutionSurface::SecurityAgent, default_policy(), scope);
+    let override_ = ManualOverride {
+        assume_yes: true,
+        allow_out_of_scope: true,
+        ..Default::default()
+    };
+    let result = ctx.approve_manual(ExecutionSurface::SecurityAgent, desc, Some(&override_));
+    assert!(
+        result.is_err(),
+        "Agent should reject manual override on automated surface"
+    );
+}
