@@ -419,6 +419,89 @@ pub enum Commands {
     Grpc(GrpcServerArgs),
 }
 
+impl Commands {
+    /// Return the stable command ID string for this variant.
+    ///
+    /// Used by the command registry dispatch bridge to resolve metadata
+    /// and by diagnostics for unknown-command suggestions.
+    pub fn command_id(&self) -> &'static str {
+        match self {
+            Self::ScanPorts(_) => "scan-ports",
+            Self::ScanEndpoints(_) => "scan-endpoints",
+            Self::Fingerprint(_) => "fingerprint",
+            Self::Scan(_) => "scan",
+            Self::Resume(_) => "resume",
+            Self::Recon(_) => "recon",
+            Self::Plan(_) => "plan",
+            Self::Preflight(_) => "preflight",
+            Self::Ci(_) => "ci",
+            Self::Config(_) => "config",
+            Self::Doctor => "doctor",
+            Self::PolicyExplain(_) => "policy-explain",
+            Self::ScopeExplain(_) => "scope-explain",
+            Self::Load(_) => "load",
+            Self::Fuzz(_) => "fuzz",
+            Self::Waf(_) => "waf",
+            Self::WafStress(_) => "waf-stress",
+            Self::Graphql(_) => "graphql",
+            Self::OAuth(_) => "oauth",
+            Self::AuthTest(_) => "auth-test",
+            Self::Report(_) => "report",
+            Self::Vuln(_) => "vuln",
+            Self::Storage(_) => "storage",
+            Self::Cluster(_) => "cluster",
+            Self::Notify(_) => "notify",
+            Self::Remote(_) => "remote",
+            Self::Exec(_) => "exec",
+            #[cfg(feature = "grpc-api")]
+            Self::Grpc(_) => "grpc",
+            #[cfg(feature = "rest-api")]
+            Self::Serve(_) => "serve",
+            #[cfg(feature = "rest-api")]
+            Self::McpServe(_) => "mcp-serve",
+            #[cfg(feature = "rest-api")]
+            Self::CodeggMcp(_) => "mcp-serve",
+            #[cfg(feature = "rest-api")]
+            Self::Agent(_) => "agent",
+            #[cfg(feature = "ai-integration")]
+            Self::AiAnalyze(_) => "ai-analyze",
+            #[cfg(feature = "wireless")]
+            Self::Wireless(_) => "wireless",
+            #[cfg(feature = "headless-browser")]
+            Self::Browser(_) => "browser",
+            #[cfg(feature = "mobile")]
+            Self::Mobile(_) => "mobile",
+            #[cfg(feature = "evasion")]
+            Self::Evasion(_) => "evasion",
+            #[cfg(feature = "postex")]
+            Self::Postex(_) => "postex",
+            #[cfg(feature = "c2")]
+            Self::C2(_) => "c2",
+            #[cfg(feature = "db-pentest")]
+            #[cfg(feature = "db-pentest")]
+            Self::Db(_) => "db",
+            #[cfg(feature = "nse")]
+            Self::Nse(_) => "nse",
+            #[cfg(feature = "advanced-hunting")]
+            Self::Hunt(_) => "hunt",
+            #[cfg(feature = "packet-inspection")]
+            Self::Packet(_) => "packet",
+            #[cfg(feature = "stress-testing")]
+            Self::Icmp(_) => "icmp",
+            #[cfg(feature = "stress-testing")]
+            Self::Traceroute(_) => "traceroute",
+            #[cfg(feature = "stress-testing")]
+            Self::Stress(_) => "stress",
+            #[cfg(feature = "stress-testing")]
+            Self::Proxy(_) => "proxy",
+            #[cfg(feature = "web-proxy")]
+            Self::ProxyIntercept(_) => "proxy-intercept",
+            #[cfg(feature = "sbom")]
+            Self::Sbom(_) => "sbom",
+        }
+    }
+}
+
 #[derive(clap::Args, Clone)]
 pub struct CommonHttpArgs {
     #[arg(long, help = "Skip TLS certificate verification")]

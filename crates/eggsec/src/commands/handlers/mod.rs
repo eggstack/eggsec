@@ -498,6 +498,43 @@ fn classes_str(classes: &[crate::config::ConfirmationClass]) -> String {
 }
 
 pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
+    // ── Dispatch bridge: validate registry metadata before execution ──
+    //
+    // For commands backed by the registry (those with an operation_id),
+    // verify that the registry entry resolves to valid OperationMetadata
+    // before dispatching to the handler. This ensures registry metadata
+    // stays consistent with the canonical source and catches stale entries
+    // at runtime.
+    //
+    // Non-registry commands (config, helper, server) skip this check.
+    // Enforcement is NOT performed here — it remains in each handler via
+    // `evaluate_and_enforce_operation()`.
+    if let Some(ref command) = cli.command {
+        let command_id = command.command_id();
+        if let Some(registry_entry) = crate::commands::registry::lookup_command(command_id) {
+            if let Some(op_id) = registry_entry.operation_id {
+                // Validate registry metadata resolves to OperationMetadata.
+                // A failure here means the registry entry is stale.
+                let metadata_valid = crate::config::metadata_for_tool_id(op_id).is_some();
+                if !metadata_valid {
+                    tracing::warn!(
+                        command_id,
+                        op_id,
+                        "Command registry entry has stale operation_id — \
+                         metadata not found. Falling back to handler."
+                    );
+                } else {
+                    tracing::trace!(
+                        command_id,
+                        op_id,
+                        category = registry_entry.category.as_str(),
+                        "Dispatch bridge: registry entry validated"
+                    );
+                }
+            }
+        }
+    }
+
     match cli.command {
         None => handle_no_command(&cli).await,
         // Keep this match exhaustive: no wildcard arm.
