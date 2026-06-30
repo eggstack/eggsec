@@ -100,6 +100,7 @@ pub mod container;
 #[allow(dead_code)]
 mod container;
 pub mod distributed;
+pub mod domain;
 pub mod error;
 pub mod findings;
 pub mod fuzzer;

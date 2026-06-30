@@ -167,6 +167,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`eggsec-core`](../crates/eggsec-core/) | Dependency-light shared types (Severity, SensitiveString), constants | [types.md](types.md) |
 | [`eggsec-tool-core`](../crates/eggsec-tool-core/) | Protocol-neutral tool request/response/error/history DTOs | [ai_agents.md](ai_agents.md) |
 | [`eggsec-output`](../crates/eggsec-output/src/) | Portable report formatting and output adapters (JSON, CSV, HTML, SARIF, JUnit, Markdown) | [output.md](output.md) |
+| [`domain/`](../crates/eggsec/src/domain/) | Domain module contract — static metadata descriptors for capability domains | [domain_contract.md](domain_contract.md) |
 | [`types.rs`](../crates/eggsec/src/types.rs) | Main-crate compatibility facade plus CLI-facing types such as `OutputFormat` | [types.md](types.md) |
 | [`constants.rs`](../crates/eggsec/src/constants.rs) | Compatibility facade over core constants plus any engine-local constants | [constants.md](constants.md) |
 | [`error/`](../crates/eggsec/src/error/) | Canonical error type with domain-specific variants | [error.md](error.md) |
@@ -508,6 +509,8 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
 | `Finding` | `findings/mod.rs` | Canonical finding structure |
 | `ProbeIntent` | `probe.rs` | Probe classification intent |
 | `ProbeRisk` | `probe.rs` | Probe risk level assessment |
+| `DomainDescriptor` | `domain/mod.rs` | Static metadata descriptor for a capability domain |
+| `DomainCategory` | `domain/mod.rs` | Classification of domain types (StandardAssessment, DefenseLab, etc.) |
 
 ### Module-Specific Types
 
@@ -711,7 +714,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 
 | Category | Documents |
 |----------|-----------|
-| **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md), [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [../docs/ARCHITECTURE_INVARIANTS.md](../docs/ARCHITECTURE_INVARIANTS.md) |
+| **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md), [domain_contract.md](domain_contract.md), [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [../docs/ARCHITECTURE_INVARIANTS.md](../docs/ARCHITECTURE_INVARIANTS.md) |
 | **Security** | [scanner.md](scanner.md), [fuzzer.md](fuzzer.md), [waf.md](waf.md), [recon.md](recon.md), [auth.md](auth.md), [hunt.md](hunt.md) |
 | **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md) |
 | **Output** | [output.md](output.md), [findings.md](findings.md), [diff.md](diff.md), [workflow.md](workflow.md) |
