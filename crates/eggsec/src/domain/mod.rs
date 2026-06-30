@@ -18,7 +18,9 @@
 //! It may later move to a dedicated `eggsec-domain-core` or
 //! `eggsec-policy-core` crate if extraction proves beneficial.
 
-use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk, TargetPolicyKind};
+use crate::config::{
+    metadata_for_tool_id, Capability, IntendedUse, OperationMode, OperationRisk, TargetPolicyKind,
+};
 
 /// Categories of domains, used for classification and display.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -187,8 +189,16 @@ pub struct CapabilityMatrixRow {
     pub cli: bool,
     /// TUI exposure.
     pub tui: bool,
-    /// MCP/API exposure.
-    pub mcp_api: bool,
+    /// Whether a ToolIntegration record exists for this operation.
+    pub tool_integration: bool,
+    /// Whether the tool is exposed via MCP by default.
+    pub mcp_exposed_by_default: bool,
+    /// Feature flag required for MCP exposure (if any).
+    pub required_mcp_feature: Option<&'static str>,
+    /// Whether the tool is REST-exposable (from OperationMetadata).
+    pub rest_exposable: bool,
+    /// Whether the tool is agent-exposable (from OperationMetadata).
+    pub agent_exposable: bool,
     /// Dry-run support description.
     pub dry_run: &'static str,
     /// Evidence/report support description.
@@ -251,11 +261,13 @@ pub struct DomainDescriptor {
     pub docs_url: Option<&'static str>,
 }
 
-/// Returns the static set of all known domain descriptors.
+/// Returns the static set of ALL known domain descriptors regardless of
+/// compile-time feature state. Consumers should check `required_feature`
+/// on each descriptor before attempting to use domain-specific functionality.
 ///
 /// The returned slice is ordered by category (StandardAssessment first,
 /// then DefenseLab, then HazardousLab, then adapters). Each descriptor
-/// reflects the current feature set — domains behind disabled features
+/// reflects the full set of known domains — domains behind disabled features
 /// are still included in the registry (their `required_feature` field
 /// indicates gating), but consumers should check feature availability
 /// before attempting to use them.
@@ -265,11 +277,8 @@ pub fn all_domain_descriptors() -> &'static [DomainDescriptor] {
         // (future: scanner, fuzzer, waf, recon, etc.)
 
         // ── Defense Lab ──
-        #[cfg(feature = "db-pentest")]
         DB_PENTEST_DESCRIPTOR,
-        #[cfg(feature = "mobile")]
         MOBILE_STATIC_DESCRIPTOR,
-        #[cfg(feature = "mobile-dynamic")]
         MOBILE_DYNAMIC_DESCRIPTOR,
         // (future: web-proxy, evasion, postex, etc.)
 
@@ -284,6 +293,34 @@ pub fn all_domain_descriptors() -> &'static [DomainDescriptor] {
 /// Look up a domain descriptor by its ID.
 pub fn domain_descriptor_by_id(id: &str) -> Option<&'static DomainDescriptor> {
     all_domain_descriptors().iter().find(|d| d.id == id)
+}
+
+/// Returns only domain descriptors whose `required_feature` is `None` or whose
+/// feature is currently compiled. This is a convenience wrapper over
+/// [`all_domain_descriptors`] for consumers that only need actionable domains.
+pub fn available_domain_descriptors() -> Vec<&'static DomainDescriptor> {
+    all_domain_descriptors()
+        .iter()
+        .filter(|d| match d.required_feature {
+            None => true,
+            Some(f) => feature_enabled(f),
+        })
+        .collect()
+}
+
+/// Check if a named Cargo feature is currently compiled.
+fn feature_enabled(feature: &str) -> bool {
+    match feature {
+        "db-pentest" => cfg!(feature = "db-pentest"),
+        "mobile" => cfg!(feature = "mobile"),
+        "mobile-dynamic" => cfg!(feature = "mobile-dynamic"),
+        "web-proxy" => cfg!(feature = "web-proxy"),
+        "evasion" => cfg!(feature = "evasion"),
+        "postex" => cfg!(feature = "postex"),
+        "c2" => cfg!(feature = "c2"),
+        "wireless" => cfg!(feature = "wireless"),
+        _ => false,
+    }
 }
 
 /// Generate capability matrix rows from all registered domain descriptors.
@@ -319,10 +356,13 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
             };
             let has_cli = domain.cli.iter().any(|c| c.operation_id == op.operation_id);
             let has_tui = domain.tui.iter().any(|t| t.operation_id == op.operation_id);
-            let has_mcp = domain
+            let tool = domain
                 .tools
                 .iter()
-                .any(|t| t.operation_id == op.operation_id);
+                .find(|t| t.operation_id == op.operation_id);
+            let has_tool = tool.is_some();
+            let mcp_exposed_by_default = tool.map(|t| t.mcp_exposed_by_default).unwrap_or(false);
+            let required_mcp_feature = tool.and_then(|t| t.required_mcp_feature);
 
             let feature = if op.required_features.is_empty() {
                 domain.required_feature
@@ -339,6 +379,14 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
                 TargetPolicyKind::OptionalTarget
             };
 
+            // Look up REST/agent exposure from OperationMetadata.
+            let (rest_exposable, agent_exposable) =
+                if let Some(meta) = metadata_for_tool_id(op.operation_id) {
+                    (meta.rest_exposable, meta.agent_exposable)
+                } else {
+                    (false, false)
+                };
+
             let docs_url = domain.docs_url;
             let notes = "";
             rows.push(CapabilityMatrixRow {
@@ -353,7 +401,11 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
                 target_policy,
                 cli: has_cli,
                 tui: has_tui,
-                mcp_api: has_mcp,
+                tool_integration: has_tool,
+                mcp_exposed_by_default,
+                required_mcp_feature,
+                rest_exposable,
+                agent_exposable,
                 dry_run,
                 evidence_report,
                 baseline,
@@ -506,8 +558,8 @@ const MOBILE_DYNAMIC_OPERATION: OperationIntegration = OperationIntegration {
     operation_id: "mobile-dynamic",
     display_name: "Mobile Dynamic Analysis",
     mode: OperationMode::DefenseLab,
-    risk: OperationRisk::SafeActive,
-    capabilities: &[],
+    risk: OperationRisk::Intrusive,
+    capabilities: &[Capability::MobileDynamicAnalysis],
     intended_uses: &[IntendedUse::WebAssessment],
     required_features: &["mobile-dynamic"],
     requires_explicit_scope: false,
@@ -559,7 +611,7 @@ const MOBILE_DYNAMIC_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
     dry_run: DryRunSupport::AlwaysAvailable,
     evidence: EvidenceSupport::AlwaysAvailable,
     baseline: BaselineSupport::AlwaysAvailable,
-    strict_surface_support: true,
+    strict_surface_support: false,
     docs_url: Some("docs/MOBILE.md"),
 };
 
@@ -838,5 +890,13 @@ mod tests {
             assert!(row.dry_run == "always");
             assert!(row.evidence_report == "always");
         }
+    }
+
+    #[cfg(feature = "mobile-dynamic")]
+    #[test]
+    fn mobile_dynamic_not_baseline_safe() {
+        let d = MOBILE_DYNAMIC_DESCRIPTOR;
+        assert_eq!(d.operations[0].risk, OperationRisk::Intrusive);
+        assert!(!d.strict_surface_support);
     }
 }

@@ -1,8 +1,10 @@
 # Eggsec Capability Matrix
 
-> **Canonical source**: This matrix is derived from `DomainDescriptor` and `OperationMetadata` in the
-> `eggsec` crate. Edit metadata in `crates/eggsec/src/domain/mod.rs` and `crates/eggsec/src/config/policy.rs`
-> rather than editing this file directly. Tests validate consistency between this matrix and the metadata.
+> **Maintenance model**: This matrix is manually maintained to be consistent with `DomainDescriptor`
+> and `OperationMetadata` in the `eggsec` crate. Edit metadata in `crates/eggsec/src/domain/mod.rs`
+> and `crates/eggsec/src/config/policy.rs` first, then update this file to match. Metadata consistency
+> tests validate the underlying metadata structures; a future enhancement may add snapshot validation
+> of this file against generated output.
 >
 > See [METADATA_OWNERSHIP.md](METADATA_OWNERSHIP.md) for the update workflow and ownership model.
 
@@ -53,7 +55,7 @@ integrated CLI, TUI, tool, and report adapters.
 |--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|------|
 | db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | DATABASE_PENTEST.md |
 | mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | explicit scope | MOBILE.md |
-| mobile-dynamic | defense-lab | mobile-dynamic | SafeActive | `mobile-dynamic` | Y | Y | N | always | always | always | Y | explicit scope | MOBILE.md |
+| mobile-dynamic | defense-lab | mobile-dynamic | Intrusive | `mobile-dynamic` | Y | Y | N | always | always | always | Y | explicit scope | MOBILE.md |
 
 ## Risk Tiers
 
@@ -119,10 +121,14 @@ integrated CLI, TUI, tool, and report adapters.
 
 ## Updating This Document
 
-This document is validated by `tests/metadata_consistency.rs` against the canonical metadata.
+This document is manually maintained and should be kept consistent with the canonical metadata in code.
 If you add or modify an operation:
 
 1. Update `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy.rs`
 2. Update `DomainDescriptor` entries in `crates/eggsec/src/domain/mod.rs` (if domain-scoped)
-3. Run `cargo test -p eggsec --lib` to verify consistency
-4. Update this file to match the metadata
+3. Run `cargo test -p eggsec --lib` to verify metadata consistency
+4. Update this file to reflect the new metadata (risk, capabilities, exposure flags, etc.)
+
+Metadata consistency tests (`tests/metadata_consistency.rs`) validate the underlying metadata structures
+but do not yet validate this markdown file's content. When updating, compare each column against the
+source metadata to ensure accuracy.

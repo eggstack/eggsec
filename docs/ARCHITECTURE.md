@@ -9,7 +9,7 @@ Eggsec is a Rust-native, scope-enforced security assessment and defense-validati
 - **Manual operator workflows** (CLI, TUI) where humans decide which tests to run
 - **Automated workflows** (REST, MCP, gRPC, Agent, CI) where policy must be enforced without operator discretion
 
-The architecture enforces a critical invariant: **authorization is centralized; domain crates declare and execute but must not authorize**. Every side-effecting operation passes through `EnforcementContext::evaluate()` before execution.
+The architecture enforces a critical invariant: **authorization is centralized; domain crates declare and execute but must not authorize**. Strict programmatic surfaces (REST, MCP, gRPC, Agent) always use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. The orchestrator currently retains raw `ToolDispatcher::dispatch()` as a transitional exception; it must only be invoked after caller-level enforcement.
 
 ```
 ┌──────────────────────────────────────────────────────┐

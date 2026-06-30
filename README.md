@@ -116,7 +116,7 @@ See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tie
 
 ### Workspace Layout
 
-Eggsec is organized as a Cargo workspace with nine crates:
+Eggsec is organized as a Cargo workspace with these crates:
 
 | Crate | Purpose |
 |-------|---------|

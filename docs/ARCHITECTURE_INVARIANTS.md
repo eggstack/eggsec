@@ -10,7 +10,7 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 3. **Fail-closed strict**: Strict surfaces (`McpStrict`, `AgentStrict`, `CiStrict`) must fail closed on `Warn`, `RequireConfirmation`, or `Deny`. Only `Allow` permits dispatch.
 
-4. **Type-level dispatch**: Strict programmatic surfaces (REST, MCP, gRPC, Agent) must use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. Raw `ToolDispatcher::dispatch()` must not be reachable from these surfaces.
+4. **Type-level dispatch**: Strict programmatic surfaces (REST, MCP, gRPC, Agent) must use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. The orchestrator is a tracked transitional exception that may only be reached after caller-level enforcement.
 
 5. **Token uniqueness**: `ApprovedOperation` tokens must not be reusable for a different tool or target. `dispatch_checked()` verifies both tool name (alias-aware) and target match.
 

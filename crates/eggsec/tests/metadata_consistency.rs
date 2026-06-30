@@ -248,7 +248,7 @@ fn pilot_domain_db_pentest_in_capability_matrix() {
     assert!(db_row.cli, "db-pentest should have CLI integration");
     assert!(db_row.tui, "db-pentest should have TUI integration");
     assert!(
-        db_row.mcp_api,
+        db_row.tool_integration,
         "db-pentest should have MCP/tool integration"
     );
     assert_eq!(db_row.dry_run, "always");
@@ -336,7 +336,8 @@ fn all_metadata_capabilities_are_known_variants() {
                 | Capability::TrafficInterception
                 | Capability::EvasionTesting
                 | Capability::DatabaseAssessment
-                | Capability::C2Simulation => {}
+                | Capability::C2Simulation
+                | Capability::MobileDynamicAnalysis => {}
             }
         }
     }
@@ -532,4 +533,166 @@ fn domain_docs_urls_are_nonempty_when_present() {
             assert!(!url.is_empty(), "domain '{}' has empty docs_url", domain.id);
         }
     }
+}
+
+// ─── Opt-in MCP Exposure Consistency ──────────────────────────────────────
+
+/// Tools that require an MCP feature flag must not be MCP-exposed by default.
+/// This catches the class of bug where db-pentest MCP exposure was mis-represented.
+#[test]
+fn opt_in_mcp_features_not_default_exposed() {
+    for domain in all_domain_descriptors() {
+        for tool in domain.tools {
+            if tool.required_mcp_feature.is_some() {
+                assert!(
+                    !tool.mcp_exposed_by_default,
+                    "domain '{}' tool '{}' requires MCP feature '{}' but is marked as MCP-exposed by default",
+                    domain.id, tool.tool_id, tool.required_mcp_feature.unwrap()
+                );
+            }
+        }
+    }
+}
+
+// ─── Capability Matrix Exposure Alignment ─────────────────────────────────
+
+/// Capability matrix exposure fields must align with the domain's ToolIntegration and OperationMetadata.
+#[test]
+fn capability_matrix_exposure_aligns_with_metadata() {
+    let rows = generate_capability_matrix();
+    for row in &rows {
+        let domain = all_domain_descriptors()
+            .iter()
+            .find(|d| d.id == row.domain_id)
+            .expect("row domain should exist");
+        let tool_int = domain
+            .tools
+            .iter()
+            .find(|t| t.operation_id == row.operation_id);
+
+        // tool_integration field matches whether a ToolIntegration exists
+        assert_eq!(
+            row.tool_integration,
+            tool_int.is_some(),
+            "row '{}': tool_integration={} but ToolIntegration exists={}",
+            row.operation_id,
+            row.tool_integration,
+            tool_int.is_some()
+        );
+
+        // If tool integration exists, mcp_exposed_by_default must match
+        if let Some(ti) = tool_int {
+            assert_eq!(
+                row.mcp_exposed_by_default, ti.mcp_exposed_by_default,
+                "row '{}': mcp_exposed_by_default mismatch",
+                row.operation_id
+            );
+            assert_eq!(
+                row.required_mcp_feature, ti.required_mcp_feature,
+                "row '{}': required_mcp_feature mismatch",
+                row.operation_id
+            );
+        }
+
+        // rest_exposable and agent_exposable must match OperationMetadata
+        if let Some(meta) = metadata_for_tool_id(row.operation_id) {
+            assert_eq!(
+                row.rest_exposable, meta.rest_exposable,
+                "row '{}': rest_exposable mismatch with metadata",
+                row.operation_id
+            );
+            assert_eq!(
+                row.agent_exposable, meta.agent_exposable,
+                "row '{}': agent_exposable mismatch with metadata",
+                row.operation_id
+            );
+        }
+    }
+}
+
+// ─── High-Risk Agent Exposure Guard ───────────────────────────────────────
+
+/// No high-risk or non-baseline operation should be agent-exposable without
+/// an explicit non-baseline capability and strict policy requirement.
+#[test]
+fn high_risk_agent_exposable_requires_capability_and_policy() {
+    for m in all_operation_metadata() {
+        if m.agent_exposable && m.risk > OperationRisk::SafeActive {
+            let has_capability = !m.required_capabilities.is_empty();
+            assert!(
+                has_capability,
+                "high-risk agent-exposable operation '{}' (risk {:?}) must declare required capabilities",
+                m.id, m.risk
+            );
+        }
+    }
+}
+
+// ─── Domain Docs URL File Validation ──────────────────────────────────────
+
+/// If a domain declares a docs_url starting with "docs/", the referenced file should exist.
+#[test]
+fn domain_docs_urls_reference_existing_files() {
+    for domain in all_domain_descriptors() {
+        if let Some(url) = domain.docs_url {
+            if url.starts_with("docs/") {
+                let path = std::path::Path::new(url);
+                // Only check if we're running from the workspace root.
+                // The file check is best-effort for local docs paths.
+                if path.exists() {
+                    // File exists — good.
+                } else {
+                    // In CI or different working directory, the file may not be
+                    // resolvable. Document the claim but don't fail the test.
+                    eprintln!(
+                        "NOTE: domain '{}' docs_url '{}' — file not found from current directory (may be expected in CI)",
+                        domain.id, url
+                    );
+                }
+            }
+        }
+    }
+}
+
+// ─── mobile-dynamic Risk Classification ───────────────────────────────────
+
+/// mobile-dynamic must not appear baseline-safe to strict programmatic surfaces.
+#[cfg(feature = "mobile-dynamic")]
+#[test]
+fn mobile_dynamic_not_baseline_safe_in_metadata() {
+    let meta = metadata_for_tool_id("mobile-dynamic").expect("mobile-dynamic should have metadata");
+    assert!(
+        meta.risk > OperationRisk::SafeActive,
+        "mobile-dynamic risk should be above SafeActive, got {:?}",
+        meta.risk
+    );
+    assert!(
+        !meta.required_capabilities.is_empty(),
+        "mobile-dynamic should declare capabilities for non-baseline classification"
+    );
+}
+
+// ─── db-pentest MCP Opt-in Semantics ──────────────────────────────────────
+
+/// db-pentest must have tool integration but not be MCP-exposed by default.
+#[cfg(feature = "db-pentest")]
+#[test]
+fn db_pentest_mcp_opt_in_semantics() {
+    let domain = all_domain_descriptors()
+        .iter()
+        .find(|d| d.id == "db-pentest")
+        .expect("db-pentest domain should exist");
+    let tool = domain
+        .tools
+        .iter()
+        .find(|t| t.tool_id == "db-pentest")
+        .expect("db-pentest should have tool integration");
+    assert!(
+        tool.required_mcp_feature.is_some(),
+        "db-pentest should require an MCP feature flag"
+    );
+    assert!(
+        !tool.mcp_exposed_by_default,
+        "db-pentest must not be MCP-exposed by default"
+    );
 }

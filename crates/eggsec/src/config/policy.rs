@@ -477,6 +477,7 @@ pub enum Capability {
     EvasionTesting,
     DatabaseAssessment,
     C2Simulation,
+    MobileDynamicAnalysis,
 }
 
 impl std::fmt::Display for Capability {
@@ -500,6 +501,7 @@ impl std::fmt::Display for Capability {
             Self::EvasionTesting => write!(f, "evasion-testing"),
             Self::DatabaseAssessment => write!(f, "database-assessment"),
             Self::C2Simulation => write!(f, "c2-simulation"),
+            Self::MobileDynamicAnalysis => write!(f, "mobile-dynamic-analysis"),
         }
     }
 }
@@ -1561,11 +1563,11 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         id: "mobile-dynamic",
         display_name: "Mobile Dynamic Analysis",
         mode: OperationMode::DefenseLab,
-        risk: OperationRisk::SafeActive,
+        risk: OperationRisk::Intrusive,
         intended_uses: &[IntendedUse::WebAssessment],
         required_features: &["mobile-dynamic"],
         required_policy_flags: &[],
-        required_capabilities: &[],
+        required_capabilities: &[Capability::MobileDynamicAnalysis],
         target_policy: TargetPolicyKind::OptionalTarget,
         manual_exposable: true,
         tui_exposable: true,

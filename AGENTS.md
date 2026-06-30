@@ -186,7 +186,7 @@ Canonical reference points when updating guidance or skills:
 | `wireless` | WiFi recon | `wireless-tools` (iwlist) | Passive scans; root/CAP_NET_ADMIN for real; TUI tab present |
 | `wireless-advanced` | WiFi active | (needs wireless) | deauth/disassoc; `--allow-active-wireless`; policy gated `Intrusive` |
 | `mobile` | APK/IPA static | none | Pure-Rust parsers; local file only; domain crate: `eggsec-mobile-lab` |
-| `mobile-dynamic` | Mobile dynamic | ADB + device | Phase 1-4a complete; `--allow-dynamic-mobile` for real; domain crate: `eggsec-mobile-lab` |
+| `mobile-dynamic` | Mobile dynamic | ADB + device | Phase 1-4a complete; `--allow-dynamic-mobile` for real; policy gated `Intrusive`; domain crate: `eggsec-mobile-lab` |
 | `db-pentest` | DB security | none (drivers) | Postgres/MySQL/MSSQL/MongoDB/Redis; `--allow-db-pentest` for real |
 | `web-proxy` | MITM proxy | none | `--allow-web-proxy` + policy for real interception |
 | `evasion` | Evasion detection | none | `--allow-evasion-testing` for real |
@@ -228,7 +228,8 @@ Canonical reference points when updating guidance or skills:
 - `EnforcedDispatcher` - Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
-- `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`.
+- `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`. Split MCP fields: `mcp_exposed_by_default: bool` and `required_mcp_feature: Option<&'static str>`.
+- `Capability` - Enum of domain capability categories used in `DomainDescriptor` operations (e.g. `MobileDynamicAnalysis`). Defined in `config::policy`.
 - `DryRunSupport` - Enum for dry-run support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `EvidenceSupport` - Enum for evidence bundle support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `BaselineSupport` - Enum for baseline/regression support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
@@ -256,7 +257,7 @@ Canonical reference points when updating guidance or skills:
 - **Type-Level Enforcement**: Strict programmatic surfaces (REST, MCP, Agent, gRPC) require an `ApprovedOperation` token before dispatch. `EnforcedDispatcher::dispatch_checked()` verifies the request matches the approved descriptor (tool name and target). Manual surfaces (CLI, TUI) use `approve_manual()` which supports `Warn` outcomes and manual override.
 - **EnforcementError Mapping**: Each surface maps `EnforcementError` to its native error type (REST → HTTP 403, MCP → error `-32025`, Agent → `anyhow::bail!`, gRPC → `Status::permission_denied`).
 - **CI has no dispatch path**: The CI handler is a passive quality gate that processes pre-existing findings from stdin; it does not dispatch tools.
-- **Domain Module Contract**: `DomainDescriptor` in `domain/mod.rs` is the static metadata contract for capability domains. Domains declare operations, feature gates, CLI/TUI/MCP/report integrations, and dry-run/evidence support. Descriptors are `const`-constructible, authorization-neutral, and never perform network I/O. Pilot domain: `db-pentest`. Use `all_domain_descriptors()` for the registry, `domain_descriptor_by_id()` for lookup.
+- **Domain Module Contract**: `DomainDescriptor` in `domain/mod.rs` is the static metadata contract for capability domains. Domains declare operations, feature gates, CLI/TUI/MCP/report integrations, and dry-run/evidence support. Descriptors are `const`-constructible, authorization-neutral, and never perform network I/O. `all_domain_descriptors()` returns all known domains regardless of feature state; check `required_feature` before use. Pilot domain: `db-pentest`. Use `all_domain_descriptors()` for the registry, `domain_descriptor_by_id()` for lookup.
 
 ### Codebase Health
 
@@ -300,6 +301,7 @@ Canonical reference points when updating guidance or skills:
 - **REST EnforcementContext**: `RestState` now carries `EnforcementContext` instead of `Option<Scope>`. `handle_serve()` constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)`. All REST dispatch goes through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile). Only `Allow` permits dispatch; `Warn`/`RequireConfirmation`/`Deny` all return HTTP 403. Metadata `rest_exposable` is enforced. See `docs/ENFORCEMENT_MODES.md`.
 - **EnforcedDispatcher**: REST, MCP, and gRPC store `EnforcedDispatcher` (not raw `ToolDispatcher`) to structurally prevent bypass.
 - **TUI pending_approved**: TUI caches `ApprovedOperation` in `pending_approved` field for reuse between pre-dispatch gate and `evaluate_policy_and_dispatch()`.
+- **Domain descriptors always present**: Domain descriptors are always present regardless of feature state; check `required_feature` before use.
 
 ## Skills Directory
 
