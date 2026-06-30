@@ -1090,20 +1090,19 @@ impl Agent {
         };
 
         if let Some(ref enforced) = self.enforced_dispatcher {
-            if let Some(ref approved) = approved_token {
-                enforced
-                    .dispatch_checked(approved, request)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{:?}", e))
-            } else {
-                // UNREACHABLE in production: enforcement.approve() always sets approved_token when enforced_dispatcher is Some
-                self.dispatcher
-                    .dispatch(request)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{:?}", e))
-            }
+            let approved = approved_token.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "internal enforcement invariant violation: \
+                     security-agent dispatch reached without ApprovedOperation"
+                )
+            })?;
+
+            enforced
+                .dispatch_checked(approved, request)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e))
         } else {
-            // Test-only path: new_for_test() sets enforced_dispatcher to None
+            // Test-only path: new_for_test() sets enforced_dispatcher to None.
             self.dispatcher
                 .dispatch(request)
                 .await

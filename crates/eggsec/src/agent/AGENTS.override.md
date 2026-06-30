@@ -23,6 +23,10 @@ Factored helper functions for per-scan enforcement, called immediately before di
 
 These replace inline risk/capability mapping that was previously duplicated in `execute_scan_with_depth`. The enforcement invariant holds: `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate; scope provenance must come from `LoadedScope`.
 
+### Dispatch Invariant (Hard Error)
+
+If `enforced_dispatcher` is `Some` but `approved_token` is `None` at dispatch time, `execute_scan_with_depth` returns a hard error (`"internal enforcement invariant violation: security-agent dispatch reached without ApprovedOperation"`). This is an internal invariant violation, not a fallback. Test-only paths (`new_for_test()`) set `enforced_dispatcher` to `None` and use raw dispatch exclusively.
+
 ### Audit Integration (Phase 10)
 
 Agent enforcement decisions emit normalized `EnforcementAuditEvent` records via `crate::audit`. Audit events are emitted for:

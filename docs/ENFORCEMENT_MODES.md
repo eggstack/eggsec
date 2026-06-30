@@ -255,7 +255,7 @@ Phase 12 hardened enforcement from convention (call sites expected to evaluate f
 
 - `evaluate()` is retained for preflight, diagnostics, and advisory checks.
 - Policy semantics are unchanged.
-- Raw `ToolDispatcher::dispatch()` is not removed but `EnforcedDispatcher` is preferred in all protocol/agent code.
+- Raw `ToolDispatcher::dispatch()` is not removed but `EnforcedDispatcher` is required for all protocol/agent production code. Agent dispatch returns a hard invariant error if `enforced_dispatcher` is present but `ApprovedOperation` is missing.
 
 ## Audit Trail
 
