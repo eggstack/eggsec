@@ -254,6 +254,7 @@ Canonical reference points when updating guidance or skills:
 - `EvidenceKind` - Category of evidence data (HttpRequest, DatabaseFinding, MobileManifest, TrafficCapture, etc.)
 - `EvidenceSource` - Provenance of evidence (tool, module, run_id)
 - `RedactionState` - Sensitivity classification: None, FullyRedacted, PartiallyRedacted, Summarized
+- `RedactionPolicy` - Manifest-level redaction strategy: None, RedactAll, RedactSensitive, SummarizeAll, DomainSpecific
 
 ### Important Patterns
 
@@ -282,7 +283,7 @@ Canonical reference points when updating guidance or skills:
 - **Command Registry**: `commands/registry.rs` has `CommandRegistration` and `REGISTERED_COMMANDS` static array. `CommandContext::describe_from_registry()` builds `OperationDescriptor` from registry metadata. Pilot commands (recon, scan-ports, scan-endpoints, fingerprint) use registry-based descriptor generation; legacy commands remain on inline construction. `suggest_command()` provides edit-distance suggestions for unknown commands. See `docs/COMMAND_REGISTRY.md`.
 - **Tool Registration Builder**: `tool::registration` provides `all_tool_registrations()`, `mcp_tool_registrations()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`. These derive from `OperationMetadata` and `DomainDescriptor` `ToolIntegration`. Protocol listing functions now filter through registration metadata. See `docs/TOOL_REGISTRATION.md`.
 - **Normalized Report Envelope**: `ReportEnvelope` in `eggsec-output::envelope` is the protocol-neutral report contract. Domain crates convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()` functions. The envelope preserves report identity, finding records, evidence manifests, policy summaries, and baseline summaries. Domain bridges (mobile-static, db-pentest) produce envelopes alongside existing `to_scan_report_data()` bridges. See `docs/REPORT_EVIDENCE_MODEL.md`.
-- **Evidence Redaction Model**: `RedactionState` in `eggsec-output::envelope` classifies evidence sensitivity. `EvidenceManifest.redacted_items` tracks redacted count. Domains classify evidence as `None`, `FullyRedacted`, `PartiallyRedacted`, or `Summarized` based on content sensitivity.
+- **Evidence Redaction Model**: `RedactionState` in `eggsec-output::envelope` classifies evidence sensitivity. `RedactionPolicy` on `EvidenceManifest` declares the manifest-level redaction strategy. `EvidenceManifest.redacted_items` tracks redacted count. Domains classify evidence as `None`, `FullyRedacted`, `PartiallyRedacted`, or `Summarized` based on content sensitivity.
 - **Domain Descriptor Report Metadata**: `ReportIntegration` in `domain/mod.rs` includes `normalized_report_supported: bool` flag indicating whether a domain has implemented the `to_report_envelope()` bridge. Currently `true` for db-pentest and mobile-static.
 
 ### Codebase Health

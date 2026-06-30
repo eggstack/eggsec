@@ -113,6 +113,7 @@ The following tests validate metadata consistency:
 | `mobile_static_requires_explicit_scope_is_false` | Safety: mobile-static does not require explicit scope |
 | `high_risk_agent_exposable_ops_are_not_baseline_safe` | Safety: high-risk agent ops are not baseline-safe |
 | `domain_docs_urls_reference_existing_files` | Local docs URLs reference existing files |
+| `domains_with_normalized_report_declare_report_integration` | Every domain with `normalized_report_supported: true` has report integration |
 
 ## Safety Invariants
 
@@ -126,7 +127,8 @@ The following tests validate metadata consistency:
 
 - **Phase 3**: Introduced `DomainDescriptor` and `OperationIntegration` for the `db-pentest` pilot domain.
 - **Phase 4**: Added `CapabilityMatrixRow`, `generate_capability_matrix()`, `BaselineSupport`, `docs_url`, `strict_surface_support`, metadata consistency tests, and `docs/CAPABILITY_MATRIX.md`.
-- **Phase 5** (future): Extract additional domains to the contract, slim the main crate.
+- **Phase 7**: Added `ToolRegistration` as derived metadata source bridging `OperationMetadata` and `DomainDescriptor::ToolIntegration`.
+- **Phase 9**: Added `normalized_report_supported` to `ReportIntegration` in `DomainDescriptor`. Introduced normalized report/evidence envelope model (`ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `BaselineSummary`) in `eggsec-output::envelope`. Added `RedactionPolicy` to `EvidenceManifest` for manifest-level redaction semantics. Pilot domain bridges (db-pentest, mobile-static) emit normalized envelopes. `docs/CAPABILITY_MATRIX.md` tracks normalized report support per domain.
 
 ## Exposure Model Decision
 

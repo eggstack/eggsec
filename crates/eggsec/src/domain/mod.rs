@@ -533,7 +533,7 @@ const MOBILE_STATIC_TOOL: ToolIntegration = ToolIntegration {
 const MOBILE_STATIC_REPORT: ReportIntegration = ReportIntegration {
     report_kind: "mobile-static",
     operation_id: "mobile-static",
-    evidence_bundle_supported: false,
+    evidence_bundle_supported: true,
     normalized_report_supported: true,
 };
 

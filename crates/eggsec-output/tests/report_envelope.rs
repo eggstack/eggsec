@@ -30,6 +30,7 @@ fn evidence_manifest_serialization_roundtrip() {
     assert_eq!(deserialized.total_items, 2);
     assert_eq!(deserialized.redacted_items, 1);
     assert_eq!(deserialized.operation_id, "op-1");
+    assert_eq!(deserialized.redaction_policy, RedactionPolicy::None);
 }
 
 #[test]
@@ -253,4 +254,71 @@ fn tool_metadata_preserved() {
     assert_eq!(meta.tool_name, "eggsec-mobile-lab");
     assert_eq!(meta.tool_version.as_deref(), Some("0.2.0"));
     assert_eq!(meta.eggsec_version.as_deref(), Some("0.1.0"));
+}
+
+#[test]
+fn redaction_policy_roundtrip() {
+    let policies = [
+        RedactionPolicy::None,
+        RedactionPolicy::RedactAll,
+        RedactionPolicy::RedactSensitive,
+        RedactionPolicy::SummarizeAll,
+        RedactionPolicy::DomainSpecific,
+    ];
+
+    for policy in policies {
+        let source = EvidenceSource {
+            tool: "test".to_string(),
+            module: None,
+            run_id: None,
+        };
+        let items = vec![EvidenceItem::new(
+            "ev-1",
+            EvidenceKind::Generic,
+            source,
+            "data",
+        )];
+        let manifest = EvidenceManifest::with_redaction_policy("op-1", &items, policy);
+        let json = serde_json::to_string(&manifest).unwrap();
+        let deserialized: EvidenceManifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.redaction_policy, policy);
+    }
+}
+
+#[test]
+fn evidence_manifest_default_redaction_policy() {
+    let manifest = EvidenceManifest {
+        bundle_id: "b-1".to_string(),
+        operation_id: "op-1".to_string(),
+        ..Default::default()
+    };
+    assert_eq!(manifest.redaction_policy, RedactionPolicy::None);
+    assert_eq!(manifest.total_items, 0);
+    assert_eq!(manifest.redacted_items, 0);
+}
+
+#[test]
+fn evidence_manifest_with_redaction_policy_preserves_field() {
+    let source = EvidenceSource {
+        tool: "test".to_string(),
+        module: None,
+        run_id: None,
+    };
+    let items = vec![
+        EvidenceItem::new("ev-1", EvidenceKind::DatabaseFinding, source.clone(), "a"),
+        EvidenceItem::new("ev-2", EvidenceKind::Generic, source, "b")
+            .with_redaction(RedactionState::PartiallyRedacted),
+    ];
+    let manifest =
+        EvidenceManifest::with_redaction_policy("op-1", &items, RedactionPolicy::RedactSensitive);
+
+    let json = serde_json::to_string(&manifest).unwrap();
+    let deserialized: EvidenceManifest = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(
+        deserialized.redaction_policy,
+        RedactionPolicy::RedactSensitive
+    );
+    assert_eq!(deserialized.total_items, 2);
+    assert_eq!(deserialized.redacted_items, 1);
 }

@@ -777,3 +777,21 @@ fn high_risk_agent_exposable_ops_are_not_baseline_safe() {
         }
     }
 }
+
+/// Every domain with `normalized_report_supported: true` must have report integration
+/// with evidence bundle support.
+#[test]
+fn domains_with_normalized_report_declare_report_integration() {
+    for domain in all_domain_descriptors() {
+        for report in domain.reports {
+            if report.normalized_report_supported {
+                assert!(
+                    report.evidence_bundle_supported,
+                    "domain '{}' report '{}' has normalized_report_supported=true but \
+                     evidence_bundle_supported=false — normalized reports require evidence bundle support",
+                    domain.id, report.report_kind
+                );
+            }
+        }
+    }
+}

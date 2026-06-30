@@ -9,7 +9,7 @@ The normalized report/evidence envelope (`eggsec_output::envelope`) provides a p
 - `ReportEnvelope` - Top-level container with report_id, operation_id, domain_id, target, findings, evidence_manifest, policy_summary, baseline, tool_metadata
 - `FindingRecord` - Normalized finding with id, domain, operation_id, severity, title, description, evidence items, remediation, references, category, location
 - `EvidenceItem` - Single evidence entry with id, kind, source, summary, data_ref, redaction state
-- `EvidenceManifest` - Manifest tracking all evidence items with total/redacted counts
+- `EvidenceManifest` - Manifest tracking all evidence items with total/redacted counts and redaction policy
 - `BaselineSummary` - Standardized baseline comparison with added/resolved/unchanged counts and severity deltas
 - `ToolMetadata` - Tool name and version information
 
@@ -24,11 +24,18 @@ Existing `to_scan_report_data()` bridges are preserved for backward compatibilit
 
 ## Evidence Redaction
 
-`RedactionState` classifies evidence sensitivity:
+`RedactionState` classifies individual evidence item sensitivity:
 - `None` - No sensitive data, full content safe
 - `FullyRedacted` - Only placeholder included
 - `PartiallyRedacted` - Sensitive fields masked
 - `Summarized` - Original content replaced with summary
+
+`RedactionPolicy` declares the manifest-level redaction strategy:
+- `None` - No redaction applied
+- `RedactAll` - Redact all items regardless of individual state
+- `RedactSensitive` - Redact only items marked as sensitive
+- `SummarizeAll` - Replace raw content with summaries
+- `DomainSpecific` - Domain-specific logic; individual item states take precedence
 
 ## Files
 

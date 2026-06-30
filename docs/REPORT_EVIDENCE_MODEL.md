@@ -236,10 +236,24 @@ pub struct EvidenceManifest {
     pub exported_at: chrono::DateTime<chrono::Utc>,
     pub finding_count: usize,
     pub evidence_count: usize,
+    pub redaction_policy: RedactionPolicy, // manifest-level redaction strategy
     pub signature: Option<String>,
     pub contents: Vec<String>,
 }
 ```
+
+### RedactionPolicy
+
+The `EvidenceManifest` includes a `redaction_policy` field that declares the manifest-level
+redaction strategy. This is distinct from per-item `RedactionState` on `EvidenceItem`:
+
+| Policy | Meaning |
+|--------|---------|
+| `None` | No redaction; all evidence included as-is |
+| `RedactAll` | Redact all items regardless of individual state |
+| `RedactSensitive` | Redact only items marked as sensitive |
+| `SummarizeAll` | Replace raw content with summaries |
+| `DomainSpecific` | Domain-specific logic; individual item states take precedence |
 
 ### Migration Path
 

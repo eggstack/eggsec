@@ -125,6 +125,23 @@ pub enum RedactionState {
     Summarized,
 }
 
+/// Manifest-level redaction policy describing how evidence should be treated.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RedactionPolicy {
+    /// No redaction applied; all evidence is included as-is.
+    #[default]
+    None,
+    /// Redact all evidence items regardless of individual state.
+    RedactAll,
+    /// Redact only items marked as sensitive; leave others intact.
+    RedactSensitive,
+    /// Summarize all evidence items rather than including raw content.
+    SummarizeAll,
+    /// Domain-specific redaction logic; individual item states take precedence.
+    DomainSpecific,
+}
+
 /// A single piece of evidence supporting a finding.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceItem {
@@ -184,7 +201,7 @@ impl EvidenceItem {
 }
 
 /// Manifest of all evidence items in a report.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceManifest {
     /// Unique identifier for this manifest.
     pub bundle_id: String,
@@ -200,15 +217,38 @@ pub struct EvidenceManifest {
     pub total_items: usize,
     /// Number of redacted items.
     pub redacted_items: usize,
+    /// Manifest-level redaction policy governing how evidence is treated.
+    pub redaction_policy: RedactionPolicy,
     /// Producer version (e.g. "0.1.0").
     pub producer_version: Option<String>,
     /// Optional policy/enforcement correlation ID.
     pub policy_correlation_id: Option<String>,
 }
 
+impl Default for EvidenceManifest {
+    fn default() -> Self {
+        Self {
+            bundle_id: String::new(),
+            operation_id: String::new(),
+            domain_id: None,
+            target: None,
+            generated_at: Utc::now(),
+            total_items: 0,
+            redacted_items: 0,
+            redaction_policy: RedactionPolicy::default(),
+            producer_version: None,
+            policy_correlation_id: None,
+        }
+    }
+}
+
 impl EvidenceManifest {
-    /// Build a manifest from a list of evidence items.
-    pub fn from_items(operation_id: impl Into<String>, items: &[EvidenceItem]) -> Self {
+    /// Build a manifest from a list of evidence items with the given redaction policy.
+    pub fn with_redaction_policy(
+        operation_id: impl Into<String>,
+        items: &[EvidenceItem],
+        policy: RedactionPolicy,
+    ) -> Self {
         let redacted_items = items
             .iter()
             .filter(|i| i.redaction != RedactionState::None)
@@ -221,9 +261,15 @@ impl EvidenceManifest {
             generated_at: Utc::now(),
             total_items: items.len(),
             redacted_items,
+            redaction_policy: policy,
             producer_version: None,
             policy_correlation_id: None,
         }
+    }
+
+    /// Build a manifest from a list of evidence items with default redaction policy.
+    pub fn from_items(operation_id: impl Into<String>, items: &[EvidenceItem]) -> Self {
+        Self::with_redaction_policy(operation_id, items, RedactionPolicy::default())
     }
 }
 
@@ -467,16 +513,27 @@ impl ReportEnvelope {
         self
     }
 
+    /// Set the manifest-level redaction policy.
+    pub fn with_redaction_policy(mut self, policy: RedactionPolicy) -> Self {
+        self.evidence_manifest.redaction_policy = policy;
+        self
+    }
+
     /// Rebuild the evidence manifest from the current findings.
+    /// Preserves the existing redaction policy, bundle_id, and producer_version.
     pub fn refresh_evidence_manifest(&mut self) {
         let all_evidence: Vec<EvidenceItem> = self
             .findings
             .iter()
             .flat_map(|f| f.evidence.iter().cloned())
             .collect();
+        let old_policy = self.evidence_manifest.redaction_policy;
+        let old_producer_version = self.evidence_manifest.producer_version.clone();
         self.evidence_manifest = EvidenceManifest::from_items(&self.operation_id, &all_evidence);
         self.evidence_manifest.domain_id = self.domain_id.clone();
         self.evidence_manifest.target = self.target.clone();
+        self.evidence_manifest.redaction_policy = old_policy;
+        self.evidence_manifest.producer_version = old_producer_version;
     }
 
     /// Serialize the envelope to pretty-printed JSON.
@@ -616,6 +673,26 @@ mod tests {
         assert_eq!(manifest.total_items, 2);
         assert_eq!(manifest.redacted_items, 1);
         assert_eq!(manifest.operation_id, "op-1");
+        assert_eq!(manifest.redaction_policy, RedactionPolicy::None);
+    }
+
+    #[test]
+    fn evidence_manifest_with_redaction_policy() {
+        let source = EvidenceSource {
+            tool: "test".to_string(),
+            module: None,
+            run_id: None,
+        };
+        let items = vec![
+            EvidenceItem::new("ev-1", EvidenceKind::DatabaseFinding, source.clone(), "a"),
+            EvidenceItem::new("ev-2", EvidenceKind::Generic, source, "b")
+                .with_redaction(RedactionState::FullyRedacted),
+        ];
+        let manifest =
+            EvidenceManifest::with_redaction_policy("op-1", &items, RedactionPolicy::RedactAll);
+        assert_eq!(manifest.total_items, 2);
+        assert_eq!(manifest.redacted_items, 1);
+        assert_eq!(manifest.redaction_policy, RedactionPolicy::RedactAll);
     }
 
     #[test]
