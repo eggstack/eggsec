@@ -182,6 +182,19 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 anyhow::bail!("No proxies to check");
             }
 
+            ctx.evaluate_and_enforce_operation(OperationDescriptor {
+                operation: "proxy-health-check".to_string(),
+                mode: crate::config::OperationMode::StandardAssessment,
+                risk: crate::config::OperationRisk::ExploitAdjacent,
+                intended_uses: vec![crate::config::IntendedUse::WebAssessment],
+                target: Some(health_args.test_url.clone()),
+                required_features: vec!["stress-testing".to_string()],
+                required_policy_flags: Vec::new(),
+                requires_private_or_local_target: false,
+                requires_explicit_scope: false,
+                required_capabilities: Vec::new(),
+            })?;
+
             let proxy_entries: Vec<ProxyEntry> = config
                 .proxies
                 .iter()
