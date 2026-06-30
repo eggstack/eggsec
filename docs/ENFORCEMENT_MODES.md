@@ -211,6 +211,39 @@ cargo test --test enforcement_matrix -p eggsec
 cargo test -p eggsec --features rest-api --test enforcement_matrix
 ```
 
+## Phase 2: Enforcement Invariant Hardening
+
+Phase 2 verified and hardened the enforcement invariants established in earlier phases:
+
+### Transitional API Cleanup
+
+| API | Status | Disposition |
+|-----|--------|-------------|
+| `CommandContext::with_execution_profile()` | **Deprecated** | Test-only. New code must use `with_execution_surface()` or construct `EnforcementContext` directly. |
+| `CommandContext::ensure_scope()` / `ensure_scope_url()` | **Deprecated** | Zero callers. Scope checks are centralized in `EnforcementContext::evaluate()`. |
+| `ToolDispatcher::dispatch()` (raw) | `#[doc(hidden)]`, `pub(crate)` | Regression test guard (`enforced_dispatch_regression.rs`) enforces no raw dispatch in strict surfaces. |
+
+### Regression Tests Added
+
+- **CI handler dispatch invariant** (`ci_handler_has_no_dispatch_path`): Verifies CI handler contains no `ToolDispatcher`, `EnforcedDispatcher`, `SecurityTool`, `ToolRegistry`, or `dispatch_checked` imports. Architecture Invariant #19.
+
+### Verified Coverage
+
+Phase 2 confirmed that all acceptance criteria from the Phase 2 plan are satisfied by existing test infrastructure:
+
+- **Enforcement matrix**: 164 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
+- **Override isolation**: Automated surfaces cannot use manual override flags to proceed.
+- **Scope provenance**: Automated operations requiring explicit scope fail without explicit manifest provenance.
+- **Approval token mismatch**: `dispatch_checked` rejects tool mismatch, target mismatch, and allows alias match.
+- **Raw dispatch guard**: Strict surfaces cannot reach raw `ToolDispatcher::dispatch()`.
+- **CI handler isolation**: CI handler has no dispatch path (Architecture Invariant #19).
+
+Run:
+```bash
+cargo test --test enforcement_matrix -p eggsec
+cargo test --test enforced_dispatch_regression -p eggsec
+```
+
 ## Phase 12: Type-Level Enforcement Dispatch
 
 Phase 12 hardened enforcement from convention (call sites expected to evaluate first) to type-level structure. Strict programmatic surfaces cannot dispatch a tool without an `ApprovedOperation` token, enforced structurally rather than by discipline at call sites.

@@ -19,11 +19,10 @@ fn strict_surfaces_do_not_call_raw_dispatch_directly() {
 
     // Strict surfaces that must use EnforcedDispatcher
     let strict_dirs = [
-        "src/tool/protocol/rest.rs",
-        "src/tool/protocol/grpc.rs",
-        "src/tool/protocol/mcp",
-        "src/agent",
-        "src/commands/handlers/ci.rs",
+        "eggsec/src/tool/protocol/rest.rs",
+        "eggsec/src/tool/protocol/grpc.rs",
+        "eggsec/src/tool/protocol/mcp",
+        "eggsec/src/agent",
     ];
 
     // Narrow allowlist: both path AND line must match for a raw dispatch to be permitted.
@@ -42,6 +41,11 @@ fn strict_surfaces_do_not_call_raw_dispatch_directly() {
             path_suffix: "src/agent/mod.rs",
             line_contains: "Box::pin(self.dispatch(request))",
             reason: "ScanDispatcherTrait adapter; production execution must use EnforcedDispatcher",
+        },
+        RawDispatchAllow {
+            path_suffix: "src/agent/mod.rs",
+            line_contains: ".dispatch(request)",
+            reason: "Test-only fallback path; guarded by enforced_dispatcher.is_none() which only occurs via new_for_test()",
         },
         RawDispatchAllow {
             path_suffix: "src/notify",
@@ -76,6 +80,54 @@ fn strict_surfaces_do_not_call_raw_dispatch_directly() {
         let msg = violations.join("\n");
         panic!(
             "Strict surfaces contain raw .dispatch() calls that may bypass enforcement:\n\n{}",
+            msg
+        );
+    }
+}
+
+/// CI handler is a passive quality gate with no dispatch path.
+/// It must not import or use ToolDispatcher, EnforcedDispatcher,
+/// or any tool execution API. (Architecture Invariant #19)
+#[test]
+fn ci_handler_has_no_dispatch_path() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let ci_handler = workspace_root.join("eggsec/src/commands/handlers/ci.rs");
+    assert!(
+        ci_handler.exists(),
+        "CI handler file not found at expected path"
+    );
+
+    let content = fs::read_to_string(&ci_handler).unwrap();
+    let forbidden = [
+        "ToolDispatcher",
+        "EnforcedDispatcher",
+        "dispatch_checked",
+        "SecurityTool",
+        "ToolRegistry",
+    ];
+
+    let mut violations = Vec::new();
+    for (line_num, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") || trimmed.starts_with("///") || trimmed.starts_with("//!") {
+            continue;
+        }
+        for term in &forbidden {
+            if line.contains(term) {
+                violations.push(format!(
+                    "ci.rs:{}: forbidden term '{}' found: {}",
+                    line_num + 1,
+                    term,
+                    trimmed.chars().take(80).collect::<String>()
+                ));
+            }
+        }
+    }
+
+    if !violations.is_empty() {
+        let msg = violations.join("\n");
+        panic!(
+            "CI handler must not contain tool dispatch APIs (Architecture Invariant #19):\n\n{}",
             msg
         );
     }

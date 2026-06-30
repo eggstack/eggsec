@@ -302,15 +302,15 @@ cat findings.json | eggsec ci --baseline baseline.json
 
 | Item | Location | Status | Recommended Disposition |
 |------|----------|--------|------------------------|
-| `CommandContext::ensure_scope()` / `ensure_scope_url()` | `commands/handlers/mod.rs:223-228` | **Unused by handlers** | **Deprecate**. Scope checks are centralized in `EnforcementContext::evaluate()`. |
-| `CommandContext::with_execution_profile()` | `commands/handlers/mod.rs:161` | Labeled "Transitional". Test-only usage. | **Deprecate**. Replace with `with_execution_surface()` or direct `EnforcementContext` construction. |
+| `CommandContext::ensure_scope()` / `ensure_scope_url()` | `commands/handlers/mod.rs:223-228` | **Deprecated (Phase 2)**. No callers. | **Deprecate**. Scope checks are centralized in `EnforcementContext::evaluate()`. |
+| `CommandContext::with_execution_profile()` | `commands/handlers/mod.rs:161` | **Deprecated (Phase 2)**. Test-only. | **Deprecate**. Replace with `with_execution_surface()` or direct `EnforcementContext` construction. |
 | `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs:36` | `pub(crate)`, `#[doc(hidden)]`. Used by Orchestrator. | **Restrict visibility**. Keep for Orchestrator with regression test guard. |
 | Orchestrator raw dispatch | `tool/orchestrator/mod.rs:194,210` | Raw dispatch without enforcement. Regression test allows it. | **Keep with invariant**. Callers must enforce before constructing Orchestrator. |
 | `utils::check_scope()` / `check_scope_from_url()` | `utils/scope.rs` | Legacy standalone helpers. No handler callers. | **Deprecate**. Superseded by `EnforcementContext` scope evaluation. |
 | Feature metadata duplication | Cargo.toml, README, policy metadata, tool docs | Feature descriptions exist in multiple places. | **Migrate**. Consolidate to `OperationMetadata` as single source of truth. |
 | Central command match growth | `commands/handlers/mod.rs` | Growing match arms in `handle_command()`. | **Keep for now**. Monitor; refactor in Phase 2 if needed. |
 | Domain logic in main crate | Various modules in `eggsec/src/` | Some domain logic still embedded (e.g., scanner, fuzzer internals). | **Keep for now**. Domain extraction is a Phase 2+ concern. |
-| CI handler dispatch invariant | `commands/handlers/ci.rs:5` | Documented as having no dispatch path. | **Test**. Add regression test verifying no `ToolDispatcher` import in CI handler. |
+| CI handler dispatch invariant | `commands/handlers/ci.rs:5` | **Tested (Phase 2)**. Regression test `ci_handler_has_no_dispatch_path`. | **Test**. Add regression test verifying no `ToolDispatcher` import in CI handler. |
 
 ## 7. Architecture Invariants
 

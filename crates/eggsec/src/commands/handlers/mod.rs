@@ -158,6 +158,9 @@ impl CommandContext {
 
     /// Set execution profile directly. Transitional — prefer [`Self::with_execution_surface`]
     /// for new call sites so that the surface-to-profile derivation is centralized.
+    #[deprecated(
+        note = "Transitional — prefer with_execution_surface() for new call sites so that surface-to-profile derivation is centralized. Test-only usage."
+    )]
     pub fn with_execution_profile(mut self, profile: ExecutionProfile) -> Self {
         self.execution_profile = profile;
         self.enforcement = match profile {
@@ -220,10 +223,16 @@ impl CommandContext {
         self
     }
 
+    #[deprecated(
+        note = "Unused legacy helper. Scope checks are centralized in EnforcementContext::evaluate()."
+    )]
     pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()> {
         crate::utils::check_scope_from_url(&self.scope, url)
     }
 
+    #[deprecated(
+        note = "Unused legacy helper. Scope checks are centralized in EnforcementContext::evaluate()."
+    )]
     pub fn ensure_scope(&self, target: &str) -> ErrorResult<()> {
         crate::utils::check_scope(&self.scope, target)
     }

@@ -98,9 +98,9 @@ pub struct CommandContext {
 
 impl CommandContext {
     pub fn evaluate_and_enforce_operation(&self, descriptor: OperationDescriptor) -> Result<PolicyDecision>
-    // Legacy methods (still present but no longer used in handlers):
-    pub fn ensure_scope(&self, target: &str) -> ErrorResult<()>
-    pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()>
+    // Deprecated legacy methods (no callers; scope checks centralized in EnforcementContext::evaluate()):
+    #[deprecated] pub fn ensure_scope(&self, target: &str) -> ErrorResult<()>
+    #[deprecated] pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()>
 }
 ```
 Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireConfirmation`: narrow `--yes` (only `out-of-scope`/`target-expansion`); dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc. for their classes; stable kebab-case audit strings via `ConfirmationClass::as_str()` and `confirmation_class_strings` dedup helper; precise "required flag" error messages listing exactly what is missing. Strict profiles/MCP/agent treat RequireConfirmation as hard Deny and ignore overrides.
