@@ -3,53 +3,55 @@
 > **Canonical source**: This matrix is derived from `DomainDescriptor` and `OperationMetadata` in the
 > `eggsec` crate. Edit metadata in `crates/eggsec/src/domain/mod.rs` and `crates/eggsec/src/config/policy.rs`
 > rather than editing this file directly. Tests validate consistency between this matrix and the metadata.
+>
+> See [METADATA_OWNERSHIP.md](METADATA_OWNERSHIP.md) for the update workflow and ownership model.
 
 ## Standalone Operations
 
 These operations are registered in `ALL_OPERATION_METADATA` and are not part of a specific domain.
 They are available across all surfaces where their exposure flags permit.
 
-| Operation | Display Name | Risk | Capabilities | Feature | CLI | TUI | MCP/API | REST | Agent | Dry-Run | Scope |
-|-----------|-------------|------|-------------|---------|-----|-----|---------|------|-------|---------|-------|
-| `recon` | Reconnaissance | SafeActive | PassiveFingerprint | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `scan-ports` | Port Scan | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `scan-endpoints` | Endpoint Discovery | SafeActive | Crawl | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `fingerprint` | Service Fingerprint | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `fuzz` | Fuzzing | Intrusive | HttpFuzzLowImpact | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `waf-detect` | WAF Detection | SafeActive | WafDetect | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `waf-bypass` | WAF Bypass Simulation | Intrusive | WafBypassSimulation | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `waf-stress` | WAF Stress Test | StressTest | WafStressTest | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `load-test` | Load Test | LoadTest | LoadTest | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `stress-test` | Stress Test | StressTest | WafStressTest | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `packet` | Raw Packet | RawPacket | RawPacketProbe | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `graphql` | GraphQL Fuzzing | Intrusive | HttpFuzzLowImpact | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `oauth` | OAuth Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `auth-test` | Authentication Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `nse` | NSE Scripts | SafeActive | NseSafe | `nse` | Y | Y | Y | Y | Y | always | explicit scope |
-| `db-pentest` | Database Pentesting | DbPentest | DatabaseAssessment | `db-pentest` | Y | Y | Y | Y | Y | always | explicit scope |
-| `c2` | C2 Simulation | C2Operation | C2Simulation | `c2` | Y | Y | Y | Y | Y | always | explicit scope |
-| `proxy-intercept` | Traffic Interception | TrafficInterception | TrafficInterception | `web-proxy` | Y | Y | Y | Y | Y | always | explicit scope |
-| `wireless` | Wireless Scanning | SafeActive | PassiveFingerprint | `wireless` | Y | Y | Y | Y | Y | always | explicit scope |
-| `hunt` | Vulnerability Hunting | SafeActive | ActiveProbe | `advanced-hunting` | Y | Y | Y | Y | Y | always | explicit scope |
-| `browser` | Headless Browser | SafeActive | ActiveProbe | `headless-browser` | Y | Y | Y | Y | Y | always | explicit scope |
-| `compliance` | Compliance Scanning | SafeActive | ActiveProbe | `compliance` | Y | Y | Y | Y | Y | always | explicit scope |
-| `storage` | Database Storage | SafeActive | DatabaseAssessment | `database` | Y | Y | Y | Y | Y | always | explicit scope |
-| `integrations` | External Integrations | SafeActive | ActiveProbe | `external-integrations` | Y | Y | Y | Y | Y | always | explicit scope |
-| `workflow` | Finding Workflow | SafeActive | ActiveProbe | `finding-workflow` | Y | Y | Y | Y | Y | always | explicit scope |
-| `vuln` | Vulnerability Management | SafeActive | ActiveProbe | `vuln-management` | Y | Y | Y | Y | Y | always | explicit scope |
-| `pipeline` | Security Pipeline | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `proxy` | Proxy Management | SafeActive | — | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `remote` | Remote Execution | RemoteExecution | RemoteExecution | — | Y | Y | Y | Y | Y | always | explicit scope |
-| `search` | Web Search | Passive | — | — | Y | Y | Y | Y | Y | — | no target |
+| Operation | Display Name | Risk | Capabilities | Feature | CLI | TUI | MCP/API | REST | Agent | Dry-Run | Baseline | Strict | Scope |
+|-----------|-------------|------|-------------|---------|-----|-----|---------|------|-------|---------|----------|--------|-------|
+| `recon` | Reconnaissance | SafeActive | PassiveFingerprint | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `scan-ports` | Port Scan | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `scan-endpoints` | Endpoint Discovery | SafeActive | Crawl | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `fingerprint` | Service Fingerprint | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `fuzz` | Fuzzing | Intrusive | HttpFuzzLowImpact | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `waf-detect` | WAF Detection | SafeActive | WafDetect | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `waf-bypass` | WAF Bypass Simulation | Intrusive | WafBypassSimulation | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `waf-stress` | WAF Stress Test | StressTest | WafStressTest | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `load-test` | Load Test | LoadTest | LoadTest | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `stress-test` | Stress Test | StressTest | WafStressTest | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `packet` | Raw Packet | RawPacket | RawPacketProbe | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `graphql` | GraphQL Fuzzing | Intrusive | HttpFuzzLowImpact | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `oauth` | OAuth Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `auth-test` | Authentication Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `nse` | NSE Scripts | SafeActive | NseSafe | `nse` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `db-pentest` | Database Pentesting | DbPentest | DatabaseAssessment | `db-pentest` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `c2` | C2 Simulation | C2Operation | C2Simulation | `c2` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `proxy-intercept` | Traffic Interception | TrafficInterception | TrafficInterception | `web-proxy` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `wireless` | Wireless Scanning | SafeActive | PassiveFingerprint | `wireless` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `hunt` | Vulnerability Hunting | SafeActive | ActiveProbe | `advanced-hunting` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `browser` | Headless Browser | SafeActive | ActiveProbe | `headless-browser` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `compliance` | Compliance Scanning | SafeActive | ActiveProbe | `compliance` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `storage` | Database Storage | SafeActive | DatabaseAssessment | `database` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `integrations` | External Integrations | SafeActive | ActiveProbe | `external-integrations` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `workflow` | Finding Workflow | SafeActive | ActiveProbe | `finding-workflow` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `vuln` | Vulnerability Management | SafeActive | ActiveProbe | `vuln-management` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `pipeline` | Security Pipeline | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `proxy` | Proxy Management | SafeActive | — | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `remote` | Remote Execution | RemoteExecution | RemoteExecution | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `search` | Web Search | Passive | — | — | Y | Y | Y | Y | Y | — | — | — | no target |
 
 ## Domain Operations
 
 Operations grouped by capability domain. Each domain declares a `DomainDescriptor` with
 integrated CLI, TUI, tool, and report adapters.
 
-| Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Scope | Notes |
-|--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|-------|-------|
-| db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | explicit scope | MCP opt-in via `db-pentest-mcp` |
+| Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Baseline | Strict | Scope | Docs |
+|--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|------|
+| db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | DATABASE_PENTEST.md |
 
 ## Risk Tiers
 

@@ -480,6 +480,7 @@ See [docker-compose.yml](docker-compose.yml) for Docker configuration.
 - [Safety and Scope Enforcement](docs/SAFETY.md) - Authorization, risk tiers, scope rules
 - [Enforcement Modes](docs/ENFORCEMENT_MODES.md) - Dual-mode enforcement contract, manual vs. automated postures
 - [Capability Matrix](docs/CAPABILITY_MATRIX.md) - Canonical operation/risk/feature/exposure matrix (derived from metadata)
+- [Metadata Ownership](docs/METADATA_OWNERSHIP.md) - Metadata model, update workflow, and validation pipeline
 - [Canonical Findings Schema](docs/FINDINGS_SCHEMA.md) - Finding structure, fingerprinting, redaction
 - [Auth Context Configuration](docs/AUTH_CONTEXT.md) - Multi-role testing, env interpolation
 - [Baselines and Differential Scans](docs/BASELINES_AND_DIFFS.md) - Comparing scan results over time

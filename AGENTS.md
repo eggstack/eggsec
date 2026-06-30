@@ -219,6 +219,7 @@ Canonical reference points when updating guidance or skills:
 - `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`.
 - `DryRunSupport` - Enum for dry-run support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `EvidenceSupport` - Enum for evidence bundle support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
+- `BaselineSupport` - Enum for baseline/regression support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 
 ### Important Patterns
 

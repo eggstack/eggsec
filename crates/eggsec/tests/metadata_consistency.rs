@@ -4,8 +4,12 @@
 //! These tests ensure that metadata remains synchronized across code and docs,
 //! preventing drift between what is declared and what is documented.
 
-use eggsec::config::{all_operation_metadata, metadata_for_tool_id, Capability, OperationRisk};
-use eggsec::domain::{all_domain_descriptors, generate_capability_matrix, DryRunSupport};
+use eggsec::config::{
+    all_operation_metadata, metadata_for_tool_id, operation_metadata, Capability, OperationRisk,
+};
+use eggsec::domain::{
+    all_domain_descriptors, generate_capability_matrix, BaselineSupport, DryRunSupport,
+};
 
 // ─── Domain × OperationMetadata Cross-Validation ──────────────────────────
 
@@ -303,6 +307,168 @@ fn mcp_exposed_ops_have_metadata_flag() {
     }
 }
 
+// ─── Enum Variant Validity ────────────────────────────────────────────────
+
+/// Every Capability used in OperationMetadata must be a known variant.
+/// This catches typos or references to removed variants. Some defined
+/// variants (e.g. IntrusiveFuzz) may not yet be assigned to any operation.
+#[test]
+fn all_metadata_capabilities_are_known_variants() {
+    // If a capability is used in metadata, this match must exhaustive.
+    // A compile error here means metadata references an unknown variant.
+    for m in all_operation_metadata() {
+        for cap in m.required_capabilities {
+            match cap {
+                Capability::PassiveFingerprint
+                | Capability::ActiveProbe
+                | Capability::Crawl
+                | Capability::HttpFuzzLowImpact
+                | Capability::IntrusiveFuzz
+                | Capability::WafDetect
+                | Capability::WafBypassSimulation
+                | Capability::WafStressTest
+                | Capability::LoadTest
+                | Capability::RawPacketProbe
+                | Capability::CredentialTesting
+                | Capability::RemoteExecution
+                | Capability::NseSafe
+                | Capability::NseIntrusive
+                | Capability::TrafficInterception
+                | Capability::EvasionTesting
+                | Capability::DatabaseAssessment
+                | Capability::C2Simulation => {}
+            }
+        }
+    }
+}
+
+/// Every OperationRisk used in metadata must be a known variant.
+/// This catches typos or references to removed variants. Some defined
+/// variants (e.g. EvasionTesting) may not yet be assigned to any operation.
+#[test]
+fn all_metadata_risks_are_known_variants() {
+    for m in all_operation_metadata() {
+        match m.risk {
+            OperationRisk::Passive
+            | OperationRisk::SafeActive
+            | OperationRisk::Intrusive
+            | OperationRisk::LoadTest
+            | OperationRisk::StressTest
+            | OperationRisk::RawPacket
+            | OperationRisk::CredentialTesting
+            | OperationRisk::DbPentest
+            | OperationRisk::TrafficInterception
+            | OperationRisk::EvasionTesting
+            | OperationRisk::PostExploitation
+            | OperationRisk::ExploitAdjacent
+            | OperationRisk::C2Operation
+            | OperationRisk::RemoteExecution
+            | OperationRisk::AgentAutonomous => {}
+        }
+    }
+}
+
+// ─── Tool ID Stability ────────────────────────────────────────────────────
+
+/// All tool IDs registered by `create_default_registry()` must have operation
+/// metadata. This prevents new tools from being added without metadata.
+#[test]
+fn all_registered_base_tools_have_operation_metadata() {
+    let base_tool_ids = &[
+        "recon",
+        "scan-ports",
+        "fingerprint",
+        "scan-endpoints",
+        "fuzz",
+        "load",
+        "waf-detect",
+        "waf-bypass",
+        "waf-stress",
+        "pipeline",
+        "search",
+    ];
+    for &tool_id in base_tool_ids {
+        assert!(
+            metadata_for_tool_id(tool_id).is_some(),
+            "registered tool '{}' has no operation metadata",
+            tool_id,
+        );
+    }
+}
+
+/// Feature-gated tool IDs must have operation metadata when their feature is enabled.
+#[cfg(feature = "web-proxy-mcp")]
+#[test]
+fn web_proxy_mcp_tool_has_metadata() {
+    assert!(
+        metadata_for_tool_id("proxy").is_some(),
+        "registered tool 'proxy' has no operation metadata"
+    );
+}
+
+#[cfg(feature = "db-pentest-mcp")]
+#[test]
+fn db_pentest_mcp_tool_has_metadata() {
+    assert!(
+        metadata_for_tool_id("db-pentest").is_some(),
+        "registered tool 'db-pentest' has no operation metadata"
+    );
+}
+
+#[cfg(feature = "c2-mcp")]
+#[test]
+fn c2_mcp_tool_has_metadata() {
+    assert!(
+        metadata_for_tool_id("c2").is_some(),
+        "registered tool 'c2' has no operation metadata"
+    );
+}
+
+/// Operation IDs must be stable: the same ID used in OperationMetadata must
+/// resolve to the same metadata entry via metadata_for_tool_id().
+#[test]
+fn operation_id_lookup_is_stable() {
+    for m in all_operation_metadata() {
+        let resolved = metadata_for_tool_id(m.id)
+            .unwrap_or_else(|| panic!("operation '{}' should be resolvable by its own ID", m.id));
+        assert_eq!(
+            resolved.id, m.id,
+            "operation '{}' resolved to '{}' — ID instability",
+            m.id, resolved.id
+        );
+    }
+}
+
+/// All aliases must resolve to different canonical IDs than themselves
+/// (already tested by no_alias_maps_to_self) and the resolved metadata
+/// must have the same risk level as the canonical entry.
+/// Aliases that are also canonical IDs are skipped (the alias is redundant).
+#[test]
+fn alias_risk_matches_canonical() {
+    use eggsec::config::ALL_OPERATION_METADATA_ALIASES;
+    for &(alias, canonical) in ALL_OPERATION_METADATA_ALIASES {
+        // Skip aliases that are also canonical IDs — the alias is redundant
+        // because metadata_for_tool_id() returns the canonical entry directly.
+        if operation_metadata(alias).is_some() {
+            continue;
+        }
+        let alias_meta = metadata_for_tool_id(alias)
+            .unwrap_or_else(|| panic!("alias '{}' should resolve to metadata", alias));
+        let canonical_meta = metadata_for_tool_id(canonical)
+            .unwrap_or_else(|| panic!("canonical '{}' should have metadata", canonical));
+        assert_eq!(
+            alias_meta.id, canonical_meta.id,
+            "alias '{}' resolves to '{}' but canonical '{}' resolves to '{}'",
+            alias, alias_meta.id, canonical, canonical_meta.id
+        );
+        assert_eq!(
+            alias_meta.risk, canonical_meta.risk,
+            "alias '{}' has risk {:?} but canonical '{}' has {:?}",
+            alias, alias_meta.risk, canonical, canonical_meta.risk
+        );
+    }
+}
+
 // ─── Documentation Cross-References ────────────────────────────────────────
 
 /// Every feature referenced by OperationMetadata should either be a valid
@@ -336,6 +502,34 @@ fn all_domains_declare_dry_run_support() {
                 );
             }
             DryRunSupport::NotSupported => {}
+        }
+    }
+}
+
+/// Baseline support should be declared for every domain.
+#[test]
+fn all_domains_declare_baseline_support() {
+    for domain in all_domain_descriptors() {
+        match domain.baseline {
+            BaselineSupport::AlwaysAvailable => {}
+            BaselineSupport::FeatureGated(f) => {
+                assert!(
+                    !f.is_empty(),
+                    "domain '{}' has empty feature-gated baseline string",
+                    domain.id
+                );
+            }
+            BaselineSupport::NotSupported => {}
+        }
+    }
+}
+
+/// If a domain declares a docs_url, it should be a non-empty string.
+#[test]
+fn domain_docs_urls_are_nonempty_when_present() {
+    for domain in all_domain_descriptors() {
+        if let Some(url) = domain.docs_url {
+            assert!(!url.is_empty(), "domain '{}' has empty docs_url", domain.id);
         }
     }
 }

@@ -18,7 +18,7 @@
 //! It may later move to a dedicated `eggsec-domain-core` or
 //! `eggsec-policy-core` crate if extraction proves beneficial.
 
-use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk};
+use crate::config::{Capability, IntendedUse, OperationMode, OperationRisk, TargetPolicyKind};
 
 /// Categories of domains, used for classification and display.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -151,6 +151,17 @@ pub enum EvidenceSupport {
     NotSupported,
 }
 
+/// Whether baseline capture and regression comparison is supported by this domain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BaselineSupport {
+    /// Baseline/regression is always available.
+    AlwaysAvailable,
+    /// Baseline/regression is available when a specific feature is enabled.
+    FeatureGated(&'static str),
+    /// Baseline/regression is not supported.
+    NotSupported,
+}
+
 /// A single row in the capability matrix, generated from domain and operation metadata.
 #[derive(Debug, Clone)]
 pub struct CapabilityMatrixRow {
@@ -170,6 +181,8 @@ pub struct CapabilityMatrixRow {
     pub risk: OperationRisk,
     /// Capabilities.
     pub capabilities: &'static [Capability],
+    /// Target policy kind from OperationMetadata.
+    pub target_policy: TargetPolicyKind,
     /// CLI exposure.
     pub cli: bool,
     /// TUI exposure.
@@ -180,8 +193,14 @@ pub struct CapabilityMatrixRow {
     pub dry_run: &'static str,
     /// Evidence/report support description.
     pub evidence_report: &'static str,
+    /// Baseline/regression support description.
+    pub baseline: &'static str,
+    /// Whether strict surfaces (MCP/Agent/REST/gRPC) support this domain.
+    pub strict_surface: bool,
     /// Scope requirement description.
     pub scope_requirement: &'static str,
+    /// Optional documentation URL or path.
+    pub docs_url: Option<&'static str>,
     /// Notes.
     pub notes: &'static str,
 }
@@ -224,6 +243,12 @@ pub struct DomainDescriptor {
     pub dry_run: DryRunSupport,
     /// Evidence bundle support level.
     pub evidence: EvidenceSupport,
+    /// Baseline capture and regression comparison support.
+    pub baseline: BaselineSupport,
+    /// Whether strict surfaces (MCP/Agent/REST/gRPC) support this domain.
+    pub strict_surface_support: bool,
+    /// Optional documentation URL or path (e.g. "docs/DATABASE_PENTEST.md").
+    pub docs_url: Option<&'static str>,
 }
 
 /// Returns the static set of all known domain descriptors.
@@ -276,6 +301,11 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
                 EvidenceSupport::FeatureGated(f) => f,
                 EvidenceSupport::NotSupported => "no",
             };
+            let baseline = match domain.baseline {
+                BaselineSupport::AlwaysAvailable => "always",
+                BaselineSupport::FeatureGated(f) => f,
+                BaselineSupport::NotSupported => "no",
+            };
             let scope = if op.requires_explicit_scope {
                 "explicit scope required"
             } else if op.requires_private_or_local_target {
@@ -296,6 +326,16 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
                 Some(op.required_features[0])
             };
 
+            // Derive target policy from scope requirements.
+            let target_policy = if op.requires_private_or_local_target {
+                TargetPolicyKind::PrivateOrLocalRequired
+            } else if op.requires_explicit_scope {
+                TargetPolicyKind::ExplicitScopeRequired
+            } else {
+                TargetPolicyKind::OptionalTarget
+            };
+
+            let docs_url = domain.docs_url;
             let notes = "";
             rows.push(CapabilityMatrixRow {
                 domain_id: domain.id,
@@ -306,12 +346,16 @@ pub fn generate_capability_matrix() -> Vec<CapabilityMatrixRow> {
                 feature,
                 risk: op.risk,
                 capabilities: op.capabilities,
+                target_policy,
                 cli: has_cli,
                 tui: has_tui,
                 mcp_api: has_mcp,
                 dry_run,
                 evidence_report,
+                baseline,
+                strict_surface: domain.strict_surface_support,
                 scope_requirement: scope,
+                docs_url,
                 notes,
             });
         }
@@ -385,6 +429,9 @@ const DB_PENTEST_DESCRIPTOR: DomainDescriptor = DomainDescriptor {
     reports: &[DB_PENTEST_REPORT],
     dry_run: DryRunSupport::AlwaysAvailable,
     evidence: EvidenceSupport::AlwaysAvailable,
+    baseline: BaselineSupport::AlwaysAvailable,
+    strict_surface_support: true,
+    docs_url: Some("docs/DATABASE_PENTEST.md"),
 };
 
 #[cfg(test)]
