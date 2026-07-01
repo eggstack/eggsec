@@ -1,4 +1,4 @@
-use crate::config::{all_operation_metadata, OperationMetadata};
+use crate::config::{all_operation_metadata, OperationMetadata, OperationRisk};
 use crate::domain::all_domain_descriptors;
 use crate::tool::traits::ToolCategory;
 
@@ -16,7 +16,10 @@ pub struct ToolRegistration {
     pub source: ToolRegistrationSource,
     pub feature: Option<&'static str>,
     pub required_mcp_feature: Option<&'static str>,
-    pub mcp_exposed_by_default: bool,
+    /// Whether the operation metadata declares this tool as MCP-exposable.
+    pub mcp_metadata_exposable: bool,
+    /// Whether the tool appears in the default MCP tool listing (conservative).
+    pub mcp_default_visible: bool,
     pub rest_exposable: bool,
     pub grpc_exposable: bool,
     pub agent_exposable: bool,
@@ -32,6 +35,17 @@ pub enum ToolRegistrationSource {
     FeatureGated(&'static str),
     /// Domain-provided tool integration
     Domain(&'static str),
+}
+
+/// Determine whether an operation should be visible in the default MCP listing.
+///
+/// Conservative: passive/safe-active, metadata-exposable, and no feature gate.
+fn default_mcp_visible_for_operation(meta: &OperationMetadata) -> bool {
+    matches!(
+        meta.risk,
+        OperationRisk::Passive | OperationRisk::SafeActive
+    ) && meta.mcp_exposable
+        && meta.required_features.is_empty()
 }
 
 fn operation_category(meta: &OperationMetadata) -> ToolCategory {
@@ -59,14 +73,16 @@ pub fn all_tool_registrations() -> Vec<ToolRegistration> {
         let mut tool_id = meta.id;
         let mut source = ToolRegistrationSource::Base;
         let mut feature = meta.required_features.first().copied();
-        let mut mcp_exposed_by_default = meta.mcp_exposable;
+        let mut mcp_metadata_exposable = meta.mcp_exposable;
+        let mut mcp_default_visible = default_mcp_visible_for_operation(meta);
         let mut required_mcp_feature: Option<&str> = None;
 
         for domain in domains {
             if let Some(tool) = domain.tools.iter().find(|t| t.operation_id == meta.id) {
                 tool_id = tool.tool_id;
                 source = ToolRegistrationSource::Domain(domain.id);
-                mcp_exposed_by_default = tool.mcp_exposed_by_default;
+                mcp_metadata_exposable = meta.mcp_exposable;
+                mcp_default_visible = tool.mcp_exposed_by_default;
                 required_mcp_feature = tool.required_mcp_feature;
                 feature = domain.required_feature;
                 break;
@@ -86,7 +102,8 @@ pub fn all_tool_registrations() -> Vec<ToolRegistration> {
             source,
             feature,
             required_mcp_feature,
-            mcp_exposed_by_default,
+            mcp_metadata_exposable,
+            mcp_default_visible,
             rest_exposable: meta.rest_exposable,
             grpc_exposable: meta.grpc_exposable,
             agent_exposable: meta.agent_exposable,
@@ -107,9 +124,9 @@ pub fn resolve_tool_registration(tool_id: &str) -> Option<ToolRegistration> {
 
 /// Returns tool registrations visible under the given MCP profile policy.
 ///
-/// Filters by `mcp_exposed_by_default` and feature requirements.
+/// Filters by `mcp_metadata_exposable` and feature requirements.
 ///
-/// - `"ops-agent"`: returns all tools with `mcp_exposable = true`
+/// - `"ops-agent"`: returns all tools with `mcp_metadata_exposable = true`
 /// - `"coding-agent"`: returns the coding-agent tools (scan-ports,
 ///   fingerprint, scan-endpoints, waf-detect, search)
 pub fn mcp_tool_registrations(profile: &str) -> Vec<ToolRegistration> {
@@ -117,7 +134,7 @@ pub fn mcp_tool_registrations(profile: &str) -> Vec<ToolRegistration> {
     match profile {
         "ops-agent" => all
             .into_iter()
-            .filter(|r| r.mcp_exposed_by_default)
+            .filter(|r| r.mcp_metadata_exposable)
             .collect(),
         "coding-agent" => {
             let coding_agent_ids = [
@@ -138,6 +155,17 @@ pub fn mcp_tool_registrations(profile: &str) -> Vec<ToolRegistration> {
         }
         _ => Vec::new(),
     }
+}
+
+/// Returns tool registrations that are visible in the default MCP listing.
+///
+/// This is the conservative subset: passive/safe-active operations with
+/// `mcp_metadata_exposable = true` and no feature gate requirement.
+pub fn mcp_tool_registrations_default_visible() -> Vec<ToolRegistration> {
+    all_tool_registrations()
+        .into_iter()
+        .filter(|r| r.mcp_default_visible)
+        .collect()
 }
 
 /// Returns tool registrations exposed via the REST API.
@@ -231,13 +259,13 @@ mod tests {
     }
 
     #[test]
-    fn mcp_ops_agent_returns_all_mcp_exposable() {
+    fn mcp_ops_agent_returns_all_metadata_exposable() {
         let regs = mcp_tool_registrations("ops-agent");
         assert!(!regs.is_empty());
         for reg in &regs {
             assert!(
-                reg.mcp_exposed_by_default,
-                "ops-agent registration '{}' should be mcp_exposed_by_default",
+                reg.mcp_metadata_exposable,
+                "ops-agent registration '{}' should be mcp_metadata_exposable",
                 reg.tool_id
             );
         }

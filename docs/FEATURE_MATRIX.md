@@ -72,7 +72,7 @@ Categories:
 | `web-proxy-mcp` | Domain protocol exposure marker | `web-proxy`, `eggsec-web-proxy/web-proxy-mcp` | eggsec | No | Yes (MCP surface) | `proxy-intercept` | — |
 | `transparent-proxy` | Domain capability | `web-proxy`, `eggsec-web-proxy/transparent-proxy` | eggsec | No | No | — | — |
 | `dynamic-plugins` | Domain capability | `web-proxy`, `eggsec-web-proxy/dynamic-plugins` | eggsec | No | No | — | — |
-| `full` | Meta/aggregate | see `Cargo.toml` | eggsec | No | No | — | — |
+| `full` | Meta/aggregate (developer/lab) | see `Cargo.toml` | eggsec | No | No | — | — |
 
 ### 1.2 Domain Crate Features
 
@@ -202,6 +202,18 @@ cargo check --workspace --no-default-features
 cargo test -p eggsec --test metadata_consistency
 ```
 
+#### full — Developer/lab aggregate (not a production profile)
+
+The `full` meta-feature enables all non-default features including advanced/lab-only capabilities
+(`wireless-advanced`, `evasion`, `postex`, `c2`, `mobile-dynamic`). It is intended for development,
+integration testing, and explicit lab builds. **`full` is not a conservative user/default profile**
+and should not be recommended for production or standard deployment.
+
+```bash
+cargo check -p eggsec --features full
+cargo test --lib -p eggsec --features full
+```
+
 ### 3.2 System Dependency Requirements
 
 | Profile | Required System Dep | Install (Debian/Ubuntu) |
@@ -269,9 +281,9 @@ cargo test -p eggsec --test metadata_consistency
    before dispatch. Enabling `db-pentest` does not grant permission to run database pentests —
    `--allow-db-pentest` and scope rules are mandatory.
 
-2. **Advanced/lab-only features are never enabled by default or broad profiles.** Features like
-   `wireless-advanced`, `evasion`, `postex`, `c2`, and `stress-testing` require explicit opt-in
-   and are excluded from `full`'s typical deployment unless the user explicitly enables them.
+2. **The `full` meta-feature is a developer/lab aggregate, not a safe default.** It includes advanced
+   features like `wireless-advanced`, `evasion`, `postex`, and `c2`. Standard deployment should use
+   explicit feature flags. `full` is for development, integration testing, and lab builds.
 
 3. **Protocol exposure markers are opt-in.** `db-pentest-mcp`, `web-proxy-mcp`, and `c2-mcp` are
    not defaults and are not included in any base profile. Domains are standalone defense-lab

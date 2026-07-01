@@ -9,11 +9,12 @@
 > See [METADATA_OWNERSHIP.md](METADATA_OWNERSHIP.md) for the update workflow and ownership model.
 
 > **Exposure semantics**: `MCP/API`, `REST`, and `Agent` columns indicate whether the operation's
-> `OperationMetadata` permits programmatic registration under the relevant feature and profile.
-> `Y` means the metadata flag is set — it does **not** mean the operation executes safely by default
-> or is baseline-agent-safe. Strict programmatic surfaces (MCP, REST, agent, gRPC) require explicit
-> scope manifest, policy approval, and `EnforcementContext::evaluate()` before dispatch. High-risk
-> operations with `Y` exposure flags still require non-baseline capabilities and strict policy gates.
+> `OperationMetadata` permits programmatic registration (metadata-level exposable) under the
+> relevant feature and profile. `Y` means the metadata flag is set — it does **not** mean the
+> operation executes safely by default or is baseline-agent-safe. Strict programmatic surfaces
+> (MCP, REST, agent, gRPC) require explicit scope manifest, policy approval, and
+> `EnforcementContext::evaluate()` before dispatch. High-risk operations with `Y` exposure flags
+> still require non-baseline capabilities and strict policy gates.
 
 ## Standalone Operations
 

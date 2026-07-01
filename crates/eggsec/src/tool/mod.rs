@@ -75,7 +75,8 @@ pub use orchestrator::{
 pub use planner::{ChainPlanner, ExecutionPlan, PlanRequest, PlanValidation};
 pub use registration::{
     agent_tool_registrations, all_tool_registrations, grpc_tool_registrations,
-    mcp_tool_registrations, rest_tool_registrations, ToolRegistration, ToolRegistrationSource,
+    mcp_tool_registrations, mcp_tool_registrations_default_visible, rest_tool_registrations,
+    ToolRegistration, ToolRegistrationSource,
 };
 pub use registry::{ToolInfo, ToolRegistry};
 pub use response::{

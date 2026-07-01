@@ -7,8 +7,9 @@ use eggsec::domain::all_domain_descriptors;
 
 // ─── Static Feature Registry ───────────────────────────────────────────────
 
-/// ALL features declared in `crates/eggsec/Cargo.toml [features]`.
-/// When a new feature is added, this list must be updated.
+/// Static snapshot of feature keys declared in `crates/eggsec/Cargo.toml [features]`.
+/// Must be kept in sync with the actual Cargo features. The `snapshot_matches_cargo_toml_features`
+/// test validates this automatically.
 static KNOWN_EGGSEC_FEATURES: &[&str] = &[
     "tool-api",
     "insecure-tls",
@@ -305,7 +306,9 @@ fn feature_names_follow_naming_conventions() {
     }
 }
 
-/// The `full` aggregate feature must include all domain capabilities.
+/// The `full` aggregate feature must include all domain capabilities (developer/lab profile).
+/// Note: `full` intentionally includes advanced/lab-only features (wireless-advanced, mobile-dynamic,
+/// evasion, postex, c2) as it is a developer/lab aggregate, not a conservative default.
 #[test]
 fn aggregate_feature_includes_domain_features() {
     // Domain capability features that the aggregate should pull in
@@ -379,6 +382,46 @@ fn no_circular_feature_dependencies() {
             !has_cycle(node, &graph, &mut state),
             "circular feature dependency detected involving '{}'",
             node
+        );
+    }
+}
+
+/// Parse Cargo.toml to extract declared features, validating the static snapshot.
+#[test]
+fn snapshot_matches_cargo_toml_features() {
+    // Read Cargo.toml from the crate root (relative to CARGO_MANIFEST_DIR)
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).expect("failed to read Cargo.toml");
+    let manifest: toml::Value = manifest_str.parse().expect("failed to parse Cargo.toml");
+
+    let features_table = manifest
+        .get("features")
+        .and_then(|v| v.as_table())
+        .expect("no [features] table in Cargo.toml");
+
+    let cargo_features: rustc_hash::FxHashSet<&str> =
+        features_table.keys().map(|s| s.as_str()).collect();
+
+    // Every feature in our static snapshot must exist in Cargo.toml
+    for &feature in KNOWN_EGGSEC_FEATURES {
+        assert!(
+            cargo_features.contains(feature),
+            "SNAPSHOT feature '{}' not found in Cargo.toml [features] — update KNOWN_EGGSEC_FEATURES or Cargo.toml",
+            feature
+        );
+    }
+
+    // Every Cargo.toml feature should be in our snapshot (or explicitly documented as excluded)
+    // Known exclusions: "default" is always present in Cargo.toml but not a real feature
+    let excluded = rustc_hash::FxHashSet::from_iter(["default"]);
+    for cargo_feat in &cargo_features {
+        if excluded.contains(*cargo_feat) {
+            continue;
+        }
+        assert!(
+            KNOWN_EGGSEC_FEATURES.contains(cargo_feat),
+            "Cargo.toml feature '{}' not in KNOWN_EGGSEC_FEATURES — add it to the snapshot",
+            cargo_feat
         );
     }
 }

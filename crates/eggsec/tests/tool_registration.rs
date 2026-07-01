@@ -7,7 +7,8 @@ use eggsec::config::{metadata_for_tool_id, OperationRisk};
 use eggsec::domain::{all_domain_descriptors, DomainCategory};
 use eggsec::tool::registration::{
     agent_tool_registrations, all_tool_registrations, grpc_tool_registrations,
-    mcp_tool_registrations, rest_tool_registrations, ToolRegistrationSource,
+    mcp_tool_registrations, mcp_tool_registrations_default_visible, rest_tool_registrations,
+    ToolRegistrationSource,
 };
 
 // ─── Registration → OperationMetadata Cross-Validation ───────────────────
@@ -25,31 +26,31 @@ fn every_tool_registration_resolves_to_operation_metadata() {
     }
 }
 
-/// All registrations with mcp_exposed_by_default == true must have
+/// All registrations with mcp_metadata_exposable == true must have
 /// metadata.mcp_exposable == true (cross-check registration vs OperationMetadata).
 #[test]
 fn default_mcp_exposed_tools_have_metadata_flag() {
     for reg in all_tool_registrations() {
-        if reg.mcp_exposed_by_default {
+        if reg.mcp_metadata_exposable {
             let meta = metadata_for_tool_id(reg.operation_id)
                 .expect("MCP-exposed registration should have metadata");
             assert!(
                 meta.mcp_exposable,
-                "registration '{}' has mcp_exposed_by_default=true but metadata has mcp_exposable=false",
+                "registration '{}' has mcp_metadata_exposable=true but metadata has mcp_exposable=false",
                 reg.tool_id
             );
         }
     }
 }
 
-/// Tools with required_mcp_feature.is_some() must have mcp_exposed_by_default == false.
+/// Tools with required_mcp_feature.is_some() must have mcp_default_visible == false.
 #[test]
 fn opt_in_mcp_tools_not_default_exposed() {
     for reg in all_tool_registrations() {
         if reg.required_mcp_feature.is_some() {
             assert!(
-                !reg.mcp_exposed_by_default,
-                "registration '{}' requires MCP feature '{}' but is MCP-exposed by default",
+                !reg.mcp_default_visible,
+                "registration '{}' requires MCP feature '{}' but is mcp_default_visible",
                 reg.tool_id,
                 reg.required_mcp_feature.unwrap()
             );
@@ -58,7 +59,7 @@ fn opt_in_mcp_tools_not_default_exposed() {
 }
 
 /// Domain-sourced registrations from HazardousLab domains must have
-/// mcp_exposed_by_default == false.
+/// mcp_default_visible == false.
 #[test]
 fn hazardous_domains_never_default_mcp_exposed() {
     let domains = all_domain_descriptors();
@@ -70,8 +71,8 @@ fn hazardous_domains_never_default_mcp_exposed() {
                 .expect("domain source should exist");
             if domain.category == DomainCategory::HazardousLab {
                 assert!(
-                    !reg.mcp_exposed_by_default,
-                    "HazardousLab domain '{}' registration '{}' must not be MCP-exposed by default",
+                    !reg.mcp_default_visible,
+                    "HazardousLab domain '{}' registration '{}' must not be mcp_default_visible",
                     domain_id, reg.tool_id
                 );
             }
@@ -130,7 +131,6 @@ fn base_tool_count_matches_registry() {
         .iter()
         .filter(|r| r.source == ToolRegistrationSource::Base)
         .count();
-    // create_default_registry() registers 11 base tools (always present).
     assert!(
         base_count >= 10,
         "expected at least 10 Base-source registrations, got {}",
@@ -187,6 +187,75 @@ fn no_duplicate_tool_ids_in_registrations() {
         assert!(
             seen.insert(reg.tool_id),
             "duplicate tool_id in registrations: '{}'",
+            reg.tool_id
+        );
+    }
+}
+
+/// Every mcp_default_visible == true registration must also have
+/// mcp_metadata_exposable == true.
+#[test]
+fn mcp_default_visible_implies_metadata_exposable() {
+    for reg in all_tool_registrations() {
+        if reg.mcp_default_visible {
+            assert!(
+                reg.mcp_metadata_exposable,
+                "registration '{}' has mcp_default_visible=true but mcp_metadata_exposable=false",
+                reg.tool_id
+            );
+        }
+    }
+}
+
+/// Operations with risk > SafeActive should not have mcp_default_visible == true.
+#[test]
+fn high_risk_operations_not_default_mcp_visible() {
+    for reg in all_tool_registrations() {
+        let meta =
+            metadata_for_tool_id(reg.operation_id).expect("registration should have metadata");
+        if meta.risk > OperationRisk::SafeActive {
+            assert!(
+                !reg.mcp_default_visible,
+                "high-risk registration '{}' (risk {:?}) should not be mcp_default_visible",
+                reg.tool_id, meta.risk
+            );
+        }
+    }
+}
+
+/// Cross-check mcp_metadata_exposable against OperationMetadata.mcp_exposable.
+#[test]
+fn mcp_metadata_exposable_matches_operation_metadata() {
+    for reg in all_tool_registrations() {
+        let meta =
+            metadata_for_tool_id(reg.operation_id).expect("registration should have metadata");
+        assert_eq!(
+            reg.mcp_metadata_exposable, meta.mcp_exposable,
+            "registration '{}' mcp_metadata_exposable ({}) does not match metadata mcp_exposable ({})",
+            reg.tool_id, reg.mcp_metadata_exposable, meta.mcp_exposable
+        );
+    }
+}
+
+/// mcp_tool_registrations_default_visible() returns only mcp_default_visible tools.
+#[test]
+fn default_visible_registrations_are_actually_default_visible() {
+    for reg in mcp_tool_registrations_default_visible() {
+        assert!(
+            reg.mcp_default_visible,
+            "default_visible registration '{}' should have mcp_default_visible=true",
+            reg.tool_id
+        );
+    }
+}
+
+/// mcp_tool_registrations("ops-agent") returns only mcp_metadata_exposable tools.
+#[test]
+fn ops_agent_registrations_are_metadata_exposable() {
+    for reg in mcp_tool_registrations("ops-agent") {
+        assert!(
+            reg.mcp_metadata_exposable,
+            "ops-agent registration '{}' should have mcp_metadata_exposable=true",
             reg.tool_id
         );
     }

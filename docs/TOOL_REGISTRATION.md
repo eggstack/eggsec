@@ -35,12 +35,12 @@ Raw `ToolDispatcher::dispatch()` (`tool/dispatcher.rs:36`) is `pub(crate)` and `
 
 | Protocol | Listing Source | Filtering at Listing | Exposure Check at Execute |
 |----------|---------------|----------------------|---------------------------|
-| MCP | `registry.list()` | `McpProfilePolicy.filter_tools()` (`policy.rs:159`) | No `mcp_exposable` check at listing |
+| MCP | `registry.list()` | `McpProfilePolicy.filter_tools()` (`policy.rs:159`) | No `mcp_metadata_exposable` check at listing |
 | REST | `registry.list()` | None (all listed) | `rest_exposable` checked at execute time only |
 | gRPC | `registry.list()` | None (all listed) | `grpc_exposable` checked at execute time only |
 | Agent | `create_default_registry()` | None at listing | `agent_exposable` checked at dispatch |
 
-Key gap: MCP listing does not check `mcp_exposable` from `OperationMetadata`. REST and gRPC listing do not filter by their respective exposure flags.
+Key gap: MCP listing does not check `mcp_metadata_exposable` from `OperationMetadata`. REST and gRPC listing do not filter by their respective exposure flags.
 
 ## 5. Feature-Gated Tools
 
@@ -54,15 +54,21 @@ Feature-gated tools are only registered in `create_default_registry()` when thei
 
 ## 6. Default MCP Exposure vs Opt-in
 
+MCP tool visibility is governed by two distinct fields on `ToolRegistration`:
+
+- **`mcp_metadata_exposable`** (`OperationMetadata`-level): Whether the operation metadata declares the tool as MCP-exposable. This is the broad permission gate — the tool *may* be registered on MCP when the required feature is compiled, registered, scoped, and policy-authorized.
+- **`mcp_default_visible`** (conservative default listing): Whether the tool appears in the default MCP tool listing without profile-specific expansion. This is a conservative subset: passive/safe-active operations with `mcp_metadata_exposable = true` and no feature gate.
+
 | Profile / Domain | Visibility | Mechanism |
 |-----------------|------------|-----------|
-| OpsAgent | All registered tools | `ToolSelector::All` (`policy.rs:100`) |
+| OpsAgent | All registered tools with `mcp_metadata_exposable = true` | `ToolSelector::All` (`policy.rs:100`) + `mcp_tool_registrations("ops-agent")` |
 | CodingAgent | 6 hardcoded tools | `ToolSelector::Exact(vec![...])` (`policy.rs:124`) |
+| Default listing | Conservative subset | `mcp_tool_registrations_default_visible()` — passive/safe-active, no feature gate |
 | `db-pentest` | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:461`), requires `db-pentest-mcp` feature |
 | `mobile-static` | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:525`), not in default registry |
 | `mobile-dynamic` | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:587`), not in default registry |
 
-The OpsAgent profile shows all registered tools regardless of `mcp_exposable` in `OperationMetadata`. There is no intersection between the profile selector and the metadata exposure flag.
+The OpsAgent profile shows all registered tools with `mcp_metadata_exposable = true` regardless of profile. The `mcp_tool_registrations_default_visible()` function returns the conservative subset for default MCP listing.
 
 ## 7. Raw Dispatch Exceptions
 
@@ -77,7 +83,7 @@ The OpsAgent profile shows all registered tools regardless of `mcp_exposable` in
 - `ToolMetadataRegistry` (`tool/metadata.rs:82`) is a separate per-tool risk/policy registry, supplementary to `ALL_OPERATION_METADATA`
 - REST listing (`registry.list()`) does not filter by `rest_exposable` at listing time
 - gRPC listing (`registry.list()`) does not filter by `grpc_exposable` at listing time
-- MCP listing filters by profile policy but not by `mcp_exposable` from `OperationMetadata`
+- MCP listing filters by profile policy but not by `mcp_metadata_exposable` from `OperationMetadata`
 
 ## 9. Safety Invariants
 
@@ -91,7 +97,7 @@ The OpsAgent profile shows all registered tools regardless of `mcp_exposable` in
 
 **Implemented:**
 
-- `ToolRegistration` type and builder functions added in `tool::registration` (`all_tool_registrations()`, `mcp_tool_registrations()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`)
+- `ToolRegistration` type and builder functions added in `tool::registration` (`all_tool_registrations()`, `mcp_tool_registrations()`, `mcp_tool_registrations_default_visible()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`)
 - MCP, REST, gRPC, and Agent listing now filter through registration metadata instead of raw `registry.list()` calls
 - 10 new tool registration consistency tests (`tests/tool_registration.rs`) validate registration coverage, exposure flag alignment, source correctness, and protocol filtering
 - Enforcement paths verified unchanged — `EnforcementContext::evaluate()` remains the sole authorization gate
@@ -107,7 +113,7 @@ The OpsAgent profile shows all registered tools regardless of `mcp_exposable` in
 Shortened durable-fact comments in protocol surfaces that duplicated metadata now available through `ToolRegistration` and `OperationMetadata`:
 
 - **`tool/mod.rs`**: Added doc comment on `create_default_registry()` pointing to this file as the canonical source for registration model and protocol exposure rules.
-- **`tool/protocol/mcp/handlers/server.rs`**: Replaced verbose "Registration-based guard" comments in `handle_tools_list` and `handle_tools_list_by_category` with one-line references to `ToolRegistration mcp_exposed_by_default` and this document.
+- **`tool/protocol/mcp/handlers/server.rs`**: Replaced verbose "Registration-based guard" comments in `handle_tools_list` and `handle_tools_list_by_category` with one-line references to `ToolRegistration mcp_metadata_exposable` and `mcp_default_visible` and this document.
 - **`tool/protocol/rest.rs`**: Replaced "Registration-based guard" comment in `list_tools` with one-line reference to `ToolRegistration rest_exposable`.
 - **`tool/protocol/grpc.rs`**: Replaced "Registration-based guard" comment in `list_tools` with one-line reference to `ToolRegistration grpc_exposable`.
 

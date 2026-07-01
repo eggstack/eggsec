@@ -213,7 +213,11 @@ Canonical reference points when updating guidance or skills:
 
 **Marker-only features (no deps, just build gating):**
 
-`tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default; includes `POST /api/v1/tools/{tool_id}/preflight` endpoint), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
+`tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default; includes `POST /api/v1/tools/{tool_id}/preflight` endpoint), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`
+
+**Aggregate features:**
+
+`full` — developer/lab aggregate that enables all non-default features including advanced/lab-only capabilities (`wireless-advanced`, `evasion`, `postex`, `c2`, `mobile-dynamic`). Not a conservative default or production profile.
 
 > **Note**: The `eggsec-output::envelope` module (normalized report/evidence types) is always available — no feature gate required.
 
@@ -254,9 +258,10 @@ Canonical reference points when updating guidance or skills:
 - `DryRunSupport` - Enum for dry-run support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `EvidenceSupport` - Enum for evidence bundle support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
 - `BaselineSupport` - Enum for baseline/regression support level: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`.
-- `CommandRegistration` - Static metadata for registered commands (`commands/registry.rs`); declares command ID, operation ID, category, feature gate, and visibility flags. Registry is metadata and routing, not authorization.
+- `CommandRegistration` - Static metadata for registered commands (`commands/registry.rs`); declares command ID, operation ID, category, feature gate, visibility flags (`cli_visible`, `tui_visible`, `programmatic_visible`, `interactive_only`), `registry_backed`, and `dispatch_mode`. Registry is metadata and routing, not authorization.
 - `CommandCategory` - Classification enum for command registry entries: `SideEffectingNetwork`, `LocalFileDomain`, `PassiveAnalytical`, `ConfigOutputHelper`, `FrontendServer`, `LegacySpecial`.
-- `ToolRegistration` - Canonical tool registration metadata, single source of truth for tool listing across MCP, REST, gRPC, and agent surfaces. Defined in `tool::registration`.
+- `CommandDispatchMode` - Dispatch classification enum: `RegistryBacked`, `LegacyWrapped`, `CatalogOnly`, `ServerLifecycle`, `HelperOnly`. Describes how a command's execution path relates to the registry.
+- `ToolRegistration` - Canonical tool registration metadata, single source of truth for tool listing across MCP, REST, gRPC, and agent surfaces. Defined in `tool::registration`. Carries `mcp_metadata_exposable` (OperationMetadata-level) and `mcp_default_visible` (conservative default listing).
 - `ToolRegistrationSource` - Origin enum for tool registrations: `Base`, `FeatureGated(&str)`, `Domain(&str)`.
 - `ReportEnvelope` - Normalized report container (`eggsec-output::envelope`); preserves report identity, findings, evidence, policy, and baseline summaries
 - `FindingRecord` - Normalized finding record within a ReportEnvelope; includes evidence items, references, and category

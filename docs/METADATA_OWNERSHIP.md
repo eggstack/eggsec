@@ -47,7 +47,7 @@ These registries are **static**, **const-constructible**, and **authorization-ne
 
 ## Programmatic Exposure Semantics
 
-The `mcp_exposable`, `rest_exposable`, `agent_exposable`, and `grpc_exposable` flags on `OperationMetadata` indicate whether an operation **may** be registered on the relevant programmatic surface when the required feature is compiled and the runtime policy approves.
+The `mcp_metadata_exposable`, `rest_exposable`, `agent_exposable`, and `grpc_exposable` flags on `OperationMetadata` indicate whether an operation **may** be registered on the relevant programmatic surface when the required feature is compiled and the runtime policy approves.
 
 These flags do **not** mean:
 - The operation executes safely by default
@@ -68,13 +68,14 @@ High-risk operations (risk > `SafeActive`) with programmatic exposure flags stil
 
 Each `ToolRegistration` carries:
 - Tool ID, display name, operation ID
-- Protocol exposure flags (`rest_exposable`, `mcp_exposable`, `grpc_exposable`, `agent_exposable`)
+- Protocol exposure flags (`rest_exposable`, `mcp_metadata_exposable`, `mcp_default_visible`, `grpc_exposable`, `agent_exposable`)
 - Source: `Base`, `FeatureGated(&str)`, or `Domain(&str)`
 - Required MCP feature (if any)
 
 Builder functions filter registrations by protocol:
 - `all_tool_registrations()` — full inventory
-- `mcp_tool_registrations()` — tools with `mcp_exposable = true`
+- `mcp_tool_registrations()` — tools with `mcp_metadata_exposable = true`
+- `mcp_tool_registrations_default_visible()` — tools visible in the default MCP listing (conservative subset)
 - `rest_tool_registrations()` — tools with `rest_exposable = true`
 - `grpc_tool_registrations()` — tools with `grpc_exposable = true`
 - `agent_tool_registrations()` — tools with `agent_exposable = true`
@@ -133,7 +134,7 @@ The following tests validate metadata consistency:
 ## Exposure Model Decision
 
 The project uses **Model A** (broad programmatic exposure flags with explicit semantics):
-- High-risk operations may have `mcp_exposable`/`rest_exposable`/`agent_exposable` set to `true`
+- High-risk operations may have `mcp_metadata_exposable`/`rest_exposable`/`agent_exposable` set to `true`
 - This means metadata permits registration when compiled, registered, scoped, and policy-authorized
 - It does **not** mean default safe execution or baseline agent safety
 - Strict surfaces require `EnforcementContext::evaluate()` and `ApprovedOperation` tokens

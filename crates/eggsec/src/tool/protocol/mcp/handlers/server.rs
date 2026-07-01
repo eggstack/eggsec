@@ -324,7 +324,7 @@ impl McpServer {
         let all_tools = self.registry.list();
         let tools = self.policy.filter_tools(all_tools);
 
-        // Filter by ToolRegistration mcp_exposed_by_default (see docs/TOOL_REGISTRATION.md)
+        // Filter by ToolRegistration mcp_metadata_exposable (see docs/TOOL_REGISTRATION.md)
         let profile_name = self.profile.as_str();
         let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
             .iter()
@@ -394,7 +394,7 @@ impl McpServer {
         let all_tools = self.registry.list();
         let tools = self.policy.filter_tools(all_tools);
 
-        // Filter by ToolRegistration mcp_exposed_by_default (see docs/TOOL_REGISTRATION.md)
+        // Filter by ToolRegistration mcp_metadata_exposable (see docs/TOOL_REGISTRATION.md)
         let profile_name = self.profile.as_str();
         let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
             .iter()

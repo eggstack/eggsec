@@ -4,8 +4,8 @@
 //! command IDs are unique, and metadata resolution works correctly.
 
 use eggsec::commands::registry::{
-    all_command_ids, build_descriptor_for_command, lookup_command, suggest_command,
-    CommandCategory, REGISTERED_COMMANDS,
+    build_descriptor_for_command, lookup_command, suggest_command, CommandCategory,
+    CommandDispatchMode, REGISTERED_COMMANDS,
 };
 use eggsec::config::metadata_for_tool_id;
 
@@ -19,20 +19,14 @@ fn registry_has_entries() {
 
 #[test]
 fn all_command_ids_are_unique() {
-    let ids = all_command_ids();
-    let mut sorted = ids.clone();
-    sorted.sort();
-    sorted.dedup();
-    assert_eq!(
-        ids.len(),
-        sorted.len(),
-        "Duplicate command IDs found: {:?}",
-        ids.iter()
-            .copied()
-            .collect::<Vec<_>>()
-            .windows(2)
-            .find(|w| w[0] == w[1])
-    );
+    let mut seen = rustc_hash::FxHashSet::default();
+    for reg in REGISTERED_COMMANDS {
+        assert!(
+            seen.insert(reg.command_id),
+            "duplicate command id: {}",
+            reg.command_id
+        );
+    }
 }
 
 #[test]
@@ -45,8 +39,6 @@ fn registry_entry_operation_ids_resolve_to_metadata() {
                     reg.command_id, op_id
                 )
             });
-            // metadata_for_tool_id resolves aliases, so metadata.id may differ from op_id.
-            // Verify the resolved metadata is valid (has a non-empty ID).
             assert!(
                 !metadata.id.is_empty(),
                 "Command '{}': resolved metadata for '{}' has empty id",
@@ -61,7 +53,6 @@ fn registry_entry_operation_ids_resolve_to_metadata() {
 fn registry_operation_ids_are_canonical_or_aliases() {
     for reg in REGISTERED_COMMANDS.iter() {
         if let Some(op_id) = reg.operation_id {
-            // The operation_id should be either a canonical ID or resolve via alias
             assert!(
                 metadata_for_tool_id(op_id).is_some(),
                 "Command '{}' has operation_id '{}' which is neither a canonical ID nor a known alias",
@@ -89,7 +80,6 @@ fn feature_gated_entries_have_nonempty_feature() {
 fn side_effecting_entries_have_descriptor_builder() {
     for reg in REGISTERED_COMMANDS.iter() {
         if reg.category == CommandCategory::SideEffectingNetwork && reg.operation_id.is_some() {
-            // Side-effecting commands with metadata should be able to build a descriptor
             let desc = reg.build_descriptor(Some("test-target".to_string()));
             assert!(
                 desc.is_some(),
@@ -101,13 +91,12 @@ fn side_effecting_entries_have_descriptor_builder() {
 }
 
 #[test]
-fn manual_only_not_exposed_programmatically() {
+fn interactive_only_not_programmatic() {
     for reg in REGISTERED_COMMANDS.iter() {
-        if reg.manual_only {
-            // Manual-only commands should not be TUI-visible
+        if reg.interactive_only {
             assert!(
-                !reg.tui_visible,
-                "Command '{}' is manual_only but tui_visible is true",
+                !reg.programmatic_visible,
+                "Command '{}' is interactive_only but programmatic_visible is true",
                 reg.command_id
             );
         }
@@ -135,6 +124,11 @@ fn pilot_commands_have_metadata() {
             "Pilot command '{}' should be TUI visible",
             cmd_id
         );
+        assert!(
+            reg.registry_backed,
+            "Pilot command '{}' should have registry_backed = true",
+            cmd_id
+        );
     }
 }
 
@@ -151,7 +145,6 @@ fn pilot_commands_build_descriptors_from_metadata() {
         let desc = build_descriptor_for_command(cmd_id, Some(target.to_string()))
             .unwrap_or_else(|| panic!("Pilot command '{}' should build a descriptor", cmd_id));
 
-        // Verify the descriptor matches the metadata
         let metadata = metadata_for_tool_id(cmd_id)
             .unwrap_or_else(|| panic!("Pilot command '{}' should have metadata", cmd_id));
 
@@ -169,7 +162,7 @@ fn lookup_returns_correct_entry() {
     assert_eq!(reg.operation_id, Some("recon"));
     assert_eq!(reg.display_name, "Reconnaissance");
     assert_eq!(reg.category, CommandCategory::SideEffectingNetwork);
-    assert!(!reg.manual_only);
+    assert!(!reg.interactive_only);
     assert!(reg.tui_visible);
 }
 
@@ -200,27 +193,22 @@ fn category_classification_consistent() {
     for reg in REGISTERED_COMMANDS.iter() {
         match reg.category {
             CommandCategory::SideEffectingNetwork => {
-                // Network commands should be TUI visible unless manual_only
-                if !reg.manual_only {
+                if !reg.interactive_only {
                     assert!(
                         reg.tui_visible,
-                        "Non-manual SideEffectingNetwork command '{}' should be TUI visible",
+                        "Non-interactive SideEffectingNetwork command '{}' should be TUI visible",
                         reg.command_id
                     );
                 }
             }
             CommandCategory::FrontendServer => {
-                // Server commands should not be TUI visible
                 assert!(
                     !reg.tui_visible,
                     "FrontendServer command '{}' should not be TUI visible",
                     reg.command_id
                 );
             }
-            CommandCategory::ConfigOutputHelper => {
-                // Config commands should be manual-only (no programmatic exposure)
-                // But not all are - doctor, config are CLI-only
-            }
+            CommandCategory::ConfigOutputHelper => {}
             _ => {}
         }
     }
@@ -228,8 +216,6 @@ fn category_classification_consistent() {
 
 #[test]
 fn registry_metadata_alignment_with_all_operation_metadata() {
-    // Every registered command with an operation_id should resolve to
-    // an entry in ALL_OPERATION_METADATA (either directly or via alias).
     for reg in REGISTERED_COMMANDS.iter() {
         if let Some(op_id) = reg.operation_id {
             assert!(
@@ -238,6 +224,84 @@ fn registry_metadata_alignment_with_all_operation_metadata() {
                 reg.command_id,
                 op_id
             );
+        }
+    }
+}
+
+#[test]
+fn registry_backed_commands_have_metadata() {
+    for reg in REGISTERED_COMMANDS.iter() {
+        if reg.registry_backed {
+            assert!(
+                reg.operation_id.is_some(),
+                "Registry-backed command '{}' has no operation_id",
+                reg.command_id
+            );
+            assert!(
+                matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked),
+                "Registry-backed command '{}' should have dispatch_mode: RegistryBacked",
+                reg.command_id
+            );
+        }
+    }
+}
+
+#[test]
+fn entries_without_operation_id_not_registry_backed() {
+    for reg in REGISTERED_COMMANDS.iter() {
+        if reg.operation_id.is_none() {
+            assert!(
+                !reg.registry_backed,
+                "Command '{}' has no operation_id but registry_backed = true",
+                reg.command_id
+            );
+        }
+    }
+}
+
+#[test]
+fn dispatch_mode_consistent_with_fields() {
+    for reg in REGISTERED_COMMANDS.iter() {
+        match reg.dispatch_mode {
+            CommandDispatchMode::RegistryBacked => {
+                assert!(
+                    reg.registry_backed,
+                    "RegistryBacked dispatch for '{}' should have registry_backed = true",
+                    reg.command_id
+                );
+                assert!(
+                    reg.operation_id.is_some(),
+                    "RegistryBacked dispatch for '{}' should have operation_id",
+                    reg.command_id
+                );
+            }
+            CommandDispatchMode::ServerLifecycle => {
+                assert!(
+                    !reg.tui_visible,
+                    "ServerLifecycle command '{}' should not be TUI visible",
+                    reg.command_id
+                );
+                assert!(
+                    !reg.interactive_only,
+                    "ServerLifecycle command '{}' should not be interactive_only",
+                    reg.command_id
+                );
+            }
+            CommandDispatchMode::HelperOnly => {
+                assert!(
+                    reg.interactive_only,
+                    "HelperOnly command '{}' should be interactive_only",
+                    reg.command_id
+                );
+            }
+            CommandDispatchMode::LegacyWrapped => {
+                assert!(
+                    reg.cli_visible,
+                    "LegacyWrapped command '{}' should be cli_visible",
+                    reg.command_id
+                );
+            }
+            CommandDispatchMode::CatalogOnly => {}
         }
     }
 }

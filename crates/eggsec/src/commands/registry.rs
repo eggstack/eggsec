@@ -38,6 +38,21 @@ impl CommandCategory {
     }
 }
 
+/// Dispatch mode for a registered command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandDispatchMode {
+    /// Descriptor/execution path uses registry metadata (Phase 6 pilot commands).
+    RegistryBacked,
+    /// Wraps legacy `handle_command()` dispatch (pre-migration commands).
+    LegacyWrapped,
+    /// Listed for discoverability but never dispatched (catalog entries).
+    CatalogOnly,
+    /// Server lifecycle command (serve, mcp-serve, agent, grpc, etc.).
+    ServerLifecycle,
+    /// Read-only helper/diagnostic (config, doctor, plan, preflight, etc.).
+    HelperOnly,
+}
+
 /// Static metadata for a registered command.
 ///
 /// Registry entries do **not** authorize operations. They provide metadata for
@@ -55,11 +70,18 @@ pub struct CommandRegistration {
     pub category: CommandCategory,
     /// Feature gate required to compile/use this command, if any.
     pub feature: Option<&'static str>,
-    /// Whether this command is manual-only (CLI/TUI) and should not be
-    /// exposed through programmatic surfaces (MCP, REST, agent, gRPC).
-    pub manual_only: bool,
+    /// Whether this command appears as a CLI command/help target.
+    pub cli_visible: bool,
     /// Whether this command should appear in TUI tab listings.
     pub tui_visible: bool,
+    /// Whether this command may be exposed through MCP/REST/gRPC/agent.
+    pub programmatic_visible: bool,
+    /// Whether this command requires human interaction.
+    pub interactive_only: bool,
+    /// Whether the descriptor/execution path uses registry metadata.
+    pub registry_backed: bool,
+    /// How this command is dispatched.
+    pub dispatch_mode: CommandDispatchMode,
 }
 
 impl CommandRegistration {
@@ -88,8 +110,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Reconnaissance",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: true,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "scan-ports",
@@ -97,8 +123,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Port Scan",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: true,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "scan-endpoints",
@@ -106,8 +136,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Endpoint Scan",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: true,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     CommandRegistration {
         command_id: "fingerprint",
@@ -115,8 +149,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Fingerprint",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: true,
+        dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
     // ── Legacy commands (not yet migrated) ──
     CommandRegistration {
@@ -125,8 +163,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Pipeline Scan",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "resume",
@@ -134,8 +176,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Resume Scan",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "fuzz",
@@ -143,8 +189,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Fuzz",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "waf",
@@ -152,8 +202,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "WAF Detect",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "waf-stress",
@@ -161,8 +215,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "WAF Stress",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "graphql",
@@ -170,8 +228,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "GraphQL Fuzz",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "oauth",
@@ -179,8 +241,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "OAuth Fuzz",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "auth-test",
@@ -188,8 +254,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Auth Test",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "load",
@@ -197,8 +267,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Load Test",
         category: CommandCategory::SideEffectingNetwork,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "stress",
@@ -206,8 +280,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Stress Test",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("stress-testing"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "packet",
@@ -215,8 +293,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Packet Operations",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("packet-inspection"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "icmp",
@@ -224,8 +306,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "ICMP",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("stress-testing"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "traceroute",
@@ -233,8 +319,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Traceroute",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("stress-testing"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "nse",
@@ -242,8 +332,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "NSE Scripts",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("nse"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "hunt",
@@ -251,8 +345,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Vulnerability Hunt",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("advanced-hunting"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "evasion",
@@ -260,8 +358,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Evasion Detection",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("evasion"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "postex",
@@ -269,8 +371,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Post-Exploitation",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("postex"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "c2",
@@ -278,8 +384,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "C2 Simulation",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("c2"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "proxy-intercept",
@@ -287,8 +397,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Web Proxy Intercept",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("web-proxy"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "wireless",
@@ -296,8 +410,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Wireless",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("wireless"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "browser",
@@ -305,8 +423,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Headless Browser",
         category: CommandCategory::SideEffectingNetwork,
         feature: Some("headless-browser"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "mobile",
@@ -314,8 +436,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Mobile Analysis",
         category: CommandCategory::LocalFileDomain,
         feature: Some("mobile"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
     CommandRegistration {
         command_id: "db",
@@ -323,17 +449,26 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "DB Pentest",
         category: CommandCategory::LocalFileDomain,
         feature: Some("db-pentest"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: true,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
+    // ── Config/helper commands ──
     CommandRegistration {
         command_id: "plan",
         operation_id: None,
         display_name: "Plan",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "preflight",
@@ -341,8 +476,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Preflight",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "ci",
@@ -350,8 +489,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "CI",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "config",
@@ -359,8 +502,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Config",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "doctor",
@@ -368,17 +515,26 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Doctor",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
+    // ── Passive analytical commands ──
     CommandRegistration {
         command_id: "policy-explain",
         operation_id: None,
         display_name: "Policy Explain",
         category: CommandCategory::PassiveAnalytical,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "scope-explain",
@@ -386,8 +542,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Scope Explain",
         category: CommandCategory::PassiveAnalytical,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "ai-analyze",
@@ -395,17 +555,26 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "AI Analyze",
         category: CommandCategory::PassiveAnalytical,
         feature: Some("ai-integration"),
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
+    // ── Server commands ──
     CommandRegistration {
         command_id: "serve",
         operation_id: None,
         display_name: "REST Server",
         category: CommandCategory::FrontendServer,
         feature: Some("rest-api"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
         command_id: "mcp-serve",
@@ -413,8 +582,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "MCP Server",
         category: CommandCategory::FrontendServer,
         feature: Some("rest-api"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
         command_id: "agent",
@@ -422,8 +595,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Agent",
         category: CommandCategory::FrontendServer,
         feature: Some("rest-api"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
         command_id: "grpc",
@@ -431,8 +608,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "gRPC Server",
         category: CommandCategory::FrontendServer,
         feature: Some("grpc-api"),
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
         command_id: "cluster",
@@ -440,8 +621,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Cluster",
         category: CommandCategory::FrontendServer,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
         command_id: "remote",
@@ -449,8 +634,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Remote",
         category: CommandCategory::FrontendServer,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
     CommandRegistration {
         command_id: "exec",
@@ -458,17 +647,26 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Exec",
         category: CommandCategory::FrontendServer,
         feature: None,
-        manual_only: false,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: false,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
+    // ── Report/vuln/storage/sbom/notify ──
     CommandRegistration {
         command_id: "report",
         operation_id: None,
         display_name: "Report",
         category: CommandCategory::LocalFileDomain,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "vuln",
@@ -476,8 +674,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Vulnerability Management",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "storage",
@@ -485,8 +687,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Storage",
         category: CommandCategory::LocalFileDomain,
         feature: Some("database"),
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "sbom",
@@ -494,8 +700,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "SBOM",
         category: CommandCategory::LocalFileDomain,
         feature: Some("sbom"),
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
     CommandRegistration {
         command_id: "notify",
@@ -503,8 +713,12 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         display_name: "Notify",
         category: CommandCategory::ConfigOutputHelper,
         feature: None,
-        manual_only: true,
+        cli_visible: true,
         tui_visible: false,
+        programmatic_visible: false,
+        interactive_only: true,
+        registry_backed: false,
+        dispatch_mode: CommandDispatchMode::HelperOnly,
     },
 ];
 
@@ -539,11 +753,20 @@ pub fn tui_visible_command_ids() -> Vec<&'static str> {
         .collect()
 }
 
-/// Get all registered command IDs that are manual-only (not exposed programmatically).
-pub fn manual_only_command_ids() -> Vec<&'static str> {
+/// Get all registered command IDs that are interactive-only (not exposed programmatically).
+pub fn interactive_only_command_ids() -> Vec<&'static str> {
     REGISTERED_COMMANDS
         .iter()
-        .filter(|r| r.manual_only)
+        .filter(|r| r.interactive_only)
+        .map(|r| r.command_id)
+        .collect()
+}
+
+/// Get all registered command IDs that use registry-backed dispatch.
+pub fn registry_backed_command_ids() -> Vec<&'static str> {
+    REGISTERED_COMMANDS
+        .iter()
+        .filter(|r| r.registry_backed)
         .map(|r| r.command_id)
         .collect()
 }
@@ -594,14 +817,14 @@ mod tests {
 
     #[test]
     fn registry_entries_have_unique_command_ids() {
-        let mut ids: Vec<&str> = REGISTERED_COMMANDS.iter().map(|r| r.command_id).collect();
-        let len_before = ids.len();
-        ids.dedup();
-        assert_eq!(
-            len_before,
-            ids.len(),
-            "Duplicate command IDs found in registry"
-        );
+        let mut seen = rustc_hash::FxHashSet::default();
+        for reg in REGISTERED_COMMANDS {
+            assert!(
+                seen.insert(reg.command_id),
+                "duplicate command id: {}",
+                reg.command_id
+            );
+        }
     }
 
     #[test]
@@ -622,8 +845,6 @@ mod tests {
     fn feature_gated_entries_declare_feature() {
         for reg in REGISTERED_COMMANDS {
             if reg.feature.is_some() {
-                // Feature-gated entries should have a non-empty feature string.
-                // This is enforced by the struct literal, but verify the pattern.
                 assert!(
                     !reg.feature.unwrap().is_empty(),
                     "Command '{}' has empty feature gate",
@@ -634,12 +855,38 @@ mod tests {
     }
 
     #[test]
-    fn manual_only_not_exposed_programmatically() {
+    fn interactive_only_not_programmatic() {
         for reg in REGISTERED_COMMANDS {
-            if reg.manual_only {
+            if reg.interactive_only {
                 assert!(
-                    !reg.tui_visible,
-                    "Command '{}' is manual_only but tui_visible",
+                    !reg.programmatic_visible,
+                    "Command '{}' is interactive_only but programmatic_visible",
+                    reg.command_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pilot_commands_have_registry_backed() {
+        for reg in REGISTERED_COMMANDS {
+            if matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked) {
+                assert!(
+                    reg.registry_backed,
+                    "RegistryBacked command '{}' should have registry_backed = true",
+                    reg.command_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn entries_without_operation_id_not_registry_backed() {
+        for reg in REGISTERED_COMMANDS {
+            if reg.operation_id.is_none() {
+                assert!(
+                    !reg.registry_backed,
+                    "Command '{}' has no operation_id but registry_backed = true",
                     reg.command_id
                 );
             }
@@ -648,8 +895,6 @@ mod tests {
 
     #[test]
     fn command_ids_match_cli_variants() {
-        // Verify that all registered command IDs correspond to known CLI subcommands.
-        // This catches typos and stale entries.
         let ids = all_command_ids();
         assert!(ids.contains(&"recon"));
         assert!(ids.contains(&"scan-ports"));
@@ -707,12 +952,12 @@ mod tests {
     }
 
     #[test]
-    fn tui_visible_excludes_manual_only() {
+    fn tui_visible_excludes_interactive_only() {
         for reg in REGISTERED_COMMANDS {
-            if reg.manual_only {
+            if reg.interactive_only {
                 assert!(
                     !reg.tui_visible,
-                    "manual_only command '{}' should not be tui_visible",
+                    "interactive_only command '{}' should not be tui_visible",
                     reg.command_id
                 );
             }
