@@ -329,7 +329,15 @@ cargo test -p eggsec --test feature_matrix
 cargo test -p eggsec --test enforcement_matrix
 cargo test -p eggsec --test enforced_dispatch_regression
 cargo test -p eggsec-output --test report_envelope
-./scripts/check-architecture-guards.sh
+bash scripts/check-architecture-guards.sh
+```
+
+> **Note**: The static guard script requires [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`). Install it before running: `cargo install ripgrep` or use your system package manager.
+
+Alternatively, run the full architecture guard CI reproduction with a single Make target:
+
+```bash
+make check-architecture-ci
 ```
 
 These checks guard:
@@ -658,7 +666,7 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
    cargo test -p eggsec --test enforcement_matrix
    cargo test -p eggsec --test enforced_dispatch_regression
    cargo test -p eggsec-output --test report_envelope
-   ./scripts/check-architecture-guards.sh
+   bash scripts/check-architecture-guards.sh
    ```
 
 3. **Update documentation**
@@ -670,7 +678,7 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 - [ ] Code compiles without warnings
 - [ ] All tests pass
-- [ ] Architecture guards pass (`./scripts/check-architecture-guards.sh`)
+- [ ] Architecture guards pass (`bash scripts/check-architecture-guards.sh` or `make check-architecture-ci`)
 - [ ] Documentation updated
 - [ ] CHANGELOG.md updated
 - [ ] Commit messages are clear

@@ -18,7 +18,7 @@ These checks run on every pull request and push to `main`. They cover core archi
 | Enforcement matrix | `cargo test -p eggsec --test enforcement_matrix` | Cross-surface enforcement invariants (22 sections, ~95 tests) |
 | Enforced dispatch regression | `cargo test -p eggsec --test enforced_dispatch_regression` | Strict surfaces do not call raw dispatch; CI handler has no dispatch path |
 | Report envelope | `cargo test -p eggsec-output --test report_envelope` | Normalized report/evidence envelope roundtrip |
-| Architecture drift | `./scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns |
+| Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
 
 ### Local Reproduction
 
@@ -35,7 +35,15 @@ cargo test -p eggsec --test feature_matrix
 cargo test -p eggsec --test enforcement_matrix
 cargo test -p eggsec --test enforced_dispatch_regression
 cargo test -p eggsec-output --test report_envelope
-./scripts/check-architecture-guards.sh
+bash scripts/check-architecture-guards.sh
+```
+
+> **Note**: The static guard script requires [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`). Install it locally before running: `cargo install ripgrep` or use your system package manager.
+
+Alternatively, run the full architecture guard CI reproduction with a single Make target:
+
+```bash
+make check-architecture-ci
 ```
 
 ## Feature-Profile Compile Guards
@@ -71,7 +79,7 @@ These checks are not required for PR merge. They may run on schedule, manually, 
 
 ## Architecture Drift Guards
 
-Static grep checks in `scripts/check-architecture-guards.sh` catch common terminology and structural regressions:
+Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) catch common terminology and structural regressions:
 
 ### Stale Command Registry Terminology
 - Fail on `manual_only` in command registry/docs/tests (historical plan files excluded).

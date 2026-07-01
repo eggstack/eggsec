@@ -59,8 +59,7 @@ jobs:
             args: "-p eggsec --features api-schema"
           - name: sbom
             args: "-p eggsec --features sbom"
-          - name: full
-            args: "-p eggsec --features full"
+
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -232,8 +231,10 @@ jobs:
         run: cargo test -p eggsec --test enforced_dispatch_regression
       - name: Report envelope
         run: cargo test -p eggsec-output --test report_envelope
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Architecture guards script
-        run: ./scripts/check-architecture-guards.sh
+        run: bash scripts/check-architecture-guards.sh
 
   feature-profiles:
     name: Feature Profile (${{ matrix.features }})

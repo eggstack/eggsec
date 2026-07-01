@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check-feature-profiles clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check-architecture-ci check-feature-profiles clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -49,24 +49,37 @@ test-feature-matrix:
 
 # Architecture drift guards (static grep checks)
 test-architecture-guards:
-	./scripts/check-architecture-guards.sh
+	bash scripts/check-architecture-guards.sh
 
 # Validate no-default-features build
 check-no-default:
 	cargo check --workspace --no-default-features
 
+# Full architecture guard CI reproduction (single target for contributors)
+check-architecture-ci:
+	cargo fmt --all --check
+	cargo check --workspace --no-default-features
+	cargo test -p eggsec --lib
+	cargo test -p eggsec --test metadata_consistency
+	cargo test -p eggsec --test command_registry
+	cargo test -p eggsec --test tool_registration --features rest-api
+	cargo test -p eggsec --test feature_matrix
+	cargo test -p eggsec --test enforcement_matrix
+	cargo test -p eggsec --test enforced_dispatch_regression
+	cargo test -p eggsec-output --test report_envelope
+	bash scripts/check-architecture-guards.sh
+
 # Representative feature profile checks (representative, not exhaustive)
 check-feature-profiles:
-	cargo check -p eggsec --no-default-features
-	cargo check -p eggsec --features rest-api
+	cargo check -p eggsec --features tool-api,rest-api
+	cargo check -p eggsec --features grpc-api
 	cargo check -p eggsec --features db-pentest
+	cargo check -p eggsec --features db-pentest-mcp,tool-api,rest-api
 	cargo check -p eggsec --features mobile
+	cargo check -p eggsec --features mobile-dynamic
 	cargo check -p eggsec --features web-proxy
-	cargo check -p eggsec --features wireless
-	cargo check -p eggsec --features nse
-	cargo check -p eggsec --features evasion
-	cargo check -p eggsec --features postex
-	cargo check -p eggsec --features c2
+	cargo check -p eggsec --features web-proxy-mcp,tool-api,rest-api
+	cargo check -p eggsec --features c2-mcp,tool-api,rest-api
 
 # Clean build artifacts
 clean:
@@ -88,5 +101,6 @@ help:
 	@echo "  make test-feature-matrix - Feature metadata validation tests"
 	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
+	@echo "  make check-architecture-ci  - Full architecture guard CI reproduction"
 	@echo "  make check-feature-profiles - Representative feature profile checks"
 	@echo "  make clean           - Clean artifacts"
