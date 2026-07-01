@@ -21,7 +21,7 @@ Fuzzing engine module workflows and patterns for security testing.
 `fuzzer/filters.rs` provides response filtering with compiled `Regex` support, using `FuzzResult.response_body`.
 
 ### ChainExecutor
-`fuzzer/chain.rs` has `ChainExecutor` with LRU regex cache using `lru = "0.18"` (cache size 100, `NonZeroUsizer`).
+`fuzzer/chain.rs` has `ChainExecutor` with LRU regex cache using `lru = "0.18"` (cache size 100, `NonZeroUsize`).
 
 ### Timing Analysis
 `fuzzer/detection/` has `TimingAnalyzer` with lock-free atomics, using IQR (Interquartile Range) for baseline calculation.

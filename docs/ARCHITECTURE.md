@@ -70,9 +70,9 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `ExecutionProfile` | `config/policy.rs` | Trust boundary. 5 variants: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`. |
 | `OperationRisk` | `config/policy.rs` | Risk tier ordering. 15 variants from `Passive` to `AgentAutonomous`. |
 | `OperationMode` | `config/policy.rs` | Semantic mode: `StandardAssessment`, `DefenseLab`, `HazardousLab`. |
-| `Capability` | `config/policy.rs` | Fine-grained capability declarations. 18 variants. |
+| `Capability` | `config/policy.rs` | Fine-grained capability declarations. 19 variants. |
 | `OperationDescriptor` | `config/policy.rs` | The unit of policy evaluation. Bundles operation name, mode, risk, target, required features, capabilities, and scope requirements. |
-| `OperationMetadata` | `config/policy.rs` | Static registry entry. 29 operations + 32 aliases. Single source of truth for all surfaces. |
+| `OperationMetadata` | `config/policy.rs` | Static registry entry. 32 operations + 33 aliases. Single source of truth for all surfaces. |
 | `ExecutionPolicy` | `config/policy.rs` | TOML-deserialized config controlling which risk tiers and capabilities are allowed. |
 | `LoadedScope` | `config/scope.rs` | Scope with provenance. `is_explicit_manifest()` distinguishes "no scope" from "explicitly empty scope". |
 | `EnforcementContext` | `config/policy_decision.rs` | Bundles `ExecutionProfile` + `ExecutionPolicy` + `LoadedScope`. Created once per execution path. |

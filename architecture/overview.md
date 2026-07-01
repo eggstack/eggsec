@@ -159,7 +159,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
-| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 45 commands | [cli_commands.md](cli_commands.md) |
+| [`cli/`](../crates/eggsec/src/cli/) | Command-line argument parsing (clap-based), 49 commands | [cli_commands.md](cli_commands.md) |
 | [`tui/`](../crates/eggsec-tui/src/) | Real-time terminal UI (ratatui-based), 33 tabs, event loop | [tui.md](tui.md) |
 
 ### Supporting Modules
@@ -188,7 +188,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 
 ### CLI (`cli/`)
 
-The command-line interface is built with `clap` and provides 42 commands organized into functional groups:
+The command-line interface is built with `clap` and provides 49 commands organized into functional groups:
 
 ```
 eggsec scan      # Port scanning, service fingerprinting
@@ -690,7 +690,7 @@ MCP, Agent, CI, and high-risk TUI direct-launch paths follow the same pattern. C
 | Negative tests | `cargo test --test negative_tests -p eggsec` |
 | Clippy | `cargo clippy --lib -p eggsec` |
 
-- **Test count**: ~4840 (includes #[test] + #[tokio::test])
+- **Test count**: ~5098 (includes #[test] + #[tokio::test])
 - **Visual regression**: `TestBackend` + `Terminal::new()` for TUI
 
 ---

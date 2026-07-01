@@ -18,6 +18,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 - `Recon` - Passive reconnaissance (DNS, WHOIS, SSL, subdomains)
 - `Vuln` - Vulnerability assessment with CVSS scoring and asset criticality
 - `DbPentest` - Direct database security assessment (Postgres/MySQL/MSSQL/MongoDB/Redis; feature-gated behind `db-pentest`)
+- `WebProxy` - Web proxy intercept and traffic analysis (feature-gated behind `web-proxy`)
 
 **Selection**: Stages are selected from a profile (for example `quick`, `web`, `full`) or from an explicit comma-separated list via `--stages`.
 

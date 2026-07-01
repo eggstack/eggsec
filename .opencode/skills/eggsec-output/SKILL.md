@@ -11,7 +11,7 @@ Report generation module workflows and patterns for exporting scan results.
 
 Most output types and renderers live in `crates/eggsec-output/`. The `eggsec` crate
 re-exports them via `pub use eggsec_output::*` in `crates/eggsec/src/output/mod.rs`.
-Engine-coupled modules (`pdf`, `report`, `report_summary`, `run_manifest`, `attack_graph`)
+Engine-coupled modules (`report`, `report_summary`, `run_manifest`)
 remain in `crates/eggsec/src/output/`.
 
 ## Key Types and Patterns
@@ -29,7 +29,7 @@ Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`
 - JUnit XML (via `convert_to_junit()`)
 - Markdown (via `convert_to_markdown()`)
 - CSV (via `convert_to_csv()`)
-- PDF (feature-gated, via `PdfGenerator`)
+- Pretty (via `PrettyFormatter`)
 
 ### Severity Re-export
 `output/agent::Severity` and `output::trend::Severity` re-export from `crate::types::Severity`.
@@ -39,7 +39,6 @@ Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`
 - `trend.rs` - `ResultComparator::compare()`, `TrendAnalyzer::get_findings_by_category()`, `TrendAnalyzer::get_most_common_findings()`
 - `agent.rs` - `FindingSummary::from_findings()`
 - `session.rs` - `ScanSession::tab_states`, `ScanSession::results`
-- `attack_graph.rs` - `GraphNode::properties`
 - `sarif.rs` - `SarifResult::properties`
 - `junit.rs` - `JUnitBuilder::test_suites`
 - `dedup.rs` - `DedupEngine::seen`
@@ -56,7 +55,6 @@ let mut map: FxHashMap<String, usize> = FxHashMap::default();
 - `CsvExporter::export_findings()`, `export_ports()`, `export_endpoints()` return `Result<String, std::fmt::Error>`
 - `MarkdownReport::generate()` returns `Result<String, std::fmt::Error>`
 - `JUnitReport::to_xml()` returns `Result<String, quick_xml::Error>`
-- `AttackGraphBuilder::to_html()` returns `Result<String, serde_json::Error>`
 - `TemplateRenderContext::render_with_styling()` uses explicit `map_err` instead of `unwrap_or_default()`
 
 When using `CsvExporter` methods, handle errors appropriately:

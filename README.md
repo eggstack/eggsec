@@ -350,20 +350,27 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `container` | Kubernetes/Docker security scanning | Stable |
 | `mobile` | Mobile app static analysis (APK/IPA manifest & config checks for authorized lab/defense use only; static-only Phase 1) | Stable |
 | `mobile-dynamic` | Mobile dynamic testing (Android ADB + runtime log analysis + Frida instrumentation + behavioral correlation; standalone defense-lab, MCP-absent; `mobile-dynamic = ["mobile"]`; auto-bridge via `to_scan_report_data_dynamic`; see docs/MOBILE.md) | Stable |
-| `cloud` | AWS/GCP/Azure asset discovery | Stable |
-| `git-secrets` | Git secrets scanning | Stable |
+| `cloud` | AWS/GCP/Azure asset discovery | Marker (planned) |
+| `git-secrets` | Git secrets scanning | Marker (planned) |
 | `wireless` | WiFi scanning (standalone-complete passive recon + security analysis; summary-by-default rogue heuristic; --repeat, --known-good, --dry-run, --detect-suspicious). TUI tab under feature; MCP/agent tool exposure intentionally absent (standalone defense-lab). **Passive = Phase 0 (complete 2026-06-11).** |
 | `wireless-advanced` | Wireless active attack primitives (deauth, disassoc) for lab-only defense validation. Phase 1: targeted/broadcast deauth frame crafting and injection via `eggsec wireless <iface> deauth --bssid MAC [--client MAC] [--broadcast] [--count N]`. Pure-Rust 802.11 + radiotap + Linux AF_PACKET/SOCK_RAW. Policy gated (`OperationRisk::Intrusive` + `wireless-advanced` feature). Same standalone defense-lab pattern (no MCP/agent exposure). Requires `wireless` feature. Also powers the TUI Wireless tab active mode (dry-run default; live attacks prompt for policy confirmation). | Stable |
 | `evasion` | Evasion technique detection (MITRE ATT&CK mapped; 16 techniques across 6 categories: syscall, hook bypass, obfuscation, injection, anti-analysis, traffic obfuscation). Standalone defense-lab module; dry-run always safe; real runs require explicit authorization. Local `EvasionReport`/`EvasionDetection` + optional `to_scan_report_data` bridge. No MCP/agent/TUI/pipeline integration. | Stable |
 | `postex` | Post-exploitation and LOTL simulation for purple teaming (MITRE ATT&CK mapped; 16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access). Standalone defense-lab module; dry-run always safe; real runs require `--allow-postex` + scope; reversible actions in lab mode. Local `PostexReport`/`PostexFinding` + optional `to_scan_report_data` bridge. No MCP/agent/TUI/pipeline integration. | Stable |
 | `c2` | C2 (Command & Control) framework for defense-lab purple teaming (depends on postex + evasion; beaconing, tasking, campaign orchestration, OPSEC scoring; MITRE ATT&CK profiles: APT29, Carbanak). Standalone defense-lab module; dry-run always safe; real runs require `--allow-c2`. Local `C2Report`/`C2Campaign` + optional `to_scan_report_data` bridge. No MCP/agent/TUI/pipeline integration. | Stable |
-| `pdf` | PDF report generation | Stable |
-| `advanced-hunting` | Advanced threat hunting | Stable |
-| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Stable |
-| `external-integrations` | Jira, GitHub, GitLab connectors | Stable |
-| `finding-workflow` | Finding lifecycle management | Stable |
-| `vuln-management` | Vulnerability triage and CVSS scoring | Stable |
-| `full` | All features combined (excludes `grpc-api`, `ws-api`, `pdf`) | - |
+| `c2-mcp` | MCP tool exposure for C2 module. Requires `c2`. | Marker (planned) |
+| `db-pentest-mssql-tiberius` | MSSQL driver support for db-pentest (Tiberius). Requires `db-pentest`. | Stable |
+| `db-pentest-mongodb` | MongoDB driver support for db-pentest. Requires `db-pentest`. | Stable |
+| `db-pentest-redis` | Redis driver support for db-pentest. Requires `db-pentest`. | Stable |
+| `db-pentest-mcp` | MCP tool exposure for db-pentest module. Requires `db-pentest`. | Marker (planned) |
+| `transparent-proxy` | Transparent proxy mode for web-proxy | Marker (planned) |
+| `dynamic-plugins` | Dynamic plugin loading system | Marker (planned) |
+| `pdf` | PDF report generation | Marker (planned) |
+| `advanced-hunting` | Advanced threat hunting | Marker (planned) |
+| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Marker (planned) |
+| `external-integrations` | Jira, GitHub, GitLab connectors | Marker (planned) |
+| `finding-workflow` | Finding lifecycle management | Marker (planned) |
+| `vuln-management` | Vulnerability triage and CVSS scoring | Marker (planned) |
+| `full` | Most non-default features combined (excludes `grpc-api`, `ws-api`, `pdf`, `nse-ssh2`, `nse-sandbox`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `api-schema`, `git-secrets`, `cloud`, `insecure-tls`, `tool-api`) | - |
 
 ### Build Examples
 

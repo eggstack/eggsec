@@ -188,7 +188,7 @@ Phase 8 added a comprehensive enforcement matrix test suite (`crates/eggsec/test
 1. Manual CLI/TUI becoming too strict to be useful.
 2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
 
-**134 tests** covering:
+**169 tests** covering:
 
 - **Surface mapping invariants**: All 8 `ExecutionSurface` variants map to correct `ExecutionProfile`.
 - **Manual permissive invariants**: Safe ops allow, scope misses require confirmation, `assume_yes` is narrow, denied capabilities hard-deny, missing features hard-deny.
@@ -231,7 +231,7 @@ Phase 2 verified and hardened the enforcement invariants established in earlier 
 
 Phase 2 confirmed that all acceptance criteria from the Phase 2 plan are satisfied by existing test infrastructure:
 
-- **Enforcement matrix**: 164 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
+- **Enforcement matrix**: 169 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
 - **Override isolation**: Automated surfaces cannot use manual override flags to proceed.
 - **Scope provenance**: Automated operations requiring explicit scope fail without explicit manifest provenance.
 - **Approval token mismatch**: `dispatch_checked` rejects tool mismatch, target mismatch, and allows alias match.

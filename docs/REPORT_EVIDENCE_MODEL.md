@@ -150,7 +150,7 @@ A protocol-neutral report/evidence contract that domain crates can convert into 
 - Report traceability via `report_id`, `operation_id`, and `domain_id`.
 - Baseline and diff summaries share a common shape.
 
-### Proposed Types
+### Implemented Types
 
 ```rust
 /// Evidence item with typed kind and structured data.

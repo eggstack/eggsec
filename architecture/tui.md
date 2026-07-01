@@ -540,9 +540,9 @@ Adding a new tab requires changes in **7-9 locations**. Each new tab must be add
 
 1. `Tab` enum (`tabs/mod.rs`) — variant + `title()`, `description()`, `cli_command()`, `stable_id()`, `from_stable_id()`, `all()` (feature-gated)
 2. `TabStore` (`app/tab_store.rs`) — new field for the tab instance (TabStore owns all tab instances)
-3. `Tab::as_tab_state()`, `as_tab_state_mut()`, `as_tab_render()`, `as_tab_input()` — 28-variant exhaustive match each
-4. `App::get_current_help()` (`app/navigation.rs`) — 28-variant match
-5. `command_to_tab()` + `execute_command()` (`app/command.rs`) — 28-variant match each
+3. `Tab::as_tab_state()`, `as_tab_state_mut()`, `as_tab_render()`, `as_tab_input()` — 33-variant exhaustive match each
+4. `App::get_current_help()` (`app/navigation.rs`) — 33-variant match
+5. `command_to_tab()` + `execute_command()` (`app/command.rs`) — 33-variant match each
 6. `export_results()` + `export_json()` (`app/export.rs`) — per-tab export logic
 7. `App::build_current_task()` (`app/task_management.rs`) — trait dispatch
 8. `help_config.rs` — static help section data

@@ -212,6 +212,15 @@ Canonical reference points when updating guidance or skills:
 - `architecture/audit.md` - Normalized audit events for enforcement decisions
 - `architecture/domain_contract.md` - Domain module contract (Phase 3): static metadata descriptors for capability domains
 - `architecture/report_envelope.md` - Normalized report/evidence envelope for cross-domain report unification
+- `architecture/database_pentest.md` - Database pentest module (Postgres/MySQL/MSSQL/MongoDB/Redis)
+- `architecture/defense_lab.md` - Defense lab mode and standalone surfaces
+- `architecture/web_proxy.md` - Web proxy intercept and traffic analysis
+- `architecture/wireless.md` - WiFi recon and wireless security testing
+- `architecture/evasion.md` - Evasion technique detection
+- `architecture/postex.md` - Post-exploitation simulation
+- `architecture/hunt.md` - Vulnerability hunting workflows
+- `architecture/browser.md` - Headless browser security testing
+- `architecture/nse_integration.md` - NSE/Lua script integration
 - `docs/FEATURE_MATRIX.md` - Feature inventory, classification, naming conventions, build profiles, and cross-reference
 - `docs/EXTENSIBILITY.md` - Contributor extensibility guide: operations, domains, commands, tool exposure, TUI actions, reports, features, tests
 - `docs/extending/operations.md` - Adding new OperationMetadata
@@ -264,7 +273,7 @@ Canonical reference points when updating guidance or skills:
 - `LoadedScope` - Scope with provenance (`DefaultEmpty`, `ConfigFile`, `CliScopeFile`, `GeneratedPreset`) in `config/scope.rs`
 - `ExecutionProfile` - Trust boundary enum: `ManualPermissive`, `ManualGuarded`, `McpStrict`, `AgentStrict`, `CiStrict`
 - `ExecutionSurface` - Caller-origin enum that derives `ExecutionProfile`; single source of truth for surface-to-profile mapping
-- `OperationMetadata` - Canonical operation metadata, single source of truth for `OperationDescriptor` generation across REST, MCP, TUI, and agent surfaces. Defined in `config::policy`, re-exported from `config` and `tool::metadata`. Static registry with 29 operations + 32 aliases.
+- `OperationMetadata` - Canonical operation metadata, single source of truth for `OperationDescriptor` generation across REST, MCP, TUI, and agent surfaces. Defined in `config::policy`, re-exported from `config` and `tool::metadata`. Static registry with 32 operations + 33 aliases.
 - `TargetPolicyKind` - Target policy requirement enum for operation metadata (`NoTarget`, `OptionalTarget`, `TargetRequired`, `ExplicitScopeRequired`, `PrivateOrLocalRequired`).
 - `ConfirmationClass` - Kebab-case strings for policy confirmations; use `as_str()` for stable IDs
 - `TabError` - Structured error type with `is_recoverable()` in `eggsec-tui`
@@ -347,7 +356,7 @@ Canonical reference points when updating guidance or skills:
 | Pipeline profiles | 18 |
 | Output formats | 8 |
 | Themes | 50 packaged + 3 built-in |
-| CLI commands | 27 base, 46 total with all features |
+| CLI commands | 27 base, 49 total with all features |
 
 ### Security Notes
 

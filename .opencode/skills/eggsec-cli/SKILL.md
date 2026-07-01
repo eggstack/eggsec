@@ -61,7 +61,7 @@ pub enum Commands {
     Resume(ResumeArgs),
     Fuzz(FuzzArgs),
     Waf(WafArgs),
-    // ... 42+ variants (26 base, 45+ total with all features)
+    // ... 48+ variants (27 base, 49+ total with all features)
 }
 ```
 

@@ -13,25 +13,36 @@ TUI module workflows and patterns for the terminal UI.
 crates/eggsec-tui/src/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
+│   ├── action.rs        # Action dispatch
 │   ├── action_hints.rs  # Context-aware status bar hints
-│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
-│   ├── tab_store.rs     # TabStore - owns all 33 tab instances
-│   ├── runner.rs        # Event loop, input handling
-│   ├── key_handler.rs   # Key handling methods
-│   ├── state_update.rs  # Background task handling, result dispatch
-│   ├── notifications.rs # Notification and NotificationSeverity types
-│   ├── confirmation.rs  # PendingAction enum
-│   ├── help_config.rs   # Static help content
-│   ├── navigation.rs    # Tab navigation, scrolling
+│   ├── apply.rs         # State application helpers
+│   ├── bookmarks.rs     # Bookmark management
 │   ├── command.rs       # Command palette commands
+│   ├── confirmation.rs  # PendingAction enum
+│   ├── dispatch.rs      # Command dispatch
+│   ├── error.rs         # Error handling
 │   ├── export.rs        # Export functionality
+│   ├── help_config.rs   # Static help content
+│   ├── input.rs         # Input handling
+│   ├── key_handler.rs   # Key handling methods
+│   ├── navigation.rs    # Tab navigation, scrolling
+│   ├── notifications.rs # Notification and NotificationSeverity types
+│   ├── operation.rs     # Operation metadata integration
+│   ├── options.rs       # Options management
+│   ├── overlay.rs       # Overlay management
+│   ├── runner.rs        # Event loop, input handling
+│   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
+│   ├── state_update.rs  # Background task handling, result dispatch
+│   ├── tab_store.rs     # TabStore - owns all 33 tab instances
+│   ├── task_management.rs # Task lifecycle management
+│   ├── task_runtime.rs  # Task runtime helpers
 │   └── theme_runtime.rs # Theme loader lifecycle helpers
 ├── tabs/         # Individual tab implementations (33 tabs)
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
 │   ├── spec.rs         # TabSpec registry (title, stable_id, category, risk, capabilities)
 │   └── ...
 ├── components/   # Reusable UI components
-│   ├── input.rs         # InputField with focus colors
+│   ├── input/           # InputField with focus colors (mod.rs, input_field.rs, input_group.rs, form_builder.rs)
 │   ├── selector.rs      # Selector dropdown
 │   ├── popup.rs         # Popup overlays
 │   └── empty_state.rs   # empty_state_paragraph() for consistent empty states
