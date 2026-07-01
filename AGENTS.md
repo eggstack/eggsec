@@ -2,6 +2,23 @@
 
 Guidelines for AI agents working on this codebase.
 
+## Quick Verification
+
+Before claiming code is correct, run these in order:
+
+```bash
+cargo fmt --all --check          # format
+cargo clippy --lib -p eggsec     # lint (pre-existing warnings OK)
+cargo test --lib -p eggsec       # unit tests
+cargo test -p eggsec --test feature_matrix   # feature metadata
+cargo test -p eggsec --test enforcement_matrix
+bash scripts/check-architecture-guards.sh    # requires ripgrep
+```
+
+Or use the Makefile (requires `cargo-nextest`): `make check-architecture-ci`
+
+Feature-gated crates need explicit features: `cargo check -p eggsec --features mobile`, `cargo check -p eggsec --features db-pentest`, etc.
+
 ## Project Overview
 
 Eggsec is a Rust-based security testing toolkit organized as a workspace with 11 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, and `eggsec-mobile-lab`. See `README.md` for features and `architecture/overview.md` for design details.
@@ -323,9 +340,9 @@ Canonical reference points when updating guidance or skills:
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~4876 (includes #[test] + #[tokio::test]) |
-| Clippy | ~54 warnings (pre-existing, none in ai module) |
-| Source files | 878 (.rs files in crates/) |
+| Tests | ~5098 (includes #[test] + #[tokio::test]) |
+| Clippy | ~8 warnings (pre-existing) |
+| Source files | 908 (.rs files in crates/) |
 | Tabs | 33 (Tab enum variants 0-32) |
 | Pipeline profiles | 18 |
 | Output formats | 8 |
@@ -361,7 +378,6 @@ Canonical reference points when updating guidance or skills:
 - **TUI pending_approved**: TUI caches `ApprovedOperation` in `pending_approved` field of `EnforcementFacade` for reuse between pre-dispatch gate and `evaluate_policy_and_dispatch()`.
 - **REST EnforcementContext**: `RestState` now carries `EnforcementContext` instead of `Option<Scope>`. `handle_serve()` constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)`. All REST dispatch goes through `enforcement.evaluate()` before tool execution. REST is strict by default (`McpStrict` profile). Only `Allow` permits dispatch; `Warn`/`RequireConfirmation`/`Deny` all return HTTP 403. Metadata `rest_exposable` is enforced. See `docs/ENFORCEMENT_MODES.md`.
 - **EnforcedDispatcher**: REST, MCP, and gRPC store `EnforcedDispatcher` (not raw `ToolDispatcher`) to structurally prevent bypass.
-- **TUI pending_approved**: TUI caches `ApprovedOperation` in `pending_approved` field for reuse between pre-dispatch gate and `evaluate_policy_and_dispatch()`.
 - **Domain descriptors always present**: Domain descriptors are always present regardless of feature state; check `required_feature` before use.
 - **Feature metadata validation**: `tests/feature_matrix.rs` validates that feature strings in OperationMetadata and DomainDescriptor match actual Cargo features. `KNOWN_EGGSEC_FEATURES` must be updated when features are added.
 - **CI architecture guards**: `scripts/check-architecture-guards.sh` runs static grep checks for stale terminology, MCP exposure split, raw dispatch prevention, plan retention, and docs currency. Requires ripgrep (`rg`). Required for every PR. `make check-architecture-ci` reproduces the full architecture guard CI job locally.
