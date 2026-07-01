@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix check-no-default check-feature-profiles clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -42,6 +42,28 @@ test-coverage:
 build:
 	cargo build --release -p eggsec-cli
 
+# Feature matrix and metadata validation
+test-feature-matrix:
+	cargo test -p eggsec --test feature_matrix
+	cargo test -p eggsec --test metadata_consistency
+
+# Validate no-default-features build
+check-no-default:
+	cargo check --workspace --no-default-features
+
+# Representative feature profile checks (representative, not exhaustive)
+check-feature-profiles:
+	cargo check -p eggsec --no-default-features
+	cargo check -p eggsec --features rest-api
+	cargo check -p eggsec --features db-pentest
+	cargo check -p eggsec --features mobile
+	cargo check -p eggsec --features web-proxy
+	cargo check -p eggsec --features wireless
+	cargo check -p eggsec --features nse
+	cargo check -p eggsec --features evasion
+	cargo check -p eggsec --features postex
+	cargo check -p eggsec --features c2
+
 # Clean build artifacts
 clean:
 	cargo clean
@@ -59,4 +81,7 @@ help:
 	@echo "  make clippy          - Lint"
 	@echo "  make fmt             - Format check"
 	@echo "  make build           - Release build"
+	@echo "  make test-feature-matrix - Feature metadata validation tests"
+	@echo "  make check-no-default   - Validate no-default-features build"
+	@echo "  make check-feature-profiles - Representative feature profile checks"
 	@echo "  make clean           - Clean artifacts"

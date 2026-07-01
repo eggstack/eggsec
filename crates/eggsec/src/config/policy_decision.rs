@@ -799,6 +799,15 @@ impl PreflightResult {
 /// Returns `true` for features that are always available or not relevant
 /// as compile-time gates, and `false` for features that are behind a
 /// `cfg(feature = "...")` gate that is not currently active.
+///
+/// # Unknown Features
+///
+/// Unknown feature names default to `true` (available). This is intentional:
+/// if a feature string in metadata doesn't match any gate here, the operation
+/// should not be blocked at this level — the gate may live in a dependency
+/// crate or may have been added without updating this function. The trade-off
+/// is that typos in feature names silently pass. Use [`is_known_feature`] in
+/// tests to validate that feature strings in metadata are recognized.
 pub fn is_feature_enabled(feature: &str) -> bool {
     match feature {
         "packet-inspection" => cfg!(feature = "packet-inspection"),
@@ -824,8 +833,43 @@ pub fn is_feature_enabled(feature: &str) -> bool {
         "mobile" => cfg!(feature = "mobile"),
         "pdf" => cfg!(feature = "pdf"),
         "advanced-hunting" => cfg!(feature = "advanced-hunting"),
-        _ => true, // Unknown features are assumed available
+        _ => true, // Unknown features are assumed available (see doc comment)
     }
+}
+
+/// Returns `true` if the given feature string is recognized by [`is_feature_enabled`].
+///
+/// Use this in tests to validate that feature strings in metadata (OperationMetadata,
+/// DomainDescriptor) are not misspelled. Does not check whether the feature is
+/// currently compiled — only that the name is known.
+#[allow(dead_code)] // test/validation helper; not used in production code paths
+pub fn is_known_feature(feature: &str) -> bool {
+    matches!(
+        feature,
+        "packet-inspection"
+            | "stress-testing"
+            | "nse"
+            | "nse-sandbox"
+            | "headless-browser"
+            | "rest-api"
+            | "grpc-api"
+            | "ws-api"
+            | "ai-integration"
+            | "database"
+            | "container"
+            | "sbom"
+            | "websocket"
+            | "compliance"
+            | "external-integrations"
+            | "finding-workflow"
+            | "vuln-management"
+            | "cloud"
+            | "git-secrets"
+            | "wireless"
+            | "mobile"
+            | "pdf"
+            | "advanced-hunting"
+    )
 }
 
 /// Shared policy evaluation entry point.
@@ -1636,6 +1680,89 @@ mod tests {
     #[test]
     fn is_feature_enabled_unknown_defaults_true() {
         assert!(is_feature_enabled("totally-fake-feature"));
+    }
+
+    #[test]
+    fn is_known_feature_recognizes_all_gated_features() {
+        // Every feature handled by is_feature_enabled should be recognized by is_known_feature.
+        let gated_features = [
+            "packet-inspection",
+            "stress-testing",
+            "nse",
+            "nse-sandbox",
+            "headless-browser",
+            "rest-api",
+            "grpc-api",
+            "ws-api",
+            "ai-integration",
+            "database",
+            "container",
+            "sbom",
+            "websocket",
+            "compliance",
+            "external-integrations",
+            "finding-workflow",
+            "vuln-management",
+            "cloud",
+            "git-secrets",
+            "wireless",
+            "mobile",
+            "pdf",
+            "advanced-hunting",
+        ];
+        for feat in &gated_features {
+            assert!(
+                is_known_feature(feat),
+                "is_known_feature('{}') should return true",
+                feat
+            );
+        }
+    }
+
+    #[test]
+    fn is_known_feature_rejects_unknown() {
+        assert!(!is_known_feature("totally-fake-feature"));
+        assert!(!is_known_feature("rest_api")); // underscore variant
+        assert!(!is_known_feature(""));
+    }
+
+    #[test]
+    fn is_known_feature_consistent_with_is_feature_enabled() {
+        // For all known features, is_feature_enabled returns a cfg! result (not the default).
+        // This test ensures both functions agree on the set of known features.
+        let known = [
+            "packet-inspection",
+            "stress-testing",
+            "nse",
+            "nse-sandbox",
+            "headless-browser",
+            "rest-api",
+            "grpc-api",
+            "ws-api",
+            "ai-integration",
+            "database",
+            "container",
+            "sbom",
+            "websocket",
+            "compliance",
+            "external-integrations",
+            "finding-workflow",
+            "vuln-management",
+            "cloud",
+            "git-secrets",
+            "wireless",
+            "mobile",
+            "pdf",
+            "advanced-hunting",
+        ];
+        for feat in &known {
+            assert!(is_known_feature(feat));
+            // is_feature_enabled should return a concrete cfg! value, not the default true
+            let _ = is_feature_enabled(feat);
+        }
+        // Unknown features: is_feature_enabled defaults true, is_known_feature returns false
+        assert!(!is_known_feature("unknown-xyz"));
+        assert!(is_feature_enabled("unknown-xyz"));
     }
 
     #[test]

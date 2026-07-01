@@ -211,21 +211,15 @@ features = ["v1_30"]
 version = "0.7"
 optional = true
 
-# tiberius (pure-Rust TDS for MSSQL) is prepared behind the marker feature `db-pentest-mssql-tiberius`.
-# The marker is declared in [features]. When both `db-pentest` and the marker are enabled,
-# the real client code in db_pentest/mssql.rs is compiled (this block is activated).
-# Until the marker is used, mssql targets fall back to rich synthetic dry-run population.
-# Activate real driver with:
-#   cargo ... --features db-pentest,db-pentest-mssql-tiberius
+# tiberius (pure-Rust TDS for MSSQL). Activated by db-pentest-mssql-tiberius marker.
+# Use: --features db-pentest,db-pentest-mssql-tiberius
 [dependencies.tiberius]
 version = "0.12"
 optional = true
 default-features = false
 features = ["tokio", "rustls"]
 
-# MongoDB async driver for db-pentest Phase 5 (marker feature `db-pentest-mongodb`).
-# When enabled together with db-pentest, the real MongoDB client path is compiled in mongodb.rs.
-# Dry-run + categories + bridge are always exercised (synthetic) regardless of the marker.
+# MongoDB async driver. Activated by db-pentest-mongodb marker.
 [dependencies.mongodb]
 version = "2.8"
 optional = true
@@ -236,8 +230,7 @@ features = ["tokio-runtime"]
 version = "2.9"
 optional = true
 
-# Redis async client for db-pentest Phase 5 (marker feature `db-pentest-redis`).
-# When enabled together with db-pentest, the real Redis client path is compiled in redis.rs.
+# Redis async client. Activated by db-pentest-redis marker.
 [dependencies.redis]
 version = "0.25"
 optional = true
@@ -332,24 +325,14 @@ headless-browser = ["headless_chrome"]
 # Database storage for findings and scan history
 database = ["sqlx"]
 
-# Database pentesting loadout (direct Postgres/MySQL/MSSQL checks for authorized lab/defense use only).
-# Standalone defense-lab surface (TUI + pipeline profile opt-in under feature in Phase 3; MCP absent by default).
-# Heavily gated by policy + --allow-db-pentest + --allow-db-pentest-advanced (narrow) + dry-run support.
-# Phase 1: foundations, Postgres primary + MySQL secondary, manifest, safety, CLI, bridge.
-# Phase 2: real MSSQL (tiberius behind marker `db-pentest-mssql-tiberius`), docker lab, --real smoke, combined web+db example, qcount cleanup, full parity.
-# Phase 3: TUI tab (Tab::DbPentest), ScanProfile::DbRegression, gated advanced checks (reversible test vectors), correlation notes, evidence bundle stub.
-# The marker is a no-op feature declaration. Enabling it + `db-pentest` activates the tiberius path in mssql.rs.
-# Dry-run + categories + bridge for mssql are always exercised (synthetic) regardless of the marker, so tests/CI
-# stay green without forcing heavy transitive deps in every environment.
+# Database pentesting (Postgres/MySQL/MSSQL/MongoDB/Redis security checks for authorized lab/defense use).
+# Standalone defense-lab surface; MCP exposure requires db-pentest-mcp marker. Dry-run always safe.
 db-pentest = ["sqlx", "dep:eggsec-db-lab", "eggsec-db-lab/db-drivers"]
-# Enabling this marker (together with db-pentest) pulls tiberius and activates the real MSSQL client path.
-# Use: cargo ... --features db-pentest,db-pentest-mssql-tiberius
+# Marker: pulls tiberius, activates real MSSQL client path (use with db-pentest).
 db-pentest-mssql-tiberius = ["dep:tiberius", "eggsec-db-lab/mssql"]
-# Enabling this marker (together with db-pentest) pulls the mongodb crate and activates the real MongoDB client path.
-# Use: cargo ... --features db-pentest,db-pentest-mongodb
+# Marker: pulls mongodb crate, activates real MongoDB client path (use with db-pentest).
 db-pentest-mongodb = ["dep:mongodb", "dep:bson", "eggsec-db-lab/mongodb"]
-# Enabling this marker (together with db-pentest) pulls the redis crate and activates the real Redis client path.
-# Use: cargo ... --features db-pentest,db-pentest-redis
+# Marker: pulls redis crate, activates real Redis client path (use with db-pentest).
 db-pentest-redis = ["dep:redis", "eggsec-db-lab/redis"]
 # Optional MCP/agent exposure for db-pentest. When enabled, registers db-pentest as an MCP tool.
 # Default behavior (without this marker) keeps db-pentest as standalone defense-lab surface only.
@@ -395,16 +378,8 @@ c2 = ["postex", "evasion"]
   # Mobile app security static analysis (APK/IPA manifest & config checks for lab/defense use)
   mobile = ["dep:eggsec-mobile-lab", "zip", "plist"]
 
-  # Mobile dynamic/runtime testing (Android ADB + logcat analysis + Frida instrumentation for lab/defense use only).
-  # Depends on base mobile static. Standalone defense-lab surface; heavily gated.
-  # Phase 1: device discovery, controlled install/launch/uninstall, runtime log capture + high-signal findings.
-  # Phase 2 (closed 2026-06-12): proxy Level-1 + traffic summary + runtime permission testing + correlation.
-  # All Phase 1 and Phase 2 dynamic mobile functionality is kept under this single mobile-dynamic feature
-  # (no mobile-dynamic-advanced sub-feature split, per 2026-06-12 closeout decision).
-  # Phase 3 (Frida/runtime instrumentation) is included under mobile-dynamic (per phase3-frida-expansion-plan.md
-  # Key Decision: no separate mobile-frida sub-feature). Governed by runtime --allow-frida flag + EnforcementContext
-  # policy gates (Intrusive tier for real ops). Dry-run always safe. Standalone defense-lab only; no MCP/agent exposure.
-  # Prefer frida CLI fallback for Phase 3a (no heavy crate dep in this pass).
+  # Mobile dynamic/runtime testing (Android ADB + Frida instrumentation for lab/defense use only).
+  # Depends on base mobile. Standalone defense-lab surface; no MCP exposure.
   mobile-dynamic = ["mobile", "eggsec-mobile-lab/mobile-dynamic"]
 
 # OpenAPI schema ingestion and fuzz target generation

@@ -292,6 +292,28 @@ pub fn all_domain_descriptors() -> &'static [DomainDescriptor] {
     ]
 }
 
+impl DomainDescriptor {
+    /// Returns `true` if this domain's required feature (if any) is currently compiled.
+    pub fn is_available(&self) -> bool {
+        match self.required_feature {
+            None => true,
+            Some(f) => feature_enabled(f),
+        }
+    }
+
+    /// Returns a diagnostic hint if this domain is unavailable, or `None` if it is available.
+    ///
+    /// The hint names the exact Cargo feature flag needed, for example:
+    /// `"enable the 'db-pentest' feature in Cargo.toml: cargo build --features db-pentest"`.
+    pub fn availability_hint(&self) -> Option<&'static str> {
+        if self.is_available() {
+            None
+        } else {
+            self.required_feature.and_then(feature_missing_hint)
+        }
+    }
+}
+
 /// Look up a domain descriptor by its ID.
 pub fn domain_descriptor_by_id(id: &str) -> Option<&'static DomainDescriptor> {
     all_domain_descriptors().iter().find(|d| d.id == id)
@@ -322,6 +344,25 @@ fn feature_enabled(feature: &str) -> bool {
         "c2" => cfg!(feature = "c2"),
         "wireless" => cfg!(feature = "wireless"),
         _ => false,
+    }
+}
+
+/// Returns a helpful diagnostic hint for a missing domain feature.
+///
+/// When a feature is not compiled in, callers can use this to produce
+/// an actionable error message that names the exact Cargo feature flag
+/// needed to enable the domain. Returns `None` for unrecognized features.
+pub fn feature_missing_hint(feature: &str) -> Option<&'static str> {
+    match feature {
+        "db-pentest" => Some("enable the 'db-pentest' feature in Cargo.toml: cargo build --features db-pentest"),
+        "mobile" => Some("enable the 'mobile' feature in Cargo.toml: cargo build --features mobile"),
+        "mobile-dynamic" => Some("enable the 'mobile-dynamic' feature in Cargo.toml (requires 'mobile' first): cargo build --features mobile-dynamic"),
+        "web-proxy" => Some("enable the 'web-proxy' feature in Cargo.toml: cargo build --features web-proxy"),
+        "evasion" => Some("enable the 'evasion' feature in Cargo.toml: cargo build --features evasion"),
+        "postex" => Some("enable the 'postex' feature in Cargo.toml: cargo build --features postex"),
+        "c2" => Some("enable the 'c2' feature in Cargo.toml (requires 'postex' and 'evasion'): cargo build --features c2"),
+        "wireless" => Some("enable the 'wireless' feature in Cargo.toml: cargo build --features wireless"),
+        _ => None,
     }
 }
 
@@ -855,6 +896,85 @@ mod tests {
                     "domain '{}' has duplicate operation id: {}",
                     domain.id,
                     op.operation_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn feature_missing_hint_returns_something_for_known_features() {
+        // Every feature that feature_enabled() handles should have a hint.
+        for &feat in &[
+            "db-pentest",
+            "mobile",
+            "mobile-dynamic",
+            "web-proxy",
+            "evasion",
+            "postex",
+            "c2",
+            "wireless",
+        ] {
+            let hint = feature_missing_hint(feat);
+            assert!(
+                hint.is_some(),
+                "feature_missing_hint({}) should return a hint",
+                feat
+            );
+            let hint = hint.unwrap();
+            assert!(
+                hint.contains(feat),
+                "hint for '{}' should mention the feature name: {}",
+                feat,
+                hint
+            );
+        }
+    }
+
+    #[test]
+    fn feature_missing_hint_returns_none_for_unknown() {
+        assert!(feature_missing_hint("nonexistent-feature").is_none());
+    }
+
+    #[test]
+    fn domain_is_available_matches_feature_state() {
+        for domain in all_domain_descriptors() {
+            let manual = match domain.required_feature {
+                None => true,
+                Some(f) => feature_enabled(f),
+            };
+            assert_eq!(
+                domain.is_available(),
+                manual,
+                "domain '{}' is_available() mismatch",
+                domain.id
+            );
+        }
+    }
+
+    #[test]
+    fn domain_availability_hint_consistent_with_is_available() {
+        for domain in all_domain_descriptors() {
+            if domain.is_available() {
+                assert!(
+                    domain.availability_hint().is_none(),
+                    "domain '{}' is available but has a hint",
+                    domain.id
+                );
+            } else {
+                let hint = domain.availability_hint();
+                assert!(
+                    hint.is_some(),
+                    "domain '{}' is unavailable but availability_hint() is None",
+                    domain.id
+                );
+                // Hint should contain the feature name
+                let feat = domain.required_feature.unwrap();
+                assert!(
+                    hint.unwrap().contains(feat),
+                    "hint for domain '{}' should mention feature '{}': {:?}",
+                    domain.id,
+                    feat,
+                    hint
                 );
             }
         }

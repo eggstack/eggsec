@@ -440,7 +440,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities:
 | `web-proxy-mcp` | `proxy/mcp.rs` | Optional MCP tool exposure for web proxy (12 tools: list flows, inspect flow, edit request/response, manage rules, session save/load, HAR export, evidence bundle). Marker feature; requires `web-proxy`. |
 | `full` | All | All features combined |
 
-See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies.
+See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and [docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md) for the canonical feature inventory with categories, naming conventions, and build profiles.
 
 ---
 

@@ -35,6 +35,13 @@ cargo test --lib -p eggsec
 cargo test --test negative_tests -p eggsec
 cargo test --test scanner_tests -p eggsec
 cargo test --test enforcement_matrix -p eggsec
+cargo test -p eggsec --test feature_matrix
+cargo check --workspace --no-default-features
+cargo check -p eggsec --features rest-api
+cargo check -p eggsec --features db-pentest
+cargo check -p eggsec --features mobile
+cargo check -p eggsec --features web-proxy
+cargo check -p eggsec --features wireless
 cargo test -p eggsec --features rest-api --test enforcement_matrix
 cargo clippy --lib -p eggsec
 cargo build --release -p eggsec-cli
@@ -120,6 +127,9 @@ make test-slow     # run ignored tests
 make clippy        # lint (-D warnings)
 make fmt           # format check
 make test-coverage # llvm-cov with rest-api,nse features
+make test-feature-matrix  # feature metadata validation (feature_matrix + metadata_consistency tests)
+make check-no-default     # validate no-default-features workspace build
+make check-feature-profiles # representative feature profile checks
 make build         # release build
 ```
 
@@ -180,6 +190,7 @@ Canonical reference points when updating guidance or skills:
 - `architecture/audit.md` - Normalized audit events for enforcement decisions
 - `architecture/domain_contract.md` - Domain module contract (Phase 3): static metadata descriptors for capability domains
 - `architecture/report_envelope.md` - Normalized report/evidence envelope for cross-domain report unification
+- `docs/FEATURE_MATRIX.md` - Feature inventory, classification, naming conventions, build profiles, and cross-reference
 
 ### Feature Flags
 
@@ -205,6 +216,8 @@ Canonical reference points when updating guidance or skills:
 `tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default; includes `POST /api/v1/tools/{tool_id}/preflight` endpoint), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `full`
 
 > **Note**: The `eggsec-output::envelope` module (normalized report/evidence types) is always available — no feature gate required.
+
+> **Feature Matrix**: See `docs/FEATURE_MATRIX.md` for the complete feature inventory with categories, naming conventions, build profiles, and metadata cross-references.
 
 ### Key Types
 
@@ -330,6 +343,7 @@ Canonical reference points when updating guidance or skills:
 - **EnforcedDispatcher**: REST, MCP, and gRPC store `EnforcedDispatcher` (not raw `ToolDispatcher`) to structurally prevent bypass.
 - **TUI pending_approved**: TUI caches `ApprovedOperation` in `pending_approved` field for reuse between pre-dispatch gate and `evaluate_policy_and_dispatch()`.
 - **Domain descriptors always present**: Domain descriptors are always present regardless of feature state; check `required_feature` before use.
+- **Feature metadata validation**: `tests/feature_matrix.rs` validates that feature strings in OperationMetadata and DomainDescriptor match actual Cargo features. `KNOWN_EGGSEC_FEATURES` must be updated when features are added.
 
 ## Skills Directory
 

@@ -2,14 +2,18 @@
 
 Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 
+> **Canonical reference**: For the full feature inventory with categories, naming conventions,
+> build profiles, and metadata cross-references, see [`docs/FEATURE_MATRIX.md`](../docs/FEATURE_MATRIX.md).
+> This file provides a developer-oriented summary.
+
 ## Summary
 
 | Metric | Count |
 |--------|-------|
-| Total features | 40 |
-| Features with deps | 18 |
+| Total features | 42 |
+| Features with deps | 20 |
 | Marker-only features | 22 |
-| In `full` | 21 |
+| In `full` | 23 |
 
 ## Feature Table
 
@@ -48,6 +52,10 @@ Comprehensive reference for all Cargo feature flags in the `eggsec` crate.
 | `db-pentest-mongodb` | yes | yes | - | `db_pentest/mongodb.rs` | Stable |
 | `db-pentest-redis` | yes | yes | - | `db_pentest/redis.rs` | Stable |
 | `db-pentest-mcp` | yes | yes (`db-pentest`) | - | `tool/implementations/db_pentest.rs` | Stable |
+| `c2` | yes | yes (`postex`, `evasion`) | yes | `c2/` | Stable |
+| `c2-mcp` | yes | yes (`c2`) | - | `c2/mcp.rs` | Stable |
+| `evasion` | yes | no | yes | `evasion/` | Stable |
+| `postex` | yes | no | yes | `postex/` | Stable |
 | `web-proxy` | yes | yes | yes | `proxy/intercept/` | Stable |
 | `web-proxy-mcp` | yes | yes (`web-proxy`) | - | `proxy/intercept/mcp.rs` | Stable |
 | `transparent-proxy` | yes | yes (`web-proxy`) | - | `proxy/intercept/` | Stable |
@@ -90,10 +98,11 @@ full WebSocket pub/sub support.
 ### Marker-only features
 
 Features like `advanced-hunting`, `compliance`, `external-integrations`,
-`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `mobile`,
-`api-schema`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`,
-`transparent-proxy`, and `dynamic-plugins` have no extra runtime dependencies beyond
-optional crates. They gate module compilation via `#[cfg(feature = "...")]` in `lib.rs`.
+`finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `evasion`,
+`postex`, `api-schema`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`,
+`db-pentest-redis`, `transparent-proxy`, and `dynamic-plugins` have no extra runtime
+dependencies beyond optional crates. They gate module compilation via
+`#[cfg(feature = "...")]` in `lib.rs`.
 
 `wireless-advanced` is a dependent feature on `wireless` and pulls in the
 `wireless/active/` module (deauth/disassoc frame crafting and injection). It is
@@ -109,6 +118,9 @@ additional database drivers. `db-pentest-mcp` enables MCP tool exposure.
 `web-proxy` pulls `tokio-tungstenite`, `h2`, `http`, `prost`, and `prost-types` for
 real WebSocket/HTTP2/gRPC interception. `web-proxy-mcp`, `transparent-proxy`, and
 `dynamic-plugins` are dependent marker features.
+
+`c2` depends on `postex` and `evasion` for integrated campaign orchestration.
+`c2-mcp` enables MCP tool exposure for the C2 framework.
 
 ### Module gating pattern
 
