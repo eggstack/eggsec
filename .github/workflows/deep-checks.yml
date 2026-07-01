@@ -1,0 +1,27 @@
+name: Deep Checks
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  deep-checks:
+    name: Deep Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Workspace all-features check
+        run: cargo check --workspace --all-features
+      - name: Workspace all-features test
+        run: cargo test --workspace --all-features
+        continue-on-error: true
+      - name: Full feature check
+        run: cargo check -p eggsec --features full

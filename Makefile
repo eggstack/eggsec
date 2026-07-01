@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix check-no-default check-feature-profiles clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards check-no-default check-feature-profiles clean help
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -47,6 +47,10 @@ test-feature-matrix:
 	cargo test -p eggsec --test feature_matrix
 	cargo test -p eggsec --test metadata_consistency
 
+# Architecture drift guards (static grep checks)
+test-architecture-guards:
+	./scripts/check-architecture-guards.sh
+
 # Validate no-default-features build
 check-no-default:
 	cargo check --workspace --no-default-features
@@ -82,6 +86,7 @@ help:
 	@echo "  make fmt             - Format check"
 	@echo "  make build           - Release build"
 	@echo "  make test-feature-matrix - Feature metadata validation tests"
+	@echo "  make test-architecture-guards - Static grep checks for invariant regressions"
 	@echo "  make check-no-default   - Validate no-default-features build"
 	@echo "  make check-feature-profiles - Representative feature profile checks"
 	@echo "  make clean           - Clean artifacts"

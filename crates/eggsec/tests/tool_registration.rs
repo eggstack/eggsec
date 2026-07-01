@@ -283,8 +283,8 @@ fn ops_agent_is_expanded_metadata_exposable_not_conservative_default() {
     // but is strictly broader (set-wise) — there must be metadata-exposable
     // tools visible to OpsAgent that are NOT default-visible.
     assert!(
-        ops_ids.len() >= default_ids.len(),
-        "OpsAgent listing should be at least as large as the conservative default listing"
+        ops_ids.len() > default_ids.len(),
+        "OpsAgent listing should be strictly larger than the conservative default listing"
     );
     for id in &default_ids {
         assert!(

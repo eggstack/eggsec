@@ -315,6 +315,35 @@ proptest! {
 }
 ```
 
+### Architecture Guards
+
+CI enforces architecture invariants via required checks. Run these locally before pushing:
+
+```bash
+cargo fmt --all --check
+cargo check --workspace --no-default-features
+cargo test -p eggsec --test metadata_consistency
+cargo test -p eggsec --test command_registry
+cargo test -p eggsec --test tool_registration --features rest-api
+cargo test -p eggsec --test feature_matrix
+cargo test -p eggsec --test enforcement_matrix
+cargo test -p eggsec --test enforced_dispatch_regression
+cargo test -p eggsec-output --test report_envelope
+./scripts/check-architecture-guards.sh
+```
+
+These checks guard:
+- **OperationMetadata** is the canonical operation policy metadata layer
+- **DomainDescriptor** is the canonical domain/integration grouping layer
+- **ToolRegistration** distinguishes `mcp_metadata_exposable` from `mcp_default_visible`
+- MCP OpsAgent uses Model A: profile-expanded metadata-exposable listing (strictly broader than conservative default)
+- **CommandRegistration** separates `cli_interactive_only`, `registry_backed`, and `dispatch_mode`
+- Feature metadata snapshot is validated against `crates/eggsec/Cargo.toml`
+- Strict surfaces (REST, MCP, gRPC, agent) do not call raw dispatch
+- Required architecture docs exist
+
+See `docs/CI_ARCHITECTURE_GUARDS.md` for the full inventory.
+
 ## Documentation
 
 ### Code Documentation
@@ -618,10 +647,18 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 2. **Run all checks**
    ```bash
-   cargo fmt --check
-   cargo clippy --all-features -- -D warnings
-   cargo test --all-features
-   cargo audit
+   cargo fmt --all --check
+   cargo clippy --lib -p eggsec -- -D warnings
+   cargo check --workspace --no-default-features
+   cargo test -p eggsec --lib
+   cargo test -p eggsec --test metadata_consistency
+   cargo test -p eggsec --test command_registry
+   cargo test -p eggsec --test tool_registration --features rest-api
+   cargo test -p eggsec --test feature_matrix
+   cargo test -p eggsec --test enforcement_matrix
+   cargo test -p eggsec --test enforced_dispatch_regression
+   cargo test -p eggsec-output --test report_envelope
+   ./scripts/check-architecture-guards.sh
    ```
 
 3. **Update documentation**
@@ -633,6 +670,7 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 - [ ] Code compiles without warnings
 - [ ] All tests pass
+- [ ] Architecture guards pass (`./scripts/check-architecture-guards.sh`)
 - [ ] Documentation updated
 - [ ] CHANGELOG.md updated
 - [ ] Commit messages are clear

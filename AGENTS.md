@@ -112,6 +112,9 @@ cargo test --lib -p eggsec --features c2-mcp
 
 # Command registry
 cargo test -p eggsec --test command_registry
+
+# Architecture guards (CI required)
+./scripts/check-architecture-guards.sh
 ```
 
 #### Make Targets
@@ -128,6 +131,7 @@ make clippy        # lint (-D warnings)
 make fmt           # format check
 make test-coverage # llvm-cov with rest-api,nse features
 make test-feature-matrix  # feature metadata validation (feature_matrix + metadata_consistency tests)
+make test-architecture-guards  # static grep checks for invariant regressions
 make check-no-default     # validate no-default-features workspace build
 make check-feature-profiles # representative feature profile checks
 make build         # release build
@@ -349,6 +353,9 @@ Canonical reference points when updating guidance or skills:
 - **TUI pending_approved**: TUI caches `ApprovedOperation` in `pending_approved` field for reuse between pre-dispatch gate and `evaluate_policy_and_dispatch()`.
 - **Domain descriptors always present**: Domain descriptors are always present regardless of feature state; check `required_feature` before use.
 - **Feature metadata validation**: `tests/feature_matrix.rs` validates that feature strings in OperationMetadata and DomainDescriptor match actual Cargo features. `KNOWN_EGGSEC_FEATURES` must be updated when features are added.
+- **CI architecture guards**: `scripts/check-architecture-guards.sh` runs static grep checks for stale terminology, MCP exposure split, raw dispatch prevention, plan retention, and docs currency. Required for every PR.
+- **Feature-profile CI**: CI runs `cargo check` for 9 representative feature profiles on every PR. Platform-sensitive profiles (mobile-dynamic) may fail due to missing system deps.
+- **MCP Model A assertion**: OpsAgent listing is strictly broader than conservative default (`ops_ids.len() > default_ids.len()`). The test comment and assertion must both reflect strict broadness.
 
 ## Skills Directory
 

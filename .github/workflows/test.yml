@@ -205,3 +205,57 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  architecture-guards:
+    name: Architecture Guards
+    runs-on: ubuntu-latest
+    needs: [fmt]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Workspace no-default check
+        run: cargo check --workspace --no-default-features
+      - name: Lib tests
+        run: cargo test -p eggsec --lib
+      - name: Metadata consistency
+        run: cargo test -p eggsec --test metadata_consistency
+      - name: Command registry
+        run: cargo test -p eggsec --test command_registry
+      - name: Tool registration
+        run: cargo test -p eggsec --test tool_registration --features rest-api
+      - name: Feature matrix
+        run: cargo test -p eggsec --test feature_matrix
+      - name: Enforcement matrix
+        run: cargo test -p eggsec --test enforcement_matrix
+      - name: Enforced dispatch regression
+        run: cargo test -p eggsec --test enforced_dispatch_regression
+      - name: Report envelope
+        run: cargo test -p eggsec-output --test report_envelope
+      - name: Architecture guards script
+        run: ./scripts/check-architecture-guards.sh
+
+  feature-profiles:
+    name: Feature Profile (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - "tool-api,rest-api"
+          - "grpc-api"
+          - "db-pentest"
+          - "db-pentest-mcp,tool-api,rest-api"
+          - "mobile"
+          - "mobile-dynamic"
+          - "web-proxy"
+          - "web-proxy-mcp,tool-api,rest-api"
+          - "c2-mcp,tool-api,rest-api"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: feature-profile-${{ matrix.features }}
+      - name: cargo check
+        run: cargo check -p eggsec --features ${{ matrix.features }}
