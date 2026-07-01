@@ -57,29 +57,22 @@ Do you need a new manual CLI command?
 
 ## Required Local Checks
 
-Run every check below before opening a PR. CI will reject changes that fail
-any of these.
+Run the authoritative Make target before opening a PR. CI will reject
+changes that fail any of these.
 
 ```bash
-cargo fmt --all --check
-cargo check --workspace --no-default-features
-cargo test -p eggsec --lib
-cargo test -p eggsec --test metadata_consistency
-cargo test -p eggsec --test command_registry
-cargo test -p eggsec --test feature_matrix
-cargo test -p eggsec --test enforcement_matrix
-bash scripts/check-architecture-guards.sh
 make check-architecture-ci
+make check-feature-profiles   # if feature-gated code changed
 ```
 
-Feature-specific checks (run only if your change touches a feature-gated module):
+`make check-architecture-ci` reproduces the full architecture guard CI
+job locally: formatting, no-default build, lib tests, metadata consistency,
+command registry, tool registration, feature matrix, enforcement matrix,
+enforced dispatch regression, report envelope, and static drift guards.
 
-```bash
-# Example: adding a db-pentest feature
-cargo check -p eggsec --features db-pentest
-cargo test -p eggsec --features db-pentest
-cargo clippy --lib -p eggsec --features db-pentest
-```
+For the expanded command list and per-extension test mapping, see
+[`docs/extending/testing.md`](docs/extending/testing.md) and
+[`docs/CI_ARCHITECTURE_GUARDS.md`](docs/CI_ARCHITECTURE_GUARDS.md).
 
 ## Detailed Guides
 
@@ -87,16 +80,18 @@ Each extension type has a dedicated guide in `docs/extending/`:
 
 | Topic | Guide |
 |-------|-------|
-| Adding an operation | `docs/extending/adding-operation.md` |
-| Adding a domain | `docs/extending/adding-domain.md` |
-| Adding a CLI command | `docs/extending/adding-command.md` |
-| Adding a protocol-exposed tool | `docs/extending/adding-tool.md` |
-| Adding a TUI action | `docs/extending/adding-tui-action.md` |
-| Adding report output | `docs/extending/adding-report.md` |
-| Adding a feature flag | `docs/extending/adding-feature.md` |
-| Enforcement and dispatch | `docs/ENFORCEMENT_MODES.md` |
-| Metadata ownership | `docs/METADATA_OWNERSHIP.md` |
-| Capability matrix | `docs/CAPABILITY_MATRIX.md` |
-| Tool registration | `docs/TOOL_REGISTRATION.md` |
-| Command registry | `docs/COMMAND_REGISTRY.md` |
-| Report/evidence model | `docs/REPORT_EVIDENCE_MODEL.md` |
+| Adding an operation | [`docs/extending/operations.md`](docs/extending/operations.md) |
+| Adding a domain | [`docs/extending/domains.md`](docs/extending/domains.md) |
+| Adding a CLI command | [`docs/extending/commands.md`](docs/extending/commands.md) |
+| Adding a protocol-exposed tool | [`docs/extending/tool-exposure.md`](docs/extending/tool-exposure.md) |
+| Adding a TUI action | [`docs/extending/tui-actions.md`](docs/extending/tui-actions.md) |
+| Adding report output | [`docs/extending/report-evidence.md`](docs/extending/report-evidence.md) |
+| Adding a feature flag | [`docs/extending/features.md`](docs/extending/features.md) |
+| Testing and pre-handoff checks | [`docs/extending/testing.md`](docs/extending/testing.md) |
+| Copyable templates | [`docs/extending/templates.md`](docs/extending/templates.md) |
+| Enforcement and dispatch | [`docs/ENFORCEMENT_MODES.md`](docs/ENFORCEMENT_MODES.md) |
+| Metadata ownership | [`docs/METADATA_OWNERSHIP.md`](docs/METADATA_OWNERSHIP.md) |
+| Capability matrix | [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md) |
+| Tool registration | [`docs/TOOL_REGISTRATION.md`](docs/TOOL_REGISTRATION.md) |
+| Command registry | [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) |
+| Report/evidence model | [`docs/REPORT_EVIDENCE_MODEL.md`](docs/REPORT_EVIDENCE_MODEL.md) |

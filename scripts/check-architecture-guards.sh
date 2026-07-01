@@ -159,9 +159,40 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: All extensibility handoff guides exist."
 fi
 
-# 8. No stale field names in current docs
+# 8. Extensibility guide links in EXTENSIBILITY.md resolve to existing files
 echo ""
-echo "--- Check 8: No stale field names in current docs ---"
+echo "--- Check 8: Extensibility guide links resolve ---"
+SECTION_FAIL=0
+EXPECTED_EXT_LINKS=(
+  "docs/extending/operations.md"
+  "docs/extending/domains.md"
+  "docs/extending/commands.md"
+  "docs/extending/tool-exposure.md"
+  "docs/extending/tui-actions.md"
+  "docs/extending/report-evidence.md"
+  "docs/extending/features.md"
+  "docs/extending/testing.md"
+  "docs/extending/templates.md"
+)
+for link in "${EXPECTED_EXT_LINKS[@]}"; do
+  if ! rg -F "$link" docs/EXTENSIBILITY.md >/dev/null 2>&1; then
+    echo "FAIL: docs/EXTENSIBILITY.md missing link: $link"
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if [[ ! -f "$link" ]]; then
+    echo "FAIL: linked extensibility doc missing: $link"
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: All extensibility guide links in EXTENSIBILITY.md resolve."
+fi
+
+# 9. No stale field names in current docs
+echo ""
+echo "--- Check 9: No stale field names in current docs ---"
 HITS=$(rg -n 'mcp_listing_does_not_check|mcp_exposed_by_default.*false.*hardcoded' --glob='*.md' docs/ 2>/dev/null | grep -v 'plans/' || true)
 if [[ -n "$HITS" ]]; then
   echo "$HITS"
