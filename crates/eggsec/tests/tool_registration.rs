@@ -260,3 +260,37 @@ fn ops_agent_registrations_are_metadata_exposable() {
         );
     }
 }
+
+/// Documenting **Model A** semantics for the OpsAgent profile: it is an
+/// expanded metadata-exposable listing, not a conservative default listing.
+/// OpsAgent may surface tools (e.g. high-risk intrusive operations) that are
+/// `mcp_metadata_exposable = true` but NOT `mcp_default_visible = true`.
+/// Conservative defaults must use `mcp_tool_registrations_default_visible()`.
+#[test]
+fn ops_agent_is_expanded_metadata_exposable_not_conservative_default() {
+    use rustc_hash::FxHashSet;
+
+    let ops_ids: FxHashSet<&str> = mcp_tool_registrations("ops-agent")
+        .iter()
+        .map(|r| r.tool_id)
+        .collect();
+    let default_ids: FxHashSet<&str> = mcp_tool_registrations_default_visible()
+        .iter()
+        .map(|r| r.tool_id)
+        .collect();
+
+    // Model A invariant: OpsAgent includes the conservative default subset
+    // but is strictly broader (set-wise) — there must be metadata-exposable
+    // tools visible to OpsAgent that are NOT default-visible.
+    assert!(
+        ops_ids.len() >= default_ids.len(),
+        "OpsAgent listing should be at least as large as the conservative default listing"
+    );
+    for id in &default_ids {
+        assert!(
+            ops_ids.contains(id),
+            "default-visible tool '{}' should also appear in ops-agent listing",
+            id
+        );
+    }
+}

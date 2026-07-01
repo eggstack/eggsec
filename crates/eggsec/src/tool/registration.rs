@@ -124,11 +124,19 @@ pub fn resolve_tool_registration(tool_id: &str) -> Option<ToolRegistration> {
 
 /// Returns tool registrations visible under the given MCP profile policy.
 ///
-/// Filters by `mcp_metadata_exposable` and feature requirements.
+/// This implements **Model A** (profile-expanded metadata-exposable listing):
+/// the OpsAgent profile intentionally returns all tools with
+/// `mcp_metadata_exposable = true`. This is **not** the conservative default
+/// listing — for that, use [`mcp_tool_registrations_default_visible`]. Strict
+/// runtime policy (`EnforcementContext::evaluate()` + `ApprovedOperation`) is
+/// still required before any tool listed here can execute.
 ///
-/// - `"ops-agent"`: returns all tools with `mcp_metadata_exposable = true`
-/// - `"coding-agent"`: returns the coding-agent tools (scan-ports,
-///   fingerprint, scan-endpoints, waf-detect, search)
+/// - `"ops-agent"`: profile-expanded — every `mcp_metadata_exposable` tool
+/// - `"coding-agent"`: hardcoded narrow allowlist (scan-ports, fingerprint,
+///   scan-endpoints, endpoints, waf-detect, search)
+/// - any other: empty
+///
+/// See `docs/TOOL_REGISTRATION.md` for the full exposure model.
 pub fn mcp_tool_registrations(profile: &str) -> Vec<ToolRegistration> {
     let all = all_tool_registrations();
     match profile {

@@ -76,8 +76,11 @@ pub struct CommandRegistration {
     pub tui_visible: bool,
     /// Whether this command may be exposed through MCP/REST/gRPC/agent.
     pub programmatic_visible: bool,
-    /// Whether this command requires human interaction.
-    pub interactive_only: bool,
+    /// Whether this command is intended for direct CLI/operator invocation only
+    /// (helper/config/report-style commands that should not appear in TUI or
+    /// programmatic surfaces). This does **not** apply to all human-interactive
+    /// surfaces; TUI manual actions use `tui_visible`, not this flag.
+    pub cli_interactive_only: bool,
     /// Whether the descriptor/execution path uses registry metadata.
     pub registry_backed: bool,
     /// How this command is dispatched.
@@ -113,7 +116,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
@@ -126,7 +129,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
@@ -139,7 +142,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
@@ -152,7 +155,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: true,
         dispatch_mode: CommandDispatchMode::RegistryBacked,
     },
@@ -166,7 +169,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -179,7 +182,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -192,7 +195,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -205,7 +208,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -218,7 +221,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -231,7 +234,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -244,7 +247,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -257,7 +260,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -270,7 +273,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -283,7 +286,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -296,7 +299,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -309,7 +312,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -322,7 +325,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -335,7 +338,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -348,7 +351,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -361,7 +364,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -374,7 +377,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -387,7 +390,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -400,7 +403,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -413,7 +416,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -426,7 +429,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -439,7 +442,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -452,7 +455,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: true,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::LegacyWrapped,
     },
@@ -466,7 +469,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -479,7 +482,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -492,7 +495,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -505,7 +508,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -518,7 +521,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -532,7 +535,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -545,7 +548,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -558,7 +561,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -572,7 +575,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -585,7 +588,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -598,7 +601,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -611,7 +614,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -624,7 +627,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -637,7 +640,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -650,7 +653,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: false,
+        cli_interactive_only: false,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::ServerLifecycle,
     },
@@ -664,7 +667,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -677,7 +680,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -690,7 +693,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -703,7 +706,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -716,7 +719,7 @@ pub const REGISTERED_COMMANDS: &[CommandRegistration] = &[
         cli_visible: true,
         tui_visible: false,
         programmatic_visible: false,
-        interactive_only: true,
+        cli_interactive_only: true,
         registry_backed: false,
         dispatch_mode: CommandDispatchMode::HelperOnly,
     },
@@ -753,11 +756,12 @@ pub fn tui_visible_command_ids() -> Vec<&'static str> {
         .collect()
 }
 
-/// Get all registered command IDs that are interactive-only (not exposed programmatically).
-pub fn interactive_only_command_ids() -> Vec<&'static str> {
+/// Get all registered command IDs that are CLI-helper interactive only
+/// (not TUI-visible and not exposed programmatically).
+pub fn cli_interactive_only_command_ids() -> Vec<&'static str> {
     REGISTERED_COMMANDS
         .iter()
-        .filter(|r| r.interactive_only)
+        .filter(|r| r.cli_interactive_only)
         .map(|r| r.command_id)
         .collect()
 }
@@ -855,12 +859,12 @@ mod tests {
     }
 
     #[test]
-    fn interactive_only_not_programmatic() {
+    fn cli_interactive_only_not_programmatic() {
         for reg in REGISTERED_COMMANDS {
-            if reg.interactive_only {
+            if reg.cli_interactive_only {
                 assert!(
                     !reg.programmatic_visible,
-                    "Command '{}' is interactive_only but programmatic_visible",
+                    "Command '{}' is cli_interactive_only but programmatic_visible",
                     reg.command_id
                 );
             }
@@ -952,16 +956,37 @@ mod tests {
     }
 
     #[test]
-    fn tui_visible_excludes_interactive_only() {
+    fn tui_visible_excludes_cli_interactive_only() {
         for reg in REGISTERED_COMMANDS {
-            if reg.interactive_only {
+            if reg.cli_interactive_only {
                 assert!(
                     !reg.tui_visible,
-                    "interactive_only command '{}' should not be tui_visible",
+                    "cli_interactive_only command '{}' should not be tui_visible",
                     reg.command_id
                 );
             }
         }
+    }
+
+    /// Documents that TUI-visible manual commands remain supported and are
+    /// distinct from CLI-helper-only commands. The two intent categories
+    /// must not be conflated: manual side-effecting commands are still
+    /// allowed to be tui_visible; only CLI-helper commands are not.
+    #[test]
+    fn tui_visible_commands_can_be_manual_operator_actions() {
+        let recon = lookup_command("recon").expect("recon should be registered");
+        assert!(recon.tui_visible, "recon should be tui_visible");
+        assert!(
+            !recon.cli_interactive_only,
+            "recon is a manual operator action, not cli_interactive_only"
+        );
+
+        let scan_ports = lookup_command("scan-ports").expect("scan-ports should be registered");
+        assert!(scan_ports.tui_visible, "scan-ports should be tui_visible");
+        assert!(
+            !scan_ports.cli_interactive_only,
+            "scan-ports is a manual operator action, not cli_interactive_only"
+        );
     }
 
     #[test]

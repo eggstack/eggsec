@@ -15,6 +15,12 @@
 > (MCP, REST, agent, gRPC) require explicit scope manifest, policy approval, and
 > `EnforcementContext::evaluate()` before dispatch. High-risk operations with `Y` exposure flags
 > still require non-baseline capabilities and strict policy gates.
+>
+> **MCP column note**: A `Y` value means the operation has `mcp_metadata_exposable = true`
+> under Model A (profile-expanded visibility — see `docs/TOOL_REGISTRATION.md`). High-risk
+> operations marked `Y` here may appear in the OpsAgent profile listing but are **not**
+> `mcp_default_visible` and therefore do not appear in the conservative default listing.
+> OpsAgent must still enforce strict runtime policy per tool before dispatch.
 
 ## Standalone Operations
 

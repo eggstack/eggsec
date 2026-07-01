@@ -77,13 +77,24 @@ fn feature_gated_entries_have_nonempty_feature() {
 }
 
 #[test]
-fn side_effecting_entries_have_descriptor_builder() {
+fn registry_backed_side_effecting_commands_build_descriptors() {
+    // RegistryBacked dispatch fully relies on `build_descriptor()` to produce the
+    // OperationDescriptor passed to `EnforcementContext::evaluate()`. Missing
+    // descriptor support here means the dispatch bridge cannot evaluate the
+    // command, so this invariant is strict for RegistryBacked entries only.
     for reg in REGISTERED_COMMANDS.iter() {
-        if reg.category == CommandCategory::SideEffectingNetwork && reg.operation_id.is_some() {
+        if reg.category == CommandCategory::SideEffectingNetwork
+            && matches!(reg.dispatch_mode, CommandDispatchMode::RegistryBacked)
+        {
+            assert!(
+                reg.operation_id.is_some(),
+                "RegistryBacked side-effecting command '{}' must have an operation_id",
+                reg.command_id
+            );
             let desc = reg.build_descriptor(Some("test-target".to_string()));
             assert!(
                 desc.is_some(),
-                "Side-effecting command '{}' with operation_id should build a descriptor",
+                "RegistryBacked side-effecting command '{}' must build a descriptor",
                 reg.command_id
             );
         }
@@ -91,12 +102,56 @@ fn side_effecting_entries_have_descriptor_builder() {
 }
 
 #[test]
-fn interactive_only_not_programmatic() {
+fn legacy_wrapped_operation_metadata_is_optional_but_valid_when_present() {
+    // LegacyWrapped entries route through the legacy `handle_command()` match
+    // path. They may carry an `operation_id` for descriptor metadata (so CLI
+    // help and preflight can describe them), but descriptor generation is not
+    // a dispatch proof — execution still flows through the legacy handler.
     for reg in REGISTERED_COMMANDS.iter() {
-        if reg.interactive_only {
+        if matches!(reg.dispatch_mode, CommandDispatchMode::LegacyWrapped) {
+            if let Some(op_id) = reg.operation_id {
+                assert!(
+                    metadata_for_tool_id(op_id).is_some(),
+                    "LegacyWrapped command '{}' has operation_id '{}' but no matching OperationMetadata",
+                    reg.command_id,
+                    op_id
+                );
+            }
+            // legacy path does not require build_descriptor to succeed
+        }
+    }
+}
+
+#[test]
+fn helper_and_server_commands_do_not_require_descriptors() {
+    // HelperOnly and ServerLifecycle entries may have no operation_id. They are
+    // not subject to the registry descriptor-builder invariant because they are
+    // not routed through `EnforcementContext::evaluate()`.
+    for reg in REGISTERED_COMMANDS.iter() {
+        if matches!(
+            reg.dispatch_mode,
+            CommandDispatchMode::HelperOnly | CommandDispatchMode::ServerLifecycle
+        ) {
+            // operation_id may be None or Some, but if Some must resolve.
+            if let Some(op_id) = reg.operation_id {
+                assert!(
+                    metadata_for_tool_id(op_id).is_some(),
+                    "Helper/Server command '{}' has operation_id '{}' but no matching OperationMetadata",
+                    reg.command_id,
+                    op_id
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn cli_interactive_only_not_programmatic() {
+    for reg in REGISTERED_COMMANDS.iter() {
+        if reg.cli_interactive_only {
             assert!(
                 !reg.programmatic_visible,
-                "Command '{}' is interactive_only but programmatic_visible is true",
+                "Command '{}' is cli_interactive_only but programmatic_visible is true",
                 reg.command_id
             );
         }
@@ -162,7 +217,7 @@ fn lookup_returns_correct_entry() {
     assert_eq!(reg.operation_id, Some("recon"));
     assert_eq!(reg.display_name, "Reconnaissance");
     assert_eq!(reg.category, CommandCategory::SideEffectingNetwork);
-    assert!(!reg.interactive_only);
+    assert!(!reg.cli_interactive_only);
     assert!(reg.tui_visible);
 }
 
@@ -193,10 +248,10 @@ fn category_classification_consistent() {
     for reg in REGISTERED_COMMANDS.iter() {
         match reg.category {
             CommandCategory::SideEffectingNetwork => {
-                if !reg.interactive_only {
+                if !reg.cli_interactive_only {
                     assert!(
                         reg.tui_visible,
-                        "Non-interactive SideEffectingNetwork command '{}' should be TUI visible",
+                        "Non-cli-interactive SideEffectingNetwork command '{}' should be TUI visible",
                         reg.command_id
                     );
                 }
@@ -282,15 +337,15 @@ fn dispatch_mode_consistent_with_fields() {
                     reg.command_id
                 );
                 assert!(
-                    !reg.interactive_only,
-                    "ServerLifecycle command '{}' should not be interactive_only",
+                    !reg.cli_interactive_only,
+                    "ServerLifecycle command '{}' should not be cli_interactive_only",
                     reg.command_id
                 );
             }
             CommandDispatchMode::HelperOnly => {
                 assert!(
-                    reg.interactive_only,
-                    "HelperOnly command '{}' should be interactive_only",
+                    reg.cli_interactive_only,
+                    "HelperOnly command '{}' should be cli_interactive_only",
                     reg.command_id
                 );
             }

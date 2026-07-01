@@ -44,8 +44,10 @@ Dispatch Bridge (handle_command)
 
 ### Registry-backed (Phase 6 pilot)
 
-| Command ID | Operation ID | Category | Feature | Interactive Only | TUI Visible | Registry Backed |
-|-----------|-------------|----------|---------|:---------------:|:-----------:|:---------------:|
+Manual operator actions exposed in CLI and TUI. Not `cli_interactive_only`.
+
+| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible | Registry Backed |
+|-----------|-------------|----------|---------|:--------------------:|:-----------:|:---------------:|
 | `recon` | `recon` | SideEffectingNetwork | — | No | Yes | Yes |
 | `scan-ports` | `scan-ports` | SideEffectingNetwork | — | No | Yes | Yes |
 | `scan-endpoints` | `scan-endpoints` | SideEffectingNetwork | — | No | Yes | Yes |
@@ -53,8 +55,10 @@ Dispatch Bridge (handle_command)
 
 ### Legacy (not yet migrated)
 
-| Command ID | Operation ID | Category | Feature | Interactive Only | TUI Visible | Registry Backed | Notes |
-|-----------|-------------|----------|---------|:---------------:|:-----------:|:---------------:|-------|
+Manual operator actions exposed in CLI and TUI. Not `cli_interactive_only`.
+
+| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible | Registry Backed | Notes |
+|-----------|-------------|----------|---------|:--------------------:|:-----------:|:---------------:|-------|
 | `scan` | `scan` (alias→scan-ports) | SideEffectingNetwork | — | No | Yes | No | Pipeline orchestrator, LegacyWrapped |
 | `resume` | scan-resume | SideEffectingNetwork | — | No | Yes | No | Pipeline resume, LegacyWrapped |
 | `fuzz` | `fuzz` | SideEffectingNetwork | — | No | Yes | No | Complex payload engine, LegacyWrapped |
@@ -78,6 +82,16 @@ Dispatch Bridge (handle_command)
 | `browser` | `browser` | SideEffectingNetwork | `headless-browser` | No | Yes | No | LegacyWrapped |
 | `mobile` | mobile-static/mobile-dynamic | LocalFileDomain | `mobile` | No | Yes | No | LegacyWrapped |
 | `db` | `db-pentest` | LocalFileDomain | `db-pentest` | No | Yes | No | LegacyWrapped |
+
+### CLI-helper interactive only (not TUI, not programmatic)
+
+`cli_interactive_only: true` — intended for direct CLI/operator invocation
+only. Hidden from TUI tabs and not exposed via MCP/REST/gRPC/agent. The flag
+does **not** mean "all human interactive surfaces"; manual operator actions
+with TUI tabs use `tui_visible`.
+
+| Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible | Registry Backed | Notes |
+|-----------|-------------|----------|---------|:--------------------:|:-----------:|:---------------:|-------|
 | `plan` | (none) | ConfigOutputHelper | — | Yes | No | No | HelperOnly |
 | `preflight` | (uses metadata lookup) | ConfigOutputHelper | — | Yes | No | No | Advisory only, HelperOnly |
 | `ci` | (none) | ConfigOutputHelper | — | Yes | No | No | Passive quality gate, HelperOnly |
@@ -98,6 +112,34 @@ Dispatch Bridge (handle_command)
 | `storage` | (none) | LocalFileDomain | `database` | Yes | No | No | HelperOnly |
 | `sbom` | (none) | LocalFileDomain | `sbom` | Yes | No | No | HelperOnly |
 | `notify` | (none) | ConfigOutputHelper | — | Yes | No | No | Test helper, HelperOnly |
+
+The full server-lifecycle group (`serve`, `mcp-serve`, `agent`, `grpc`,
+`cluster`, `remote`, `exec`) is `cli_interactive_only: false` because the CLI
+operator uses these to launch the daemon, not to interactively invoke them in
+the helper sense.
+
+## Visibility & Surface Fields
+
+Each `CommandRegistration` carries visibility and dispatch fields that
+classify how it integrates with the CLI/TUI/programmatic surfaces. These are
+**metadata, not authorization**; all side-effecting commands still flow
+through `EnforcementContext::evaluate()` before execution.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `cli_visible` | `bool` | Whether this command appears as a CLI subcommand or in help output. |
+| `tui_visible` | `bool` | Whether this command appears as a TUI tab action. |
+| `programmatic_visible` | `bool` | Whether this command may be exposed through MCP/REST/gRPC/agent. |
+| `cli_interactive_only` | `bool` | Whether the command is intended for **direct CLI/operator invocation only**. CLI helper/config/report-style commands (e.g. `doctor`, `plan`, `preflight`, `config`, `report`) are `cli_interactive_only: true`; they are not TUI-visible and not programmatic. **This flag does not apply to all human-interactive surfaces** — TUI manual actions use `tui_visible`, not `cli_interactive_only`. |
+| `registry_backed` | `bool` | Shorthand for `dispatch_mode == RegistryBacked`. The descriptor/execution path uses registry metadata. |
+| `dispatch_mode` | `CommandDispatchMode` | See below. |
+
+Invariants enforced by `tests/command_registry.rs`:
+- `cli_interactive_only → !programmatic_visible`
+- `cli_interactive_only → !tui_visible`
+- `HelperOnly → cli_interactive_only`
+- `ServerLifecycle → !tui_visible && !cli_interactive_only`
+- `RegistryBacked → registry_backed && operation_id.is_some()`
 
 ## Migration Notes
 

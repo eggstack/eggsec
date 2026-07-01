@@ -324,7 +324,11 @@ impl McpServer {
         let all_tools = self.registry.list();
         let tools = self.policy.filter_tools(all_tools);
 
-        // Filter by ToolRegistration mcp_metadata_exposable (see docs/TOOL_REGISTRATION.md)
+        // Profile-expanded listing (Model A): MCP profile policy filters the runtime
+        // registry first, then `ToolRegistration` restricts by profile visibility.
+        // For OpsAgent this returns all `mcp_metadata_exposable` tools; CodingAgent
+        // uses a hardcoded allowlist. Conservative defaults are available through
+        // `mcp_tool_registrations_default_visible()`. See docs/TOOL_REGISTRATION.md.
         let profile_name = self.profile.as_str();
         let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
             .iter()
@@ -394,7 +398,11 @@ impl McpServer {
         let all_tools = self.registry.list();
         let tools = self.policy.filter_tools(all_tools);
 
-        // Filter by ToolRegistration mcp_metadata_exposable (see docs/TOOL_REGISTRATION.md)
+        // Profile-expanded listing (Model A): MCP profile policy filters the runtime
+        // registry first, then `ToolRegistration` restricts by profile visibility.
+        // For OpsAgent this returns all `mcp_metadata_exposable` tools; CodingAgent
+        // uses a hardcoded allowlist. Conservative defaults are available through
+        // `mcp_tool_registrations_default_visible()`. See docs/TOOL_REGISTRATION.md.
         let profile_name = self.profile.as_str();
         let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
             .iter()

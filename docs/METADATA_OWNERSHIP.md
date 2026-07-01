@@ -62,6 +62,23 @@ Strict programmatic surfaces (MCP, REST, agent, gRPC) always require:
 
 High-risk operations (risk > `SafeActive`) with programmatic exposure flags still require non-baseline capabilities and strict policy gates. The `docs/CAPABILITY_MATRIX.md` Standalone Operations table documents these flags as metadata-level exposure permissions, not default runtime behavior.
 
+## MCP Profile Visibility Model A
+
+The MCP surface distinguishes between two layers of visibility:
+
+- **`mcp_metadata_exposable`** — broad metadata-level permission gate set from
+  `OperationMetadata.mcp_exposable`. OpsAgent uses this for its expanded
+  profile listing.
+- **`mcp_default_visible`** — conservative subset visible to
+  `mcp_tool_registrations_default_visible()`. Restricts to passive/safe-active
+  operations with no feature gate and `mcp_metadata_exposable = true`.
+
+OpsAgent is **profile-expanded**, not conservative default. It lists every
+`mcp_metadata_exposable` tool, including high-risk operations. Strict runtime
+policy (`EnforcementContext::evaluate()` + `ApprovedOperation`) is still
+required before any listed tool executes. See `docs/TOOL_REGISTRATION.md` for
+the full protocol-by-protocol listing behavior.
+
 ## Tool Registration (Phase 7)
 
 `ToolRegistration` (`tool::registration`) is a **derived metadata source** that bridges `OperationMetadata` and `DomainDescriptor` `ToolIntegration` to produce per-protocol tool listings. It is not a third static registry — it is computed from the two existing ones.
@@ -74,8 +91,9 @@ Each `ToolRegistration` carries:
 
 Builder functions filter registrations by protocol:
 - `all_tool_registrations()` — full inventory
-- `mcp_tool_registrations()` — tools with `mcp_metadata_exposable = true`
-- `mcp_tool_registrations_default_visible()` — tools visible in the default MCP listing (conservative subset)
+- `mcp_tool_registrations("ops-agent")` — Model A profile-expanded listing: every `mcp_metadata_exposable` tool
+- `mcp_tool_registrations("coding-agent")` — hardcoded narrow allowlist
+- `mcp_tool_registrations_default_visible()` — conservative default subset (passive/safe-active, no feature gate)
 - `rest_tool_registrations()` — tools with `rest_exposable = true`
 - `grpc_tool_registrations()` — tools with `grpc_exposable = true`
 - `agent_tool_registrations()` — tools with `agent_exposable = true`
@@ -138,3 +156,4 @@ The project uses **Model A** (broad programmatic exposure flags with explicit se
 - This means metadata permits registration when compiled, registered, scoped, and policy-authorized
 - It does **not** mean default safe execution or baseline agent safety
 - Strict surfaces require `EnforcementContext::evaluate()` and `ApprovedOperation` tokens
+- OpsAgent is a **profile-expanded** listing under Model A; the conservative default is `mcp_tool_registrations_default_visible()`
