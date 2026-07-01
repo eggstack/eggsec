@@ -16,7 +16,7 @@ echo "=== Architecture Drift Guards ==="
 # 1. No stale "manual_only" in command registry docs/tests (excluding plans/, TUI action specs, and this script's own docs)
 echo ""
 echo "--- Check 1: No stale 'manual_only' in command registry ---"
-HITS=$(rg -n 'manual_only' --glob='*.md' docs/ 2>/dev/null | grep -v 'plans/' | grep -v 'action_spec' | grep -v 'CI_ARCHITECTURE_GUARDS' || true)
+HITS=$(rg -n 'manual_only' --glob='*.md' docs/ 2>/dev/null | grep -v 'plans/' | grep -v 'action_spec' | grep -v 'CI_ARCHITECTURE_GUARDS' | grep -v 'docs/extending/' || true)
 if [[ -n "$HITS" ]]; then
   echo "$HITS"
   echo "FAIL: Found stale 'manual_only' in docs. Use 'cli_interactive_only' instead."
@@ -130,6 +130,33 @@ for doc in "${REQUIRED_DOCS[@]}"; do
 done
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: All required docs exist."
+fi
+
+# 7b. Extensibility handoff guides exist
+echo ""
+echo "--- Check 7b: Extensibility handoff guides exist ---"
+SECTION_FAIL=0
+REQUIRED_EXT_DOCS=(
+  "docs/EXTENSIBILITY.md"
+  "docs/extending/operations.md"
+  "docs/extending/domains.md"
+  "docs/extending/commands.md"
+  "docs/extending/tool-exposure.md"
+  "docs/extending/tui-actions.md"
+  "docs/extending/report-evidence.md"
+  "docs/extending/features.md"
+  "docs/extending/testing.md"
+  "docs/extending/templates.md"
+)
+for doc in "${REQUIRED_EXT_DOCS[@]}"; do
+  if [[ ! -f "$doc" ]]; then
+    echo "FAIL: Missing extensibility doc: $doc"
+    FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: All extensibility handoff guides exist."
 fi
 
 # 8. No stale field names in current docs

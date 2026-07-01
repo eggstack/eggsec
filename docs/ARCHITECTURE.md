@@ -348,3 +348,7 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 | Agent enforcement | `crates/eggsec/src/agent/mod.rs` |
 | Enforced dispatch regression test | `crates/eggsec/tests/enforced_dispatch_regression.rs` |
 | Command registry | `crates/eggsec/src/commands/registry.rs` |
+
+## Extending Eggsec
+
+For contributor-facing guidance on adding operations, domains, commands, tool integrations, TUI actions, report/evidence outputs, and features, see [EXTENSIBILITY.md](EXTENSIBILITY.md) and the detailed guides in [extending/](extending/).

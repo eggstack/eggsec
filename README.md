@@ -499,6 +499,7 @@ See [docker-compose.yml](docker-compose.yml) for Docker configuration.
 - [Auth Testing Lab](docs/AUTH_LAB.md) - Authentication control validation (brute-force, lockout, MFA)
 - [Tool Registration](docs/TOOL_REGISTRATION.md) - Registration inventory, protocol listing, enforcement paths
 - [Usage Guide](docs/USAGE.md) - Comprehensive usage reference, output models, command examples
+- [Extending Eggsec](docs/EXTENSIBILITY.md) - Contributor guide for adding operations, domains, commands, tools, TUI actions, reports, and features
 
 ## Security Considerations
 
@@ -537,4 +538,4 @@ Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. For adding new operations, domains, commands, tools, TUI actions, report outputs, or features, start with the [Extensibility Guide](docs/EXTENSIBILITY.md) -- it covers the metadata-first extension model, required tests, and pre-handoff checklist.

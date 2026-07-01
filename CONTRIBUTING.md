@@ -647,6 +647,8 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 
 ### Before Submitting
 
+> **New contributors**: Start with the [Extensibility Guide](docs/EXTENSIBILITY.md) for the metadata-first extension model, required tests, and templates. New extension work should follow the guides in `docs/extending/` and pass `make check-architecture-ci` before handoff.
+
 1. **Update from upstream**
    ```bash
    git fetch upstream

@@ -196,6 +196,16 @@ Canonical reference points when updating guidance or skills:
 - `architecture/domain_contract.md` - Domain module contract (Phase 3): static metadata descriptors for capability domains
 - `architecture/report_envelope.md` - Normalized report/evidence envelope for cross-domain report unification
 - `docs/FEATURE_MATRIX.md` - Feature inventory, classification, naming conventions, build profiles, and cross-reference
+- `docs/EXTENSIBILITY.md` - Contributor extensibility guide: operations, domains, commands, tool exposure, TUI actions, reports, features, tests
+- `docs/extending/operations.md` - Adding new OperationMetadata
+- `docs/extending/domains.md` - Adding new domain crates and DomainDescriptors
+- `docs/extending/commands.md` - Adding new CLI commands and the command registry
+- `docs/extending/tool-exposure.md` - Exposing tools through MCP, REST, gRPC, and agent surfaces
+- `docs/extending/tui-actions.md` - Adding TUI tabs and actions
+- `docs/extending/report-evidence.md` - Report/evidence output using eggsec-output
+- `docs/extending/features.md` - Adding Cargo features and the feature matrix
+- `docs/extending/testing.md` - Test matrix and pre-handoff checklist
+- `docs/extending/templates.md` - Short templates for each extension type
 
 ### Feature Flags
 

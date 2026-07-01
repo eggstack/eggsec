@@ -98,6 +98,7 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 
 ### Documentation Currency
 - Verify current architecture docs exist (`COMMAND_REGISTRY.md`, `TOOL_REGISTRATION.md`, `FEATURE_MATRIX.md`, `METADATA_OWNERSHIP.md`, `CI_ARCHITECTURE_GUARDS.md`).
+- Verify extensibility handoff guides exist (`EXTENSIBILITY.md`, `extending/operations.md`, `extending/domains.md`, `extending/commands.md`, `extending/tool-exposure.md`, `extending/tui-actions.md`, `extending/report-evidence.md`, `extending/features.md`, `extending/testing.md`, `extending/templates.md`).
 - Fail on stale field names or contradictions in current docs.
 
 ## Platform-Sensitive Checks
