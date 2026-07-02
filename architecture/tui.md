@@ -181,7 +181,7 @@ Execution flow (mirrors Auth/Stress/Packet):
 2. `App::build_current_operation_descriptor()` (`app/mod.rs:436-471`) special-cases wireless active attacks: the operation is `wireless-deauth` or `wireless-disassoc`, the mode is `OperationMode::DefenseLab`, the risk is `SafeActive` (dry-run) or `Intrusive` (live), and `required_features: ["wireless-advanced"]` is set.
 3. Central `EnforcementContext::evaluate()`:
    - Dry-run → `Allow` / `Warn` → `spawn_task(...)` immediately.
-   - Live → `RequireConfirmation` under `ManualPermissive` → `request_policy_confirmation()` captures the `TaskConfig` and opens the policy overlay; on confirm, `confirm_policy_action()` replays the captured task.
+   - Live → `RequireConfirmation` under `ManualPermissive` → `request_policy_confirmation()` captures the `RunRequest` and opens the policy overlay; on confirm, `confirm_policy_action()` replays the captured task.
 4. The worker `run_wireless_active_task` (`workers/security.rs:865-927`) parses MACs, builds an `ActiveAttackConfig` with hard budgets (`max_frames ≤ 1000`, `frames_per_second ≤ 100`), and dispatches `run_deauth` (default) or `run_disassoc`.
 5. Result returns via `TaskResult::WirelessActive(result)` → `WirelessTab::set_active_results()` (`app/state_update.rs:418-422`), which transitions the tab to `AppState::Completed` and renders the findings, evidence, and recommendations.
 
@@ -355,28 +355,29 @@ if let Some(idx) = self.valid_focused_index() {
 }
 ```
 
-### Workers (`workers/`)
+### Dispatch (`eggsec::dispatch`)
 
-Background async tasks communicate via channels:
+Worker dispatch has been moved from the TUI crate to `eggsec::dispatch`. The TUI no longer owns the canonical execution match over task kinds.
 
-| Worker | File | Task Types |
+| Module | File | Task Types |
 |--------|------|------------|
-| `TaskRunner` | `runner.rs` | `TaskConfig`/`TaskResult` enums, async executor |
-| Network | `network.rs` | Load test, stress test, packet operations |
-| Scanner | `scanner.rs` | Port scan, endpoint scan, fingerprint |
-| Fuzzer | `fuzzer.rs` | Fuzz, WAF, WAF stress operations |
-| Recon | `recon.rs` | Recon operations (DNS, WHOIS, SSL, etc.) |
-| API | `api.rs` | GraphQL, OAuth, NSE operations |
-| Security | `security.rs` | Hunt, browser, compliance, storage, integrations, wireless active |
+| `dispatch::scanner` | `scanner.rs` | Port scan, endpoint scan, fingerprint |
+| `dispatch::network` | `network.rs` | Load test, stress test, packet operations |
+| `dispatch::fuzzer` | `fuzzer.rs` | Fuzz, WAF, WAF stress operations |
+| `dispatch::recon` | `recon.rs` | Recon operations (DNS, WHOIS, SSL, etc.) |
+| `dispatch::api` | `api.rs` | GraphQL, OAuth, NSE operations |
+| `dispatch::auth` | `auth.rs` | Authentication testing |
+| `dispatch::security` | `security.rs` | Hunt, browser, compliance, storage, integrations, wireless |
+| `dispatch::db_pentest` | `db_pentest.rs` | Database pentesting (feature-gated) |
+| `dispatch::intercept` | `intercept.rs` | Web proxy interception (feature-gated) |
+| `dispatch::c2` | `c2.rs` | C2 simulation (feature-gated) |
 
-(8 files total including `mod.rs`)
-
-**Error handling**: All worker channel sends use `if let Err(e) = ... { tracing::warn!(...) }` for proper error logging.
+**Types**: `TaskResult`, `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions` are all defined in `eggsec::dispatch::types`.
 
 **Communication Flow**:
 ```
-Tab builds TaskConfig → spawn_task() → TaskRunner (async)
-                                              ↓
+Tab builds RunRequest → spawn_task() → Runtime → TuiTaskDispatcher → eggsec::dispatch::dispatch_inner()
+                                                                              ↓
           progress_rx → App::update_progress() → tab.update_progress()
           result_rx → App::handle_result() → tab.set_results()
 ```
@@ -678,7 +679,7 @@ The guard checks `theme_selector.is_open()`, `proxy_rotation_selector.is_open()`
 │  │ TabInput.handle_enter() → spawn_task()                   │
 │  │                                                          │
 │  │ ┌────────────────────────────────────────────────────┐  │
-│  │ │ TaskRunner::run() async                            │  │
+│  │ │ eggsec::dispatch::dispatch_inner() async         │  │
 │  │ │ - Runs scan/fuzz/recon/etc                        │  │
 │  │ │ - Sends progress via progress_tx                  │  │
 │  │ │ - Sends result via result_tx                      │  │

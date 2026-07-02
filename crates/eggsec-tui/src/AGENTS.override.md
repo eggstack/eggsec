@@ -822,7 +822,7 @@ if let Err(e) = progress_tx.send((requests, requests)).await {
 }
 ```
 
-If the main loop has been dropped (app closed), the send fails — but this is logged at `warn` level for diagnostics. For critical failures that should abort the task, workers return `Err(...)` which propagates to `run()` and is handled at the TaskRunner level.
+If the main loop has been dropped (app closed), the send fails — but this is logged at `warn` level for diagnostics. For critical failures that should abort the task, workers return `Err(...)` which propagates to `dispatch_inner()` and is handled at the dispatch level.
 
 DO NOT use `let _ = channel.send(...).await` — this silently drops errors. See `architecture/tui.md` for the full pattern.
 
