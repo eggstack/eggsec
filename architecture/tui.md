@@ -6,7 +6,7 @@ Eggsec includes a powerful real-time Terminal User Interface (TUI) built with th
 
 Context-aware action hints replace the static help text in the status bar. The `ActionHint` model contains a `key` and `label` pair (e.g. `"C:stop"`). Hints are computed by `get_action_hints(app)` with this priority order:
 
-1. **Running task hints** — `C:stop` + `Z:pause` (or `Y:resume` when paused); detected via `app.has_active_task()` (checks all task state fields, not just `task_state.handle`)
+1. **Running task hints** — `C:stop` + `Z:pause` (or `Y:resume` when paused); detected via `app.has_active_task()` (checks all task state fields, not just `task_state.task_id`)
 2. **Overlay-specific hints** — PolicyConfirm: `Enter:confirm Esc:cancel`, ConfirmPopup: `y:yes n:no`, CommandPalette: `Enter:run ↑↓:select Esc:close`, QuickSwitch: `Enter:go ↑↓:select Esc:close`, Search: `Enter:search Bksp:edit Esc:close`, Help: `Esc:close j/k:scroll g/G:top/end`, HttpOptions: `h:close`
 3. **Insert-mode hints** — `Esc:normal Tab:next Enter:confirm`
 4. **Tab-specific normal-mode hints** — History: `↑↓:nav d:delete r:clear`, Dashboard: `Enter:open n/p:tabs`, default (with target): `Enter:run n/p:tabs /:search`, default (no target): `Enter:focus n/p:tabs /:search`

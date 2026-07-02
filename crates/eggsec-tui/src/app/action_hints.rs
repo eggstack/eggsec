@@ -18,8 +18,8 @@ pub struct ActionHint {
 /// 3. Insert-mode (input focused) hints
 /// 4. Tab-specific normal-mode hints
 pub fn get_action_hints(app: &App) -> Vec<ActionHint> {
-    // Use has_active_task() which checks all task state fields (handle, tab,
-    // progress_rx, result_rx) instead of just task_state.handle.
+    // Use has_active_task() which checks all task state fields (task_id, tab,
+    // progress_rx, result_rx) instead of just task_state.task_id.
     if app.has_active_task() {
         return task_hints(app);
     }
@@ -361,7 +361,7 @@ mod tests {
     #[tokio::test]
     async fn task_running_hints() {
         let mut app = create_test_app();
-        app.task_state.handle = Some(tokio::spawn(async {}));
+        app.task_state.task_id = Some(eggsec_runtime::TaskId::new());
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 2);
         assert_eq!(hints[0].key, "C");
@@ -373,7 +373,7 @@ mod tests {
     #[tokio::test]
     async fn task_paused_hints() {
         let mut app = create_test_app();
-        app.task_state.handle = Some(tokio::spawn(async {}));
+        app.task_state.task_id = Some(eggsec_runtime::TaskId::new());
         app.task_state.paused = true;
         let hints = get_action_hints(&app);
         assert_eq!(hints.len(), 2);
@@ -595,7 +595,7 @@ mod tests {
     #[tokio::test]
     async fn task_overrides_overlay_hints() {
         let mut app = create_test_app();
-        app.task_state.handle = Some(tokio::spawn(async {}));
+        app.task_state.task_id = Some(eggsec_runtime::TaskId::new());
         app.overlay.show_help = true;
         let hints = get_action_hints(&app);
         assert_eq!(hints[0].key, "C");

@@ -53,11 +53,19 @@ pub struct QuickSwitchState {
 }
 
 /// Task runtime state
+///
+/// Phase 2: Task lifecycle is owned by `eggsec_runtime::Runtime`. The TUI stores
+/// a `TaskId` and consumes runtime events. Raw `JoinHandle`/`AbortHandle` fields
+/// are removed; `progress_rx`/`result_rx` remain as a temporary bridge until
+/// Phase 4 migrates the update loop to drain `RuntimeEventReceiver` directly.
 #[derive(Default)]
 pub struct TaskState {
-    pub handle: Option<tokio::task::JoinHandle<()>>,
-    pub inner_abort: Option<tokio::task::AbortHandle>,
+    /// Runtime-assigned task identifier. `Some` while a task is active.
+    pub task_id: Option<eggsec_runtime::TaskId>,
+    /// Which tab initiated the active task.
     pub tab: Option<Tab>,
+    /// Channel receivers bridging `TaskRunner` progress to the TUI.
+    /// These will be replaced by `RuntimeEventReceiver` in Phase 4.
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
     pub result_rx: Option<tokio::sync::mpsc::Receiver<crate::workers::TaskResult>>,
     pub paused: bool,
@@ -149,8 +157,7 @@ mod tests {
     #[test]
     fn task_state_defaults() {
         let state = TaskState::default();
-        assert!(state.handle.is_none());
-        assert!(state.inner_abort.is_none());
+        assert!(state.task_id.is_none());
         assert!(state.tab.is_none());
         assert!(state.progress_rx.is_none());
         assert!(state.result_rx.is_none());

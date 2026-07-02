@@ -90,8 +90,7 @@ impl super::App {
             if is_closed {
                 self.task_state.result_rx = None;
                 self.task_state.tab = None;
-                self.task_state.handle = None;
-                self.task_state.inner_abort = None;
+                self.task_state.task_id = None;
                 self.task_state.started_at = None;
                 self.task_state.paused = false;
             }

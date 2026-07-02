@@ -21,7 +21,7 @@ Feature-gated crates need explicit features: `cargo check -p eggsec --features m
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 12 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, and `eggsec-runtime`. See `README.md` for features and `architecture/overview.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 12 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, and `eggsec-runtime`. The `eggsec-runtime` crate provides frontend-neutral task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) used by TUI, CLI, REST, MCP, and agent surfaces. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Quick Reference
 
@@ -328,6 +328,12 @@ Canonical reference points when updating guidance or skills:
 - `TaskOutcome` - Generic task outcome (`eggsec-runtime::event`)
 - `SessionSnapshot` - Runtime session state snapshot (`eggsec-runtime::session`)
 - `RuntimeCapabilities` - Runtime capability descriptor (`eggsec-runtime::capabilities`)
+- `Runtime` - Async task lifecycle manager (`eggsec-runtime::runtime`); owns task submit/cancel/snapshot/subscribe; single-active-task policy (new task cancels existing)
+- `RuntimeConfig` - Runtime configuration (`eggsec-runtime::runtime`); `default_task_timeout`, `max_active_tasks_per_session`, `event_channel_capacity`
+- `SessionOptions` - Session creation options (`eggsec-runtime::runtime`)
+- `RuntimeTaskExecutor` - Trait allowing frontends to supply task execution logic (`eggsec-runtime::runtime`)
+- `RuntimeEventSink` - Event sink for runtime lifecycle events (`eggsec-runtime::runtime`)
+- `RuntimeEventReceiver` - Event receiver for runtime lifecycle events (`eggsec-runtime::runtime`)
 
 ### Important Patterns
 
@@ -406,6 +412,7 @@ Canonical reference points when updating guidance or skills:
 - **CI architecture guards**: `scripts/check-architecture-guards.sh` runs static grep checks for stale terminology, MCP exposure split, raw dispatch prevention, plan retention, and docs currency. Requires ripgrep (`rg`). Required for every PR. `make check-architecture-ci` reproduces the full architecture guard CI job locally.
 - **Feature-profile CI**: CI runs `cargo check` for 9 representative feature profiles on every PR. Platform-sensitive profiles (mobile-dynamic) may fail due to missing system deps.
 - **MCP Model A assertion**: OpsAgent listing is strictly broader than conservative default (`ops_ids.len() > default_ids.len()`). The test comment and assertion must both reflect strict broadness.
+- **TUI Runtime Phase 2 Bridge**: `eggsec-runtime` manages task lifecycle (task ID, timeout, cancellation, events) while the TUI's existing channel-based `TaskRunner` continues as the execution path. `TaskState` uses `task_id: Option<eggsec_runtime::TaskId>` instead of raw `JoinHandle`/`AbortHandle`. `App` owns an `Arc<Runtime>` and `runtime_session_id`. `TuiStubExecutor` satisfies `Runtime::new()` but actual task execution goes through a local compatibility executor wrapping `TaskRunner`. This will be replaced in Phase 3 when the executor moves into the runtime/engine crate.
 
 ## Skills Directory
 

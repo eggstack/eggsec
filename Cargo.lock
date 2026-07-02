@@ -1981,6 +1981,9 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "uuid",
 ]
 
@@ -2012,6 +2015,7 @@ dependencies = [
  "eggsec",
  "eggsec-core",
  "eggsec-nse",
+ "eggsec-runtime",
  "futures",
  "lzma-rs",
  "parking_lot",
@@ -2023,6 +2027,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "url",

@@ -21,7 +21,7 @@ crates/
   eggsec-db-lab/     # Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis)
   eggsec-web-proxy/  # Web proxy and MITM interception domain crate
   eggsec-mobile-lab/ # Mobile app security analysis domain crate (APK/IPA static + Android dynamic)
-  eggsec-runtime/    # Frontend-neutral runtime DTOs and protocol types for daemon architecture
+  eggsec-runtime/    # Frontend-neutral runtime with task lifecycle management (Runtime, RuntimeConfig, RuntimeTaskExecutor)
 ```
 
 ## Third pass changes
@@ -92,7 +92,7 @@ crates/
   eggsec-db-lab/     # Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis)
   eggsec-web-proxy/  # Web proxy and MITM interception domain crate
   eggsec-mobile-lab/ # Mobile app security analysis domain crate (APK/IPA static + Android dynamic)
-  eggsec-runtime/    # Frontend-neutral runtime DTOs and protocol types for daemon architecture
+  eggsec-runtime/    # Frontend-neutral runtime with task lifecycle management (Runtime, RuntimeConfig, RuntimeTaskExecutor)
 ```
 
 ### Commands run

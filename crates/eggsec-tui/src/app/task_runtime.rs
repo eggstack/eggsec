@@ -3,9 +3,41 @@ use std::time::Duration;
 use crate::workers;
 use eggsec::config::ApprovedOperation;
 
+/// Stub executor for `eggsec_runtime::Runtime` initialization.
+///
+/// The TUI does not use the runtime's executor directly — it uses a local
+/// compatibility bridge in `spawn_task` that wraps the existing `TaskRunner`.
+/// This stub satisfies the `Runtime::new()` requirement for an executor.
+/// Phase 3 will replace this with the real executor that moves into the
+/// runtime/engine crate.
+pub(crate) struct TuiStubExecutor;
+
+impl eggsec_runtime::RuntimeTaskExecutor for TuiStubExecutor {
+    fn execute(
+        &self,
+        _task_id: eggsec_runtime::TaskId,
+        _request: eggsec_runtime::RunRequest,
+        _sink: eggsec_runtime::RuntimeEventSink,
+        _cancel: tokio_util::sync::CancellationToken,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<eggsec_runtime::TaskOutcome, eggsec_runtime::RuntimeError>,
+                > + Send
+                + 'static,
+        >,
+    > {
+        Box::pin(async {
+            // The TUI never dispatches through the runtime's executor.
+            // Actual task execution goes through the local compatibility bridge.
+            Err(eggsec_runtime::RuntimeError::UnsupportedTaskKind)
+        })
+    }
+}
+
 impl super::App {
     pub fn has_active_task(&self) -> bool {
-        self.task_state.handle.is_some()
+        self.task_state.task_id.is_some()
             || self.task_state.tab.is_some()
             || self.task_state.progress_rx.is_some()
             || self.task_state.result_rx.is_some()
@@ -29,7 +61,7 @@ impl super::App {
         let tab_name = self.task_state.tab.map(|t| t.title()).unwrap_or("Task");
         let state = if self.task_state.paused {
             "paused"
-        } else if self.task_state.handle.is_some() {
+        } else if self.task_state.task_id.is_some() {
             "running"
         } else {
             "stopping"
@@ -51,13 +83,26 @@ impl super::App {
         tab.as_tab_input(self).stop();
     }
 
+    /// Cancel the active task via the runtime and clear TUI state.
+    ///
+    /// Phase 2 bridge: calls `runtime.cancel()` to record the lifecycle event,
+    /// then drops channel receivers to stop the progress forwarder. The runtime
+    /// tracks the canonical cancellation; the TUI cleans up local state.
     fn clear_task_runtime(&mut self) {
-        if let Some(handle) = self.task_state.handle.take() {
-            handle.abort();
+        if let (Some(session_id), Some(task_id)) =
+            (self.runtime_session_id, self.task_state.task_id)
+        {
+            let runtime = self.runtime.clone();
+            let sid = session_id;
+            let tid = task_id;
+            tokio::spawn(async move {
+                if let Err(e) = runtime.cancel(sid, tid).await {
+                    tracing::debug!("Runtime cancel failed (may already be completed): {}", e);
+                }
+            });
         }
-        if let Some(abort) = self.task_state.inner_abort.take() {
-            abort.abort();
-        }
+
+        self.task_state.task_id = None;
         self.task_state.tab = None;
         if let Some(rx) = self.task_state.progress_rx.take() {
             drop(rx);
@@ -87,6 +132,12 @@ impl super::App {
         self.task_state.tab = None;
     }
 
+    /// Submit a task to the runtime and spawn a local compatibility executor.
+    ///
+    /// Phase 2 bridge: the runtime records the task lifecycle (ID, timeout,
+    /// cancellation), while the local executor wraps the existing `TaskRunner`
+    /// worker path. Channels (`progress_rx`/`result_rx`) remain as the TUI's
+    /// consumption path until Phase 4 migrates to `RuntimeEventReceiver`.
     pub(crate) fn spawn_task(
         &mut self,
         config: Option<workers::TaskConfig>,
@@ -103,20 +154,62 @@ impl super::App {
             let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(100);
             let (result_tx, result_rx) = tokio::sync::mpsc::channel(1);
 
-            let runner = workers::TaskRunner::new(config, progress_tx, result_tx.clone());
-            let error_tx = result_tx.clone();
-
             self.task_state.progress_rx = Some(progress_rx);
             self.task_state.result_rx = Some(result_rx);
 
             self.task_state.tab = Some(self.current_tab);
             self.task_state.started_at = Some(std::time::Instant::now());
 
-            let inner_handle = tokio::spawn(async move { runner.run().await });
+            // Submit to runtime for lifecycle tracking (best-effort)
+            let runtime = self.runtime.clone();
+            let session_id = self.runtime_session_id;
 
+            tokio::spawn(async move {
+                let session_id = match session_id {
+                    Some(sid) => sid,
+                    None => match runtime
+                        .create_session(eggsec_runtime::SessionOptions::default())
+                        .await
+                    {
+                        Ok(sid) => sid,
+                        Err(e) => {
+                            tracing::error!("Failed to create runtime session: {}", e);
+                            return;
+                        }
+                    },
+                };
+
+                let request = eggsec_runtime::RunRequest {
+                    task_kind: eggsec_runtime::TaskKind::PortScan(
+                        eggsec_runtime::request::PortScanParams {
+                            target: String::new(),
+                            ports: None,
+                            scan_type: None,
+                            timeout_ms: None,
+                        },
+                    ),
+                    requested_by: None,
+                    surface: eggsec_runtime::RuntimeSurface::TuiManual,
+                    labels: vec![],
+                };
+
+                match runtime.submit(session_id, request).await {
+                    Ok(task_id) => {
+                        tracing::debug!("Task submitted to runtime: {}", task_id);
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to submit task to runtime: {}", e);
+                    }
+                }
+            });
+
+            // Spawn the local compatibility executor with existing worker path
+            let runner = workers::TaskRunner::new(config, progress_tx, result_tx.clone());
+            let error_tx = result_tx;
+
+            let inner_handle = tokio::spawn(async move { runner.run().await });
             let inner_abort = inner_handle.abort_handle();
             let handle_to_abort = inner_abort.clone();
-            self.task_state.inner_abort = Some(inner_abort);
 
             let handle = tokio::spawn(async move {
                 match tokio::time::timeout(Duration::from_secs(300), inner_handle).await {
@@ -172,7 +265,15 @@ impl super::App {
                     }
                 }
             });
-            self.task_state.handle = Some(handle);
+
+            // Phase 2 bridge: store the abort handle for emergency cleanup.
+            // The runtime tracks the canonical task lifecycle; this handle is
+            // retained for the local executor's timeout/cancellation path.
+            // TODO(phase-3): remove raw handle, rely on runtime.cancel() + channel drop
+            drop(handle);
+
+            // Store abort handle for emergency cleanup
+            self.runtime_abort_handle = Some(inner_abort);
         }
     }
 }

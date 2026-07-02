@@ -984,7 +984,7 @@ Update any future TUI changes to preserve the decode/apply split, delegate throu
 ### Action Hints Pattern
 
 Status bar hints are context-aware via `get_action_hints()` in `app/action_hints.rs`. Priority order:
-1. Running task hints (stop/pause/resume) — detected via `app.has_active_task()` (checks all task state fields, not just `task_state.handle`)
+1. Running task hints (stop/pause/resume) — detected via `app.has_active_task()` (checks all task state fields, not just `task_state.task_id`)
 2. Overlay-specific hints (policy confirm, command palette, search, help, etc.)
 3. Insert-mode hints (Esc/Tab/Enter)
 4. Tab-specific normal-mode hints (varies by tab)

@@ -100,6 +100,15 @@ pub struct App {
 
     /// Enforcement facade — owns evaluation, approval, and cached tokens.
     pub enforcement_state: enforcement_facade::EnforcementFacade,
+
+    // -- Phase 2: runtime lifecycle management --
+    /// Frontend-neutral runtime for task lifecycle (timeout, cancellation, events).
+    pub runtime: std::sync::Arc<eggsec_runtime::Runtime>,
+    /// Runtime session ID. Created lazily on first task submission.
+    pub runtime_session_id: Option<eggsec_runtime::SessionId>,
+    /// Phase 2 bridge: abort handle for the local compatibility executor.
+    /// TODO(phase-3): remove when executor moves into runtime.
+    pub runtime_abort_handle: Option<tokio::task::AbortHandle>,
 }
 
 impl App {
@@ -142,6 +151,12 @@ impl App {
             enforcement_state: enforcement_facade::EnforcementFacade::new(
                 TuiEnforcementState::new(surface, loaded_scope, enforcement),
             ),
+            runtime: std::sync::Arc::new(eggsec_runtime::Runtime::new(
+                eggsec_runtime::RuntimeConfig::default(),
+                task_runtime::TuiStubExecutor,
+            )),
+            runtime_session_id: None,
+            runtime_abort_handle: None,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -232,6 +247,12 @@ impl App {
                     enforcement,
                 ))
             },
+            runtime: std::sync::Arc::new(eggsec_runtime::Runtime::new(
+                eggsec_runtime::RuntimeConfig::default(),
+                task_runtime::TuiStubExecutor,
+            )),
+            runtime_session_id: None,
+            runtime_abort_handle: None,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -291,7 +312,7 @@ impl App {
     pub fn is_running(&self) -> bool {
         // A running task is also visible in the task_state regardless of which
         // tab is focused.
-        if self.task_state.handle.is_some() || self.task_state.tab.is_some() {
+        if self.task_state.task_id.is_some() || self.task_state.tab.is_some() {
             return true;
         }
         self.current_tab.as_tab_state(self).is_running()
@@ -817,7 +838,7 @@ impl App {
         // transient and saving mid-scan can write a snapshot that doesn't
         // match the disk reality. The save will fire on the next tick
         // after the task completes.
-        if self.task_state.handle.is_some() || self.task_state.tab.is_some() {
+        if self.task_state.task_id.is_some() || self.task_state.tab.is_some() {
             return;
         }
         let interval_secs = self.session_manager.auto_save_interval();

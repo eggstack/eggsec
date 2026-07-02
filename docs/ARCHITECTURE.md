@@ -57,7 +57,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec-db-lab` | DB pentest domain | No | Domain execution | No | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks. |
 | `eggsec-web-proxy` | Web proxy domain | No | Domain execution | No | Yes | MITM intercept, TLS, protocol handlers. |
 | `eggsec-mobile-lab` | Mobile analysis domain | No | Domain execution | No | Yes | APK/IPA static analysis + Android dynamic runtime testing (ADB, Frida, behavioral correlation). |
-| `eggsec-runtime` | Frontend-neutral DTOs | No | No | No | Yes | Runtime DTOs and protocol types for daemon architecture. |
+| `eggsec-runtime` | Frontend-neutral runtime | No | No | No | Yes | Task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor`) for daemon architecture. |
 
 **Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-output`, `eggsec-agent`) have no internal workspace dependencies. The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends.
 
