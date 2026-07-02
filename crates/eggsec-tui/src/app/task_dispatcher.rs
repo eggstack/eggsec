@@ -34,21 +34,21 @@ impl TaskDispatcher for TuiTaskDispatcher {
         let result_tx = ctx.result_tx.clone();
 
         Box::pin(async move {
-            eggsec::dispatch::dispatch_inner(request, progress_tx, result_tx)
+            let task_result = eggsec::dispatch::dispatch_inner(request, progress_tx)
                 .await
                 .map_err(|e| {
                     RuntimeError::DispatchFailed(format!("task execution failed: {}", e))
                 })?;
 
-            // Typed results were sent through the result channel for TUI
-            // rendering. Return a structured envelope so non-TUI frontends
+            // Convert to envelope before sending, since TaskResult is not Clone.
+            let envelope = task_result_to_envelope(&task_result);
+
+            // Send typed result through the channel for TUI rendering.
+            let _ = result_tx.send(task_result).await;
+
+            // Return a structured envelope so non-TUI frontends
             // (daemon, REST, MCP) also receive useful completion data.
-            Ok(TaskOutcome::Result(TaskResultEnvelope {
-                kind: "tui-compat".into(),
-                summary: Some("Task completed; typed result via channel".into()),
-                payload: serde_json::json!({"bridge": "result_rx"}),
-                artifacts: vec![],
-            }))
+            Ok(TaskOutcome::Result(envelope))
         })
     }
 }
@@ -58,7 +58,6 @@ impl TaskDispatcher for TuiTaskDispatcher {
 /// Extracts a kind discriminator and summary from each variant. Domain-specific
 /// payloads are returned as empty JSON — the TUI uses typed `TaskResult`
 /// channels for rich rendering. Non-TUI frontends get the kind + summary.
-#[allow(dead_code)]
 pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> TaskResultEnvelope {
     use eggsec::dispatch::TaskResult;
 
@@ -222,6 +221,8 @@ pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eggsec::dispatch::TaskResult;
+    use eggsec_runtime::event::TaskOutcome;
 
     #[tokio::test]
     async fn task_dispatcher_creation() {
@@ -236,5 +237,83 @@ mod tests {
             std::any::TypeId::of::<TuiTaskDispatcher>()
                 == std::any::TypeId::of::<TuiTaskDispatcher>()
         );
+    }
+
+    #[test]
+    fn envelope_error_has_kind_and_message() {
+        let result = TaskResult::Error("connection refused".into());
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "error");
+        assert_eq!(envelope.summary.as_deref(), Some("connection refused"));
+    }
+
+    #[test]
+    fn envelope_task_outcome_is_result_variant() {
+        let result = TaskResult::Error("test".into());
+        let envelope = task_result_to_envelope(&result);
+        let outcome = TaskOutcome::Result(envelope);
+        assert!(matches!(outcome, TaskOutcome::Result(_)));
+        if let TaskOutcome::Result(env) = outcome {
+            assert_eq!(env.kind, "error");
+            assert!(env.summary.is_some());
+        }
+    }
+
+    #[test]
+    fn envelope_packet_capture_has_count() {
+        let result = TaskResult::PacketCapture {
+            packets_captured: 42,
+            output_file: Some("/tmp/capture.pcap".into()),
+        };
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "packet-capture");
+        assert!(envelope.summary.is_some());
+        assert!(envelope.summary.unwrap().contains("42"));
+    }
+
+    #[test]
+    fn envelope_packet_traceroute_has_hop_count() {
+        let result = TaskResult::PacketTraceroute { hops: vec![] };
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "traceroute");
+        assert!(envelope.summary.is_some());
+        assert!(envelope.summary.unwrap().contains("0 hops"));
+    }
+
+    #[test]
+    fn envelope_packet_send_has_counts() {
+        let result = TaskResult::PacketSend {
+            packets_sent: 10,
+            bytes_sent: 640,
+        };
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "packet-send");
+        assert!(envelope.summary.is_some());
+        let summary = envelope.summary.unwrap();
+        assert!(summary.contains("10 packets"));
+        assert!(summary.contains("640 bytes"));
+    }
+
+    #[test]
+    fn envelope_waf_stress_has_count() {
+        let result = TaskResult::WafStress(vec![]);
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "waf-stress");
+        assert!(envelope.summary.is_some());
+        assert!(envelope.summary.unwrap().contains("0 bypasses"));
+    }
+
+    #[test]
+    fn envelope_artifacts_are_empty_by_default() {
+        let result = TaskResult::Error("test".into());
+        let envelope = task_result_to_envelope(&result);
+        assert!(envelope.artifacts.is_empty());
+    }
+
+    #[test]
+    fn envelope_payload_is_empty_json() {
+        let result = TaskResult::Error("test".into());
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.payload, serde_json::json!({}));
     }
 }

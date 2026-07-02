@@ -1,4 +1,4 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 
 fn empty_auth_report(target: String) -> crate::auth::AuthTestReport {
     crate::auth::AuthTestReport {
@@ -27,8 +27,7 @@ pub async fn run_auth_task(
     concurrency: usize,
     timeout: u64,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::auth::AuthEngine;
 
     send_progress(&progress_tx, 0, 8).await;
@@ -57,6 +56,5 @@ pub async fn run_auth_task(
     };
 
     send_progress(&progress_tx, 8, 8).await;
-    send_result(&result_tx, TaskResult::Auth(report)).await;
-    Ok(())
+    Ok(TaskResult::Auth(report))
 }

@@ -387,7 +387,13 @@ Tab builds RunRequest → spawn_task() → Runtime → TuiTaskDispatcher → egg
                           (typed channels)         Vec<TuiAction> → apply_actions() → tab state
 ```
 
-`TuiTaskDispatcher::dispatch()` returns `TaskOutcome::Result(TaskResultEnvelope)` with a summary and artifact references. The TUI also maintains typed `mpsc` channels (`progress_tx`/`result_tx`) through `TuiDispatcherContext` for domain-specific rendering (recon results, scan reports, etc.). `task_result_to_envelope()` converts `eggsec::dispatch::TaskResult` variants into `TaskResultEnvelope` for the runtime lifecycle path. The typed channel path remains the primary rendering path for tab-specific data.
+**Dual-path result bridge**: `dispatch_inner()` returns `TaskResult` directly (workers return values, not channel sends). `TuiTaskDispatcher::dispatch()` routes results through two paths:
+
+1. **Typed channel path** (primary for TUI rendering): `result_tx.send(task_result)` → `result_rx.try_recv()` in `state_update.rs` → `handle_result()` → tab-specific rendering. This carries the full `TaskResult` enum for domain-specific display.
+
+2. **Envelope path** (for non-TUI frontends): `task_result_to_envelope(&task_result)` converts each `TaskResult` variant to a `TaskResultEnvelope` with `kind`, `summary`, and `artifacts`. The runtime tracks this via `TaskOutcome::Result(envelope)` in lifecycle events. Non-TUI frontends (daemon, REST, MCP) consume the envelope; TUI ignores it in favor of the typed channel.
+
+Workers no longer send through channels — they return `TaskResult` directly. `dispatch_inner()` and `dispatch_task()` handle channel plumbing.
 
 **Runtime dependency boundary**: The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`, `TaskKind`, `TaskOutcome`, and `TaskResultEnvelope` types. This is intentional — the engine uses runtime protocol types to submit work. However, `eggsec-runtime` must never depend on `eggsec` (no reverse dependency). Architecture guard `check-architecture-guards.sh` enforces this. `eggsec-runtime` has zero TUI or transport dependencies.
 

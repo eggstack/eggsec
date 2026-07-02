@@ -260,6 +260,43 @@ else
   echo "PASS: No canonical TaskConfig/TaskResult in TUI."
 fi
 
+# 15. TUI must not contain a match TaskKind execution dispatcher
+# (dispatch routing lives in eggsec::dispatch::dispatch_inner, not TUI).
+# NOTE: TUI legitimately uses TaskKind::Variant() to construct RunRequest,
+# and test code may match on TaskKind for assertions. We check that all
+# match task_kind occurrences are inside test modules (after #[cfg(test)]).
+echo ""
+echo "--- Check 15: TUI has no match TaskKind execution dispatcher ---"
+SECTION_FAIL=0
+# Get all files in TUI that contain match.*task_kind
+MATCH_FILES=$(rg -l 'match.*task_kind' crates/eggsec-tui/src/ 2>/dev/null || true)
+for file in $MATCH_FILES; do
+  # Find the first #[cfg(test)] or mod tests line in this file
+  TEST_MODULE_LINE=$(rg -n '#\[cfg\(test\)]|^mod tests' "$file" 2>/dev/null | head -1 | cut -d: -f1)
+  if [[ -z "$TEST_MODULE_LINE" ]]; then
+    # No test module found — any match is suspicious
+    HITS=$(rg -n 'match.*task_kind' "$file" 2>/dev/null || true)
+    echo "$HITS"
+    echo "FAIL: $file has match on task_kind with no test module."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  # Check each match: is it after the test module declaration?
+  while IFS= read -r hit; do
+    line=$(echo "$hit" | cut -d: -f1)
+    if [[ "$line" -lt "$TEST_MODULE_LINE" ]]; then
+      echo "$hit"
+      echo "FAIL: $file has match on task_kind at line $line (before test module at $TEST_MODULE_LINE)."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done < <(rg -n 'match.*task_kind' "$file" 2>/dev/null || true)
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: All match TaskKind occurrences are in test code."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

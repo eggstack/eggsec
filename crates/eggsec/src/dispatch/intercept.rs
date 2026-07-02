@@ -1,4 +1,4 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 
 pub async fn run_intercept_task(
     listen_addr: String,
@@ -6,8 +6,7 @@ pub async fn run_intercept_task(
     max_flows: u64,
     target: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     tracing::info!(
         "Intercept worker starting: listen_addr={}, dry_run={}, max_flows={}",
         listen_addr,
@@ -21,7 +20,5 @@ pub async fn run_intercept_task(
     session.target = target;
 
     send_progress(&progress_tx, 1, 1).await;
-    send_result(&result_tx, TaskResult::Intercept(session)).await;
-
-    Ok(())
+    Ok(TaskResult::Intercept(session))
 }

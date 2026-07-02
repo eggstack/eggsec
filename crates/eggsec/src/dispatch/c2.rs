@@ -1,12 +1,11 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 
 pub async fn run_c2_task(
     target: String,
     campaign: String,
     dry_run: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::c2::C2Scanner;
 
     send_progress(&progress_tx, 0, 4).await;
@@ -21,24 +20,16 @@ pub async fn run_c2_task(
             Ok(Ok(report)) => report,
             Ok(Err(e)) => {
                 tracing::warn!("C2 simulation error: {}", e);
-                send_result(
-                    &result_tx,
-                    TaskResult::Error(format!("C2 simulation failed: {}", e)),
-                )
-                .await;
-                return Ok(());
+                send_progress(&progress_tx, 4, 4).await;
+                return Ok(TaskResult::Error(format!("C2 simulation failed: {}", e)));
             }
             Err(_) => {
-                send_result(
-                    &result_tx,
-                    TaskResult::Error("C2 simulation timed out".to_string()),
-                )
-                .await;
-                return Ok(());
+                tracing::warn!("C2 simulation timed out");
+                send_progress(&progress_tx, 4, 4).await;
+                return Ok(TaskResult::Error("C2 simulation timed out".to_string()));
             }
         };
 
     send_progress(&progress_tx, 4, 4).await;
-    send_result(&result_tx, TaskResult::C2(report)).await;
-    Ok(())
+    Ok(TaskResult::C2(report))
 }

@@ -1,4 +1,4 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 
 #[cfg(any(
     feature = "advanced-hunting",
@@ -15,8 +15,7 @@ pub async fn run_hunt_task(
     target: String,
     config: crate::hunt::HuntConfig,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::hunt::run_hunt;
 
     send_progress(&progress_tx, 0, 5).await;
@@ -31,8 +30,7 @@ pub async fn run_hunt_task(
         Err(_) => return Err(anyhow::anyhow!("Hunt timed out after 60s")),
     };
     send_progress(&progress_tx, 5, 5).await;
-    send_result(&result_tx, TaskResult::Hunt(report)).await;
-    Ok(())
+    Ok(TaskResult::Hunt(report))
 }
 
 #[cfg(feature = "headless-browser")]
@@ -40,8 +38,7 @@ pub async fn run_browser_task(
     target: String,
     config: crate::browser::BrowserConfig,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::browser::run_browser_scan;
 
     send_progress(&progress_tx, 0, 3).await;
@@ -56,8 +53,7 @@ pub async fn run_browser_task(
         Err(_) => return Err(anyhow::anyhow!("Browser scan timed out after 60s")),
     };
     send_progress(&progress_tx, 3, 3).await;
-    send_result(&result_tx, TaskResult::Browser(report)).await;
-    Ok(())
+    Ok(TaskResult::Browser(report))
 }
 
 #[cfg(feature = "compliance")]
@@ -65,8 +61,7 @@ pub async fn run_compliance_task(
     target: String,
     framework: crate::compliance::ComplianceFramework,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::compliance::generate_compliance_report;
     use crate::types::Severity;
 
@@ -207,8 +202,7 @@ pub async fn run_compliance_task(
         Err(_) => return Err(anyhow::anyhow!("Compliance report timed out after 60s")),
     };
     send_progress(&progress_tx, 3, 3).await;
-    send_result(&result_tx, TaskResult::Compliance(report)).await;
-    Ok(())
+    Ok(TaskResult::Compliance(report))
 }
 
 #[cfg(feature = "database")]
@@ -219,13 +213,11 @@ pub async fn run_storage_task(
     cve_id: Option<String>,
     severity_filter: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::findings::lifecycle::StoredFinding;
     use crate::storage::init_storage;
     use crate::storage::models::{ScanStatus, StoredScan};
 
-    let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(
         std::time::Duration::from_secs(60),
         async move {
@@ -234,27 +226,25 @@ pub async fn run_storage_task(
     let db = match init_storage(&config).await {
         Ok(db) => db,
         Err(e) => {
-            send_result(&result_tx, TaskResult::Error(format!(
+            send_progress(&progress_tx, 3, 3).await;
+            return Ok(TaskResult::Error(format!(
                 "Storage connection failed: {}. Ensure the database is running and credentials are correct.",
                 e
-            ))).await;
-            return Ok(());
+            )));
         }
     };
 
     send_progress(&progress_tx, 1, 3).await;
 
-    let result_data = match mode.as_str() {
+    let result = match mode.as_str() {
         "connect" => {
-            send_result(&result_tx, TaskResult::Storage).await;
-            None
+            TaskResult::Storage
         }
         "list_scans" => match db.list_scans(50).await {
             Ok(scans) => {
-                send_result(&result_tx, TaskResult::StorageListScans { scans }).await;
-                None
+                TaskResult::StorageListScans { scans }
             }
-            Err(e) => Some(format!("Failed to list scans: {}", e)),
+            Err(e) => TaskResult::Error(format!("Failed to list scans: {}", e)),
         },
         "list_findings" => {
             let findings = if let Some(ref scan) = scan_id {
@@ -274,8 +264,7 @@ pub async fn run_storage_task(
                     }
                 }
             };
-            send_result(&result_tx, TaskResult::StorageListFindings { findings }).await;
-            None
+            TaskResult::StorageListFindings { findings }
         }
         "search_cve" => {
             if let Some(ref cve) = cve_id {
@@ -311,39 +300,21 @@ pub async fn run_storage_task(
                     metadata: serde_json::Value::Null,
                 };
                 let stored = StoredFinding::new(finding, "");
-                send_result(
-                    &result_tx,
-                    TaskResult::StorageListFindings {
-                        findings: vec![stored],
-                    },
-                )
-                .await;
+                TaskResult::StorageListFindings {
+                    findings: vec![stored],
+                }
             } else {
-                send_result(
-                    &result_tx,
-                    TaskResult::Error("No CVE ID provided for search".to_string()),
-                )
-                .await;
+                TaskResult::Error("No CVE ID provided for search".to_string())
             }
-            None
         }
         _ => {
-            send_result(
-                &result_tx,
-                TaskResult::Error(format!("Unknown storage mode: {}", mode)),
-            )
-            .await;
-            None
+            TaskResult::Error(format!("Unknown storage mode: {}", mode))
         }
     };
 
     send_progress(&progress_tx, 3, 3).await;
 
-    if let Some(error) = result_data {
-        send_result(&result_tx, TaskResult::Error(error)).await;
-    }
-
-    Ok(())
+    Ok(result)
         },
     )
     .await
@@ -351,8 +322,7 @@ pub async fn run_storage_task(
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Storage task timed out after 60s");
-            send_result(&result_tx_timeout, TaskResult::Error("Storage task timed out".to_string())).await;
-            Ok(())
+            Ok(TaskResult::Error("Storage task timed out".to_string()))
         }
     }
 }
@@ -367,11 +337,9 @@ pub async fn run_integrations_task(
     assignees: Vec<String>,
     search_query: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::integrations::{Issue, IssueTracker};
 
-    let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(std::time::Duration::from_secs(60), async move {
         send_progress(&progress_tx, 0, 3).await;
 
@@ -394,24 +362,17 @@ pub async fn run_integrations_task(
         let tracker = match tracker {
             Some(t) => t,
             None => {
-                send_result(
-                    &result_tx,
-                    TaskResult::Error(
-                        "No tracker configured. Set Jira, GitHub, or GitLab credentials."
-                            .to_string(),
-                    ),
-                )
-                .await;
-                return Ok(());
+                send_progress(&progress_tx, 3, 3).await;
+                return Ok(TaskResult::Error(
+                    "No tracker configured. Set Jira, GitHub, or GitLab credentials.".to_string(),
+                ));
             }
         };
 
         send_progress(&progress_tx, 1, 3).await;
 
-        match mode.as_str() {
-            "configure" => {
-                send_result(&result_tx, TaskResult::Integrations).await;
-            }
+        let result = match mode.as_str() {
+            "configure" => TaskResult::Integrations,
             "create_issue" => match (&title, &description) {
                 (Some(t), Some(d)) if !t.is_empty() && !d.is_empty() => {
                     let issue = Issue {
@@ -431,85 +392,46 @@ pub async fn run_integrations_task(
                                 id: Some(id.clone()),
                                 ..issue
                             };
-                            send_result(
-                                &result_tx,
-                                TaskResult::IntegrationsCreateIssue { issue: created },
-                            )
-                            .await;
+                            TaskResult::IntegrationsCreateIssue { issue: created }
                         }
                         Err(e) => {
                             tracing::warn!("Failed to create issue: {}", e);
-                            send_result(
-                                &result_tx,
-                                TaskResult::Error(format!("Failed to create issue: {}", e)),
-                            )
-                            .await;
+                            TaskResult::Error(format!("Failed to create issue: {}", e))
                         }
                     }
                 }
-                _ => {
-                    send_result(
-                        &result_tx,
-                        TaskResult::Error(
-                            "Title and description required for creating an issue".to_string(),
-                        ),
-                    )
-                    .await;
-                }
+                _ => TaskResult::Error(
+                    "Title and description required for creating an issue".to_string(),
+                ),
             },
             "search_issues" => {
                 let query = search_query.as_deref().unwrap_or("");
                 if query.is_empty() {
-                    send_result(
-                        &result_tx,
-                        TaskResult::Error(
-                            "Search query required (enter in Search Query field)".to_string(),
-                        ),
+                    TaskResult::Error(
+                        "Search query required (enter in Search Query field)".to_string(),
                     )
-                    .await;
                 } else {
                     match tracker.search_issues(query).await {
-                        Ok(issues) => {
-                            send_result(
-                                &result_tx,
-                                TaskResult::IntegrationsSearchIssues { issues },
-                            )
-                            .await;
-                        }
+                        Ok(issues) => TaskResult::IntegrationsSearchIssues { issues },
                         Err(e) => {
                             tracing::warn!("Failed to search issues: {}", e);
-                            send_result(
-                                &result_tx,
-                                TaskResult::Error(format!("Failed to search issues: {}", e)),
-                            )
-                            .await;
+                            TaskResult::Error(format!("Failed to search issues: {}", e))
                         }
                     }
                 }
             }
-            _ => {
-                send_result(
-                    &result_tx,
-                    TaskResult::Error(format!("Unknown integrations mode: {}", mode)),
-                )
-                .await;
-            }
-        }
+            _ => TaskResult::Error(format!("Unknown integrations mode: {}", mode)),
+        };
 
         send_progress(&progress_tx, 3, 3).await;
-        Ok(())
+        Ok(result)
     })
     .await
     {
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Integrations task timed out after 60s");
-            send_result(
-                &result_tx_timeout,
-                TaskResult::Error("Integrations task timed out".to_string()),
-            )
-            .await;
-            Ok(())
+            Ok(TaskResult::Error("Integrations task timed out".to_string()))
         }
     }
 }
@@ -520,8 +442,7 @@ pub async fn run_workflow_task(
     _target: Option<String>,
     finding_ids: Vec<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::workflow::WorkflowReport;
 
     send_progress(&progress_tx, 0, 3).await;
@@ -531,9 +452,8 @@ pub async fn run_workflow_task(
     report.open_findings = finding_ids.len();
 
     send_progress(&progress_tx, 2, 3).await;
-    send_result(&result_tx, TaskResult::Workflow(report)).await;
     send_progress(&progress_tx, 3, 3).await;
-    Ok(())
+    Ok(TaskResult::Workflow(report))
 }
 
 #[cfg(feature = "vuln-management")]
@@ -547,15 +467,13 @@ pub async fn run_vuln_task(
     asset_type: Option<String>,
     severity: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::types::Severity;
     use crate::vuln::asset::assess_asset;
     use crate::vuln::prioritizer::prioritize_findings;
     use crate::vuln::triage::triage_finding;
     use crate::vuln::{AssetCriticality, CvssScore, ExploitInfo, Remediation, VulnAssessment};
 
-    let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(std::time::Duration::from_secs(120), async move {
         send_progress(&progress_tx, 0, 3).await;
 
@@ -707,32 +625,21 @@ pub async fn run_vuln_task(
                 assessment.remediation_plans.push(rem);
             }
             _ => {
-                send_result(
-                    &result_tx,
-                    TaskResult::Error(format!("Unknown vuln mode: {}", mode)),
-                )
-                .await;
                 send_progress(&progress_tx, 3, 3).await;
-                return Ok(());
+                return Ok(TaskResult::Error(format!("Unknown vuln mode: {}", mode)));
             }
         }
 
         send_progress(&progress_tx, 2, 3).await;
-        send_result(&result_tx, TaskResult::Vuln(assessment)).await;
         send_progress(&progress_tx, 3, 3).await;
-        Ok(())
+        Ok(TaskResult::Vuln(assessment))
     })
     .await
     {
         Ok(result) => result,
         Err(_) => {
             tracing::warn!("Vuln task timed out after 120s");
-            send_result(
-                &result_tx_timeout,
-                TaskResult::Error("Vuln task timed out".to_string()),
-            )
-            .await;
-            Ok(())
+            Ok(TaskResult::Error("Vuln task timed out".to_string()))
         }
     }
 }
@@ -741,8 +648,7 @@ pub async fn run_vuln_task(
 pub async fn run_wireless_task(
     interface: String,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     send_progress(&progress_tx, 0, 2).await;
 
     let scanner = crate::wireless::WirelessScanner::new();
@@ -755,14 +661,9 @@ pub async fn run_wireless_task(
     send_progress(&progress_tx, 2, 2).await;
 
     match scan_res {
-        Ok(r) => {
-            send_result(&result_tx, TaskResult::Wireless(r)).await;
-        }
-        Err(e) => {
-            send_result(&result_tx, TaskResult::Error(e.to_string())).await;
-        }
+        Ok(r) => Ok(TaskResult::Wireless(r)),
+        Err(e) => Ok(TaskResult::Error(e.to_string())),
     }
-    Ok(())
 }
 
 #[cfg(feature = "wireless-advanced")]
@@ -775,8 +676,7 @@ pub async fn run_wireless_active_task(
     rate_limit: u64,
     dry_run: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
     use crate::wireless::active::ActiveAttackConfig;
 
@@ -815,23 +715,12 @@ pub async fn run_wireless_active_task(
     send_progress(&progress_tx, 2, 2).await;
 
     match result {
-        Ok(Ok(attack_result)) => {
-            send_result(&result_tx, TaskResult::WirelessActive(attack_result)).await;
-        }
-        Ok(Err(e)) => {
-            send_result(
-                &result_tx,
-                TaskResult::Error(format!("Active wireless attack failed: {e}")),
-            )
-            .await;
-        }
-        Err(_) => {
-            send_result(
-                &result_tx,
-                TaskResult::Error("Active wireless attack timed out after 60s".to_string()),
-            )
-            .await;
-        }
+        Ok(Ok(attack_result)) => Ok(TaskResult::WirelessActive(attack_result)),
+        Ok(Err(e)) => Ok(TaskResult::Error(format!(
+            "Active wireless attack failed: {e}"
+        ))),
+        Err(_) => Ok(TaskResult::Error(
+            "Active wireless attack timed out after 60s".to_string(),
+        )),
     }
-    Ok(())
 }

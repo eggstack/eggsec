@@ -1,4 +1,4 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 use crate::scanner::spoof::SpoofConfig;
 
 pub async fn run_port_scan(
@@ -7,8 +7,7 @@ pub async fn run_port_scan(
     concurrency: usize,
     timeout: std::time::Duration,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::scanner::ports::scan_ports;
 
     send_progress(&progress_tx, 0, 100).await;
@@ -41,9 +40,8 @@ pub async fn run_port_scan(
     };
 
     let total = results.ports_scanned as u64;
-    send_result(&result_tx, TaskResult::PortScan(results)).await;
     send_progress(&progress_tx, total.max(1), total_ports.max(1)).await;
-    Ok(())
+    Ok(TaskResult::PortScan(results))
 }
 
 pub async fn run_endpoint_scan(
@@ -52,8 +50,7 @@ pub async fn run_endpoint_scan(
     timeout: std::time::Duration,
     wordlist: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
 
     send_progress(&progress_tx, 0, 100).await;
@@ -90,9 +87,8 @@ pub async fn run_endpoint_scan(
     };
 
     let total = results.endpoints_scanned as u64;
-    send_result(&result_tx, TaskResult::EndpointScan(results)).await;
     send_progress(&progress_tx, total.max(1), total_endpoints.max(1)).await;
-    Ok(())
+    Ok(TaskResult::EndpointScan(results))
 }
 
 pub async fn run_fingerprint(
@@ -100,8 +96,7 @@ pub async fn run_fingerprint(
     ports: String,
     timeout: std::time::Duration,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::scanner::fingerprint::fingerprint_services;
 
     send_progress(&progress_tx, 0, 100).await;
@@ -129,7 +124,6 @@ pub async fn run_fingerprint(
     };
 
     let total = results.ports_scanned as u64;
-    send_result(&result_tx, TaskResult::Fingerprint(results)).await;
     send_progress(&progress_tx, total.max(1), total_ports.max(1)).await;
-    Ok(())
+    Ok(TaskResult::Fingerprint(results))
 }

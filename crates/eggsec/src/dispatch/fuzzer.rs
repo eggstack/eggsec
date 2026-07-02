@@ -1,4 +1,4 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_fuzz(
@@ -19,8 +19,7 @@ pub async fn run_fuzz(
     oauth_state_test: bool,
     oauth_grant_test: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
     use crate::fuzzer::engine::FuzzEngine;
 
@@ -98,9 +97,8 @@ pub async fn run_fuzz(
         Err(_) => return Err(anyhow::anyhow!("Fuzz session timed out after 60s")),
     };
 
-    send_result(&result_tx, TaskResult::Fuzz(session)).await;
     send_progress(&progress_tx, 1, 1).await;
-    Ok(())
+    Ok(TaskResult::Fuzz(session))
 }
 
 pub async fn run_waf(
@@ -108,8 +106,7 @@ pub async fn run_waf(
     bypass_mode: bool,
     techniques: Vec<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::waf::WafDetector;
 
     let detector = WafDetector::new()?;
@@ -165,20 +162,15 @@ pub async fn run_waf(
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => return Err(anyhow::anyhow!("WAF bypass timed out after 60s")),
         };
-        send_result(
-            &result_tx,
-            TaskResult::WafBypass {
-                detection,
-                bypasses,
-            },
-        )
-        .await;
+        send_progress(&progress_tx, 1, 1).await;
+        Ok(TaskResult::WafBypass {
+            detection,
+            bypasses,
+        })
     } else {
-        send_result(&result_tx, TaskResult::WafDetection(detection)).await;
+        send_progress(&progress_tx, 1, 1).await;
+        Ok(TaskResult::WafDetection(detection))
     }
-
-    send_progress(&progress_tx, 1, 1).await;
-    Ok(())
 }
 
 pub async fn run_waf_stress(
@@ -186,8 +178,7 @@ pub async fn run_waf_stress(
     concurrency: usize,
     timeout: u64,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::cli::WafStressArgs;
     use crate::fuzzer::run_waf_stress as fuzzer_run_waf_stress;
 
@@ -212,24 +203,19 @@ pub async fn run_waf_stress(
         Ok(Err(e)) => {
             tracing::warn!("WAF stress failed: {}", e);
             send_progress(&progress_tx, 1, 1).await;
-            send_result(&result_tx, TaskResult::Error(e.to_string())).await;
-            return Err(e.into());
+            return Ok(TaskResult::Error(e.to_string()));
         }
         Err(_) => {
             tracing::warn!("WAF stress timed out after 60s");
             send_progress(&progress_tx, 1, 1).await;
-            send_result(
-                &result_tx,
-                TaskResult::Error("WAF stress timed out after 60s".to_string()),
-            )
-            .await;
-            return Err(anyhow::anyhow!("WAF stress timed out after 60s"));
+            return Ok(TaskResult::Error(
+                "WAF stress timed out after 60s".to_string(),
+            ));
         }
     }
     send_progress(&progress_tx, 1, 1).await;
     tracing::debug!(
         "WAF stress completed (fuzzer_run_waf_stress returned no results, sending empty WafStress)"
     );
-    send_result(&result_tx, TaskResult::WafStress(vec![])).await;
-    Ok(())
+    Ok(TaskResult::WafStress(vec![]))
 }

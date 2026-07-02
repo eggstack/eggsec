@@ -1,5 +1,5 @@
 use crate::cli::ScanProfile;
-use crate::dispatch::types::{send_progress, send_result, ReconOptions, TaskResult};
+use crate::dispatch::types::{send_progress, ReconOptions, TaskResult};
 
 pub async fn run_pipeline(
     target: String,
@@ -7,8 +7,7 @@ pub async fn run_pipeline(
     output_file: String,
     output_format: String,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::cli::{CommonHttpArgs, ScanArgs};
     use crate::pipeline::Pipeline;
 
@@ -56,9 +55,8 @@ pub async fn run_pipeline(
             Err(_) => return Err(anyhow::anyhow!("Pipeline timed out after 300s")),
         };
 
-    send_result(&result_tx, TaskResult::Pipeline(report)).await;
     send_progress(&progress_tx, stages_count, stages_count.max(1)).await;
-    Ok(())
+    Ok(TaskResult::Pipeline(report))
 }
 
 pub async fn run_recon(
@@ -66,8 +64,7 @@ pub async fn run_recon(
     concurrency: usize,
     options: ReconOptions,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::cli::ReconArgs;
     use crate::config::EggsecConfig;
     use crate::recon::run_full_recon;
@@ -189,13 +186,12 @@ pub async fn run_recon(
             Ok(Ok(r)) => {
                 progress_handle.abort();
                 send_progress(&progress_tx, 100, 100).await;
-                send_result(&result_tx, TaskResult::Recon(r)).await;
                 if let Err(e) = progress_handle.await {
                     if e.is_panic() {
                         tracing::warn!("Progress tracking task panicked: {:?}", e);
                     }
                 }
-                return Ok(());
+                return Ok(TaskResult::Recon(r));
             }
             Ok(Err(e)) => {
                 progress_handle.abort();

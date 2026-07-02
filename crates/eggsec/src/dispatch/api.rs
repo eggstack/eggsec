@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use crate::dispatch::types::{
-    send_progress, send_result, GraphQlResults, OAuthResults, TaskResult,
-};
+use crate::dispatch::types::{send_progress, GraphQlResults, OAuthResults, TaskResult};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_graphql(
@@ -14,8 +12,7 @@ pub async fn run_graphql(
     _concurrency: usize,
     timeout: u64,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::fuzzer::payloads::graphql::{
         GraphQLFuzzer, GraphQLTestResult, GraphQLVulnerability,
     };
@@ -161,9 +158,7 @@ pub async fn run_graphql(
         };
 
         send_progress(&progress_tx, 100, 100).await;
-        send_result(&result_tx, TaskResult::GraphQl(results)).await;
-
-        Ok(())
+        Ok(TaskResult::GraphQl(results))
     })
     .await
     .unwrap_or_else(|_| Err(anyhow::anyhow!("GraphQL test timed out after 300 seconds")))
@@ -199,8 +194,7 @@ pub async fn run_oauth(
     _concurrency: usize,
     _timeout: u64,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::fuzzer::payloads::oauth::{OAuthFuzzer, OAuthTestResult};
 
     let op_timeout = Duration::from_secs(300);
@@ -298,9 +292,7 @@ pub async fn run_oauth(
         };
 
         send_progress(&progress_tx, 100, 100).await;
-        send_result(&result_tx, TaskResult::OAuth(results)).await;
-
-        Ok(())
+        Ok(TaskResult::OAuth(results))
     })
     .await
     .unwrap_or_else(|_| Err(anyhow::anyhow!("OAuth test timed out after 300 seconds")))
@@ -313,8 +305,7 @@ pub async fn run_nse(
     script_args: Option<String>,
     custom_script: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::nse::NseExecutor;
 
     send_progress(&progress_tx, 0, 100).await;
@@ -373,7 +364,5 @@ pub async fn run_nse(
         success,
     };
 
-    send_result(&result_tx, TaskResult::Nse(results)).await;
-
-    Ok(())
+    Ok(TaskResult::Nse(results))
 }

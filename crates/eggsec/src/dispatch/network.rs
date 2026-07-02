@@ -1,4 +1,4 @@
-use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, TaskResult};
 #[cfg(feature = "stress-testing")]
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -12,8 +12,7 @@ pub async fn run_load_test(
     concurrency: usize,
     timeout: Duration,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::loadtest::runner::LoadTestRunner;
 
     let runner =
@@ -36,9 +35,8 @@ pub async fn run_load_test(
         }
     };
 
-    send_result(&result_tx, TaskResult::LoadTest(results)).await;
     send_progress(&progress_tx, requests, requests).await;
-    Ok(())
+    Ok(TaskResult::LoadTest(results))
 }
 
 #[cfg(feature = "stress-testing")]
@@ -49,8 +47,7 @@ pub async fn run_stress_test(
     duration: u64,
     concurrency: usize,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::stress::{StressConfig, StressTest, StressType};
 
     let stress_type = match stress_type.as_str() {
@@ -93,16 +90,11 @@ pub async fn run_stress_test(
         }
     };
 
-    send_result(
-        &result_tx,
-        TaskResult::StressTest {
-            target: target.clone(),
-            stats: stats.clone(),
-        },
-    )
-    .await;
     send_progress(&progress_tx, duration, duration).await;
-    Ok(())
+    Ok(TaskResult::StressTest {
+        target: target.clone(),
+        stats: stats.clone(),
+    })
 }
 
 #[cfg(not(feature = "stress-testing"))]
@@ -113,8 +105,7 @@ pub async fn run_stress_test(
     _duration: u64,
     _concurrency: usize,
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    _result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     anyhow::bail!("Stress testing not enabled. Compile with --features stress-testing");
 }
 
@@ -125,8 +116,7 @@ pub async fn run_packet_capture(
     max_packets: usize,
     output_file: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::packet::capture::CaptureBuilder;
     use pnet::datalink;
 
@@ -203,16 +193,12 @@ pub async fn run_packet_capture(
         }
     }
 
-    send_result(
-        &result_tx,
-        TaskResult::PacketCapture {
-            packets_captured: captured,
-            output_file,
-        },
-    )
-    .await;
+    send_progress(&progress_tx, captured as u64, max_packets as u64).await;
 
-    Ok(())
+    Ok(TaskResult::PacketCapture {
+        packets_captured: captured,
+        output_file,
+    })
 }
 
 #[cfg(not(all(feature = "packet-inspection", unix)))]
@@ -222,8 +208,7 @@ pub async fn run_packet_capture(
     _max_packets: usize,
     _output_file: Option<String>,
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    _result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     anyhow::bail!("Packet capture not available. Compile with --features packet-inspection");
 }
 
@@ -232,8 +217,7 @@ pub async fn run_packet_traceroute(
     target: String,
     max_hops: u8,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use crate::dispatch::types::TracerouteHopResult;
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     let _socket_addr = tokio::net::lookup_host((target.as_str(), 80))
@@ -277,9 +261,7 @@ pub async fn run_packet_traceroute(
         .collect();
 
     send_progress(&progress_tx, max_hops as u64, max_hops as u64).await;
-    send_result(&result_tx, TaskResult::PacketTraceroute { hops }).await;
-
-    Ok(())
+    Ok(TaskResult::PacketTraceroute { hops })
 }
 
 #[cfg(not(all(feature = "stress-testing", unix)))]
@@ -287,8 +269,7 @@ pub async fn run_packet_traceroute(
     _target: String,
     _max_hops: u8,
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    _result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     anyhow::bail!("Traceroute not available. Compile with --features stress-testing");
 }
 
@@ -369,8 +350,7 @@ pub async fn run_packet_send(
     count: u32,
     packet_size: usize,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     use std::time::Duration;
 
     tracing::warn!("Packet sending is a stub - raw socket implementation required for actual packet transmission");
@@ -388,16 +368,10 @@ pub async fn run_packet_send(
         tracing::trace!("[STUB] Would send packet {} to {}:{}", i + 1, target, port);
     }
 
-    send_result(
-        &result_tx,
-        TaskResult::PacketSend {
-            packets_sent: sent,
-            bytes_sent: bytes,
-        },
-    )
-    .await;
-
-    Ok(())
+    Ok(TaskResult::PacketSend {
+        packets_sent: sent,
+        bytes_sent: bytes,
+    })
 }
 
 #[cfg(not(all(feature = "stress-testing", unix)))]
@@ -407,7 +381,6 @@ pub async fn run_packet_send(
     _count: u32,
     _packet_size: usize,
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    _result_tx: tokio::sync::mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     anyhow::bail!("Packet send not available. Compile with --features stress-testing");
 }

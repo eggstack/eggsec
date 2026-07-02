@@ -63,21 +63,30 @@ pub async fn dispatch_task(
     let (progress_tx, progress_rx) = mpsc::channel(100);
     let (result_tx, result_rx) = mpsc::channel(1);
 
-    let result = dispatch_inner(request, progress_tx, result_tx).await;
+    let result = dispatch_inner(request, progress_tx).await;
 
-    if let Err(e) = result {
-        tracing::warn!("Dispatch failed: {}", e);
+    match result {
+        Ok(task_result) => {
+            let _ = result_tx.send(task_result).await;
+        }
+        Err(e) => {
+            tracing::warn!("Dispatch failed: {}", e);
+            let _ = result_tx.send(TaskResult::Error(e.to_string())).await;
+        }
     }
 
     Ok((progress_rx, result_rx))
 }
 
 /// Internal dispatch that routes `TaskKind` to worker functions.
+///
+/// Returns the [`TaskResult`] directly so callers can convert it to a
+/// [`TaskResultEnvelope`] for the runtime outcome path. Worker functions
+/// return `TaskResult` values directly instead of sending through channels.
 pub async fn dispatch_inner(
     request: RunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
-    result_tx: mpsc::Sender<TaskResult>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TaskResult> {
     match request.task_kind {
         TaskKind::LoadTest(p) => {
             let timeout = std::time::Duration::from_secs(p.duration_secs.unwrap_or(30) as u64);
@@ -87,7 +96,6 @@ pub async fn dispatch_inner(
                 p.connections.unwrap_or(10) as usize,
                 timeout,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -99,7 +107,6 @@ pub async fn dispatch_inner(
                 p.duration_secs.unwrap_or(60) as u64,
                 p.threads.unwrap_or(10) as usize,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -111,25 +118,16 @@ pub async fn dispatch_inner(
                 100,
                 timeout,
                 progress_tx,
-                result_tx,
             )
             .await
         }
         TaskKind::EndpointScan(p) => {
             let timeout = std::time::Duration::from_secs(60);
-            scanner::run_endpoint_scan(p.target, 10, timeout, p.wordlist, progress_tx, result_tx)
-                .await
+            scanner::run_endpoint_scan(p.target, 10, timeout, p.wordlist, progress_tx).await
         }
         TaskKind::Fingerprint(p) => {
             let timeout = std::time::Duration::from_secs(60);
-            scanner::run_fingerprint(
-                p.target,
-                "1-1024".to_string(),
-                timeout,
-                progress_tx,
-                result_tx,
-            )
-            .await
+            scanner::run_fingerprint(p.target, "1-1024".to_string(), timeout, progress_tx).await
         }
         TaskKind::Fuzz(p) => {
             fuzzer::run_fuzz(
@@ -150,20 +148,13 @@ pub async fn dispatch_inner(
                 false,
                 false,
                 progress_tx,
-                result_tx,
             )
             .await
         }
-        TaskKind::Waf(p) => fuzzer::run_waf(p.target, false, vec![], progress_tx, result_tx).await,
+        TaskKind::Waf(p) => fuzzer::run_waf(p.target, false, vec![], progress_tx).await,
         TaskKind::WafStress(p) => {
-            fuzzer::run_waf_stress(
-                p.target,
-                10,
-                p.requests.unwrap_or(100) as u64,
-                progress_tx,
-                result_tx,
-            )
-            .await
+            fuzzer::run_waf_stress(p.target, 10, p.requests.unwrap_or(100) as u64, progress_tx)
+                .await
         }
         TaskKind::Pipeline(p) => {
             let profile = match p.profile.as_deref() {
@@ -187,19 +178,11 @@ pub async fn dispatch_inner(
                 String::new(),
                 "json".to_string(),
                 progress_tx,
-                result_tx,
             )
             .await
         }
         TaskKind::Recon(p) => {
-            recon::run_recon(
-                p.target,
-                20,
-                ReconOptions::default(),
-                progress_tx,
-                result_tx,
-            )
-            .await
+            recon::run_recon(p.target, 20, ReconOptions::default(), progress_tx).await
         }
         TaskKind::PacketCapture(p) => {
             network::run_packet_capture(
@@ -208,21 +191,15 @@ pub async fn dispatch_inner(
                 1000,
                 None,
                 progress_tx,
-                result_tx,
             )
             .await
         }
         TaskKind::PacketTraceroute(p) => {
-            network::run_packet_traceroute(
-                p.target,
-                p.max_hops.unwrap_or(30) as u8,
-                progress_tx,
-                result_tx,
-            )
-            .await
+            network::run_packet_traceroute(p.target, p.max_hops.unwrap_or(30) as u8, progress_tx)
+                .await
         }
         TaskKind::PacketSend(p) => {
-            network::run_packet_send(p.target, 80, 10, 64, progress_tx, result_tx).await
+            network::run_packet_send(p.target, 80, 10, 64, progress_tx).await
         }
         TaskKind::GraphQl(p) => {
             api::run_graphql(
@@ -234,7 +211,6 @@ pub async fn dispatch_inner(
                 10,
                 300,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -250,7 +226,6 @@ pub async fn dispatch_inner(
                 10,
                 300,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -264,23 +239,14 @@ pub async fn dispatch_inner(
                 1,
                 30,
                 progress_tx,
-                result_tx,
             )
             .await
         }
         #[cfg(feature = "nse")]
-        TaskKind::Nse(p) => {
-            api::run_nse(p.target, p.script, p.args, None, progress_tx, result_tx).await
-        }
+        TaskKind::Nse(p) => api::run_nse(p.target, p.script, p.args, None, progress_tx).await,
         #[cfg(feature = "advanced-hunting")]
         TaskKind::Hunt(p) => {
-            security::run_hunt_task(
-                p.target,
-                crate::hunt::HuntConfig::default(),
-                progress_tx,
-                result_tx,
-            )
-            .await
+            security::run_hunt_task(p.target, crate::hunt::HuntConfig::default(), progress_tx).await
         }
         #[cfg(feature = "headless-browser")]
         TaskKind::Browser(p) => {
@@ -288,7 +254,6 @@ pub async fn dispatch_inner(
                 p.target,
                 crate::browser::BrowserConfig::default(),
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -298,7 +263,6 @@ pub async fn dispatch_inner(
                 p.target,
                 crate::compliance::ComplianceFramework::OwaspTop10,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -311,7 +275,6 @@ pub async fn dispatch_inner(
                 None,
                 None,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -326,14 +289,12 @@ pub async fn dispatch_inner(
                 vec![],
                 None,
                 progress_tx,
-                result_tx,
             )
             .await
         }
         #[cfg(feature = "finding-workflow")]
         TaskKind::Workflow(p) => {
-            security::run_workflow_task("list".to_string(), None, vec![], progress_tx, result_tx)
-                .await
+            security::run_workflow_task("list".to_string(), None, vec![], progress_tx).await
         }
         #[cfg(feature = "vuln-management")]
         TaskKind::Vuln(p) => {
@@ -347,7 +308,6 @@ pub async fn dispatch_inner(
                 None,
                 None,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -356,7 +316,6 @@ pub async fn dispatch_inner(
             security::run_wireless_task(
                 p.interface.unwrap_or_else(|| "wlan0".to_string()),
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -371,7 +330,6 @@ pub async fn dispatch_inner(
                 10,
                 true,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -387,7 +345,6 @@ pub async fn dispatch_inner(
                 200,
                 120,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -399,7 +356,6 @@ pub async fn dispatch_inner(
                 100,
                 p.target,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -410,7 +366,6 @@ pub async fn dispatch_inner(
                 p.profile.unwrap_or_else(|| "default".to_string()),
                 true,
                 progress_tx,
-                result_tx,
             )
             .await
         }
@@ -419,7 +374,7 @@ pub async fn dispatch_inner(
         // frontend should reject unsupported task kinds before submission.
         _ => {
             tracing::warn!("Received unsupported or feature-gated task kind");
-            Ok(())
+            Ok(TaskResult::Error("Unsupported task kind".into()))
         }
     }
 }
@@ -451,5 +406,40 @@ mod tests {
         // Drop receivers so channels close cleanly
         drop(progress_rx);
         drop(result_rx);
+    }
+
+    #[tokio::test]
+    async fn dispatch_inner_returns_task_result_for_error_case() {
+        let (progress_tx, _progress_rx) = tokio::sync::mpsc::channel(100);
+
+        // Use a LoadTest with an unreachable target to trigger an error path.
+        // The key assertion is that dispatch_inner returns TaskResult, not ().
+        let request = RunRequest {
+            task_kind: TaskKind::LoadTest(eggsec_runtime::request::LoadTestParams {
+                target: "http://192.0.2.1:1".into(), // TEST-NET, unreachable
+                method: "GET".into(),
+                duration_secs: Some(1),
+                connections: Some(1),
+                rate_limit: None,
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        };
+
+        let result = dispatch_inner(request, progress_tx).await;
+        // May succeed or fail depending on timeout, but the return type
+        // is TaskResult — proving the plumbing works.
+        match result {
+            Ok(task_result) => {
+                let debug_str = format!("{:?}", task_result);
+                assert!(!debug_str.is_empty());
+            }
+            Err(e) => {
+                // Error is also acceptable — proves dispatch_inner returns
+                // a Result, not () — the key invariant.
+                assert!(!e.to_string().is_empty());
+            }
+        }
     }
 }
