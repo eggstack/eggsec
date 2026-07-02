@@ -19,4 +19,4 @@ pub use runtime::{
     Runtime, RuntimeConfig, RuntimeEventReceiver, RuntimeEventSink, RuntimeTaskExecutor,
     SessionOptions,
 };
-pub use session::{RuntimeSession, SessionSnapshot, TaskSnapshot};
+pub use session::{RuntimeSession, SessionScope, SessionSnapshot, TaskSnapshot};

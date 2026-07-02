@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress, TaskStatus};
 use crate::ids::{SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface};
-use crate::session::{RuntimeSession, SessionSnapshot};
+use crate::session::{RuntimeSession, SessionScope, SessionSnapshot};
 use crate::RuntimeError;
 
 /// Configuration for the runtime.
@@ -186,11 +186,24 @@ impl Runtime {
         _options: SessionOptions,
         surface: RuntimeSurface,
     ) -> Result<SessionId, RuntimeError> {
+        self.create_session_with_scope(_options, surface, None)
+            .await
+    }
+
+    /// Create a new session with an explicit scope binding.
+    pub async fn create_session_with_scope(
+        &self,
+        _options: SessionOptions,
+        surface: RuntimeSurface,
+        scope: Option<SessionScope>,
+    ) -> Result<SessionId, RuntimeError> {
         let session_id = SessionId::new();
         let mut state = self.state.lock().await;
-        state
-            .sessions
-            .insert(session_id, RuntimeSession::new(session_id, surface));
+        let session = match scope {
+            Some(s) => RuntimeSession::with_scope(session_id, surface, s),
+            None => RuntimeSession::new(session_id, surface),
+        };
+        state.sessions.insert(session_id, session);
         let _ = state
             .event_tx
             .send(RuntimeEvent::SessionCreated { session_id });
@@ -208,6 +221,19 @@ impl Runtime {
             .get(&session_id)
             .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
         Ok(session.execution_surface())
+    }
+
+    /// Get the scope metadata for a session, if bound.
+    pub async fn session_scope(
+        &self,
+        session_id: SessionId,
+    ) -> Result<Option<SessionScope>, RuntimeError> {
+        let state = self.state.lock().await;
+        let session = state
+            .sessions
+            .get(&session_id)
+            .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
+        Ok(session.scope().cloned())
     }
 
     /// Submit a task to a session. Returns the task ID.

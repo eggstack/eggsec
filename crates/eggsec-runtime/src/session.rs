@@ -10,6 +10,21 @@ use crate::event::{TaskProgress, TaskStatus};
 use crate::ids::{SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface, TaskKind};
 
+/// Lightweight scope metadata bound to a session.
+///
+/// Mirrors the essential provenance data from `LoadedScope` without
+/// depending on the `eggsec` crate. The `eggsec` crate provides
+/// `From<&LoadedScope>` to convert from the full scope type.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SessionScope {
+    /// Whether scope was explicitly provided (config file, CLI, or preset).
+    pub is_explicit: bool,
+    /// Human-readable source label (e.g. "default-empty", "config", "cli", "preset").
+    pub source: String,
+    /// Optional path to the scope file.
+    pub path: Option<String>,
+}
+
 /// Internal task record owned by a runtime session.
 ///
 /// Holds the full lifecycle state of a single task: request, status,
@@ -38,10 +53,15 @@ pub struct RuntimeSession {
     pub id: SessionId,
     /// Execution surface bound at session creation (e.g. TuiManual, McpServer).
     surface: RuntimeSurface,
+    /// Scope metadata bound at session creation (provenance + explicit flag).
+    scope: Option<SessionScope>,
     /// When the session was created.
     created_at: Instant,
     /// Task records (active and completed).
     pub(crate) tasks: HashMap<TaskId, TaskRecord>,
+    /// Completed task snapshots restored from a previous session snapshot.
+    /// These are read-only records for history/audit; they hold no runtime handles.
+    hydrated_completed: Vec<TaskSnapshot>,
 }
 
 impl RuntimeSession {
@@ -50,14 +70,33 @@ impl RuntimeSession {
         Self {
             id,
             surface,
+            scope: None,
             created_at: Instant::now(),
             tasks: HashMap::new(),
+            hydrated_completed: Vec::new(),
+        }
+    }
+
+    /// Create a new session with an explicit scope binding.
+    pub fn with_scope(id: SessionId, surface: RuntimeSurface, scope: SessionScope) -> Self {
+        Self {
+            id,
+            surface,
+            scope: Some(scope),
+            created_at: Instant::now(),
+            tasks: HashMap::new(),
+            hydrated_completed: Vec::new(),
         }
     }
 
     /// Execution surface this session was bound to at creation.
     pub fn execution_surface(&self) -> RuntimeSurface {
         self.surface.clone()
+    }
+
+    /// Scope metadata bound at session creation, if any.
+    pub fn scope(&self) -> Option<&SessionScope> {
+        self.scope.as_ref()
     }
 
     /// When the session was created (monotonic clock).
@@ -87,8 +126,12 @@ impl RuntimeSession {
     }
 
     /// Snapshot of all completed (terminal) tasks.
+    ///
+    /// Includes both live completed tasks and hydrated snapshots from a
+    /// previous session (for daemon attach history).
     pub fn completed_tasks(&self) -> Vec<TaskSnapshot> {
-        self.tasks
+        let mut results: Vec<TaskSnapshot> = self
+            .tasks
             .iter()
             .filter(|(_, t)| t.status.is_terminal())
             .map(|(id, t)| TaskSnapshot {
@@ -98,7 +141,9 @@ impl RuntimeSession {
                 progress: t.progress.clone(),
                 last_error: t.last_error.clone(),
             })
-            .collect()
+            .collect();
+        results.extend(self.hydrated_completed.iter().cloned());
+        results
     }
 
     /// Full session snapshot for state reporting and serialization.
@@ -106,6 +151,7 @@ impl RuntimeSession {
         SessionSnapshot {
             session_id: self.id,
             surface: self.surface.clone(),
+            scope: self.scope.clone(),
             created_at_secs: self.created_at.elapsed().as_secs(),
             active_tasks: self.active_tasks(),
             completed_tasks: self.completed_tasks(),
@@ -115,15 +161,17 @@ impl RuntimeSession {
 
     /// Hydrate session state from a snapshot (for future daemon attach).
     ///
-    /// This reconstructs the metadata portion of a session from a snapshot.
-    /// Task records themselves are not restorable (they hold runtime handles),
-    /// but the snapshot preserves their final state for querying.
+    /// Reconstructs the metadata and completed task records from a snapshot.
+    /// Active task records are not restorable (they hold runtime handles),
+    /// but completed task snapshots are preserved for history and audit querying.
     pub fn hydrate_from_snapshot(snapshot: SessionSnapshot) -> Self {
         Self {
             id: snapshot.session_id,
             surface: snapshot.surface,
+            scope: snapshot.scope,
             created_at: Instant::now(),
             tasks: HashMap::new(),
+            hydrated_completed: snapshot.completed_tasks,
         }
     }
 }
@@ -149,6 +197,8 @@ pub struct SessionSnapshot {
     pub session_id: SessionId,
     /// Execution surface bound at session creation.
     pub surface: RuntimeSurface,
+    /// Scope metadata bound at session creation.
+    pub scope: Option<SessionScope>,
     /// Seconds since session creation (monotonic approximation).
     pub created_at_secs: u64,
     pub active_tasks: Vec<TaskSnapshot>,
@@ -207,6 +257,7 @@ mod tests {
         let snapshot = SessionSnapshot {
             session_id: SessionId::new(),
             surface: RuntimeSurface::TuiManual,
+            scope: None,
             created_at_secs: 42,
             active_tasks: vec![],
             completed_tasks: vec![],
@@ -216,6 +267,30 @@ mod tests {
         let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(snapshot.session_id, deserialized.session_id);
         assert_eq!(deserialized.created_at_secs, 42);
+        assert!(deserialized.scope.is_none());
+    }
+
+    #[test]
+    fn session_snapshot_roundtrip_with_scope() {
+        let snapshot = SessionSnapshot {
+            session_id: SessionId::new(),
+            surface: RuntimeSurface::TuiManual,
+            scope: Some(SessionScope {
+                is_explicit: true,
+                source: "config".into(),
+                path: Some("/etc/eggsec/scope.yaml".into()),
+            }),
+            created_at_secs: 10,
+            active_tasks: vec![],
+            completed_tasks: vec![],
+            capabilities: RuntimeCapabilities::default(),
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        let deserialized: SessionSnapshot = serde_json::from_str(&json).unwrap();
+        let scope = deserialized.scope.unwrap();
+        assert!(scope.is_explicit);
+        assert_eq!(scope.source, "config");
+        assert_eq!(scope.path.as_deref(), Some("/etc/eggsec/scope.yaml"));
     }
 
     #[test]
@@ -235,8 +310,23 @@ mod tests {
         let session = RuntimeSession::new(id, RuntimeSurface::TuiManual);
         assert_eq!(session.id, id);
         assert_eq!(session.execution_surface(), RuntimeSurface::TuiManual);
+        assert!(session.scope().is_none());
         assert!(session.active_tasks().is_empty());
         assert!(session.completed_tasks().is_empty());
+    }
+
+    #[test]
+    fn runtime_session_with_scope() {
+        let scope = SessionScope {
+            is_explicit: true,
+            source: "cli".into(),
+            path: None,
+        };
+        let session =
+            RuntimeSession::with_scope(SessionId::new(), RuntimeSurface::CliManual, scope);
+        let s = session.scope().unwrap();
+        assert!(s.is_explicit);
+        assert_eq!(s.source, "cli");
     }
 
     #[test]
@@ -247,19 +337,52 @@ mod tests {
     }
 
     #[test]
-    fn runtime_session_hydrate_from_snapshot() {
+    fn runtime_session_hydrate_from_snapshot_preserves_completed() {
         let snapshot = SessionSnapshot {
             session_id: SessionId::new(),
             surface: RuntimeSurface::McpServer,
+            scope: Some(SessionScope {
+                is_explicit: true,
+                source: "config".into(),
+                path: None,
+            }),
             created_at_secs: 10,
             active_tasks: vec![],
-            completed_tasks: vec![],
+            completed_tasks: vec![TaskSnapshot {
+                task_id: TaskId::new(),
+                status: TaskStatus::Completed,
+                request_summary: "port-scan: 10.0.0.1".into(),
+                progress: None,
+                last_error: None,
+            }],
             capabilities: RuntimeCapabilities::default(),
         };
         let session = RuntimeSession::hydrate_from_snapshot(snapshot.clone());
         assert_eq!(session.id, snapshot.session_id);
         assert_eq!(session.execution_surface(), RuntimeSurface::McpServer);
+        assert!(session.scope().is_some());
+        assert_eq!(session.scope().unwrap().source, "config");
         assert!(session.active_tasks().is_empty());
+        // Completed tasks from snapshot are restored for read-only querying.
+        let completed = session.completed_tasks();
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].request_summary, "port-scan: 10.0.0.1");
+    }
+
+    #[test]
+    fn runtime_session_snapshot_includes_scope() {
+        let scope = SessionScope {
+            is_explicit: false,
+            source: "default-empty".into(),
+            path: None,
+        };
+        let session = RuntimeSession::with_scope(SessionId::new(), RuntimeSurface::RestApi, scope);
+        let snapshot = session.snapshot();
+        assert_eq!(snapshot.surface, RuntimeSurface::RestApi);
+        assert_eq!(snapshot.session_id, session.id);
+        let s = snapshot.scope.unwrap();
+        assert!(!s.is_explicit);
+        assert_eq!(s.source, "default-empty");
     }
 
     #[test]
@@ -268,5 +391,6 @@ mod tests {
         let snapshot = session.snapshot();
         assert_eq!(snapshot.surface, RuntimeSurface::RestApi);
         assert_eq!(snapshot.session_id, session.id);
+        assert!(snapshot.scope.is_none());
     }
 }

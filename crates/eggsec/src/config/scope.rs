@@ -68,6 +68,22 @@ impl Default for LoadedScope {
     }
 }
 
+impl From<&LoadedScope> for eggsec_runtime::SessionScope {
+    fn from(loaded: &LoadedScope) -> Self {
+        let source = match loaded.source {
+            ScopeSource::DefaultEmpty => "default-empty",
+            ScopeSource::ConfigFile => "config",
+            ScopeSource::CliScopeFile => "cli",
+            ScopeSource::GeneratedPreset => "preset",
+        };
+        Self {
+            is_explicit: loaded.is_explicit_manifest(),
+            source: source.to_string(),
+            path: loaded.path.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Scope {
     #[serde(default)]

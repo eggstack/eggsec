@@ -195,6 +195,8 @@ impl super::App {
             // Submit to runtime for lifecycle tracking + execution.
             let runtime = self.runtime_binding.runtime.clone();
             let session_id = self.runtime_binding.session_id;
+            let session_scope: eggsec_runtime::SessionScope =
+                self.enforcement_state.loaded_scope().into();
             let pending_session_id =
                 Arc::new(std::sync::Mutex::new(None::<eggsec_runtime::SessionId>));
             let pending_session_id_clone = pending_session_id.clone();
@@ -206,9 +208,10 @@ impl super::App {
                 let session_id = match session_id {
                     Some(sid) => sid,
                     None => match runtime
-                        .create_session(
+                        .create_session_with_scope(
                             eggsec_runtime::SessionOptions::default(),
                             eggsec_runtime::RuntimeSurface::TuiManual,
+                            Some(session_scope),
                         )
                         .await
                     {
@@ -276,5 +279,87 @@ mod tests {
         assert!(matches!(app.tabs.recon.core.state, AppState::Idle));
         assert!(app.task_state.tab.is_none());
         assert!(!app.has_active_task());
+    }
+
+    #[test]
+    fn tui_app_binds_to_pre_existing_runtime_session() {
+        use crate::app::RuntimeBinding;
+        use eggsec_runtime::{Runtime, RuntimeConfig, RuntimeSurface, SessionId};
+
+        // Create a runtime and a session outside of the TUI.
+        let runtime = std::sync::Arc::new(Runtime::new(
+            RuntimeConfig::default(),
+            crate::app::task_runtime::TuiExecutor::new(std::sync::Arc::new(
+                arc_swap::ArcSwap::new(std::sync::Arc::new(
+                    crate::app::task_runtime::TuiDispatcherContext {
+                        progress_tx: tokio::sync::mpsc::channel(1).0,
+                        result_tx: tokio::sync::mpsc::channel(1).0,
+                    },
+                )),
+            )),
+        ));
+        let rt = runtime.clone();
+        let session_id = tokio::runtime::Runtime::new().unwrap().block_on(async {
+            rt.create_session(
+                eggsec_runtime::SessionOptions::default(),
+                RuntimeSurface::TuiManual,
+            )
+            .await
+            .unwrap()
+        });
+
+        // Bind TUI app to the pre-existing session.
+        let mut app = create_test_app();
+        app.runtime_binding = RuntimeBinding {
+            runtime,
+            session_id: Some(session_id),
+            events: None,
+        };
+
+        // Verify the TUI can read back the session ID.
+        assert_eq!(app.runtime_binding.session_id, Some(session_id));
+        assert!(!app.has_active_task());
+    }
+
+    #[test]
+    fn tui_app_runtime_binding_reflects_session_surface() {
+        use crate::app::RuntimeBinding;
+        use eggsec_runtime::{Runtime, RuntimeConfig, RuntimeSurface};
+
+        let runtime = std::sync::Arc::new(Runtime::new(
+            RuntimeConfig::default(),
+            crate::app::task_runtime::TuiExecutor::new(std::sync::Arc::new(
+                arc_swap::ArcSwap::new(std::sync::Arc::new(
+                    crate::app::task_runtime::TuiDispatcherContext {
+                        progress_tx: tokio::sync::mpsc::channel(1).0,
+                        result_tx: tokio::sync::mpsc::channel(1).0,
+                    },
+                )),
+            )),
+        ));
+        let rt = runtime.clone();
+        let session_id = tokio::runtime::Runtime::new().unwrap().block_on(async {
+            rt.create_session(
+                eggsec_runtime::SessionOptions::default(),
+                RuntimeSurface::TuiManual,
+            )
+            .await
+            .unwrap()
+        });
+
+        let mut app = create_test_app();
+        app.runtime_binding = RuntimeBinding {
+            runtime,
+            session_id: Some(session_id),
+            events: None,
+        };
+
+        // The runtime should report the correct surface for the bound session.
+        let rt = app.runtime_binding.runtime.clone();
+        let sid = app.runtime_binding.session_id.unwrap();
+        let surface = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { rt.session_surface(sid).await.unwrap() });
+        assert_eq!(surface, RuntimeSurface::TuiManual);
     }
 }
