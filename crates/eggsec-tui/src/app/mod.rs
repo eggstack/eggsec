@@ -18,6 +18,7 @@ pub(crate) mod operation;
 mod options;
 pub(crate) mod overlay;
 pub(crate) mod runner;
+pub(crate) mod runtime_adapter;
 pub(crate) mod state;
 pub(crate) mod state_update;
 pub(crate) mod tab_error;
@@ -127,6 +128,10 @@ pub struct App {
     /// The `TuiExecutor` reads this via `ArcSwap` before dispatching.
     pub(crate) executor_context:
         std::sync::Arc<arc_swap::ArcSwap<task_runtime::TuiDispatcherContext>>,
+
+    // -- Phase 4: runtime event reducer --
+    /// Maps runtime TaskIds to originating tabs and applies lifecycle events.
+    pub(crate) runtime_adapter: runtime_adapter::TuiRuntimeAdapter,
 }
 
 impl App {
@@ -188,6 +193,7 @@ impl App {
             runtime_pending_event_rx: None,
             runtime_event_rx: None,
             executor_context,
+            runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -297,6 +303,7 @@ impl App {
             runtime_pending_event_rx: None,
             runtime_event_rx: None,
             executor_context,
+            runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until

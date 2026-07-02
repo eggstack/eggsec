@@ -36,6 +36,10 @@ impl super::App {
             let extracted = holder.try_lock().ok().and_then(|mut guard| guard.take());
             if let Some(tid) = extracted {
                 self.task_state.task_id = Some(tid);
+                // Phase 4: register task-tab mapping in the runtime adapter.
+                if let Some(tab) = self.task_state.tab {
+                    self.runtime_adapter.register_task(tid, tab);
+                }
                 tracing::debug!("Runtime task_id synced");
             } else {
                 // Still pending or lock held, put it back for next poll.
@@ -55,18 +59,12 @@ impl super::App {
             }
         }
 
-        // Drain runtime lifecycle events for logging and (Phase 4) forwarding.
-        if let Some(ref mut rx) = self.runtime_event_rx {
-            while let Some(event) = rx.try_recv() {
-                match &event {
-                    eggsec_runtime::RuntimeEvent::TaskStarted { .. }
-                    | eggsec_runtime::RuntimeEvent::TaskCompleted { .. }
-                    | eggsec_runtime::RuntimeEvent::TaskFailed { .. }
-                    | eggsec_runtime::RuntimeEvent::TaskCancelled { .. } => {
-                        tracing::debug!("Runtime event: {:?}", event);
-                    }
-                    _ => {}
-                }
+        // Phase 4: drain runtime lifecycle events through the adapter.
+        // Two-phase reduce/apply to avoid borrow conflicts (adapter lives inside App).
+        let actions = self.runtime_adapter.drain_and_reduce(&mut self.runtime_event_rx);
+        if !actions.is_empty() {
+            if super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, self) {
+                dirty = true;
             }
         }
 
@@ -155,6 +153,7 @@ impl super::App {
     fn update_progress(&mut self, completed: u64, total: u64) {
         // Use task_tab if set, otherwise fall back to current_tab (for backwards compatibility)
         let tab = self.task_state.tab.unwrap_or(self.current_tab);
+        use crate::app::runtime_adapter::TabProgressRouter;
         tab.update_progress_in_app(self, completed, total);
     }
 
@@ -608,57 +607,6 @@ impl super::App {
             _ => "Unknown",
         };
         tracing::error!("{} tab does not support error state: {}", tab_name, error);
-    }
-}
-
-trait TabProgressUpdate {
-    fn update_progress_in_app(&self, app: &mut super::App, completed: u64, total: u64);
-}
-
-impl TabProgressUpdate for super::tabs::Tab {
-    fn update_progress_in_app(&self, app: &mut super::App, completed: u64, total: u64) {
-        match self {
-            super::tabs::Tab::Recon => app.tabs.recon.update_progress(completed, total),
-            super::tabs::Tab::Load => app.tabs.load.update_progress(completed, total),
-            super::tabs::Tab::ScanPorts => app.tabs.scan_ports.update_progress(completed, total),
-            super::tabs::Tab::ScanEndpoints => {
-                app.tabs.scan_endpoints.update_progress(completed, total)
-            }
-            super::tabs::Tab::Fingerprint => app.tabs.fingerprint.update_progress(completed, total),
-            super::tabs::Tab::Fuzz => app.tabs.fuzz.core.update_progress(completed, total),
-            super::tabs::Tab::Waf => app.tabs.waf.update_progress(completed, total),
-            super::tabs::Tab::WafStress => app.tabs.waf_stress.update_progress(completed, total),
-            super::tabs::Tab::Scan => {
-                let total = app.tabs.scan.stages.len() as u64;
-                if total == 0 {
-                    return;
-                }
-                let completed = app
-                    .tabs
-                    .scan
-                    .stages
-                    .iter()
-                    .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
-                    .count() as u64;
-                app.tabs.scan.update_progress(completed, total);
-            }
-            #[cfg(feature = "wireless")]
-            super::tabs::Tab::Wireless => {
-                app.tabs.wireless.update_progress(completed, total);
-            }
-            super::tabs::Tab::Auth => {
-                // Auth progress is handled via the task system
-            }
-            #[cfg(feature = "c2")]
-            super::tabs::Tab::C2 => {
-                // C2 progress is handled via the task system
-            }
-            #[cfg(feature = "web-proxy")]
-            super::tabs::Tab::Intercept => {
-                // Intercept progress is event-driven, not percentage-based.
-            }
-            _ => {}
-        }
     }
 }
 

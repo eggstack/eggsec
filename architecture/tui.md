@@ -374,13 +374,15 @@ Worker dispatch has been moved from the TUI crate to `eggsec::dispatch`. The TUI
 
 **Types**: `TaskResult`, `GraphQlResults`, `OAuthResults`, `NseResults`, `TracerouteHopResult`, `ReconOptions` are all defined in `eggsec::dispatch::types`.
 
-**Communication Flow**:
+**Communication Flow (Phase 4 — runtime event reducer)**:
 ```
 Tab builds RunRequest → spawn_task() → Runtime → TuiTaskDispatcher → eggsec::dispatch::dispatch_inner()
                                                                               ↓
-          progress_rx → App::update_progress() → tab.update_progress()
-          result_rx → App::handle_result() → tab.set_results()
+          RuntimeEventReceiver → TuiRuntimeAdapter::drain_and_reduce()
+                                       ↓
+          Vec<TuiAction> → TuiRuntimeAdapter::apply_actions() → tab state
 ```
+Legacy `progress_rx` / `result_rx` channels remain as a compatibility bridge but are no longer the primary lifecycle path. Typed `TaskResult` values still flow through `result_rx` for domain-specific tab updates (recon results, scan reports, etc.).
 
 ### State Management (`state/`)
 

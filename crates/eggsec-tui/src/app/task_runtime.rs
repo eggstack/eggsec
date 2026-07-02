@@ -177,6 +177,10 @@ impl super::App {
             self.task_state.tab = Some(self.current_tab);
             self.task_state.started_at = Some(std::time::Instant::now());
 
+            // Phase 4: register task-tab mapping in the runtime adapter.
+            // The adapter routes lifecycle events (progress, completion, failure)
+            // to the correct tab regardless of which tab is currently focused.
+
             // Update the executor context with new channel senders.
             // The executor reads this via ArcSwap before dispatching.
             let ctx = TuiDispatcherContext {

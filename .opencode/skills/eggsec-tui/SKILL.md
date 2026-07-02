@@ -36,6 +36,9 @@ crates/eggsec-tui/src/
 │   ├── tab_store.rs     # TabStore - owns all 33 tab instances
 │   ├── task_management.rs # Task lifecycle management
 │   ├── task_runtime.rs  # Task runtime helpers
+│   ├── task_dispatcher.rs # TuiTaskDispatcher (TaskDispatcher impl)
+│   ├── runtime_adapter/ # Phase 4: runtime event reducer
+│   │   └── mod.rs       # TuiRuntimeAdapter, TuiAction, reduce/apply pattern
 │   └── theme_runtime.rs # Theme loader lifecycle helpers
 ├── tabs/         # Individual tab implementations (33 tabs)
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits

@@ -117,6 +117,65 @@ App retains UI-level flows (`request_policy_confirmation`, `confirm_policy_actio
 
 `TuiActionSpec` and `TuiTabSpec` (`app/action_spec.rs`) provide metadata-backed descriptors pointing to canonical `OperationMetadata`. Pilot: recon, scan-ports, fuzz, db-pentest. Tests verify metadata resolution, feature string validity, risk consistency, and domain reference validity.
 
+## Phase 4: Runtime Event Reducer (TUI Adapter)
+
+`TuiRuntimeAdapter` (`app/runtime_adapter/mod.rs`) is the canonical lifecycle path for runtime events in the TUI. It replaces direct `progress_rx`/`result_rx` draining as the primary mechanism for task lifecycle updates.
+
+### Architecture
+
+The adapter uses a two-phase reduce/apply pattern to work within Rust's borrow rules:
+
+1. **Reduce**: `drain_and_reduce(rx)` borrows only the adapter and receiver, returns `Vec<TuiAction>`
+2. **Apply**: `apply_actions(actions, app)` is a free function taking `(Vec<TuiAction>, &mut App)`
+
+This separation is necessary because `runtime_adapter` is a field of `App`, so methods on it cannot also take `&mut App`.
+
+### Key Types
+
+```rust
+pub(crate) struct TuiRuntimeAdapter {
+    task_to_tab: FxHashMap<TaskId, Tab>,  // TaskId → originating Tab
+}
+
+pub(crate) enum TuiAction {
+    UpdateProgress(Tab, u64, u64),
+    TabError(Tab, String),
+    TabCancelled(Tab, Option<String>),
+    TabCompleted(Tab, TaskOutcome),
+    TabStarted(Tab, TaskId),
+}
+```
+
+### Event Mapping
+
+| RuntimeEvent | TuiAction(s) |
+|---|---|
+| `TaskStarted` | `TabStarted(tab, task_id)` |
+| `TaskProgress` | `UpdateProgress(tab, completed, total)` |
+| `TaskCompleted` | `TabCompleted(tab, outcome)` |
+| `TaskFailed` | `TabError(tab, message)` |
+| `TaskCancelled` | `TabCancelled(tab, reason)` |
+| `TaskQueued`, `TaskLog`, `PolicyDecisionRequired`, `Audit` | No action (ignored) |
+
+### Integration in Update Loop
+
+`App::update()` in `state_update.rs` now:
+1. Drains `runtime_event_rx` via `self.runtime_adapter.drain_and_reduce()`
+2. Applies actions via `TuiRuntimeAdapter::apply_actions(actions, self)`
+3. Still drains `progress_rx`/`result_rx` as compatibility bridge for typed `TaskResult` values
+
+### Registration
+
+Tasks are registered when their `TaskId` is synced from the async bridge in `update()`. The adapter maps each `TaskId` to its originating `Tab` for event routing.
+
+### Tests
+
+13 unit tests cover event routing, registration, cancellation, failure, progress, and edge cases. Run with:
+
+```bash
+cargo test -p eggsec-tui -- runtime_adapter
+```
+
 ### Module Structure
 
 ```
@@ -128,6 +187,10 @@ crates/eggsec-tui/src/
 │   ├── runner.rs        # Event loop, input handling
 │   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
 │   ├── state_update.rs  # Background task handling, result dispatch
+│   ├── task_runtime.rs  # TuiExecutor, spawn_task(), TuiDispatcherContext
+│   ├── task_dispatcher.rs # TuiTaskDispatcher (TaskDispatcher impl)
+│   ├── runtime_adapter/ # Phase 4: runtime event reducer
+│   │   └── mod.rs       # TuiRuntimeAdapter, TuiAction, reduce/apply pattern
 │   ├── notifications.rs # Notification and NotificationSeverity types
 │   ├── bookmarks.rs    # Bookmark helper functions
 │   ├── confirmation.rs  # PendingAction enum
@@ -245,8 +308,9 @@ let mode_color = match app.mode {
 };
 ```
 
-`App::update` drains ALL pending messages from `progress_rx` and `result_rx`:
-- Uses collected `pending_updates` / `pending_results` vectors
+`App::update` (Phase 4) drains runtime events through the adapter first, then drains typed results from `progress_rx` and `result_rx` as a compatibility bridge:
+- Runtime events → `TuiRuntimeAdapter::drain_and_reduce()` → `apply_actions()`
+- Typed results → `pending_updates` / `pending_results` vectors (compatibility bridge)
 - Avoids borrow checker issues
 
 ## Tab System
