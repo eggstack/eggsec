@@ -18,6 +18,12 @@ pub enum ErrorCode {
     Internal,
     PermissionDenied,
     InvalidSurface,
+    /// The client has not declared its identity before sending a restricted command.
+    ClientNotDeclared,
+    /// The requested operation is not supported by this daemon.
+    Unsupported,
+    /// The operation cannot proceed in the current state (e.g., no pending policy decision).
+    InvalidState,
 }
 
 /// A command sent from a client to the daemon.
@@ -577,6 +583,30 @@ mod tests {
     }
 
     #[test]
+    fn error_code_roundtrip_client_not_declared() {
+        let code = ErrorCode::ClientNotDeclared;
+        let json = serde_json::to_string(&code).unwrap();
+        let back: ErrorCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(code, back);
+    }
+
+    #[test]
+    fn error_code_roundtrip_unsupported() {
+        let code = ErrorCode::Unsupported;
+        let json = serde_json::to_string(&code).unwrap();
+        let back: ErrorCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(code, back);
+    }
+
+    #[test]
+    fn error_code_roundtrip_invalid_state() {
+        let code = ErrorCode::InvalidState;
+        let json = serde_json::to_string(&code).unwrap();
+        let back: ErrorCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(code, back);
+    }
+
+    #[test]
     fn client_command_roundtrip_declare_client() {
         let cmd = ClientCommand::DeclareClient {
             request_id: rid(),
@@ -722,6 +752,9 @@ mod tests {
             (ErrorCode::Internal, "Internal"),
             (ErrorCode::PermissionDenied, "PermissionDenied"),
             (ErrorCode::InvalidSurface, "InvalidSurface"),
+            (ErrorCode::ClientNotDeclared, "ClientNotDeclared"),
+            (ErrorCode::Unsupported, "Unsupported"),
+            (ErrorCode::InvalidState, "InvalidState"),
         ];
         for (code, expected_type) in cases {
             let val = serde_json::to_value(&code).unwrap();

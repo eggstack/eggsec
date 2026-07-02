@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::protocol::ClientCommand;
 use eggsec_runtime::{ClientId, RuntimeSurface};
 
 /// The kind of client connecting to the daemon.
@@ -33,6 +34,50 @@ pub enum ClientRole {
     Approver,
 }
 
+/// Permission level required for a daemon command.
+///
+/// Every `ClientCommand` variant maps to exactly one permission.
+/// This enum is the single source of truth for the RBAC matrix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CommandPermission {
+    /// No authorization required (health, capabilities).
+    Public,
+    /// Requires declared client identity but no session role.
+    DeclaredClient,
+    /// Read-only session access (snapshot, subscribe).
+    Observer,
+    /// Mutating session access (submit, cancel).
+    Controller,
+    /// Full session lifecycle (close).
+    Owner,
+    /// Policy approval (manual-surface restricted).
+    Approver,
+}
+
+/// Map a `ClientCommand` to its required permission level.
+///
+/// This is a total function — every `ClientCommand` variant must be covered.
+/// Adding a new variant to `ClientCommand` without updating this function
+/// will cause a compile error.
+pub fn command_permission(cmd: &ClientCommand) -> CommandPermission {
+    match cmd {
+        ClientCommand::Health { .. } | ClientCommand::Capabilities { .. } => {
+            CommandPermission::Public
+        }
+        ClientCommand::DeclareClient { .. } => CommandPermission::DeclaredClient,
+        ClientCommand::CreateSession { .. } => CommandPermission::DeclaredClient,
+        ClientCommand::ListSessions { .. } => CommandPermission::DeclaredClient,
+        ClientCommand::GetSnapshot { .. } | ClientCommand::Subscribe { .. } => {
+            CommandPermission::Observer
+        }
+        ClientCommand::SubmitTask { .. }
+        | ClientCommand::CancelTask { .. }
+        | ClientCommand::CancelActive { .. } => CommandPermission::Controller,
+        ClientCommand::CloseSession { .. } => CommandPermission::Owner,
+        ClientCommand::ApprovePolicy { .. } => CommandPermission::Approver,
+    }
+}
+
 /// Information about a connected client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientInfo {
@@ -55,6 +100,10 @@ pub struct ClientAccessRule {
 pub struct SessionAccess {
     pub owner_client_id: Option<ClientId>,
     pub allowed_clients: Vec<ClientAccessRule>,
+    /// The actual runtime surface bound at session creation.
+    pub surface: RuntimeSurface,
+    /// The client kind of the session creator (for audit).
+    pub owner_client_kind: ClientKind,
     pub default_observer_allowed: bool,
     pub default_controller_allowed: bool,
 }
@@ -64,6 +113,8 @@ impl Default for SessionAccess {
         Self {
             owner_client_id: None,
             allowed_clients: Vec::new(),
+            surface: RuntimeSurface::Unknown,
+            owner_client_kind: ClientKind::Unknown,
             default_observer_allowed: true,
             default_controller_allowed: false,
         }
@@ -110,15 +161,16 @@ pub fn check_permission(
     _client_kind: &ClientKind,
     client_role: &ClientRole,
     session_surface: &RuntimeSurface,
-    command: &str,
+    permission: CommandPermission,
 ) -> Result<(), String> {
-    match command {
-        "health" | "capabilities" | "list-sessions" => Ok(()),
-        "get-snapshot" | "subscribe" => match client_role {
+    match permission {
+        CommandPermission::Public => Ok(()),
+        CommandPermission::DeclaredClient => Ok(()),
+        CommandPermission::Observer => match client_role {
             ClientRole::Owner | ClientRole::Controller | ClientRole::Observer => Ok(()),
             ClientRole::Approver => Ok(()),
         },
-        "submit-task" | "cancel-task" | "cancel-active" => match client_role {
+        CommandPermission::Controller => match client_role {
             ClientRole::Owner | ClientRole::Controller => Ok(()),
             ClientRole::Observer => Err(
                 "permission-denied: observers cannot submit or cancel tasks".into(),
@@ -127,7 +179,7 @@ pub fn check_permission(
                 "permission-denied: approvers cannot submit or cancel tasks".into(),
             ),
         },
-        "approve-policy" => match session_surface {
+        CommandPermission::Approver => match session_surface {
             RuntimeSurface::TuiManual | RuntimeSurface::CliManual => match client_role {
                 ClientRole::Owner | ClientRole::Controller | ClientRole::Approver => Ok(()),
                 ClientRole::Observer => {
@@ -135,20 +187,21 @@ pub fn check_permission(
                 }
             },
             _ => match client_role {
-                ClientRole::Owner | ClientRole::Controller => Ok(()),
-                ClientRole::Approver | ClientRole::Observer => Err(
+                // Strict sessions: only the session owner can approve policies.
+                // Controllers, approvers, and observers from unrelated clients are denied.
+                ClientRole::Owner => Ok(()),
+                ClientRole::Controller | ClientRole::Approver | ClientRole::Observer => Err(
                     "policy-approval-not-allowed: strict sessions do not accept manual approvals from unrelated clients"
                         .into(),
                 ),
             },
         },
-        "close-session" => match client_role {
+        CommandPermission::Owner => match client_role {
             ClientRole::Owner | ClientRole::Controller => Ok(()),
             _ => Err(
                 "permission-denied: only owner or controller can close session".into(),
             ),
         },
-        _ => Err(format!("permission-denied: unknown command '{}'", command)),
     }
 }
 
@@ -167,6 +220,7 @@ mod tests {
         assert!(access.owner_client_id.is_none());
         assert!(access.default_observer_allowed);
         assert!(!access.default_controller_allowed);
+        assert_eq!(access.surface, RuntimeSurface::Unknown);
     }
 
     #[test]
@@ -207,7 +261,7 @@ mod tests {
             &ClientKind::Unknown,
             &ClientRole::Observer,
             &RuntimeSurface::McpServer,
-            "health"
+            CommandPermission::Public,
         )
         .is_ok());
     }
@@ -218,7 +272,7 @@ mod tests {
             &ClientKind::Cli,
             &ClientRole::Observer,
             &RuntimeSurface::TuiManual,
-            "submit-task",
+            CommandPermission::Controller,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("permission-denied"));
@@ -230,7 +284,7 @@ mod tests {
             &ClientKind::Cli,
             &ClientRole::Controller,
             &RuntimeSurface::TuiManual,
-            "submit-task",
+            CommandPermission::Controller,
         )
         .is_ok());
     }
@@ -241,7 +295,7 @@ mod tests {
             &ClientKind::Tui,
             &ClientRole::Owner,
             &RuntimeSurface::TuiManual,
-            "submit-task",
+            CommandPermission::Controller,
         )
         .is_ok());
     }
@@ -252,7 +306,7 @@ mod tests {
             &ClientKind::Tui,
             &ClientRole::Approver,
             &RuntimeSurface::TuiManual,
-            "approve-policy",
+            CommandPermission::Approver,
         )
         .is_ok());
     }
@@ -263,7 +317,7 @@ mod tests {
             &ClientKind::Tui,
             &ClientRole::Approver,
             &RuntimeSurface::McpServer,
-            "approve-policy",
+            CommandPermission::Approver,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("policy-approval-not-allowed"));
@@ -275,7 +329,7 @@ mod tests {
             &ClientKind::Cli,
             &ClientRole::Observer,
             &RuntimeSurface::TuiManual,
-            "get-snapshot",
+            CommandPermission::Observer,
         )
         .is_ok());
     }
@@ -286,7 +340,7 @@ mod tests {
             &ClientKind::Tui,
             &ClientRole::Owner,
             &RuntimeSurface::TuiManual,
-            "close-session",
+            CommandPermission::Owner,
         )
         .is_ok());
     }
@@ -297,21 +351,163 @@ mod tests {
             &ClientKind::Cli,
             &ClientRole::Observer,
             &RuntimeSurface::TuiManual,
-            "close-session",
+            CommandPermission::Owner,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("permission-denied"));
     }
 
     #[test]
-    fn permission_unknown_command_denied() {
+    fn command_permission_mapping_covers_all_variants() {
+        let commands = vec![
+            ClientCommand::Health {
+                request_id: "t".into(),
+            },
+            ClientCommand::Capabilities {
+                request_id: "t".into(),
+            },
+            ClientCommand::DeclareClient {
+                request_id: "t".into(),
+                kind: ClientKind::Tui,
+                label: None,
+            },
+            ClientCommand::CreateSession {
+                request_id: "t".into(),
+                surface: RuntimeSurface::Unknown,
+                scope: None,
+                labels: vec![],
+            },
+            ClientCommand::ListSessions {
+                request_id: "t".into(),
+            },
+            ClientCommand::GetSnapshot {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+            },
+            ClientCommand::SubmitTask {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+                request: eggsec_runtime::RunRequest {
+                    task_kind: eggsec_runtime::TaskKind::PortScan(
+                        eggsec_runtime::request::PortScanParams {
+                            target: "10.0.0.1".into(),
+                            ports: None,
+                            scan_type: None,
+                            timeout_ms: None,
+                        },
+                    ),
+                    requested_by: None,
+                    surface: RuntimeSurface::CliManual,
+                    labels: vec![],
+                },
+            },
+            ClientCommand::CancelTask {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+                task_id: eggsec_runtime::TaskId::new(),
+            },
+            ClientCommand::CancelActive {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+            },
+            ClientCommand::Subscribe {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+            },
+            ClientCommand::CloseSession {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+            },
+            ClientCommand::ApprovePolicy {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+                task_id: eggsec_runtime::TaskId::new(),
+                approved: true,
+                reason: None,
+            },
+        ];
+        for cmd in &commands {
+            let perm = command_permission(cmd);
+            // Every command must map to a permission — no panics or undefined behavior.
+            let _ = check_permission(&ClientKind::Tui, &ClientRole::Owner, &RuntimeSurface::TuiManual, perm);
+        }
+    }
+
+    #[test]
+    fn strict_surface_approver_denied() {
+        let surfaces = vec![
+            RuntimeSurface::McpServer,
+            RuntimeSurface::RestApi,
+            RuntimeSurface::GrpcApi,
+            RuntimeSurface::SecurityAgent,
+            RuntimeSurface::Ci,
+        ];
+        for surface in &surfaces {
+            let result = check_permission(
+                &ClientKind::Agent,
+                &ClientRole::Approver,
+                surface,
+                CommandPermission::Approver,
+            );
+            assert!(result.is_err(), "Approver should be denied on strict surface {:?}", surface);
+        }
+    }
+
+    #[test]
+    fn manual_surface_approver_allowed() {
+        let surfaces = vec![RuntimeSurface::TuiManual, RuntimeSurface::CliManual];
+        for surface in &surfaces {
+            assert!(
+                check_permission(
+                    &ClientKind::Tui,
+                    &ClientRole::Approver,
+                    surface,
+                    CommandPermission::Approver,
+                )
+                .is_ok(),
+                "Approver should be allowed on manual surface {:?}",
+                surface
+            );
+        }
+    }
+
+    #[test]
+    fn observer_denied_on_all_mutation_permissions() {
+        let mutation_perms = vec![CommandPermission::Controller, CommandPermission::Owner];
+        for perm in &mutation_perms {
+            let result = check_permission(
+                &ClientKind::Cli,
+                &ClientRole::Observer,
+                &RuntimeSurface::TuiManual,
+                *perm,
+            );
+            assert!(result.is_err(), "Observer should be denied for {:?}", perm);
+        }
+    }
+
+    #[test]
+    fn approver_denied_on_mutation_permissions() {
+        let mutation_perms = vec![CommandPermission::Controller, CommandPermission::Owner];
+        for perm in &mutation_perms {
+            let result = check_permission(
+                &ClientKind::Tui,
+                &ClientRole::Approver,
+                &RuntimeSurface::TuiManual,
+                *perm,
+            );
+            assert!(result.is_err(), "Approver should be denied for {:?}", perm);
+        }
+    }
+
+    #[test]
+    fn unrelated_tui_cannot_approve_strict_session() {
         let result = check_permission(
             &ClientKind::Tui,
-            &ClientRole::Owner,
-            &RuntimeSurface::TuiManual,
-            "nonexistent-command",
+            &ClientRole::Controller,
+            &RuntimeSurface::McpServer,
+            CommandPermission::Approver,
         );
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("unknown command"));
+        assert!(result.unwrap_err().contains("policy-approval-not-allowed"));
     }
 }

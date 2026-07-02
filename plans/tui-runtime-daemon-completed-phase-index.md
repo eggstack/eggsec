@@ -17,6 +17,7 @@ Audit trail for the TUI→Runtime migration. Each phase lists status, key delive
 | 6a | Embedded Runtime Compatibility Closure | ✅ Complete | `eggsec-runtime/src/capabilities.rs`, architecture guards |
 | 6b | Pre-Daemon Runtime Readiness | ✅ Complete | `crates/eggsec-runtime/tests/in_process_client.rs`, `crates/eggsec-tui/src/app/task_dispatcher.rs`, `crates/eggsec-tui/src/app/runtime_adapter/mod.rs` |
 | 7–14 | Daemon, Remote Attach, Transport, Plugin | ⏳ Not started | See `tui-runtime-daemon-roadmap.md` |
+| CP | Security Corrective Pass | ✅ Complete | `crates/eggsec-daemon/src/client_registry.rs`, `host.rs`, `protocol.rs` |
 
 ## Closure Pass (Phase 6a) Deliverables
 
@@ -53,6 +54,19 @@ The pre-daemon readiness plan (`tui-runtime-daemon-phase-06-pre-daemon-readiness
 - Phase 7+ (daemon transport) blocked on this readiness gate
 - Runtime has 22 in-process client tests + 64 total tests across 3 test suites
 - TUI runtime adapter has 28 tests, task dispatcher has 21 tests
+
+## Security Corrective Pass (CP) Deliverables
+
+The security corrective pass (`tui-runtime-daemon-security-corrective-pass.md`) addressed semantic security risks in the daemon authorization model:
+
+1. **Centralized Command Authorization** — Replaced stringly-typed permission names with `CommandPermission` enum in `client_registry.rs`. Every `ClientCommand` variant now maps to a permission level via `command_permission()`. Adding a new command without updating the mapping causes a compile error.
+2. **Actual Runtime Surface for Authorization** — Fixed `check_command_permission()` in `host.rs` to query `Runtime::session_surface()` for the actual session surface instead of deriving it from `SessionAccess.default_controller_allowed`. `SessionAccess` now stores `surface: RuntimeSurface` and `owner_client_kind: ClientKind` directly.
+3. **Policy Approval Semantics** — `ApprovePolicy` now returns `ErrorCode::Unsupported` with explicit message instead of silently succeeding as a no-op placeholder. No client can believe an approval happened when it did not.
+4. **Client Declaration Hardening** — `CreateSession` is classified as `CommandPermission::DeclaredClient` (allowed before declaration but without owner attribution). Session-scoped commands (`GetSnapshot`, `SubmitTask`, etc.) require declared client and return `ErrorCode::ClientNotDeclared` if missing.
+5. **Strict Surface Approval Restriction** — On strict sessions (McpServer, RestApi, etc.), only the session Owner can approve policies. Controllers, Approvers, and Observers from unrelated clients are denied.
+6. **New Error Codes** — Added `ClientNotDeclared`, `Unsupported`, and `InvalidState` to `ErrorCode` enum with roundtrip tests.
+7. **Comprehensive Denial Tests** — Added tests for observer denial, approver denial on strict surfaces, unrelated TUI denial on strict sessions, and undeclared client denial.
+8. **Local Socket Security** — Verified: Unix socket only (no TCP fallback), runtime crate has no transport dependencies, socket cleanup is path-safe. Documented as non-goal: public network exposure.
 
 ## References
 

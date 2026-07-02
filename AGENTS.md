@@ -48,6 +48,8 @@ cargo test -p eggsec-db-lab
 cargo test -p eggsec-mobile-lab
 cargo check -p eggsec-runtime
 cargo test -p eggsec-runtime
+cargo check -p eggsec-daemon
+cargo test -p eggsec-daemon
 cargo check -p eggsec-web-proxy
 cargo test -p eggsec-web-proxy
 cargo test --lib -p eggsec
@@ -310,6 +312,7 @@ Canonical reference points when updating guidance or skills:
 - `ApprovedOperation` - Proof-of-enforcement token with private fields; produced exclusively by `EnforcementContext::approve()` or `approve_manual()`. Read-only accessors: `descriptor()`, `decision()`, `surface()`, `profile()`, `audit_event_id()`.
 - `EnforcementError` - Structured error from `approve()`/`approve_manual()`: `Denied`, `ConfirmationRequired`, `ManualOverrideUnavailable`.
 - `EnforcedDispatcher` - Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`.
+- `CommandPermission` - Per-command authorization level enum for daemon RBAC (`Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`). Single source of truth in `eggsec-daemon/src/client_registry.rs`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
 - `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`. Fields: `tool_integration: bool`, `mcp_exposed_by_default: bool`, `required_mcp_feature: Option<&'static str>`, `rest_exposable: bool`, `agent_exposable: bool`.
@@ -407,6 +410,7 @@ Canonical reference points when updating guidance or skills:
 - **Manual Overrides**: `--yes` is narrow (only `out-of-scope`/`target-expansion`); dedicated `--allow-*` flags required for others. Strict profiles/MCP/agent/REST never honor overrides.
 - **REST Strict Enforcement**: REST API uses `EnforcementContext` with `McpStrict` profile. Only `EnforcementOutcome::Allow` permits dispatch; `Warn`, `RequireConfirmation`, and `Deny` all return HTTP 403 with structured `POLICY_DENIED` response. `RestState` carries `EnforcementContext` instead of `Option<Scope>`. Metadata `rest_exposable` flags are enforced before policy evaluation.
 - **gRPC Strict Enforcement**: gRPC API uses `EnforcementContext` with `McpStrict` profile. Only `EnforcementOutcome::Allow` produces an `ApprovedOperation` token; `Warn`, `RequireConfirmation`, and `Deny` all fail with `Status::permission_denied`. Dispatch goes through `EnforcedDispatcher::dispatch_checked()`. Metadata `grpc_exposable` flags are enforced before policy evaluation.
+- **Daemon Authorization**: `eggsec-daemon` uses `CommandPermission` enum (not stringly-typed names) for per-command RBAC. Every `ClientCommand` variant maps to a permission level via `command_permission()`. Session access stores `RuntimeSurface` and `owner_client_kind` at creation time. Strict-surface sessions (McpServer, RestApi, GrpcApi, SecurityAgent, Ci) restrict policy approval to the session Owner only. `ApprovePolicy` returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding.
 
 ### Key Patterns (Lessons Learned)
 
@@ -436,6 +440,7 @@ Canonical reference points when updating guidance or skills:
 - **MCP Model A assertion**: OpsAgent listing is strictly broader than conservative default (`ops_ids.len() > default_ids.len()`). The test comment and assertion must both reflect strict broadness.
 - **TUI Runtime Phase 3 Dispatch**: `eggsec-runtime` defines a `TaskDispatcher` trait (dependency-free) in `dispatcher.rs`. `eggsec` crate owns the canonical dispatch logic in `eggsec::dispatch` module with `dispatch_task()` and `dispatch_inner()` public functions, plus `TaskResult` and all worker functions. Workers return `TaskResult` directly (no channel sends). `dispatch_inner()` takes `(RunRequest, progress_tx)` and returns `anyhow::Result<TaskResult>`. `eggsec-tui` implements `TuiTaskDispatcher` which calls `eggsec::dispatch::dispatch_inner()` directly, converts the result to `TaskResultEnvelope` via `task_result_to_envelope()`, sends typed `TaskResult` through `result_tx` for TUI rendering, and returns `TaskOutcome::Result(envelope)` for lifecycle tracking. `TuiExecutor` implements `RuntimeTaskExecutor`, loading per-task channel senders via `ArcSwap<TuiDispatcherContext>`. `TaskBuilder` trait now produces `RunRequest` instead of `TaskConfig`. The `eggsec-tui/src/workers/` directory has been removed.
 - **Runtime dependency boundary**: `eggsec-runtime` is dependency-light (serde, tokio, thiserror, uuid, tracing). The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`/`TaskKind`/`TaskOutcome`/`TaskResultEnvelope` types — this direction is intentional. `eggsec-runtime` must never depend on `eggsec` (no reverse dependency), and must never gain TUI (`ratatui`/`crossterm`) or transport (`axum`/`tonic`/`tokio-tungstenite`) dependencies. Enforced by architecture guards in `scripts/check-architecture-guards.sh`.
+- **Daemon CommandPermission**: `CommandPermission` enum in `eggsec-daemon/src/client_registry.rs` is the single source of truth for per-command authorization levels. `command_permission()` maps every `ClientCommand` variant. Adding a new command variant without updating `command_permission()` triggers a `#[non_exhaustive]` compile error. `SessionAccess` stores `surface: RuntimeSurface` and `owner_client_kind: ClientKind` — do not derive these from other fields.
 
 ## Skills Directory
 

@@ -144,6 +144,16 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | `handle_ci` | `handlers/ci.rs` | - | CI/CD checks |
 | `handle_report` | `handlers/report.rs` | - | Report generation |
 
+**Daemon commands** (feature-gated: `daemon-client`, dispatched in `main.rs` before general handler):
+
+| Command | Source | Purpose |
+|---------|--------|---------|
+| `daemon start/status/stop` | `daemon_cli.rs` | Daemon lifecycle management |
+| `session list/create/snapshot` | `daemon_cli.rs` | Session introspection |
+| `task submit/cancel/watch` | `daemon_cli.rs` | Task lifecycle management |
+
+Daemon commands connect via Unix socket using `DaemonClient` from `eggsec-daemon`. Authorization uses `CommandPermission` enum — `DeclareClient` must succeed before session-scoped commands are allowed.
+
 ## Common Patterns
 
 ### Policy Enforcement

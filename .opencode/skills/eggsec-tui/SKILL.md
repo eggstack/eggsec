@@ -89,6 +89,9 @@ Key differences in daemon mode:
 - `apply_actions()` calls `set_completed_message()` for envelope rendering
 - Multiple TUI instances can observe the same session (role: Owner/Controller/Observer)
 - Observers cannot submit/cancel tasks (permission check returns `ErrorCode::PermissionDenied`)
+- On strict-surface sessions (McpServer, RestApi, etc.), only the session Owner can approve policies
+- Daemon uses `CommandPermission` enum for per-command RBAC (not stringly-typed names)
+- `ApprovePolicy` returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding
 
 ### Tab System
 - `Tab::all()` - Returns available tabs for current feature set
