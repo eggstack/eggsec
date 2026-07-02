@@ -21,7 +21,7 @@ Feature-gated crates need explicit features: `cargo check -p eggsec --features m
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 11 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, and `eggsec-mobile-lab`. See `README.md` for features and `architecture/overview.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 12 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, and `eggsec-runtime`. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Quick Reference
 
@@ -46,6 +46,8 @@ cargo test -p eggsec-tool-core
 cargo test -p eggsec-output
 cargo test -p eggsec-db-lab
 cargo test -p eggsec-mobile-lab
+cargo check -p eggsec-runtime
+cargo test -p eggsec-runtime
 cargo check -p eggsec-web-proxy
 cargo test -p eggsec-web-proxy
 cargo test --lib -p eggsec
@@ -314,6 +316,18 @@ Canonical reference points when updating guidance or skills:
 - `EvidenceSource` - Provenance of evidence (tool, module, run_id)
 - `RedactionState` - Sensitivity classification: None, FullyRedacted, PartiallyRedacted, Summarized
 - `RedactionPolicy` - Manifest-level redaction strategy: None, RedactAll, RedactSensitive, SummarizeAll, DomainSpecific
+- `SessionId` - Opaque session identifier (`eggsec-runtime::ids`)
+- `TaskId` - Opaque task identifier (`eggsec-runtime::ids`)
+- `ClientId` - Opaque client identifier (`eggsec-runtime::ids`)
+- `RunRequest` - Frontend-neutral task request (`eggsec-runtime::request`)
+- `TaskKind` - Frontend-neutral task kind enum (`eggsec-runtime::request`)
+- `RuntimeSurface` - Frontend-neutral execution surface mirror (`eggsec-runtime::request`)
+- `RuntimeEvent` - Runtime lifecycle event (`eggsec-runtime::event`)
+- `TaskStatus` - Task lifecycle status enum (`eggsec-runtime::event`)
+- `TaskProgress` - Task progress info (`eggsec-runtime::event`)
+- `TaskOutcome` - Generic task outcome (`eggsec-runtime::event`)
+- `SessionSnapshot` - Runtime session state snapshot (`eggsec-runtime::session`)
+- `RuntimeCapabilities` - Runtime capability descriptor (`eggsec-runtime::capabilities`)
 
 ### Important Patterns
 

@@ -11,6 +11,7 @@ members = [
     "crates/eggsec-db-lab",
     "crates/eggsec-web-proxy",
     "crates/eggsec-mobile-lab",
+    "crates/eggsec-runtime",
 ]
 resolver = "2"
 

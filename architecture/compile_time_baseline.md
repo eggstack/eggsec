@@ -10,14 +10,18 @@ The third pass removed unused TUI dependencies from `eggsec` and extracted `eggs
 
 ```text
 crates/
-  eggsec-core/      # Dependency-light types and constants
-  eggsec-tool-core/ # Core data types for tool abstraction layer
-  eggsec/           # Assessment engine library (no binary)
-  eggsec-nse/       # Optional NSE compatibility
-  eggsec-tui/       # Terminal UI adapter (ratatui/crossterm)
-  eggsec-cli/       # CLI binary entry point (binary named "eggsec")
-  eggsec-output/    # Report formatting and output adapters
-  eggsec-agent/     # Agent coordination primitives (extracted from tool/agents/)
+  eggsec-core/       # Dependency-light types and constants
+  eggsec-tool-core/  # Core data types for tool abstraction layer
+  eggsec/            # Assessment engine library (no binary)
+  eggsec-nse/        # Optional NSE compatibility
+  eggsec-tui/        # Terminal UI adapter (ratatui/crossterm)
+  eggsec-cli/        # CLI binary entry point (binary named "eggsec")
+  eggsec-output/     # Report formatting and output adapters
+  eggsec-agent/      # Agent coordination primitives (extracted from tool/agents/)
+  eggsec-db-lab/     # Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis)
+  eggsec-web-proxy/  # Web proxy and MITM interception domain crate
+  eggsec-mobile-lab/ # Mobile app security analysis domain crate (APK/IPA static + Android dynamic)
+  eggsec-runtime/    # Frontend-neutral runtime DTOs and protocol types for daemon architecture
 ```
 
 ## Third pass changes
@@ -77,14 +81,18 @@ The current crate split isolates terminal UI dependencies from the engine crate 
 
 ```text
 crates/
-  eggsec-core/      # Dependency-light types and constants
-  eggsec-tool-core/ # Core data types for tool abstraction layer
-  eggsec/           # Assessment engine library (no binary)
-  eggsec-nse/       # Optional NSE compatibility
-  eggsec-tui/       # Terminal UI adapter (ratatui/crossterm)
-  eggsec-cli/       # CLI binary entry point (binary named "eggsec")
-  eggsec-output/    # Report formatting and output adapters
-  eggsec-agent/     # Agent coordination primitives (extracted from tool/agents/)
+  eggsec-core/       # Dependency-light types and constants
+  eggsec-tool-core/  # Core data types for tool abstraction layer
+  eggsec/            # Assessment engine library (no binary)
+  eggsec-nse/        # Optional NSE compatibility
+  eggsec-tui/        # Terminal UI adapter (ratatui/crossterm)
+  eggsec-cli/        # CLI binary entry point (binary named "eggsec")
+  eggsec-output/     # Report formatting and output adapters
+  eggsec-agent/      # Agent coordination primitives (extracted from tool/agents/)
+  eggsec-db-lab/     # Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis)
+  eggsec-web-proxy/  # Web proxy and MITM interception domain crate
+  eggsec-mobile-lab/ # Mobile app security analysis domain crate (APK/IPA static + Android dynamic)
+  eggsec-runtime/    # Frontend-neutral runtime DTOs and protocol types for daemon architecture
 ```
 
 ### Commands run
