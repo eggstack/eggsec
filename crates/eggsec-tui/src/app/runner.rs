@@ -11,10 +11,11 @@ use super::App;
 use super::InputMode;
 use super::KeyHandler;
 use crate::state;
-use crate::tabs::TabWindow;
+use crate::tabs::{Tab, TabWindow};
 use crate::ui;
 use crate::ui::{LAYOUT_MARGIN, TAB_BAR_HEIGHT};
 use crate::RuntimeMode;
+use eggsec_runtime::request::TaskKind;
 
 fn compute_tab_area(term_width: u16) -> ratatui::layout::Rect {
     ratatui::layout::Rect {
@@ -22,6 +23,41 @@ fn compute_tab_area(term_width: u16) -> ratatui::layout::Rect {
         y: LAYOUT_MARGIN,
         width: term_width.saturating_sub(LAYOUT_MARGIN * 2),
         height: TAB_BAR_HEIGHT,
+    }
+}
+
+/// Map a `TaskKind` to its originating `Tab` for snapshot hydration.
+fn tab_for_task_kind(kind: &TaskKind) -> Tab {
+    match kind {
+        TaskKind::PortScan(_) => Tab::ScanPorts,
+        TaskKind::EndpointScan(_) => Tab::ScanEndpoints,
+        TaskKind::Fingerprint(_) => Tab::Fingerprint,
+        TaskKind::Fuzz(_) => Tab::Fuzz,
+        TaskKind::Waf(_) => Tab::Waf,
+        TaskKind::WafStress(_) => Tab::WafStress,
+        TaskKind::Pipeline(_) => Tab::Scan,
+        TaskKind::Recon(_) => Tab::Recon,
+        TaskKind::LoadTest(_) => Tab::Load,
+        TaskKind::StressTest(_) => Tab::Stress,
+        TaskKind::PacketCapture(_) => Tab::Packet,
+        TaskKind::PacketTraceroute(_) => Tab::Packet,
+        TaskKind::PacketSend(_) => Tab::Packet,
+        TaskKind::GraphQl(_) => Tab::GraphQl,
+        TaskKind::OAuth(_) => Tab::OAuth,
+        TaskKind::AuthTest(_) => Tab::Auth,
+        TaskKind::Nse(_) => Tab::Nse,
+        TaskKind::Hunt(_) => Tab::Hunt,
+        TaskKind::Browser(_) => Tab::Browser,
+        TaskKind::Compliance(_) => Tab::Compliance,
+        TaskKind::Storage(_) => Tab::Storage,
+        TaskKind::Integrations(_) => Tab::Integrations,
+        TaskKind::Workflow(_) => Tab::Workflow,
+        TaskKind::Vuln(_) => Tab::Vuln,
+        TaskKind::Wireless(_) => Tab::Wireless,
+        TaskKind::WirelessActive(_) => Tab::Wireless,
+        TaskKind::DbPentest(_) => Tab::DbPentest,
+        TaskKind::Intercept(_) => Tab::Intercept,
+        TaskKind::C2(_) => Tab::C2,
     }
 }
 
@@ -210,7 +246,7 @@ async fn attach_daemon_session(
 
             // Hydrate adapter with pre-existing completed tasks.
             for task in &snapshot.completed_tasks {
-                let tab = crate::tabs::Tab::Recon; // Default mapping for hydrated tasks.
+                let tab = tab_for_task_kind(&task.task_kind);
                 app.runtime_adapter.register_task(task.task_id, tab);
             }
         }
@@ -382,5 +418,51 @@ where
         if event_count == 0 {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eggsec_runtime::request::{FingerprintParams, LoadTestParams, PortScanParams, ReconParams};
+
+    #[test]
+    fn tab_for_task_kind_port_scan() {
+        let kind = TaskKind::PortScan(PortScanParams {
+            target: "10.0.0.1".into(),
+            ports: None,
+            scan_type: None,
+            timeout_ms: None,
+        });
+        assert_eq!(tab_for_task_kind(&kind), Tab::ScanPorts);
+    }
+
+    #[test]
+    fn tab_for_task_kind_recon() {
+        let kind = TaskKind::Recon(ReconParams {
+            target: "example.com".into(),
+            modules: None,
+        });
+        assert_eq!(tab_for_task_kind(&kind), Tab::Recon);
+    }
+
+    #[test]
+    fn tab_for_task_kind_load_test() {
+        let kind = TaskKind::LoadTest(LoadTestParams {
+            target: "http://example.com".into(),
+            method: "GET".into(),
+            connections: None,
+            duration_secs: None,
+            rate_limit: None,
+        });
+        assert_eq!(tab_for_task_kind(&kind), Tab::Load);
+    }
+
+    #[test]
+    fn tab_for_task_kind_fingerprint() {
+        let kind = TaskKind::Fingerprint(FingerprintParams {
+            target: "10.0.0.1".into(),
+        });
+        assert_eq!(tab_for_task_kind(&kind), Tab::Fingerprint);
     }
 }

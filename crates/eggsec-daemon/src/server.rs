@@ -406,4 +406,109 @@ mod tests {
 
         assert!(!std::path::Path::new(&socket_path).exists());
     }
+
+    #[tokio::test]
+    async fn subscribe_receives_task_events() {
+        use crate::protocol::ClientCommand;
+        use eggsec_runtime::request::{PortScanParams, RunRequest, TaskKind};
+        use eggsec_runtime::{ClientId, RuntimeSurface};
+
+        let (_host, socket_path, shutdown) = start_server().await;
+        let (mut write_half, mut read_lines) = connect(&socket_path).await;
+
+        // 1. Create a session.
+        let create_resp = send_command(
+            &mut write_half,
+            &mut read_lines,
+            &ClientCommand::CreateSession {
+                request_id: "c1".into(),
+                surface: RuntimeSurface::Unknown,
+                scope: None,
+                labels: vec![],
+            },
+        )
+        .await;
+        let session_id = match create_resp {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            other => panic!("expected SessionCreated, got {:?}", other),
+        };
+
+        // 2. Subscribe to events.
+        let sub_resp = send_command(
+            &mut write_half,
+            &mut read_lines,
+            &ClientCommand::Subscribe {
+                request_id: "s1".into(),
+                session_id,
+            },
+        )
+        .await;
+        assert!(matches!(sub_resp, ServerMessage::Ok { .. }));
+
+        // 3. Submit a task (TestExecutor completes immediately).
+        let submit_resp = send_command(
+            &mut write_half,
+            &mut read_lines,
+            &ClientCommand::SubmitTask {
+                request_id: "t1".into(),
+                session_id,
+                request: RunRequest {
+                    task_kind: TaskKind::PortScan(PortScanParams {
+                        target: "127.0.0.1".into(),
+                        ports: None,
+                        scan_type: None,
+                        timeout_ms: None,
+                    }),
+                    requested_by: Some(ClientId::new()),
+                    surface: RuntimeSurface::CliManual,
+                    labels: vec![],
+                },
+            },
+        )
+        .await;
+        let task_id = match submit_resp {
+            ServerMessage::TaskSubmitted { task_id, .. } => task_id,
+            other => panic!("expected TaskSubmitted, got {:?}", other),
+        };
+
+        // 4. Read messages until we get RuntimeEvent variants.
+        let mut saw_queued = false;
+        let mut saw_completed = false;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        while tokio::time::Instant::now() < deadline {
+            let read_result = tokio::time::timeout(
+                std::time::Duration::from_millis(200),
+                read_lines.next_line(),
+            )
+            .await;
+            match read_result {
+                Ok(Ok(Some(line))) => {
+                    let msg: ServerMessage = serde_json::from_str(&line).unwrap();
+                    if let ServerMessage::RuntimeEvent { event, .. } = msg {
+                        match event {
+                            eggsec_runtime::RuntimeEvent::TaskQueued { task_id: tid, .. } => {
+                                assert_eq!(tid, task_id);
+                                saw_queued = true;
+                            }
+                            eggsec_runtime::RuntimeEvent::TaskCompleted {
+                                task_id: tid, ..
+                            } => {
+                                assert_eq!(tid, task_id);
+                                saw_completed = true;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if saw_queued && saw_completed {
+                        break;
+                    }
+                }
+                _ => continue,
+            }
+        }
+        assert!(saw_queued, "should receive TaskQueued event");
+        assert!(saw_completed, "should receive TaskCompleted event");
+
+        shutdown.cancel();
+    }
 }

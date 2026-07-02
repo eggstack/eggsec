@@ -135,6 +135,7 @@ impl RuntimeSession {
             .map(|(id, t)| TaskSnapshot {
                 task_id: *id,
                 status: t.status.clone(),
+                task_kind: t.request.task_kind.clone(),
                 request_summary: summarize_request(&t.request.task_kind),
                 progress: t.progress.clone(),
                 last_error: t.last_error.clone(),
@@ -154,6 +155,7 @@ impl RuntimeSession {
             .map(|(id, t)| TaskSnapshot {
                 task_id: *id,
                 status: t.status.clone(),
+                task_kind: t.request.task_kind.clone(),
                 request_summary: summarize_request(&t.request.task_kind),
                 progress: t.progress.clone(),
                 last_error: t.last_error.clone(),
@@ -199,6 +201,8 @@ impl RuntimeSession {
 pub struct TaskSnapshot {
     pub task_id: TaskId,
     pub status: TaskStatus,
+    /// The original task kind, enabling frontends to map tasks to tabs/tools.
+    pub task_kind: TaskKind,
     pub request_summary: String,
     pub progress: Option<TaskProgress>,
     pub last_error: Option<String>,
@@ -380,6 +384,12 @@ mod tests {
             completed_tasks: vec![TaskSnapshot {
                 task_id: TaskId::new(),
                 status: TaskStatus::Completed,
+                task_kind: TaskKind::PortScan(PortScanParams {
+                    target: "10.0.0.1".into(),
+                    ports: None,
+                    scan_type: None,
+                    timeout_ms: None,
+                }),
                 request_summary: "port-scan: 10.0.0.1".into(),
                 progress: None,
                 last_error: None,
