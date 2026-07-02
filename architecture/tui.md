@@ -414,7 +414,9 @@ Embedded (default)              Daemon (remote)
 
 CLI args: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
 
-`EmbeddedRuntimeClient` wraps `Arc<Runtime>` and calls runtime methods directly. `DaemonRuntimeClient` connects via Unix socket using `ClientCommand`/`ServerMessage` JSON-line protocol from `eggsec-daemon`. Session attach hydrates state from `SessionSnapshot` and registers completed tasks in the adapter.
+`EmbeddedRuntimeClient` wraps `Arc<Runtime>` and calls runtime methods directly. `DaemonRuntimeClient` connects via Unix socket using `ClientCommand`/`ServerMessage` JSON-line protocol from `eggsec-daemon`. On connect, it sends `DeclareClient { kind: ClientKind::Tui, label: "eggsec-tui" }` — the daemon registers the client and assigns a `ClientId`. Session attach hydrates state from `SessionSnapshot` and registers completed tasks in the adapter.
+
+**Multi-client semantics**: Multiple TUI instances can observe the same daemon session simultaneously. The daemon assigns roles: `Owner` for session creators, `Controller` for attachers with submit permissions, `Observer` for read-only attachers. Permission checks enforce: observers cannot submit/cancel tasks, only owners/controllers/approvers can approve policies, and strict-surface sessions reject manual approvals from unrelated clients. Events are fanned out to all subscribers with slow-client tolerance (stale senders are cleaned up automatically).
 
 **Runtime dependency boundary**: The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`, `TaskKind`, `TaskOutcome`, and `TaskResultEnvelope` types. This is intentional — the engine uses runtime protocol types to submit work. However, `eggsec-runtime` must never depend on `eggsec` (no reverse dependency). Architecture guard `check-architecture-guards.sh` enforces this. `eggsec-runtime` has zero TUI or transport dependencies.
 

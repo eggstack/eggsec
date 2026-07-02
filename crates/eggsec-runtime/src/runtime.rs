@@ -303,6 +303,9 @@ impl Runtime {
                     });
                 }
             }
+            if let Some(session) = state.sessions.get_mut(&session_id) {
+                session.increment_generation();
+            }
 
             let cancel_token = CancellationToken::new();
             let timeout_duration = state.config.default_task_timeout;
@@ -314,6 +317,7 @@ impl Runtime {
                     status: TaskStatus::Queued,
                     progress: None,
                     last_error: None,
+                    outcome: None,
                     abort: Some(cancel_token.clone()),
                     _handle: None,
                 },
@@ -376,14 +380,14 @@ impl Runtime {
                 };
 
                 // Determine final status
-                let (final_status, error_msg) = match result {
+                let (final_status, error_msg, outcome_value) = match result {
                     Ok(Ok(outcome)) => {
                         let _ = event_tx_clone.send(RuntimeEvent::TaskCompleted {
                             session_id,
                             task_id,
-                            outcome,
+                            outcome: outcome.clone(),
                         });
-                        (TaskStatus::Completed, None)
+                        (TaskStatus::Completed, None, Some(outcome))
                     }
                     Ok(Err(e)) => {
                         let msg = e.to_string();
@@ -396,7 +400,7 @@ impl Runtime {
                                 details: None,
                             },
                         });
-                        (TaskStatus::Failed, Some(msg))
+                        (TaskStatus::Failed, Some(msg), None)
                     }
                     Err(_elapsed) => {
                         cancel_for_spawn.cancel();
@@ -405,7 +409,7 @@ impl Runtime {
                             task_id,
                             reason: Some("timed out".into()),
                         });
-                        (TaskStatus::TimedOut, Some("task timed out".into()))
+                        (TaskStatus::TimedOut, Some("task timed out".into()), None)
                     }
                 };
 
@@ -415,9 +419,11 @@ impl Runtime {
                     if let Some(task) = session.tasks.get_mut(&task_id) {
                         task.status = final_status;
                         task.last_error = error_msg;
+                        task.outcome = outcome_value;
                         task.abort = None;
                         task._handle = None;
                     }
+                    session.increment_generation();
                 }
             })
         };
@@ -443,19 +449,23 @@ impl Runtime {
             .get_mut(&session_id)
             .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
 
-        let task = session
-            .tasks
-            .get_mut(&task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
+        {
+            let task = session
+                .tasks
+                .get_mut(&task_id)
+                .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
 
-        if task.status.is_terminal() {
-            return Err(RuntimeError::TaskAlreadyCompleted(task_id.to_string()));
+            if task.status.is_terminal() {
+                return Err(RuntimeError::TaskAlreadyCompleted(task_id.to_string()));
+            }
+
+            task.status = TaskStatus::Cancelled;
+            if let Some(cancel) = task.abort.take() {
+                cancel.cancel();
+            }
         }
 
-        task.status = TaskStatus::Cancelled;
-        if let Some(cancel) = task.abort.take() {
-            cancel.cancel();
-        }
+        session.increment_generation();
 
         let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
             session_id,
@@ -490,12 +500,13 @@ impl Runtime {
                 if let Some(cancel) = task.abort.take() {
                     cancel.cancel();
                 }
-                let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
-                    session_id,
-                    task_id,
-                    reason: Some("cancelled by user".into()),
-                });
             }
+            session.increment_generation();
+            let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
+                session_id,
+                task_id,
+                reason: Some("cancelled by user".into()),
+            });
         }
 
         Ok(())

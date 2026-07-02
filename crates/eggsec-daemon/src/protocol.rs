@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use crate::client_registry::ClientKind;
 use eggsec_runtime::{
-    RunRequest, RuntimeCapabilities, RuntimeEvent, RuntimeSurface, SessionId, SessionSnapshot,
-    SessionSummary, TaskId,
+    ClientId, RunRequest, RuntimeCapabilities, RuntimeEvent, RuntimeSurface, SessionId,
+    SessionSnapshot, SessionSummary, TaskId,
 };
 
 /// Error codes returned by the daemon in response to client commands.
@@ -15,6 +16,8 @@ pub enum ErrorCode {
     TaskAlreadyCompleted,
     UnsupportedCommand,
     Internal,
+    PermissionDenied,
+    InvalidSurface,
 }
 
 /// A command sent from a client to the daemon.
@@ -26,6 +29,11 @@ pub enum ClientCommand {
     },
     Capabilities {
         request_id: String,
+    },
+    DeclareClient {
+        request_id: String,
+        kind: ClientKind,
+        label: Option<String>,
     },
     CreateSession {
         request_id: String,
@@ -58,6 +66,10 @@ pub enum ClientCommand {
         request_id: String,
         session_id: SessionId,
     },
+    CloseSession {
+        request_id: String,
+        session_id: SessionId,
+    },
 }
 
 /// A message sent from the daemon to a client.
@@ -71,6 +83,10 @@ pub enum ServerMessage {
         request_id: String,
         code: ErrorCode,
         message: String,
+    },
+    ClientDeclared {
+        request_id: String,
+        client_id: ClientId,
     },
     SessionCreated {
         request_id: String,
@@ -100,6 +116,9 @@ pub enum ServerMessage {
     RuntimeEvent {
         session_id: SessionId,
         event: RuntimeEvent,
+    },
+    SessionClosed {
+        request_id: String,
     },
 }
 
@@ -408,6 +427,7 @@ mod tests {
                 surface: RuntimeSurface::TuiManual,
                 scope: None,
                 created_at_secs: 42,
+                generation: 0,
                 active_tasks: vec![],
                 completed_tasks: vec![],
                 capabilities: RuntimeCapabilities::default(),
@@ -497,6 +517,127 @@ mod tests {
         assert_eq!(val["type"], "Ok");
     }
 
+    // New variant round-trips
+
+    #[test]
+    fn error_code_roundtrip_permission_denied() {
+        let code = ErrorCode::PermissionDenied;
+        let json = serde_json::to_string(&code).unwrap();
+        let back: ErrorCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(code, back);
+    }
+
+    #[test]
+    fn error_code_roundtrip_invalid_surface() {
+        let code = ErrorCode::InvalidSurface;
+        let json = serde_json::to_string(&code).unwrap();
+        let back: ErrorCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(code, back);
+    }
+
+    #[test]
+    fn client_command_roundtrip_declare_client() {
+        let cmd = ClientCommand::DeclareClient {
+            request_id: rid(),
+            kind: ClientKind::Tui,
+            label: Some("my-tui".into()),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        if let ClientCommand::DeclareClient { kind, label, .. } = back {
+            assert_eq!(kind, ClientKind::Tui);
+            assert_eq!(label.as_deref(), Some("my-tui"));
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn client_command_roundtrip_close_session() {
+        let sid = SessionId::new();
+        let cmd = ClientCommand::CloseSession {
+            request_id: rid(),
+            session_id: sid,
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        if let ClientCommand::CloseSession { session_id, .. } = back {
+            assert_eq!(session_id, sid);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip_client_declared() {
+        let cid = ClientId::new();
+        let msg = ServerMessage::ClientDeclared {
+            request_id: rid(),
+            client_id: cid,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::ClientDeclared { client_id, .. } = back {
+            assert_eq!(client_id, cid);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip_session_closed() {
+        let msg = ServerMessage::SessionClosed {
+            request_id: rid(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::SessionClosed { request_id, .. } = back {
+            assert_eq!(request_id, "req-001");
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn client_command_type_field_declare_client() {
+        let cmd = ClientCommand::DeclareClient {
+            request_id: rid(),
+            kind: ClientKind::Agent,
+            label: None,
+        };
+        let val = serde_json::to_value(&cmd).unwrap();
+        assert_eq!(val["type"], "DeclareClient");
+    }
+
+    #[test]
+    fn client_command_type_field_close_session() {
+        let cmd = ClientCommand::CloseSession {
+            request_id: rid(),
+            session_id: SessionId::new(),
+        };
+        let val = serde_json::to_value(&cmd).unwrap();
+        assert_eq!(val["type"], "CloseSession");
+    }
+
+    #[test]
+    fn server_message_type_field_client_declared() {
+        let msg = ServerMessage::ClientDeclared {
+            request_id: rid(),
+            client_id: ClientId::new(),
+        };
+        let val = serde_json::to_value(&msg).unwrap();
+        assert_eq!(val["type"], "ClientDeclared");
+    }
+
+    #[test]
+    fn server_message_type_field_session_closed() {
+        let msg = ServerMessage::SessionClosed {
+            request_id: rid(),
+        };
+        let val = serde_json::to_value(&msg).unwrap();
+        assert_eq!(val["type"], "SessionClosed");
+    }
+
     // Cross-variant type field checks
 
     #[test]
@@ -508,6 +649,8 @@ mod tests {
             (ErrorCode::TaskAlreadyCompleted, "TaskAlreadyCompleted"),
             (ErrorCode::UnsupportedCommand, "UnsupportedCommand"),
             (ErrorCode::Internal, "Internal"),
+            (ErrorCode::PermissionDenied, "PermissionDenied"),
+            (ErrorCode::InvalidSurface, "InvalidSurface"),
         ];
         for (code, expected_type) in cases {
             let val = serde_json::to_value(&code).unwrap();
@@ -527,8 +670,25 @@ mod tests {
                 "Capabilities",
             ),
             (
+                serde_json::to_value(&ClientCommand::DeclareClient {
+                    request_id: rid(),
+                    kind: ClientKind::Unknown,
+                    label: None,
+                })
+                .unwrap(),
+                "DeclareClient",
+            ),
+            (
                 serde_json::to_value(&ClientCommand::ListSessions { request_id: rid() }).unwrap(),
                 "ListSessions",
+            ),
+            (
+                serde_json::to_value(&ClientCommand::CloseSession {
+                    request_id: rid(),
+                    session_id: SessionId::new(),
+                })
+                .unwrap(),
+                "CloseSession",
             ),
         ];
         for (val, expected_type) in cases {
@@ -544,12 +704,27 @@ mod tests {
                 "Ok",
             ),
             (
+                serde_json::to_value(&ServerMessage::ClientDeclared {
+                    request_id: rid(),
+                    client_id: ClientId::new(),
+                })
+                .unwrap(),
+                "ClientDeclared",
+            ),
+            (
                 serde_json::to_value(&ServerMessage::TaskSubmitted {
                     request_id: rid(),
                     task_id: TaskId::new(),
                 })
                 .unwrap(),
                 "TaskSubmitted",
+            ),
+            (
+                serde_json::to_value(&ServerMessage::SessionClosed {
+                    request_id: rid(),
+                })
+                .unwrap(),
+                "SessionClosed",
             ),
         ];
         for (val, expected_type) in cases {

@@ -63,6 +63,20 @@ impl DaemonClient {
         .await
     }
 
+    /// Declare the client type and label to the daemon.
+    pub async fn declare_client(
+        &mut self,
+        kind: crate::client_registry::ClientKind,
+        label: Option<String>,
+    ) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::DeclareClient {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            kind,
+            label,
+        })
+        .await
+    }
+
     /// List all active sessions.
     pub async fn list_sessions(&mut self) -> Result<ServerMessage> {
         self.send_command(ClientCommand::ListSessions {
@@ -123,6 +137,18 @@ impl DaemonClient {
             request_id: uuid::Uuid::new_v4().to_string(),
             session_id,
             task_id,
+        })
+        .await
+    }
+
+    /// Close a session.
+    pub async fn close_session(
+        &mut self,
+        session_id: eggsec_runtime::SessionId,
+    ) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::CloseSession {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            session_id,
         })
         .await
     }
@@ -248,5 +274,46 @@ mod tests {
     async fn client_connect_failure() {
         let result = DaemonClient::connect("/tmp/nonexistent-daemon.sock").await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn client_declare_client_roundtrip() {
+        let (socket_path, shutdown) = start_server().await;
+        let mut client = DaemonClient::connect(&socket_path).await.unwrap();
+        let resp = client
+            .declare_client(crate::client_registry::ClientKind::Tui, Some("my-tui".into()))
+            .await
+            .unwrap();
+        match resp {
+            ServerMessage::ClientDeclared {
+                request_id,
+                client_id,
+            } => {
+                assert!(!request_id.is_empty());
+                let _ = client_id;
+            }
+            other => panic!("expected ClientDeclared, got {:?}", other),
+        }
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn client_close_session_roundtrip() {
+        let (socket_path, shutdown) = start_server().await;
+        let mut client = DaemonClient::connect(&socket_path).await.unwrap();
+        let session_id = match client
+            .create_session(eggsec_runtime::RuntimeSurface::CliManual, None, vec![])
+            .await
+            .unwrap()
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            _ => panic!("expected SessionCreated"),
+        };
+        let resp = client.close_session(session_id).await.unwrap();
+        match resp {
+            ServerMessage::SessionClosed { .. } => {}
+            other => panic!("expected SessionClosed, got {:?}", other),
+        }
+        shutdown.cancel();
     }
 }

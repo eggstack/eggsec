@@ -135,3 +135,5 @@ The CI architecture guards enforce these invariants from Phases 1–10:
 14. `eggsec-runtime` capabilities do not list unimplemented transports (`stdio`, `unix-socket`, `websocket`).
 15. `eggsec-tui` does not define canonical `TaskConfig` or `TaskResult` enums (owned by `eggsec-runtime` and `eggsec` respectively).
 16. `eggsec-tui` has no `match task_kind` execution dispatchers — all `match task_kind` in TUI must be inside `#[cfg(test)]` modules (test assertions). Dispatch routing lives exclusively in `eggsec::dispatch::dispatch_inner()`.
+17. `eggsec-daemon` has no TUI dependencies (`ratatui`, `crossterm`, `eggsec-tui`) and no reverse dependency on `eggsec`.
+18. `eggsec-daemon` permission checks (`check_permission`) are called for every mutating daemon command (SubmitTask, CancelTask, CancelActive, CloseSession).

@@ -42,6 +42,7 @@ pub(crate) struct TaskRecord {
     pub status: TaskStatus,
     pub progress: Option<TaskProgress>,
     pub last_error: Option<String>,
+    pub outcome: Option<crate::event::TaskOutcome>,
     pub abort: Option<CancellationToken>,
     pub _handle: Option<JoinHandle<()>>,
 }
@@ -67,6 +68,8 @@ pub struct RuntimeSession {
     created_at: Instant,
     /// When the session was created (seconds since Unix epoch).
     created_at_utc: u64,
+    /// Monotonically increasing generation counter, incremented on task state changes.
+    generation: u64,
     /// Task records (active and completed).
     pub(crate) tasks: HashMap<TaskId, TaskRecord>,
     /// Completed task snapshots restored from a previous session snapshot.
@@ -83,6 +86,7 @@ impl RuntimeSession {
             scope: None,
             created_at: Instant::now(),
             created_at_utc: now_epoch_secs(),
+            generation: 0,
             tasks: HashMap::new(),
             hydrated_completed: Vec::new(),
         }
@@ -96,6 +100,7 @@ impl RuntimeSession {
             scope: Some(scope),
             created_at: Instant::now(),
             created_at_utc: now_epoch_secs(),
+            generation: 0,
             tasks: HashMap::new(),
             hydrated_completed: Vec::new(),
         }
@@ -121,6 +126,16 @@ impl RuntimeSession {
         self.created_at_utc
     }
 
+    /// Current generation counter. Incremented on each task state change.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Increment the generation counter. Called internally when task state changes.
+    pub(crate) fn increment_generation(&mut self) {
+        self.generation = self.generation.saturating_add(1);
+    }
+
     /// Session-level capabilities. Currently always returns the default
     /// capability set; future versions may derive this from the surface.
     pub fn capabilities(&self) -> RuntimeCapabilities {
@@ -139,6 +154,7 @@ impl RuntimeSession {
                 request_summary: summarize_request(&t.request.task_kind),
                 progress: t.progress.clone(),
                 last_error: t.last_error.clone(),
+                outcome: t.outcome.clone(),
             })
             .collect()
     }
@@ -159,6 +175,7 @@ impl RuntimeSession {
                 request_summary: summarize_request(&t.request.task_kind),
                 progress: t.progress.clone(),
                 last_error: t.last_error.clone(),
+                outcome: t.outcome.clone(),
             })
             .collect();
         results.extend(self.hydrated_completed.iter().cloned());
@@ -172,6 +189,7 @@ impl RuntimeSession {
             surface: self.surface.clone(),
             scope: self.scope.clone(),
             created_at_secs: self.created_at.elapsed().as_secs(),
+            generation: self.generation,
             active_tasks: self.active_tasks(),
             completed_tasks: self.completed_tasks(),
             capabilities: self.capabilities(),
@@ -190,6 +208,7 @@ impl RuntimeSession {
             scope: snapshot.scope,
             created_at: Instant::now(),
             created_at_utc: now_epoch_secs(),
+            generation: snapshot.generation,
             tasks: HashMap::new(),
             hydrated_completed: snapshot.completed_tasks,
         }
@@ -206,6 +225,7 @@ pub struct TaskSnapshot {
     pub request_summary: String,
     pub progress: Option<TaskProgress>,
     pub last_error: Option<String>,
+    pub outcome: Option<crate::event::TaskOutcome>,
 }
 
 /// Session snapshot containing all runtime state for a session.
@@ -223,6 +243,8 @@ pub struct SessionSnapshot {
     pub scope: Option<SessionScope>,
     /// Seconds since session creation (monotonic approximation).
     pub created_at_secs: u64,
+    /// Monotonically increasing generation counter for change detection.
+    pub generation: u64,
     pub active_tasks: Vec<TaskSnapshot>,
     pub completed_tasks: Vec<TaskSnapshot>,
     pub capabilities: RuntimeCapabilities,
@@ -292,6 +314,7 @@ mod tests {
             surface: RuntimeSurface::TuiManual,
             scope: None,
             created_at_secs: 42,
+            generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![],
             capabilities: RuntimeCapabilities::default(),
@@ -314,6 +337,7 @@ mod tests {
                 path: Some("/etc/eggsec/scope.yaml".into()),
             }),
             created_at_secs: 10,
+            generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![],
             capabilities: RuntimeCapabilities::default(),
@@ -380,6 +404,7 @@ mod tests {
                 path: None,
             }),
             created_at_secs: 10,
+            generation: 0,
             active_tasks: vec![],
             completed_tasks: vec![TaskSnapshot {
                 task_id: TaskId::new(),
@@ -393,6 +418,7 @@ mod tests {
                 request_summary: "port-scan: 10.0.0.1".into(),
                 progress: None,
                 last_error: None,
+                outcome: None,
             }],
             capabilities: RuntimeCapabilities::default(),
         };

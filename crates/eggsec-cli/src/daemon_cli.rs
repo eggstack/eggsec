@@ -77,6 +77,13 @@ async fn handle_daemon(
         eggsec::cli::DaemonSubcommand::Status { socket } => {
             let path = socket.as_deref().unwrap_or(socket_path);
             let mut client = connect(path).await?;
+            // Declare client kind
+            let _ = client
+                .declare_client(
+                    eggsec_daemon::client_registry::ClientKind::Cli,
+                    Some("eggsec-cli".into()),
+                )
+                .await;
             let resp = client.health().await?;
             match resp {
                 ServerMessage::Health {
@@ -103,6 +110,12 @@ async fn handle_daemon(
             // For now, just report status.
             match connect(path).await {
                 Ok(mut client) => {
+                    let _ = client
+                        .declare_client(
+                            eggsec_daemon::client_registry::ClientKind::Cli,
+                            Some("eggsec-cli".into()),
+                        )
+                        .await;
                     match client.health().await {
                         Ok(_) => {
                             if json {
@@ -131,6 +144,13 @@ async fn handle_session(
     json: bool,
 ) -> Result<()> {
     let mut client = connect(socket_path).await?;
+    // Declare client kind
+    let _ = client
+        .declare_client(
+            eggsec_daemon::client_registry::ClientKind::Cli,
+            Some("eggsec-cli".into()),
+        )
+        .await;
     match &args.subcommand {
         eggsec::cli::SessionSubcommand::List => {
             let resp = client.list_sessions().await?;
@@ -221,6 +241,13 @@ async fn handle_task(
     json: bool,
 ) -> Result<()> {
     let mut client = connect(socket_path).await?;
+    // Declare client kind
+    let _ = client
+        .declare_client(
+            eggsec_daemon::client_registry::ClientKind::Cli,
+            Some("eggsec-cli".into()),
+        )
+        .await;
     match &args.subcommand {
         eggsec::cli::TaskSubcommand::Submit {
             session_id,

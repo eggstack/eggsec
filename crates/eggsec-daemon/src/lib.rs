@@ -1,4 +1,5 @@
 pub mod client;
+pub mod client_registry;
 pub mod config;
 pub mod error;
 pub mod host;

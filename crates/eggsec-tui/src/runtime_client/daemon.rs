@@ -110,7 +110,9 @@ impl DaemonRuntimeClient {
                                     | ServerMessage::Snapshot { request_id, .. }
                                     | ServerMessage::TaskSubmitted { request_id, .. }
                                     | ServerMessage::Capabilities { request_id, .. }
-                                    | ServerMessage::Health { request_id, .. } => {
+                                    | ServerMessage::Health { request_id, .. }
+                                    | ServerMessage::ClientDeclared { request_id, .. }
+                                    | ServerMessage::SessionClosed { request_id, .. } => {
                                         request_id.clone()
                                     }
                                     ServerMessage::RuntimeEvent { .. } => unreachable!(),
@@ -134,7 +136,7 @@ impl DaemonRuntimeClient {
             }
         });
 
-        Ok(Self {
+        let client = Self {
             inner: Arc::new(DaemonConnection {
                 _socket_path: socket_path.to_string(),
                 request_counter: AtomicU64::new(0),
@@ -142,7 +144,31 @@ impl DaemonRuntimeClient {
                 pending_responses,
                 event_channels,
             }),
-        })
+        };
+
+        // Declare client kind to the daemon (best effort)
+        let _ = client
+            .declare_client(
+                eggsec_daemon::client_registry::ClientKind::Tui,
+                Some("eggsec-tui".into()),
+            )
+            .await;
+
+        Ok(client)
+    }
+
+    /// Declare this client's kind to the daemon.
+    pub async fn declare_client(
+        &self,
+        kind: eggsec_daemon::client_registry::ClientKind,
+        label: Option<String>,
+    ) -> Result<ServerMessage, DaemonClientError> {
+        let cmd = ClientCommand::DeclareClient {
+            request_id: self.next_request_id(),
+            kind,
+            label,
+        };
+        self.send_command(cmd).await
     }
 
     fn next_request_id(&self) -> String {
@@ -160,6 +186,8 @@ impl DaemonRuntimeClient {
             | ClientCommand::SubmitTask { request_id, .. }
             | ClientCommand::CancelTask { request_id, .. }
             | ClientCommand::CancelActive { request_id, .. }
+            | ClientCommand::DeclareClient { request_id, .. }
+            | ClientCommand::CloseSession { request_id, .. }
             | ClientCommand::Subscribe { request_id, .. } => request_id.clone(),
         };
 

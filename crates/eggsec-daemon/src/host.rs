@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use eggsec_runtime::{Runtime, RuntimeConfig, RuntimeError, RuntimeTaskExecutor};
+use eggsec_runtime::{ClientId, Runtime, RuntimeConfig, RuntimeError, RuntimeTaskExecutor};
 
+use crate::client_registry::{ClientInfo, ClientKind, ClientRegistry, ClientRole, SessionAccess};
 use crate::config::DaemonConfig;
 use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
 
@@ -14,6 +16,9 @@ use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
 pub struct DaemonHost {
     runtime: Arc<Runtime>,
     config: DaemonConfig,
+    client_registry: std::sync::Mutex<ClientRegistry>,
+    session_access: std::sync::Mutex<HashMap<eggsec_runtime::SessionId, SessionAccess>>,
+    connected_clients: std::sync::Mutex<HashMap<eggsec_runtime::ClientId, ClientRole>>,
 }
 
 impl DaemonHost {
@@ -22,6 +27,9 @@ impl DaemonHost {
         Self {
             runtime: Arc::new(runtime),
             config,
+            client_registry: std::sync::Mutex::new(ClientRegistry::new()),
+            session_access: std::sync::Mutex::new(HashMap::new()),
+            connected_clients: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -31,6 +39,31 @@ impl DaemonHost {
 
     pub fn config(&self) -> &DaemonConfig {
         &self.config
+    }
+
+    pub fn register_client(&self, info: ClientInfo) -> ClientId {
+        let client_id = info.client_id;
+        self.client_registry.lock().unwrap().register(info);
+        client_id
+    }
+
+    pub fn client_role_for_session(
+        &self,
+        client_id: &ClientId,
+        session_id: &eggsec_runtime::SessionId,
+    ) -> ClientRole {
+        let access = self.session_access.lock().unwrap();
+        if let Some(session_access) = access.get(session_id) {
+            if session_access.owner_client_id == Some(*client_id) {
+                return ClientRole::Owner;
+            }
+            for rule in &session_access.allowed_clients {
+                if rule.client_id == *client_id {
+                    return rule.role.clone();
+                }
+            }
+        }
+        ClientRole::Observer
     }
 
     /// Dispatch a client command to the runtime and return a response.
@@ -65,10 +98,22 @@ impl DaemonHost {
                     .create_session_with_scope(Default::default(), surface, scope)
                     .await
                 {
-                    Ok(session_id) => ServerMessage::SessionCreated {
-                        request_id,
-                        session_id,
-                    },
+                    Ok(session_id) => {
+                        let access = SessionAccess {
+                            owner_client_id: None,
+                            default_observer_allowed: true,
+                            default_controller_allowed: true,
+                            ..Default::default()
+                        };
+                        self.session_access
+                            .lock()
+                            .unwrap()
+                            .insert(session_id, access);
+                        ServerMessage::SessionCreated {
+                            request_id,
+                            session_id,
+                        }
+                    }
                     Err(e) => ServerMessage::Error {
                         request_id,
                         code: ErrorCode::Internal,
@@ -149,6 +194,41 @@ impl DaemonHost {
                 session_id,
             } => match self.runtime().cancel_active(session_id).await {
                 Ok(()) => ServerMessage::Ok { request_id },
+                Err(e) => ServerMessage::Error {
+                    request_id,
+                    code: ErrorCode::SessionNotFound,
+                    message: e.to_string(),
+                },
+            },
+
+            ClientCommand::DeclareClient {
+                request_id,
+                kind,
+                label,
+            } => {
+                let client_id = ClientId::new();
+                let info = ClientInfo {
+                    client_id,
+                    kind,
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    connected_at_secs: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    label,
+                };
+                self.register_client(info);
+                ServerMessage::ClientDeclared {
+                    request_id,
+                    client_id,
+                }
+            }
+
+            ClientCommand::CloseSession {
+                request_id,
+                session_id,
+            } => match self.runtime().snapshot(session_id).await {
+                Ok(_) => ServerMessage::SessionClosed { request_id },
                 Err(e) => ServerMessage::Error {
                     request_id,
                     code: ErrorCode::SessionNotFound,
@@ -415,5 +495,105 @@ mod tests {
             }
             other => panic!("expected Error, got {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn handle_declare_client() {
+        use crate::client_registry::ClientKind;
+
+        let host = test_host();
+        let resp = host
+            .handle_command(ClientCommand::DeclareClient {
+                request_id: "r1".into(),
+                kind: ClientKind::Tui,
+                label: Some("my-tui".into()),
+            })
+            .await;
+        match resp {
+            ServerMessage::ClientDeclared {
+                request_id,
+                client_id,
+            } => {
+                assert_eq!(request_id, "r1");
+                let _ = client_id;
+            }
+            other => panic!("expected ClientDeclared, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_close_session() {
+        let host = test_host();
+
+        let session_id = match host
+            .handle_command(ClientCommand::CreateSession {
+                request_id: "r1".into(),
+                surface: eggsec_runtime::RuntimeSurface::Unknown,
+                scope: None,
+                labels: vec![],
+            })
+            .await
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            _ => panic!("expected SessionCreated"),
+        };
+
+        let resp = host
+            .handle_command(ClientCommand::CloseSession {
+                request_id: "r2".into(),
+                session_id,
+            })
+            .await;
+        match resp {
+            ServerMessage::SessionClosed { request_id } => {
+                assert_eq!(request_id, "r2");
+            }
+            other => panic!("expected SessionClosed, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_close_session_not_found() {
+        let host = test_host();
+        let fake_id = eggsec_runtime::SessionId::new();
+        let resp = host
+            .handle_command(ClientCommand::CloseSession {
+                request_id: "r1".into(),
+                session_id: fake_id,
+            })
+            .await;
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "r1");
+                assert_eq!(code, ErrorCode::SessionNotFound);
+                assert!(message.contains("not found"));
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_declare_client_stores_in_registry() {
+        use crate::client_registry::ClientKind;
+
+        let host = test_host();
+        let resp = host
+            .handle_command(ClientCommand::DeclareClient {
+                request_id: "r1".into(),
+                kind: ClientKind::Agent,
+                label: Some("agent-1".into()),
+            })
+            .await;
+        let client_id = match resp {
+            ServerMessage::ClientDeclared { client_id, .. } => client_id,
+            _ => panic!("expected ClientDeclared"),
+        };
+        let stored = host.client_registry.lock().unwrap().get(&client_id).cloned();
+        assert!(stored.is_some());
+        assert_eq!(stored.unwrap().kind, ClientKind::Agent);
     }
 }

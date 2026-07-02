@@ -82,10 +82,13 @@ The TUI supports two runtime backends via the `TuiRuntimeClient` trait:
 CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`
 
 Key differences in daemon mode:
+- On connect, sends `DeclareClient { kind: ClientKind::Tui, label: "eggsec-tui" }` — daemon registers the client and assigns a `ClientId`
 - `spawn_task()` delegates to `client.submit()` instead of runtime
 - `clear_task_runtime()` delegates to `client.cancel_active()`
 - Event drain uses `daemon_event_handle` → adapter reduces to `TuiAction::TabCompletedEnvelope`
 - `apply_actions()` calls `set_completed_message()` for envelope rendering
+- Multiple TUI instances can observe the same session (role: Owner/Controller/Observer)
+- Observers cannot submit/cancel tasks (permission check returns `ErrorCode::PermissionDenied`)
 
 ### Tab System
 - `Tab::all()` - Returns available tabs for current feature set

@@ -131,7 +131,7 @@ Eggsec is organized as a Cargo workspace with these crates:
 | `eggsec-db-lab` | Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis security checks) |
 | `eggsec-web-proxy` | Web proxy and MITM interception domain crate (proxy pool, intercept server, TLS, protocol handlers) |
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate (APK/IPA static + Android dynamic runtime testing) |
-| `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), Unix socket server, and client library |
+| `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), Unix socket server, client library, multi-client registry (`ClientKind`/`ClientRole`), session access control, and role-based permission checks |
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) |
 
 ### Prerequisites
