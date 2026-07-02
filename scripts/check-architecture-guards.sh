@@ -284,13 +284,13 @@ else
   echo "PASS: Daemon free of transport dependencies."
 fi
 
-# 15. TUI must not contain a match TaskKind execution dispatcher
+# 18. TUI must not contain a match TaskKind execution dispatcher
 # (dispatch routing lives in eggsec::dispatch::dispatch_inner, not TUI).
 # NOTE: TUI legitimately uses TaskKind::Variant() to construct RunRequest,
 # and test code may match on TaskKind for assertions. We check that all
 # match task_kind occurrences are inside test modules (after #[cfg(test)]).
 echo ""
-echo "--- Check 15: TUI has no match TaskKind execution dispatcher ---"
+echo "--- Check 18: TUI has no match TaskKind execution dispatcher ---"
 SECTION_FAIL=0
 # Get all files in TUI that contain match.*task_kind
 MATCH_FILES=$(rg -l 'match.*task_kind' crates/eggsec-tui/src/ 2>/dev/null || true)
@@ -319,6 +319,20 @@ if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: All match TaskKind occurrences are in test code."
 else
   FAIL=$((FAIL + 1))
+fi
+
+# 19. CLI TUI dependency must be feature-gated
+echo ""
+echo "--- Check 19: CLI TUI dependency is feature-gated ---"
+# The eggsec-cli crate must NOT have an unconditional eggsec-tui dependency
+# (exclude optional = true lines, which are feature-gated)
+HITS=$(rg -n '^eggsec-tui' crates/eggsec-cli/Cargo.toml 2>/dev/null | grep -v 'optional = true' || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-cli has unconditional eggsec-tui dependency. Feature-gate it."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: CLI TUI dependency is feature-gated."
 fi
 
 echo ""

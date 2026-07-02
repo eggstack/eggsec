@@ -14,32 +14,41 @@ path = "src/main.rs"
 
 [dependencies]
 eggsec = { path = "../eggsec" }
-eggsec-tui = { path = "../eggsec-tui" }
+eggsec-daemon = { path = "../eggsec-daemon", optional = true }
+eggsec-tui = { path = "../eggsec-tui", optional = true }
+eggsec-runtime = { path = "../eggsec-runtime" }
 
 tokio = { workspace = true }
 anyhow = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 shellexpand = "3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tokio-util = { version = "0.7", optional = true }
 
 [features]
-default = []
-nse = ["eggsec/nse", "eggsec-tui/nse"]
-headless-browser = ["eggsec/headless-browser", "eggsec-tui/headless-browser"]
-compliance = ["eggsec/compliance", "eggsec-tui/compliance"]
-database = ["eggsec/database", "eggsec-tui/database"]
-external-integrations = ["eggsec/external-integrations", "eggsec-tui/external-integrations"]
-finding-workflow = ["eggsec/finding-workflow", "eggsec-tui/finding-workflow"]
-vuln-management = ["eggsec/vuln-management", "eggsec-tui/vuln-management"]
-wireless = ["eggsec/wireless", "eggsec-tui/wireless"]
-wireless-advanced = ["eggsec/wireless-advanced", "eggsec-tui/wireless-advanced"]
+default = ["tui"]
+tui = ["dep:eggsec-tui"]
+daemon-client = ["dep:eggsec-daemon", "dep:tokio-util", "eggsec/daemon-client"]
+headless = []
+nse = ["eggsec/nse", "eggsec-tui?/nse"]
+headless-browser = ["eggsec/headless-browser", "eggsec-tui?/headless-browser"]
+compliance = ["eggsec/compliance", "eggsec-tui?/compliance"]
+database = ["eggsec/database", "eggsec-tui?/database"]
+external-integrations = ["eggsec/external-integrations", "eggsec-tui?/external-integrations"]
+finding-workflow = ["eggsec/finding-workflow", "eggsec-tui?/finding-workflow"]
+vuln-management = ["eggsec/vuln-management", "eggsec-tui?/vuln-management"]
+wireless = ["eggsec/wireless", "eggsec-tui?/wireless"]
+wireless-advanced = ["eggsec/wireless-advanced", "eggsec-tui?/wireless-advanced"]
 mobile = ["eggsec/mobile"]
 mobile-dynamic = ["eggsec/mobile-dynamic", "mobile"]
-stress-testing = ["eggsec/stress-testing", "eggsec-tui/stress-testing"]
-packet-inspection = ["eggsec/packet-inspection", "eggsec-tui/packet-inspection"]
-advanced-hunting = ["eggsec/advanced-hunting", "eggsec-tui/advanced-hunting"]
-tool-api = ["eggsec/tool-api", "eggsec-tui/tool-api"]
-rest-api = ["eggsec/rest-api", "eggsec-tui/rest-api"]
+stress-testing = ["eggsec/stress-testing", "eggsec-tui?/stress-testing"]
+packet-inspection = ["eggsec/packet-inspection", "eggsec-tui?/packet-inspection"]
+advanced-hunting = ["eggsec/advanced-hunting", "eggsec-tui?/advanced-hunting"]
+tool-api = ["eggsec/tool-api", "eggsec-tui?/tool-api"]
+rest-api = ["eggsec/rest-api", "eggsec-tui?/rest-api"]
 ai-integration = ["eggsec/ai-integration"]
 websocket = ["eggsec/websocket"]
 grpc-api = ["eggsec/grpc-api"]
@@ -52,8 +61,9 @@ pdf = ["eggsec/pdf"]
 api-schema = ["eggsec/api-schema"]
 insecure-tls = ["eggsec/insecure-tls"]
   full = [
+    "tui",
     "eggsec/full",
-    "eggsec-tui/full",
+    "eggsec-tui?/full",
     "mobile",
     "mobile-dynamic",
     "wireless-advanced",

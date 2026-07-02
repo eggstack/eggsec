@@ -7,6 +7,9 @@ use clap_complete::Shell;
 use eggsec::cli::Cli;
 use eggsec::logging::{init_logging, LogFormat};
 
+#[cfg(feature = "daemon-client")]
+mod daemon_cli;
+
 fn generate_shell_completion(shell: Shell) -> Result<()> {
     let mut cmd = Cli::command();
     clap_complete::generate(shell, &mut cmd, "eggsec", &mut std::io::stdout());
@@ -81,6 +84,7 @@ async fn main() -> Result<()> {
     );
 
     // Launch TUI directly when no command is given and stdout is a terminal.
+    #[cfg(feature = "tui")]
     if cli.command.is_none() && std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         let mode = match cli.runtime.as_deref() {
             Some("daemon") => eggsec_tui::RuntimeMode::Daemon {
@@ -96,6 +100,23 @@ async fn main() -> Result<()> {
             None => eggsec_tui::RuntimeMode::Embedded,
         };
         return eggsec_tui::run_with_mode(cli.config.clone(), mode);
+    }
+
+    // Headless mode: no command provided and no TUI feature.
+    #[cfg(not(feature = "tui"))]
+    if cli.command.is_none() {
+        if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+            eprintln!("No command specified. Run 'eggsec --help' for usage.");
+        }
+        return Ok(());
+    }
+
+    // Handle daemon client commands before general command dispatch.
+    #[cfg(feature = "daemon-client")]
+    if let Some(ref cmd) = cli.command {
+        if daemon_cli::is_daemon_command(cmd) {
+            return daemon_cli::handle_daemon_command(cmd, &cli).await;
+        }
     }
 
     let config = eggsec::config::load_config(cli.config.as_deref())?;

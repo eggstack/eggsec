@@ -69,6 +69,14 @@ cargo build --release -p eggsec-cli
 #### Feature-Specific Build & Test
 
 ```bash
+# CLI headless (no TUI, no daemon client)
+cargo check -p eggsec-cli --no-default-features
+cargo test -p eggsec-cli --no-default-features
+
+# CLI daemon client
+cargo check -p eggsec-cli --no-default-features --features daemon-client
+cargo test -p eggsec-cli --no-default-features --features daemon-client
+
 # db-pentest (domain crate)
 cargo check -p eggsec-db-lab
 cargo test -p eggsec-db-lab
@@ -257,6 +265,14 @@ Canonical reference points when updating guidance or skills:
 **Marker-only features (no deps, just build gating):**
 
 `tool-api`, `insecure-tls`, `rest-api` (strict enforcement via `EnforcementContext` + `McpStrict` by default; includes `POST /api/v1/tools/{tool_id}/preflight` endpoint), `grpc-api`, `ws-api`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `web-proxy-mcp`, `c2-mcp`, `transparent-proxy`, `dynamic-plugins`, `pdf`, `api-schema`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`
+
+**CLI-level features** (on `eggsec-cli` crate):
+
+| Feature | Module | Notes |
+|---------|--------|-------|
+| `tui` | Terminal UI | Default; `dep:eggsec-tui` |
+| `daemon-client` | Daemon client | `dep:eggsec-daemon` + `dep:tokio-util` + `eggsec/daemon-client` |
+| `headless` | Marker | No TUI, no daemon client; CI/scripting builds |
 
 **Aggregate features:**
 

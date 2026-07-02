@@ -6,7 +6,7 @@ The CLI and Commands layer is responsible for parsing user input, managing globa
 
 Eggsec uses `clap` for command-line argument parsing. The CLI is organized into several modules, each defining the arguments for a specific category of commands:
 
-- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (42 variants), and `CommonHttpArgs`.
+- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (45 variants), and `CommonHttpArgs`.
 - **`scan.rs`**: Arguments for the `scan` command (port scanning, endpoint discovery).
 - **`fuzz.rs`**: Arguments for the `fuzz` command (security fuzzing).
 - **`http.rs`**: Arguments for HTTP-specific operations (load, recon, graphql, oauth).
@@ -16,7 +16,7 @@ Eggsec uses `clap` for command-line argument parsing. The CLI is organized into 
 ### Key CLI Patterns
 
 - **Global flags**: `--json`, `--config`, `--scope`, `--strict-scope` apply to all commands
-- **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`, `mobile`
+- **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`, `mobile`, `daemon-client` (`daemon`, `session`, `task`)
 - **Output flag**: Use `-o` / `--output` for file output (consistent across commands)
 - **Scope validation**: Handlers call `evaluate_and_enforce_operation()` with an `OperationDescriptor` to validate targets against scope and execution policy. For ManualPermissive, `RequireConfirmation` is satisfied only via narrow `--yes` (out-of-scope/target-expansion only) or dedicated `--allow-private-resolution` / `--allow-cross-host-redirect` etc.; precise required-flag errors are returned; strict profiles ignore overrides.
 
@@ -111,6 +111,18 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 ## Skills Reference
 
 - `.opencode/skills/eggsec-cli/` - Full CLI patterns and handler guide
+
+## Daemon Client Commands (feature = `daemon-client`)
+
+When built with `--features daemon-client`, the CLI gains three command groups that communicate with a running `eggsec-daemon` instance over a Unix socket:
+
+- **`eggsec daemon start|status|stop`**: Manage the daemon process (start forks a background daemon, status checks health, stop sends shutdown).
+- **`eggsec session list|create|snapshot`**: Manage sessions on the daemon (list sessions, create new session, get session snapshot with task statuses).
+- **`eggsec task submit|cancel|watch`**: Manage tasks on the daemon (submit a tool command, cancel a task, watch task events via streaming).
+
+All daemon commands use JSON line protocol over Unix sockets. The `--socket` flag specifies the socket path (default: `~/.eggsec/daemon.sock`). Task submission builds a `RunRequest` from CLI args and sends it to the daemon for execution. All daemon CLI sessions use `RuntimeSurface::CliManual` (not `TuiManual`).
+
+**Dispatch pattern**: Daemon commands are intercepted in `main.rs` before reaching the `handle_command` exhaustive match. The `daemon_cli::is_daemon_command()` check routes daemon/session/task variants to `daemon_cli::handle_daemon_command()`. The `eggsec` crate handler match arms for these variants return `anyhow::bail!` (unreachable in practice).
 
 ## Special Cases (Standalone Commands)
 

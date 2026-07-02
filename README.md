@@ -131,6 +131,7 @@ Eggsec is organized as a Cargo workspace with these crates:
 | `eggsec-db-lab` | Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis security checks) |
 | `eggsec-web-proxy` | Web proxy and MITM interception domain crate (proxy pool, intercept server, TLS, protocol handlers) |
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate (APK/IPA static + Android dynamic runtime testing) |
+| `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), Unix socket server, and client library |
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) |
 
 ### Prerequisites
@@ -373,6 +374,14 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `vuln-management` | Vulnerability triage and CVSS scoring | Marker (planned) |
 | `full` | Most non-default features combined (excludes `grpc-api`, `ws-api`, `pdf`, `nse-ssh2`, `nse-sandbox`, `db-pentest-mssql-tiberius`, `db-pentest-mongodb`, `db-pentest-redis`, `db-pentest-mcp`, `c2-mcp`, `web-proxy-mcp`, `transparent-proxy`, `dynamic-plugins`, `api-schema`, `git-secrets`, `cloud`, `insecure-tls`, `tool-api`) | - |
 
+**CLI-level features** (on `eggsec-cli` crate):
+
+| Feature | Description | Default |
+|---------|-------------|---------|
+| `tui` | Terminal UI adapter (`eggsec-tui`) | Yes |
+| `daemon-client` | Daemon client CLI commands (`eggsec-daemon` client library) | No |
+| `headless` | Marker for headless/CI builds (no TUI, no daemon client) | No |
+
 ### Build Examples
 
 ```bash
@@ -411,6 +420,12 @@ cargo build --release -p eggsec-cli --features web-proxy-mcp
 
 # Full build - all features (includes mobile, wireless, container, etc.)
 cargo build --release -p eggsec-cli --features full
+
+# Headless build - no TUI, no daemon client (CI/scripting)
+cargo build --release -p eggsec-cli --no-default-features
+
+# Daemon client build - CLI commands without TUI
+cargo build --release -p eggsec-cli --no-default-features --features daemon-client
 ```
 
 ## System Dependencies

@@ -400,6 +400,9 @@ transparent-proxy = ["web-proxy", "eggsec-web-proxy/transparent-proxy"]
 # SECURITY WARNING: Only load plugins from trusted sources!
 dynamic-plugins = ["web-proxy", "eggsec-web-proxy/dynamic-plugins"]
 
+# Daemon client CLI commands (daemon, session, task subcommands)
+daemon-client = []
+
 [dev-dependencies]
 wiremock = "0.6"
 tempfile = "3"

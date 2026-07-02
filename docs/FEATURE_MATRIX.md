@@ -74,6 +74,14 @@ Categories:
 | `dynamic-plugins` | Domain capability | `web-proxy`, `eggsec-web-proxy/dynamic-plugins` | eggsec | No | No | — | — |
 | `full` | Meta/aggregate (developer/lab) | see `Cargo.toml` | eggsec | No | No | — | — |
 
+### 1.1a CLI Crate Features
+
+| Feature | Category | Implied Features | Declaring Crate | In Defaults | Notes |
+|---------|----------|-----------------|-----------------|-------------|-------|
+| `tui` | Protocol/front-end adapter | `dep:eggsec-tui` | eggsec-cli | Yes | Terminal UI adapter |
+| `daemon-client` | Protocol/front-end adapter | `dep:eggsec-daemon`, `dep:tokio-util`, `eggsec/daemon-client` | eggsec-cli | No | Daemon client CLI commands |
+| `headless` | Marker-only | — | eggsec-cli | No | Headless/CI builds (no TUI, no daemon client) |
+
 ### 1.2 Domain Crate Features
 
 | Crate | Feature | Category | Implies | Notes |
@@ -97,6 +105,9 @@ Categories:
 
 The default feature set is **empty** (`default = []`). The `full` meta-feature enables everything
 but is not a default. Users build with explicit feature flags or the `full` meta-feature.
+
+The `eggsec-cli` crate has `default = ["tui"]`. Build with `--no-default-features` for headless
+usage, or `--no-default-features --features daemon-client` for daemon client mode.
 
 ---
 
@@ -212,6 +223,20 @@ and should not be recommended for production or standard deployment.
 ```bash
 cargo check -p eggsec --features full
 cargo test --lib -p eggsec --features full
+```
+
+#### cli-headless — Headless CLI (no TUI, no daemon client)
+
+```bash
+cargo check -p eggsec-cli --no-default-features
+cargo test -p eggsec-cli --no-default-features
+```
+
+#### cli-daemon-client — Daemon client CLI commands
+
+```bash
+cargo check -p eggsec-cli --no-default-features --features daemon-client
+cargo test -p eggsec-cli --no-default-features --features daemon-client
 ```
 
 ### 3.2 System Dependency Requirements

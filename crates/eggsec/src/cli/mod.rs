@@ -449,6 +449,17 @@ pub enum Commands {
     #[cfg(feature = "grpc-api")]
     #[command(about = "Start gRPC server for external tool integration")]
     Grpc(GrpcServerArgs),
+
+    // --- Daemon client commands ---
+    #[cfg(feature = "daemon-client")]
+    #[command(about = "Manage the eggsec daemon process")]
+    Daemon(DaemonArgs),
+    #[cfg(feature = "daemon-client")]
+    #[command(about = "Manage daemon sessions")]
+    Session(SessionArgs),
+    #[cfg(feature = "daemon-client")]
+    #[command(about = "Manage daemon tasks")]
+    Task(TaskArgs),
 }
 
 impl Commands {
@@ -530,6 +541,12 @@ impl Commands {
             Self::ProxyIntercept(_) => "proxy-intercept",
             #[cfg(feature = "sbom")]
             Self::Sbom(_) => "sbom",
+            #[cfg(feature = "daemon-client")]
+            Self::Daemon(_) => "daemon",
+            #[cfg(feature = "daemon-client")]
+            Self::Session(_) => "session",
+            #[cfg(feature = "daemon-client")]
+            Self::Task(_) => "task",
         }
     }
 }
@@ -872,4 +889,96 @@ mod tests {
         assert!(uses.contains(&crate::config::IntendedUse::WafRegression));
         assert!(uses.contains(&crate::config::IntendedUse::SynvoidRegression));
     }
+}
+
+// --- Daemon client CLI types ---
+
+#[derive(clap::Args)]
+pub struct DaemonArgs {
+    #[command(subcommand)]
+    pub subcommand: DaemonSubcommand,
+}
+
+#[derive(Subcommand)]
+pub enum DaemonSubcommand {
+    /// Start the eggsec daemon process
+    Start {
+        /// Unix socket path for the daemon
+        #[arg(long, value_name = "PATH")]
+        socket: Option<String>,
+    },
+    /// Check daemon health and status
+    Status {
+        /// Unix socket path to connect to
+        #[arg(long, value_name = "PATH")]
+        socket: Option<String>,
+    },
+    /// Stop the daemon process (reports status; use SIGTERM for actual stop)
+    Stop {
+        /// Unix socket path to connect to
+        #[arg(long, value_name = "PATH")]
+        socket: Option<String>,
+    },
+}
+
+#[derive(clap::Args)]
+pub struct SessionArgs {
+    #[command(subcommand)]
+    pub subcommand: SessionSubcommand,
+}
+
+#[derive(Subcommand)]
+pub enum SessionSubcommand {
+    /// List all active daemon sessions
+    List,
+    /// Create a new daemon session
+    Create {
+        /// Execution surface for the session
+        #[arg(long, value_name = "SURFACE", default_value = "cli-manual",
+              help = "Execution surface: cli-manual, cli-manual-strict, ci, mcp-server, rest-api, grpc-api, security-agent")]
+        surface: Option<String>,
+    },
+    /// Show session snapshot (tasks, status, scope)
+    Snapshot {
+        /// Session ID to inspect
+        #[arg(value_name = "SESSION_ID")]
+        session_id: String,
+    },
+}
+
+#[derive(clap::Args)]
+pub struct TaskArgs {
+    #[command(subcommand)]
+    pub subcommand: TaskSubcommand,
+}
+
+#[derive(Subcommand)]
+pub enum TaskSubcommand {
+    /// Submit a task to a daemon session
+    Submit {
+        /// Session ID to submit the task to
+        #[arg(value_name = "SESSION_ID")]
+        session_id: String,
+        /// Task kind (port-scan, endpoint-scan, fingerprint, fuzz, waf, recon, load-test, pipeline, auth-test, hunt)
+        #[arg(short = 'k', long, value_name = "KIND")]
+        kind: String,
+        /// Target for the task
+        #[arg(short = 't', long, value_name = "TARGET")]
+        target: String,
+    },
+    /// Cancel a running task
+    Cancel {
+        /// Session ID
+        #[arg(value_name = "SESSION_ID")]
+        session_id: String,
+        /// Task ID to cancel
+        #[arg(value_name = "TASK_ID")]
+        task_id: String,
+    },
+    /// Watch task events in real-time
+    Watch {
+        /// Session ID to watch events for
+        #[arg(value_name = "SESSION_ID")]
+        session_id: String,
+    },
 }

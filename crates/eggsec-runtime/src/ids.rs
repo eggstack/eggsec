@@ -1,6 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
+
+/// Error type for parsing session/task/client IDs.
+#[derive(Debug)]
+pub struct IdParseError(String);
+
+impl fmt::Display for IdParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for IdParseError {}
 
 /// Opaque session identifier for runtime sessions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -32,6 +45,17 @@ impl fmt::Display for SessionId {
     }
 }
 
+impl FromStr for SessionId {
+    type Err = IdParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let stripped = s.strip_prefix("session:").unwrap_or(s);
+        let uuid = Uuid::parse_str(stripped)
+            .map_err(|e| IdParseError(format!("invalid session ID '{}': {}", s, e)))?;
+        Ok(Self(uuid))
+    }
+}
+
 /// Opaque task identifier for runtime tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TaskId(Uuid);
@@ -59,6 +83,17 @@ impl Default for TaskId {
 impl fmt::Display for TaskId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "task:{}", self.0)
+    }
+}
+
+impl FromStr for TaskId {
+    type Err = IdParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let stripped = s.strip_prefix("task:").unwrap_or(s);
+        let uuid = Uuid::parse_str(stripped)
+            .map_err(|e| IdParseError(format!("invalid task ID '{}': {}", s, e)))?;
+        Ok(Self(uuid))
     }
 }
 

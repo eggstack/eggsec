@@ -619,6 +619,12 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Grpc(args)) => handle_grpc_server(ctx, args).await,
         Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,
         Some(Commands::Storage(args)) => handle_storage(ctx, args).await,
+        // Daemon client commands are dispatched from main.rs before reaching handle_command.
+        // These arms satisfy the exhaustive match but should never be reached.
+        #[cfg(feature = "daemon-client")]
+        Some(Commands::Daemon(_)) | Some(Commands::Session(_)) | Some(Commands::Task(_)) => {
+            anyhow::bail!("daemon client commands are handled by the CLI binary, not the command handler")
+        }
     }
 }
 
