@@ -22,6 +22,7 @@ pub(crate) mod state;
 pub(crate) mod state_update;
 pub(crate) mod tab_error;
 pub(crate) mod tab_store;
+pub(crate) mod task_dispatcher;
 pub(crate) mod task_management;
 pub(crate) mod task_runtime;
 pub(crate) mod theme_runtime;
@@ -121,6 +122,11 @@ pub struct App {
     /// Receiver for runtime lifecycle events. Drained in `update()` for logging
     /// and (Phase 4) for forwarding progress/completion to TUI channels.
     pub runtime_event_rx: Option<eggsec_runtime::RuntimeEventReceiver>,
+    // -- Phase 3: executor context for dispatcher --
+    /// Shared executor context holding per-task channel senders.
+    /// The `TuiExecutor` reads this via `ArcSwap` before dispatching.
+    pub(crate) executor_context:
+        std::sync::Arc<arc_swap::ArcSwap<task_runtime::TuiDispatcherContext>>,
 }
 
 impl App {
@@ -137,6 +143,15 @@ impl App {
             ExecutionPolicy::default(),
             loaded_scope.clone(),
         );
+        let (dummy_progress_tx, _dummy_progress_rx) = tokio::sync::mpsc::channel(1);
+        let (dummy_result_tx, _dummy_result_rx) = tokio::sync::mpsc::channel(1);
+        let executor_context = std::sync::Arc::new(arc_swap::ArcSwap::new(std::sync::Arc::new(
+            task_runtime::TuiDispatcherContext {
+                progress_tx: dummy_progress_tx,
+                result_tx: dummy_result_tx,
+            },
+        )));
+        let executor = task_runtime::TuiExecutor::new(executor_context.clone());
         let mut app = Self {
             current_tab: Tab::Recon,
             should_quit: false,
@@ -165,13 +180,14 @@ impl App {
             ),
             runtime: std::sync::Arc::new(eggsec_runtime::Runtime::new(
                 eggsec_runtime::RuntimeConfig::default(),
-                task_runtime::TuiStubExecutor,
+                executor,
             )),
             runtime_session_id: None,
             runtime_pending_session_id: None,
             runtime_pending_task_id: None,
             runtime_pending_event_rx: None,
             runtime_event_rx: None,
+            executor_context,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -226,6 +242,15 @@ impl App {
                     .and_then(Tab::from_index)
             });
 
+        let (dummy_progress_tx, _dummy_progress_rx) = tokio::sync::mpsc::channel(1);
+        let (dummy_result_tx, _dummy_result_rx) = tokio::sync::mpsc::channel(1);
+        let executor_context = std::sync::Arc::new(arc_swap::ArcSwap::new(std::sync::Arc::new(
+            task_runtime::TuiDispatcherContext {
+                progress_tx: dummy_progress_tx,
+                result_tx: dummy_result_tx,
+            },
+        )));
+        let executor = task_runtime::TuiExecutor::new(executor_context.clone());
         let mut app = Self {
             current_tab: restored_current_tab.unwrap_or(Tab::Recon),
             should_quit: false,
@@ -264,13 +289,14 @@ impl App {
             },
             runtime: std::sync::Arc::new(eggsec_runtime::Runtime::new(
                 eggsec_runtime::RuntimeConfig::default(),
-                task_runtime::TuiStubExecutor,
+                executor,
             )),
             runtime_session_id: None,
             runtime_pending_session_id: None,
             runtime_pending_task_id: None,
             runtime_pending_event_rx: None,
             runtime_event_rx: None,
+            executor_context,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -455,7 +481,7 @@ impl App {
     fn evaluate_policy_and_dispatch(
         &mut self,
         desc: OperationDescriptor,
-        task_config: Option<crate::workers::TaskConfig>,
+        request: Option<eggsec_runtime::RunRequest>,
     ) {
         let approved = self
             .enforcement_state
@@ -463,8 +489,8 @@ impl App {
 
         match approved {
             Ok(approved_op) => {
-                if let Some(cfg) = task_config {
-                    self.spawn_task(Some(cfg), Some(approved_op));
+                if let Some(req) = request {
+                    self.spawn_task(Some(req), Some(approved_op));
                 }
             }
             Err(EnforcementError::ConfirmationRequired {
@@ -476,7 +502,7 @@ impl App {
                     let mut tab = self.current_tab;
                     tab.as_tab_input(self).stop();
                 }
-                self.request_policy_confirmation(desc, decision, task_config);
+                self.request_policy_confirmation(desc, decision, request);
             }
             Err(EnforcementError::Denied { decision })
             | Err(EnforcementError::ManualOverrideUnavailable { decision, .. }) => {
@@ -716,7 +742,7 @@ impl App {
         &mut self,
         descriptor: OperationDescriptor,
         decision: eggsec::config::PolicyDecision,
-        captured_task_config: Option<crate::workers::TaskConfig>,
+        captured_request: Option<eggsec_runtime::RunRequest>,
     ) {
         let required = confirmation_classes_for(
             &descriptor,
@@ -735,7 +761,7 @@ impl App {
             decision,
             required_classes: required,
             reason_input: String::new(),
-            captured_task_config,
+            captured_request,
             cli_flags,
         });
         self.needs_redraw = true;
@@ -775,8 +801,8 @@ impl App {
                         format!("Policy override accepted for: {}", decision.operation),
                         crate::app::notifications::NotificationSeverity::Warning,
                     ));
-                    if let Some(cfg) = pending.captured_task_config {
-                        self.spawn_task(Some(cfg), Some(approved_op));
+                    if let Some(req) = pending.captured_request {
+                        self.spawn_task(Some(req), Some(approved_op));
                     }
                 }
                 Err(EnforcementError::Denied { decision }) => {

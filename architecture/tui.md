@@ -147,7 +147,7 @@ Each row below captures the tab's stable ID, operation ID (for descriptor buildi
 | 32 | C2 | `c2` | `c2` | `c2` | **yes** | yes | yes | yes |
 
 **Notes:**
-- ¹ Cluster's `build_task_config()` always returns `None` — handle_enter() handles UI actions locally.
+- ¹ Cluster's `build_run_request()` always returns `None` — handle_enter() handles UI actions locally.
 - ² Stress has `direct_launch: true` (pre-dispatch gate fires), but `build_current_task()` returns `None` — the tab manages its own start/stop state without spawning a tokio task.
 - ³ NSE has `direct_launch: true` and produces a descriptor, but has no `TaskBuilder` impl — `build_current_task()` returns `None`.
 
@@ -163,11 +163,11 @@ Each row below captures the tab's stable ID, operation ID (for descriptor buildi
 - `TabInput` - Input: `handle_focus_next()`, `handle_char()`, `handle_enter()`, etc.
 - `TabRender` - Rendering: `render()`, `render_overlays()`, `breadcrumb()`
 
-**Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskConfig::Auth + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
+**Auth Test tab**: `AuthTab` at `tabs/auth.rs` is fully integrated as `Tab::Auth` (TabSpec with Intrusive risk_group, direct_launch: true; TaskKind::AuthTest via TaskBuilder + TaskResult::Auth in worker system). Defense-lab only — no `ScanReportData` bridge.
 
 **C2 tab** (`tabs/c2.rs`, under `c2` feature): `C2Tab` is fully integrated as `Tab::C2` (TabSpec with Intrusive risk_group, direct_launch: true). Simulates C2 operations for defense validation and purple teaming. Always runs dry-run in TUI. Depends on `c2` feature (which requires `postex` + `evasion`). MITRE ATT&CK profiles: APT29, Carbanak.
 
-**Intercept tab** (`tabs/intercept.rs`, under `web-proxy` feature): `InterceptTab` is fully integrated as `Tab::Intercept` (TabSpec with Intrusive risk_group, direct_launch: true, `TabCategory::Traffic`, `operation: "proxy-intercept"`). Provides interactive web proxy traffic interception for defense-lab use. Three focus areas (`FlowList`, `DetailView`, `ActionBar`) with 7 detail sub-panes (Headers, Body, Manipulations, Rules, WebSocket, Http2, Grpc). Supports session save/load, HAR export, request/response editing via modal, manipulation audit trail, performance mode for large sessions (>5000 flows), and virtual scrolling. Task runner (`intercept_worker.rs`) creates `InterceptSession` with configured listen address and dry-run flag. The real MITM proxy server runs via CLI (`eggsec proxy-intercept`); the TUI tab focuses on interactive flow inspection, session management, and manipulation editing. Worker dispatch: `TaskConfig::Intercept { listen_addr, dry_run, max_flows, target }` → `TaskResult::Intercept(InterceptSession)`.
+**Intercept tab** (`tabs/intercept.rs`, under `web-proxy` feature): `InterceptTab` is fully integrated as `Tab::Intercept` (TabSpec with Intrusive risk_group, direct_launch: true, `TabCategory::Traffic`, `operation: "proxy-intercept"`). Provides interactive web proxy traffic interception for defense-lab use. Three focus areas (`FlowList`, `DetailView`, `ActionBar`) with 7 detail sub-panes (Headers, Body, Manipulations, Rules, WebSocket, Http2, Grpc). Supports session save/load, HAR export, request/response editing via modal, manipulation audit trail, performance mode for large sessions (>5000 flows), and virtual scrolling. Task runner (`intercept_worker.rs`) creates `InterceptSession` with configured listen address and dry-run flag. The real MITM proxy server runs via CLI (`eggsec proxy-intercept`); the TUI tab focuses on interactive flow inspection, session management, and manipulation editing. Worker dispatch: `TaskKind::Intercept` → `TaskResult::Intercept(InterceptSession)`.
 
 **Wireless tab Active Mode** (`tabs/wireless.rs`, under `wireless-advanced`): the wireless tab supports both passive scanning (default) and an opt-in **Active Mode** for deauth/disassoc. Keymap:
 
@@ -177,7 +177,7 @@ Each row below captures the tab's stable ID, operation ID (for descriptor buildi
 
 Execution flow (mirrors Auth/Stress/Packet):
 
-1. `WirelessTab::build_task_config()` returns `TaskConfig::WirelessActive { interface, attack_type, bssid, client, frame_count, rate_limit, dry_run }` (gated on `active_mode == true` and valid `active_attack_config()`).
+1. `WirelessTab::build_run_request()` returns `RunRequest { task_kind: TaskKind::WirelessActive(...) }` (gated on `active_mode == true` and valid `active_attack_config()`).
 2. `App::build_current_operation_descriptor()` (`app/mod.rs:436-471`) special-cases wireless active attacks: the operation is `wireless-deauth` or `wireless-disassoc`, the mode is `OperationMode::DefenseLab`, the risk is `SafeActive` (dry-run) or `Intrusive` (live), and `required_features: ["wireless-advanced"]` is set.
 3. Central `EnforcementContext::evaluate()`:
    - Dry-run → `Allow` / `Warn` → `spawn_task(...)` immediately.

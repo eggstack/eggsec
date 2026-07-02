@@ -1,36 +1,61 @@
-use std::time::Duration;
+use std::sync::Arc;
 
-use crate::workers;
+use arc_swap::ArcSwap;
 use eggsec::config::ApprovedOperation;
+use eggsec_runtime::dispatcher::TaskDispatcher;
+use eggsec_runtime::event::TaskOutcome;
+use eggsec_runtime::request::RunRequest;
+use eggsec_runtime::{RuntimeError, RuntimeEventSink, RuntimeTaskExecutor, TaskId};
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
-/// Stub executor for `eggsec_runtime::Runtime` initialization.
+use crate::app::task_dispatcher::TuiTaskDispatcher;
+use crate::workers::TaskResult;
+
+/// Per-task context for the TUI executor.
 ///
-/// The TUI does not use the runtime's executor directly — it uses a local
-/// compatibility bridge in `spawn_task` that wraps the existing `TaskRunner`.
-/// This stub satisfies the `Runtime::new()` requirement for an executor.
-/// Phase 3 will replace this with the real executor that moves into the
-/// runtime/engine crate.
-pub(crate) struct TuiStubExecutor;
+/// Holds the channel senders for a single task submission. The executor
+/// loads this via `ArcSwap` before dispatching, ensuring it uses the
+/// channels for the current task.
+pub(crate) struct TuiDispatcherContext {
+    pub progress_tx: mpsc::Sender<(u64, u64)>,
+    pub result_tx: mpsc::Sender<TaskResult>,
+}
 
-impl eggsec_runtime::RuntimeTaskExecutor for TuiStubExecutor {
+/// Real executor for `eggsec_runtime::Runtime`.
+///
+/// Replaces the Phase 2 `TuiStubExecutor`. Uses a `TuiTaskDispatcher`
+/// to map `RunRequest` to engine calls, sending typed `TaskResult`
+/// through channels for TUI consumption.
+pub(crate) struct TuiExecutor {
+    context: Arc<ArcSwap<TuiDispatcherContext>>,
+}
+
+impl TuiExecutor {
+    pub fn new(context: Arc<ArcSwap<TuiDispatcherContext>>) -> Self {
+        Self { context }
+    }
+}
+
+impl RuntimeTaskExecutor for TuiExecutor {
     fn execute(
         &self,
-        _task_id: eggsec_runtime::TaskId,
-        _request: eggsec_runtime::RunRequest,
-        _sink: eggsec_runtime::RuntimeEventSink,
-        _cancel: tokio_util::sync::CancellationToken,
+        _task_id: TaskId,
+        request: RunRequest,
+        _sink: RuntimeEventSink,
+        _cancel: CancellationToken,
     ) -> std::pin::Pin<
         Box<
-            dyn std::future::Future<
-                    Output = Result<eggsec_runtime::TaskOutcome, eggsec_runtime::RuntimeError>,
-                > + Send
-                + 'static,
+            dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static,
         >,
     > {
-        Box::pin(async {
-            // The TUI never dispatches through the runtime's executor.
-            // Actual task execution goes through the local compatibility bridge.
-            Err(eggsec_runtime::RuntimeError::UnsupportedTaskKind)
+        let ctx = self.context.load();
+        let progress_tx = ctx.progress_tx.clone();
+        let result_tx = ctx.result_tx.clone();
+
+        Box::pin(async move {
+            let dispatcher = TuiTaskDispatcher::new(progress_tx, result_tx);
+            dispatcher.dispatch(request).await
         })
     }
 }
@@ -84,10 +109,6 @@ impl super::App {
     }
 
     /// Cancel the active task via the runtime and clear TUI state.
-    ///
-    /// Phase 2 bridge: calls `runtime.cancel()` to record the lifecycle event,
-    /// then drops channel receivers to stop the progress forwarder. The runtime
-    /// tracks the canonical cancellation; the TUI cleans up local state.
     fn clear_task_runtime(&mut self) {
         if let (Some(session_id), Some(task_id)) =
             (self.runtime_session_id, self.task_state.task_id)
@@ -132,18 +153,18 @@ impl super::App {
         self.task_state.tab = None;
     }
 
-    /// Submit a task to the runtime and spawn a local compatibility executor.
+    /// Submit a task to the runtime via the real executor.
     ///
-    /// Phase 2 bridge: the runtime records the task lifecycle (ID, timeout,
-    /// cancellation), while the local executor wraps the existing `TaskRunner`
-    /// worker path. Channels (`progress_rx`/`result_rx`) remain as the TUI's
-    /// consumption path until Phase 4 migrates to `RuntimeEventReceiver`.
+    /// Creates per-task channels, updates the executor context, and
+    /// submits a `RunRequest` to the runtime. The runtime's executor
+    /// calls `TuiTaskDispatcher::dispatch()` which runs the engine
+    /// functions and sends typed `TaskResult` through the channels.
     pub(crate) fn spawn_task(
         &mut self,
-        config: Option<workers::TaskConfig>,
+        request: Option<RunRequest>,
         _approved: Option<ApprovedOperation>,
     ) {
-        if let Some(config) = config {
+        if let Some(request) = request {
             if self.has_active_task() {
                 tracing::warn!(
                     "A task is already running. Aborting previous task before starting new one."
@@ -151,8 +172,8 @@ impl super::App {
                 self.clear_task_runtime();
             }
 
-            let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(100);
-            let (result_tx, result_rx) = tokio::sync::mpsc::channel(1);
+            let (progress_tx, progress_rx) = mpsc::channel(100);
+            let (result_tx, result_rx) = mpsc::channel(1);
 
             self.task_state.progress_rx = Some(progress_rx);
             self.task_state.result_rx = Some(result_rx);
@@ -160,19 +181,24 @@ impl super::App {
             self.task_state.tab = Some(self.current_tab);
             self.task_state.started_at = Some(std::time::Instant::now());
 
-            // Submit to runtime for lifecycle tracking (best-effort).
-            // Use a shared holder to sync task_id back to TaskState on next update().
-            let pending_task_id = std::sync::Arc::new(std::sync::Mutex::new(None));
+            // Update the executor context with new channel senders.
+            // The executor reads this via ArcSwap before dispatching.
+            let ctx = TuiDispatcherContext {
+                progress_tx,
+                result_tx,
+            };
+            self.executor_context.store(Arc::new(ctx));
+
+            // Submit to runtime for lifecycle tracking + execution.
+            let pending_task_id = Arc::new(std::sync::Mutex::new(None));
             self.runtime_pending_task_id = Some(pending_task_id.clone());
 
             let runtime = self.runtime.clone();
             let session_id = self.runtime_session_id;
-            // Shared holder for session_id so spawned task can store it back.
             let pending_session_id =
-                std::sync::Arc::new(std::sync::Mutex::new(None::<eggsec_runtime::SessionId>));
+                Arc::new(std::sync::Mutex::new(None::<eggsec_runtime::SessionId>));
             let pending_session_id_clone = pending_session_id.clone();
-            // Shared holder for event receiver subscription.
-            let pending_event_rx = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+            let pending_event_rx = Arc::new(tokio::sync::Mutex::new(None));
             let pending_event_rx_clone = pending_event_rx.clone();
             self.runtime_pending_event_rx = Some(pending_event_rx);
 
@@ -184,7 +210,6 @@ impl super::App {
                         .await
                     {
                         Ok(sid) => {
-                            // Store session_id back so App can reuse it for next task.
                             *pending_session_id_clone.lock().unwrap() = Some(sid);
                             sid
                         }
@@ -195,28 +220,12 @@ impl super::App {
                     },
                 };
 
-                // Subscribe to runtime events before task submission so we
-                // capture TaskQueued and TaskStarted.
+                // Subscribe to runtime events before task submission.
                 let event_rx = runtime.subscribe().await;
                 *pending_event_rx_clone.lock().await = Some(event_rx);
 
-                let request = eggsec_runtime::RunRequest {
-                    task_kind: eggsec_runtime::TaskKind::PortScan(
-                        eggsec_runtime::request::PortScanParams {
-                            target: String::new(),
-                            ports: None,
-                            scan_type: None,
-                            timeout_ms: None,
-                        },
-                    ),
-                    requested_by: None,
-                    surface: eggsec_runtime::RuntimeSurface::TuiManual,
-                    labels: vec![],
-                };
-
                 match runtime.submit(session_id, request).await {
                     Ok(task_id) => {
-                        // Store task_id for sync to TaskState on next update().
                         *pending_task_id.lock().unwrap() = Some(task_id);
                         tracing::debug!("Task submitted to runtime: {}", task_id);
                     }
@@ -228,76 +237,6 @@ impl super::App {
 
             // Store session_id holder for sync on next update().
             self.runtime_pending_session_id = Some(pending_session_id);
-
-            // Spawn the local compatibility executor with existing worker path
-            let runner = workers::TaskRunner::new(config, progress_tx, result_tx.clone());
-            let error_tx = result_tx;
-
-            let inner_handle = tokio::spawn(async move { runner.run().await });
-            let inner_abort = inner_handle.abort_handle();
-            let handle_to_abort = inner_abort.clone();
-
-            let handle = tokio::spawn(async move {
-                match tokio::time::timeout(Duration::from_secs(300), inner_handle).await {
-                    Ok(Ok(Ok(()))) => {}
-                    Ok(Ok(Err(e))) => {
-                        let friendly_error = super::make_friendly_error(&e);
-                        tracing::error!("Task failed: {}", friendly_error);
-                        if let Err(e) = error_tx
-                            .send(workers::TaskResult::Error(friendly_error))
-                            .await
-                        {
-                            tracing::warn!("Failed to send task error result: {:?}", e);
-                        }
-                    }
-                    Ok(Err(join_error)) => {
-                        if join_error.is_cancelled() {
-                            tracing::error!("Task was cancelled");
-                            if let Err(e) = error_tx
-                                .send(workers::TaskResult::Error("Task was cancelled".to_string()))
-                                .await
-                            {
-                                tracing::warn!("Failed to send task error result: {:?}", e);
-                            }
-                        } else if join_error.is_panic() {
-                            tracing::error!("Task panicked");
-                            if let Err(e) = error_tx
-                                .send(workers::TaskResult::Error("Task panicked".to_string()))
-                                .await
-                            {
-                                tracing::warn!("Failed to send task error result: {:?}", e);
-                            }
-                        } else {
-                            tracing::error!("Task failed: {}", join_error);
-                            if let Err(e) = error_tx
-                                .send(workers::TaskResult::Error("Task failed".to_string()))
-                                .await
-                            {
-                                tracing::warn!("Failed to send task error result: {:?}", e);
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        tracing::error!("Task timed out after 300s - aborting task");
-                        handle_to_abort.abort();
-                        if let Err(e) = error_tx
-                            .send(workers::TaskResult::Error(
-                                "Task timed out after 300 seconds".to_string(),
-                            ))
-                            .await
-                        {
-                            tracing::warn!("Failed to send task error result: {:?}", e);
-                        }
-                    }
-                }
-            });
-
-            // Phase 2 bridge: drop the outer handle (local executor runs independently).
-            // The runtime tracks canonical lifecycle; this handle is retained only for
-            // the local timeout/cancellation path via inner_abort.
-            // TODO(phase-3): remove raw handle, rely on runtime.cancel() + channel drop
-            drop(handle);
-            let _ = inner_abort; // Retained for emergency cleanup; not stored on App.
         }
     }
 }

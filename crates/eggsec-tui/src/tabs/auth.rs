@@ -2,7 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::InputField;
 use crate::tabs::core::{render_results_area, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::workers::TaskConfig;
+
 use crate::{tab_input_indexed, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -183,23 +183,6 @@ impl AuthTab {
             cmd.push_str(&format!(" --timeout {}", to));
         }
         Some(cmd)
-    }
-
-    pub fn build_task_config(&self) -> Option<TaskConfig> {
-        let target = self.target()?.to_string();
-        if target.is_empty() {
-            return None;
-        }
-
-        Some(TaskConfig::Auth {
-            target,
-            username: self.username().map(|s| s.to_string()),
-            password_list: self.password_list().map(|s| s.to_string()),
-            credential_file: self.credential_file().map(|s| s.to_string()),
-            max_attempts: self.max_attempts(),
-            concurrency: self.concurrency(),
-            timeout: self.timeout(),
-        })
     }
 
     pub fn set_results_from_report(&mut self, report: &eggsec::auth::AuthTestReport) {
@@ -425,32 +408,25 @@ mod tests {
     }
 
     #[test]
-    fn test_build_task_config_returns_none_without_target() {
+    fn test_build_run_request_returns_none_without_target() {
+        use crate::app::task_management::TaskBuilder;
         let mut tab = AuthTab::new();
         tab.core.inputs.fields[0].value.clear();
-        assert!(tab.build_task_config().is_none());
+        assert!(tab.build_run_request().is_none());
     }
 
     #[test]
-    fn test_build_task_config_uses_ui_values() {
+    fn test_build_run_request_uses_ui_values() {
+        use crate::app::task_management::TaskBuilder;
         let mut tab = AuthTab::new();
         tab.core.inputs.fields[0].value = "https://target.lab".to_string();
-        tab.core.inputs.fields[4].value = "100".to_string();
-        tab.core.inputs.fields[5].value = "10".to_string();
 
-        let config = tab.build_task_config().unwrap();
-        match config {
-            TaskConfig::Auth {
-                target,
-                max_attempts,
-                concurrency,
-                ..
-            } => {
-                assert_eq!(target, "https://target.lab");
-                assert_eq!(max_attempts, 100);
-                assert_eq!(concurrency, 10);
+        let req = tab.build_run_request().unwrap();
+        match req.task_kind {
+            eggsec_runtime::request::TaskKind::AuthTest(params) => {
+                assert_eq!(params.target, "https://target.lab");
             }
-            _ => panic!("Expected TaskConfig::Auth"),
+            _ => panic!("Expected TaskKind::AuthTest"),
         }
     }
 

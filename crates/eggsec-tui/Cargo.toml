@@ -40,6 +40,7 @@ directories = "5"
 url = "2"
 base64 = "0.22"
 lzma-rs = "0.3"
+arc-swap = "1"
 
 # Feature-gated dependencies forwarded from eggsec
 pnet = { version = "0.35", optional = true }

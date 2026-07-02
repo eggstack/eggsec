@@ -193,7 +193,7 @@ fn render_policy_confirm_on_small_terminal_still_readable() {
         decision,
         required_classes: vec![],
         reason_input: String::new(),
-        captured_task_config: None,
+        captured_request: None,
         cli_flags: vec![],
     });
 

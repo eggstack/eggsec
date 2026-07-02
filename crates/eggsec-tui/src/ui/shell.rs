@@ -673,7 +673,7 @@ mod tests {
             decision,
             required_classes: vec![],
             reason_input: String::new(),
-            captured_task_config: None,
+            captured_request: None,
             cli_flags: vec![],
         });
 

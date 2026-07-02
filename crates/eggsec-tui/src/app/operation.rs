@@ -257,44 +257,44 @@ impl App {
         Some(out)
     }
 
-    pub(crate) fn build_current_task(&self) -> Option<crate::workers::TaskConfig> {
+    pub(crate) fn build_current_task(&self) -> Option<eggsec_runtime::RunRequest> {
         match self.current_tab {
-            Tab::Recon => self.tabs.recon.build_task_config(),
-            Tab::Load => self.tabs.load.build_task_config(),
-            Tab::ScanPorts => self.tabs.scan_ports.build_task_config(),
-            Tab::ScanEndpoints => self.tabs.scan_endpoints.build_task_config(),
-            Tab::Fingerprint => self.tabs.fingerprint.build_task_config(),
-            Tab::Fuzz => self.tabs.fuzz.build_task_config(),
-            Tab::Waf => self.tabs.waf.build_task_config(),
-            Tab::WafStress => self.tabs.waf_stress.build_task_config(),
-            Tab::Scan => self.tabs.scan.build_task_config(),
-            Tab::Packet => self.tabs.packet.build_task_config(),
-            Tab::GraphQl => self.tabs.graphql.build_task_config(),
-            Tab::OAuth => self.tabs.oauth.build_task_config(),
-            Tab::Auth => self.tabs.auth.build_task_config(),
+            Tab::Recon => self.tabs.recon.build_run_request(),
+            Tab::Load => self.tabs.load.build_run_request(),
+            Tab::ScanPorts => self.tabs.scan_ports.build_run_request(),
+            Tab::ScanEndpoints => self.tabs.scan_endpoints.build_run_request(),
+            Tab::Fingerprint => self.tabs.fingerprint.build_run_request(),
+            Tab::Fuzz => self.tabs.fuzz.build_run_request(),
+            Tab::Waf => self.tabs.waf.build_run_request(),
+            Tab::WafStress => self.tabs.waf_stress.build_run_request(),
+            Tab::Scan => self.tabs.scan.build_run_request(),
+            Tab::Packet => self.tabs.packet.build_run_request(),
+            Tab::GraphQl => self.tabs.graphql.build_run_request(),
+            Tab::OAuth => self.tabs.oauth.build_run_request(),
+            Tab::Auth => self.tabs.auth.build_run_request(),
             #[cfg(feature = "c2")]
-            Tab::C2 => self.tabs.c2.build_task_config(),
-            Tab::Cluster => self.tabs.cluster.build_task_config(),
+            Tab::C2 => self.tabs.c2.build_run_request(),
+            Tab::Cluster => self.tabs.cluster.build_run_request(),
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.tabs.hunt.build_task_config(),
+            Tab::Hunt => self.tabs.hunt.build_run_request(),
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.tabs.browser.build_task_config(),
+            Tab::Browser => self.tabs.browser.build_run_request(),
             #[cfg(feature = "compliance")]
-            Tab::Compliance => self.tabs.compliance.build_task_config(),
+            Tab::Compliance => self.tabs.compliance.build_run_request(),
             #[cfg(feature = "database")]
-            Tab::Storage => self.tabs.storage.build_task_config(),
+            Tab::Storage => self.tabs.storage.build_run_request(),
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.tabs.integrations.build_task_config(),
+            Tab::Integrations => self.tabs.integrations.build_run_request(),
             #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.tabs.workflow.build_task_config(),
+            Tab::Workflow => self.tabs.workflow.build_run_request(),
             #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.tabs.vuln.build_task_config(),
+            Tab::Vuln => self.tabs.vuln.build_run_request(),
             #[cfg(feature = "wireless")]
-            Tab::Wireless => self.tabs.wireless.build_task_config(),
+            Tab::Wireless => self.tabs.wireless.build_run_request(),
             #[cfg(feature = "db-pentest")]
-            Tab::DbPentest => self.tabs.db_pentest.build_task_config(),
+            Tab::DbPentest => self.tabs.db_pentest.build_run_request(),
             #[cfg(feature = "web-proxy")]
-            Tab::Intercept => self.tabs.intercept.build_task_config(),
+            Tab::Intercept => self.tabs.intercept.build_run_request(),
             _ => None,
         }
     }

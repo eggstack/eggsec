@@ -2,7 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, ScrollableText};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
-use crate::workers::TaskConfig;
+
 use eggsec::proxy::intercept::correlation::{
     BehavioralPattern, ConfidenceScorer, CorrelationContext, CorrelationEngine, CorrelationSource,
     TemporalCorrelation,

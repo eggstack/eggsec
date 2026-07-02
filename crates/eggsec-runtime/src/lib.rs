@@ -1,4 +1,5 @@
 pub mod capabilities;
+pub mod dispatcher;
 pub mod error;
 pub mod event;
 pub mod ids;

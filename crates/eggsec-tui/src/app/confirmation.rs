@@ -61,8 +61,8 @@ pub struct PendingPolicyConfirmation {
     pub decision: eggsec::config::PolicyDecision,
     pub required_classes: Vec<eggsec::config::ConfirmationClass>,
     pub reason_input: String,
-    /// The TaskConfig that would have been spawned; replayed on successful manual override.
-    pub captured_task_config: Option<crate::workers::TaskConfig>,
+    /// The RunRequest that would have been spawned; replayed on successful manual override.
+    pub captured_request: Option<eggsec_runtime::RunRequest>,
     /// CLI-equivalent flags for this confirmation (populated from preflight).
     pub cli_flags: Vec<String>,
 }

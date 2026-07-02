@@ -2,7 +2,7 @@ use crate::app::tab_error::TabError;
 use crate::components::InputField;
 use crate::tabs::core::{render_results_area, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::workers::TaskConfig;
+
 use crate::{tab_input_indexed, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -75,20 +75,6 @@ impl C2Tab {
         self.target().map(|s| s.to_string())
     }
 
-    pub fn build_task_config(&self) -> Option<TaskConfig> {
-        let target = self.target()?.to_string();
-        if target.is_empty() {
-            return None;
-        }
-
-        let campaign = self.campaign().unwrap_or("default").to_string();
-
-        Some(TaskConfig::C2 {
-            target,
-            campaign,
-            dry_run: true,
-        })
-    }
 }
 
 impl Default for C2Tab {
@@ -285,30 +271,27 @@ mod tests {
     }
 
     #[test]
-    fn test_build_task_config_returns_none_without_target() {
+    fn test_build_run_request_returns_none_without_target() {
+        use crate::app::task_management::TaskBuilder;
         let mut tab = C2Tab::new();
         tab.core.inputs.fields[0].value.clear();
-        assert!(tab.build_task_config().is_none());
+        assert!(tab.build_run_request().is_none());
     }
 
     #[test]
-    fn test_build_task_config_uses_ui_values() {
+    fn test_build_run_request_uses_ui_values() {
+        use crate::app::task_management::TaskBuilder;
         let mut tab = C2Tab::new();
         tab.core.inputs.fields[0].value = "10.0.0.1".to_string();
         tab.core.inputs.fields[1].value = "carbanak".to_string();
 
-        let config = tab.build_task_config().unwrap();
-        match config {
-            TaskConfig::C2 {
-                target,
-                campaign,
-                dry_run,
-            } => {
-                assert_eq!(target, "10.0.0.1");
-                assert_eq!(campaign, "carbanak");
-                assert!(dry_run);
+        let req = tab.build_run_request().unwrap();
+        match req.task_kind {
+            eggsec_runtime::request::TaskKind::C2(params) => {
+                assert_eq!(params.target.as_deref(), Some("10.0.0.1"));
+                assert_eq!(params.profile.as_deref(), Some("carbanak"));
             }
-            _ => panic!("Expected TaskConfig::C2"),
+            _ => panic!("Expected TaskKind::C2"),
         }
     }
 

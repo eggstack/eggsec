@@ -23,6 +23,9 @@ pub enum RuntimeError {
 
     #[error("unsupported task kind for this runtime")]
     UnsupportedTaskKind,
+
+    #[error("dispatch failed: {0}")]
+    DispatchFailed(String),
 }
 
 #[cfg(test)]

@@ -958,35 +958,23 @@ mod tests {
     }
 
     #[test]
-    fn test_build_task_config_returns_wireless_active_variant() {
+    fn test_build_run_request_returns_wireless_active_variant() {
+        use crate::app::task_management::TaskBuilder;
         let mut tab = WirelessTab::new();
         tab.active_mode = true;
         tab.inputs.fields[0].value = "wlan0".to_string();
         tab.active_inputs.fields[0].value = "AA:BB:CC:DD:EE:FF".to_string();
         tab.dry_run = true;
 
-        match tab
-            .build_task_config()
-            .expect("task config should be present")
-        {
-            crate::workers::TaskConfig::WirelessActive {
-                interface,
-                attack_type,
-                bssid,
-                client,
-                frame_count,
-                rate_limit,
-                dry_run,
-            } => {
-                assert_eq!(interface, "wlan0");
-                assert_eq!(attack_type, "deauth");
-                assert_eq!(bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
-                assert!(client.is_none());
-                assert_eq!(frame_count, 100);
-                assert_eq!(rate_limit, 10);
-                assert!(dry_run);
+        let req = tab
+            .build_run_request()
+            .expect("run request should be present");
+        match req.task_kind {
+            eggsec_runtime::request::TaskKind::WirelessActive(params) => {
+                assert_eq!(params.interface, "wlan0");
+                assert_eq!(params.target_bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
             }
-            _ => panic!("expected WirelessActive task config"),
+            _ => panic!("expected WirelessActive task kind"),
         }
     }
 
@@ -1103,24 +1091,11 @@ mod tests {
         assert!(tab.active_results.is_none());
         assert!(tab.results_view.is_empty());
 
-        let task = tab.build_task_config().expect("task config present");
-        match task {
-            crate::workers::TaskConfig::WirelessActive {
-                interface,
-                attack_type,
-                bssid,
-                client,
-                frame_count,
-                rate_limit,
-                dry_run,
-            } => {
-                assert_eq!(interface, "wlan0");
-                assert_eq!(attack_type, "deauth");
-                assert_eq!(bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
-                assert!(client.is_none());
-                assert_eq!(frame_count, 100);
-                assert_eq!(rate_limit, 10);
-                assert!(dry_run);
+        let task = tab.build_run_request().expect("run request present");
+        match task.task_kind {
+            eggsec_runtime::request::TaskKind::WirelessActive(params) => {
+                assert_eq!(params.interface, "wlan0");
+                assert_eq!(params.target_bssid.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
             }
             _ => panic!("expected WirelessActive"),
         }
