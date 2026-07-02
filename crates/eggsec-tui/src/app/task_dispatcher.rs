@@ -316,4 +316,155 @@ mod tests {
         let envelope = task_result_to_envelope(&result);
         assert_eq!(envelope.payload, serde_json::json!({}));
     }
+
+    #[test]
+    fn envelope_port_scan_has_port_count() {
+        let result = TaskResult::PortScan(eggsec::scanner::PortScanResults {
+            host: "10.0.0.1".into(),
+            ports_scanned: 1000,
+            open_ports: vec![],
+            duration_ms: 500,
+            spoof_stats: None,
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "port-scan");
+        assert!(envelope.summary.unwrap().contains("1000"));
+    }
+
+    #[test]
+    fn envelope_recon_has_target() {
+        let result = TaskResult::Recon(eggsec::recon::FullReconResult {
+            target: "example.com".into(),
+            ..Default::default()
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "recon");
+        assert!(envelope.summary.unwrap().contains("example.com"));
+    }
+
+    #[test]
+    fn envelope_load_test_has_request_count() {
+        use rustc_hash::FxHashMap;
+        let result = TaskResult::LoadTest(eggsec::loadtest::metrics::LoadTestResults {
+            target_url: "http://target.local".into(),
+            total_requests: 500,
+            successful_requests: 490,
+            failed_requests: 10,
+            total_duration_ms: 10000,
+            requests_per_second: 50.0,
+            latency_min_ms: 1.0,
+            latency_max_ms: 200.0,
+            latency_mean_ms: 10.0,
+            latency_p50_ms: 5.0,
+            latency_p90_ms: 30.0,
+            latency_p95_ms: 50.0,
+            latency_p99_ms: 150.0,
+            status_codes: FxHashMap::default(),
+            errors: vec![],
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "load-test");
+        assert!(envelope.summary.unwrap().contains("500"));
+    }
+
+    #[test]
+    fn envelope_graphql_has_finding_count() {
+        let result = TaskResult::GraphQl(eggsec::dispatch::GraphQlResults {
+            target: "http://gql.local".into(),
+            introspection_enabled: true,
+            depth_limit_bypassed: false,
+            alias_overload_vulnerable: false,
+            injection_findings: vec!["sql-injection".into()],
+            total_requests: 20,
+            errors: 0,
+            duration_ms: 1000,
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "graphql");
+        assert!(envelope.summary.unwrap().contains("1"));
+    }
+
+    #[test]
+    fn envelope_fingerprint_has_service_count() {
+        let result = TaskResult::Fingerprint(eggsec::scanner::FingerprintResults {
+            host: "10.0.0.1".into(),
+            ports_scanned: 100,
+            services_identified: 5,
+            duration_ms: 300,
+            results: vec![],
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "fingerprint");
+        assert!(envelope.summary.unwrap().contains("5"));
+    }
+
+    #[test]
+    fn envelope_endpoint_scan_has_endpoint_count() {
+        let result = TaskResult::EndpointScan(eggsec::scanner::EndpointScanResults {
+            base_url: "http://api.local".into(),
+            endpoints_scanned: 50,
+            endpoints_found: 12,
+            interesting_findings: 3,
+            duration_ms: 2000,
+            results: vec![],
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "endpoint-scan");
+        assert!(envelope.summary.unwrap().contains("12"));
+    }
+
+    #[test]
+    fn envelope_waf_detection_has_name() {
+        let result = TaskResult::WafDetection(eggsec::waf::WafDetectionResult {
+            waf_name: Some("Cloudflare".into()),
+            confidence: 95,
+            request_error: None,
+            matched_headers: vec![],
+            matched_cookies: vec![],
+            matched_patterns: vec![],
+            server_header: None,
+            status_code: 403,
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "waf");
+        assert!(envelope.summary.unwrap().contains("Cloudflare"));
+    }
+
+    #[test]
+    fn envelope_waf_detection_unknown_name() {
+        let result = TaskResult::WafDetection(eggsec::waf::WafDetectionResult {
+            waf_name: None,
+            confidence: 0,
+            request_error: None,
+            matched_headers: vec![],
+            matched_cookies: vec![],
+            matched_patterns: vec![],
+            server_header: None,
+            status_code: 200,
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "waf");
+        assert!(envelope.summary.unwrap().contains("unknown"));
+    }
+
+    #[test]
+    fn envelope_auth_has_finding_count() {
+        let result = TaskResult::Auth(eggsec::auth::AuthTestReport {
+            target: "http://auth.local".into(),
+            tests_run: vec![],
+            brute_force: None,
+            credential_stuffing: None,
+            lockout_detection: None,
+            rate_limit: None,
+            mfa: None,
+            session: None,
+            timing: None,
+            password_policy: None,
+            total_attempts: 0,
+            findings: vec![],
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "auth-test");
+        assert!(envelope.summary.unwrap().contains("0"));
+    }
 }

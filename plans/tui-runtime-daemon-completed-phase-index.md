@@ -37,8 +37,8 @@ The tightening closure plan (`tui-runtime-daemon-tightening-closure-plan.md`) co
 
 ## Follow-Up Items
 
-- `task_result_to_envelope()` is `#[allow(dead_code)]` — integrate into TUI result rendering or expose via REST/MCP
-- Pre-existing feature-gate compile errors in `stress-testing`, `db-pentest`, `web-proxy`, `wireless` (not introduced by this work)
+- `task_result_to_envelope()` is wired into `TuiTaskDispatcher::dispatch()` — ready for REST/MCP surfaces to consume `TaskResultEnvelope`
+- Pre-existing feature-gate compile errors in `stress-testing` fixed (missing `ProxyEntry::new`/`to_log_key`/`ProxyManager::get_all_healthy_proxies` stubs); `db-pentest`, `web-proxy`, `wireless` compile cleanly
 - Phase 7+ (daemon transport) blocked on this closure pass completion
 
 ## References

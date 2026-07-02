@@ -7,13 +7,6 @@ pub(crate) async fn send_progress(tx: &mpsc::Sender<(u64, u64)>, done: u64, tota
     }
 }
 
-/// Send a task result, logging on channel failure instead of propagating.
-pub(crate) async fn send_result(tx: &mpsc::Sender<TaskResult>, result: TaskResult) {
-    if let Err(e) = tx.send(result).await {
-        tracing::warn!("Failed to send result: {}", e);
-    }
-}
-
 /// Results from GraphQL security testing.
 #[derive(Clone, Debug)]
 pub struct GraphQlResults {

@@ -152,6 +152,32 @@ fn default_true() -> bool {
 
 #[cfg(not(feature = "web-proxy"))]
 impl ProxyEntry {
+    pub fn new(proxy_type: ProxyType, address: String, port: u16) -> Self {
+        Self {
+            name: None,
+            proxy_type,
+            address,
+            port,
+            username: None,
+            password: None,
+            weight: 1,
+            priority: 0,
+            timeout_ms: default_timeout_ms(),
+            enabled: true,
+            tags: Vec::new(),
+        }
+    }
+
+    pub fn to_log_key(&self) -> String {
+        let scheme = self.proxy_type.to_string();
+        match (&self.username, &self.password) {
+            (Some(user), Some(_)) => {
+                format!("{}://{}:***@{}:{}", scheme, user, self.address, self.port)
+            }
+            _ => format!("{}://{}:{}", scheme, self.address, self.port),
+        }
+    }
+
     pub fn load_from_file<P: AsRef<std::path::Path>>(_path: P) -> Result<Vec<Self>, anyhow::Error> {
         Ok(Vec::new())
     }
@@ -170,6 +196,9 @@ impl ProxyManager {
     }
     pub fn get_random_proxy(&self) -> Option<ProxyEntry> {
         None
+    }
+    pub async fn get_all_healthy_proxies(&self) -> Vec<ProxyEntry> {
+        Vec::new()
     }
 }
 
