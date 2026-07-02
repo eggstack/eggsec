@@ -10,8 +10,8 @@ pub mod session;
 pub use capabilities::{RuntimeCapabilities, TaskCapability};
 pub use error::RuntimeError;
 pub use event::{
-    LogLevel, RuntimeAuditEvent, RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress,
-    TaskStatus,
+    ArtifactRef, LogLevel, PolicyPrompt, RuntimeAuditEvent, RuntimeErrorInfo, RuntimeEvent,
+    TaskOutcome, TaskProgress, TaskResultEnvelope, TaskStatus,
 };
 pub use ids::{ClientId, SessionId, TaskId};
 pub use request::{LoadTestParams, RunRequest, RuntimeSurface, TaskKind};

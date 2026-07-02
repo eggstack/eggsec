@@ -66,6 +66,9 @@ crates/eggsec-tui/src/
 
 ## Key Patterns
 
+### Runtime Event Reducer (Phase 4)
+`TuiRuntimeAdapter` in `app/runtime_adapter/` maps `RuntimeEvent`s to `Vec<TuiAction>` via `reduce()` + `apply_actions()`. Unknown task IDs and duplicate terminal events are silently ignored (no panic). `TaskResultEnvelope` (from `eggsec-runtime`) is the protocol-neutral result wrapper returned by `TuiTaskDispatcher::dispatch()` for lifecycle tracking. Typed `TaskResult` still flows through `result_rx` for tab-specific rendering.
+
 ### Tab System
 - `Tab::all()` - Returns available tabs for current feature set
 - `Tab::visible_index(&self)` - Position in `Tab::all()`

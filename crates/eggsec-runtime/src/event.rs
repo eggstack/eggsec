@@ -42,6 +42,30 @@ pub enum LogLevel {
     Error,
 }
 
+/// Reference to an artifact produced by a task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactRef {
+    pub id: String,
+    pub kind: String,
+    pub path: Option<String>,
+    pub mime_type: Option<String>,
+    pub summary: Option<String>,
+}
+
+/// Structured result envelope for task completion.
+///
+/// Carries a typed kind discriminator, optional summary, structured JSON
+/// payload, and artifact references. This is the canonical result path
+/// for non-TUI frontends (daemon, CLI, REST, MCP) — the TUI may continue
+/// to use typed `TaskResult` channels as a rendering optimization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskResultEnvelope {
+    pub kind: String,
+    pub summary: Option<String>,
+    pub payload: serde_json::Value,
+    pub artifacts: Vec<ArtifactRef>,
+}
+
 /// Outcome of a completed task.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskOutcome {
@@ -51,6 +75,12 @@ pub enum TaskOutcome {
         artifact_id: String,
         summary: Option<String>,
     },
+    /// Structured result envelope with kind discriminator and artifacts.
+    ///
+    /// This is the preferred outcome for tasks that produce domain-specific
+    /// results. Non-TUI frontends consume this directly; the TUI uses typed
+    /// `TaskResult` channels as a rendering optimization.
+    Result(TaskResultEnvelope),
     Empty,
 }
 

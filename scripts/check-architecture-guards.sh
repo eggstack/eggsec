@@ -202,6 +202,64 @@ else
   echo "PASS: No stale field names in current docs."
 fi
 
+# 10. TUI workers directory must not exist
+echo ""
+echo "--- Check 10: TUI workers directory absent ---"
+if [[ -d "crates/eggsec-tui/src/workers" ]]; then
+  echo "FAIL: crates/eggsec-tui/src/workers/ still exists. Dispatch moved to eggsec::dispatch."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: TUI workers directory is absent."
+fi
+
+# 11. eggsec-runtime must not depend on TUI crates
+echo ""
+echo "--- Check 11: Runtime free of TUI dependencies ---"
+HITS=$(rg -n 'ratatui|crossterm|eggsec.tui' crates/eggsec-runtime/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-runtime has TUI dependencies."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Runtime free of TUI dependencies."
+fi
+
+# 12. eggsec-runtime must not depend on daemon transport crates
+echo ""
+echo "--- Check 12: Runtime free of transport dependencies ---"
+HITS=$(rg -n 'axum|tonic|tokio.tungstenite|tower-http' crates/eggsec-runtime/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-runtime has daemon transport dependencies."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Runtime free of transport dependencies."
+fi
+
+# 13. Runtime capabilities must not advertise unimplemented transports
+echo ""
+echo "--- Check 13: No unimplemented transports in capabilities ---"
+HITS=$(rg -n '"stdio"|"unix-socket"|"websocket"' crates/eggsec-runtime/src/capabilities.rs 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: Capabilities advertise unimplemented transports. Use 'in-process'."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: No unimplemented transports in capabilities."
+fi
+
+# 14. eggsec-tui must not define a canonical TaskConfig or TaskResult enum
+echo ""
+echo "--- Check 14: TUI has no canonical TaskConfig/TaskResult enums ---"
+HITS=$(rg -n 'pub enum TaskConfig|pub enum TaskResult' crates/eggsec-tui/src/ 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: TUI defines canonical TaskConfig/TaskResult enums. Use eggsec::dispatch::TaskResult."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: No canonical TaskConfig/TaskResult in TUI."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

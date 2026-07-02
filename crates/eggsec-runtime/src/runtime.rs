@@ -45,6 +45,11 @@ pub struct RuntimeEventReceiver {
 }
 
 impl RuntimeEventReceiver {
+    /// Create a receiver from a broadcast channel. Useful for tests.
+    pub fn from_broadcast(rx: broadcast::Receiver<RuntimeEvent>) -> Self {
+        Self { rx }
+    }
+
     /// Receive the next event. Returns `None` if the channel is closed.
     pub async fn recv(&mut self) -> Option<RuntimeEvent> {
         self.rx.recv().await.ok()

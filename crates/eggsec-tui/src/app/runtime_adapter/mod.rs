@@ -547,4 +547,204 @@ mod tests {
         assert_eq!(adapter.task_count(), 1);
         assert_eq!(adapter.tab_for_task(&tid2), Some(Tab::Load));
     }
+
+    #[test]
+    fn reduce_unknown_task_id_returns_empty() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        // Event for a task that was never registered.
+        let unknown_id = TaskId::new();
+
+        let event = RuntimeEvent::TaskProgress {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id: unknown_id,
+            progress: eggsec_runtime::TaskProgress {
+                completed: 10,
+                total: Some(100),
+                message: None,
+            },
+        };
+        let actions = adapter.reduce(event, None);
+        assert!(actions.is_empty());
+        assert!(!adapter.has_tasks());
+    }
+
+    #[test]
+    fn reduce_duplicate_terminal_event_is_idempotent() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::Recon);
+
+        let event = RuntimeEvent::TaskFailed {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            error: eggsec_runtime::RuntimeErrorInfo {
+                message: "fail".into(),
+                code: None,
+                details: None,
+            },
+        };
+
+        // First terminal event unregisters and returns action.
+        let actions = adapter.reduce(event.clone(), None);
+        assert_eq!(actions.len(), 1);
+        assert!(!adapter.has_tasks());
+
+        // Second terminal event for same task: no mapping, no action.
+        let actions = adapter.reduce(event, None);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn reduce_policy_decision_required_does_not_panic() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let event = RuntimeEvent::PolicyDecisionRequired {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id: None,
+            prompt: eggsec_runtime::PolicyPrompt {
+                message: "Confirm target?".into(),
+                confirmation_class: Some("scope-expansion".into()),
+                requires_explicit_approval: true,
+            },
+        };
+        // PolicyDecisionRequired is currently unhandled (returns []).
+        let actions = adapter.reduce(event, None);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn reduce_progress_with_no_total_returns_empty() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::Load);
+
+        let event = RuntimeEvent::TaskProgress {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            progress: eggsec_runtime::TaskProgress {
+                completed: 50,
+                total: None,
+                message: Some("indeterminate".into()),
+            },
+        };
+        // Progress with no total: not enough info for a progress bar.
+        let actions = adapter.reduce(event, None);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn reduce_progress_with_zero_total_returns_empty() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::Load);
+
+        let event = RuntimeEvent::TaskProgress {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            progress: eggsec_runtime::TaskProgress {
+                completed: 0,
+                total: Some(0),
+                message: None,
+            },
+        };
+        // Zero total: division guard, no progress update.
+        let actions = adapter.reduce(event, None);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn reduce_task_cancelled_unregisters_exact_once() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::ScanPorts);
+
+        let cancel_event = RuntimeEvent::TaskCancelled {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            reason: Some("user".into()),
+        };
+
+        let actions1 = adapter.reduce(cancel_event.clone(), None);
+        assert_eq!(actions1.len(), 1);
+        assert!(!adapter.has_tasks());
+
+        // Second cancel: no mapping.
+        let actions2 = adapter.reduce(cancel_event, None);
+        assert!(actions2.is_empty());
+    }
+
+    #[test]
+    fn reduce_task_started_auto_registers_with_current_tab() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+
+        // First: no mapping, no fallback → empty.
+        let event = RuntimeEvent::TaskStarted {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+        };
+        let actions = adapter.reduce(event.clone(), None);
+        assert!(actions.is_empty());
+
+        // Second: with fallback tab → auto-registers.
+        let actions = adapter.reduce(event, Some(Tab::Fuzz));
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(actions[0], TuiAction::TabStarted(Tab::Fuzz, _)));
+        assert!(adapter.has_tasks());
+    }
+
+    #[test]
+    fn reduce_event_after_tab_change_routes_to_original_tab() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        // Task was registered from Recon, but user navigated to Load.
+        adapter.register_task(task_id, Tab::Recon);
+
+        let event = RuntimeEvent::TaskCompleted {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            outcome: eggsec_runtime::TaskOutcome::Empty,
+        };
+        // current_task_tab is Load (user navigated), but event routes to Recon.
+        let actions = adapter.reduce(event, Some(Tab::Load));
+        assert_eq!(actions.len(), 1);
+        // The action targets the ORIGINAL tab (Recon), not the current tab.
+        assert!(matches!(
+            &actions[0],
+            TuiAction::TabCompleted(Tab::Recon, _)
+        ));
+    }
+
+    #[test]
+    fn drain_and_reduce_collects_multiple_events() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::Recon);
+
+        let (tx, rx) = tokio::sync::broadcast::channel::<eggsec_runtime::RuntimeEvent>(10);
+        let receiver = eggsec_runtime::RuntimeEventReceiver::from_broadcast(rx);
+        let mut rx = Some(receiver);
+
+        // Send events before draining.
+        let sid = eggsec_runtime::SessionId::new();
+        let _ = tx.send(RuntimeEvent::TaskStarted {
+            session_id: sid,
+            task_id,
+        });
+        let _ = tx.send(RuntimeEvent::TaskProgress {
+            session_id: sid,
+            task_id,
+            progress: eggsec_runtime::TaskProgress {
+                completed: 25,
+                total: Some(100),
+                message: None,
+            },
+        });
+        drop(tx);
+
+        let actions = adapter.drain_and_reduce(&mut rx, None);
+        // Should get TabStarted + UpdateProgress.
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(actions[0], TuiAction::TabStarted(_, _)));
+        assert!(matches!(actions[1], TuiAction::UpdateProgress(_, 25, 100)));
+    }
 }

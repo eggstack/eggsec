@@ -129,3 +129,8 @@ The CI architecture guards enforce these invariants from Phases 1–10:
 8. TUI action specs point back to canonical metadata.
 9. `eggsec-output` has a normalized report/evidence envelope.
 10. Feature metadata snapshot is validated against `crates/eggsec/Cargo.toml`.
+11. `eggsec-tui/src/workers/` directory is absent (removed in TUI Runtime Phase 3).
+12. `eggsec-runtime` has no TUI dependencies (`ratatui`, `crossterm`, `eggsec-tui`).
+13. `eggsec-runtime` has no transport dependencies (`axum`, `tonic`, `tokio-tungstenite`, `tower-http`).
+14. `eggsec-runtime` capabilities do not list unimplemented transports (`stdio`, `unix-socket`, `websocket`).
+15. `eggsec-tui` does not define canonical `TaskConfig` or `TaskResult` enums (owned by `eggsec-runtime` and `eggsec` respectively).

@@ -50,6 +50,8 @@ Manages the overall application state, event loop, and rendering.
 | `key_handler.rs` | Priority-based key processing: `decode_global_shortcuts`, `decode_mode_specific_input`, `decode_topmost_overlay` (all return `Vec<UiAction>`); `handle_key_event` orchestrates decode + apply |
 | `state_update.rs` | Async task result handling and routing |
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
+| `task_dispatcher.rs` | `TuiTaskDispatcher` — `TaskDispatcher` impl, returns `TaskOutcome::Result(TaskResultEnvelope)` |
+| `runtime_adapter/` | `TuiRuntimeAdapter` — runtime event reducer, maps `RuntimeEvent`s to `Vec<TuiAction>` via `reduce()` + `apply_actions()` |
 | `enforcement.rs` | `TuiEnforcementState`, `TuiPreflightResult` — TUI-local enforcement posture model |
 | `enforcement_facade.rs` | `EnforcementFacade` — extracted enforcement evaluation/approval logic (Phase 8) |
 | `action_spec.rs` | `TuiActionSpec`, `TuiTabSpec` — metadata-backed TUI action/tab registry (Phase 8) |
@@ -377,12 +379,17 @@ Worker dispatch has been moved from the TUI crate to `eggsec::dispatch`. The TUI
 **Communication Flow (Phase 4 — runtime event reducer)**:
 ```
 Tab builds RunRequest → spawn_task() → Runtime → TuiTaskDispatcher → eggsec::dispatch::dispatch_inner()
-                                                                              ↓
-          RuntimeEventReceiver → TuiRuntimeAdapter::drain_and_reduce()
-                                       ↓
-          Vec<TuiAction> → TuiRuntimeAdapter::apply_actions() → tab state
+                                  ↓                    ↓
+                          TaskOutcome::Result    RuntimeEventReceiver
+                          (TaskResultEnvelope)        ↓
+                                  ↓            TuiRuntimeAdapter::drain_and_reduce()
+                          progress_tx / result_tx           ↓
+                          (typed channels)         Vec<TuiAction> → apply_actions() → tab state
 ```
-Legacy `progress_rx` / `result_rx` channels remain as a compatibility bridge but are no longer the primary lifecycle path. Typed `TaskResult` values still flow through `result_rx` for domain-specific tab updates (recon results, scan reports, etc.).
+
+`TuiTaskDispatcher::dispatch()` returns `TaskOutcome::Result(TaskResultEnvelope)` with a summary and artifact references. The TUI also maintains typed `mpsc` channels (`progress_tx`/`result_tx`) through `TuiDispatcherContext` for domain-specific rendering (recon results, scan reports, etc.). `task_result_to_envelope()` converts `eggsec::dispatch::TaskResult` variants into `TaskResultEnvelope` for the runtime lifecycle path. The typed channel path remains the primary rendering path for tab-specific data.
+
+**Runtime dependency boundary**: The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`, `TaskKind`, `TaskOutcome`, and `TaskResultEnvelope` types. This is intentional — the engine uses runtime protocol types to submit work. However, `eggsec-runtime` must never depend on `eggsec` (no reverse dependency). Architecture guard `check-architecture-guards.sh` enforces this. `eggsec-runtime` has zero TUI or transport dependencies.
 
 ### State Management (`state/`)
 
