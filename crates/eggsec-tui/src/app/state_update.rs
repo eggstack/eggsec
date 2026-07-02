@@ -55,6 +55,20 @@ impl super::App {
             }
         }
 
+        // Phase 8: drain daemon event handle for remote mode.
+        if let Some(ref mut handle) = self.runtime_binding.daemon_event_handle {
+            let mut daemon_actions = Vec::new();
+            while let Some(event) = handle.try_recv() {
+                let actions = self.runtime_adapter.reduce(event, current_task_tab);
+                daemon_actions.extend(actions);
+            }
+            if !daemon_actions.is_empty() {
+                if super::runtime_adapter::TuiRuntimeAdapter::apply_actions(daemon_actions, self) {
+                    dirty = true;
+                }
+            }
+        }
+
         // Auto-expire stale notifications so they don't linger until the
         // next notification replaces them.
         if let Some(ref notif) = self.overlay.notification {

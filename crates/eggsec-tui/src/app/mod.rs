@@ -36,7 +36,7 @@ pub use input::InputMode;
 pub use key_handler::KeyHandler;
 pub use notifications::{Notification, NotificationSeverity};
 pub use options::GlobalHttpOptions;
-pub use runner::run;
+pub use runner::{run, run_with_mode};
 pub use state::{OverlayState, QuickSwitchState, SearchState, TaskState, ThemeLoadState};
 pub use tab_store::TabStore;
 
@@ -47,11 +47,14 @@ pub(crate) mod notifications;
 
 use super::error::make_friendly_error;
 use crate::help::{CommandPalette, HelpManager};
+use crate::runtime_client::RuntimeEventReceiverHandle;
+use crate::runtime_client::TuiRuntimeClient;
 use crate::session::{SessionConfig, SessionManager};
 use crate::state::SharedHistory;
 use crate::tabs;
 use crate::tabs::{Tab, TabInput};
 use crate::theme::{display_theme_name, ThemeManager};
+use crate::RuntimeMode;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use eggsec::config::{
@@ -126,6 +129,12 @@ pub struct App {
     // -- Phase 4: runtime event reducer --
     /// Maps runtime TaskIds to originating tabs and applies lifecycle events.
     pub(crate) runtime_adapter: runtime_adapter::TuiRuntimeAdapter,
+
+    // -- Phase 8: runtime mode --
+    /// Current runtime mode (embedded or daemon).
+    pub(crate) runtime_mode: RuntimeMode,
+    /// Runtime client for daemon mode. `None` when in embedded mode.
+    pub(crate) runtime_client: Option<std::sync::Arc<dyn TuiRuntimeClient + Send + Sync>>,
 }
 
 /// Canonical runtime binding for the TUI.
@@ -140,6 +149,8 @@ pub(crate) struct RuntimeBinding {
     pub session_id: Option<eggsec_runtime::SessionId>,
     /// Receiver for runtime lifecycle events. `None` until first task.
     pub events: Option<eggsec_runtime::RuntimeEventReceiver>,
+    /// Daemon event receiver handle for remote mode. `None` in embedded mode.
+    pub daemon_event_handle: Option<RuntimeEventReceiverHandle>,
 }
 
 impl App {
@@ -199,11 +210,14 @@ impl App {
                 runtime,
                 session_id: None,
                 events: None,
+                daemon_event_handle: None,
             },
             runtime_pending_session_id: None,
             runtime_pending_event_rx: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
+            runtime_mode: RuntimeMode::default(),
+            runtime_client: None,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -311,11 +325,14 @@ impl App {
                 runtime,
                 session_id: None,
                 events: None,
+                daemon_event_handle: None,
             },
             runtime_pending_session_id: None,
             runtime_pending_event_rx: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
+            runtime_mode: RuntimeMode::default(),
+            runtime_client: None,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until
@@ -338,6 +355,40 @@ impl App {
         app.spawn_theme_loader();
 
         app
+    }
+
+    /// Apply a non-default runtime mode to the TUI.
+    ///
+    /// Sets the runtime mode and creates a daemon client if in daemon mode.
+    /// This must be called before the event loop starts.
+    pub fn apply_runtime_mode(&mut self, mode: &RuntimeMode) {
+        self.runtime_mode = mode.clone();
+        if let RuntimeMode::Daemon {
+            ref socket_path, ..
+        } = mode
+        {
+            let socket = socket_path.clone();
+            // Create a blocking runtime for the synchronous connect.
+            match tokio::runtime::Runtime::new() {
+                Ok(rt) => {
+                    let result = rt.block_on(async {
+                        crate::runtime_client::DaemonRuntimeClient::connect(&socket).await
+                    });
+                    match result {
+                        Ok(client) => {
+                            self.runtime_client = Some(std::sync::Arc::new(client));
+                            tracing::info!("Connected to daemon at {}", socket);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to connect to daemon at {}: {}", socket, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create tokio runtime for daemon connect: {}", e);
+                }
+            }
+        }
     }
 
     pub fn cycle_export_format(&mut self) {

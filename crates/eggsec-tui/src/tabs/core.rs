@@ -191,6 +191,15 @@ pub fn tab_state_set_error(core: &mut TabCore, error: TabError) {
     core.progress.current = 0;
 }
 
+pub fn tab_state_set_completed_message(core: &mut TabCore, message: String) {
+    core.state = AppState::Completed;
+    core.error = None;
+    core.progress.current = 0;
+    core.results_view.clear();
+    core.results_view
+        .add_line(ratatui::text::Line::from(message));
+}
+
 // --- TabInput delegation helpers ---
 // These implement the boilerplate input handling that is identical across
 // nearly all tabs. Tabs with custom behavior (like ScanPorts' validation)

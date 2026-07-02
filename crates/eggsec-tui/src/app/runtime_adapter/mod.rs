@@ -41,6 +41,9 @@ pub(crate) enum TuiAction {
     TabCompleted(Tab, eggsec_runtime::TaskOutcome),
     /// Tab started: (tab, task_id).
     TabStarted(Tab, TaskId),
+    /// Tab completed with envelope summary (daemon mode fallback).
+    /// Carries (tab, kind, summary) for rendering when typed TaskResult is unavailable.
+    TabCompletedEnvelope(Tab, String, Option<String>),
 }
 
 /// Reducer that maps runtime lifecycle events to TUI actions.
@@ -128,7 +131,25 @@ impl TuiRuntimeAdapter {
                         tab = %tab.title(),
                         "Runtime task completed"
                     );
-                    vec![TuiAction::TabCompleted(tab, outcome)]
+                    // Extract envelope summary for daemon-mode rendering fallback.
+                    let envelope_summary = match &outcome {
+                        eggsec_runtime::TaskOutcome::Result(env) => Some(
+                            env.summary
+                                .clone()
+                                .unwrap_or_else(|| format!("{} completed", env.kind)),
+                        ),
+                        eggsec_runtime::TaskOutcome::Text(text) => Some(text.clone()),
+                        _ => None,
+                    };
+                    let mut actions = vec![TuiAction::TabCompleted(tab, outcome)];
+                    if let Some(summary) = envelope_summary {
+                        actions.push(TuiAction::TabCompletedEnvelope(
+                            tab,
+                            "task".into(),
+                            Some(summary),
+                        ));
+                    }
+                    actions
                 } else {
                     tracing::debug!(
                         task_id = %task_id,
@@ -234,6 +255,13 @@ impl TuiRuntimeAdapter {
                     dirty = true;
                 }
                 TuiAction::TabStarted(_tab, _task_id) => {
+                    dirty = true;
+                }
+                TuiAction::TabCompletedEnvelope(mut tab, _kind, summary) => {
+                    // Daemon-mode rendering fallback: render envelope summary
+                    // when typed TaskResult is unavailable (no result_rx).
+                    let msg = summary.unwrap_or_else(|| "Task completed".into());
+                    tab.as_tab_state_mut(app).set_completed_message(msg);
                     dirty = true;
                 }
             }
@@ -771,10 +799,14 @@ mod tests {
         };
 
         let actions = adapter.reduce(event, None);
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
         assert!(matches!(
             &actions[0],
             TuiAction::TabCompleted(Tab::ScanPorts, _)
+        ));
+        assert!(matches!(
+            &actions[1],
+            TuiAction::TabCompletedEnvelope(Tab::ScanPorts, _, Some(_))
         ));
         assert!(!adapter.has_tasks());
     }
@@ -898,13 +930,20 @@ mod tests {
         };
 
         let actions = adapter.reduce(event, None);
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
         match &actions[0] {
             TuiAction::TabCompleted(tab, outcome) => {
                 assert_eq!(*tab, Tab::Recon);
                 assert!(matches!(outcome, eggsec_runtime::TaskOutcome::Result(_)));
             }
             other => panic!("Expected TabCompleted, got: {:?}", other),
+        }
+        match &actions[1] {
+            TuiAction::TabCompletedEnvelope(tab, _kind, summary) => {
+                assert_eq!(*tab, Tab::Recon);
+                assert_eq!(summary.as_deref(), Some("target: example.com"));
+            }
+            other => panic!("Expected TabCompletedEnvelope, got: {:?}", other),
         }
     }
 }

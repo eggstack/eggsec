@@ -563,6 +563,7 @@ pub trait TabState {
     }
     fn reset(&mut self) {}
     fn set_error(&mut self, _error: TabError) {}
+    fn set_completed_message(&mut self, _message: String) {}
 }
 
 pub trait TabRender {

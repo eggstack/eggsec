@@ -110,17 +110,31 @@ impl super::App {
 
     /// Cancel the active task via the runtime and clear TUI state.
     fn clear_task_runtime(&mut self) {
+        // Cancel via runtime client (daemon mode) or embedded runtime.
         if let Some(session_id) = self.runtime_binding.session_id {
-            let runtime = self.runtime_binding.runtime.clone();
-            let sid = session_id;
-            tokio::spawn(async move {
-                if let Err(e) = runtime.cancel_active(sid).await {
-                    tracing::debug!(
-                        "Runtime cancel_active failed (may already be completed): {}",
-                        e
-                    );
-                }
-            });
+            if let Some(ref client) = self.runtime_client {
+                let client = client.clone();
+                let sid = session_id;
+                tokio::spawn(async move {
+                    if let Err(e) = client.cancel_active(sid).await {
+                        tracing::debug!(
+                            "Daemon cancel_active failed (may already be completed): {}",
+                            e
+                        );
+                    }
+                });
+            } else {
+                let runtime = self.runtime_binding.runtime.clone();
+                let sid = session_id;
+                tokio::spawn(async move {
+                    if let Err(e) = runtime.cancel_active(sid).await {
+                        tracing::debug!(
+                            "Runtime cancel_active failed (may already be completed): {}",
+                            e
+                        );
+                    }
+                });
+            }
         }
 
         self.task_state.tab = None;
@@ -314,6 +328,7 @@ mod tests {
             runtime,
             session_id: Some(session_id),
             events: None,
+            daemon_event_handle: None,
         };
 
         // Verify the TUI can read back the session ID.
@@ -352,6 +367,7 @@ mod tests {
             runtime,
             session_id: Some(session_id),
             events: None,
+            daemon_event_handle: None,
         };
 
         // The runtime should report the correct surface for the bound session.

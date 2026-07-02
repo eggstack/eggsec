@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress, TaskStatus};
 use crate::ids::{SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface};
-use crate::session::{RuntimeSession, SessionScope, SessionSnapshot};
+use crate::session::{RuntimeSession, SessionScope, SessionSnapshot, SessionSummary};
 use crate::RuntimeError;
 
 /// Configuration for the runtime.
@@ -239,6 +239,23 @@ impl Runtime {
             .get(&session_id)
             .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
         Ok(session.scope().cloned())
+    }
+
+    /// List summaries for all sessions.
+    pub async fn list_sessions(&self) -> Vec<SessionSummary> {
+        let state = self.state.lock().await;
+        state
+            .sessions
+            .iter()
+            .map(|(id, session)| SessionSummary {
+                session_id: *id,
+                surface: session.execution_surface(),
+                scope: session.scope().cloned(),
+                active_count: session.active_tasks().len(),
+                completed_count: session.completed_tasks().len(),
+                created_at_secs: session.created_at_secs(),
+            })
+            .collect()
     }
 
     /// Submit a task to a session. Returns the task ID.

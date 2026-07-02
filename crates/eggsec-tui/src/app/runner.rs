@@ -14,6 +14,7 @@ use crate::state;
 use crate::tabs::TabWindow;
 use crate::ui;
 use crate::ui::{LAYOUT_MARGIN, TAB_BAR_HEIGHT};
+use crate::RuntimeMode;
 
 fn compute_tab_area(term_width: u16) -> ratatui::layout::Rect {
     ratatui::layout::Rect {
@@ -25,6 +26,10 @@ fn compute_tab_area(term_width: u16) -> ratatui::layout::Rect {
 }
 
 pub fn run(config_path: Option<String>) -> Result<()> {
+    run_with_mode(config_path, RuntimeMode::default())
+}
+
+pub fn run_with_mode(config_path: Option<String>, mode: RuntimeMode) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -43,6 +48,12 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 
     let history = state::create_shared_history();
     let mut app = App::new(history);
+
+    // Apply runtime mode if non-default.
+    if mode != RuntimeMode::default() {
+        app.apply_runtime_mode(&mode);
+    }
+
     let loaded_config = match eggsec::config::load_config(config_path.as_deref()) {
         Ok(c) => Some(c),
         Err(e) => {
@@ -90,6 +101,24 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     app.enforcement_state = super::enforcement_facade::EnforcementFacade::new(
         super::TuiEnforcementState::new(surface, loaded_scope, enforcement),
     );
+
+    // For daemon mode, connect and attach to session before starting the event loop.
+    if mode != RuntimeMode::default() {
+        let runtime_mode = app.runtime_mode.clone();
+        if let Some(ref client) = app.runtime_client {
+            let client_arc = client.clone();
+            let rt_mode = runtime_mode.clone();
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(async {
+                if let Err(e) = attach_daemon_session(client_arc.as_ref(), &rt_mode, &mut app).await
+                {
+                    tracing::error!("Failed to attach to daemon session: {}", e);
+                    app.stop_with_message(&format!("Daemon attach failed: {}", e));
+                }
+            });
+        }
+    }
+
     let res = run_app(&mut terminal, &mut app);
 
     if let Err(e) = app.session_manager.save_quick(&app) {
@@ -106,6 +135,101 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 
     if let Err(err) = res {
         tracing::error!("TUI exited with error: {:?}", err);
+    }
+
+    Ok(())
+}
+
+/// Attach to a daemon session: create/list/subscribe based on mode flags.
+async fn attach_daemon_session(
+    client: &dyn crate::runtime_client::TuiRuntimeClient,
+    mode: &RuntimeMode,
+    app: &mut App,
+) -> Result<(), String> {
+    let RuntimeMode::Daemon {
+        session_id,
+        new_session,
+        attach_latest,
+        ..
+    } = mode
+    else {
+        return Ok(());
+    };
+
+    let target_session = if *new_session {
+        let scope: eggsec_runtime::session::SessionScope =
+            app.enforcement_state.loaded_scope().into();
+        let sid = client
+            .create_session(
+                eggsec_runtime::RuntimeSurface::TuiManual,
+                Some(scope),
+                vec![],
+            )
+            .await?;
+        tracing::info!("Created new daemon session: {}", sid);
+        Some(sid)
+    } else if let Some(ref explicit_id) = session_id {
+        // Strip "session:" prefix if present (SessionId Display format).
+        let uuid_str = explicit_id.strip_prefix("session:").unwrap_or(explicit_id);
+        let uuid: uuid::Uuid = uuid_str
+            .parse()
+            .map_err(|e| format!("invalid session ID '{}': {}", explicit_id, e))?;
+        let parsed = eggsec_runtime::SessionId::from_uuid(uuid);
+        Some(parsed)
+    } else if *attach_latest {
+        let sessions = client.list_sessions().await?;
+        sessions
+            .into_iter()
+            .max_by_key(|s| s.created_at_secs)
+            .map(|s| s.session_id)
+    } else {
+        // No explicit session flag: list and pick latest, or create new.
+        let sessions = client.list_sessions().await?;
+        sessions
+            .into_iter()
+            .max_by_key(|s| s.created_at_secs)
+            .map(|s| s.session_id)
+    };
+
+    match target_session {
+        Some(sid) => {
+            // Hydrate from snapshot.
+            let snapshot = client.snapshot(sid).await?;
+            tracing::info!(
+                session = %sid,
+                active = snapshot.active_tasks.len(),
+                completed = snapshot.completed_tasks.len(),
+                "Attached to daemon session"
+            );
+
+            // Store session ID and subscribe to events.
+            app.runtime_binding.session_id = Some(sid);
+            let event_handle = client.subscribe(sid).await?;
+            // Store the handle for the adapter to drain.
+            app.runtime_binding.daemon_event_handle = Some(event_handle);
+
+            // Hydrate adapter with pre-existing completed tasks.
+            for task in &snapshot.completed_tasks {
+                let tab = crate::tabs::Tab::Recon; // Default mapping for hydrated tasks.
+                app.runtime_adapter.register_task(task.task_id, tab);
+            }
+        }
+        None => {
+            // No sessions exist; create a new one.
+            let scope: eggsec_runtime::session::SessionScope =
+                app.enforcement_state.loaded_scope().into();
+            let sid = client
+                .create_session(
+                    eggsec_runtime::RuntimeSurface::TuiManual,
+                    Some(scope),
+                    vec![],
+                )
+                .await?;
+            tracing::info!("No sessions found; created new daemon session: {}", sid);
+            app.runtime_binding.session_id = Some(sid);
+            let event_handle = client.subscribe(sid).await?;
+            app.runtime_binding.daemon_event_handle = Some(event_handle);
+        }
     }
 
     Ok(())

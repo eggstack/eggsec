@@ -1877,6 +1877,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "eggsec-daemon"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "eggsec-runtime",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "eggsec-db-lab"
 version = "0.1.0"
 dependencies = [
@@ -2016,6 +2032,7 @@ dependencies = [
  "directories",
  "eggsec",
  "eggsec-core",
+ "eggsec-daemon",
  "eggsec-nse",
  "eggsec-runtime",
  "futures",

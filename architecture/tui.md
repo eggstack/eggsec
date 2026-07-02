@@ -52,6 +52,7 @@ Manages the overall application state, event loop, and rendering.
 | `task_runtime.rs` | Task lifecycle management (spawn, stop, clear) |
 | `task_dispatcher.rs` | `TuiTaskDispatcher` — `TaskDispatcher` impl, returns `TaskOutcome::Result(TaskResultEnvelope)` |
 | `runtime_adapter/` | `TuiRuntimeAdapter` — runtime event reducer, maps `RuntimeEvent`s to `Vec<TuiAction>` via `reduce()` + `apply_actions()` |
+| `runtime_client/` | `TuiRuntimeClient` trait + `EmbeddedRuntimeClient` / `DaemonRuntimeClient` (Phase 8: remote attach mode) |
 | `enforcement.rs` | `TuiEnforcementState`, `TuiPreflightResult` — TUI-local enforcement posture model |
 | `enforcement_facade.rs` | `EnforcementFacade` — extracted enforcement evaluation/approval logic (Phase 8) |
 | `action_spec.rs` | `TuiActionSpec`, `TuiTabSpec` — metadata-backed TUI action/tab registry (Phase 8) |
@@ -394,6 +395,26 @@ Tab builds RunRequest → spawn_task() → Runtime → TuiTaskDispatcher → egg
 2. **Envelope path** (for non-TUI frontends): `task_result_to_envelope(&task_result)` converts each `TaskResult` variant to a `TaskResultEnvelope` with `kind`, `summary`, and `artifacts`. The runtime tracks this via `TaskOutcome::Result(envelope)` in lifecycle events. Non-TUI frontends (daemon, REST, MCP) consume the envelope; TUI ignores it in favor of the typed channel.
 
 Workers no longer send through channels — they return `TaskResult` directly. `dispatch_inner()` and `dispatch_task()` handle channel plumbing.
+
+**Remote Attach Mode (Phase 8)**: The TUI can connect to an external `eggsec-daemon` process via Unix socket instead of running an embedded runtime. The `TuiRuntimeClient` trait abstracts both paths:
+
+```
+Embedded (default)              Daemon (remote)
+┌──────────────────┐            ┌──────────────────┐
+│ Runtime (in-proc) │            │ DaemonRuntimeClient│
+│  ↓ submit()       │            │  ↓ socket JSON    │
+│ TuiExecutor       │            │  ↓ ServerMessage  │
+│  ↓ dispatch()     │            │  ↓ RuntimeEvent   │
+└──────────────────┘            └──────────────────┘
+       ↓                               ↓
+  result_rx (typed)            daemon_event_handle (reduced)
+       ↓                               ↓
+  handle_result()              apply_actions() envelope fallback
+```
+
+CLI args: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
+
+`EmbeddedRuntimeClient` wraps `Arc<Runtime>` and calls runtime methods directly. `DaemonRuntimeClient` connects via Unix socket using `ClientCommand`/`ServerMessage` JSON-line protocol from `eggsec-daemon`. Session attach hydrates state from `SessionSnapshot` and registers completed tasks in the adapter.
 
 **Runtime dependency boundary**: The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`, `TaskKind`, `TaskOutcome`, and `TaskResultEnvelope` types. This is intentional — the engine uses runtime protocol types to submit work. However, `eggsec-runtime` must never depend on `eggsec` (no reverse dependency). Architecture guard `check-architecture-guards.sh` enforces this. `eggsec-runtime` has zero TUI or transport dependencies.
 

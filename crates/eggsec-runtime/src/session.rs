@@ -1,5 +1,13 @@
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+/// Current time as seconds since Unix epoch.
+fn now_epoch_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
 
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
@@ -57,6 +65,8 @@ pub struct RuntimeSession {
     scope: Option<SessionScope>,
     /// When the session was created.
     created_at: Instant,
+    /// When the session was created (seconds since Unix epoch).
+    created_at_utc: u64,
     /// Task records (active and completed).
     pub(crate) tasks: HashMap<TaskId, TaskRecord>,
     /// Completed task snapshots restored from a previous session snapshot.
@@ -72,6 +82,7 @@ impl RuntimeSession {
             surface,
             scope: None,
             created_at: Instant::now(),
+            created_at_utc: now_epoch_secs(),
             tasks: HashMap::new(),
             hydrated_completed: Vec::new(),
         }
@@ -84,6 +95,7 @@ impl RuntimeSession {
             surface,
             scope: Some(scope),
             created_at: Instant::now(),
+            created_at_utc: now_epoch_secs(),
             tasks: HashMap::new(),
             hydrated_completed: Vec::new(),
         }
@@ -102,6 +114,11 @@ impl RuntimeSession {
     /// When the session was created (monotonic clock).
     pub fn created_at(&self) -> Instant {
         self.created_at
+    }
+
+    /// When the session was created (seconds since Unix epoch).
+    pub fn created_at_secs(&self) -> u64 {
+        self.created_at_utc
     }
 
     /// Session-level capabilities. Currently always returns the default
@@ -170,6 +187,7 @@ impl RuntimeSession {
             surface: snapshot.surface,
             scope: snapshot.scope,
             created_at: Instant::now(),
+            created_at_utc: now_epoch_secs(),
             tasks: HashMap::new(),
             hydrated_completed: snapshot.completed_tasks,
         }
@@ -204,6 +222,17 @@ pub struct SessionSnapshot {
     pub active_tasks: Vec<TaskSnapshot>,
     pub completed_tasks: Vec<TaskSnapshot>,
     pub capabilities: RuntimeCapabilities,
+}
+
+/// Lightweight summary of a session for listing purposes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub session_id: SessionId,
+    pub surface: RuntimeSurface,
+    pub scope: Option<SessionScope>,
+    pub active_count: usize,
+    pub completed_count: usize,
+    pub created_at_secs: u64,
 }
 
 /// Summary of a task request for snapshot display.

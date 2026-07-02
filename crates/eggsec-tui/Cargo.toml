@@ -17,6 +17,7 @@ categories = ["command-line-utilities"]
 eggsec-core = { path = "../eggsec-core" }
 eggsec = { path = "../eggsec" }
 eggsec-runtime = { path = "../eggsec-runtime" }
+eggsec-daemon = { path = "../eggsec-daemon" }
 
 ratatui = "0.30"
 crossterm = { version = "0.29", features = ["event-stream"] }

@@ -82,7 +82,20 @@ async fn main() -> Result<()> {
 
     // Launch TUI directly when no command is given and stdout is a terminal.
     if cli.command.is_none() && std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-        return eggsec_tui::run(cli.config.clone());
+        let mode = match cli.runtime.as_deref() {
+            Some("daemon") => eggsec_tui::RuntimeMode::Daemon {
+                socket_path: cli.socket.clone(),
+                session_id: cli.session.clone(),
+                new_session: cli.new_session,
+                attach_latest: cli.attach_latest,
+            },
+            Some(other) => {
+                eprintln!("Unknown runtime mode '{}', falling back to embedded", other);
+                eggsec_tui::RuntimeMode::Embedded
+            }
+            None => eggsec_tui::RuntimeMode::Embedded,
+        };
+        return eggsec_tui::run_with_mode(cli.config.clone(), mode);
     }
 
     let config = eggsec::config::load_config(cli.config.as_deref())?;

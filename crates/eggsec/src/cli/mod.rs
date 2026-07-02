@@ -232,6 +232,38 @@ pub struct Cli {
 
     #[arg(long, help = "Generate shell completion scripts", value_enum)]
     pub generate_shell_completion: Option<Shell>,
+
+    // --- TUI runtime mode (Phase 8) ---
+    #[arg(
+        long,
+        global = true,
+        value_name = "MODE",
+        help = "TUI runtime backend: 'embedded' (default) or 'daemon'"
+    )]
+    pub runtime: Option<String>,
+
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        default_value = "/tmp/eggsec-daemon.sock",
+        help = "Unix socket path for daemon runtime mode"
+    )]
+    pub socket: String,
+
+    #[arg(
+        long,
+        global = true,
+        value_name = "ID",
+        help = "Attach to an existing daemon session by ID"
+    )]
+    pub session: Option<String>,
+
+    #[arg(long, global = true, help = "Create a new daemon session on attach")]
+    pub new_session: bool,
+
+    #[arg(long, global = true, help = "Attach to the most recent daemon session")]
+    pub attach_latest: bool,
 }
 
 #[derive(Subcommand)]

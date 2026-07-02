@@ -40,6 +40,10 @@ crates/eggsec-tui/src/
 │   ├── runtime_adapter/ # Phase 4: runtime event reducer
 │   │   └── mod.rs       # TuiRuntimeAdapter, TuiAction, reduce/apply pattern
 │   └── theme_runtime.rs # Theme loader lifecycle helpers
+├── runtime_client/   # Phase 8: remote attach mode
+│   ├── mod.rs             # TuiRuntimeClient trait, RuntimeEventReceiverHandle
+│   ├── embedded.rs        # EmbeddedRuntimeClient (in-process Runtime)
+│   └── daemon.rs          # DaemonRuntimeClient (Unix socket to eggsec-daemon)
 ├── tabs/         # Individual tab implementations (33 tabs)
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
 │   ├── spec.rs         # TabSpec registry (title, stable_id, category, risk, capabilities)
@@ -69,13 +73,27 @@ crates/eggsec-tui/src/
 ### Runtime Event Reducer (Phase 4)
 `TuiRuntimeAdapter` in `app/runtime_adapter/` maps `RuntimeEvent`s to `Vec<TuiAction>` via `reduce()` + `apply_actions()`. Unknown task IDs and duplicate terminal events are silently ignored (no panic). `TaskResultEnvelope` (from `eggsec-runtime`) is the protocol-neutral result wrapper returned by `TuiTaskDispatcher::dispatch()` for lifecycle tracking. Typed `TaskResult` still flows through `result_rx` for tab-specific rendering.
 
+### Remote Attach Mode (Phase 8)
+The TUI supports two runtime backends via the `TuiRuntimeClient` trait:
+
+- **Embedded** (default): `EmbeddedRuntimeClient` wraps `Arc<Runtime>` — full typed `TaskResult` rendering via `result_rx`.
+- **Daemon** (remote): `DaemonRuntimeClient` connects to `eggsec-daemon` via Unix socket. Uses envelope rendering fallback (`TuiAction::TabCompletedEnvelope`) since typed `TaskResult` is unavailable.
+
+CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`
+
+Key differences in daemon mode:
+- `spawn_task()` delegates to `client.submit()` instead of runtime
+- `clear_task_runtime()` delegates to `client.cancel_active()`
+- Event drain uses `daemon_event_handle` → adapter reduces to `TuiAction::TabCompletedEnvelope`
+- `apply_actions()` calls `set_completed_message()` for envelope rendering
+
 ### Tab System
 - `Tab::all()` - Returns available tabs for current feature set
 - `Tab::visible_index(&self)` - Position in `Tab::all()`
 - `App::set_current_tab_if_available(tab) -> bool` - Safe tab switching
 
 ### Traits
-- `TabState` - State methods: `state()`, `progress()`, `reset()`, `set_error()`
+- `TabState` - State methods: `state()`, `progress()`, `reset()`, `set_error()`, `set_completed_message()`
 - `TabInput` - Input handling: `handle_focus_next()`, `handle_char()`, etc.
 - `TabRender` - Rendering: `render()`, `render_overlays()`
 

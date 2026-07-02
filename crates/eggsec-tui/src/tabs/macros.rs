@@ -84,6 +84,10 @@ macro_rules! tab_state_boilerplate {
         fn set_error(&mut self, error: $crate::app::tab_error::TabError) {
             $crate::tabs::core::tab_state_set_error(&mut self.$core, error);
         }
+
+        fn set_completed_message(&mut self, message: String) {
+            $crate::tabs::core::tab_state_set_completed_message(&mut self.$core, message);
+        }
     };
 }
 

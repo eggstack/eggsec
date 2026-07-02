@@ -260,6 +260,30 @@ else
   echo "PASS: No canonical TaskConfig/TaskResult in TUI."
 fi
 
+# 16. eggsec-daemon must not depend on TUI crates or engine crate
+echo ""
+echo "--- Check 16: Daemon free of TUI and engine dependencies ---"
+HITS=$(rg -n 'ratatui|crossterm|eggsec-tui|eggsec =|eggsec-core' crates/eggsec-daemon/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-daemon has TUI or engine dependencies. It must depend only on eggsec-runtime."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Daemon free of TUI and engine dependencies."
+fi
+
+# 17. eggsec-daemon must not depend on transport crates (axum, tonic, etc.)
+echo ""
+echo "--- Check 17: Daemon free of transport dependencies ---"
+HITS=$(rg -n 'axum|tonic|tokio.tungstenite|tower-http' crates/eggsec-daemon/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-daemon has transport dependencies. Use Unix sockets only."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Daemon free of transport dependencies."
+fi
+
 # 15. TUI must not contain a match TaskKind execution dispatcher
 # (dispatch routing lives in eggsec::dispatch::dispatch_inner, not TUI).
 # NOTE: TUI legitimately uses TaskKind::Variant() to construct RunRequest,
