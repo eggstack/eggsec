@@ -104,11 +104,23 @@ pub struct App {
     // -- Phase 2: runtime lifecycle management --
     /// Frontend-neutral runtime for task lifecycle (timeout, cancellation, events).
     pub runtime: std::sync::Arc<eggsec_runtime::Runtime>,
-    /// Runtime session ID. Created lazily on first task submission.
+    /// Runtime session ID. Created lazily on first task submission, then reused.
     pub runtime_session_id: Option<eggsec_runtime::SessionId>,
-    /// Phase 2 bridge: abort handle for the local compatibility executor.
-    /// TODO(phase-3): remove when executor moves into runtime.
-    pub runtime_abort_handle: Option<tokio::task::AbortHandle>,
+    /// Pending session ID from async runtime creation. Polled in `update()` to
+    /// sync the session ID into `runtime_session_id` for subsequent tasks.
+    pub runtime_pending_session_id:
+        Option<std::sync::Arc<std::sync::Mutex<Option<eggsec_runtime::SessionId>>>>,
+    /// Pending task ID from async runtime submission. Polled in `update()` to
+    /// sync the runtime-assigned `TaskId` into `TaskState.task_id`.
+    pub runtime_pending_task_id:
+        Option<std::sync::Arc<std::sync::Mutex<Option<eggsec_runtime::TaskId>>>>,
+    /// Pending event receiver from async runtime subscription. Polled in
+    /// `update()` to store in `runtime_event_rx` for lifecycle event logging.
+    pub runtime_pending_event_rx:
+        Option<std::sync::Arc<tokio::sync::Mutex<Option<eggsec_runtime::RuntimeEventReceiver>>>>,
+    /// Receiver for runtime lifecycle events. Drained in `update()` for logging
+    /// and (Phase 4) for forwarding progress/completion to TUI channels.
+    pub runtime_event_rx: Option<eggsec_runtime::RuntimeEventReceiver>,
 }
 
 impl App {
@@ -156,7 +168,10 @@ impl App {
                 task_runtime::TuiStubExecutor,
             )),
             runtime_session_id: None,
-            runtime_abort_handle: None,
+            runtime_pending_session_id: None,
+            runtime_pending_task_id: None,
+            runtime_pending_event_rx: None,
+            runtime_event_rx: None,
         };
         app.update_settings_theme_selector();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
@@ -252,7 +267,10 @@ impl App {
                 task_runtime::TuiStubExecutor,
             )),
             runtime_session_id: None,
-            runtime_abort_handle: None,
+            runtime_pending_session_id: None,
+            runtime_pending_task_id: None,
+            runtime_pending_event_rx: None,
+            runtime_event_rx: None,
         };
 
         // Saved sessions can reference packaged/user themes that are not registered until

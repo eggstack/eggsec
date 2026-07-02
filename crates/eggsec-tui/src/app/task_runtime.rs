@@ -160,9 +160,21 @@ impl super::App {
             self.task_state.tab = Some(self.current_tab);
             self.task_state.started_at = Some(std::time::Instant::now());
 
-            // Submit to runtime for lifecycle tracking (best-effort)
+            // Submit to runtime for lifecycle tracking (best-effort).
+            // Use a shared holder to sync task_id back to TaskState on next update().
+            let pending_task_id = std::sync::Arc::new(std::sync::Mutex::new(None));
+            self.runtime_pending_task_id = Some(pending_task_id.clone());
+
             let runtime = self.runtime.clone();
             let session_id = self.runtime_session_id;
+            // Shared holder for session_id so spawned task can store it back.
+            let pending_session_id =
+                std::sync::Arc::new(std::sync::Mutex::new(None::<eggsec_runtime::SessionId>));
+            let pending_session_id_clone = pending_session_id.clone();
+            // Shared holder for event receiver subscription.
+            let pending_event_rx = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+            let pending_event_rx_clone = pending_event_rx.clone();
+            self.runtime_pending_event_rx = Some(pending_event_rx);
 
             tokio::spawn(async move {
                 let session_id = match session_id {
@@ -171,13 +183,22 @@ impl super::App {
                         .create_session(eggsec_runtime::SessionOptions::default())
                         .await
                     {
-                        Ok(sid) => sid,
+                        Ok(sid) => {
+                            // Store session_id back so App can reuse it for next task.
+                            *pending_session_id_clone.lock().unwrap() = Some(sid);
+                            sid
+                        }
                         Err(e) => {
                             tracing::error!("Failed to create runtime session: {}", e);
                             return;
                         }
                     },
                 };
+
+                // Subscribe to runtime events before task submission so we
+                // capture TaskQueued and TaskStarted.
+                let event_rx = runtime.subscribe().await;
+                *pending_event_rx_clone.lock().await = Some(event_rx);
 
                 let request = eggsec_runtime::RunRequest {
                     task_kind: eggsec_runtime::TaskKind::PortScan(
@@ -195,6 +216,8 @@ impl super::App {
 
                 match runtime.submit(session_id, request).await {
                     Ok(task_id) => {
+                        // Store task_id for sync to TaskState on next update().
+                        *pending_task_id.lock().unwrap() = Some(task_id);
                         tracing::debug!("Task submitted to runtime: {}", task_id);
                     }
                     Err(e) => {
@@ -202,6 +225,9 @@ impl super::App {
                     }
                 }
             });
+
+            // Store session_id holder for sync on next update().
+            self.runtime_pending_session_id = Some(pending_session_id);
 
             // Spawn the local compatibility executor with existing worker path
             let runner = workers::TaskRunner::new(config, progress_tx, result_tx.clone());
@@ -266,14 +292,12 @@ impl super::App {
                 }
             });
 
-            // Phase 2 bridge: store the abort handle for emergency cleanup.
-            // The runtime tracks the canonical task lifecycle; this handle is
-            // retained for the local executor's timeout/cancellation path.
+            // Phase 2 bridge: drop the outer handle (local executor runs independently).
+            // The runtime tracks canonical lifecycle; this handle is retained only for
+            // the local timeout/cancellation path via inner_abort.
             // TODO(phase-3): remove raw handle, rely on runtime.cancel() + channel drop
             drop(handle);
-
-            // Store abort handle for emergency cleanup
-            self.runtime_abort_handle = Some(inner_abort);
+            let _ = inner_abort; // Retained for emergency cleanup; not stored on App.
         }
     }
 }
