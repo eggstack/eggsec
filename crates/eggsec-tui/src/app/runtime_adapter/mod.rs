@@ -747,4 +747,164 @@ mod tests {
         assert!(matches!(actions[0], TuiAction::TabStarted(_, _)));
         assert!(matches!(actions[1], TuiAction::UpdateProgress(_, 25, 100)));
     }
+
+    // -----------------------------------------------------------------------
+    // Phase 6 regression: embedded TUI boundary stability
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn completed_with_nonempty_envelope_outcome() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::ScanPorts);
+
+        let envelope = eggsec_runtime::TaskResultEnvelope {
+            kind: "port-scan".into(),
+            summary: Some("42 ports scanned".into()),
+            payload: serde_json::json!({}),
+            artifacts: vec![],
+        };
+        let event = RuntimeEvent::TaskCompleted {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            outcome: eggsec_runtime::TaskOutcome::Result(envelope),
+        };
+
+        let actions = adapter.reduce(event, None);
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            &actions[0],
+            TuiAction::TabCompleted(Tab::ScanPorts, _)
+        ));
+        assert!(!adapter.has_tasks());
+    }
+
+    #[test]
+    fn cancel_then_clear_leaves_clean_state() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let tid1 = TaskId::new();
+        let tid2 = TaskId::new();
+        adapter.register_task(tid1, Tab::Recon);
+        adapter.register_task(tid2, Tab::Load);
+        assert_eq!(adapter.task_count(), 2);
+
+        // Cancel one task.
+        adapter.reduce(
+            RuntimeEvent::TaskCancelled {
+                session_id: eggsec_runtime::SessionId::new(),
+                task_id: tid1,
+                reason: Some("user".into()),
+            },
+            None,
+        );
+        assert_eq!(adapter.task_count(), 1);
+
+        // Clear remaining.
+        adapter.clear();
+        assert!(!adapter.has_tasks());
+    }
+
+    #[test]
+    fn multiple_tasks_cancelled_independently() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let tid1 = TaskId::new();
+        let tid2 = TaskId::new();
+        let tid3 = TaskId::new();
+        adapter.register_task(tid1, Tab::Recon);
+        adapter.register_task(tid2, Tab::Load);
+        adapter.register_task(tid3, Tab::Fuzz);
+        assert_eq!(adapter.task_count(), 3);
+
+        // Cancel tid2.
+        adapter.reduce(
+            RuntimeEvent::TaskCancelled {
+                session_id: eggsec_runtime::SessionId::new(),
+                task_id: tid2,
+                reason: None,
+            },
+            None,
+        );
+        assert_eq!(adapter.task_count(), 2);
+        assert_eq!(adapter.tab_for_task(&tid1), Some(Tab::Recon));
+        assert_eq!(adapter.tab_for_task(&tid2), None);
+        assert_eq!(adapter.tab_for_task(&tid3), Some(Tab::Fuzz));
+    }
+
+    #[test]
+    fn completed_then_duplicate_completed_is_idempotent() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::Waf);
+
+        let event = RuntimeEvent::TaskCompleted {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            outcome: eggsec_runtime::TaskOutcome::Empty,
+        };
+
+        // First completion unregisters.
+        let actions = adapter.reduce(event.clone(), None);
+        assert_eq!(actions.len(), 1);
+        assert!(!adapter.has_tasks());
+
+        // Second completion: no mapping, no action.
+        let actions = adapter.reduce(event, None);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn auto_register_then_cancel_leaves_no_mapping() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+
+        // Auto-register via TaskStarted with fallback tab.
+        let start_event = RuntimeEvent::TaskStarted {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+        };
+        let actions = adapter.reduce(start_event, Some(Tab::Packet));
+        assert_eq!(actions.len(), 1);
+        assert!(adapter.has_tasks());
+
+        // Cancel the task.
+        adapter.reduce(
+            RuntimeEvent::TaskCancelled {
+                session_id: eggsec_runtime::SessionId::new(),
+                task_id,
+                reason: Some("timeout".into()),
+            },
+            None,
+        );
+        assert!(!adapter.has_tasks());
+        assert_eq!(adapter.tab_for_task(&task_id), None);
+    }
+
+    #[test]
+    fn envelope_outcome_carrying_result_variant() {
+        let mut adapter = TuiRuntimeAdapter::new();
+        let task_id = TaskId::new();
+        adapter.register_task(task_id, Tab::Recon);
+
+        let envelope = eggsec_runtime::TaskResultEnvelope {
+            kind: "recon".into(),
+            summary: Some("target: example.com".into()),
+            payload: serde_json::json!({}),
+            artifacts: vec![],
+        };
+        let event = RuntimeEvent::TaskCompleted {
+            session_id: eggsec_runtime::SessionId::new(),
+            task_id,
+            outcome: eggsec_runtime::TaskOutcome::Result(envelope),
+        };
+
+        let actions = adapter.reduce(event, None);
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            TuiAction::TabCompleted(tab, outcome) => {
+                assert_eq!(*tab, Tab::Recon);
+                assert!(matches!(outcome, eggsec_runtime::TaskOutcome::Result(_)));
+            }
+            other => panic!("Expected TabCompleted, got: {:?}", other),
+        }
+    }
 }

@@ -467,4 +467,64 @@ mod tests {
         assert_eq!(envelope.kind, "auth-test");
         assert!(envelope.summary.unwrap().contains("0"));
     }
+
+    #[test]
+    fn envelope_oauth_has_vulnerability_counts() {
+        let result = TaskResult::OAuth(eggsec::dispatch::OAuthResults {
+            target: "http://oauth.local".into(),
+            redirect_vulnerabilities: vec!["open-redirect".into()],
+            scope_vulnerabilities: vec![],
+            state_vulnerabilities: vec!["missing-state".into(), "weak-state".into()],
+            grant_vulnerabilities: vec![],
+            total_requests: 30,
+            errors: 0,
+            duration_ms: 1500,
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "oauth");
+        let summary = envelope.summary.unwrap();
+        assert!(summary.contains("redirect: 1"));
+        assert!(summary.contains("scope: 0"));
+        assert!(summary.contains("state: 2"));
+    }
+
+    #[test]
+    fn envelope_waf_bypass_has_bypass_count() {
+        let detection = eggsec::waf::WafDetectionResult {
+            waf_name: Some("ModSecurity".into()),
+            confidence: 90,
+            request_error: None,
+            matched_headers: vec![],
+            matched_cookies: vec![],
+            matched_patterns: vec![],
+            server_header: None,
+            status_code: 403,
+        };
+        let result = TaskResult::WafBypass {
+            detection,
+            bypasses: vec![],
+        };
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "waf-bypass");
+        assert!(envelope.summary.unwrap().contains("0 bypasses"));
+    }
+
+    #[test]
+    fn envelope_pipeline_has_stage_count() {
+        let result = TaskResult::Pipeline(eggsec::pipeline::PipelineReport {
+            target: "10.0.0.1".into(),
+            stage_results: vec![],
+            total_duration_ms: 5000,
+            open_ports: vec![],
+            services: vec![],
+            endpoints: vec![],
+            checkpoint_error: None,
+            manifest: None,
+            vuln_assessment: None,
+            load_test_results: None,
+        });
+        let envelope = task_result_to_envelope(&result);
+        assert_eq!(envelope.kind, "pipeline");
+        assert!(envelope.summary.unwrap().contains("0 stages"));
+    }
 }
