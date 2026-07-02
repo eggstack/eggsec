@@ -301,6 +301,11 @@ mod tests {
     async fn client_close_session_roundtrip() {
         let (socket_path, shutdown) = start_server().await;
         let mut client = DaemonClient::connect(&socket_path).await.unwrap();
+        // Declare client first so subsequent commands have a client_id.
+        let _decl = client
+            .declare_client(crate::client_registry::ClientKind::Cli, Some("test-cli".into()))
+            .await
+            .unwrap();
         let session_id = match client
             .create_session(eggsec_runtime::RuntimeSurface::CliManual, None, vec![])
             .await

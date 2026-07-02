@@ -85,6 +85,9 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half).lines();
 
+    // Track the client_id assigned by DeclareClient on this connection.
+    let mut local_client_id: Option<eggsec_runtime::ClientId> = None;
+
     loop {
         let line = match reader.next_line().await {
             Ok(Some(line)) => line,
@@ -113,6 +116,18 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
                 continue;
             }
         };
+
+        // If this is a DeclareClient, capture the returned client_id for this connection.
+        if let ClientCommand::DeclareClient { .. } = &cmd {
+            let resp = host.handle_command(cmd, local_client_id).await;
+            if let ServerMessage::ClientDeclared { client_id, .. } = &resp {
+                local_client_id = Some(*client_id);
+            }
+            if write_message(&mut write_half, &resp).await.is_err() {
+                break;
+            }
+            continue;
+        }
 
         // Handle Subscribe specially — it starts a long-lived event stream.
         if let ClientCommand::Subscribe {
@@ -171,7 +186,7 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
                                         continue;
                                     }
                                 };
-                                let resp = host.handle_command(cmd).await;
+                                let resp = host.handle_command(cmd, local_client_id).await;
                                 if write_message(&mut write_half, &resp).await.is_err() {
                                     break;
                                 }
@@ -193,7 +208,7 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
         }
 
         // Non-subscribe commands: dispatch and respond inline
-        let resp = host.handle_command(cmd).await;
+        let resp = host.handle_command(cmd, local_client_id).await;
         if write_message(&mut write_half, &resp).await.is_err() {
             break;
         }
@@ -409,12 +424,25 @@ mod tests {
 
     #[tokio::test]
     async fn subscribe_receives_task_events() {
+        use crate::client_registry::ClientKind;
         use crate::protocol::ClientCommand;
         use eggsec_runtime::request::{PortScanParams, RunRequest, TaskKind};
         use eggsec_runtime::{ClientId, RuntimeSurface};
 
         let (_host, socket_path, shutdown) = start_server().await;
         let (mut write_half, mut read_lines) = connect(&socket_path).await;
+
+        // 0. Declare a client so permission checks pass.
+        let _decl = send_command(
+            &mut write_half,
+            &mut read_lines,
+            &ClientCommand::DeclareClient {
+                request_id: "d1".into(),
+                kind: ClientKind::Cli,
+                label: Some("test-cli".into()),
+            },
+        )
+        .await;
 
         // 1. Create a session.
         let create_resp = send_command(
@@ -508,6 +536,153 @@ mod tests {
         }
         assert!(saw_queued, "should receive TaskQueued event");
         assert!(saw_completed, "should receive TaskCompleted event");
+
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn two_subscribers_receive_same_events() {
+        use crate::client_registry::ClientKind;
+        use crate::protocol::ClientCommand;
+        use eggsec_runtime::request::{PortScanParams, RunRequest, TaskKind};
+        use eggsec_runtime::RuntimeSurface;
+
+        let (_host, socket_path, shutdown) = start_server().await;
+
+        // Client A: declare, create session, subscribe.
+        let (mut wa, mut ra) = connect(&socket_path).await;
+        let _da = send_command(
+            &mut wa,
+            &mut ra,
+            &ClientCommand::DeclareClient {
+                request_id: "da".into(),
+                kind: ClientKind::Tui,
+                label: Some("tui-a".into()),
+            },
+        )
+        .await;
+        let create_a = send_command(
+            &mut wa,
+            &mut ra,
+            &ClientCommand::CreateSession {
+                request_id: "ca".into(),
+                surface: RuntimeSurface::TuiManual,
+                scope: None,
+                labels: vec![],
+            },
+        )
+        .await;
+        let session_id = match create_a {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            other => panic!("expected SessionCreated, got {:?}", other),
+        };
+        let sub_a = send_command(
+            &mut wa,
+            &mut ra,
+            &ClientCommand::Subscribe {
+                request_id: "sa".into(),
+                session_id,
+            },
+        )
+        .await;
+        assert!(matches!(sub_a, ServerMessage::Ok { .. }));
+
+        // Client B: declare, subscribe to same session.
+        let (mut wb, mut rb) = connect(&socket_path).await;
+        let _db = send_command(
+            &mut wb,
+            &mut rb,
+            &ClientCommand::DeclareClient {
+                request_id: "db".into(),
+                kind: ClientKind::Cli,
+                label: Some("cli-b".into()),
+            },
+        )
+        .await;
+        let sub_b = send_command(
+            &mut wb,
+            &mut rb,
+            &ClientCommand::Subscribe {
+                request_id: "sb".into(),
+                session_id,
+            },
+        )
+        .await;
+        assert!(matches!(sub_b, ServerMessage::Ok { .. }));
+
+        // Submit a task through client A.
+        let submit_resp = send_command(
+            &mut wa,
+            &mut ra,
+            &ClientCommand::SubmitTask {
+                request_id: "t1".into(),
+                session_id,
+                request: RunRequest {
+                    task_kind: TaskKind::PortScan(PortScanParams {
+                        target: "127.0.0.1".into(),
+                        ports: None,
+                        scan_type: None,
+                        timeout_ms: None,
+                    }),
+                    requested_by: None,
+                    surface: RuntimeSurface::CliManual,
+                    labels: vec![],
+                },
+            },
+        )
+        .await;
+        let task_id = match submit_resp {
+            ServerMessage::TaskSubmitted { task_id, .. } => task_id,
+            other => panic!("expected TaskSubmitted, got {:?}", other),
+        };
+
+        // Both subscribers should receive TaskQueued and TaskCompleted.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+
+        let mut a_saw_queued = false;
+        let mut a_saw_completed = false;
+        let mut b_saw_queued = false;
+        let mut b_saw_completed = false;
+
+        while tokio::time::Instant::now() < deadline {
+            if a_saw_queued && a_saw_completed && b_saw_queued && b_saw_completed {
+                break;
+            }
+            tokio::select! {
+                line = tokio::time::timeout(
+                    std::time::Duration::from_millis(100),
+                    ra.next_line(),
+                ) => {
+                    if let Ok(Ok(Some(line))) = line {
+                        if let Ok(ServerMessage::RuntimeEvent { event, .. }) = serde_json::from_str::<ServerMessage>(&line) {
+                            match event {
+                                eggsec_runtime::RuntimeEvent::TaskQueued { task_id: tid, .. } if tid == task_id => a_saw_queued = true,
+                                eggsec_runtime::RuntimeEvent::TaskCompleted { task_id: tid, .. } if tid == task_id => a_saw_completed = true,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                line = tokio::time::timeout(
+                    std::time::Duration::from_millis(100),
+                    rb.next_line(),
+                ) => {
+                    if let Ok(Ok(Some(line))) = line {
+                        if let Ok(ServerMessage::RuntimeEvent { event, .. }) = serde_json::from_str::<ServerMessage>(&line) {
+                            match event {
+                                eggsec_runtime::RuntimeEvent::TaskQueued { task_id: tid, .. } if tid == task_id => b_saw_queued = true,
+                                eggsec_runtime::RuntimeEvent::TaskCompleted { task_id: tid, .. } if tid == task_id => b_saw_completed = true,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(a_saw_queued, "client A should receive TaskQueued");
+        assert!(a_saw_completed, "client A should receive TaskCompleted");
+        assert!(b_saw_queued, "client B should receive TaskQueued");
+        assert!(b_saw_completed, "client B should receive TaskCompleted");
 
         shutdown.cancel();
     }

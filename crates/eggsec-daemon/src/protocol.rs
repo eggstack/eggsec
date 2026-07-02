@@ -70,6 +70,47 @@ pub enum ClientCommand {
         request_id: String,
         session_id: SessionId,
     },
+    ApprovePolicy {
+        request_id: String,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    },
+}
+
+impl ClientCommand {
+    /// Borrow the request_id without destructuring.
+    pub fn request_id(&self) -> &str {
+        match self {
+            Self::Health { request_id }
+            | Self::Capabilities { request_id }
+            | Self::DeclareClient { request_id, .. }
+            | Self::CreateSession { request_id, .. }
+            | Self::ListSessions { request_id }
+            | Self::GetSnapshot { request_id, .. }
+            | Self::SubmitTask { request_id, .. }
+            | Self::CancelTask { request_id, .. }
+            | Self::CancelActive { request_id, .. }
+            | Self::Subscribe { request_id, .. }
+            | Self::CloseSession { request_id, .. }
+            | Self::ApprovePolicy { request_id, .. } => request_id,
+        }
+    }
+
+    /// Borrow the session_id if this command targets one.
+    pub fn session_id(&self) -> Option<&SessionId> {
+        match self {
+            Self::GetSnapshot { session_id, .. }
+            | Self::SubmitTask { session_id, .. }
+            | Self::CancelTask { session_id, .. }
+            | Self::CancelActive { session_id, .. }
+            | Self::Subscribe { session_id, .. }
+            | Self::CloseSession { session_id, .. }
+            | Self::ApprovePolicy { session_id, .. } => Some(session_id),
+            _ => None,
+        }
+    }
 }
 
 /// A message sent from the daemon to a client.
@@ -569,6 +610,36 @@ mod tests {
     }
 
     #[test]
+    fn client_command_roundtrip_approve_policy() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let cmd = ClientCommand::ApprovePolicy {
+            request_id: rid(),
+            session_id: sid,
+            task_id: tid,
+            approved: true,
+            reason: Some("confirmed".into()),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        if let ClientCommand::ApprovePolicy {
+            session_id,
+            task_id,
+            approved,
+            reason,
+            ..
+        } = back
+        {
+            assert_eq!(session_id, sid);
+            assert_eq!(task_id, tid);
+            assert!(approved);
+            assert_eq!(reason.as_deref(), Some("confirmed"));
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
     fn server_message_roundtrip_client_declared() {
         let cid = ClientId::new();
         let msg = ServerMessage::ClientDeclared {
@@ -689,6 +760,17 @@ mod tests {
                 })
                 .unwrap(),
                 "CloseSession",
+            ),
+            (
+                serde_json::to_value(&ClientCommand::ApprovePolicy {
+                    request_id: rid(),
+                    session_id: SessionId::new(),
+                    task_id: TaskId::new(),
+                    approved: true,
+                    reason: None,
+                })
+                .unwrap(),
+                "ApprovePolicy",
             ),
         ];
         for (val, expected_type) in cases {

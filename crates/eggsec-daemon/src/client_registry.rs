@@ -107,7 +107,7 @@ impl Default for ClientRegistry {
 
 /// Check if a client has the required role for a command on a session.
 pub fn check_permission(
-    client_kind: &ClientKind,
+    _client_kind: &ClientKind,
     client_role: &ClientRole,
     session_surface: &RuntimeSurface,
     command: &str,

@@ -188,7 +188,8 @@ impl DaemonRuntimeClient {
             | ClientCommand::CancelActive { request_id, .. }
             | ClientCommand::DeclareClient { request_id, .. }
             | ClientCommand::CloseSession { request_id, .. }
-            | ClientCommand::Subscribe { request_id, .. } => request_id.clone(),
+            | ClientCommand::Subscribe { request_id, .. }
+            | ClientCommand::ApprovePolicy { request_id, .. } => request_id.clone(),
         };
 
         let (tx, rx) = oneshot::channel();
