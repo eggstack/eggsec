@@ -195,10 +195,7 @@ impl PacketTab {
         self.state = AppState::Completed;
     }
 
-    pub fn set_traceroute_results(
-        &mut self,
-        hops: Vec<super::super::workers::TracerouteHopResult>,
-    ) {
+    pub fn set_traceroute_results(&mut self, hops: Vec<eggsec::dispatch::TracerouteHopResult>) {
         use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 

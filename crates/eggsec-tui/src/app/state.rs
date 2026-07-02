@@ -67,7 +67,7 @@ pub struct TaskState {
     /// Channel receivers bridging `TaskRunner` progress to the TUI.
     /// These will be replaced by `RuntimeEventReceiver` in Phase 4.
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
-    pub result_rx: Option<tokio::sync::mpsc::Receiver<crate::workers::TaskResult>>,
+    pub result_rx: Option<tokio::sync::mpsc::Receiver<eggsec::dispatch::TaskResult>>,
     pub paused: bool,
     pub started_at: Option<std::time::Instant>,
 }

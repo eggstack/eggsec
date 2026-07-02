@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::workers::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{
+    send_progress, send_result, GraphQlResults, OAuthResults, TaskResult,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_graphql(
@@ -14,8 +16,7 @@ pub async fn run_graphql(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::tabs::graphql::GraphQlResults;
-    use eggsec::fuzzer::payloads::graphql::{
+    use crate::fuzzer::payloads::graphql::{
         GraphQLFuzzer, GraphQLTestResult, GraphQLVulnerability,
     };
     use std::time::Instant;
@@ -25,7 +26,7 @@ pub async fn run_graphql(
         let start = Instant::now();
         send_progress(&progress_tx, 0, 100).await;
 
-        let client = eggsec::utils::get_shared_insecure_http_client();
+        let client = crate::utils::get_shared_insecure_http_client();
 
         let mut fuzzer = GraphQLFuzzer::new(url.clone())
             .with_introspection(do_introspection)
@@ -200,15 +201,14 @@ pub async fn run_oauth(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::tabs::oauth::OAuthResults;
-    use eggsec::fuzzer::payloads::oauth::{OAuthFuzzer, OAuthTestResult};
+    use crate::fuzzer::payloads::oauth::{OAuthFuzzer, OAuthTestResult};
 
     let op_timeout = Duration::from_secs(300);
     tokio::time::timeout(op_timeout, async {
         send_progress(&progress_tx, 0, 100).await;
 
         let start_time = std::time::Instant::now();
-        let client = eggsec::utils::get_shared_insecure_http_client();
+        let client = crate::utils::get_shared_insecure_http_client();
 
         let default_client_id = client_id
             .clone()
@@ -315,8 +315,7 @@ pub async fn run_nse(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::tabs::nse::NseResults;
-    use eggsec_nse::NseExecutor;
+    use crate::nse::NseExecutor;
 
     send_progress(&progress_tx, 0, 100).await;
 
@@ -339,7 +338,7 @@ pub async fn run_nse(
                     anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e)
                 })?
             } else {
-                eggsec_nse::get_builtin_script(&script_clone)
+                crate::nse::get_builtin_script(&script_clone)
             };
 
             let output = executor

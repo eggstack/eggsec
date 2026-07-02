@@ -1,3 +1,5 @@
+use crate::dispatch::types::{send_progress, send_result, TaskResult};
+
 #[cfg(any(
     feature = "advanced-hunting",
     feature = "compliance",
@@ -8,16 +10,14 @@
     feature = "headless-browser",
     feature = "wireless"
 ))]
-use crate::workers::{send_progress, send_result, TaskResult};
-
 #[cfg(feature = "advanced-hunting")]
 pub async fn run_hunt_task(
     target: String,
-    config: eggsec::hunt::HuntConfig,
+    config: crate::hunt::HuntConfig,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::hunt::run_hunt;
+    use crate::hunt::run_hunt;
 
     send_progress(&progress_tx, 0, 5).await;
     let report = match tokio::time::timeout(
@@ -38,11 +38,11 @@ pub async fn run_hunt_task(
 #[cfg(feature = "headless-browser")]
 pub async fn run_browser_task(
     target: String,
-    config: eggsec::browser::BrowserConfig,
+    config: crate::browser::BrowserConfig,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::browser::run_browser_scan;
+    use crate::browser::run_browser_scan;
 
     send_progress(&progress_tx, 0, 3).await;
     let report = match tokio::time::timeout(
@@ -63,18 +63,18 @@ pub async fn run_browser_task(
 #[cfg(feature = "compliance")]
 pub async fn run_compliance_task(
     target: String,
-    framework: eggsec::compliance::ComplianceFramework,
+    framework: crate::compliance::ComplianceFramework,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::compliance::generate_compliance_report;
-    use eggsec::types::Severity;
+    use crate::compliance::generate_compliance_report;
+    use crate::types::Severity;
 
     send_progress(&progress_tx, 0, 3).await;
 
     let mut findings = Vec::new();
 
-    if let Ok(resp) = eggsec::utils::get_shared_http_client()
+    if let Ok(resp) = crate::utils::get_shared_http_client()
         .get(&target)
         .timeout(std::time::Duration::from_secs(10))
         .send()
@@ -213,7 +213,7 @@ pub async fn run_compliance_task(
 
 #[cfg(feature = "database")]
 pub async fn run_storage_task(
-    config: eggsec::storage::StorageConfig,
+    config: crate::storage::StorageConfig,
     mode: String,
     scan_id: Option<String>,
     cve_id: Option<String>,
@@ -221,9 +221,9 @@ pub async fn run_storage_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::findings::lifecycle::StoredFinding;
-    use eggsec::storage::init_storage;
-    use eggsec::storage::models::{ScanStatus, StoredScan};
+    use crate::findings::lifecycle::StoredFinding;
+    use crate::storage::init_storage;
+    use crate::storage::models::{ScanStatus, StoredScan};
 
     let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(
@@ -279,30 +279,30 @@ pub async fn run_storage_task(
         }
         "search_cve" => {
             if let Some(ref cve) = cve_id {
-                let finding = eggsec::findings::Finding {
+                let finding = crate::findings::Finding {
                     id: uuid::Uuid::new_v4().to_string(),
                     fingerprint: String::new(),
                     title: format!("CVE search: {}", cve),
                     description: format!("Search results for {}", cve),
-                    severity: eggsec::types::Severity::Medium,
-                    confidence: eggsec::findings::Confidence::Informational,
-                    finding_type: eggsec::findings::FindingType::ScanResult,
+                    severity: crate::types::Severity::Medium,
+                    confidence: crate::findings::Confidence::Informational,
+                    finding_type: crate::findings::FindingType::ScanResult,
                     cwe: None,
                     owasp: None,
                     cve: Some(cve.clone()),
-                    affected_asset: eggsec::findings::AffectedAsset {
+                    affected_asset: crate::findings::AffectedAsset {
                         asset_type: "cve_search".to_string(),
                         identifier: cve.clone(),
                         host: None,
                         port: None,
                         protocol: None,
                     },
-                    location: eggsec::findings::FindingLocation::default(),
+                    location: crate::findings::FindingLocation::default(),
                     evidence: vec![],
                     reproduction: None,
                     remediation: None,
                     discovered_at: chrono::Utc::now(),
-                    source: eggsec::findings::FindingSource {
+                    source: crate::findings::FindingSource {
                         tool: "eggsec".to_string(),
                         module: "storage".to_string(),
                         run_id: None,
@@ -359,7 +359,7 @@ pub async fn run_storage_task(
 
 #[cfg(feature = "external-integrations")]
 pub async fn run_integrations_task(
-    config: eggsec::integrations::IntegrationConfig,
+    config: crate::integrations::IntegrationConfig,
     mode: String,
     title: Option<String>,
     description: Option<String>,
@@ -369,22 +369,22 @@ pub async fn run_integrations_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::integrations::{Issue, IssueTracker};
+    use crate::integrations::{Issue, IssueTracker};
 
     let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(std::time::Duration::from_secs(60), async move {
         send_progress(&progress_tx, 0, 3).await;
 
         let tracker: Option<Box<dyn IssueTracker>> = if let Some(jira_config) = config.jira {
-            Some(Box::new(eggsec::integrations::jira::JiraClient::new(
+            Some(Box::new(crate::integrations::jira::JiraClient::new(
                 jira_config,
             )))
         } else if let Some(github_config) = config.github {
-            Some(Box::new(eggsec::integrations::github::GitHubClient::new(
+            Some(Box::new(crate::integrations::github::GitHubClient::new(
                 github_config,
             )))
         } else if let Some(gitlab_config) = config.gitlab {
-            Some(Box::new(eggsec::integrations::gitlab::GitLabClient::new(
+            Some(Box::new(crate::integrations::gitlab::GitLabClient::new(
                 gitlab_config,
             )))
         } else {
@@ -522,7 +522,7 @@ pub async fn run_workflow_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::workflow::WorkflowReport;
+    use crate::workflow::WorkflowReport;
 
     send_progress(&progress_tx, 0, 3).await;
 
@@ -549,11 +549,11 @@ pub async fn run_vuln_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::types::Severity;
-    use eggsec::vuln::asset::assess_asset;
-    use eggsec::vuln::prioritizer::prioritize_findings;
-    use eggsec::vuln::triage::triage_finding;
-    use eggsec::vuln::{AssetCriticality, CvssScore, ExploitInfo, Remediation, VulnAssessment};
+    use crate::types::Severity;
+    use crate::vuln::asset::assess_asset;
+    use crate::vuln::prioritizer::prioritize_findings;
+    use crate::vuln::triage::triage_finding;
+    use crate::vuln::{AssetCriticality, CvssScore, ExploitInfo, Remediation, VulnAssessment};
 
     let result_tx_timeout = result_tx.clone();
     match tokio::time::timeout(std::time::Duration::from_secs(120), async move {
@@ -745,7 +745,7 @@ pub async fn run_wireless_task(
 ) -> anyhow::Result<()> {
     send_progress(&progress_tx, 0, 2).await;
 
-    let scanner = eggsec::wireless::WirelessScanner::new();
+    let scanner = crate::wireless::WirelessScanner::new();
     let scanner = scanner.with_interface(interface);
     let scan_res = tokio::time::timeout(std::time::Duration::from_secs(30), scanner.scan(10))
         .await
@@ -775,10 +775,10 @@ pub async fn run_wireless_active_task(
     rate_limit: u64,
     dry_run: bool,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
-    result_tx: tokio::sync::mpsc::Sender<super::runner::TaskResult>,
+    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
-    use eggsec::wireless::active::ActiveAttackConfig;
+    use crate::wireless::active::attacks::deauth::{run_deauth, run_disassoc};
+    use crate::wireless::active::ActiveAttackConfig;
 
     send_progress(&progress_tx, 0, 2).await;
 
@@ -816,25 +816,19 @@ pub async fn run_wireless_active_task(
 
     match result {
         Ok(Ok(attack_result)) => {
-            send_result(
-                &result_tx,
-                super::runner::TaskResult::WirelessActive(attack_result),
-            )
-            .await;
+            send_result(&result_tx, TaskResult::WirelessActive(attack_result)).await;
         }
         Ok(Err(e)) => {
             send_result(
                 &result_tx,
-                super::runner::TaskResult::Error(format!("Active wireless attack failed: {e}")),
+                TaskResult::Error(format!("Active wireless attack failed: {e}")),
             )
             .await;
         }
         Err(_) => {
             send_result(
                 &result_tx,
-                super::runner::TaskResult::Error(
-                    "Active wireless attack timed out after 60s".to_string(),
-                ),
+                TaskResult::Error("Active wireless attack timed out after 60s".to_string()),
             )
             .await;
         }

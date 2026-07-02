@@ -1,4 +1,4 @@
-use crate::workers::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, send_result, TaskResult};
 #[cfg(feature = "stress-testing")]
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -14,7 +14,7 @@ pub async fn run_load_test(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::loadtest::runner::LoadTestRunner;
+    use crate::loadtest::runner::LoadTestRunner;
 
     let runner =
         LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
@@ -51,7 +51,7 @@ pub async fn run_stress_test(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::stress::{StressConfig, StressTest, StressType};
+    use crate::stress::{StressConfig, StressTest, StressType};
 
     let stress_type = match stress_type.as_str() {
         "syn" => StressType::Syn,
@@ -127,7 +127,7 @@ pub async fn run_packet_capture(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::packet::capture::CaptureBuilder;
+    use crate::packet::capture::CaptureBuilder;
     use pnet::datalink;
 
     let interfaces = datalink::interfaces();
@@ -234,8 +234,8 @@ pub async fn run_packet_traceroute(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::workers::TracerouteHopResult;
-    use eggsec::packet::traceroute::{Traceroute, TracerouteConfig};
+    use crate::dispatch::types::TracerouteHopResult;
+    use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     let _socket_addr = tokio::net::lookup_host((target.as_str(), 80))
         .await
         .map_err(|e| anyhow::anyhow!("Invalid target: {}", e))?

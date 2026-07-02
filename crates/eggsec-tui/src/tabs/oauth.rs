@@ -152,17 +152,7 @@ impl OAuthTab {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct OAuthResults {
-    pub target: String,
-    pub redirect_vulnerabilities: Vec<String>,
-    pub scope_vulnerabilities: Vec<String>,
-    pub state_vulnerabilities: Vec<String>,
-    pub grant_vulnerabilities: Vec<String>,
-    pub total_requests: usize,
-    pub errors: usize,
-    pub duration_ms: u64,
-}
+pub use eggsec::dispatch::OAuthResults;
 
 impl TabState for OAuthTab {
     tab_state_boilerplate!(OAuthTab, core: core);

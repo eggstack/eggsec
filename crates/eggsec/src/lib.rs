@@ -99,6 +99,7 @@ pub mod container;
 #[cfg(not(feature = "container"))]
 #[allow(dead_code)]
 mod container;
+pub mod dispatch;
 pub mod distributed;
 pub mod domain;
 pub mod error;

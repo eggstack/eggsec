@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::app::task_dispatcher::TuiTaskDispatcher;
-use crate::workers::TaskResult;
+use eggsec::dispatch::TaskResult;
 
 /// Per-task context for the TUI executor.
 ///
@@ -45,16 +45,12 @@ impl RuntimeTaskExecutor for TuiExecutor {
         _sink: RuntimeEventSink,
         _cancel: CancellationToken,
     ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static,
-        >,
+        Box<dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>,
     > {
-        let ctx = self.context.load();
-        let progress_tx = ctx.progress_tx.clone();
-        let result_tx = ctx.result_tx.clone();
+        let context = self.context.clone();
 
         Box::pin(async move {
-            let dispatcher = TuiTaskDispatcher::new(progress_tx, result_tx);
+            let dispatcher = TuiTaskDispatcher::new(context);
             dispatcher.dispatch(request).await
         })
     }

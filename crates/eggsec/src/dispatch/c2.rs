@@ -1,4 +1,4 @@
-use crate::workers::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, send_result, TaskResult};
 
 pub async fn run_c2_task(
     target: String,
@@ -7,7 +7,7 @@ pub async fn run_c2_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::c2::C2Scanner;
+    use crate::c2::C2Scanner;
 
     send_progress(&progress_tx, 0, 4).await;
 

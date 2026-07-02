@@ -115,17 +115,7 @@ impl GraphQlTab {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct GraphQlResults {
-    pub target: String,
-    pub introspection_enabled: bool,
-    pub depth_limit_bypassed: bool,
-    pub alias_overload_vulnerable: bool,
-    pub injection_findings: Vec<String>,
-    pub total_requests: usize,
-    pub errors: usize,
-    pub duration_ms: u64,
-}
+pub use eggsec::dispatch::GraphQlResults;
 
 impl TabState for GraphQlTab {
     tab_state_boilerplate!(GraphQlTab, core: core);

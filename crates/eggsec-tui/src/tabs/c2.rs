@@ -74,7 +74,6 @@ impl C2Tab {
     pub fn primary_target(&self) -> Option<String> {
         self.target().map(|s| s.to_string())
     }
-
 }
 
 impl Default for C2Tab {

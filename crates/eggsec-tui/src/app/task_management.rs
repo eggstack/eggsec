@@ -426,8 +426,15 @@ impl TaskBuilder for super::tabs::WirelessTab {
         #[cfg(feature = "wireless-advanced")]
         {
             if self.active_mode {
-                if let Some((interface, _attack_type, bssid, _client, _frame_count, _rate_limit, _dry_run)) =
-                    self.active_attack_config()
+                if let Some((
+                    interface,
+                    _attack_type,
+                    bssid,
+                    _client,
+                    _frame_count,
+                    _rate_limit,
+                    _dry_run,
+                )) = self.active_attack_config()
                 {
                     return Some(RunRequest {
                         task_kind: TaskKind::WirelessActive(
@@ -485,7 +492,11 @@ impl TaskBuilder for super::tabs::InterceptTab {
     fn build_run_request(&self) -> Option<RunRequest> {
         Some(RunRequest {
             task_kind: TaskKind::Intercept(eggsec_runtime::request::InterceptParams {
-                listen_port: self.listen_addr().split(':').last().and_then(|p| p.parse().ok()),
+                listen_port: self
+                    .listen_addr()
+                    .split(':')
+                    .last()
+                    .and_then(|p| p.parse().ok()),
                 target: self.primary_target(),
             }),
             requested_by: None,

@@ -1,7 +1,7 @@
-use crate::workers::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, send_result, TaskResult};
 
-fn empty_auth_report(target: String) -> eggsec::auth::AuthTestReport {
-    eggsec::auth::AuthTestReport {
+fn empty_auth_report(target: String) -> crate::auth::AuthTestReport {
+    crate::auth::AuthTestReport {
         target,
         tests_run: Vec::new(),
         brute_force: None,
@@ -29,7 +29,7 @@ pub async fn run_auth_task(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::auth::AuthEngine;
+    use crate::auth::AuthEngine;
 
     send_progress(&progress_tx, 0, 8).await;
 

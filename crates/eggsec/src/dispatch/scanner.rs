@@ -1,5 +1,5 @@
-use crate::workers::{send_progress, send_result, TaskResult};
-use eggsec::scanner::spoof::SpoofConfig;
+use crate::dispatch::types::{send_progress, send_result, TaskResult};
+use crate::scanner::spoof::SpoofConfig;
 
 pub async fn run_port_scan(
     target: String,
@@ -9,11 +9,11 @@ pub async fn run_port_scan(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::scanner::ports::scan_ports;
+    use crate::scanner::ports::scan_ports;
 
     send_progress(&progress_tx, 0, 100).await;
 
-    let port_list = eggsec::utils::parsing::parse_ports(&ports)?;
+    let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
     send_progress(&progress_tx, 10, 100).await;
@@ -22,7 +22,7 @@ pub async fn run_port_scan(
         std::time::Duration::from_secs(60),
         scan_ports(
             &target,
-            eggsec::scanner::ports::PortScanConfig {
+            crate::scanner::ports::PortScanConfig {
                 ports: port_list,
                 concurrency,
                 timeout_duration: timeout,
@@ -54,12 +54,12 @@ pub async fn run_endpoint_scan(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
+    use crate::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
 
     send_progress(&progress_tx, 0, 100).await;
 
     let endpoints: Vec<String> = if let Some(ref wl) = wordlist {
-        eggsec::scanner::wordlist::Wordlist::from_file(wl)
+        crate::scanner::wordlist::Wordlist::from_file(wl)
             .await?
             .into_endpoints()
     } else {
@@ -102,11 +102,11 @@ pub async fn run_fingerprint(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::scanner::fingerprint::fingerprint_services;
+    use crate::scanner::fingerprint::fingerprint_services;
 
     send_progress(&progress_tx, 0, 100).await;
 
-    let port_list = eggsec::utils::parsing::parse_ports(&ports)?;
+    let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
     let results = match tokio::time::timeout(

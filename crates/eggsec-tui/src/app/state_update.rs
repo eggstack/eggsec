@@ -5,7 +5,7 @@ use crate::app::tab_error::TabError;
     feature = "finding-workflow"
 ))]
 use crate::tabs::AppState;
-use crate::workers::TaskResult;
+use eggsec::dispatch::TaskResult;
 
 impl super::App {
     fn with_history<F>(&self, f: F)

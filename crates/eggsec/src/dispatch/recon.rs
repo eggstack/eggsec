@@ -1,6 +1,5 @@
-use crate::tabs::recon::ReconOptions;
-use crate::workers::{send_progress, send_result, TaskResult};
-use eggsec::cli::ScanProfile;
+use crate::cli::ScanProfile;
+use crate::dispatch::types::{send_progress, send_result, ReconOptions, TaskResult};
 
 pub async fn run_pipeline(
     target: String,
@@ -10,8 +9,8 @@ pub async fn run_pipeline(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::cli::{CommonHttpArgs, ScanArgs};
-    use eggsec::pipeline::Pipeline;
+    use crate::cli::{CommonHttpArgs, ScanArgs};
+    use crate::pipeline::Pipeline;
 
     let args = ScanArgs {
         target: target.clone(),
@@ -25,7 +24,7 @@ pub async fn run_pipeline(
         } else {
             Some(output_file)
         },
-        format: output_format.parse::<eggsec::cli::OutputFormat>().ok(),
+        format: output_format.parse::<crate::cli::OutputFormat>().ok(),
         web_types: None,
         common: CommonHttpArgs::default(),
         source_ip: None,
@@ -69,9 +68,9 @@ pub async fn run_recon(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::cli::ReconArgs;
-    use eggsec::config::EggsecConfig;
-    use eggsec::recon::run_full_recon;
+    use crate::cli::ReconArgs;
+    use crate::config::EggsecConfig;
+    use crate::recon::run_full_recon;
 
     send_progress(&progress_tx, 0, 100).await;
 

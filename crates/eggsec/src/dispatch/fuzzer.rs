@@ -1,4 +1,4 @@
-use crate::workers::{send_progress, send_result, TaskResult};
+use crate::dispatch::types::{send_progress, send_result, TaskResult};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_fuzz(
@@ -21,8 +21,8 @@ pub async fn run_fuzz(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
-    use eggsec::fuzzer::engine::FuzzEngine;
+    use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
+    use crate::fuzzer::engine::FuzzEngine;
 
     let mode_lower = mode.to_lowercase();
     let fuzz_mode = if mode_lower == "burst" {
@@ -110,7 +110,7 @@ pub async fn run_waf(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::waf::WafDetector;
+    use crate::waf::WafDetector;
 
     let detector = WafDetector::new()?;
     let detection =
@@ -123,8 +123,8 @@ pub async fn run_waf(
         };
 
     if bypass_mode {
-        use eggsec::cli::WafArgs;
-        use eggsec::waf::{get_auto_profile, BypassEngine, TestType};
+        use crate::cli::WafArgs;
+        use crate::waf::{get_auto_profile, BypassEngine, TestType};
 
         let header_bypass = techniques
             .iter()
@@ -151,7 +151,7 @@ pub async fn run_waf(
             verbose: false,
             quiet: false,
             output: None,
-            common: eggsec::cli::CommonHttpArgs::default(),
+            common: crate::cli::CommonHttpArgs::default(),
         };
 
         let bypass_engine = BypassEngine::new(&args, Some(get_auto_profile()), TestType::All)?;
@@ -188,8 +188,8 @@ pub async fn run_waf_stress(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use eggsec::cli::WafStressArgs;
-    use eggsec::fuzzer::run_waf_stress as fuzzer_run_waf_stress;
+    use crate::cli::WafStressArgs;
+    use crate::fuzzer::run_waf_stress as fuzzer_run_waf_stress;
 
     let args = WafStressArgs {
         url: target,
@@ -230,10 +230,6 @@ pub async fn run_waf_stress(
     tracing::debug!(
         "WAF stress completed (fuzzer_run_waf_stress returned no results, sending empty WafStress)"
     );
-    // Note: WafStress results are always empty because the underlying
-    // fuzzer_run_waf_stress function returns Result<(), Error> with no
-    // result data. This is a known design limitation; downstream
-    // consumers should treat WafStress(vec![]) as "completed with no findings".
     send_result(&result_tx, TaskResult::WafStress(vec![])).await;
     Ok(())
 }

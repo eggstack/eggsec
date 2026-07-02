@@ -1748,6 +1748,7 @@ dependencies = [
  "eggsec-mobile-lab",
  "eggsec-nse",
  "eggsec-output",
+ "eggsec-runtime",
  "eggsec-tool-core",
  "eggsec-web-proxy",
  "eventsource-stream",

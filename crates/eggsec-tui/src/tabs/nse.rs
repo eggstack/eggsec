@@ -116,14 +116,7 @@ impl NseTab {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct NseResults {
-    pub target: String,
-    pub script: String,
-    pub output: String,
-    pub errors: String,
-    pub success: bool,
-}
+pub use eggsec::dispatch::NseResults;
 
 impl Default for NseTab {
     fn default() -> Self {

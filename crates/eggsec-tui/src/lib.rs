@@ -8,7 +8,6 @@ pub mod tabs;
 mod theme;
 pub mod ui;
 pub mod utils;
-mod workers;
 
 #[cfg(test)]
 pub(crate) mod test_utils;

@@ -94,6 +94,7 @@ ed25519-dalek = "2"
 
 # Workspace crates
 eggsec-core = { path = "../eggsec-core" }
+eggsec-runtime = { path = "../eggsec-runtime" }
 eggsec-output = { path = "../eggsec-output" }
 eggsec-tool-core = { path = "../eggsec-tool-core" }
 eggsec-agent = { path = "../eggsec-agent" }
