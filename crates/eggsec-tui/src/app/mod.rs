@@ -103,26 +103,20 @@ pub struct App {
     /// Enforcement facade — owns evaluation, approval, and cached tokens.
     pub enforcement_state: enforcement_facade::EnforcementFacade,
 
-    // -- Phase 2: runtime lifecycle management --
-    /// Frontend-neutral runtime for task lifecycle (timeout, cancellation, events).
-    pub runtime: std::sync::Arc<eggsec_runtime::Runtime>,
-    /// Runtime session ID. Created lazily on first task submission, then reused.
-    pub runtime_session_id: Option<eggsec_runtime::SessionId>,
-    /// Pending session ID from async runtime creation. Polled in `update()` to
-    /// sync the session ID into `runtime_session_id` for subsequent tasks.
-    pub runtime_pending_session_id:
+    // -- Phase 5: runtime binding --
+    /// Canonical runtime binding. Always present after init; holds the
+    /// runtime handle. Session ID and event receiver are populated on
+    /// first task submission.
+    pub(crate) runtime_binding: RuntimeBinding,
+
+    // -- Async bridges (temporary, cleared after sync in update()) --
+    /// Pending session ID from async runtime creation.
+    pub(crate) runtime_pending_session_id:
         Option<std::sync::Arc<std::sync::Mutex<Option<eggsec_runtime::SessionId>>>>,
-    /// Pending task ID from async runtime submission. Polled in `update()` to
-    /// sync the runtime-assigned `TaskId` into `TaskState.task_id`.
-    pub runtime_pending_task_id:
-        Option<std::sync::Arc<std::sync::Mutex<Option<eggsec_runtime::TaskId>>>>,
-    /// Pending event receiver from async runtime subscription. Polled in
-    /// `update()` to store in `runtime_event_rx` for lifecycle event logging.
-    pub runtime_pending_event_rx:
+    /// Pending event receiver from async runtime subscription.
+    pub(crate) runtime_pending_event_rx:
         Option<std::sync::Arc<tokio::sync::Mutex<Option<eggsec_runtime::RuntimeEventReceiver>>>>,
-    /// Receiver for runtime lifecycle events. Drained in `update()` for logging
-    /// and (Phase 4) for forwarding progress/completion to TUI channels.
-    pub runtime_event_rx: Option<eggsec_runtime::RuntimeEventReceiver>,
+
     // -- Phase 3: executor context for dispatcher --
     /// Shared executor context holding per-task channel senders.
     /// The `TuiExecutor` reads this via `ArcSwap` before dispatching.
@@ -132,6 +126,20 @@ pub struct App {
     // -- Phase 4: runtime event reducer --
     /// Maps runtime TaskIds to originating tabs and applies lifecycle events.
     pub(crate) runtime_adapter: runtime_adapter::TuiRuntimeAdapter,
+}
+
+/// Canonical runtime binding for the TUI.
+///
+/// Always present after init; holds the runtime handle. Session ID and
+/// event receiver are populated on first task submission. The TUI queries
+/// this for task lifecycle state rather than maintaining duplicate fields.
+pub(crate) struct RuntimeBinding {
+    /// Runtime handle for task lifecycle management.
+    pub runtime: std::sync::Arc<eggsec_runtime::Runtime>,
+    /// Session ID bound to the TUI's execution surface. `None` until first task.
+    pub session_id: Option<eggsec_runtime::SessionId>,
+    /// Receiver for runtime lifecycle events. `None` until first task.
+    pub events: Option<eggsec_runtime::RuntimeEventReceiver>,
 }
 
 impl App {
@@ -157,6 +165,10 @@ impl App {
             },
         )));
         let executor = task_runtime::TuiExecutor::new(executor_context.clone());
+        let runtime = std::sync::Arc::new(eggsec_runtime::Runtime::new(
+            eggsec_runtime::RuntimeConfig::default(),
+            executor,
+        ));
         let mut app = Self {
             current_tab: Tab::Recon,
             should_quit: false,
@@ -183,15 +195,13 @@ impl App {
             enforcement_state: enforcement_facade::EnforcementFacade::new(
                 TuiEnforcementState::new(surface, loaded_scope, enforcement),
             ),
-            runtime: std::sync::Arc::new(eggsec_runtime::Runtime::new(
-                eggsec_runtime::RuntimeConfig::default(),
-                executor,
-            )),
-            runtime_session_id: None,
+            runtime_binding: RuntimeBinding {
+                runtime,
+                session_id: None,
+                events: None,
+            },
             runtime_pending_session_id: None,
-            runtime_pending_task_id: None,
             runtime_pending_event_rx: None,
-            runtime_event_rx: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
         };
@@ -257,6 +267,10 @@ impl App {
             },
         )));
         let executor = task_runtime::TuiExecutor::new(executor_context.clone());
+        let runtime = std::sync::Arc::new(eggsec_runtime::Runtime::new(
+            eggsec_runtime::RuntimeConfig::default(),
+            executor,
+        ));
         let mut app = Self {
             current_tab: restored_current_tab.unwrap_or(Tab::Recon),
             should_quit: false,
@@ -293,15 +307,13 @@ impl App {
                     enforcement,
                 ))
             },
-            runtime: std::sync::Arc::new(eggsec_runtime::Runtime::new(
-                eggsec_runtime::RuntimeConfig::default(),
-                executor,
-            )),
-            runtime_session_id: None,
+            runtime_binding: RuntimeBinding {
+                runtime,
+                session_id: None,
+                events: None,
+            },
             runtime_pending_session_id: None,
-            runtime_pending_task_id: None,
             runtime_pending_event_rx: None,
-            runtime_event_rx: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
         };
@@ -363,7 +375,7 @@ impl App {
     pub fn is_running(&self) -> bool {
         // A running task is also visible in the task_state regardless of which
         // tab is focused.
-        if self.task_state.task_id.is_some() || self.task_state.tab.is_some() {
+        if self.task_state.tab.is_some() {
             return true;
         }
         self.current_tab.as_tab_state(self).is_running()
@@ -889,7 +901,7 @@ impl App {
         // transient and saving mid-scan can write a snapshot that doesn't
         // match the disk reality. The save will fire on the next tick
         // after the task completes.
-        if self.task_state.task_id.is_some() || self.task_state.tab.is_some() {
+        if self.task_state.tab.is_some() {
             return;
         }
         let interval_secs = self.session_manager.auto_save_interval();

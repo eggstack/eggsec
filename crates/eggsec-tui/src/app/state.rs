@@ -52,16 +52,15 @@ pub struct QuickSwitchState {
     pub selected: usize,
 }
 
-/// Task runtime state
+/// Task runtime state (view-specific only).
 ///
-/// Phase 2: Task lifecycle is owned by `eggsec_runtime::Runtime`. The TUI stores
-/// a `TaskId` and consumes runtime events. Raw `JoinHandle`/`AbortHandle` fields
-/// are removed; `progress_rx`/`result_rx` remain as a temporary bridge until
-/// Phase 4 migrates the update loop to drain `RuntimeEventReceiver` directly.
+/// Task lifecycle is owned by `eggsec_runtime::Runtime`. The TUI tracks
+/// only view-specific state: which tab initiated the task, local pause
+/// control, and channel receivers bridging `eggsec::dispatch` results.
+/// Canonical task identity (`TaskId`) and status live in the runtime
+/// session; the TUI queries them via `RuntimeBinding`.
 #[derive(Default)]
 pub struct TaskState {
-    /// Runtime-assigned task identifier. `Some` while a task is active.
-    pub task_id: Option<eggsec_runtime::TaskId>,
     /// Which tab initiated the active task.
     pub tab: Option<Tab>,
     /// Channel receivers bridging `eggsec::dispatch` progress to the TUI.
@@ -157,7 +156,6 @@ mod tests {
     #[test]
     fn task_state_defaults() {
         let state = TaskState::default();
-        assert!(state.task_id.is_none());
         assert!(state.tab.is_none());
         assert!(state.progress_rx.is_none());
         assert!(state.result_rx.is_none());

@@ -19,11 +19,11 @@ impl super::App {
     pub(super) fn update(&mut self) {
         let mut dirty = false;
 
-        // Sync runtime session_id from async creation (Phase 2 bridge).
+        // Sync runtime session_id from async creation (Phase 5 bridge).
         if let Some(holder) = self.runtime_pending_session_id.take() {
             let extracted = holder.try_lock().ok().and_then(|mut guard| guard.take());
             if let Some(sid) = extracted {
-                self.runtime_session_id = Some(sid);
+                self.runtime_binding.session_id = Some(sid);
                 tracing::debug!("Runtime session created");
             } else {
                 // Still pending or lock held, put it back for next poll.
@@ -31,27 +31,11 @@ impl super::App {
             }
         }
 
-        // Sync runtime task_id to TaskState (Phase 2 bridge).
-        if let Some(holder) = self.runtime_pending_task_id.take() {
-            let extracted = holder.try_lock().ok().and_then(|mut guard| guard.take());
-            if let Some(tid) = extracted {
-                self.task_state.task_id = Some(tid);
-                // Phase 4: register task-tab mapping in the runtime adapter.
-                if let Some(tab) = self.task_state.tab {
-                    self.runtime_adapter.register_task(tid, tab);
-                }
-                tracing::debug!("Runtime task_id synced");
-            } else {
-                // Still pending or lock held, put it back for next poll.
-                self.runtime_pending_task_id = Some(holder);
-            }
-        }
-
-        // Sync runtime event receiver from async subscription (Phase 2 bridge).
+        // Sync runtime event receiver from async subscription (Phase 5 bridge).
         if let Some(holder) = self.runtime_pending_event_rx.take() {
             let extracted = holder.try_lock().ok().and_then(|mut guard| guard.take());
             if let Some(rx) = extracted {
-                self.runtime_event_rx = Some(rx);
+                self.runtime_binding.events = Some(rx);
                 tracing::debug!("Runtime event receiver subscribed");
             } else {
                 // Still pending or lock held, put it back for next poll.
@@ -61,7 +45,10 @@ impl super::App {
 
         // Phase 4: drain runtime lifecycle events through the adapter.
         // Two-phase reduce/apply to avoid borrow conflicts (adapter lives inside App).
-        let actions = self.runtime_adapter.drain_and_reduce(&mut self.runtime_event_rx);
+        let current_task_tab = self.task_state.tab;
+        let actions = self
+            .runtime_adapter
+            .drain_and_reduce(&mut self.runtime_binding.events, current_task_tab);
         if !actions.is_empty() {
             if super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, self) {
                 dirty = true;
@@ -139,7 +126,6 @@ impl super::App {
             if is_closed {
                 self.task_state.result_rx = None;
                 self.task_state.tab = None;
-                self.task_state.task_id = None;
                 self.task_state.started_at = None;
                 self.task_state.paused = false;
             }

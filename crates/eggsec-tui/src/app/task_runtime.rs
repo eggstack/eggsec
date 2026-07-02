@@ -57,9 +57,13 @@ impl RuntimeTaskExecutor for TuiExecutor {
 }
 
 impl super::App {
+    /// Check if there is an active (non-completed) task.
+    ///
+    /// Uses channel liveness and session binding rather than storing a
+    /// redundant `TaskId` — the canonical task identity lives in the
+    /// runtime session.
     pub fn has_active_task(&self) -> bool {
-        self.task_state.task_id.is_some()
-            || self.task_state.tab.is_some()
+        self.task_state.tab.is_some()
             || self.task_state.progress_rx.is_some()
             || self.task_state.result_rx.is_some()
     }
@@ -82,7 +86,7 @@ impl super::App {
         let tab_name = self.task_state.tab.map(|t| t.title()).unwrap_or("Task");
         let state = if self.task_state.paused {
             "paused"
-        } else if self.task_state.task_id.is_some() {
+        } else if self.task_state.result_rx.is_some() || self.task_state.progress_rx.is_some() {
             "running"
         } else {
             "stopping"
@@ -106,20 +110,19 @@ impl super::App {
 
     /// Cancel the active task via the runtime and clear TUI state.
     fn clear_task_runtime(&mut self) {
-        if let (Some(session_id), Some(task_id)) =
-            (self.runtime_session_id, self.task_state.task_id)
-        {
-            let runtime = self.runtime.clone();
+        if let Some(session_id) = self.runtime_binding.session_id {
+            let runtime = self.runtime_binding.runtime.clone();
             let sid = session_id;
-            let tid = task_id;
             tokio::spawn(async move {
-                if let Err(e) = runtime.cancel(sid, tid).await {
-                    tracing::debug!("Runtime cancel failed (may already be completed): {}", e);
+                if let Err(e) = runtime.cancel_active(sid).await {
+                    tracing::debug!(
+                        "Runtime cancel_active failed (may already be completed): {}",
+                        e
+                    );
                 }
             });
         }
 
-        self.task_state.task_id = None;
         self.task_state.tab = None;
         if let Some(rx) = self.task_state.progress_rx.take() {
             drop(rx);
@@ -190,11 +193,8 @@ impl super::App {
             self.executor_context.store(Arc::new(ctx));
 
             // Submit to runtime for lifecycle tracking + execution.
-            let pending_task_id = Arc::new(std::sync::Mutex::new(None));
-            self.runtime_pending_task_id = Some(pending_task_id.clone());
-
-            let runtime = self.runtime.clone();
-            let session_id = self.runtime_session_id;
+            let runtime = self.runtime_binding.runtime.clone();
+            let session_id = self.runtime_binding.session_id;
             let pending_session_id =
                 Arc::new(std::sync::Mutex::new(None::<eggsec_runtime::SessionId>));
             let pending_session_id_clone = pending_session_id.clone();
@@ -206,7 +206,10 @@ impl super::App {
                 let session_id = match session_id {
                     Some(sid) => sid,
                     None => match runtime
-                        .create_session(eggsec_runtime::SessionOptions::default())
+                        .create_session(
+                            eggsec_runtime::SessionOptions::default(),
+                            eggsec_runtime::RuntimeSurface::TuiManual,
+                        )
                         .await
                     {
                         Ok(sid) => {
@@ -226,7 +229,6 @@ impl super::App {
 
                 match runtime.submit(session_id, request).await {
                     Ok(task_id) => {
-                        *pending_task_id.lock().unwrap() = Some(task_id);
                         tracing::debug!("Task submitted to runtime: {}", task_id);
                     }
                     Err(e) => {

@@ -76,11 +76,21 @@ impl TuiRuntimeAdapter {
 
     /// Reduce a runtime event into zero or more TuiActions.
     ///
+    /// `current_task_tab` is the TUI's knowledge of which tab initiated the
+    /// current task (from `task_state.tab`). On `TaskStarted`, if no mapping
+    /// exists yet, the adapter auto-registers using this tab.
+    ///
     /// This method only borrows `&mut self` (the adapter), not `App`,
     /// so it avoids borrow-checker conflicts.
-    pub fn reduce(&mut self, event: RuntimeEvent) -> Vec<TuiAction> {
+    pub fn reduce(&mut self, event: RuntimeEvent, current_task_tab: Option<Tab>) -> Vec<TuiAction> {
         match event {
             RuntimeEvent::TaskStarted { task_id, .. } => {
+                // Auto-register on first TaskStarted if no mapping exists.
+                if self.tab_for_task(&task_id).is_none() {
+                    if let Some(tab) = current_task_tab {
+                        self.register_task(task_id, tab);
+                    }
+                }
                 if let Some(tab) = self.tab_for_task(&task_id) {
                     tracing::debug!(
                         task_id = %task_id,
@@ -211,9 +221,8 @@ impl TuiRuntimeAdapter {
                     dirty = true;
                 }
                 TuiAction::TabError(mut tab, message) => {
-                    tab.as_tab_state_mut(app).set_error(
-                        crate::app::tab_error::TabError::Target(message),
-                    );
+                    tab.as_tab_state_mut(app)
+                        .set_error(crate::app::tab_error::TabError::Target(message));
                     dirty = true;
                 }
                 TuiAction::TabCancelled(mut tab, _reason) => {
@@ -239,6 +248,7 @@ impl TuiRuntimeAdapter {
     pub fn drain_and_reduce(
         &mut self,
         rx: &mut Option<eggsec_runtime::RuntimeEventReceiver>,
+        current_task_tab: Option<Tab>,
     ) -> Vec<TuiAction> {
         let mut all_actions = Vec::new();
 
@@ -246,7 +256,7 @@ impl TuiRuntimeAdapter {
         let mut rx_owned = rx.take();
         if let Some(ref mut rx_inner) = rx_owned {
             while let Some(event) = rx_inner.try_recv() {
-                let actions = self.reduce(event);
+                let actions = self.reduce(event, current_task_tab);
                 all_actions.extend(actions);
             }
         }
@@ -300,14 +310,11 @@ impl TabProgressRouter for Tab {
                     .scan
                     .stages
                     .iter()
-                    .filter(|s| {
-                        matches!(
-                            s.status,
-                            crate::tabs::StageStatus::Completed
-                        )
-                    })
+                    .filter(|s| matches!(s.status, crate::tabs::StageStatus::Completed))
                     .count() as u64;
-                app.tabs.scan.update_progress(completed_stages, total_stages);
+                app.tabs
+                    .scan
+                    .update_progress(completed_stages, total_stages);
             }
             #[cfg(feature = "wireless")]
             Tab::Wireless => {
@@ -363,13 +370,13 @@ mod tests {
             task_id,
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert_eq!(actions.len(), 1);
         assert!(matches!(actions[0], TuiAction::TabStarted(Tab::Recon, _)));
     }
 
     #[test]
-    fn reduce_task_started_without_mapping() {
+    fn reduce_task_started_without_mapping_auto_registers() {
         let mut adapter = TuiRuntimeAdapter::new();
         let task_id = TaskId::new();
 
@@ -378,8 +385,14 @@ mod tests {
             task_id,
         };
 
-        let actions = adapter.reduce(event);
+        // Without fallback tab: no auto-registration.
+        let actions = adapter.reduce(event.clone(), None);
         assert!(actions.is_empty());
+
+        // With fallback tab: auto-registers and returns TabStarted.
+        let actions = adapter.reduce(event, Some(Tab::Recon));
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(actions[0], TuiAction::TabStarted(Tab::Recon, _)));
     }
 
     #[test]
@@ -399,9 +412,11 @@ mod tests {
             },
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert_eq!(actions.len(), 1);
-        assert!(matches!(&actions[0], TuiAction::TabError(Tab::Recon, msg) if msg == "Connection refused"));
+        assert!(
+            matches!(&actions[0], TuiAction::TabError(Tab::Recon, msg) if msg == "Connection refused")
+        );
         assert!(!adapter.has_tasks());
     }
 
@@ -418,7 +433,7 @@ mod tests {
             reason: Some("User cancelled".to_string()),
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert_eq!(actions.len(), 1);
         assert!(matches!(
             &actions[0],
@@ -440,9 +455,12 @@ mod tests {
             outcome: eggsec_runtime::TaskOutcome::Empty,
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert_eq!(actions.len(), 1);
-        assert!(matches!(&actions[0], TuiAction::TabCompleted(Tab::Recon, _)));
+        assert!(matches!(
+            &actions[0],
+            TuiAction::TabCompleted(Tab::Recon, _)
+        ));
         assert!(!adapter.has_tasks());
     }
 
@@ -463,7 +481,7 @@ mod tests {
             },
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert_eq!(actions.len(), 1);
         assert!(matches!(
             &actions[0],
@@ -485,7 +503,7 @@ mod tests {
             message: "Processing...".to_string(),
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert!(actions.is_empty());
     }
 
@@ -498,7 +516,7 @@ mod tests {
             session_id: eggsec_runtime::SessionId::new(),
         };
 
-        let actions = adapter.reduce(event);
+        let actions = adapter.reduce(event, None);
         assert!(actions.is_empty());
     }
 

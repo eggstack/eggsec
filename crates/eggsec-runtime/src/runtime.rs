@@ -3,13 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::{broadcast, Mutex};
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress, TaskStatus};
 use crate::ids::{SessionId, TaskId};
-use crate::request::RunRequest;
-use crate::session::{SessionSnapshot, TaskSnapshot};
+use crate::request::{RunRequest, RuntimeSurface};
+use crate::session::{RuntimeSession, SessionSnapshot};
 use crate::RuntimeError;
 
 /// Configuration for the runtime.
@@ -141,23 +140,8 @@ pub trait RuntimeTaskExecutor: Send + Sync + 'static {
     >;
 }
 
-/// In-memory task record.
-struct TaskRecord {
-    request: RunRequest,
-    status: TaskStatus,
-    progress: Option<TaskProgress>,
-    last_error: Option<String>,
-    abort: Option<CancellationToken>,
-    _handle: Option<JoinHandle<()>>,
-}
-
-/// In-memory session record.
-struct SessionRecord {
-    tasks: HashMap<TaskId, TaskRecord>,
-}
-
 struct RuntimeState {
-    sessions: HashMap<SessionId, SessionRecord>,
+    sessions: HashMap<SessionId, RuntimeSession>,
     config: RuntimeConfig,
     event_tx: broadcast::Sender<RuntimeEvent>,
     executor: Arc<dyn RuntimeTaskExecutor>,
@@ -168,6 +152,11 @@ struct RuntimeState {
 /// The runtime manages sessions, tasks, timeouts, cancellation, and event
 /// delivery. Frontends submit requests and consume events without holding raw
 /// task handles.
+///
+/// Sessions are bound to an execution surface at creation time, establishing
+/// the trust boundary for policy enforcement. Each session owns its canonical
+/// task state; frontends query via `snapshot()` rather than holding duplicate
+/// lifecycle state.
 pub struct Runtime {
     state: Arc<Mutex<RuntimeState>>,
 }
@@ -186,23 +175,39 @@ impl Runtime {
         }
     }
 
-    /// Create a new session. Returns the session ID.
+    /// Create a new session bound to the given execution surface.
+    ///
+    /// The surface establishes the trust boundary for this session:
+    /// - `TuiManual` / `CliManual`: interactive manual surfaces
+    /// - `McpServer` / `SecurityAgent` / `RestApi` / `GrpcApi`: strict programmatic surfaces
+    /// - `CiStrict`: CI pipeline surface
     pub async fn create_session(
         &self,
         _options: SessionOptions,
+        surface: RuntimeSurface,
     ) -> Result<SessionId, RuntimeError> {
         let session_id = SessionId::new();
         let mut state = self.state.lock().await;
-        state.sessions.insert(
-            session_id,
-            SessionRecord {
-                tasks: HashMap::new(),
-            },
-        );
+        state
+            .sessions
+            .insert(session_id, RuntimeSession::new(session_id, surface));
         let _ = state
             .event_tx
             .send(RuntimeEvent::SessionCreated { session_id });
         Ok(session_id)
+    }
+
+    /// Get the execution surface for a session.
+    pub async fn session_surface(
+        &self,
+        session_id: SessionId,
+    ) -> Result<RuntimeSurface, RuntimeError> {
+        let state = self.state.lock().await;
+        let session = state
+            .sessions
+            .get(&session_id)
+            .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
+        Ok(session.execution_surface())
     }
 
     /// Submit a task to a session. Returns the task ID.
@@ -256,7 +261,7 @@ impl Runtime {
 
             state.sessions.get_mut(&session_id).unwrap().tasks.insert(
                 task_id,
-                TaskRecord {
+                crate::session::TaskRecord {
                     request: request.clone(),
                     status: TaskStatus::Queued,
                     progress: None,
@@ -413,6 +418,41 @@ impl Runtime {
         Ok(())
     }
 
+    /// Cancel the active (non-terminal) task in a session.
+    ///
+    /// This is a convenience method for single-active-task sessions (the
+    /// common case). Returns `Ok(())` if a task was cancelled, or
+    /// `Ok(())` with no side effects if no active task exists.
+    pub async fn cancel_active(&self, session_id: SessionId) -> Result<(), RuntimeError> {
+        let mut state = self.state.lock().await;
+        let session = state
+            .sessions
+            .get_mut(&session_id)
+            .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
+
+        let active_id = session
+            .tasks
+            .iter()
+            .find(|(_, t)| !t.status.is_terminal())
+            .map(|(id, _)| *id);
+
+        if let Some(task_id) = active_id {
+            if let Some(task) = session.tasks.get_mut(&task_id) {
+                task.status = TaskStatus::Cancelled;
+                if let Some(cancel) = task.abort.take() {
+                    cancel.cancel();
+                }
+                let _ = state.event_tx.send(RuntimeEvent::TaskCancelled {
+                    session_id,
+                    task_id,
+                    reason: Some("cancelled by user".into()),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     /// Get a snapshot of a session's state.
     pub async fn snapshot(&self, session_id: SessionId) -> Result<SessionSnapshot, RuntimeError> {
         let state = self.state.lock().await;
@@ -421,30 +461,7 @@ impl Runtime {
             .get(&session_id)
             .ok_or_else(|| RuntimeError::SessionNotFound(session_id.to_string()))?;
 
-        let mut active_tasks = Vec::new();
-        let mut completed_tasks = Vec::new();
-
-        for (task_id, task) in &session.tasks {
-            let snapshot = TaskSnapshot {
-                task_id: *task_id,
-                status: task.status.clone(),
-                request_summary: crate::session::summarize_request(&task.request.task_kind),
-                progress: task.progress.clone(),
-                last_error: task.last_error.clone(),
-            };
-            if task.status.is_terminal() {
-                completed_tasks.push(snapshot);
-            } else {
-                active_tasks.push(snapshot);
-            }
-        }
-
-        Ok(SessionSnapshot {
-            session_id,
-            active_tasks,
-            completed_tasks,
-            capabilities: crate::capabilities::RuntimeCapabilities::default(),
-        })
+        Ok(session.snapshot())
     }
 
     /// Subscribe to runtime events.
@@ -554,7 +571,7 @@ mod tests {
     async fn create_session_and_submit() {
         let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -568,7 +585,7 @@ mod tests {
     async fn task_completes_immediately() {
         let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -586,7 +603,7 @@ mod tests {
     async fn cancel_task() {
         let runtime = Runtime::new(RuntimeConfig::default(), SlowExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -609,7 +626,7 @@ mod tests {
         };
         let runtime = Runtime::new(config, SlowExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -627,7 +644,7 @@ mod tests {
     async fn failed_task() {
         let runtime = Runtime::new(RuntimeConfig::default(), FailingExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -646,7 +663,7 @@ mod tests {
         let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
         let mut rx = runtime.subscribe().await;
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -687,7 +704,7 @@ mod tests {
     async fn cancel_replaces_existing_task() {
         let runtime = Runtime::new(RuntimeConfig::default(), SlowExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let _task1 = runtime.submit(session_id, test_request()).await.unwrap();
@@ -714,7 +731,7 @@ mod tests {
     async fn cancel_completed_task_errors() {
         let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
         let session_id = runtime
-            .create_session(SessionOptions::default())
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
             .await
             .unwrap();
         let task_id = runtime.submit(session_id, test_request()).await.unwrap();
@@ -723,5 +740,114 @@ mod tests {
 
         let result = runtime.cancel(session_id, task_id).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn session_surface_query() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        let surface = runtime.session_surface(session_id).await.unwrap();
+        assert_eq!(surface, RuntimeSurface::McpServer);
+    }
+
+    #[tokio::test]
+    async fn snapshot_includes_surface() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::RestApi)
+            .await
+            .unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert_eq!(snapshot.surface, RuntimeSurface::RestApi);
+    }
+
+    #[tokio::test]
+    async fn sessions_without_tui() {
+        // Verify that runtime sessions can be created, submitted, and
+        // queried entirely without any TUI dependency.
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::CliManual)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            runtime.session_surface(session_id).await.unwrap(),
+            RuntimeSurface::CliManual
+        );
+
+        let task_id = runtime.submit(session_id, test_request()).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+        assert_eq!(snapshot.completed_tasks[0].task_id, task_id);
+        assert_eq!(snapshot.surface, RuntimeSurface::CliManual);
+    }
+
+    #[tokio::test]
+    async fn multiple_sessions_independent() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let s1 = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let s2 = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::McpServer)
+            .await
+            .unwrap();
+
+        runtime.submit(s1, test_request()).await.unwrap();
+        runtime.submit(s2, test_request()).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let snap1 = runtime.snapshot(s1).await.unwrap();
+        let snap2 = runtime.snapshot(s2).await.unwrap();
+
+        assert_eq!(snap1.surface, RuntimeSurface::TuiManual);
+        assert_eq!(snap2.surface, RuntimeSurface::McpServer);
+        assert_eq!(snap1.completed_tasks.len(), 1);
+        assert_eq!(snap2.completed_tasks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn cancel_active_cancels_running_task() {
+        let runtime = Runtime::new(RuntimeConfig::default(), SlowExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+        let _task_id = runtime.submit(session_id, test_request()).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        runtime.cancel_active(session_id).await.unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.active_tasks.is_empty());
+        assert_eq!(snapshot.completed_tasks.len(), 1);
+        assert_eq!(snapshot.completed_tasks[0].status, TaskStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn cancel_active_noop_when_no_active_task() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        // No tasks submitted — cancel_active should succeed without error.
+        runtime.cancel_active(session_id).await.unwrap();
+
+        let snapshot = runtime.snapshot(session_id).await.unwrap();
+        assert!(snapshot.active_tasks.is_empty());
+        assert!(snapshot.completed_tasks.is_empty());
     }
 }
