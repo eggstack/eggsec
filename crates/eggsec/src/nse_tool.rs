@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 
 use crate::error::EggsecError;
-use crate::output::AgentSeverity;
+use crate::output::Severity as AgentSeverity;
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,
     ToolCategory,

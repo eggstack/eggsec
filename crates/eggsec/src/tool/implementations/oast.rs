@@ -361,7 +361,7 @@ impl SecurityTool for OastTool {
             parameters: vec![],
             examples: vec![],
             attack_surface: vec![crate::tool::traits::AttackSurface::Internal],
-            severity_potential: vec![crate::output::AgentSeverity::Critical],
+            severity_potential: vec![crate::output::Severity::Critical],
             prerequisites: vec![],
             estimated_duration_ms: 60000,
         }]

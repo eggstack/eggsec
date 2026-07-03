@@ -244,9 +244,10 @@ impl Selector {
 
     pub fn prev(&mut self) {
         if self.expanded && !self.items.is_empty() {
-            self.selected = self.selected.saturating_sub(1);
-            if self.selected == 0 && !self.items.is_empty() {
+            if self.selected == 0 {
                 self.selected = self.items.len() - 1;
+            } else {
+                self.selected -= 1;
             }
         }
     }

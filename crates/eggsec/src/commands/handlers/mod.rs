@@ -102,7 +102,6 @@ use crate::cli::Cli;
 use crate::cli::Commands;
 use crate::config::OperationDescriptor;
 use crate::config::{EggsecConfig, ExecutionProfile, ExecutionSurface, Scope};
-use crate::error::Result as ErrorResult;
 use anyhow::Result;
 
 pub struct CommandContext {
@@ -156,40 +155,6 @@ impl CommandContext {
         self
     }
 
-    /// Set execution profile directly. Transitional — prefer [`Self::with_execution_surface`]
-    /// for new call sites so that the surface-to-profile derivation is centralized.
-    #[deprecated(
-        note = "Transitional — prefer with_execution_surface() for new call sites so that surface-to-profile derivation is centralized. Test-only usage."
-    )]
-    pub fn with_execution_profile(mut self, profile: ExecutionProfile) -> Self {
-        self.execution_profile = profile;
-        self.enforcement = match profile {
-            ExecutionProfile::ManualPermissive => {
-                crate::config::EnforcementContext::manual_permissive(
-                    self.config.execution_policy.clone(),
-                    self.enforcement.loaded_scope.clone(),
-                )
-            }
-            ExecutionProfile::ManualGuarded => crate::config::EnforcementContext::manual_guarded(
-                self.config.execution_policy.clone(),
-                self.enforcement.loaded_scope.clone(),
-            ),
-            ExecutionProfile::CiStrict => crate::config::EnforcementContext::ci_strict(
-                self.config.execution_policy.clone(),
-                self.enforcement.loaded_scope.clone(),
-            ),
-            ExecutionProfile::McpStrict => crate::config::EnforcementContext::mcp_strict(
-                self.config.execution_policy.clone(),
-                self.enforcement.loaded_scope.clone(),
-            ),
-            ExecutionProfile::AgentStrict => crate::config::EnforcementContext::agent_strict(
-                self.config.execution_policy.clone(),
-                self.enforcement.loaded_scope.clone(),
-            ),
-        };
-        self
-    }
-
     /// Set execution surface, deriving both the profile and enforcement context
     /// from the surface. This is the preferred way to configure entrypoint semantics.
     pub fn with_execution_surface(mut self, surface: ExecutionSurface) -> Self {
@@ -236,20 +201,6 @@ impl CommandContext {
         target: Option<String>,
     ) -> Option<OperationDescriptor> {
         crate::commands::registry::build_descriptor_for_command(command_id, target)
-    }
-
-    #[deprecated(
-        note = "Unused legacy helper. Scope checks are centralized in EnforcementContext::evaluate()."
-    )]
-    pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()> {
-        crate::utils::check_scope_from_url(&self.scope, url)
-    }
-
-    #[deprecated(
-        note = "Unused legacy helper. Scope checks are centralized in EnforcementContext::evaluate()."
-    )]
-    pub fn ensure_scope(&self, target: &str) -> ErrorResult<()> {
-        crate::utils::check_scope(&self.scope, target)
     }
 
     /// Evaluate an operation against the current execution policy and scope.
@@ -956,16 +907,16 @@ mod tests {
     }
 
     #[test]
-    fn with_execution_profile_sets_profile() {
+    fn with_execution_surface_sets_profile() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
-            .with_execution_profile(ExecutionProfile::McpStrict);
+            .with_execution_surface(crate::config::ExecutionSurface::McpServer);
         assert_eq!(ctx.execution_profile, ExecutionProfile::McpStrict);
     }
 
     #[test]
     fn mcp_strict_denies_requires_explicit_scope_without_scope() {
         let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false)
-            .with_execution_profile(ExecutionProfile::McpStrict);
+            .with_execution_surface(crate::config::ExecutionSurface::McpServer);
         let desc = OperationDescriptor {
             operation: "scan".to_string(),
             mode: OperationMode::StandardAssessment,
@@ -985,7 +936,7 @@ mod tests {
     #[test]
     fn agent_strict_denies_requires_explicit_scope_without_scope() {
         let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false)
-            .with_execution_profile(ExecutionProfile::AgentStrict);
+            .with_execution_surface(crate::config::ExecutionSurface::SecurityAgent);
         let desc = OperationDescriptor {
             operation: "scan".to_string(),
             mode: OperationMode::StandardAssessment,
@@ -1031,7 +982,7 @@ mod tests {
     #[test]
     fn command_context_with_mcp_strict_profile_builds_mcp_enforcement() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
-            .with_execution_profile(ExecutionProfile::McpStrict);
+            .with_execution_surface(crate::config::ExecutionSurface::McpServer);
         assert_eq!(
             ctx.enforcement.execution_profile,
             ExecutionProfile::McpStrict
@@ -1318,7 +1269,7 @@ mod tests {
         // All overrides attached; they must not be honored.
         let scope = localhost_scope(); // positive rule -> out-of-scope target will be confirmable only for permissive
         let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
-            .with_execution_profile(ExecutionProfile::ManualGuarded)
+            .with_execution_surface(crate::config::ExecutionSurface::CliManualStrict)
             .with_manual_override(crate::config::ManualOverride {
                 allow_out_of_scope: true,
                 allow_explicit_exclusion: true,
@@ -1362,7 +1313,7 @@ mod tests {
     fn ci_strict_with_all_overrides_still_denies_require_confirmation() {
         let scope = localhost_scope();
         let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
-            .with_execution_profile(ExecutionProfile::CiStrict)
+            .with_execution_surface(crate::config::ExecutionSurface::Ci)
             .with_manual_override(crate::config::ManualOverride {
                 allow_out_of_scope: true,
                 allow_explicit_exclusion: true,
@@ -1396,7 +1347,7 @@ mod tests {
     fn mcp_strict_via_command_context_ignores_overrides_and_denies_require_confirmation() {
         let scope = localhost_scope();
         let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
-            .with_execution_profile(ExecutionProfile::McpStrict)
+            .with_execution_surface(crate::config::ExecutionSurface::McpServer)
             .with_manual_override(crate::config::ManualOverride {
                 allow_out_of_scope: true,
                 assume_yes: true,
@@ -1432,7 +1383,7 @@ mod tests {
     fn agent_strict_via_command_context_ignores_overrides_and_denies_require_confirmation() {
         let scope = localhost_scope();
         let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
-            .with_execution_profile(ExecutionProfile::AgentStrict)
+            .with_execution_surface(crate::config::ExecutionSurface::SecurityAgent)
             .with_manual_override(crate::config::ManualOverride {
                 allow_out_of_scope: true,
                 assume_yes: true,
@@ -1582,7 +1533,7 @@ mod tests {
     #[test]
     fn manual_guarded_all_overrides_cannot_override_scope_miss() {
         let ctx = make_ctx(ExecutionPolicy::default(), localhost_scope(), false)
-            .with_execution_profile(ExecutionProfile::ManualGuarded)
+            .with_execution_surface(crate::config::ExecutionSurface::CliManualStrict)
             .with_manual_override(crate::config::ManualOverride {
                 allow_out_of_scope: true,
                 allow_high_risk: true,
@@ -1612,7 +1563,7 @@ mod tests {
     fn agent_strict_overrides_ignored_and_deny_message_unconditional() {
         let scope = localhost_scope();
         let ctx = make_ctx(ExecutionPolicy::default(), scope, false)
-            .with_execution_profile(ExecutionProfile::AgentStrict)
+            .with_execution_surface(crate::config::ExecutionSurface::SecurityAgent)
             .with_manual_override(crate::config::ManualOverride {
                 allow_out_of_scope: true,
                 allow_high_risk: true,

@@ -197,15 +197,12 @@ pub(crate) fn task_result_to_envelope(result: &eggsec::dispatch::TaskResult) -> 
         #[cfg(feature = "wireless-advanced")]
         TaskResult::WirelessActive(r) => (
             "wireless-active".into(),
-            Some(format!("success: {}", r.success)),
+            Some(format!("{} frames sent", r.frames_sent)),
         ),
         #[cfg(feature = "db-pentest")]
         TaskResult::DbPentest(r) => ("db-pentest".into(), Some(format!("{}", r.db_type))),
         #[cfg(feature = "web-proxy")]
-        TaskResult::Intercept(r) => (
-            "intercept".into(),
-            Some(format!("{} requests", r.requests.len())),
-        ),
+        TaskResult::Intercept(r) => ("intercept".into(), Some(format!("{} flows", r.flows.len()))),
         #[cfg(feature = "c2")]
         TaskResult::C2(r) => ("c2".into(), Some(format!("{}", r.profile))),
     };

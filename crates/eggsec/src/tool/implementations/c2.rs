@@ -300,8 +300,8 @@ impl SecurityTool for C2Tool {
             ],
             attack_surface: vec![AttackSurface::Network],
             severity_potential: vec![
-                crate::output::AgentSeverity::Medium,
-                crate::output::AgentSeverity::High,
+                crate::output::Severity::Medium,
+                crate::output::Severity::High,
             ],
             prerequisites: vec![
                 "Authorized lab environment only".to_string(),

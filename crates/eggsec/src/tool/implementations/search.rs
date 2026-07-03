@@ -10,7 +10,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::error::EggsecError;
-use crate::output::AgentSeverity;
+use crate::output::Severity as AgentSeverity;
 use crate::tool::traits::{SecurityTool, ToolCapability, ToolCategory, ToolResult};
 use crate::tool::{ToolRequest, ToolResponse};
 

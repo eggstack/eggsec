@@ -1281,9 +1281,6 @@ impl Default for AuthenticatedSessionManager {
     }
 }
 
-/// Re-export for backward compatibility
-pub type AdvancedSessionManager = AuthenticatedSessionManager;
-
 #[cfg(test)]
 mod tests {
     use super::*;

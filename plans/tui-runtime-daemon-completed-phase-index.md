@@ -2,77 +2,178 @@
 
 ## Purpose
 
-Audit trail for the TUI→Runtime migration. Each phase lists status, key deliverables, and follow-up items.
+Audit trail for the TUI→Runtime→Daemon migration. Each phase lists status, key deliverables, plan file path, and follow-up items. This is the handoff map for future work.
 
-## Phase Status
+## Phase Summary
 
-| Phase | Name | Status | Key Files |
+| Phase | Name | Status | Plan File |
 |-------|------|--------|-----------|
-| 0 | Architecture Inventory | ✅ Complete | `architecture/tui.md` |
-| 1 | Runtime DTO and Protocol Skeleton | ✅ Complete | `eggsec-runtime/src/event.rs`, `request.rs`, `session.rs`, `capabilities.rs` |
-| 2 | Task Lifecycle Extraction | ✅ Complete | `eggsec-runtime/src/runtime.rs` (Runtime, RuntimeConfig, SessionOptions) |
-| 3 | Worker Dispatch Migration | ✅ Complete | `eggsec/src/dispatch/mod.rs`, `eggsec-tui/src/app/task_dispatcher.rs` |
-| 4 | Runtime Event Reducer and TUI Adapter | ✅ Complete | `eggsec-tui/src/app/runtime_adapter/mod.rs` |
-| 5 | Session/View State Split | ✅ Complete | `eggsec-runtime/src/session.rs`, `eggsec-tui/src/app/state_update.rs` |
-| 6a | Embedded Runtime Compatibility Closure | ✅ Complete | `eggsec-runtime/src/capabilities.rs`, architecture guards |
-| 6b | Pre-Daemon Runtime Readiness | ✅ Complete | `crates/eggsec-runtime/tests/in_process_client.rs`, `crates/eggsec-tui/src/app/task_dispatcher.rs`, `crates/eggsec-tui/src/app/runtime_adapter/mod.rs` |
-| 7–14 | Daemon, Remote Attach, Transport, Plugin | ⏳ Not started | See `tui-runtime-daemon-roadmap.md` |
-| CP | Security Corrective Pass | ✅ Complete | `crates/eggsec-daemon/src/client_registry.rs`, `host.rs`, `protocol.rs` |
+| 0 | Architecture Inventory | ✅ Complete | (in `tui-runtime-daemon-roadmap.md` § Phase 0) |
+| 1 | Runtime DTO and Protocol Skeleton | ✅ Complete | (in `tui-runtime-daemon-roadmap.md` § Phase 1) |
+| 2 | Task Lifecycle Extraction | ✅ Complete | (in `tui-runtime-daemon-roadmap.md` § Phase 2) |
+| 3 | Worker Dispatch Migration | ✅ Complete | `plans/tui-runtime-daemon-phase-03-worker-dispatch-migration.md` |
+| 4 | Runtime Event Reducer and TUI Adapter | ✅ Complete | `plans/tui-runtime-daemon-phase-04-runtime-event-reducer-tui-adapter.md` |
+| 5 | Session/View State Split | ✅ Complete | `plans/tui-runtime-daemon-phase-05-session-view-state-split.md` |
+| 6 | Embedded Runtime Compatibility Closure + Pre-Daemon Readiness | ✅ Complete | `plans/tui-runtime-daemon-phase-06-pre-daemon-readiness.md` |
+| 7 | Local Daemon MVP | ✅ Complete | `plans/tui-runtime-daemon-phase-07-local-daemon-mvp.md` |
+| 8 | TUI Remote Attach Mode | ✅ Complete | `plans/tui-runtime-daemon-phase-08-tui-remote-attach.md` |
+| 9 | CLI Headless and Daemon Cleanup | ✅ Complete | (absorbed into Phase 10 scope) |
+| 10 | Multi-Session and Multi-Frontend Semantics | ✅ Complete | `plans/tui-runtime-daemon-phase-10-multi-session-multi-frontend.md` |
+| 11 | Persistence, Artifacts, and Resumability | ✅ Complete | `plans/tui-runtime-daemon-phase-11-persistence-artifacts-resumability.md` |
+| 12 | Transport APIs Beyond Local Socket | ✅ Complete | `plans/tui-runtime-daemon-phase-12-transport-apis.md` |
+| 13 | Frontend Plugin and Component Model | ✅ Complete | `plans/tui-runtime-daemon-phase-13-frontend-plugin-component-model.md` |
+| 14 | Final Cleanup, Dependency Hardening, and Release Readiness | ✅ Complete | `plans/tui-runtime-daemon-phase-14-final-cleanup-hardening.md` |
+| CP | Security Corrective Pass | ✅ Complete | `plans/tui-runtime-daemon-security-corrective-pass.md` |
 
-## Closure Pass (Phase 6a) Deliverables
+## Phase Details
 
-The tightening closure plan (`tui-runtime-daemon-tightening-closure-plan.md`) completed these workstreams:
+### Phase 0: Architecture Inventory
 
-1. **Typed Result Bridge** — `TaskOutcome::Result(TaskResultEnvelope)` added to `eggsec-runtime`. `TuiTaskDispatcher` returns envelope with kind+summary. Typed `TaskResult` still flows through `result_rx` compatibility channel for TUI rendering.
-2. **Runtime Capability Truthfulness** — Fixed `supports_multiple_active_tasks: false`, `transports: ["in-process"]`, added missing task kinds.
-3. **Engine/Runtime Dependency Boundary** — Decision: keep `eggsec → eggsec-runtime` dependency intentionally. Guardrails documented.
-4. **Feature-Gated Dispatch Verification** — 6 representative feature profiles checked. No regressions.
-5. **TUI Runtime Adapter Edge Case Tests** — 9 tests added covering unknown tasks, duplicate events, zero/nil progress, auto-registration, tab routing.
-6. **Plan Audit Trail** — This file.
-7. **Architecture Guards** — 5 guards added to `scripts/check-architecture-guards.sh` (workers absent, no TUI deps in runtime, no transport deps, no unimplemented transports, no canonical TaskConfig/TaskResult in TUI).
+Documented current TUI coupling. Classified `App` state into frontend view state, frontend input state, runtime/session state, and engine execution. Produced `architecture/tui.md` as the boundary reference.
 
-## Pre-Daemon Readiness (Phase 6b) Deliverables
+### Phase 1: Runtime DTO and Protocol Skeleton
 
-The pre-daemon readiness plan (`tui-runtime-daemon-phase-06-pre-daemon-readiness.md`) completed these workstreams:
+Introduced `eggsec-runtime` as a workspace crate. Defined serializable DTOs: `SessionId`, `TaskId`, `RunRequest`, `TaskKind`, `TaskStatus`, `TaskProgress`, `TaskOutcome`, `RuntimeEvent`, `SessionSnapshot`, `RuntimeCapabilities`, `TaskResultEnvelope`, `ArtifactRef`. Crate builds without `eggsec-tui`. JSON round-trip tests exist.
 
-1. **In-Process Client Contract Tests** — 22 integration tests in `crates/eggsec-runtime/tests/in_process_client.rs` proving runtime works independently of TUI: session creation with 4 surfaces (CliManual, McpServer, RestApi, SecurityAgent), scope binding, task lifecycle events, cancellation, timeout, failure reporting, multi-session independence, single-active-task policy, result envelopes (Result/Text/JSON), snapshot serialization, capabilities verification.
-2. **Result Envelope Completeness Audit** — Verified all 25 `TaskResult` variants have envelope mappings. Added 3 new tests for OAuth, WafBypass, and Pipeline summary formatting. Total envelope tests: 20.
-3. **Capability Reporting Audit** — Verified `RuntimeCapabilities::default()` truthfully reflects implemented behavior. No gaps found.
-4. **Embedded TUI Runtime Adapter Regression Tests** — 7 new tests added: envelope outcome delivery, cancel-then-clean-state, multiple independent cancellations, idempotent duplicate completions, auto-register-then-cancel, envelope result variant propagation. Total runtime adapter tests: 28.
-5. **Documentation** — Phase index updated.
+**Key files:** `eggsec-runtime/src/event.rs`, `request.rs`, `session.rs`, `capabilities.rs`
 
-## Key Types (Post-Phase 6b)
+### Phase 2: Task Lifecycle Extraction
 
-- `eggsec-runtime`: `Runtime`, `RuntimeConfig`, `SessionOptions`, `RunRequest`, `TaskKind`, `TaskOutcome`, `RuntimeEvent`, `RuntimeCapabilities`, `TaskResultEnvelope`, `ArtifactRef`, `PolicyPrompt`, `RuntimeTaskExecutor`, `TaskDispatcher`
-- `eggsec-tui`: `TuiTaskDispatcher` (implements `TaskDispatcher`), `TuiExecutor` (implements `RuntimeTaskExecutor`), `TuiRuntimeAdapter` (event reducer)
-- `eggsec::dispatch`: `dispatch_inner()`, `TaskResult` (~25 variants, some feature-gated)
+Moved task spawning, handles, cancellation, timeout policy, progress/result channels, and active-task bookkeeping out of `App` into the runtime layer. Runtime owns `create_session`, `submit`, `cancel`, `snapshot`, `subscribe`.
 
-## Follow-Up Items
+**Key files:** `eggsec-runtime/src/runtime.rs` (Runtime, RuntimeConfig, SessionOptions)
 
-- `task_result_to_envelope()` is wired into `TuiTaskDispatcher::dispatch()` — ready for REST/MCP surfaces to consume `TaskResultEnvelope`
-- Pre-existing feature-gate compile errors in `stress-testing` fixed (missing `ProxyEntry::new`/`to_log_key`/`ProxyManager::get_all_healthy_proxies` stubs); `db-pentest`, `web-proxy`, `wireless` compile cleanly
-- Phase 7+ (daemon transport) blocked on this readiness gate
-- Runtime has 22 in-process client tests + 64 total tests across 3 test suites
-- TUI runtime adapter has 28 tests, task dispatcher has 21 tests
+### Phase 3: Worker Dispatch Migration
 
-## Security Corrective Pass (CP) Deliverables
+Moved execution dispatch from `eggsec-tui/src/workers` into `eggsec::dispatch`. Runtime translates neutral `TaskKind` into engine calls. TUI workers deleted. Feature-gated dispatch verified across 6 representative profiles.
 
-The security corrective pass (`tui-runtime-daemon-security-corrective-pass.md`) addressed semantic security risks in the daemon authorization model:
+**Key files:** `eggsec/src/dispatch/mod.rs`, `eggsec-tui/src/app/task_dispatcher.rs`
 
-1. **Centralized Command Authorization** — Replaced stringly-typed permission names with `CommandPermission` enum in `client_registry.rs`. Every `ClientCommand` variant now maps to a permission level via `command_permission()`. Adding a new command without updating the mapping causes a compile error.
-2. **Actual Runtime Surface for Authorization** — Fixed `check_command_permission()` in `host.rs` to query `Runtime::session_surface()` for the actual session surface instead of deriving it from `SessionAccess.default_controller_allowed`. `SessionAccess` now stores `surface: RuntimeSurface` and `owner_client_kind: ClientKind` directly.
-3. **Policy Approval Semantics** — `ApprovePolicy` now returns `ErrorCode::Unsupported` with explicit message instead of silently succeeding as a no-op placeholder. No client can believe an approval happened when it did not.
-4. **Client Declaration Hardening** — `CreateSession` is classified as `CommandPermission::DeclaredClient` (allowed before declaration but without owner attribution). Session-scoped commands (`GetSnapshot`, `SubmitTask`, etc.) require declared client and return `ErrorCode::ClientNotDeclared` if missing.
-5. **Strict Surface Approval Restriction** — On strict sessions (McpServer, RestApi, etc.), only the session Owner can approve policies. Controllers, Approvers, and Observers from unrelated clients are denied.
-6. **New Error Codes** — Added `ClientNotDeclared`, `Unsupported`, and `InvalidState` to `ErrorCode` enum with roundtrip tests.
-7. **Comprehensive Denial Tests** — Added tests for observer denial, approver denial on strict surfaces, unrelated TUI denial on strict sessions, and undeclared client denial.
-8. **Local Socket Security** — Verified: Unix socket only (no TCP fallback), runtime crate has no transport dependencies, socket cleanup is path-safe. Documented as non-goal: public network exposure.
+### Phase 4: Runtime Event Reducer and TUI Adapter
+
+Replaced direct `App::handle_result` mutation with `TuiRuntimeAdapter` event reducer. Results associated with `TaskId` and session. Runtime events map to tab view updates through explicit adapter boundary.
+
+**Key files:** `eggsec-tui/src/app/runtime_adapter/mod.rs`
+
+### Phase 5: Session/View State Split
+
+Split canonical runtime session state from local TUI view state. Runtime owns config snapshot, loaded scope, execution surface, task registry, audit stream. TUI owns tab, input mode, overlays, focus, theme, scroll offsets. Sessions constructible without Ratatui.
+
+**Key files:** `eggsec-runtime/src/session.rs`, `eggsec-tui/src/app/state_update.rs`
+
+### Phase 6: Embedded Runtime Compatibility Closure + Pre-Daemon Readiness
+
+Two sub-phases:
+
+- **6a (Closure):** Verified TUI behaves identically pre/post refactor. Added typed result bridge (`TaskOutcome::Result(TaskResultEnvelope)`), runtime capability truthfulness, 5 architecture guards, 9 adapter edge-case tests.
+- **6b (Pre-Daemon Readiness):** Added 22 in-process client contract tests proving runtime works independently of TUI. Verified all 25 `TaskResult` variants have envelope mappings. Total runtime tests: 22 in-process + 64 across 3 suites. TUI adapter: 28 tests. Task dispatcher: 21 tests.
+
+**Key files:** `crates/eggsec-runtime/tests/in_process_client.rs`, `crates/eggsec-tui/src/app/task_dispatcher.rs`, `crates/eggsec-tui/src/app/runtime_adapter/mod.rs`
+
+### Phase 7: Local Daemon MVP
+
+Added `eggsec-daemon` crate with local-only Unix socket transport. Daemon hosts `eggsec-runtime`. Supports session creation, attach/list, task submission, cancellation, event subscription, snapshot retrieval, capabilities, and health. Protocol version constant added.
+
+**Key files:** `crates/eggsec-daemon/src/` (host.rs, protocol.rs, server.rs, client.rs)
+
+### Phase 8: TUI Remote Attach Mode
+
+TUI can connect to either embedded in-process runtime or local daemon. Runtime client abstraction with `embedded.rs` and `daemon.rs` backends. Embedded mode remains default. Same protocol commands/events for both modes.
+
+**Key files:** `crates/eggsec-tui/src/runtime_client/` (embedded.rs, daemon.rs)
+
+### Phase 9: CLI Headless and Daemon Cleanup
+
+Refactored CLI packaging so headless builds (`--no-default-features`) don't need terminal dependencies. Added daemon-client CLI operations for listing sessions, attaching, submitting tasks, streaming events, cancelling. Feature split: `tui`, `daemon-client`, `headless` markers.
+
+**Key files:** `crates/eggsec-cli/src/` (headless dispatch, daemon client commands)
+
+### Phase 10: Multi-Session and Multi-Frontend Semantics
+
+Defined client/observer/controller/owner/approver roles. `CommandPermission` enum for per-command RBAC. Session-scoped commands require declared client. Strict sessions restrict policy approval to Owner. Multiple clients can subscribe to one session. Stale clients don't block completion.
+
+**Key files:** `crates/eggsec-daemon/src/client_registry.rs`
+
+### Phase 11: Persistence, Artifacts, and Resumability
+
+SQLite-backed session snapshots stored at lifecycle points. `DaemonStore` trait with `SqliteStore` implementation. Recovery on daemon startup via `recover_persisted_state()`. Artifact references fetchable through daemon APIs. All persistence operations fire-and-forget (best-effort).
+
+**Key files:** `crates/eggsec-daemon/src/store.rs`, `crates/eggsec-daemon/src/http.rs`
+
+### Phase 12: Transport APIs Beyond Local Socket
+
+Added HTTP transport (feature-gated `http-api`). `axum`-based loopback server. `DaemonCapabilities` declares available transports. `DaemonRequestContext` carries `TransportKind` on every inbound command. Default: loopback `127.0.0.1:0`. Network-facing transport requires explicit opt-in.
+
+**Key files:** `crates/eggsec-daemon/src/http.rs`
+
+### Phase 13: Frontend Plugin and Component Model
+
+Defined frontend-neutral view DTOs in `eggsec-ui-model`: `SessionSummaryView`, `SessionView`, `TaskView`, `TaskProgressView`, `ResultEnvelopeView`, `OutcomeView`, `ArtifactView`, `EventView`, `DashboardSummaryView`, `ClientRoleView`, `PolicyPromptView`. `ResultRendererDescriptor` registry for kind→renderer mapping.
+
+**Key files:** `crates/eggsec-ui-model/src/`
+
+### Phase 14: Final Cleanup, Dependency Hardening, and Release Readiness
+
+Final audit across 8 workstreams: crate boundary enforcement, temporary bridge audit, feature/build matrix verification, daemon security review, documentation truth pass, API stability review, manual smoke test script, and completed plan index. Architecture guards verified. All docs updated to reflect implementation.
+
+**Key files:** `scripts/check-architecture-guards.sh`, `architecture/tui.md`, `AGENTS.md`
+
+### Security Corrective Pass (CP)
+
+Addressed semantic security risks in daemon authorization:
+
+1. Centralized `CommandPermission` enum replacing stringly-typed names
+2. Actual `RuntimeSurface` used for authorization (not derived defaults)
+3. `ApprovePolicy` returns `ErrorCode::Unsupported` (no silent no-op)
+4. `CreateSession` classified as `DeclaredClient`
+5. Strict surface policy approval restricted to session Owner only
+6. New error codes: `ClientNotDeclared`, `Unsupported`, `InvalidState`
+7. Comprehensive denial tests for observer/approver/strict-surface scenarios
+
+**Key files:** `crates/eggsec-daemon/src/client_registry.rs`, `host.rs`, `protocol.rs`
+
+## Known Deferred Items (Phase 14 Audit)
+
+These items are intentionally deferred — not bugs, but recognized open edges for future work:
+
+| Item | Location | Status |
+|------|----------|--------|
+| `ApprovePolicy` unwired (returns `Unsupported`) | `eggsec-daemon/src/client_registry.rs` | Explicit placeholder; wiring requires policy prompt UI |
+| Packet sending stub | `eggsec/src/dispatch/network.rs:356` | Stub; real packet sending requires raw socket + scope |
+| AI routes placeholder data | `eggsec/src/ai/` (~20 placeholders) | Placeholder data for AI analysis routes; functional but not production-hardened |
+| `TODO(reframe-pass3)` defense-lab config profiles | `eggsec/src/config/` | Deferred config profile work for defense lab mode |
+| Phase 5 async bridge fields in TUI | `eggsec-tui/src/app/` | Legacy async bridge fields retained for compatibility; not yet cleaned up |
+| `result_rx`/`progress_rx` dual-channel architecture | `eggsec-tui/src/app/task_dispatcher.rs` | Typed `mpsc` channels for TUI rendering coexist with `TaskOutcome` envelope path; planned consolidation |
+| `InterceptRule` legacy types in web-proxy | `eggsec-web-proxy/src/` | Legacy intercept rule types; functional but not yet unified with newer model |
+| `frida_script` single-field compat in mobile-dynamic | `eggsec-mobile-lab/src/` | Single-field compatibility struct for frida script config |
+| NSE library stubs | `eggsec-nse/src/` | Lua library stubs; functional but not all NSE libraries fully implemented |
+
+## Key Types (Post-Phase 14 + CP)
+
+- **`eggsec-runtime`**: `Runtime`, `RuntimeConfig`, `SessionOptions`, `RunRequest`, `TaskKind`, `TaskOutcome`, `RuntimeEvent`, `RuntimeCapabilities`, `TaskResultEnvelope`, `ArtifactRef`, `PolicyPrompt`, `RuntimeTaskExecutor`, `TaskDispatcher`
+- **`eggsec-tui`**: `TuiTaskDispatcher`, `TuiExecutor`, `TuiRuntimeAdapter`, `EnforcementFacade`, `TuiEnforcementState`
+- **`eggsec::dispatch`**: `dispatch_inner()`, `TaskResult` (~25 variants, some feature-gated)
+- **`eggsec-daemon`**: `DaemonStore`, `SqliteStore`, `CommandPermission`, `DaemonRequestContext`, `TransportKind`, `DaemonCapabilities`, `HttpConfig`
+- **`eggsec-ui-model`**: `SessionView`, `TaskView`, `ResultEnvelopeView`, `EventView`, `DashboardSummaryView`, `ResultRendererDescriptor`
+
+## Validation Commands
+
+```bash
+cargo fmt --all --check
+cargo clippy --lib -p eggsec
+cargo test --lib -p eggsec
+cargo test -p eggsec-daemon
+cargo test -p eggsec-runtime
+cargo test -p eggsec-tui
+cargo test -p eggsec-ui-model
+bash scripts/check-architecture-guards.sh
+```
 
 ## References
 
 - Roadmap: `plans/tui-runtime-daemon-roadmap.md`
 - Closure plan: `plans/tui-runtime-daemon-tightening-closure-plan.md`
-- Pre-daemon readiness plan: `plans/tui-runtime-daemon-phase-06-pre-daemon-readiness.md`
+- Security pass: `plans/tui-runtime-daemon-security-corrective-pass.md`
 - Architecture: `architecture/tui.md`
 - Guards: `scripts/check-architecture-guards.sh`
 - In-process client tests: `crates/eggsec-runtime/tests/in_process_client.rs`

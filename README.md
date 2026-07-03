@@ -339,12 +339,12 @@ The daemon supports pluggable transport layers for client connectivity:
 
 | Transport | Feature Flag | Default | Description |
 |-----------|-------------|---------|-------------|
-| Unix socket | Built-in | Yes | JSON-line protocol over Unix domain socket; primary IPC transport |
-| HTTP/SSE | `http-api` | No | HTTP REST + Server-Sent Events via `axum`; 12 routes mapping to `ClientCommand`; loopback-only bind by default; requires explicit `http-api` feature |
+| Unix socket | Built-in | Yes (`/tmp/eggsec-daemon.sock`) | JSON-line protocol over Unix domain socket; primary IPC transport |
+| HTTP/SSE | `http-api` | No (`127.0.0.1:9876`) | HTTP REST + Server-Sent Events via `axum`; 12 routes mapping to `ClientCommand`; loopback-only bind by default; requires explicit `http-api` feature |
 
 WebSocket and gRPC transports were evaluated but deferred — they are not implemented in Phase 12.
 
-The daemon advertises its available transports to clients via `DaemonCapabilities` (returned in `ServerMessage::Capabilities`). Clients send requests through `DaemonRequestContext` which carries the client ID, peer address, and transport kind.
+The daemon advertises its available transports to clients via `DaemonCapabilities` (returned in `ServerMessage::Capabilities`). Clients send requests through `DaemonRequestContext` which carries the client ID, peer address, and transport kind. The daemon includes a `DAEMON_PROTOCOL_VERSION` (currently `1`) in its welcome message for client-side compatibility checks.
 
 **HTTP transport details:**
 - Binds to loopback only (`127.0.0.1`) by default; public bind (`0.0.0.0`) requires explicit config and emits a warning

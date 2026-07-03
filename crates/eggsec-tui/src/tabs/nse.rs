@@ -3,7 +3,7 @@ use crate::tabs::core::{
     self, render_config_block, render_error_block, render_input_fields, TabCore,
 };
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
-use crate::{tab_state_boilerplate, tc};
+use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -206,14 +206,81 @@ impl TabRender for NseTab {
 }
 
 impl TabInput for NseTab {
-    tab_input_3area!(
+    tab_input_boilerplate!(
         NseTab,
         core: core,
         focus: focus_area,
         Inputs: NseFocusArea::Inputs,
-        Options: NseFocusArea::ScriptSelector,
         Results: NseFocusArea::Results
     );
+
+    fn handle_char(&mut self, c: char) {
+        let running = self.is_running();
+        let inputs = self.focus_area == NseFocusArea::Inputs;
+        crate::tabs::core::tab_input_char(&mut self.core, c, running, inputs);
+    }
+
+    fn handle_backspace(&mut self) {
+        let running = self.is_running();
+        let inputs = self.focus_area == NseFocusArea::Inputs;
+        crate::tabs::core::tab_input_backspace(&mut self.core, running, inputs);
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        let running = self.is_running();
+        let inputs = self.focus_area == NseFocusArea::Inputs;
+        crate::tabs::core::tab_input_paste(&mut self.core, text, running, inputs);
+    }
+
+    fn handle_focus_next(&mut self) {
+        self.focus_area = match self.focus_area {
+            NseFocusArea::Inputs => NseFocusArea::ScriptSelector,
+            NseFocusArea::ScriptSelector => NseFocusArea::Results,
+            NseFocusArea::Results => NseFocusArea::Inputs,
+        };
+        self.core.inputs.set_focus_for_index(match self.focus_area {
+            NseFocusArea::Inputs => Some(0),
+            _ => None,
+        });
+    }
+
+    fn handle_focus_prev(&mut self) {
+        self.focus_area = match self.focus_area {
+            NseFocusArea::Inputs => NseFocusArea::Results,
+            NseFocusArea::ScriptSelector => NseFocusArea::Inputs,
+            NseFocusArea::Results => NseFocusArea::ScriptSelector,
+        };
+        self.core.inputs.set_focus_for_index(match self.focus_area {
+            NseFocusArea::Inputs => Some(0),
+            _ => None,
+        });
+    }
+
+    fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
+        if self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.move_left()
+        } else {
+            false
+        }
+    }
+
+    fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
+        if self.focus_area == NseFocusArea::Inputs {
+            self.core.inputs.move_right()
+        } else {
+            false
+        }
+    }
+
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == NseFocusArea::Inputs && self.core.inputs.is_focused()
+    }
 
     fn handle_enter(&mut self) {
         if self.is_running() {

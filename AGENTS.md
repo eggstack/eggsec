@@ -332,6 +332,7 @@ Canonical reference points when updating guidance or skills:
 - `DaemonRequestContext` - Per-request context carrying `client_id`, `session_id`, `request_id`, and `transport` kind. Defined in `eggsec-daemon::protocol`.
 - `TransportCapability` - Declares a daemon transport's `kind` and `default_bind` address. Defined in `eggsec-daemon::protocol`.
 - `DaemonCapabilities` - Capabilities descriptor carrying `transports: Vec<TransportCapability>`. Returned in `ServerMessage::Welcome`. Defined in `eggsec-daemon::protocol`.
+- `DAEMON_PROTOCOL_VERSION` - Protocol version constant (`u32 = 1`) for daemon IPC compatibility negotiation. Defined in `eggsec-daemon::protocol`. Clients should check this value before sending commands.
 - `HttpConfig` - HTTP transport configuration (`bind`, `mcp_strict_by_default`, `cors_origin`). Defined in `eggsec-daemon::http`. Default: loopback `127.0.0.1:0`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
@@ -434,7 +435,7 @@ Canonical reference points when updating guidance or skills:
 | Pipeline profiles | 18 |
 | Output formats | 8 |
 | Themes | 50 packaged + 3 built-in |
-| CLI commands | 27 base, 49 total with all features |
+| CLI commands | 33 base, 52 total with all features |
 
 ### Security Notes
 
@@ -476,7 +477,7 @@ Canonical reference points when updating guidance or skills:
 - **Runtime dependency boundary**: `eggsec-runtime` is dependency-light (serde, tokio, thiserror, uuid, tracing). The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`/`TaskKind`/`TaskOutcome`/`TaskResultEnvelope` types — this direction is intentional. `eggsec-runtime` must never depend on `eggsec` (no reverse dependency), and must never gain TUI (`ratatui`/`crossterm`) or transport (`axum`/`tonic`/`tokio-tungstenite`) dependencies. Enforced by architecture guards in `scripts/check-architecture-guards.sh`.
 - **Daemon CommandPermission**: `CommandPermission` enum in `eggsec-daemon/src/client_registry.rs` is the single source of truth for per-command authorization levels. `command_permission()` maps every `ClientCommand` variant. Adding a new command variant without updating `command_permission()` triggers a `#[non_exhaustive]` compile error. `SessionAccess` stores `surface: RuntimeSurface` and `owner_client_kind: ClientKind` — do not derive these from other fields.
 - **Daemon Persistence**: SQLite-backed session snapshots stored at lifecycle points (create, submit, cancel, close). Recovery on daemon startup via `recover_persisted_state()`. All persistence operations are fire-and-forget (spawned async, best-effort).
-- **Daemon Transport Abstraction**: `DaemonRequestContext` carries `transport: TransportKind` on every inbound command. The daemon host constructs the context per-transport (`UnixSocket` in `server.rs`, `LoopbackHttp` in `http.rs`). `DaemonCapabilities` is returned in `ServerMessage::Welcome` and declares which transports are available. Adding a new transport means implementing a listener, constructing `DaemonRequestContext` with the correct `TransportKind`, and declaring a `TransportCapability`.
+- **Daemon Transport Abstraction**: `DaemonRequestContext` carries `transport: TransportKind` on every inbound command. The daemon host constructs the context per-transport (`UnixSocket` in `server.rs`, `LoopbackHttp` in `http.rs`). `DaemonCapabilities` is returned in `ServerMessage::Welcome` and declares which transports are available. `DAEMON_PROTOCOL_VERSION` (currently `1`) is included in `ServerMessage::Welcome` for client-side compatibility checks. Adding a new transport means implementing a listener, constructing `DaemonRequestContext` with the correct `TransportKind`, and declaring a `TransportCapability`.
 
 ## Skills Directory
 

@@ -338,6 +338,54 @@ else
   echo "PASS: CLI TUI dependency is feature-gated."
 fi
 
+# 20. Runtime persistence boundary - no database drivers in runtime crate
+echo ""
+echo "--- Check 20: Runtime free of persistence dependencies ---"
+HITS=$(rg -n 'rusqlite|sqlx' crates/eggsec-runtime/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-runtime has persistence dependencies (rusqlite/sqlx). It must remain dependency-light."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Runtime free of persistence dependencies."
+fi
+
+# 21. Engine must not depend on TUI or daemon crates (reverse dependency)
+echo ""
+echo "--- Check 21: Engine free of TUI and daemon dependencies ---"
+HITS=$(rg -n 'eggsec-tui|eggsec-daemon' crates/eggsec/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec engine depends on eggsec-tui or eggsec-daemon. The engine must not depend on frontend crates."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Engine free of TUI and daemon dependencies."
+fi
+
+# 22. Runtime domain crate isolation - runtime must not depend on engine or domain crates
+echo ""
+echo "--- Check 22: Runtime isolated from engine and domain crates ---"
+HITS=$(rg -n 'eggsec[^-]|eggsec-core|eggsec-db-lab|eggsec-web-proxy|eggsec-mobile-lab|eggsec-nse|eggsec-agent|eggsec-output|eggsec-tool-core' crates/eggsec-runtime/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-runtime depends on engine or domain crates. It must be dependency-light (serde, tokio, tracing only)."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Runtime isolated from engine and domain crates."
+fi
+
+# 23. Output crate must not have reverse dependencies on engine or runtime
+echo ""
+echo "--- Check 23: Output free of reverse dependencies ---"
+HITS=$(rg -n 'eggsec =|eggsec-runtime' crates/eggsec-output/Cargo.toml 2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: eggsec-output depends on eggsec (engine) or eggsec-runtime. It must only depend on eggsec-core."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Output free of reverse dependencies."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

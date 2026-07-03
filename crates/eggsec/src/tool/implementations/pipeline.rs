@@ -3,7 +3,7 @@ use chrono::Utc;
 use std::sync::Arc;
 
 use crate::error::EggsecError;
-use crate::output::AgentSeverity;
+use crate::output::Severity as AgentSeverity;
 use crate::pipeline::stage::profile_from_str;
 use crate::tool::response::Finding;
 use crate::tool::traits::{

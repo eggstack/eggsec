@@ -1,5 +1,5 @@
 use crate::output::agent::{
-    AgentFinding, AttackSurface, Confidence, Evidence, Remediation, Severity as AgentSeverity,
+    AgentFinding, AttackSurface, Confidence, Evidence, Remediation, Severity,
 };
 use crate::tool::response::{ResponseSeverity, ToolResponse};
 
@@ -50,25 +50,25 @@ impl ToolResponseExt for ToolResponse {
     }
 }
 
-fn severity_from_response(severity: &ResponseSeverity) -> AgentSeverity {
+fn severity_from_response(severity: &ResponseSeverity) -> Severity {
     match severity {
-        ResponseSeverity::Critical => AgentSeverity::Critical,
-        ResponseSeverity::High => AgentSeverity::High,
-        ResponseSeverity::Medium => AgentSeverity::Medium,
-        ResponseSeverity::Low => AgentSeverity::Low,
-        ResponseSeverity::Info => AgentSeverity::Info,
-        ResponseSeverity::None => AgentSeverity::Info,
+        ResponseSeverity::Critical => Severity::Critical,
+        ResponseSeverity::High => Severity::High,
+        ResponseSeverity::Medium => Severity::Medium,
+        ResponseSeverity::Low => Severity::Low,
+        ResponseSeverity::Info => Severity::Info,
+        ResponseSeverity::None => Severity::Info,
     }
 }
 
-fn severity_from_status(status: &crate::tool::ResponseStatus) -> AgentSeverity {
+fn severity_from_status(status: &crate::tool::ResponseStatus) -> Severity {
     match status {
-        crate::tool::ResponseStatus::Success => AgentSeverity::Info,
-        crate::tool::ResponseStatus::PartialSuccess => AgentSeverity::Medium,
-        crate::tool::ResponseStatus::Failed => AgentSeverity::Low,
-        crate::tool::ResponseStatus::Timeout => AgentSeverity::Low,
-        crate::tool::ResponseStatus::ScopeViolation => AgentSeverity::High,
-        crate::tool::ResponseStatus::Cancelled => AgentSeverity::Info,
+        crate::tool::ResponseStatus::Success => Severity::Info,
+        crate::tool::ResponseStatus::PartialSuccess => Severity::Medium,
+        crate::tool::ResponseStatus::Failed => Severity::Low,
+        crate::tool::ResponseStatus::Timeout => Severity::Low,
+        crate::tool::ResponseStatus::ScopeViolation => Severity::High,
+        crate::tool::ResponseStatus::Cancelled => Severity::Info,
     }
 }
 
@@ -91,23 +91,23 @@ mod tests {
     fn test_severity_from_response() {
         assert_eq!(
             severity_from_response(&ResponseSeverity::Critical),
-            AgentSeverity::Critical
+            Severity::Critical
         );
         assert_eq!(
             severity_from_response(&ResponseSeverity::High),
-            AgentSeverity::High
+            Severity::High
         );
         assert_eq!(
             severity_from_response(&ResponseSeverity::Medium),
-            AgentSeverity::Medium
+            Severity::Medium
         );
         assert_eq!(
             severity_from_response(&ResponseSeverity::Low),
-            AgentSeverity::Low
+            Severity::Low
         );
         assert_eq!(
             severity_from_response(&ResponseSeverity::Info),
-            AgentSeverity::Info
+            Severity::Info
         );
     }
 
@@ -115,19 +115,16 @@ mod tests {
     fn test_severity_from_status() {
         assert_eq!(
             severity_from_status(&ResponseStatus::Success),
-            AgentSeverity::Info
+            Severity::Info
         );
         assert_eq!(
             severity_from_status(&ResponseStatus::PartialSuccess),
-            AgentSeverity::Medium
+            Severity::Medium
         );
-        assert_eq!(
-            severity_from_status(&ResponseStatus::Failed),
-            AgentSeverity::Low
-        );
+        assert_eq!(severity_from_status(&ResponseStatus::Failed), Severity::Low);
         assert_eq!(
             severity_from_status(&ResponseStatus::Timeout),
-            AgentSeverity::Low
+            Severity::Low
         );
     }
 
@@ -171,7 +168,7 @@ mod tests {
             AgentFinding::from_scan_result("fuzz", "https://example.com", "/api/users", &results);
 
         assert_eq!(findings.len(), 2);
-        assert_eq!(findings[0].severity, AgentSeverity::Critical);
+        assert_eq!(findings[0].severity, Severity::Critical);
         assert_eq!(findings[0].vulnerability_type, "sqli");
         assert_eq!(findings[0].cwe_ids, vec!["CWE-89"]);
     }
@@ -209,6 +206,6 @@ mod tests {
         let agents = response.to_findings();
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].vulnerability_type, "vulnerability");
-        assert_eq!(agents[0].severity, AgentSeverity::High);
+        assert_eq!(agents[0].severity, Severity::High);
     }
 }

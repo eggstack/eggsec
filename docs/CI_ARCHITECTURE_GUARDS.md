@@ -1,6 +1,6 @@
 # CI Architecture Guards
 
-CI architecture guards preserve the enforcement, registry, metadata, feature, and documentation invariants established across Phases 1–10 of the architecture extensibility work. They stop regressions at pull-request time without making the workflow brittle, slow, or dependent on platform-specific optional features.
+CI architecture guards preserve the enforcement, registry, metadata, feature, and documentation invariants established across Phases 1–14 of the architecture extensibility work. They stop regressions at pull-request time without making the workflow brittle, slow, or dependent on platform-specific optional features.
 
 ## Required Fast PR Checks
 
@@ -117,7 +117,7 @@ These checks require specific system dependencies or privileges and are never pa
 
 ## Key Invariants Guarded
 
-The CI architecture guards enforce these invariants from Phases 1–10:
+The CI architecture guards enforce these invariants from Phases 1–14 (23 checks):
 
 1. **OperationMetadata** is the canonical operation policy metadata layer.
 2. **DomainDescriptor** is the canonical domain/integration grouping layer.
@@ -140,3 +140,5 @@ The CI architecture guards enforce these invariants from Phases 1–10:
 19. `eggsec-daemon` transport crates (e.g., `axum` for HTTP) are feature-gated optional dependencies, not in the default build.
 20. HTTP transport requires explicit `http-api` feature flag on `eggsec-daemon`.
 21. Public network bind (`0.0.0.0`, `::`) requires explicit configuration and emits a warning; default bind is loopback-only.
+22. Runtime is isolated from engine and domain crates (no `eggsec`, `eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy` dependencies).
+23. Output crate has no reverse dependencies (no `eggsec`, `eggsec-tui`, `eggsec-cli`, `eggsec-daemon` dependencies).

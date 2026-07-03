@@ -55,7 +55,7 @@ pub struct ToolCapability {
     pub parameters: Vec<ParameterDef>,
     pub examples: Vec<CapabilityExample>,
     pub attack_surface: Vec<AttackSurface>,
-    pub severity_potential: Vec<crate::output::AgentSeverity>,
+    pub severity_potential: Vec<crate::output::Severity>,
     pub prerequisites: Vec<String>,
     pub estimated_duration_ms: u32,
 }

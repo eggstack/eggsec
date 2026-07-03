@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+#[cfg(feature = "nse")]
+use crate::dispatch::types::NseResults;
 use crate::dispatch::types::{send_progress, GraphQlResults, OAuthResults, TaskResult};
 
 #[allow(clippy::too_many_arguments)]

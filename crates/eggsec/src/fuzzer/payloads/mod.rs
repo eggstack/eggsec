@@ -231,11 +231,6 @@ pub fn get_payloads_cached(payload_type: PayloadType) -> &'static Vec<Payload> {
     })
 }
 
-#[deprecated(since = "0.1.0", note = "Use get_all_payloads_cached instead")]
-pub fn get_all_payloads() -> Vec<Payload> {
-    get_all_payloads_cached().clone()
-}
-
 pub fn get_all_payloads_cached() -> &'static Vec<Payload> {
     &ALL_PAYLOADS_CACHE
 }

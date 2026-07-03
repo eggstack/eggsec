@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use std::sync::{Arc, LazyLock};
 
 use crate::error::EggsecError;
-use crate::output::AgentSeverity;
+use crate::output::Severity as AgentSeverity;
 use crate::proxy::intercept::types::{ProxyFlow, WebProxySessionReport};
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,

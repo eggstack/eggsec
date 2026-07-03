@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::client_registry::ClientKind;
+
+/// Protocol version for daemon IPC compatibility negotiation.
+///
+/// Clients should check this value against their expected range
+/// before sending commands. The version is bumped on breaking
+/// wire-format changes (new required fields, removed variants, etc.).
+pub const DAEMON_PROTOCOL_VERSION: u32 = 1;
 use eggsec_runtime::{
     ClientId, RunRequest, RuntimeCapabilities, RuntimeEvent, RuntimeSurface, SessionId,
     SessionSnapshot, SessionSummary, TaskId,
@@ -223,6 +230,7 @@ pub enum ServerMessage {
         request_id: String,
         status: String,
         version: String,
+        protocol_version: u32,
     },
     RuntimeEvent {
         session_id: SessionId,
@@ -603,15 +611,20 @@ mod tests {
             request_id: rid(),
             status: "ok".into(),
             version: "0.1.0".into(),
+            protocol_version: DAEMON_PROTOCOL_VERSION,
         };
         let json = serde_json::to_string(&msg).unwrap();
         let back: ServerMessage = serde_json::from_str(&json).unwrap();
         if let ServerMessage::Health {
-            status, version, ..
+            status,
+            version,
+            protocol_version,
+            ..
         } = back
         {
             assert_eq!(status, "ok");
             assert_eq!(version, "0.1.0");
+            assert_eq!(protocol_version, DAEMON_PROTOCOL_VERSION);
         } else {
             panic!("wrong variant");
         }

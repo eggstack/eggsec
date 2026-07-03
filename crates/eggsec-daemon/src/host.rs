@@ -190,6 +190,7 @@ impl DaemonHost {
                 request_id,
                 status: "ok".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
+                protocol_version: crate::protocol::DAEMON_PROTOCOL_VERSION,
             },
 
             ClientCommand::Capabilities { request_id } => ServerMessage::Capabilities {
@@ -734,10 +735,12 @@ mod tests {
                 request_id,
                 status,
                 version,
+                protocol_version,
             } => {
                 assert_eq!(request_id, "req-1");
                 assert_eq!(status, "ok");
                 assert!(!version.is_empty());
+                assert_eq!(protocol_version, crate::protocol::DAEMON_PROTOCOL_VERSION);
             }
             other => panic!("expected Health, got {:?}", other),
         }
