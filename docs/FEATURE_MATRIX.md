@@ -74,7 +74,13 @@ Categories:
 | `dynamic-plugins` | Domain capability | `web-proxy`, `eggsec-web-proxy/dynamic-plugins` | eggsec | No | No | — | — |
 | `full` | Meta/aggregate (developer/lab) | see `Cargo.toml` | eggsec | No | No | — | — |
 
-### 1.1a CLI Crate Features
+### 1.1a Daemon Crate Features
+
+| Feature | Category | Implied Features | Declaring Crate | In Defaults | Notes |
+|---------|----------|-----------------|-----------------|-------------|-------|
+| `http-api` | Protocol/front-end adapter | `axum`, `async-stream`, `futures` | eggsec-daemon | No | HTTP/SSE transport for daemon (loopback-only default bind) |
+
+### 1.1b CLI Crate Features
 
 | Feature | Category | Implied Features | Declaring Crate | In Defaults | Notes |
 |---------|----------|-----------------|-----------------|-------------|-------|
@@ -237,6 +243,13 @@ cargo test -p eggsec-cli --no-default-features
 ```bash
 cargo check -p eggsec-cli --no-default-features --features daemon-client
 cargo test -p eggsec-cli --no-default-features --features daemon-client
+```
+
+#### daemon-http — Daemon with HTTP/SSE transport
+
+```bash
+cargo check -p eggsec-daemon --features http-api
+cargo test -p eggsec-daemon --features http-api
 ```
 
 ### 3.2 System Dependency Requirements

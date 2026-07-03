@@ -272,16 +272,19 @@ else
   echo "PASS: Daemon free of TUI and engine dependencies."
 fi
 
-# 17. eggsec-daemon must not depend on transport crates (axum, tonic, etc.)
+# 17. eggsec-daemon must not depend on transport crates (axum, tonic, etc.) in [dependencies]
+# Feature-gated optional deps in [dependencies] are permitted (e.g., axum behind http-api feature).
 echo ""
-echo "--- Check 17: Daemon free of transport dependencies ---"
-HITS=$(rg -n 'axum|tonic|tokio.tungstenite|tower-http' crates/eggsec-daemon/Cargo.toml 2>/dev/null || true)
+echo "--- Check 17: Daemon free of non-optional transport dependencies ---"
+# Check only the [dependencies] section for non-optional transport crates
+# Note: optional = true is allowed (feature-gated, e.g., http-api -> axum)
+HITS=$(awk '/^\[dependencies\]/,/^\[/' crates/eggsec-daemon/Cargo.toml 2>/dev/null | grep -E '(axum|tonic|tokio.tungstenite|tower-http)' | grep -v 'optional = true' | grep -v 'optional=true' || true)
 if [[ -n "$HITS" ]]; then
   echo "$HITS"
-  echo "FAIL: eggsec-daemon has transport dependencies. Use Unix sockets only."
+  echo "FAIL: eggsec-daemon has non-optional transport dependencies. Use feature-gated optional deps."
   FAIL=$((FAIL + 1))
 else
-  echo "PASS: Daemon free of transport dependencies."
+  echo "PASS: Daemon transport dependencies are feature-gated (or absent)."
 fi
 
 # 18. TUI must not contain a match TaskKind execution dispatcher

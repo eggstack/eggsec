@@ -137,3 +137,6 @@ The CI architecture guards enforce these invariants from Phases 1–10:
 16. `eggsec-tui` has no `match task_kind` execution dispatchers — all `match task_kind` in TUI must be inside `#[cfg(test)]` modules (test assertions). Dispatch routing lives exclusively in `eggsec::dispatch::dispatch_inner()`.
 17. `eggsec-daemon` has no TUI dependencies (`ratatui`, `crossterm`, `eggsec-tui`) and no reverse dependency on `eggsec`.
 18. `eggsec-daemon` permission checks (`check_permission`) are called for every mutating daemon command (SubmitTask, CancelTask, CancelActive, CloseSession).
+19. `eggsec-daemon` transport crates (e.g., `axum` for HTTP) are feature-gated optional dependencies, not in the default build.
+20. HTTP transport requires explicit `http-api` feature flag on `eggsec-daemon`.
+21. Public network bind (`0.0.0.0`, `::`) requires explicit configuration and emits a warning; default bind is loopback-only.

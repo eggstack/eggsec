@@ -8,7 +8,7 @@ use crate::client_registry::{
     CommandPermission, SessionAccess,
 };
 use crate::config::DaemonConfig;
-use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
+use crate::protocol::{ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage};
 use crate::store::{DaemonStore, PersistedAuditEvent};
 
 /// Wraps the eggsec runtime with daemon configuration and command dispatch.
@@ -155,13 +155,13 @@ impl DaemonHost {
     pub async fn handle_command(
         &self,
         cmd: ClientCommand,
-        client_id: Option<ClientId>,
+        ctx: DaemonRequestContext,
     ) -> ServerMessage {
+        let client_id = ctx.client_id;
         // Permission check before destructuring (borrowing &cmd).
         if let Some(session_id) = cmd.session_id() {
-            if let Err((code, message)) = self
-                .check_command_permission(&cmd, client_id, session_id)
-                .await
+            if let Err((code, message)) =
+                self.check_command_permission(&cmd, &ctx, session_id).await
             {
                 // Record permission denial audit event
                 let _ = self
@@ -194,7 +194,14 @@ impl DaemonHost {
 
             ClientCommand::Capabilities { request_id } => ServerMessage::Capabilities {
                 request_id,
-                capabilities: eggsec_runtime::RuntimeCapabilities::default(),
+                capabilities: crate::protocol::DaemonCapabilities {
+                    runtime: eggsec_runtime::RuntimeCapabilities::default(),
+                    transports: vec![crate::protocol::TransportCapability {
+                        kind: crate::protocol::TransportKind::UnixSocket,
+                        bind_address: self.config.socket_path.clone(),
+                        enabled: true,
+                    }],
+                },
             },
 
             ClientCommand::DeclareClient {
@@ -594,7 +601,7 @@ impl DaemonHost {
     async fn check_command_permission(
         &self,
         cmd: &ClientCommand,
-        client_id: Option<ClientId>,
+        ctx: &DaemonRequestContext,
         session_id: &eggsec_runtime::SessionId,
     ) -> Result<(), (ErrorCode, String)> {
         let perm = command_permission(cmd);
@@ -611,7 +618,7 @@ impl DaemonHost {
         }
 
         // All session-scoped commands require a declared client.
-        let Some(client_id) = client_id else {
+        let Some(client_id) = ctx.client_id else {
             return Err((
                 ErrorCode::ClientNotDeclared,
                 "client must declare before sending session commands".into(),
@@ -652,13 +659,23 @@ impl DaemonHost {
 mod tests {
     use super::*;
     use crate::config::DaemonConfig;
-    use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
+    use crate::protocol::{
+        ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage, TransportKind,
+    };
     use crate::store::NoopStore;
     use eggsec_runtime::{
         CancellationToken, RuntimeEventSink, RuntimeTaskExecutor, TaskId, TaskOutcome,
     };
     use std::future::Future;
     use std::pin::Pin;
+
+    fn test_ctx(client_id: Option<eggsec_runtime::ClientId>) -> DaemonRequestContext {
+        DaemonRequestContext {
+            client_id,
+            peer: None,
+            transport: TransportKind::UnixSocket,
+        }
+    }
 
     struct TestExecutor;
 
@@ -692,7 +709,7 @@ mod tests {
                     kind: ClientKind::Tui,
                     label: Some("test-tui".into()),
                 },
-                None,
+                test_ctx(None),
             )
             .await
         {
@@ -709,7 +726,7 @@ mod tests {
                 ClientCommand::Health {
                     request_id: "req-1".into(),
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         match resp {
@@ -734,7 +751,7 @@ mod tests {
                 ClientCommand::Capabilities {
                     request_id: "req-2".into(),
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         match resp {
@@ -743,7 +760,7 @@ mod tests {
                 capabilities,
             } => {
                 assert_eq!(request_id, "req-2");
-                assert!(!capabilities.task_kinds.is_empty());
+                assert!(!capabilities.runtime.task_kinds.is_empty());
             }
             other => panic!("expected Capabilities, got {:?}", other),
         }
@@ -760,7 +777,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         let session_id = match resp {
@@ -779,7 +796,7 @@ mod tests {
                 ClientCommand::ListSessions {
                     request_id: "req-4".into(),
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         match resp {
@@ -806,7 +823,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await
         {
@@ -833,7 +850,7 @@ mod tests {
                         labels: vec![],
                     },
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         match resp {
@@ -860,7 +877,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await
         {
@@ -874,7 +891,7 @@ mod tests {
                     request_id: "r2".into(),
                     session_id,
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         match resp {
@@ -903,7 +920,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await
         {
@@ -917,7 +934,7 @@ mod tests {
                     request_id: "r2".into(),
                     session_id,
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         match resp {
@@ -937,7 +954,7 @@ mod tests {
                     request_id: "r1".into(),
                     session_id: fake_id,
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         match resp {
@@ -964,7 +981,7 @@ mod tests {
                     kind: ClientKind::Tui,
                     label: Some("my-tui".into()),
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         match resp {
@@ -991,7 +1008,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await
         {
@@ -1005,7 +1022,7 @@ mod tests {
                     request_id: "r2".into(),
                     session_id,
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         match resp {
@@ -1025,7 +1042,7 @@ mod tests {
                     request_id: "r1".into(),
                     session_id: fake_id,
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         match resp {
@@ -1052,7 +1069,7 @@ mod tests {
                     kind: ClientKind::Agent,
                     label: Some("agent-1".into()),
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         let client_id = match resp {
@@ -1089,7 +1106,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(client_id),
+                test_ctx(Some(client_id)),
             )
             .await;
         let session_id = match resp {
@@ -1131,7 +1148,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1158,7 +1175,7 @@ mod tests {
                         labels: vec![],
                     },
                 },
-                Some(observer_id),
+                test_ctx(Some(observer_id)),
             )
             .await;
         match resp {
@@ -1202,7 +1219,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1216,7 +1233,7 @@ mod tests {
                     request_id: "r2".into(),
                     session_id,
                 },
-                Some(observer_id),
+                test_ctx(Some(observer_id)),
             )
             .await;
         match resp {
@@ -1242,7 +1259,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                None,
+                test_ctx(None),
             )
             .await
         {
@@ -1269,7 +1286,7 @@ mod tests {
                         labels: vec![],
                     },
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         match resp {
@@ -1304,7 +1321,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1331,7 +1348,7 @@ mod tests {
                         labels: vec![],
                     },
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await;
         match resp {
@@ -1360,7 +1377,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1377,7 +1394,7 @@ mod tests {
                     approved: true,
                     reason: Some("confirmed".into()),
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await;
         match resp {
@@ -1421,7 +1438,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1438,7 +1455,7 @@ mod tests {
                     approved: true,
                     reason: None,
                 },
-                Some(observer_id),
+                test_ctx(Some(observer_id)),
             )
             .await;
         match resp {
@@ -1485,7 +1502,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1499,7 +1516,7 @@ mod tests {
                     request_id: "r2".into(),
                     session_id,
                 },
-                Some(observer_id),
+                test_ctx(Some(observer_id)),
             )
             .await;
         match resp {
@@ -1528,7 +1545,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(tui_id),
+                test_ctx(Some(tui_id)),
             )
             .await
         {
@@ -1556,7 +1573,7 @@ mod tests {
                         labels: vec![],
                     },
                 },
-                Some(tui_id),
+                test_ctx(Some(tui_id)),
             )
             .await;
         assert!(
@@ -1586,7 +1603,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(cli_id),
+                test_ctx(Some(cli_id)),
             )
             .await
         {
@@ -1601,7 +1618,7 @@ mod tests {
                     request_id: "r2".into(),
                     session_id,
                 },
-                Some(cli_id),
+                test_ctx(Some(cli_id)),
             )
             .await;
         assert!(
@@ -1629,7 +1646,7 @@ mod tests {
                         kind: kind.clone(),
                         label: None,
                     },
-                    None,
+                    test_ctx(None),
                 )
                 .await;
             let client_id = match resp {
@@ -1667,7 +1684,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await;
         let session_id = match resp {
@@ -1714,7 +1731,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1731,7 +1748,7 @@ mod tests {
                     approved: true,
                     reason: None,
                 },
-                Some(approver_id),
+                test_ctx(Some(approver_id)),
             )
             .await;
         match resp {
@@ -1779,7 +1796,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1797,7 +1814,7 @@ mod tests {
                     approved: true,
                     reason: None,
                 },
-                Some(unrelated_id),
+                test_ctx(Some(unrelated_id)),
             )
             .await;
         match resp {
@@ -1833,7 +1850,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await
         {
@@ -1851,7 +1868,7 @@ mod tests {
                     approved: true,
                     reason: None,
                 },
-                Some(owner_id),
+                test_ctx(Some(owner_id)),
             )
             .await;
         match resp {
@@ -1877,7 +1894,7 @@ mod tests {
                     scope: None,
                     labels: vec![],
                 },
-                None,
+                test_ctx(None),
             )
             .await;
         match resp {

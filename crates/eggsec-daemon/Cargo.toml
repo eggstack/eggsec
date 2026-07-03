@@ -10,6 +10,10 @@ license.workspace = true
 name = "eggsec-daemon"
 path = "src/main.rs"
 
+[features]
+default = []
+http-api = ["dep:axum", "dep:async-stream", "dep:futures"]
+
 [dependencies]
 eggsec-runtime = { path = "../eggsec-runtime" }
 serde.workspace = true
@@ -23,3 +27,9 @@ uuid.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 rusqlite = { version = "0.31", features = ["bundled"] }
+axum = { version = "0.8", optional = true }
+async-stream = { version = "0.3", optional = true }
+futures = { version = "0.3", optional = true }
+
+[dev-dependencies]
+reqwest = { version = "0.13", features = ["json", "rustls"], default-features = false }

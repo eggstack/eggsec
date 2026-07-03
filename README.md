@@ -131,7 +131,7 @@ Eggsec is organized as a Cargo workspace with these crates:
 | `eggsec-db-lab` | Database pentesting domain crate (Postgres/MySQL/MSSQL/MongoDB/Redis security checks) |
 | `eggsec-web-proxy` | Web proxy and MITM interception domain crate (proxy pool, intercept server, TLS, protocol handlers) |
 | `eggsec-mobile-lab` | Mobile app security analysis domain crate (APK/IPA static + Android dynamic runtime testing) |
-| `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), Unix socket server, client library, multi-client registry (`ClientKind`/`ClientRole`), session access control, and role-based permission checks |
+| `eggsec-daemon` | Long-running daemon host for persistent sessions (`Runtime`), transport abstraction (Unix socket default; HTTP/SSE feature-gated via `http-api`), client library, multi-client registry (`ClientKind`/`ClientRole`), session access control, and role-based permission checks |
 | `eggsec-runtime` | Frontend-neutral runtime with task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) |
 
 ### Prerequisites
@@ -333,6 +333,25 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 
 The `eggsec-daemon` crate provides durable session state backed by SQLite. Session snapshots are persisted at lifecycle points (create, submit, cancel, close) and recovered automatically on daemon restart.
 
+### Daemon Transport
+
+The daemon supports pluggable transport layers for client connectivity:
+
+| Transport | Feature Flag | Default | Description |
+|-----------|-------------|---------|-------------|
+| Unix socket | Built-in | Yes | JSON-line protocol over Unix domain socket; primary IPC transport |
+| HTTP/SSE | `http-api` | No | HTTP REST + Server-Sent Events via `axum`; 12 routes mapping to `ClientCommand`; loopback-only bind by default; requires explicit `http-api` feature |
+
+WebSocket and gRPC transports were evaluated but deferred — they are not implemented in Phase 12.
+
+The daemon advertises its available transports to clients via `DaemonCapabilities` (returned in `ServerMessage::Capabilities`). Clients send requests through `DaemonRequestContext` which carries the client ID, peer address, and transport kind.
+
+**HTTP transport details:**
+- Binds to loopback only (`127.0.0.1`) by default; public bind (`0.0.0.0`) requires explicit config and emits a warning
+- Uses `McpStrict` enforcement profile by default — noninteractive, no manual overrides
+- 12 HTTP routes map to `ClientCommand` variants (create session, submit task, cancel, list sessions, etc.)
+- SSE endpoint provides real-time session event streaming
+
 ### Configuration
 
 | Field | Default | Description |
@@ -474,6 +493,9 @@ cargo build --release -p eggsec-cli --no-default-features
 
 # Daemon client build - CLI commands without TUI
 cargo build --release -p eggsec-cli --no-default-features --features daemon-client
+
+# Daemon with HTTP/SSE transport (feature-gated; loopback-only bind by default)
+cargo build --release -p eggsec-daemon --features http-api
 ```
 
 ## System Dependencies

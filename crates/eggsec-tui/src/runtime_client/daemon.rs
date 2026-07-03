@@ -254,7 +254,7 @@ impl TuiRuntimeClient for DaemonRuntimeClient {
                 request_id: client.next_request_id(),
             };
             match client.send_command(cmd).await {
-                Ok(ServerMessage::Capabilities { capabilities, .. }) => Ok(capabilities),
+                Ok(ServerMessage::Capabilities { capabilities, .. }) => Ok(capabilities.runtime),
                 Ok(msg) => Err(format!("unexpected response: {:?}", msg)),
                 Err(e) => Err(e.to_string()),
             }

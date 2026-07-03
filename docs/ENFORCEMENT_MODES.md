@@ -33,10 +33,13 @@ The contract below is the source of truth for how enforcement behaves per execut
 | CI | Agent strict | `CiStrict` | Yes (target/networked operations) | No (treated as deny) | No (treated as deny) | No | No (single evaluation) |
 | REST API | Agent strict | `McpStrict` or `CiStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 | gRPC API | Agent strict | `McpStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
+| Daemon HTTP | Agent strict | `McpStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 
 **Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, REST, or gRPC. Agent strict behavior must not become the default for normal CLI/TUI manual use.
 
 **REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. Only `EnforcementOutcome::Allow` permits dispatch. `Warn`, `RequireConfirmation`, and `Deny` all result in HTTP 403 Forbidden with a structured `RestPolicyErrorResponse` (code: `POLICY_DENIED`, includes serialized `PolicyDecision`). REST is noninteractive and programmatic — warning-class ambiguity must not dispatch. Metadata `rest_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
+
+**Daemon HTTP enforcement specifics**: Daemon HTTP transport (feature-gated `http-api`) uses `EnforcementContext` with `McpStrict` profile by default. HTTP routes map 1:1 to `ClientCommand` variants and go through `DaemonHost::handle_command()` with `DaemonRequestContext`. Since the HTTP surface is noninteractive and programmatic, it follows the same enforcement contract as REST: only `Allow` permits dispatch; `Warn`/`RequireConfirmation`/`Deny` result in error responses. Loopback-only bind is enforced by default; public bind requires explicit configuration and emits a warning.
 
 **gRPC enforcement specifics**: gRPC API now constructs `GrpcService` with `EnforcementContext::for_surface(ExecutionSurface::GrpcApi, ...)` and dispatches every tool call through `EnforcementContext::approve()` → `EnforcedDispatcher::dispatch_checked()`. Only `EnforcementOutcome::Allow` produces an `ApprovedOperation` token; `Warn`, `RequireConfirmation`, and `Deny` all fail with `EnforcementError` and return gRPC `Status::permission_denied`. Metadata `grpc_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. Audit events emitted for all enforcement outcomes including denials.
 

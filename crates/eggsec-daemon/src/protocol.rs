@@ -6,6 +6,38 @@ use eggsec_runtime::{
     SessionSnapshot, SessionSummary, TaskId,
 };
 
+/// Identifies the transport layer for a daemon request.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TransportKind {
+    UnixSocket,
+    LoopbackHttp,
+    WebSocket,
+    Grpc,
+}
+
+/// Context attached to every daemon request for audit and authorization.
+#[derive(Debug, Clone)]
+pub struct DaemonRequestContext {
+    pub client_id: Option<ClientId>,
+    pub peer: Option<String>,
+    pub transport: TransportKind,
+}
+
+/// Transport capability advertised by the daemon.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransportCapability {
+    pub kind: TransportKind,
+    pub bind_address: String,
+    pub enabled: bool,
+}
+
+/// Daemon-level capabilities including transport information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonCapabilities {
+    pub runtime: RuntimeCapabilities,
+    pub transports: Vec<TransportCapability>,
+}
+
 /// Error codes returned by the daemon in response to client commands.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -185,7 +217,7 @@ pub enum ServerMessage {
     },
     Capabilities {
         request_id: String,
-        capabilities: RuntimeCapabilities,
+        capabilities: DaemonCapabilities,
     },
     Health {
         request_id: String,
@@ -551,12 +583,15 @@ mod tests {
     fn server_message_roundtrip_capabilities() {
         let msg = ServerMessage::Capabilities {
             request_id: rid(),
-            capabilities: RuntimeCapabilities::default(),
+            capabilities: DaemonCapabilities {
+                runtime: RuntimeCapabilities::default(),
+                transports: vec![],
+            },
         };
         let json = serde_json::to_string(&msg).unwrap();
         let back: ServerMessage = serde_json::from_str(&json).unwrap();
         if let ServerMessage::Capabilities { capabilities, .. } = back {
-            assert!(capabilities.supports_cancellation);
+            assert!(capabilities.runtime.supports_cancellation);
         } else {
             panic!("wrong variant");
         }

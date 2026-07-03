@@ -154,7 +154,7 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | `session list/create/snapshot` | `daemon_cli.rs` | Session introspection |
 | `task submit/cancel/watch` | `daemon_cli.rs` | Task lifecycle management |
 
-Daemon commands connect via Unix socket using `DaemonClient` from `eggsec-daemon`. Authorization uses `CommandPermission` enum — `DeclareClient` must succeed before session-scoped commands are allowed.
+Daemon commands connect via Unix socket using `DaemonClient` from `eggsec-daemon`. The daemon also supports an optional `http-api` loopback HTTP transport (feature-gated). Authorization uses `CommandPermission` enum — `DeclareClient` must succeed before session-scoped commands are allowed.
 
 ## Common Patterns
 

@@ -1887,8 +1887,12 @@ name = "eggsec-daemon"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
+ "axum",
  "eggsec-runtime",
+ "futures",
+ "reqwest",
  "rusqlite",
  "serde",
  "serde_json",

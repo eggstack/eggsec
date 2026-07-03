@@ -6,7 +6,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::DaemonError;
 use crate::host::DaemonHost;
-use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
+use crate::protocol::{
+    ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage, TransportKind,
+};
 
 /// RAII guard that cancels a `CancellationToken` when dropped.
 struct CancelOnDrop(CancellationToken);
@@ -56,7 +58,9 @@ pub async fn run_server(
 }
 
 /// Extract the session_id from a `RuntimeEvent`.
-fn event_session_id(event: &eggsec_runtime::RuntimeEvent) -> Option<&eggsec_runtime::SessionId> {
+pub(crate) fn event_session_id(
+    event: &eggsec_runtime::RuntimeEvent,
+) -> Option<&eggsec_runtime::SessionId> {
     use eggsec_runtime::RuntimeEvent::*;
     match event {
         SessionCreated { session_id }
@@ -85,8 +89,13 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half).lines();
 
-    // Track the client_id assigned by DeclareClient on this connection.
     let mut local_client_id: Option<eggsec_runtime::ClientId> = None;
+
+    let make_ctx = |client_id: Option<eggsec_runtime::ClientId>| DaemonRequestContext {
+        client_id,
+        peer: None,
+        transport: TransportKind::UnixSocket,
+    };
 
     loop {
         let line = match reader.next_line().await {
@@ -119,7 +128,7 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
 
         // If this is a DeclareClient, capture the returned client_id for this connection.
         if let ClientCommand::DeclareClient { .. } = &cmd {
-            let resp = host.handle_command(cmd, local_client_id).await;
+            let resp = host.handle_command(cmd, make_ctx(local_client_id)).await;
             if let ServerMessage::ClientDeclared { client_id, .. } = &resp {
                 local_client_id = Some(*client_id);
             }
@@ -186,7 +195,7 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
                                         continue;
                                     }
                                 };
-                                let resp = host.handle_command(cmd, local_client_id).await;
+                                let resp = host.handle_command(cmd, make_ctx(local_client_id)).await;
                                 if write_message(&mut write_half, &resp).await.is_err() {
                                     break;
                                 }
@@ -208,7 +217,7 @@ async fn handle_client(host: Arc<DaemonHost>, stream: tokio::net::UnixStream) {
         }
 
         // Non-subscribe commands: dispatch and respond inline
-        let resp = host.handle_command(cmd, local_client_id).await;
+        let resp = host.handle_command(cmd, make_ctx(local_client_id)).await;
         if write_message(&mut write_half, &resp).await.is_err() {
             break;
         }

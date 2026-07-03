@@ -50,6 +50,8 @@ cargo check -p eggsec-runtime
 cargo test -p eggsec-runtime
 cargo check -p eggsec-daemon
 cargo test -p eggsec-daemon                    # daemon tests including persistence layer (135 tests)
+cargo check -p eggsec-daemon --features http-api
+cargo test -p eggsec-daemon --features http-api
 cargo check -p eggsec-web-proxy
 cargo test -p eggsec-web-proxy
 cargo test --lib -p eggsec
@@ -270,6 +272,7 @@ Canonical reference points when updating guidance or skills:
 | `stress-testing` | Flood testing | none | Raw sockets, IP spoofing |
 | `packet-inspection` | Packet capture | `libpcap-dev` | |
 | `nse` | NSE scripts | `libssl-dev` | |
+| `http-api` | Daemon HTTP transport | none | `axum`-based loopback HTTP server; `McpStrict` profile; loopback-only default bind |
 
 **Marker-only features (no deps, just build gating):**
 
@@ -323,6 +326,11 @@ Canonical reference points when updating guidance or skills:
 - `DaemonStore` - Trait for daemon persistence (trait + SQLite implementation). Defined in `eggsec-daemon::store`.
 - `SqliteStore` - SQLite-backed implementation of `DaemonStore` with WAL mode.
 - `NoopStore` - Test stub implementing `DaemonStore`.
+- `TransportKind` - Daemon transport type enum (`UnixSocket`, `LoopbackHttp`). Defined in `eggsec-daemon::protocol`.
+- `DaemonRequestContext` - Per-request context carrying `client_id`, `session_id`, `request_id`, and `transport` kind. Defined in `eggsec-daemon::protocol`.
+- `TransportCapability` - Declares a daemon transport's `kind` and `default_bind` address. Defined in `eggsec-daemon::protocol`.
+- `DaemonCapabilities` - Capabilities descriptor carrying `transports: Vec<TransportCapability>`. Returned in `ServerMessage::Welcome`. Defined in `eggsec-daemon::protocol`.
+- `HttpConfig` - HTTP transport configuration (`bind`, `mcp_strict_by_default`, `cors_origin`). Defined in `eggsec-daemon::http`. Default: loopback `127.0.0.1:0`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
 - `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`. Fields: `tool_integration: bool`, `mcp_exposed_by_default: bool`, `required_mcp_feature: Option<&'static str>`, `rest_exposable: bool`, `agent_exposable: bool`.
@@ -421,6 +429,7 @@ Canonical reference points when updating guidance or skills:
 - **REST Strict Enforcement**: REST API uses `EnforcementContext` with `McpStrict` profile. Only `EnforcementOutcome::Allow` permits dispatch; `Warn`, `RequireConfirmation`, and `Deny` all return HTTP 403 with structured `POLICY_DENIED` response. `RestState` carries `EnforcementContext` instead of `Option<Scope>`. Metadata `rest_exposable` flags are enforced before policy evaluation.
 - **gRPC Strict Enforcement**: gRPC API uses `EnforcementContext` with `McpStrict` profile. Only `EnforcementOutcome::Allow` produces an `ApprovedOperation` token; `Warn`, `RequireConfirmation`, and `Deny` all fail with `Status::permission_denied`. Dispatch goes through `EnforcedDispatcher::dispatch_checked()`. Metadata `grpc_exposable` flags are enforced before policy evaluation.
 - **Daemon Authorization**: `eggsec-daemon` uses `CommandPermission` enum (not stringly-typed names) for per-command RBAC. Every `ClientCommand` variant maps to a permission level via `command_permission()`. Session access stores `RuntimeSurface` and `owner_client_kind` at creation time. Strict-surface sessions (McpServer, RestApi, GrpcApi, SecurityAgent, Ci) restrict policy approval to the session Owner only. `ApprovePolicy` returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding.
+- **Daemon HTTP Transport**: The `http-api` feature enables an `axum`-based loopback HTTP transport. Default bind is `127.0.0.1:0` (loopback-only, ephemeral port). Uses `McpStrict` profile by default (`mcp_strict_by_default: true`). Each HTTP request carries a `DaemonRequestContext` with `transport: TransportKind::LoopbackHttp`. The transport is feature-gated — daemon compiles without it (Unix socket only).
 
 ### Key Patterns (Lessons Learned)
 
@@ -452,6 +461,7 @@ Canonical reference points when updating guidance or skills:
 - **Runtime dependency boundary**: `eggsec-runtime` is dependency-light (serde, tokio, thiserror, uuid, tracing). The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`/`TaskKind`/`TaskOutcome`/`TaskResultEnvelope` types — this direction is intentional. `eggsec-runtime` must never depend on `eggsec` (no reverse dependency), and must never gain TUI (`ratatui`/`crossterm`) or transport (`axum`/`tonic`/`tokio-tungstenite`) dependencies. Enforced by architecture guards in `scripts/check-architecture-guards.sh`.
 - **Daemon CommandPermission**: `CommandPermission` enum in `eggsec-daemon/src/client_registry.rs` is the single source of truth for per-command authorization levels. `command_permission()` maps every `ClientCommand` variant. Adding a new command variant without updating `command_permission()` triggers a `#[non_exhaustive]` compile error. `SessionAccess` stores `surface: RuntimeSurface` and `owner_client_kind: ClientKind` — do not derive these from other fields.
 - **Daemon Persistence**: SQLite-backed session snapshots stored at lifecycle points (create, submit, cancel, close). Recovery on daemon startup via `recover_persisted_state()`. All persistence operations are fire-and-forget (spawned async, best-effort).
+- **Daemon Transport Abstraction**: `DaemonRequestContext` carries `transport: TransportKind` on every inbound command. The daemon host constructs the context per-transport (`UnixSocket` in `server.rs`, `LoopbackHttp` in `http.rs`). `DaemonCapabilities` is returned in `ServerMessage::Welcome` and declares which transports are available. Adding a new transport means implementing a listener, constructing `DaemonRequestContext` with the correct `TransportKind`, and declaring a `TransportCapability`.
 
 ## Skills Directory
 
