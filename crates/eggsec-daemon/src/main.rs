@@ -73,11 +73,11 @@ async fn main() -> Result<()> {
 
     let shutdown = CancellationToken::new();
 
-    // Handle SIGINT/SIGTERM for graceful shutdown
+    // Handle SIGINT and SIGTERM for graceful shutdown
     {
         let shutdown = shutdown.clone();
         tokio::spawn(async move {
-            tokio::signal::ctrl_c().await.ok();
+            wait_for_shutdown_signal().await;
             tracing::info!("Received shutdown signal");
             shutdown.cancel();
         });
@@ -87,6 +87,29 @@ async fn main() -> Result<()> {
 
     tracing::info!("Daemon stopped.");
     Ok(())
+}
+
+/// Wait for SIGINT (Ctrl+C) or SIGTERM, whichever fires first.
+#[cfg(unix)]
+async fn wait_for_shutdown_signal() {
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut sigterm = match signal(SignalKind::terminate()) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to install SIGTERM handler");
+            let _ = tokio::signal::ctrl_c().await;
+            return;
+        }
+    };
+    tokio::select! {
+        _ = sigterm.recv() => {}
+        _ = tokio::signal::ctrl_c() => {}
+    }
+}
+
+#[cfg(not(unix))]
+async fn wait_for_shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 /// Placeholder executor that rejects all tasks.

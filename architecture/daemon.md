@@ -80,7 +80,19 @@ All persistence operations are guarded by `DaemonConfig::enable_persistence`. Wh
 3. Hydrates each snapshot into the runtime via `Runtime::hydrate_session()`
 4. Records a `daemon-recovery` audit event with recovery counts
 
-Failed session recoveries are logged at warn level and skipped. Active tasks are never auto-resumed — they are interrupted and must be resubmitted by clients.
+Failed session recoveries are logged at warn level and skipped. Active tasks are **never auto-resumed** — they are interrupted and must be resubmitted by clients. The `Cancelled` rewrite is informational only: the runtime's `hydrate_session` preserves only completed task records, so the rewrite is not strictly required for correctness but documents the recovery semantics for downstream consumers.
+
+## Schema Migration
+
+`SqliteStore::migrate()` (`store/sqlite.rs`) is version-aware:
+
+- Reads the stored `schema_version` from `schema_meta` if present.
+- Compares against the compile-time `SCHEMA_VERSION` (current: `2`).
+- **Refuses** to load when the stored version is newer than the current version, returning an error from `SqliteStore::new`. This prevents silent data corruption on downgrade.
+- Logs a warning when migrating an older stored version.
+- Always rewrites the stored `schema_version` to the current value after the migration step.
+
+When `create_dir_all` for the data directory fails, or `SqliteStore::new` fails for any reason (locked file, invalid path, schema version mismatch), `main.rs` falls back to `NoopStore` and logs a `tracing::warn!`. The daemon continues running with persistence disabled; this degradation is observable in logs but not in `DaemonCapabilities` (operators must consult logs to confirm persistence mode).
 
 ## Configuration
 
@@ -114,6 +126,21 @@ Two `daemon` subcommands expose persisted state inspection:
 | `eggsec daemon show <session-id> [--json]` | Shows full snapshot details: surface, scope, generation, task list with statuses |
 
 Both connect to the daemon via Unix socket and use `ListPersistedSessions` / `GetPersistedSnapshot` protocol commands.
+
+## Local Smoke Test
+
+`scripts/smoke-daemon-local.sh` is the canonical local-only lifecycle test for the daemon. It:
+
+- Uses an ephemeral socket path and a temporary workspace (`mktemp -d`); no public network exposure.
+- Pre-builds the daemon and CLI binaries into the temp workspace to avoid `cargo run` recompile noise leaking into assertions.
+- Verifies daemon start, health, client declaration, session create/list/snapshot, observer-deny + owner-allow posture, persisted history/show, event stream subscription, and graceful SIGTERM shutdown.
+
+Run with:
+
+```bash
+bash scripts/smoke-daemon-local.sh                 # default ephemeral socket
+bash scripts/smoke-daemon-local.sh /path/to/socket # custom socket path
+```
 
 ## Dependencies
 
@@ -201,3 +228,11 @@ Configuration for the HTTP/SSE server:
 | `timestamp_secs` | Unix timestamp |
 
 Audit events are appended to the `audit_events` table and are not pruned.
+
+## Signal Handling
+
+The daemon handles `SIGINT` and `SIGTERM` for graceful shutdown (`main.rs` installs both via `tokio::signal::unix::signal(SignalKind::terminate())` plus `tokio::signal::ctrl_c()`):
+
+- `SIGINT` (Ctrl+C) and `SIGTERM` both trigger `CancellationToken::cancel()`.
+- The server loop exits cleanly and `run_server` removes the socket file before returning.
+- Both signals are tested by the local smoke script (`scripts/smoke-daemon-local.sh`).

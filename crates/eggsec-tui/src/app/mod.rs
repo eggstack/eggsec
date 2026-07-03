@@ -45,7 +45,6 @@ pub(crate) use overlay::OverlayController;
 
 pub(crate) mod notifications;
 
-use super::error::make_friendly_error;
 use crate::help::{CommandPalette, HelpManager};
 use crate::runtime_client::RuntimeEventReceiverHandle;
 use crate::runtime_client::TuiRuntimeClient;

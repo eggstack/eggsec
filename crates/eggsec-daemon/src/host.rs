@@ -87,7 +87,9 @@ impl DaemonHost {
     /// Recover persisted session state from the store on startup.
     ///
     /// Loads all persisted sessions and reconstructs them in the runtime.
-    /// Tasks that were Running/Queued are marked as Interrupted (not auto-resumed).
+    /// Active tasks (Running/Queued) are NOT auto-resumed: their runtime
+    /// handles were never serialized, so they cannot be re-instantiated.
+    /// Only completed task records are preserved across restarts.
     pub async fn recover_persisted_state(&self) -> anyhow::Result<()> {
         if !self.config.enable_persistence {
             return Ok(());
@@ -1911,5 +1913,152 @@ mod tests {
         let host = test_host();
         // NoopStore returns empty sessions, so recovery is a no-op
         host.recover_persisted_state().await.unwrap();
+    }
+
+    /// Verifies that permission denial writes an audit event when persistence is enabled.
+    #[tokio::test]
+    async fn permission_denial_writes_audit_event_with_persistence() {
+        use crate::config::DaemonConfig;
+        use crate::store::PersistedAuditEvent;
+        use async_trait::async_trait;
+        use std::sync::Mutex as StdMutex;
+
+        /// Recording store that captures audit events
+        struct RecordingAuditStore {
+            events: StdMutex<Vec<PersistedAuditEvent>>,
+        }
+
+        #[async_trait]
+        impl crate::store::DaemonStore for RecordingAuditStore {
+            async fn save_session_snapshot(
+                &self,
+                _snapshot: &eggsec_runtime::SessionSnapshot,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn load_session_snapshot(
+                &self,
+                _session_id: eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+            async fn load_all_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSnapshot>> {
+                Ok(vec![])
+            }
+            async fn record_audit_event(&self, event: &PersistedAuditEvent) -> anyhow::Result<()> {
+                self.events.lock().unwrap().push(event.clone());
+                Ok(())
+            }
+            async fn delete_session(
+                &self,
+                _session_id: eggsec_runtime::SessionId,
+            ) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn blocking_list_sessions(
+                &self,
+            ) -> anyhow::Result<Vec<eggsec_runtime::SessionSummary>> {
+                Ok(vec![])
+            }
+            fn blocking_get_snapshot(
+                &self,
+                _session_id: &eggsec_runtime::SessionId,
+            ) -> anyhow::Result<Option<eggsec_runtime::SessionSnapshot>> {
+                Ok(None)
+            }
+        }
+
+        let store = Arc::new(RecordingAuditStore {
+            events: StdMutex::new(Vec::new()),
+        });
+        let recorder = store.clone();
+        let mut config = DaemonConfig::default();
+        config.enable_persistence = true;
+        let host = DaemonHost::new(config, TestExecutor, store);
+
+        // Owner creates a session
+        let owner_id = declare_test_client(&host).await;
+        let session_id = match host
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::CliManual,
+                    scope: None,
+                    labels: vec![],
+                },
+                test_ctx(Some(owner_id)),
+            )
+            .await
+        {
+            ServerMessage::SessionCreated { session_id, .. } => session_id,
+            other => panic!("expected SessionCreated, got {:?}", other),
+        };
+
+        // A separate observer client tries to submit — must be denied.
+        // Use the NoopStore fallback path by recording into our test store.
+        let observer_client = observer_unauthorized_client_id(&host).await;
+        let observer_resp = host
+            .handle_command(
+                ClientCommand::SubmitTask {
+                    request_id: "r2".into(),
+                    session_id,
+                    request: eggsec_runtime::RunRequest {
+                        task_kind: eggsec_runtime::TaskKind::PortScan(
+                            eggsec_runtime::request::PortScanParams {
+                                target: "127.0.0.1".into(),
+                                ports: Some("80".into()),
+                                scan_type: None,
+                                timeout_ms: None,
+                            },
+                        ),
+                        requested_by: None,
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        labels: vec![],
+                    },
+                },
+                test_ctx(Some(observer_client)),
+            )
+            .await;
+        match observer_resp {
+            ServerMessage::Error {
+                code: ErrorCode::PermissionDenied,
+                ..
+            } => {}
+            other => panic!("expected PermissionDenied, got {:?}", other),
+        }
+        // Give the audit-event record task a moment to complete.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let events = recorder.events.lock().unwrap().clone();
+        let denial = events
+            .iter()
+            .find(|e| e.action.starts_with("command-denied") && e.outcome == "denied")
+            .expect("a denial audit event should have been recorded");
+        assert!(
+            denial.session_id.is_some(),
+            "denial event must include session_id"
+        );
+        assert!(
+            denial.client_id.is_some(),
+            "denial event must include client_id"
+        );
+    }
+
+    async fn observer_unauthorized_client_id(host: &DaemonHost) -> ClientId {
+        match host
+            .handle_command(
+                ClientCommand::DeclareClient {
+                    request_id: "declare-2".into(),
+                    kind: ClientKind::Tui,
+                    label: Some("test-observer".into()),
+                },
+                test_ctx(None),
+            )
+            .await
+        {
+            ServerMessage::ClientDeclared { client_id, .. } => client_id,
+            other => panic!("expected ClientDeclared, got {:?}", other),
+        }
     }
 }

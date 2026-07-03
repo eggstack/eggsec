@@ -24,6 +24,7 @@ Audit trail for the TUI→Runtime→Daemon migration. Each phase lists status, k
 | 13 | Frontend Plugin and Component Model | ✅ Complete | `plans/tui-runtime-daemon-phase-13-frontend-plugin-component-model.md` |
 | 14 | Final Cleanup, Dependency Hardening, and Release Readiness | ✅ Complete | `plans/tui-runtime-daemon-phase-14-final-cleanup-hardening.md` |
 | CP | Security Corrective Pass | ✅ Complete | `plans/tui-runtime-daemon-security-corrective-pass.md` |
+| RR | Release Readiness Verification | ✅ Complete | `plans/tui-runtime-daemon-release-readiness-verification.md` (+ `plans/tui-runtime-daemon-release-readiness-report.md`) |
 
 ## Phase Details
 
@@ -163,11 +164,26 @@ cargo fmt --all --check
 cargo clippy --lib -p eggsec
 cargo test --lib -p eggsec
 cargo test -p eggsec-daemon
+cargo test -p eggsec-daemon --features http-api
 cargo test -p eggsec-runtime
 cargo test -p eggsec-tui
 cargo test -p eggsec-ui-model
+cargo check -p eggsec-cli --no-default-features --features daemon-client
 bash scripts/check-architecture-guards.sh
+bash scripts/smoke-daemon-local.sh
 ```
+
+## Release Readiness Verification (Phase RR)
+
+The release-readiness pass added:
+
+- **`scripts/smoke-daemon-local.sh` rewrite** — uses `mktemp -d` for an ephemeral workspace, pre-builds binaries to avoid `cargo run` recompile warnings leaking into assertions, validates SIGTERM graceful shutdown, and exercises observer-deny + owner-allow posture in addition to the standard lifecycle.
+- **`SIGTERM` handling in daemon main** — previously only `SIGINT` was handled; now `tokio::signal::unix::signal(SignalKind::terminate())` is installed alongside `ctrl_c()` so the daemon exits cleanly when sent SIGTERM. The server loop removes the socket file before returning.
+- **`SqliteStore::migrate()` version-awareness** — newer-than-current schema versions are explicitly refused (returns `Err` from `SqliteStore::new`), preventing silent data corruption on downgrade. Older stored versions log a `warn!` and proceed.
+- **`permission_denial_writes_audit_event_with_persistence` test** — closes the documented authorization-test gap (workstream 3 / item 6) by exercising a `RecordingAuditStore` and asserting that a denial produces a `command-denied:*` audit event with `client_id` and `session_id`.
+- **Documentation updates** — README, AGENTS.md, architecture/daemon.md corrected for: `ServerMessage::Welcome` → `ServerMessage::Capabilities` (and `Health` carries `protocol_version`), schema migration is version-aware, session recovery clarifies that active tasks are not auto-resumed, smoke script reference added, daemon test count updated from 135 to 145, signal handling section added.
+
+See `plans/tui-runtime-daemon-release-readiness-report.md` for blocker classification and final release recommendation.
 
 ## References
 

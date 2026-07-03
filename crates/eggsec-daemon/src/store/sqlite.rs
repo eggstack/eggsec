@@ -61,6 +61,30 @@ impl SqliteStore {
     fn migrate(&self) -> anyhow::Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(SCHEMA_DDL)?;
+        let stored: Option<String> = conn
+            .query_row(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if let Some(existing) = stored {
+            if existing != SCHEMA_VERSION {
+                let existing_num: u32 = existing.parse().unwrap_or(0);
+                let current_num: u32 = SCHEMA_VERSION.parse().unwrap_or(0);
+                if existing_num > current_num {
+                    anyhow::bail!(
+                        "persisted schema version ({}) is newer than current schema ({}) — refusing to load; please upgrade eggsec",
+                        existing, SCHEMA_VERSION
+                    );
+                }
+                tracing::warn!(
+                    existing_schema = %existing,
+                    current_schema = %SCHEMA_VERSION,
+                    "Migrating persisted schema version; data layout assumptions may need review"
+                );
+            }
+        }
         conn.execute(
             "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('schema_version', ?1)",
             [SCHEMA_VERSION],

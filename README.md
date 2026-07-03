@@ -362,10 +362,10 @@ The daemon advertises its available transports to clients via `DaemonCapabilitie
 ### Features
 
 - **Session snapshots** — `SessionSnapshot` stored as JSON with timestamps in `session_snapshots` table
-- **Session recovery** — On startup, `recover_persisted_state()` hydrates all persisted sessions; running/queued tasks are marked `Cancelled` with "interrupted by daemon restart"
+- **Session recovery** — On startup, `recover_persisted_state()` hydrates all persisted sessions; running/queued tasks are dropped (not auto-resumed) and recorded as `Cancelled` with `last_error: "interrupted by daemon restart"`. Only completed task records are preserved across restarts.
 - **Audit event logging** — Security actions (create-session, submit-task, cancel, etc.) recorded with action, surface, outcome, client/session IDs, and timestamp
 - **Artifact indexing** — Task artifacts (`ArtifactRef`) persisted within session snapshots, tracked by session association with kind, path, and MIME type
-- **Schema migration** — SQLite schema versioned via `schema_meta` table; WAL mode enabled for concurrent reads
+- **Schema migration** — SQLite schema versioned via `schema_meta` table (current: `2`); WAL mode enabled for concurrent reads; newer-than-current stored versions are explicitly refused to avoid silent corruption on downgrade.
 
 ### CLI Commands
 
@@ -386,6 +386,20 @@ eggsec daemon status
 
 # Stop daemon
 eggsec daemon stop
+```
+
+### Local Smoke Test
+
+`scripts/smoke-daemon-local.sh` is the canonical local-only lifecycle test for the
+daemon. It runs against an ephemeral socket and a temporary data directory, with
+no public network exposure. It validates daemon start, health, client
+declaration, session create/list/snapshot, observer-deny + owner-allow
+permission posture, persisted history/show, event stream subscription, and
+graceful SIGTERM shutdown. Run with:
+
+```bash
+bash scripts/smoke-daemon-local.sh                 # defaults
+bash scripts/smoke-daemon-local.sh /custom/path    # custom socket path
 ```
 
 ### Database Schema

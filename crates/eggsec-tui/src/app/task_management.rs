@@ -1,3 +1,4 @@
+#[cfg(feature = "db-pentest")]
 use crate::tabs::TabState;
 use eggsec_runtime::request::{
     LoadTestParams, PortScanParams, ReconParams, RunRequest, RuntimeSurface, TaskKind,

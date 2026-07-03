@@ -156,6 +156,8 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 
 Daemon commands connect via Unix socket using `DaemonClient` from `eggsec-daemon`. The daemon also supports an optional `http-api` loopback HTTP transport (feature-gated). Authorization uses `CommandPermission` enum — `DeclareClient` must succeed before session-scoped commands are allowed.
 
+**Local lifecycle smoke test:** `scripts/smoke-daemon-local.sh` is the canonical local-only daemon validation. It uses an ephemeral socket and `mktemp -d` workspace, runs pre-built binaries (no `cargo run` recompile noise), and exercises observer-deny + owner-allow posture in addition to standard lifecycle steps. Run with `bash scripts/smoke-daemon-local.sh` or `bash scripts/smoke-daemon-local.sh /custom/socket/path`.
+
 ## Common Patterns
 
 ### Policy Enforcement

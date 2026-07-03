@@ -54,10 +54,10 @@ mod handle_enter_regression;
 #[cfg(test)]
 mod input_accessibility;
 mod spec;
-pub(crate) use spec::{risk_from_group, spec_for, spec_for_id, tab_specs, TabRiskGroup};
+pub(crate) use spec::{risk_from_group, spec_for, tab_specs, TabRiskGroup};
 
 #[cfg(test)]
-pub(crate) use spec::visible_tab_specs;
+pub(crate) use spec::{spec_for_id, visible_tab_specs};
 
 pub use auth::AuthTab;
 #[cfg(feature = "headless-browser")]
