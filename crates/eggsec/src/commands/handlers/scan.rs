@@ -116,6 +116,15 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
         required_capabilities: Vec::new(),
     })?;
     args.json |= ctx.json;
+
+    // Select execution profile based on surface (CLI = ManualPermissive)
+    let profile = eggsec_nse::ResolvedNseExecutionProfile::manual_permissive(Some(&args.target));
+
+    for warning in &profile.warnings {
+        tracing::warn!("NSE profile warning: {}", warning);
+        eprintln!("Warning: {}", warning);
+    }
+
     let target = args.target.clone();
     let scan_id = format!("nse-{}", chrono::Utc::now().timestamp());
     ctx.notify_manager
@@ -129,7 +138,7 @@ pub async fn handle_nse(ctx: &CommandContext, mut args: crate::cli::NseArgs) -> 
         args.json,
         args.verbose,
     );
-    match eggsec_nse::run_cli(config).await {
+    match eggsec_nse::run_cli_with_profile(config, Some(profile)).await {
         Ok(()) => {
             ctx.notify_manager
                 .notify_scan_complete(&scan_id, &target, "NSE scan completed", None, None)

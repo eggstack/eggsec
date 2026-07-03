@@ -85,6 +85,8 @@ NSE scripts are categorized into support tiers based on risk and resource requir
 | **Tier 3** | Intrusive/brute-force/exploit-adjacent | Scripts requiring explicit opt-in (e.g., `http-brute`, `smb-vuln-*`). |
 | **Unsupported** | Restricted | Scripts requiring unrestricted filesystem/process access, uncontrolled network reachability, or behavior incompatible with Eggsec guardrails. |
 
+Execution profiles (`NseExecutionProfileKind`) encode these tiers as enforceable presets. `CompatibilityLab` corresponds to Tier 1 (full Nmap compatibility), while `AgentSafe` and `CiSafe` correspond to Tier 3 (sandboxed, restricted).
+
 ## NSE as a Knowledge Source
 
 NSE libraries and scripts encode mature protocol-testing concepts developed over years of community use. Beyond direct execution, NSE serves as a knowledge source:
@@ -107,3 +109,65 @@ The recommended default for NSE execution is sandboxed mode:
 - **Capability manifests**: Script category and capability manifests determine whether a script can run under sandboxed or unrestricted execution.
 
 Agent/tool API paths should prefer sandboxed NSE. Unrestricted execution requires explicit opt-in and should only be used in controlled defense-lab environments.
+
+## Execution Profiles
+
+NSE execution profiles provide explicit presets that resolve into sandbox config, limits, script/module policy, network policy, and audit metadata. Each profile encodes a trust boundary assumption.
+
+### Profile Variants
+
+| Profile | Trust Level | Scripts | Modules | Network | Limits |
+|---------|-------------|---------|---------|---------|--------|
+| `ManualPermissive` | User-controlled, full trust | All builtin + files | All builtin + filesystem | AllowAllManual | 120s / 100M instr / 50MiB |
+| `ManualStrict` | User-controlled, restricted | Builtin only, restricted roots | Builtin only | AllowCidrs from scope | 120s / 100M / 50MiB |
+| `AgentSafe` | Autonomous agent | Builtin only | Builtin only | Derived from target/scope | 15s / 5M / 2MiB |
+| `CiSafe` | CI pipeline | Builtin only | Builtin only | DenyAll | 15s / 5M / 2MiB |
+| `CompatibilityLab` | Nmap compat testing | All + Nmap paths | All + Nmap paths | AllowAllManual | 120s / 100M / 50MiB |
+
+### Resolution Flow
+
+```
+Profile Constructor → ResolvedNseExecutionProfile
+    ├── SandboxConfig (enabled, allowed_dir, allowed_commands, allowed_networks)
+    ├── NseExecutionLimits (wall_clock, lua_instruction_budget, resource caps)
+    ├── NseScriptPolicy (builtin/files/roots/nmap_paths/size cap)
+    ├── NseModulePolicy (builtin/filesystem/roots/size cap)
+    ├── NseNetworkPolicy (allow/deny/CIDRs/target set)
+    ├── audit_label (e.g., "nse:manual-permissive")
+    └── warnings (sandbox status, scope implications)
+```
+
+### Network Policy Variants
+
+| Policy | Behavior |
+|--------|----------|
+| `AllowAllManual` | No network restrictions (manual profiles only) |
+| `DenyAll` | Zero network operations (CiSafe) |
+| `AllowCidrs` | Only CIDRs from scope rules |
+| `AllowResolvedTargetSet` | Only IPs resolved from the explicit target |
+
+### Scope Derivation
+
+For `AgentSafe` and `ManualStrict`, the network policy is derived from scope input:
+- If `scope_cidrs` is non-empty → `AllowCidrs(scope_cidrs)`
+- Else if `target_ip` is a valid IP → `AllowResolvedTargetSet(vec![target_ip])`
+- Else → `DenyAll`
+
+### Usage
+
+```rust
+use eggsec_nse::{NseExecutionProfileKind, ResolvedNseExecutionProfile, ScopeInput};
+
+// Manual (CLI)
+let profile = ResolvedNseExecutionProfile::manual_permissive();
+
+// Agent (autonomous)
+let scope = ScopeInput::new("192.168.1.1").with_scope_cidrs(&["192.168.1.0/24"]);
+let profile = ResolvedNseExecutionProfile::agent_safe(&scope);
+
+// CI (zero network)
+let profile = ResolvedNseExecutionProfile::ci_safe();
+
+// Run with profile
+eggsec_nse::run_cli_with_profile(config, Some(profile)).await?;
+```

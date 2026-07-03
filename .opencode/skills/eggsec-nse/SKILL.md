@@ -31,6 +31,61 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | `NseResourceCounters` | `src/limits.rs` | Atomic counters for network/filesystem operations |
 | `NseExecutionStats` | `src/limits.rs` | Execution stats snapshot (elapsed, instructions, bytes, violation) |
 
+## Execution Profiles
+
+NSE execution profiles provide explicit presets for sandbox config, limits, script/module policy, network policy, and audit metadata.
+
+### Available Profiles
+
+| Profile | Use Case | Scripts | Network | Limits |
+|---------|----------|---------|---------|--------|
+| `ManualPermissive` | CLI (default) | All builtin + files | AllowAllManual | 120s / 100M / 50MiB |
+| `ManualStrict` | CLI restricted | Builtin only, restricted roots | AllowCidrs | 120s / 100M / 50MiB |
+| `AgentSafe` | Autonomous agents | Builtin only | From target/scope | 15s / 5M / 2MiB |
+| `CiSafe` | CI pipelines | Builtin only | DenyAll | 15s / 5M / 2MiB |
+| `CompatibilityLab` | Nmap compat | All + Nmap paths | AllowAllManual | 120s / 100M / 50MiB |
+
+### Key Types
+
+```rust
+use eggsec_nse::{
+    NseExecutionProfileKind,    // enum: ManualPermissive, ManualStrict, AgentSafe, CiSafe, CompatibilityLab
+    ResolvedNseExecutionProfile, // Resolved profile with all policies
+    ScopeInput,                 // Target + scope CIDRs for network policy derivation
+    NseScriptPolicy,            // Script access rules
+    NseModulePolicy,            // Module access rules
+    NseNetworkPolicy,           // Network access rules
+};
+```
+
+### Creating Profiles
+
+```rust
+// CLI default (full access)
+let profile = ResolvedNseExecutionProfile::manual_permissive();
+
+// Agent (restricted, network from scope)
+let scope = ScopeInput::new("192.168.1.1").with_scope_cidrs(&["192.168.1.0/24"]);
+let profile = ResolvedNseExecutionProfile::agent_safe(&scope);
+
+// CI (zero network)
+let profile = ResolvedNseExecutionProfile::ci_safe();
+```
+
+### Running with Profile
+
+```rust
+// Profile-aware execution
+eggsec_nse::run_cli_with_profile(config, Some(profile)).await?;
+
+// Fallback to manual_permissive if None
+eggsec_nse::run_cli_with_profile(config, None).await?;
+```
+
+### CLI Handler Integration
+
+The CLI handler (`handle_nse` in `crates/eggsec/src/commands/handlers/scan.rs`) constructs a `ManualPermissive` profile and passes it to `run_cli_with_profile`. Profile warnings (sandbox disabled, scope implications) are logged at startup.
+
 ## Features
 
 ```

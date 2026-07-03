@@ -556,6 +556,7 @@ Eggsec borrows proven scanning concepts from Nmap but is not a drop-in replaceme
 - **NSE is an optional compatibility layer.** Build with `--features nse` to enable curated Nmap NSE script support.
 - **No full Nmap parity.** Eggsec does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
 - **NSE is a protocol-testing knowledge source.** Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety.
+- **Execution profiles enforce trust boundaries.** `NseExecutionProfileKind` presets (`ManualPermissive`, `AgentSafe`, `CiSafe`, etc.) resolve into sandbox config, limits, script/module/network policy, and audit metadata. CLI uses `ManualPermissive` by default; agents and CI use restrictive profiles.
 
 ## Agent and Orchestration
 

@@ -97,6 +97,7 @@ cargo clippy --lib -p eggsec --features db-pentest
 cargo check -p eggsec-nse --features nse
 cargo test -p eggsec-nse --features nse
 cargo test -p eggsec-nse --test execution_limits_tests
+cargo test -p eggsec-nse --test profile_tests
 cargo clippy -p eggsec-nse --features nse
 
 # Wireless
@@ -362,6 +363,12 @@ Canonical reference points when updating guidance or skills:
 - `EvidenceSource` - Provenance of evidence (tool, module, run_id)
 - `RedactionState` - Sensitivity classification: None, FullyRedacted, PartiallyRedacted, Summarized
 - `RedactionPolicy` - Manifest-level redaction strategy: None, RedactAll, RedactSensitive, SummarizeAll, DomainSpecific
+- `NseExecutionProfileKind` - NSE execution profile enum: `ManualPermissive`, `ManualStrict`, `AgentSafe`, `CiSafe`, `CompatibilityLab`. Defined in `eggsec-nse::profile`. Encodes trust boundary assumption for NSE script execution.
+- `ResolvedNseExecutionProfile` - Resolved NSE profile with all policies: `kind`, `sandbox`, `limits`, `script_policy`, `module_policy`, `network_policy`, `audit_label`, `warnings`. Constructors: `manual_permissive`, `manual_strict`, `agent_safe`, `ci_safe`, `compatibility_lab`.
+- `NseScriptPolicy` - NSE script access rules: `allow_builtin_scripts`, `allow_script_files`, `allowed_script_roots`, `allow_conventional_nmap_paths`, `max_script_bytes`.
+- `NseModulePolicy` - NSE module access rules: `allow_builtin_modules`, `allow_filesystem_modules`, `allowed_module_roots`, `max_module_bytes`.
+- `NseNetworkPolicy` - NSE network access policy: `AllowAllManual`, `DenyAll`, `AllowCidrs`, `AllowResolvedTargetSet`.
+- `ScopeInput` - Scope input for network policy derivation in NSE profiles: `target_ip`, `resolved_ips`, `scope_cidrs`.
 - `SessionId` - Opaque session identifier (`eggsec-runtime::ids`)
 - `TaskId` - Opaque task identifier (`eggsec-runtime::ids`)
 - `ClientId` - Opaque client identifier (`eggsec-runtime::ids`)
