@@ -13,6 +13,7 @@ members = [
     "crates/eggsec-mobile-lab",
     "crates/eggsec-runtime",
     "crates/eggsec-daemon",
+    "crates/eggsec-ui-model",
 ]
 resolver = "2"
 

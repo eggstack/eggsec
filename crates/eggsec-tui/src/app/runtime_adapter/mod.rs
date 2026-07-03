@@ -27,6 +27,7 @@ use rustc_hash::FxHashMap;
 
 use crate::tabs::Tab;
 use eggsec_runtime::{RuntimeEvent, TaskId};
+use eggsec_ui_model::{renderer_for_kind, OutcomeView};
 
 /// Actions produced by the reducer for the caller to apply to App state.
 #[derive(Debug, Clone)]
@@ -131,22 +132,22 @@ impl TuiRuntimeAdapter {
                         tab = %tab.title(),
                         "Runtime task completed"
                     );
-                    // Extract envelope summary for daemon-mode rendering fallback.
-                    let envelope_summary = match &outcome {
-                        eggsec_runtime::TaskOutcome::Result(env) => Some(
-                            env.summary
-                                .clone()
-                                .unwrap_or_else(|| format!("{} completed", env.kind)),
-                        ),
-                        eggsec_runtime::TaskOutcome::Text(text) => Some(text.clone()),
-                        _ => None,
+                    // Use OutcomeView for normalized summary extraction.
+                    let outcome_view = OutcomeView::from(&outcome);
+                    let envelope_summary = outcome_view.summary;
+                    let kind_label = match &outcome {
+                        eggsec_runtime::TaskOutcome::Result(env) => renderer_for_kind(&env.kind)
+                            .map(|r| r.title)
+                            .unwrap_or("Task")
+                            .to_string(),
+                        _ => "Task".to_string(),
                     };
                     let mut actions = vec![TuiAction::TabCompleted(tab, outcome)];
-                    if let Some(summary) = envelope_summary {
+                    if envelope_summary.is_some() {
                         actions.push(TuiAction::TabCompletedEnvelope(
                             tab,
-                            "task".into(),
-                            Some(summary),
+                            kind_label,
+                            envelope_summary,
                         ));
                     }
                     actions

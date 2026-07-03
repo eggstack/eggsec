@@ -17,6 +17,7 @@ eggsec = { path = "../eggsec" }
 eggsec-daemon = { path = "../eggsec-daemon", optional = true }
 eggsec-tui = { path = "../eggsec-tui", optional = true }
 eggsec-runtime = { path = "../eggsec-runtime" }
+eggsec-ui-model = { path = "../eggsec-ui-model" }
 
 tokio = { workspace = true }
 anyhow = { workspace = true }

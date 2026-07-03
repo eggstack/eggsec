@@ -257,16 +257,12 @@ async fn subscribe_events(
         )
     })?;
 
-    let cmd = ClientCommand::Subscribe {
-        request_id: uuid::Uuid::new_v4().to_string(),
-        session_id,
-    };
-    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
-    match resp {
-        ServerMessage::Ok { .. } => {}
-        other => {
-            return Err(Json(serde_json::to_value(&other).unwrap()).into_response());
-        }
+    if state.host.runtime().snapshot(session_id).await.is_err() {
+        return Err(error_response(
+            StatusCode::OK,
+            ErrorCode::SessionNotFound,
+            "session not found".into(),
+        ));
     }
 
     let mut receiver = state.host.runtime().subscribe().await;
@@ -355,6 +351,36 @@ async fn close_session(
     Json(serde_json::to_value(&resp).unwrap()).into_response()
 }
 
+async fn list_persisted_sessions(State(state): State<Arc<HttpState>>) -> Response {
+    let cmd = ClientCommand::ListPersistedSessions {
+        request_id: uuid::Uuid::new_v4().to_string(),
+    };
+    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    Json(serde_json::to_value(&resp).unwrap()).into_response()
+}
+
+async fn get_persisted_snapshot(
+    State(state): State<Arc<HttpState>>,
+    Path(session_id): Path<String>,
+) -> Response {
+    let session_id = match session_id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                ErrorCode::InvalidRequest,
+                "invalid session_id".into(),
+            );
+        }
+    };
+    let cmd = ClientCommand::GetPersistedSnapshot {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        session_id,
+    };
+    let resp = state.host.handle_command(cmd, make_ctx(&state)).await;
+    Json(serde_json::to_value(&resp).unwrap()).into_response()
+}
+
 fn validate_bind_addr(addr: &SocketAddr, allow_public: bool) -> Result<(), String> {
     if !addr.ip().is_loopback() && !allow_public {
         return Err(format!(
@@ -413,6 +439,11 @@ pub async fn run_http_server(
             post(approve_policy),
         )
         .route("/sessions/{session_id}", delete(close_session))
+        .route("/sessions/persisted", get(list_persisted_sessions))
+        .route(
+            "/sessions/persisted/{session_id}",
+            get(get_persisted_snapshot),
+        )
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(addr)
@@ -500,6 +531,11 @@ mod tests {
                     post(approve_policy),
                 )
                 .route("/sessions/{session_id}", delete(close_session))
+                .route("/sessions/persisted", get(list_persisted_sessions))
+                .route(
+                    "/sessions/persisted/{session_id}",
+                    get(get_persisted_snapshot),
+                )
                 .with_state(state);
 
             axum::serve(listener, app)
@@ -780,6 +816,124 @@ mod tests {
         assert!(resp.status().is_success());
         let body: serde_json::Value = resp.json().await.unwrap();
         assert_eq!(body["type"], "Ok");
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn http_submit_without_declaration_denied() {
+        let (addr, shutdown) = start_server().await;
+        let client = reqwest::Client::new();
+
+        let fake_session = eggsec_runtime::SessionId::new();
+        let resp = client
+            .post(format!("http://{}/sessions/{}/tasks", addr, fake_session))
+            .json(&serde_json::json!({
+                "request": {
+                    "task_kind": {"kind": "PortScan", "params": {"target": "10.0.0.1"}},
+                    "surface": {"CliManual": null},
+                    "labels": []
+                }
+            }))
+            .send()
+            .await
+            .unwrap();
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["type"], "Error");
+        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn http_sse_event_delivery() {
+        let (addr, shutdown) = start_server().await;
+        let client = reqwest::Client::new();
+
+        let _ = client
+            .post(format!("http://{}/clients/declare", addr))
+            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "sse-test"}))
+            .send()
+            .await
+            .unwrap();
+
+        let resp = client
+            .post(format!("http://{}/sessions", addr))
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        let body: serde_json::Value = resp.json().await.unwrap();
+        let session_id = body["session_id"].as_str().unwrap();
+
+        let resp = client
+            .get(format!("http://{}/sessions/{}/events", addr, session_id))
+            .header("Accept", "text/event-stream")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn http_list_persisted_sessions() {
+        let (addr, shutdown) = start_server().await;
+        let client = reqwest::Client::new();
+
+        let _ = client
+            .post(format!("http://{}/clients/declare", addr))
+            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
+            .send()
+            .await
+            .unwrap();
+
+        let resp = client
+            .get(format!("http://{}/sessions/persisted", addr))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["type"], "PersistedSessions");
+        assert!(body["sessions"].is_array());
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn http_get_persisted_snapshot() {
+        let (addr, shutdown) = start_server().await;
+        let client = reqwest::Client::new();
+
+        let _ = client
+            .post(format!("http://{}/clients/declare", addr))
+            .json(&serde_json::json!({"kind": {"type": "Tui"}, "label": "test"}))
+            .send()
+            .await
+            .unwrap();
+
+        let fake_id = eggsec_runtime::SessionId::new();
+        let resp = client
+            .get(format!("http://{}/sessions/persisted/{}", addr, fake_id))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["type"], "PersistedSnapshot");
+        assert!(body["snapshot"].is_null());
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn http_get_persisted_snapshot_invalid_id() {
+        let (addr, shutdown) = start_server().await;
+        let resp = reqwest::get(format!("http://{}/sessions/persisted/not-a-uuid", addr))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         shutdown.cancel();
     }
 }

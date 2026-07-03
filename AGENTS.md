@@ -21,7 +21,7 @@ Feature-gated crates need explicit features: `cargo check -p eggsec --features m
 
 ## Project Overview
 
-Eggsec is a Rust-based security testing toolkit organized as a workspace with 12 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, and `eggsec-runtime`. The `eggsec-runtime` crate provides frontend-neutral task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) used by TUI, CLI, REST, MCP, and agent surfaces. See `README.md` for features and `architecture/overview.md` for design details.
+Eggsec is a Rust-based security testing toolkit organized as a workspace with 13 crates: `eggsec-core`, `eggsec-tool-core`, `eggsec`, `eggsec-nse`, `eggsec-tui`, `eggsec-cli`, `eggsec-output`, `eggsec-agent`, `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-runtime`, and `eggsec-ui-model`. The `eggsec-runtime` crate provides frontend-neutral task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) used by TUI, CLI, REST, MCP, and agent surfaces. See `README.md` for features and `architecture/overview.md` for design details.
 
 ## Quick Reference
 
@@ -48,6 +48,8 @@ cargo test -p eggsec-db-lab
 cargo test -p eggsec-mobile-lab
 cargo check -p eggsec-runtime
 cargo test -p eggsec-runtime
+cargo check -p eggsec-ui-model
+cargo test -p eggsec-ui-model
 cargo check -p eggsec-daemon
 cargo test -p eggsec-daemon                    # daemon tests including persistence layer (135 tests)
 cargo check -p eggsec-daemon --features http-api
@@ -377,6 +379,19 @@ Canonical reference points when updating guidance or skills:
 - `TuiDispatcherContext` - Per-task channel context (`eggsec-tui::app::task_runtime`); holds `mpsc::Sender<(u64,u64)>` and `mpsc::Sender<TaskResult>` for a single task submission
 - `RuntimeEventSink` - Event sink for runtime lifecycle events (`eggsec-runtime::runtime`)
 - `RuntimeEventReceiver` - Event receiver for runtime lifecycle events (`eggsec-runtime::runtime`)
+- `SessionSummaryView` - Frontend-neutral session summary DTO (`eggsec-ui-model::session_view`); `From<&SessionSummary>` conversion
+- `SessionView` - Full session view with task lists (`eggsec-ui-model::session_view`); `From<&SessionSnapshot>` conversion
+- `TaskView` - Task view with status/kind labels (`eggsec-ui-model::task_view`); `From<&TaskSnapshot>` conversion
+- `TaskProgressView` - Progress with percentage (`eggsec-ui-model::task_view`); `From<&TaskProgress>` conversion
+- `ResultEnvelopeView` - Normalized result envelope with renderer lookup (`eggsec-ui-model::result_view`); `From<&TaskResultEnvelope>` conversion
+- `OutcomeView` - Task outcome view (`eggsec-ui-model::result_view`); `From<&TaskOutcome>` conversion
+- `ArtifactView` - Artifact reference view (`eggsec-ui-model::artifact_view`); `From<&ArtifactRef>` conversion
+- `EventView` - Runtime event view (`eggsec-ui-model::event_view`); `From<&RuntimeEvent>` conversion for all 11 variants
+- `DashboardSummaryView` - Aggregated session statistics (`eggsec-ui-model::dashboard_view`); `from_summaries(&[SessionSummary])` constructor
+- `ClientRoleView` - Permission role view (`eggsec-ui-model::permission_view`); static constructors for owner/controller/observer/approver
+- `PolicyPromptView` - Policy prompt view (`eggsec-ui-model::policy_view`); `From<&PolicyPrompt>` conversion
+- `ResultRendererDescriptor` - Metadata for rendering a result kind (`eggsec-ui-model::renderer_registry`); fields: `kind`, `title`, `summary_fields`, `artifact_kinds`, `supports_rich_tui`, `supports_json_detail`
+- `renderer_for_kind()` - Lookup function for `ResultRendererDescriptor` by kind string (`eggsec-ui-model::renderer_registry`)
 
 ### Important Patterns
 

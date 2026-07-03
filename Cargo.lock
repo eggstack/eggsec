@@ -1864,6 +1864,7 @@ dependencies = [
  "eggsec-daemon",
  "eggsec-runtime",
  "eggsec-tui",
+ "eggsec-ui-model",
  "serde",
  "serde_json",
  "shellexpand",
@@ -2047,6 +2048,7 @@ dependencies = [
  "eggsec-daemon",
  "eggsec-nse",
  "eggsec-runtime",
+ "eggsec-ui-model",
  "futures",
  "lzma-rs",
  "parking_lot",
@@ -2063,6 +2065,15 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "eggsec-ui-model"
+version = "0.1.0"
+dependencies = [
+ "eggsec-runtime",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

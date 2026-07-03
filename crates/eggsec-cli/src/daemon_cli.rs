@@ -8,6 +8,7 @@ use eggsec::cli::{Cli, Commands};
 use eggsec_daemon::client::DaemonClient;
 use eggsec_daemon::protocol::ServerMessage;
 use eggsec_runtime::RuntimeSurface;
+use eggsec_ui_model::{EventView, SessionSummaryView, SessionView};
 
 /// Returns `true` if the command is a daemon client command.
 pub fn is_daemon_command(cmd: &Commands) -> bool {
@@ -157,12 +158,13 @@ async fn handle_daemon(
                             );
                             println!("{}", "-".repeat(73));
                             for s in &sessions {
+                                let view = SessionSummaryView::from(s);
                                 println!(
                                     "{:<40} {:<15} {:<8} {:<8}",
-                                    s.session_id,
-                                    s.surface.label(),
-                                    s.active_count,
-                                    s.completed_count
+                                    view.session_id,
+                                    view.surface_label,
+                                    view.active_count,
+                                    view.completed_count
                                 );
                             }
                         }
@@ -193,25 +195,25 @@ async fn handle_daemon(
                     if *json {
                         println!("{}", serde_json::to_string_pretty(&snapshot)?);
                     } else {
-                        println!("Session: {}", snapshot.session_id);
-                        println!("Surface: {}", snapshot.surface.label());
-                        println!(
-                            "Scope: {}",
-                            snapshot
-                                .scope
-                                .as_ref()
-                                .map(|s| format!("{} (explicit: {})", s.source, s.is_explicit))
-                                .unwrap_or_else(|| "none".into())
-                        );
-                        println!("Created: {}s", snapshot.created_at_secs);
-                        println!("Generation: {}", snapshot.generation);
-                        println!("Active tasks: {}", snapshot.active_tasks.len());
-                        for t in &snapshot.active_tasks {
-                            println!("  [{}] {} - {:?}", t.task_id, t.request_summary, t.status);
+                        let view = SessionView::from(&snapshot);
+                        println!("Session: {}", view.session_id);
+                        println!("Surface: {}", view.surface_label);
+                        if let Some(ref scope) = view.scope {
+                            println!("Scope: {} (explicit: {})", scope.source, scope.is_explicit);
                         }
-                        println!("Completed tasks: {}", snapshot.completed_tasks.len());
-                        for t in &snapshot.completed_tasks {
-                            println!("  [{}] {} - {:?}", t.task_id, t.request_summary, t.status);
+                        println!("Active tasks: {}", view.active_tasks.len());
+                        for t in &view.active_tasks {
+                            println!(
+                                "  [{}] {} - {}",
+                                t.task_id, t.request_summary, t.status_label
+                            );
+                        }
+                        println!("Completed tasks: {}", view.completed_tasks.len());
+                        for t in &view.completed_tasks {
+                            println!(
+                                "  [{}] {} - {}",
+                                t.task_id, t.request_summary, t.status_label
+                            );
                         }
                     }
                 }
@@ -258,12 +260,13 @@ async fn handle_session(
                             );
                             println!("{}", "-".repeat(71));
                             for s in &sessions {
+                                let view = SessionSummaryView::from(s);
                                 println!(
                                     "{:<38} {:<15} {:<8} {:<8}",
-                                    s.session_id,
-                                    s.surface.label(),
-                                    s.active_count,
-                                    s.completed_count
+                                    view.session_id,
+                                    view.surface_label,
+                                    view.active_count,
+                                    view.completed_count
                                 );
                             }
                         }
@@ -301,23 +304,24 @@ async fn handle_session(
                     if json {
                         println!("{}", serde_json::to_string_pretty(&snapshot)?);
                     } else {
-                        println!("Session: {}", snapshot.session_id);
-                        println!("Surface: {}", snapshot.surface.label());
-                        println!(
-                            "Scope: {}",
-                            snapshot
-                                .scope
-                                .as_ref()
-                                .map(|s| format!("{} (explicit: {})", s.source, s.is_explicit))
-                                .unwrap_or_else(|| "none".into())
-                        );
-                        println!("Active tasks: {}", snapshot.active_tasks.len());
-                        println!("Completed tasks: {}", snapshot.completed_tasks.len());
-                        for t in &snapshot.active_tasks {
-                            println!("  [{}] {} - {:?}", t.task_id, t.request_summary, t.status);
+                        let view = SessionView::from(&snapshot);
+                        println!("Session: {}", view.session_id);
+                        println!("Surface: {}", view.surface_label);
+                        if let Some(ref scope) = view.scope {
+                            println!("Scope: {} (explicit: {})", scope.source, scope.is_explicit);
                         }
-                        for t in &snapshot.completed_tasks {
-                            println!("  [{}] {} - {:?}", t.task_id, t.request_summary, t.status);
+                        println!("Active tasks: {}", view.active_tasks.len());
+                        for t in &view.active_tasks {
+                            println!(
+                                "  [{}] {} - {}",
+                                t.task_id, t.request_summary, t.status_label
+                            );
+                        }
+                        for t in &view.completed_tasks {
+                            println!(
+                                "  [{}] {} - {}",
+                                t.task_id, t.request_summary, t.status_label
+                            );
                         }
                     }
                 }
@@ -504,39 +508,11 @@ fn build_run_request(kind: &str, target: &str) -> Result<eggsec_runtime::RunRequ
 }
 
 fn print_event(event: &eggsec_runtime::RuntimeEvent) {
-    match event {
-        eggsec_runtime::RuntimeEvent::SessionCreated { session_id } => {
-            println!("[session] Created: {}", session_id);
-        }
-        eggsec_runtime::RuntimeEvent::TaskQueued { task_id, .. } => {
-            println!("[task] Queued: {}", task_id);
-        }
-        eggsec_runtime::RuntimeEvent::TaskStarted { task_id, .. } => {
-            println!("[task] Started: {}", task_id);
-        }
-        eggsec_runtime::RuntimeEvent::TaskProgress {
-            task_id, progress, ..
-        } => {
-            println!(
-                "[task] Progress: {} - {}",
-                task_id,
-                progress.message.as_deref().unwrap_or("...")
-            );
-        }
-        eggsec_runtime::RuntimeEvent::TaskCompleted {
-            task_id, outcome, ..
-        } => {
-            println!("[task] Completed: {} - {:?}", task_id, outcome);
-        }
-        eggsec_runtime::RuntimeEvent::TaskFailed { task_id, error, .. } => {
-            println!("[task] Failed: {} - {}", task_id, error.message);
-        }
-        eggsec_runtime::RuntimeEvent::TaskCancelled { task_id, .. } => {
-            println!("[task] Cancelled: {}", task_id);
-        }
-        other => {
-            println!("[event] {:?}", other);
-        }
+    let view = EventView::from(event);
+    if let Some(ref msg) = view.message {
+        println!("[{}] {}", view.event_type, msg);
+    } else {
+        println!("[{}]", view.event_type);
     }
 }
 

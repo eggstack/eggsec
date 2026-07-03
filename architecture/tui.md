@@ -69,6 +69,16 @@ Manages the overall application state, event loop, and rendering.
 | `options.rs` | `GlobalHttpOptions` struct (auth, proxy, TLS, rate-limit, user-agent) |
 | `tab_error.rs` | `TabError` enum with 5 categories (Network, Config, Resource, Target, Unknown) and `is_recoverable()` |
 
+### UI Model Integration (`eggsec-ui-model`)
+
+The TUI depends on `eggsec-ui-model` for frontend-neutral view DTOs used in daemon-facing rendering. Key integrations:
+
+- **`runtime_adapter/mod.rs`**: Uses `OutcomeView::from(&outcome)` to normalize `TaskOutcome` into a structured view with `outcome_type`, `summary`, `envelope`, and `artifact_ref`. Uses `renderer_for_kind()` to look up `ResultRendererDescriptor` for kind labels instead of hardcoded strings.
+- **Daemon attach mode**: When connected to a daemon, the TUI receives `TaskOutcome::Result(TaskResultEnvelope)` with only `kind`/`summary`/`payload` (no typed `TaskResult`). `OutcomeView` and `ResultEnvelopeView` provide normalized summaries for `TabCompletedEnvelope` actions.
+- **Renderer registry**: `renderer_for_kind(kind)` returns `Option<&'static ResultRendererDescriptor>` with `title`, `summary_fields`, `artifact_kinds`, `supports_rich_tui`, `supports_json_detail`. Used by the runtime adapter for kind labels and by CLI for consistent output.
+
+The TUI does NOT yet consume `SessionView`, `TaskView`, `EventView`, or `DashboardSummaryView` directly — these are available for future wiring into dashboard/history tabs.
+
 ### Tabs (`tabs/`)
 
 33 specialized tabs for different security testing functions:
