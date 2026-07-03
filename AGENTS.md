@@ -93,6 +93,12 @@ cargo check -p eggsec --features db-pentest
 cargo test --lib -p eggsec --features db-pentest
 cargo clippy --lib -p eggsec --features db-pentest
 
+# NSE (domain crate)
+cargo check -p eggsec-nse --features nse
+cargo test -p eggsec-nse --features nse
+cargo test -p eggsec-nse --test execution_limits_tests
+cargo clippy -p eggsec-nse --features nse
+
 # Wireless
 cargo check -p eggsec --features wireless
 cargo test --lib -p eggsec --features wireless

@@ -26,6 +26,10 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | `ExecutorCore` | `src/executor_core.rs` | Shared Lua VM, globals, library registration |
 | `SandboxConfig` | `src/lib.rs:50-76` | Sandbox restrictions for scripts |
 | `ScanContext` | `src/context.rs:141-149` | Host info, ports, output during execution |
+| `NseExecutionLimits` | `src/limits.rs` | Bounded execution: wall-clock, instruction count, output size, script size, resource usage |
+| `NseCancellationToken` | `src/limits.rs` | Cooperative cancellation via `Arc<AtomicBool>` |
+| `NseResourceCounters` | `src/limits.rs` | Atomic counters for network/filesystem operations |
+| `NseExecutionStats` | `src/limits.rs` | Execution stats snapshot (elapsed, instructions, bytes, violation) |
 
 ## Features
 
@@ -119,6 +123,52 @@ Located in `src/cve/`:
 | `libraries/http.rs:143` HashMap in parse_options | Changed to FxHashMap |
 | `libraries/datafiles.rs:31-33` HashMap in get_services | Changed to FxHashMap |
 | `libraries/creds.rs:102,123` HashSet usage | Changed to FxHashSet |
+
+## Execution Limits
+
+`NseExecutionLimits` bounds script execution across multiple dimensions:
+
+| Limit | Default | Automated | Purpose |
+|-------|---------|-----------|---------|
+| `wall_clock_timeout` | 30s | 15s | Max wall-clock time |
+| `lua_instruction_budget` | 10M | 5M | Max Lua instructions (interrupt hook) |
+| `max_output_bytes` | 10 MiB | 2 MiB | Max total output |
+| `max_script_bytes` | 5 MiB | 1 MiB | Max script source size |
+| `max_required_module_bytes` | 2 MiB | 512 KiB | Max required module size |
+| `max_network_operations` | None | 100 | Max network ops (socket) |
+| `max_filesystem_operations` | None | 50 | Max FS ops (io/lfs) |
+
+### Profiles
+
+```rust
+NseExecutionLimits::manual_defaults()    // CLI/interactive: 120s timeout, 100M instructions
+NseExecutionLimits::automated_defaults() // MCP/agent/REST: 15s timeout, 5M instructions
+NseExecutionLimits::unlimited()          // No limits (use with caution)
+```
+
+### Cancellation
+
+```rust
+let cancellation = NseCancellationToken::new();
+cancellation.cancel();  // Request cancellation
+cancellation.is_cancelled();  // Check
+```
+
+### Creating with Limits
+
+```rust
+use eggsec_nse::{NseExecutor, NseExecutionLimits, NseCancellationToken};
+
+let limits = NseExecutionLimits::automated_defaults();
+let cancellation = NseCancellationToken::new();
+let executor = NseExecutor::with_policy(
+    SandboxConfig::default(),
+    limits,
+    cancellation,
+)?;
+let result = executor.run_script_with_limits(script)?;
+let stats = executor.execution_stats();
+```
 
 ## Common Patterns
 
