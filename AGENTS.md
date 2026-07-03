@@ -368,6 +368,13 @@ Canonical reference points when updating guidance or skills:
 - `NseScriptPolicy` - NSE script access rules: `allow_builtin_scripts`, `allow_script_files`, `allowed_script_roots`, `allow_conventional_nmap_paths`, `max_script_bytes`.
 - `NseModulePolicy` - NSE module access rules: `allow_builtin_modules`, `allow_filesystem_modules`, `allowed_module_roots`, `max_module_bytes`.
 - `NseNetworkPolicy` - NSE network access policy: `AllowAllManual`, `DenyAll`, `AllowCidrs`, `AllowResolvedTargetSet`.
+- `NseScriptSource` - Explicit script source kind for resolver (Builtin, TrustedRegistry, File, InlineManual) in `eggsec-nse::resolver`
+- `NseModuleName` - Validated module name type with strict grammar enforcement in `eggsec-nse::resolver`
+- `ResolvedNseScript` - Resolved script with content and metadata in `eggsec-nse::resolver`
+- `ResolvedNseModule` - Resolved module with content and metadata in `eggsec-nse::resolver`
+- `NseLoadError` - Structured load error type for script/module resolution in `eggsec-nse::resolver`
+- `NseLoadDiagnostic` - Load behavior diagnostic for visibility in `eggsec-nse::resolver`
+- `ScriptResolver` - Hardened script/module resolver enforcing policies, path containment, and size limits in `eggsec-nse::resolver`
 - `ScopeInput` - Scope input for network policy derivation in NSE profiles: `target_ip`, `resolved_ips`, `scope_cidrs`.
 - `SessionId` - Opaque session identifier (`eggsec-runtime::ids`)
 - `TaskId` - Opaque task identifier (`eggsec-runtime::ids`)

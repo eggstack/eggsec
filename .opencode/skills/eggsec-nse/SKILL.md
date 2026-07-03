@@ -201,6 +201,56 @@ NseExecutionLimits::automated_defaults() // MCP/agent/REST: 15s timeout, 5M inst
 NseExecutionLimits::unlimited()          // No limits (use with caution)
 ```
 
+## Script/Module Resolver
+
+`ScriptResolver` in `src/resolver.rs` enforces hardened script and module loading:
+
+| Component | Purpose |
+|-----------|---------|
+| `NseScriptSource` | Explicit script source kind (Builtin, TrustedRegistry, File, InlineManual) |
+| `NseModuleName` | Validated module name (ASCII alphanumeric + `_`, `-`, `.`) |
+| `ScriptResolver` | Policy-enforcing resolver with diagnostics |
+| `NseLoadError` | Structured load error (NotFound, BlockedByPolicy, OutsideRoot, SymlinkEscape, InvalidExtension, Oversized, InvalidModuleName, IoError, EvalError) |
+| `NseLoadDiagnostic` | Load behavior diagnostics for visibility |
+
+### Module Name Grammar
+
+Validated before any filesystem access:
+- ASCII letters, digits, `_`, `-`, `.`
+- Must not start with `.`
+- Must not contain `..`
+- Must not contain `/`, `\`, `:`, `~`, null bytes, glob chars, whitespace
+- Max length: 256
+
+### Path Containment
+
+- Canonical paths validated under approved roots
+- Symlink escape rejected
+- File extension allowlist: `.lua`, `.nse`
+
+### Usage
+
+```rust
+use eggsec_nse::{ScriptResolver, NseScriptSource, validate_nse_module_name};
+
+let mut resolver = ScriptResolver::new(
+    profile.script_policy,
+    profile.module_policy,
+    profile.limits,
+);
+
+// Resolve a script file
+let script = resolver.resolve_script(NseScriptSource::File {
+    path: PathBuf::from("/tmp/test.lua"),
+})?;
+
+// Validate a module name
+let name = validate_nse_module_name("stdnse")?;
+
+// Resolve a filesystem module
+let module = resolver.resolve_module("stdnse")?;
+```
+
 ### Cancellation
 
 ```rust

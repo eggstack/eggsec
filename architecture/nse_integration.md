@@ -171,3 +171,42 @@ let profile = ResolvedNseExecutionProfile::ci_safe();
 // Run with profile
 eggsec_nse::run_cli_with_profile(config, Some(profile)).await?;
 ```
+
+## Script/Module Resolver
+
+All script and module loading flows through `ScriptResolver` in `src/resolver.rs` to enforce security boundaries.
+
+### Script Source Model
+
+| Source Kind | Description | Policy |
+|-------------|-------------|--------|
+| `Builtin` | Shipped with eggsec-nse | Always allowed if profile permits |
+| `TrustedRegistry` | Future bundled registries | Not yet implemented |
+| `File` | User-provided script file | Manual-only unless profile allows |
+| `InlineManual` | Tests and manual CLI | Not agent-safe by default |
+
+### Module Name Grammar
+
+Before any filesystem access, module names are validated:
+- ASCII alphanumeric + `_`, `-`, `.`
+- No leading `.`, no `..` traversal
+- No path separators, shell metacharacters, or null bytes
+- Max 256 characters
+
+### Path Containment
+
+- Canonical path resolution under approved roots
+- Symlink-aware containment (symlinks resolving outside roots are rejected)
+- File extension allowlist (`.lua`, `.nse` only)
+- Size limits enforced before content evaluation
+
+### Structured Diagnostics
+
+`NseLoadDiagnostic` provides visibility into load behavior:
+- `Resolved` - successful load with byte count
+- `Blocked` - policy rejection
+- `OutsideRoot` - path containment violation
+- `SymlinkRejected` - symlink escape attempt
+- `ModuleNameRejected` - grammar violation
+- `OversizedRejected` - size limit exceeded
+- `ModuleLoadFailed` - filesystem read error (reported, not silently skipped)
