@@ -98,6 +98,9 @@ cargo check -p eggsec-nse --features nse
 cargo test -p eggsec-nse --features nse
 cargo test -p eggsec-nse --test execution_limits_tests
 cargo test -p eggsec-nse --test profile_tests
+cargo test -p eggsec-nse --test profile_guard_tests
+cargo test -p eggsec-nse --test script_file_policy_tests
+cargo test -p eggsec-nse --test sandbox_tests
 cargo clippy -p eggsec-nse --features nse
 
 # Wireless

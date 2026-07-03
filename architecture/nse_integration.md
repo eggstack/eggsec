@@ -232,6 +232,30 @@ canonical_candidate starts_with one canonical_allowed_root using path-component 
 
 `canonicalize()` is required before comparison. `Path::strip_prefix()` provides component semantics — `/tmp/root_evil` does NOT match root `/tmp/root`. Symlinks that resolve outside approved roots are rejected by `validate_symlink_containment()`.
 
+### Empty-Roots Semantics
+
+The meaning of an empty `allowed_script_roots` / `allowed_module_roots` depends on the `allow_*` boolean and the profile that produced the policy:
+
+| Policy area | Bool | Empty roots meaning |
+|-------------|------|---------------------|
+| Manual script files (`ManualPermissive`) | `allow_script_files = true` | Unrestricted manual file selection. Extension and size limits still apply. No root containment check, no symlink check — `path.canonicalize()` only. |
+| Restricted script files (`ManualStrict`, `CompatibilityLab`) | `allow_script_files = true` | Misconfiguration. Files outside any configured root are rejected with `OutsideRoot`. Profiles must populate `allowed_script_roots` to permit script files. |
+| Automated script files (`AgentSafe`, `CiSafe`) | `allow_script_files = false` | Denied before any root check via `BlockedByPolicy`. Roots are irrelevant. |
+| Filesystem modules (`ManualPermissive`) | `allow_filesystem_modules = true` | No filesystem modules. Empty roots mean only built-in modules resolve. |
+| Restricted filesystem modules (`ManualStrict`, `CompatibilityLab`) | `allow_filesystem_modules = true` | Misconfiguration. Modules outside configured roots are rejected. |
+| Automated filesystem modules (`AgentSafe`, `CiSafe`) | `allow_filesystem_modules = false` | Denied before any root check. Roots are irrelevant. |
+
+The `ManualPermissive` constructor emits a `manual-permissive profile is not agent-safe` warning so automated callers cannot accidentally use it.
+
+### Read vs Write Authorization Helpers
+
+`resolver.rs` exposes two distinct root-containment helpers:
+
+- `validate_existing_path_under_roots(path, roots)` — **read-only** helper. Requires the canonical file path to resolve. Returns `IoError` for non-existent files. Used by both `resolve_script_file()` and `resolve_module()`.
+- `validate_parent_under_roots(path, roots)` — **write/create** helper. Authorizes a path by canonicalizing only its parent. Currently unused by read paths. Marked `#[allow(dead_code)]` and reserved for future create/write semantics.
+
+Read paths must never authorize non-existent script/module files. The split is documented in the helper doc comments.
+
 ### Automated Surface Profile Enforcement
 
 `ManualPermissive` is manual-only (CLI/TUI). Automated surfaces must use explicit profiles:
@@ -248,3 +272,20 @@ Manual-only constructors (`NseExecutor::new()`, `with_sandbox()`, `with_target()
 ### Cancellation Posture
 
 Lua execution has cooperative cancellation via `NseCancellationToken` (interrupt hook fires between instructions). Core infrastructure paths (`load_script`, `setup_require`) check `is_cancelled()` before file reads. Blocking Rust-side helpers (~170 calls across 40+ library files) do NOT have individual cancellation checks — they are bounded only by the Lua interrupt hook and will be addressed in Milestone 3 via capability wrappers.
+
+## Milestone 1 Closure Note
+
+The NSE Milestone 1 closure is the end-state for loader/script-file/module-file policy enforcement. The following are explicitly **closed**:
+
+- All Lua `require()` filesystem loading is resolver-owned via `ScriptResolver::resolve_module()`.
+- Module name grammar is validated before any filesystem access.
+- Canonical root containment and symlink escape rejection are enforced for restricted profiles.
+- `ManualPermissive` script-file loading is intentionally discretionary (empty roots = unrestricted manual selection). Extension and size limits still apply.
+- `AgentSafe` and `CiSafe` reject arbitrary script files and filesystem modules before any path authorization.
+- Read-path authorization (`validate_existing_path_under_roots`) cannot authorize non-existent files via parent fallback. Write/create semantics, if ever added, use a separate helper (`validate_parent_under_roots`).
+
+The following remain **deferred to Milestone 3**:
+
+- Rust-side blocking helper cancellation. ~170 calls across 40+ library files do not have individual cancellation checks. They are bounded by the Lua interrupt hook and resource counters. Milestone 3 will introduce capability wrappers with explicit cancellation points.
+
+The empty-roots semantic table above and the read/write helper split are the contractual surface that future maintainers must preserve. Tests in `crates/eggsec-nse/tests/script_file_policy_tests.rs` are the regression net.

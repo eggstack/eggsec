@@ -285,6 +285,27 @@ let stats = executor.execution_stats();
 
 Lua `require()` filesystem loading delegates to `ScriptResolver::resolve_module()`. The resolver enforces module name grammar, profile policy, canonical root containment, symlink escape rejection, extension allowlist, and size limits. All script/module loading flows through `ScriptResolver` — no direct `std::fs::read_to_string()` in execution paths.
 
+### Empty-Roots Semantics
+
+The meaning of empty `allowed_script_roots` / `allowed_module_roots` depends on the `allow_*` boolean and the profile that produced the policy. Doc comments on `NseScriptPolicy` / `NseModulePolicy` enumerate the full table; the short form:
+
+| Profile kind | Script files | Filesystem modules |
+|--------------|--------------|--------------------|
+| `ManualPermissive` | Empty roots = unrestricted manual file selection. Extension + size limits still apply. | Empty roots = no filesystem modules (built-ins only). |
+| `ManualStrict` / `CompatibilityLab` | Empty roots = misconfiguration. Files outside any configured root are rejected. | Empty roots = misconfiguration. Modules outside configured roots are rejected. |
+| `AgentSafe` / `CiSafe` | `allow_script_files = false` — denied before any root check. | `allow_filesystem_modules = false` — denied before any root check. |
+
+`ManualPermissive` emits a `manual-permissive profile is not agent-safe` warning so automated callers cannot accidentally use it.
+
+### Read vs Write Authorization
+
+`resolver.rs` exposes two distinct root-containment helpers:
+
+- `validate_existing_path_under_roots(path, roots)` — **read-only** helper. Requires the canonical file path to resolve. Returns `IoError` for non-existent files. Used by `resolve_script_file()` and `resolve_module()`.
+- `validate_parent_under_roots(path, roots)` — reserved for future create/write semantics. Currently `#[allow(dead_code)]` and intentionally not used by read paths.
+
+Read paths must never authorize non-existent script/module files via parent fallback.
+
 ## Common Patterns
 
 ### Creating an Executor
@@ -329,4 +350,9 @@ let result = match executor.run_script(script) {
 ```bash
 cargo test -p eggsec-nse
 cargo check --lib -p eggsec-nse --features nse
+cargo test -p eggsec-nse --features nse --test script_file_policy_tests
+cargo test -p eggsec-nse --features nse --test profile_guard_tests
+cargo test -p eggsec-nse --features nse --test profile_tests
+cargo test -p eggsec-nse --features nse --test execution_limits_tests
+cargo test -p eggsec-nse --features nse --test sandbox_tests
 ```
