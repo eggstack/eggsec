@@ -13,9 +13,7 @@ use eggsec_runtime::RuntimeSurface;
 pub fn is_daemon_command(cmd: &Commands) -> bool {
     matches!(
         cmd,
-        Commands::Daemon(_)
-            | Commands::Session(_)
-            | Commands::Task(_)
+        Commands::Daemon(_) | Commands::Session(_) | Commands::Task(_)
     )
 }
 
@@ -50,6 +48,7 @@ async fn handle_daemon(
             let host = std::sync::Arc::new(eggsec_daemon::host::DaemonHost::new(
                 config,
                 NoopExecutor,
+                eggsec_daemon::store::noop_store(),
             ));
             let shutdown = tokio_util::sync::CancellationToken::new();
             let host_clone = host.clone();
@@ -87,9 +86,7 @@ async fn handle_daemon(
             let resp = client.health().await?;
             match resp {
                 ServerMessage::Health {
-                    status,
-                    version,
-                    ..
+                    status, version, ..
                 } => {
                     if json {
                         println!(
@@ -119,7 +116,9 @@ async fn handle_daemon(
                     match client.health().await {
                         Ok(_) => {
                             if json {
-                                println!(r#"{{"status":"running","message":"daemon is running (stop via SIGTERM or ctrl-c on the daemon process)"}}"#);
+                                println!(
+                                    r#"{{"status":"running","message":"daemon is running (stop via SIGTERM or ctrl-c on the daemon process)"}}"#
+                                );
                             } else {
                                 println!("Daemon is running. Stop it via SIGTERM or ctrl-c on the daemon process.");
                             }
@@ -132,6 +131,97 @@ async fn handle_daemon(
                 Err(e) => {
                     bail!("Could not connect to daemon at {}: {}", path, e);
                 }
+            }
+        }
+        eggsec::cli::DaemonSubcommand::History { json } => {
+            let path = socket_path;
+            let mut client = connect(path).await?;
+            let _ = client
+                .declare_client(
+                    eggsec_daemon::client_registry::ClientKind::Cli,
+                    Some("cli-history".into()),
+                )
+                .await;
+            let resp = client.list_persisted_sessions().await?;
+            match resp {
+                ServerMessage::PersistedSessions { sessions, .. } => {
+                    if *json {
+                        println!("{}", serde_json::to_string_pretty(&sessions)?);
+                    } else {
+                        if sessions.is_empty() {
+                            println!("No persisted sessions found.");
+                        } else {
+                            println!(
+                                "{:<40} {:<15} {:<8} {:<8}",
+                                "SESSION ID", "SURFACE", "ACTIVE", "DONE"
+                            );
+                            println!("{}", "-".repeat(73));
+                            for s in &sessions {
+                                println!(
+                                    "{:<40} {:<15} {:<8} {:<8}",
+                                    s.session_id,
+                                    s.surface.label(),
+                                    s.active_count,
+                                    s.completed_count
+                                );
+                            }
+                        }
+                    }
+                }
+                ServerMessage::Error { code, message, .. } => {
+                    bail!("Daemon error ({:?}): {}", code, message);
+                }
+                other => bail!("unexpected response: {:?}", other),
+            }
+        }
+        eggsec::cli::DaemonSubcommand::Show { session_id, json } => {
+            let path = socket_path;
+            let mut client = connect(path).await?;
+            let _ = client
+                .declare_client(
+                    eggsec_daemon::client_registry::ClientKind::Cli,
+                    Some("cli-show".into()),
+                )
+                .await;
+            let sid: eggsec_runtime::SessionId = session_id.parse()?;
+            let resp = client.get_persisted_snapshot(sid).await?;
+            match resp {
+                ServerMessage::PersistedSnapshot {
+                    snapshot: Some(snapshot),
+                    ..
+                } => {
+                    if *json {
+                        println!("{}", serde_json::to_string_pretty(&snapshot)?);
+                    } else {
+                        println!("Session: {}", snapshot.session_id);
+                        println!("Surface: {}", snapshot.surface.label());
+                        println!(
+                            "Scope: {}",
+                            snapshot
+                                .scope
+                                .as_ref()
+                                .map(|s| format!("{} (explicit: {})", s.source, s.is_explicit))
+                                .unwrap_or_else(|| "none".into())
+                        );
+                        println!("Created: {}s", snapshot.created_at_secs);
+                        println!("Generation: {}", snapshot.generation);
+                        println!("Active tasks: {}", snapshot.active_tasks.len());
+                        for t in &snapshot.active_tasks {
+                            println!("  [{}] {} - {:?}", t.task_id, t.request_summary, t.status);
+                        }
+                        println!("Completed tasks: {}", snapshot.completed_tasks.len());
+                        for t in &snapshot.completed_tasks {
+                            println!("  [{}] {} - {:?}", t.task_id, t.request_summary, t.status);
+                        }
+                    }
+                }
+                ServerMessage::PersistedSnapshot { snapshot: None, .. } => {
+                    println!("No persisted snapshot found for session {}", session_id);
+                }
+                ServerMessage::Error { code, message, .. } => {
+                    bail!("Daemon error ({:?}): {}", code, message);
+                }
+                other => bail!("unexpected response: {:?}", other),
             }
         }
     }
@@ -162,7 +252,10 @@ async fn handle_session(
                         if sessions.is_empty() {
                             println!("No active sessions.");
                         } else {
-                            println!("{:<38} {:<15} {:<8} {:<8}", "SESSION ID", "SURFACE", "ACTIVE", "DONE");
+                            println!(
+                                "{:<38} {:<15} {:<8} {:<8}",
+                                "SESSION ID", "SURFACE", "ACTIVE", "DONE"
+                            );
                             println!("{}", "-".repeat(71));
                             for s in &sessions {
                                 println!(
@@ -182,19 +275,19 @@ async fn handle_session(
         eggsec::cli::SessionSubcommand::Create { surface } => {
             let surface = parse_surface(surface.as_deref())?;
             let surface_label = surface.label().to_string();
-            let resp = client
-                .create_session(surface, None, vec![])
-                .await?;
+            let resp = client.create_session(surface, None, vec![]).await?;
             match resp {
                 ServerMessage::SessionCreated { session_id, .. } => {
                     if json {
                         println!(
                             r#"{{"session_id":"{}","surface":"{}"}}"#,
-                            session_id,
-                            surface_label
+                            session_id, surface_label
                         );
                     } else {
-                        println!("Session created: {} (surface: {})", session_id, surface_label);
+                        println!(
+                            "Session created: {} (surface: {})",
+                            session_id, surface_label
+                        );
                     }
                 }
                 other => bail!("unexpected response: {:?}", other),
@@ -235,11 +328,7 @@ async fn handle_session(
     Ok(())
 }
 
-async fn handle_task(
-    args: &eggsec::cli::TaskArgs,
-    socket_path: &str,
-    json: bool,
-) -> Result<()> {
+async fn handle_task(args: &eggsec::cli::TaskArgs, socket_path: &str, json: bool) -> Result<()> {
     let mut client = connect(socket_path).await?;
     // Declare client kind
     let _ = client
@@ -301,9 +390,7 @@ async fn handle_task(
                 other => bail!("unexpected response: {:?}", other),
             }
         }
-        eggsec::cli::TaskSubcommand::Watch {
-            session_id,
-        } => {
+        eggsec::cli::TaskSubcommand::Watch { session_id } => {
             let sid: eggsec_runtime::SessionId = session_id.parse()?;
             let mut receiver = client.subscribe(sid).await?;
             // Stream events until interrupted
@@ -428,9 +515,7 @@ fn print_event(event: &eggsec_runtime::RuntimeEvent) {
             println!("[task] Started: {}", task_id);
         }
         eggsec_runtime::RuntimeEvent::TaskProgress {
-            task_id,
-            progress,
-            ..
+            task_id, progress, ..
         } => {
             println!(
                 "[task] Progress: {} - {}",
@@ -439,15 +524,11 @@ fn print_event(event: &eggsec_runtime::RuntimeEvent) {
             );
         }
         eggsec_runtime::RuntimeEvent::TaskCompleted {
-            task_id,
-            outcome,
-            ..
+            task_id, outcome, ..
         } => {
             println!("[task] Completed: {} - {:?}", task_id, outcome);
         }
-        eggsec_runtime::RuntimeEvent::TaskFailed {
-            task_id, error, ..
-        } => {
+        eggsec_runtime::RuntimeEvent::TaskFailed { task_id, error, .. } => {
             println!("[task] Failed: {} - {}", task_id, error.message);
         }
         eggsec_runtime::RuntimeEvent::TaskCancelled { task_id, .. } => {
@@ -527,9 +608,15 @@ mod tests {
 
     #[test]
     fn parse_surface_valid() {
-        assert_eq!(parse_surface(Some("cli-manual")).unwrap(), RuntimeSurface::CliManual);
+        assert_eq!(
+            parse_surface(Some("cli-manual")).unwrap(),
+            RuntimeSurface::CliManual
+        );
         assert_eq!(parse_surface(Some("ci")).unwrap(), RuntimeSurface::Ci);
-        assert_eq!(parse_surface(Some("rest-api")).unwrap(), RuntimeSurface::RestApi);
+        assert_eq!(
+            parse_surface(Some("rest-api")).unwrap(),
+            RuntimeSurface::RestApi
+        );
     }
 
     #[test]
@@ -546,7 +633,10 @@ mod tests {
     #[test]
     fn build_request_port_scan() {
         let req = build_run_request("port-scan", "10.0.0.1").unwrap();
-        assert!(matches!(req.task_kind, eggsec_runtime::TaskKind::PortScan(_)));
+        assert!(matches!(
+            req.task_kind,
+            eggsec_runtime::TaskKind::PortScan(_)
+        ));
         assert_eq!(req.surface, RuntimeSurface::CliManual);
     }
 

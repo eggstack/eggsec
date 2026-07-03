@@ -149,6 +149,8 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | Command | Source | Purpose |
 |---------|--------|---------|
 | `daemon start/status/stop` | `daemon_cli.rs` | Daemon lifecycle management |
+| `daemon history` | `daemon_cli.rs` | List persisted sessions |
+| `daemon show <id>` | `daemon_cli.rs` | Show persisted snapshot |
 | `session list/create/snapshot` | `daemon_cli.rs` | Session introspection |
 | `task submit/cancel/watch` | `daemon_cli.rs` | Task lifecycle management |
 
@@ -221,6 +223,9 @@ cargo test --lib -p eggsec cli::
 
 ### Preflight Command
 `eggsec preflight <operation> --target <target> [--json]` runs advisory policy evaluation without executing. Uses `metadata_for_tool_id()` + `preflight_operation()` from `config::policy_decision`. Output includes outcome kind, decision, suggested flags, and required confirmation classes.
+
+### Daemon Persistence Commands
+`eggsec daemon history [--json]` lists all persisted daemon sessions. `eggsec daemon show <id> [--json]` displays a full snapshot of a persisted session including task results. Both support `--json` for structured output.
 
 ### Bug Fixes in Handlers
 - **Never use `unwrap()`** - Use `ok_or_else()` or `context()`

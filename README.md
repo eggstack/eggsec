@@ -329,6 +329,54 @@ Run `eggsec --help` or `eggsec <command> --help` for the full command reference 
 | `eggsec postex` | defense-lab | Simulate post-exploitation techniques for purple teaming (16 techniques across 4 categories: LOTL, persistence, lateral movement, credential access) mapped to MITRE ATT&CK IDs. Standalone defense-lab module (dry-run always safe; real runs require `--allow-postex` + scope; reversible actions in lab mode). Local `PostexReport`/`PostexFinding` + optional `to_scan_report_data` bridge via report convert. Feature-gated `postex`. No MCP/agent/TUI/pipeline integration. |
 | `eggsec c2` | defense-lab | Simulate C2 operations for purple teaming (beaconing, tasking, campaign orchestration, OPSEC scoring; MITRE ATT&CK profiles: APT29, Carbanak). Standalone defense-lab module (dry-run always safe; real runs require `--allow-c2`; depends on postex + evasion features). Local `C2Report`/`C2Campaign` + optional `to_scan_report_data` bridge via report convert. Feature-gated `c2`. No MCP/agent/TUI/pipeline integration. |
 
+## Daemon Persistence
+
+The `eggsec-daemon` crate provides durable session state backed by SQLite. Session snapshots are persisted at lifecycle points (create, submit, cancel, close) and recovered automatically on daemon restart.
+
+### Configuration
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enable_persistence` | `true` | Persist session snapshots and audit events to SQLite |
+| `data_dir` | `~/.local/share/eggsec/daemon/` | Directory for the `eggsec-daemon.sqlite` database file |
+
+### Features
+
+- **Session snapshots** — `SessionSnapshot` stored as JSON with timestamps in `session_snapshots` table
+- **Session recovery** — On startup, `recover_persisted_state()` hydrates all persisted sessions; running/queued tasks are marked `Cancelled` with "interrupted by daemon restart"
+- **Audit event logging** — Security actions (create-session, submit-task, cancel, etc.) recorded with action, surface, outcome, client/session IDs, and timestamp
+- **Artifact indexing** — Task artifacts (`ArtifactRef`) persisted within session snapshots, tracked by session association with kind, path, and MIME type
+- **Schema migration** — SQLite schema versioned via `schema_meta` table; WAL mode enabled for concurrent reads
+
+### CLI Commands
+
+```bash
+# Start daemon with persistence (default)
+eggsec daemon start
+
+# List all persisted sessions
+eggsec daemon history
+eggsec daemon history --json
+
+# Inspect a specific session's persisted snapshot
+eggsec daemon show <session-id>
+eggsec daemon show <session-id> --json
+
+# Check daemon health
+eggsec daemon status
+
+# Stop daemon
+eggsec daemon stop
+```
+
+### Database Schema
+
+| Table | Columns | Purpose |
+|-------|---------|---------|
+| `session_snapshots` | `session_id` (PK), `snapshot_json`, `created_at_secs` | Session state snapshots |
+| `audit_events` | `audit_id` (PK), `action`, `surface`, `outcome`, `client_id`, `session_id`, `created_at_secs` | Security audit log |
+| `schema_meta` | `key` (PK), `value` | Schema version tracking |
+
 ## Build Features
 
 | Feature | Description | Status |

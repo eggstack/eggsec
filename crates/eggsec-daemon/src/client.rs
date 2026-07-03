@@ -22,11 +22,7 @@ impl DaemonClient {
     /// Connect to a daemon at the given Unix socket path.
     pub async fn connect(socket_path: &str) -> Result<Self> {
         let stream = UnixStream::connect(socket_path).await.map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to connect to daemon at {}: {}",
-                socket_path,
-                e
-            )
+            anyhow::anyhow!("Failed to connect to daemon at {}: {}", socket_path, e)
         })?;
         let (read_half, write_half) = stream.into_split();
         let read_lines = BufReader::new(read_half).lines();
@@ -153,6 +149,26 @@ impl DaemonClient {
         .await
     }
 
+    /// List all persisted sessions from the daemon store.
+    pub async fn list_persisted_sessions(&mut self) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::ListPersistedSessions {
+            request_id: uuid::Uuid::new_v4().to_string(),
+        })
+        .await
+    }
+
+    /// Get a persisted snapshot by session ID from the daemon store.
+    pub async fn get_persisted_snapshot(
+        &mut self,
+        session_id: eggsec_runtime::SessionId,
+    ) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::GetPersistedSnapshot {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            session_id,
+        })
+        .await
+    }
+
     /// Subscribe to events for a session. Returns an event receiver.
     ///
     /// The subscribe command sends an OK acknowledgement, then the daemon
@@ -199,12 +215,12 @@ mod tests {
     use crate::config::DaemonConfig;
     use crate::host::DaemonHost;
     use crate::server::run_server;
-    use std::sync::Arc;
     use eggsec_runtime::{
         CancellationToken, RuntimeEventSink, RuntimeTaskExecutor, TaskId, TaskOutcome,
     };
     use std::future::Future;
     use std::pin::Pin;
+    use std::sync::Arc;
 
     struct TestExecutor;
 
@@ -215,8 +231,13 @@ mod tests {
             _request: eggsec_runtime::RunRequest,
             _sink: RuntimeEventSink,
             _cancel: CancellationToken,
-        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, eggsec_runtime::RuntimeError>> + Send + 'static>>
-        {
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<TaskOutcome, eggsec_runtime::RuntimeError>>
+                    + Send
+                    + 'static,
+            >,
+        > {
             Box::pin(async { Ok(TaskOutcome::Text("test-result".into())) })
         }
     }
@@ -227,7 +248,11 @@ mod tests {
             socket_path: socket_path.clone(),
             ..Default::default()
         };
-        let host = Arc::new(DaemonHost::new(config, TestExecutor));
+        let host = Arc::new(DaemonHost::new(
+            config,
+            TestExecutor,
+            crate::store::noop_store(),
+        ));
         let shutdown = CancellationToken::new();
 
         let host_clone = host.clone();
@@ -246,7 +271,9 @@ mod tests {
         let mut client = DaemonClient::connect(&socket_path).await.unwrap();
         let resp = client.health().await.unwrap();
         match resp {
-            ServerMessage::Health { status, version, .. } => {
+            ServerMessage::Health {
+                status, version, ..
+            } => {
                 assert_eq!(status, "ok");
                 assert!(!version.is_empty());
             }
@@ -281,7 +308,10 @@ mod tests {
         let (socket_path, shutdown) = start_server().await;
         let mut client = DaemonClient::connect(&socket_path).await.unwrap();
         let resp = client
-            .declare_client(crate::client_registry::ClientKind::Tui, Some("my-tui".into()))
+            .declare_client(
+                crate::client_registry::ClientKind::Tui,
+                Some("my-tui".into()),
+            )
             .await
             .unwrap();
         match resp {
@@ -303,7 +333,10 @@ mod tests {
         let mut client = DaemonClient::connect(&socket_path).await.unwrap();
         // Declare client first so subsequent commands have a client_id.
         let _decl = client
-            .declare_client(crate::client_registry::ClientKind::Cli, Some("test-cli".into()))
+            .declare_client(
+                crate::client_registry::ClientKind::Cli,
+                Some("test-cli".into()),
+            )
             .await
             .unwrap();
         let session_id = match client

@@ -35,7 +35,7 @@ Eggsec is organized as a Cargo workspace. The first-level crate boundary is:
 - **`eggsec-db-lab`**: database pentesting domain crate extracted from `eggsec::db_pentest`. Owns domain execution logic, types, and tests for Postgres/MySQL/MSSQL/MongoDB/Redis security checks. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
 - **`eggsec-web-proxy`**: web proxy and MITM interception domain crate extracted from `eggsec::proxy`. Owns proxy pool management, intercept server, TLS certificate generation, protocol handlers (WebSocket/HTTP2/gRPC), rule engine, correlation engine, and evidence bundles. Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
 - **`eggsec-mobile-lab`**: mobile app security analysis domain crate extracted from `eggsec::mobile`. Owns APK/IPA static analysis (manifest, permissions, transport config, secrets, debug/backup/exported components) and Android dynamic runtime testing (ADB, Frida instrumentation, behavioral correlation, traffic capture). Depends on `eggsec-core` and `eggsec-output` but not the main engine crate.
-- **`eggsec-daemon`**: long-running daemon host for persistent sessions (`Runtime`), Unix socket server, and client library. Provides `DaemonHost` (Runtime bridge with client registry and session access control), `ClientRegistry` (tracks connected clients with `ClientKind`/`ClientRole`), `DaemonClient` (Unix socket client with `declare_client()` handshake), and `ClientCommand`/`ServerMessage` JSON-line protocol. Supports multi-session/multi-frontend semantics: multiple clients can observe the same session, session owners control access, and permission checks enforce role-based command authorization. Guardrails: no TUI dependencies, no engine dependencies (`eggsec`), transport ownership (Unix socket) stays in this crate.
+- **`eggsec-daemon`**: long-running daemon host for persistent sessions (`Runtime`), Unix socket server, and client library. Provides `DaemonHost` (Runtime bridge with client registry and session access control), `ClientRegistry` (tracks connected clients with `ClientKind`/`ClientRole`), `DaemonClient` (Unix socket client with `declare_client()` handshake), and `ClientCommand`/`ServerMessage` JSON-line protocol. Supports multi-session/multi-frontend semantics: multiple clients can observe the same session, session owners control access, and permission checks enforce role-based command authorization. Persistence via `DaemonStore` trait with SQLite backend (WAL mode), snapshot hydration on startup, and audit event recording. Guardrails: no TUI dependencies, no engine dependencies (`eggsec`), transport ownership (Unix socket) stays in this crate. See [daemon.md](daemon.md).
 - **`eggsec-runtime`**: frontend-neutral runtime with async task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor` trait) and protocol types for daemon architecture. Provides `Runtime` for task submit/cancel/snapshot/subscribe with single-active-task policy per session, `RuntimeConfig` for timeouts and capacity, and `RuntimeTaskExecutor` for frontend-supplied execution logic. `SessionSnapshot` includes a `generation` field for optimistic concurrency tracking. Dependency-light types shared between frontend adapters (CLI, TUI, REST, MCP, gRPC) and the engine core. Guardrails: no TUI dependencies (`ratatui`/`crossterm`), no transport dependencies (`axum`/`tonic`/`tokio-tungstenite`), no reverse dependency on `eggsec`. The engine crate (`eggsec`) depends on `eggsec-runtime` for `RunRequest`/`TaskKind`/`TaskOutcome`/`TaskResultEnvelope` — this direction is intentional and enforced by architecture guards.
 
 New modules should avoid adding heavy runtime dependencies to `eggsec-core`. Types that depend on `clap`, `reqwest`, `tokio`, `ratatui`, or other heavy crates should remain in the main `eggsec` crate or in `eggsec-tui` as appropriate.
@@ -129,6 +129,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | [`config/`](../crates/eggsec/src/config/) | TOML/YAML configuration loading, scope enforcement, TUI settings | [config.md](config.md) |
 | [`storage/`](../crates/eggsec/src/storage/) | SQLx-based PostgreSQL persistence for findings and scan history | [storage.md](storage.md) |
 | [`workflow/`](../crates/eggsec/src/workflow/) | Finding lifecycle management (assignment, SLA tracking, status transitions) | [workflow.md](workflow.md) |
+| [`eggsec-daemon`](../crates/eggsec-daemon/) | Long-running daemon host: session persistence (SQLite), client registry, Unix socket server, audit events | [daemon.md](daemon.md) |
 
 ### Compliance & Risk
 
@@ -526,6 +527,9 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and
 | Daemon | `ClientRegistry` | Tracks connected clients with permission checks |
 | Daemon | `SessionAccess` | Session-level access control (owner, allowed clients, defaults) |
 | Daemon | `DaemonHost` | Runtime bridge with client registry and session access |
+| Daemon | `DaemonStore` | Persistence trait for session snapshots and audit events |
+| Daemon | `SqliteStore` | SQLite-backed persistence (WAL mode) |
+| Daemon | `PersistedAuditEvent` | Audit record for security-relevant daemon actions |
 | Config | `ApprovedOperation` | Proof-of-enforcement token for type-level dispatch (Phase 12) |
 | Config | `EnforcementError` | Structured error from `approve()`/`approve_manual()` |
 | Config | `EnforcedDispatcher` | `ToolDispatcher` wrapper requiring approval token before dispatch |
@@ -728,7 +732,7 @@ See [defense_lab.md](defense_lab.md) for detailed documentation.
 |----------|-----------|
 | **Core** | [config.md](config.md), [types.md](types.md), [constants.md](constants.md), [error.md](error.md), [domain_contract.md](domain_contract.md), [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [../docs/ARCHITECTURE_INVARIANTS.md](../docs/ARCHITECTURE_INVARIANTS.md) |
 | **Security** | [scanner.md](scanner.md), [fuzzer.md](fuzzer.md), [waf.md](waf.md), [recon.md](recon.md), [auth.md](auth.md), [hunt.md](hunt.md) |
-| **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md) |
+| **Infrastructure** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [loadtest.md](loadtest.md), [daemon.md](daemon.md) |
 | **Output** | [output.md](output.md), [findings.md](findings.md), [diff.md](diff.md), [workflow.md](workflow.md) |
 | **Integration** | [ai_agents.md](ai_agents.md), [nse_integration.md](nse_integration.md), [integrations.md](integrations.md), [notify.md](notify.md) |
 | **UI** | [tui.md](tui.md), [cli_commands.md](cli_commands.md) |
@@ -742,4 +746,4 @@ All implementation items are complete.
 
 ---
 
-*Last updated: 2026-06-30*
+*Last updated: 2026-07-03*

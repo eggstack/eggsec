@@ -83,6 +83,15 @@ pub enum ClientCommand {
         approved: bool,
         reason: Option<String>,
     },
+    /// List all persisted sessions from the store (not just live).
+    ListPersistedSessions {
+        request_id: String,
+    },
+    /// Get a persisted snapshot by session ID from the store.
+    GetPersistedSnapshot {
+        request_id: String,
+        session_id: SessionId,
+    },
 }
 
 impl ClientCommand {
@@ -100,7 +109,9 @@ impl ClientCommand {
             | Self::CancelActive { request_id, .. }
             | Self::Subscribe { request_id, .. }
             | Self::CloseSession { request_id, .. }
-            | Self::ApprovePolicy { request_id, .. } => request_id,
+            | Self::ApprovePolicy { request_id, .. }
+            | Self::ListPersistedSessions { request_id }
+            | Self::GetPersistedSnapshot { request_id, .. } => request_id,
         }
     }
 
@@ -113,8 +124,29 @@ impl ClientCommand {
             | Self::CancelActive { session_id, .. }
             | Self::Subscribe { session_id, .. }
             | Self::CloseSession { session_id, .. }
-            | Self::ApprovePolicy { session_id, .. } => Some(session_id),
+            | Self::ApprovePolicy { session_id, .. }
+            | Self::GetPersistedSnapshot { session_id, .. } => Some(session_id),
             _ => None,
+        }
+    }
+
+    /// Short discriminant string for audit logging.
+    pub fn discriminant(&self) -> &'static str {
+        match self {
+            Self::Health { .. } => "health",
+            Self::Capabilities { .. } => "capabilities",
+            Self::DeclareClient { .. } => "declare-client",
+            Self::CreateSession { .. } => "create-session",
+            Self::ListSessions { .. } => "list-sessions",
+            Self::GetSnapshot { .. } => "get-snapshot",
+            Self::SubmitTask { .. } => "submit-task",
+            Self::CancelTask { .. } => "cancel-task",
+            Self::CancelActive { .. } => "cancel-active",
+            Self::Subscribe { .. } => "subscribe",
+            Self::CloseSession { .. } => "close-session",
+            Self::ApprovePolicy { .. } => "approve-policy",
+            Self::ListPersistedSessions { .. } => "list-persisted-sessions",
+            Self::GetPersistedSnapshot { .. } => "get-persisted-snapshot",
         }
     }
 }
@@ -166,6 +198,16 @@ pub enum ServerMessage {
     },
     SessionClosed {
         request_id: String,
+    },
+    /// Persisted sessions list from the store.
+    PersistedSessions {
+        request_id: String,
+        sessions: Vec<SessionSummary>,
+    },
+    /// Persisted session snapshot from the store.
+    PersistedSnapshot {
+        request_id: String,
+        snapshot: Option<SessionSnapshot>,
     },
 }
 
@@ -687,9 +729,7 @@ mod tests {
 
     #[test]
     fn server_message_roundtrip_session_closed() {
-        let msg = ServerMessage::SessionClosed {
-            request_id: rid(),
-        };
+        let msg = ServerMessage::SessionClosed { request_id: rid() };
         let json = serde_json::to_string(&msg).unwrap();
         let back: ServerMessage = serde_json::from_str(&json).unwrap();
         if let ServerMessage::SessionClosed { request_id, .. } = back {
@@ -732,9 +772,7 @@ mod tests {
 
     #[test]
     fn server_message_type_field_session_closed() {
-        let msg = ServerMessage::SessionClosed {
-            request_id: rid(),
-        };
+        let msg = ServerMessage::SessionClosed { request_id: rid() };
         let val = serde_json::to_value(&msg).unwrap();
         assert_eq!(val["type"], "SessionClosed");
     }
@@ -805,6 +843,19 @@ mod tests {
                 .unwrap(),
                 "ApprovePolicy",
             ),
+            (
+                serde_json::to_value(&ClientCommand::ListPersistedSessions { request_id: rid() })
+                    .unwrap(),
+                "ListPersistedSessions",
+            ),
+            (
+                serde_json::to_value(&ClientCommand::GetPersistedSnapshot {
+                    request_id: rid(),
+                    session_id: SessionId::new(),
+                })
+                .unwrap(),
+                "GetPersistedSnapshot",
+            ),
         ];
         for (val, expected_type) in cases {
             assert_eq!(val["type"], expected_type);
@@ -835,15 +886,118 @@ mod tests {
                 "TaskSubmitted",
             ),
             (
-                serde_json::to_value(&ServerMessage::SessionClosed {
+                serde_json::to_value(&ServerMessage::SessionClosed { request_id: rid() }).unwrap(),
+                "SessionClosed",
+            ),
+            (
+                serde_json::to_value(&ServerMessage::PersistedSessions {
                     request_id: rid(),
+                    sessions: vec![],
                 })
                 .unwrap(),
-                "SessionClosed",
+                "PersistedSessions",
+            ),
+            (
+                serde_json::to_value(&ServerMessage::PersistedSnapshot {
+                    request_id: rid(),
+                    snapshot: None,
+                })
+                .unwrap(),
+                "PersistedSnapshot",
             ),
         ];
         for (val, expected_type) in cases {
             assert_eq!(val["type"], expected_type);
+        }
+    }
+
+    #[test]
+    fn client_command_roundtrip_list_persisted_sessions() {
+        let cmd = ClientCommand::ListPersistedSessions { request_id: rid() };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, ClientCommand::ListPersistedSessions { .. }));
+    }
+
+    #[test]
+    fn client_command_roundtrip_get_persisted_snapshot() {
+        let sid = SessionId::new();
+        let cmd = ClientCommand::GetPersistedSnapshot {
+            request_id: rid(),
+            session_id: sid,
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        if let ClientCommand::GetPersistedSnapshot { session_id, .. } = back {
+            assert_eq!(session_id, sid);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip_persisted_sessions() {
+        let msg = ServerMessage::PersistedSessions {
+            request_id: rid(),
+            sessions: vec![SessionSummary {
+                session_id: SessionId::new(),
+                surface: RuntimeSurface::RestApi,
+                scope: None,
+                active_count: 1,
+                completed_count: 0,
+                created_at_secs: 100,
+            }],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::PersistedSessions { sessions, .. } = back {
+            assert_eq!(sessions.len(), 1);
+            assert_eq!(sessions[0].surface, RuntimeSurface::RestApi);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip_persisted_snapshot() {
+        let msg = ServerMessage::PersistedSnapshot {
+            request_id: rid(),
+            snapshot: Some(SessionSnapshot {
+                session_id: SessionId::new(),
+                surface: RuntimeSurface::TuiManual,
+                scope: None,
+                created_at_secs: 42,
+                generation: 0,
+                active_tasks: vec![],
+                completed_tasks: vec![],
+                capabilities: RuntimeCapabilities::default(),
+            }),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::PersistedSnapshot {
+            snapshot: Some(snapshot),
+            ..
+        } = back
+        {
+            assert_eq!(snapshot.created_at_secs, 42);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip_persisted_snapshot_none() {
+        let msg = ServerMessage::PersistedSnapshot {
+            request_id: rid(),
+            snapshot: None,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::PersistedSnapshot { snapshot, .. } = back {
+            assert!(snapshot.is_none());
+        } else {
+            panic!("wrong variant");
         }
     }
 }

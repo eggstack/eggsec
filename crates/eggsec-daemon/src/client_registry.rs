@@ -75,6 +75,8 @@ pub fn command_permission(cmd: &ClientCommand) -> CommandPermission {
         | ClientCommand::CancelActive { .. } => CommandPermission::Controller,
         ClientCommand::CloseSession { .. } => CommandPermission::Owner,
         ClientCommand::ApprovePolicy { .. } => CommandPermission::Approver,
+        ClientCommand::ListPersistedSessions { .. }
+        | ClientCommand::GetPersistedSnapshot { .. } => CommandPermission::DeclaredClient,
     }
 }
 
@@ -425,11 +427,23 @@ mod tests {
                 approved: true,
                 reason: None,
             },
+            ClientCommand::ListPersistedSessions {
+                request_id: "t".into(),
+            },
+            ClientCommand::GetPersistedSnapshot {
+                request_id: "t".into(),
+                session_id: eggsec_runtime::SessionId::new(),
+            },
         ];
         for cmd in &commands {
             let perm = command_permission(cmd);
             // Every command must map to a permission — no panics or undefined behavior.
-            let _ = check_permission(&ClientKind::Tui, &ClientRole::Owner, &RuntimeSurface::TuiManual, perm);
+            let _ = check_permission(
+                &ClientKind::Tui,
+                &ClientRole::Owner,
+                &RuntimeSurface::TuiManual,
+                perm,
+            );
         }
     }
 
@@ -449,7 +463,11 @@ mod tests {
                 surface,
                 CommandPermission::Approver,
             );
-            assert!(result.is_err(), "Approver should be denied on strict surface {:?}", surface);
+            assert!(
+                result.is_err(),
+                "Approver should be denied on strict surface {:?}",
+                surface
+            );
         }
     }
 

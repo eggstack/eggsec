@@ -117,6 +117,8 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 When built with `--features daemon-client`, the CLI gains three command groups that communicate with a running `eggsec-daemon` instance over a Unix socket:
 
 - **`eggsec daemon start|status|stop`**: Manage the daemon process (start forks a background daemon, status checks health, stop sends shutdown).
+- **`eggsec daemon history [--json]`**: List persisted sessions from the SQLite store (session ID, surface, active/completed task counts).
+- **`eggsec daemon show <session-id> [--json]`**: Show full persisted snapshot details (surface, scope, generation, task list with statuses).
 - **`eggsec session list|create|snapshot`**: Manage sessions on the daemon (list sessions, create new session, get session snapshot with task statuses).
 - **`eggsec task submit|cancel|watch`**: Manage tasks on the daemon (submit a tool command, cancel a task, watch task events via streaming).
 

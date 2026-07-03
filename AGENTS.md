@@ -49,7 +49,7 @@ cargo test -p eggsec-mobile-lab
 cargo check -p eggsec-runtime
 cargo test -p eggsec-runtime
 cargo check -p eggsec-daemon
-cargo test -p eggsec-daemon
+cargo test -p eggsec-daemon                    # daemon tests including persistence layer (135 tests)
 cargo check -p eggsec-web-proxy
 cargo test -p eggsec-web-proxy
 cargo test --lib -p eggsec
@@ -168,6 +168,13 @@ make build         # release build
 ```
 
 > **Note**: CI uses `cargo-tarpaulin` for coverage, while the Makefile uses `cargo llvm-cov`. Both measure the same thing but with different tools.
+
+### New CLI Commands
+
+```bash
+eggsec daemon history [--json]                  # List persisted sessions
+eggsec daemon show <session-id> [--json]        # Show persisted snapshot details
+```
 
 ### Module Override Files
 
@@ -313,6 +320,9 @@ Canonical reference points when updating guidance or skills:
 - `EnforcementError` - Structured error from `approve()`/`approve_manual()`: `Denied`, `ConfirmationRequired`, `ManualOverrideUnavailable`.
 - `EnforcedDispatcher` - Wrapper around `ToolDispatcher` requiring `ApprovedOperation` before dispatch via `dispatch_checked()`.
 - `CommandPermission` - Per-command authorization level enum for daemon RBAC (`Public`, `DeclaredClient`, `Observer`, `Controller`, `Owner`, `Approver`). Single source of truth in `eggsec-daemon/src/client_registry.rs`.
+- `DaemonStore` - Trait for daemon persistence (trait + SQLite implementation). Defined in `eggsec-daemon::store`.
+- `SqliteStore` - SQLite-backed implementation of `DaemonStore` with WAL mode.
+- `NoopStore` - Test stub implementing `DaemonStore`.
 - `DomainDescriptor` - Static metadata descriptor for a capability domain (`domain/mod.rs`); declares operations, CLI/TUI/MCP/report integrations, feature gates, dry-run/evidence support. Pilot: `db-pentest`.
 - `DomainCategory` - Classification enum for domains: `StandardAssessment`, `DefenseLab`, `HazardousLab`, `FrontendAdapter`, `OutputAdapter`.
 - `CapabilityMatrixRow` - Generated row from `DomainDescriptor` + `OperationMetadata` for the capability matrix (`domain/mod.rs`). Produced by `generate_capability_matrix()`. Fields: `tool_integration: bool`, `mcp_exposed_by_default: bool`, `required_mcp_feature: Option<&'static str>`, `rest_exposable: bool`, `agent_exposable: bool`.
@@ -441,6 +451,7 @@ Canonical reference points when updating guidance or skills:
 - **TUI Runtime Phase 3 Dispatch**: `eggsec-runtime` defines a `TaskDispatcher` trait (dependency-free) in `dispatcher.rs`. `eggsec` crate owns the canonical dispatch logic in `eggsec::dispatch` module with `dispatch_task()` and `dispatch_inner()` public functions, plus `TaskResult` and all worker functions. Workers return `TaskResult` directly (no channel sends). `dispatch_inner()` takes `(RunRequest, progress_tx)` and returns `anyhow::Result<TaskResult>`. `eggsec-tui` implements `TuiTaskDispatcher` which calls `eggsec::dispatch::dispatch_inner()` directly, converts the result to `TaskResultEnvelope` via `task_result_to_envelope()`, sends typed `TaskResult` through `result_tx` for TUI rendering, and returns `TaskOutcome::Result(envelope)` for lifecycle tracking. `TuiExecutor` implements `RuntimeTaskExecutor`, loading per-task channel senders via `ArcSwap<TuiDispatcherContext>`. `TaskBuilder` trait now produces `RunRequest` instead of `TaskConfig`. The `eggsec-tui/src/workers/` directory has been removed.
 - **Runtime dependency boundary**: `eggsec-runtime` is dependency-light (serde, tokio, thiserror, uuid, tracing). The `eggsec` engine crate depends on `eggsec-runtime` for `RunRequest`/`TaskKind`/`TaskOutcome`/`TaskResultEnvelope` types — this direction is intentional. `eggsec-runtime` must never depend on `eggsec` (no reverse dependency), and must never gain TUI (`ratatui`/`crossterm`) or transport (`axum`/`tonic`/`tokio-tungstenite`) dependencies. Enforced by architecture guards in `scripts/check-architecture-guards.sh`.
 - **Daemon CommandPermission**: `CommandPermission` enum in `eggsec-daemon/src/client_registry.rs` is the single source of truth for per-command authorization levels. `command_permission()` maps every `ClientCommand` variant. Adding a new command variant without updating `command_permission()` triggers a `#[non_exhaustive]` compile error. `SessionAccess` stores `surface: RuntimeSurface` and `owner_client_kind: ClientKind` — do not derive these from other fields.
+- **Daemon Persistence**: SQLite-backed session snapshots stored at lifecycle points (create, submit, cancel, close). Recovery on daemon startup via `recover_persisted_state()`. All persistence operations are fire-and-forget (spawned async, best-effort).
 
 ## Skills Directory
 

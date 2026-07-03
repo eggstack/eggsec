@@ -112,7 +112,9 @@ impl DaemonRuntimeClient {
                                     | ServerMessage::Capabilities { request_id, .. }
                                     | ServerMessage::Health { request_id, .. }
                                     | ServerMessage::ClientDeclared { request_id, .. }
-                                    | ServerMessage::SessionClosed { request_id, .. } => {
+                                    | ServerMessage::SessionClosed { request_id, .. }
+                                    | ServerMessage::PersistedSessions { request_id, .. }
+                                    | ServerMessage::PersistedSnapshot { request_id, .. } => {
                                         request_id.clone()
                                     }
                                     ServerMessage::RuntimeEvent { .. } => unreachable!(),
@@ -189,7 +191,9 @@ impl DaemonRuntimeClient {
             | ClientCommand::DeclareClient { request_id, .. }
             | ClientCommand::CloseSession { request_id, .. }
             | ClientCommand::Subscribe { request_id, .. }
-            | ClientCommand::ApprovePolicy { request_id, .. } => request_id.clone(),
+            | ClientCommand::ApprovePolicy { request_id, .. }
+            | ClientCommand::ListPersistedSessions { request_id }
+            | ClientCommand::GetPersistedSnapshot { request_id, .. } => request_id.clone(),
         };
 
         let (tx, rx) = oneshot::channel();

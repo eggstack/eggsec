@@ -623,7 +623,9 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         // These arms satisfy the exhaustive match but should never be reached.
         #[cfg(feature = "daemon-client")]
         Some(Commands::Daemon(_)) | Some(Commands::Session(_)) | Some(Commands::Task(_)) => {
-            anyhow::bail!("daemon client commands are handled by the CLI binary, not the command handler")
+            anyhow::bail!(
+                "daemon client commands are handled by the CLI binary, not the command handler"
+            )
         }
     }
 }

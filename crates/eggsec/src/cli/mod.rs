@@ -919,6 +919,21 @@ pub enum DaemonSubcommand {
         #[arg(long, value_name = "PATH")]
         socket: Option<String>,
     },
+    /// List all sessions persisted in the daemon store
+    History {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show persisted snapshot for a session
+    Show {
+        /// Session ID to inspect
+        #[arg(value_name = "SESSION_ID")]
+        session_id: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(clap::Args)]
@@ -934,8 +949,12 @@ pub enum SessionSubcommand {
     /// Create a new daemon session
     Create {
         /// Execution surface for the session
-        #[arg(long, value_name = "SURFACE", default_value = "cli-manual",
-              help = "Execution surface: cli-manual, cli-manual-strict, ci, mcp-server, rest-api, grpc-api, security-agent")]
+        #[arg(
+            long,
+            value_name = "SURFACE",
+            default_value = "cli-manual",
+            help = "Execution surface: cli-manual, cli-manual-strict, ci, mcp-server, rest-api, grpc-api, security-agent"
+        )]
         surface: Option<String>,
     },
     /// Show session snapshot (tasks, status, scope)

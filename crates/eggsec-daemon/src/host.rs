@@ -9,6 +9,7 @@ use crate::client_registry::{
 };
 use crate::config::DaemonConfig;
 use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
+use crate::store::{DaemonStore, PersistedAuditEvent};
 
 /// Wraps the eggsec runtime with daemon configuration and command dispatch.
 ///
@@ -21,16 +22,22 @@ pub struct DaemonHost {
     config: DaemonConfig,
     client_registry: std::sync::Mutex<ClientRegistry>,
     session_access: std::sync::Mutex<HashMap<eggsec_runtime::SessionId, SessionAccess>>,
+    store: Arc<dyn DaemonStore>,
 }
 
 impl DaemonHost {
-    pub fn new(config: DaemonConfig, executor: impl RuntimeTaskExecutor) -> Self {
+    pub fn new(
+        config: DaemonConfig,
+        executor: impl RuntimeTaskExecutor,
+        store: Arc<dyn DaemonStore>,
+    ) -> Self {
         let runtime = Runtime::new(RuntimeConfig::default(), executor);
         Self {
             runtime: Arc::new(runtime),
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(HashMap::new()),
+            store,
         }
     }
 
@@ -67,6 +74,78 @@ impl DaemonHost {
         ClientRole::Observer
     }
 
+    // --- Persistence helpers ---
+
+    /// Record a security-relevant audit event.
+    async fn record_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()> {
+        if !self.config.enable_persistence {
+            return Ok(());
+        }
+        self.store.record_audit_event(&event).await
+    }
+
+    /// Recover persisted session state from the store on startup.
+    ///
+    /// Loads all persisted sessions and reconstructs them in the runtime.
+    /// Tasks that were Running/Queued are marked as Interrupted (not auto-resumed).
+    pub async fn recover_persisted_state(&self) -> anyhow::Result<()> {
+        if !self.config.enable_persistence {
+            return Ok(());
+        }
+
+        let sessions = self.store.load_all_sessions().await?;
+        if sessions.is_empty() {
+            tracing::info!("No persisted sessions to recover");
+            return Ok(());
+        }
+
+        let mut recovered = 0u32;
+        let mut interrupted_tasks = 0u32;
+
+        for snapshot in sessions {
+            // Mark any non-terminal tasks as interrupted
+            let mut snapshot = snapshot;
+            for task in &mut snapshot.active_tasks {
+                task.status = eggsec_runtime::TaskStatus::Cancelled;
+                task.last_error = Some("interrupted by daemon restart".into());
+                interrupted_tasks += 1;
+            }
+
+            match self.runtime().hydrate_session(snapshot).await {
+                Ok(session_id) => {
+                    recovered += 1;
+                    tracing::info!(%session_id, "Recovered persisted session");
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to recover persisted session");
+                }
+            }
+        }
+
+        // Record recovery audit event
+        let _ = self
+            .record_audit_event(PersistedAuditEvent {
+                action: "daemon-recovery".into(),
+                surface: "daemon".into(),
+                outcome: "recovered".into(),
+                client_id: None,
+                session_id: None,
+                timestamp_secs: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            })
+            .await;
+
+        tracing::info!(
+            sessions_recovered = recovered,
+            interrupted_tasks,
+            "Startup recovery complete"
+        );
+
+        Ok(())
+    }
+
     /// Dispatch a client command to the runtime and return a response.
     ///
     /// Every response carries the same `request_id` from the incoming command.
@@ -80,7 +159,24 @@ impl DaemonHost {
     ) -> ServerMessage {
         // Permission check before destructuring (borrowing &cmd).
         if let Some(session_id) = cmd.session_id() {
-            if let Err((code, message)) = self.check_command_permission(&cmd, client_id, session_id).await {
+            if let Err((code, message)) = self
+                .check_command_permission(&cmd, client_id, session_id)
+                .await
+            {
+                // Record permission denial audit event
+                let _ = self
+                    .record_audit_event(PersistedAuditEvent {
+                        action: format!("command-denied:{}", cmd.discriminant()),
+                        surface: "daemon".into(),
+                        outcome: "denied".into(),
+                        client_id: client_id.map(|c| c.to_string()),
+                        session_id: Some(session_id.to_string()),
+                        timestamp_secs: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    })
+                    .await;
                 return ServerMessage::Error {
                     request_id: cmd.request_id().to_owned(),
                     code,
@@ -118,6 +214,19 @@ impl DaemonHost {
                     label,
                 };
                 self.register_client(info);
+                let _ = self
+                    .record_audit_event(PersistedAuditEvent {
+                        action: "declare-client".into(),
+                        surface: "daemon".into(),
+                        outcome: "allow".into(),
+                        client_id: Some(client_id.to_string()),
+                        session_id: None,
+                        timestamp_secs: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    })
+                    .await;
                 ServerMessage::ClientDeclared {
                     request_id,
                     client_id,
@@ -162,6 +271,34 @@ impl DaemonHost {
                             .lock()
                             .unwrap()
                             .insert(session_id, access);
+                        // Persist session snapshot and record audit event
+                        let store = self.store.clone();
+                        let runtime = self.runtime.clone();
+                        let enable_persistence = self.config.enable_persistence;
+                        let client_id_str = client_id.map(|c| c.to_string());
+                        let session_id_copy = session_id;
+                        tokio::spawn(async move {
+                            if enable_persistence {
+                                if let Ok(snapshot) = runtime.snapshot(session_id_copy).await {
+                                    if let Err(e) = store.save_session_snapshot(&snapshot).await {
+                                        tracing::warn!(error = %e, "Failed to persist session snapshot");
+                                    }
+                                }
+                                let _ = store
+                                    .record_audit_event(&PersistedAuditEvent {
+                                        action: "create-session".into(),
+                                        surface: "daemon".into(),
+                                        outcome: "allow".into(),
+                                        client_id: client_id_str,
+                                        session_id: Some(session_id_copy.to_string()),
+                                        timestamp_secs: std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs(),
+                                    })
+                                    .await;
+                            }
+                        });
                         ServerMessage::SessionCreated {
                             request_id,
                             session_id,
@@ -203,10 +340,39 @@ impl DaemonHost {
                 session_id,
                 request,
             } => match self.runtime().submit(session_id, request).await {
-                Ok(task_id) => ServerMessage::TaskSubmitted {
-                    request_id,
-                    task_id,
-                },
+                Ok(task_id) => {
+                    // Persist snapshot and record audit event
+                    let store = self.store.clone();
+                    let runtime = self.runtime.clone();
+                    let enable_persistence = self.config.enable_persistence;
+                    let client_id_str = client_id.map(|c| c.to_string());
+                    tokio::spawn(async move {
+                        if enable_persistence {
+                            if let Ok(snapshot) = runtime.snapshot(session_id).await {
+                                if let Err(e) = store.save_session_snapshot(&snapshot).await {
+                                    tracing::warn!(error = %e, "Failed to persist snapshot after task submit");
+                                }
+                            }
+                            let _ = store
+                                .record_audit_event(&PersistedAuditEvent {
+                                    action: "submit-task".into(),
+                                    surface: "daemon".into(),
+                                    outcome: "allow".into(),
+                                    client_id: client_id_str,
+                                    session_id: Some(session_id.to_string()),
+                                    timestamp_secs: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                })
+                                .await;
+                        }
+                    });
+                    ServerMessage::TaskSubmitted {
+                        request_id,
+                        task_id,
+                    }
+                }
                 Err(e) => {
                     let code = match &e {
                         RuntimeError::SessionNotFound(_) => ErrorCode::SessionNotFound,
@@ -226,7 +392,36 @@ impl DaemonHost {
                 session_id,
                 task_id,
             } => match self.runtime().cancel(session_id, task_id).await {
-                Ok(()) => ServerMessage::Ok { request_id },
+                Ok(()) => {
+                    // Persist snapshot and record audit event
+                    let store = self.store.clone();
+                    let runtime = self.runtime.clone();
+                    let enable_persistence = self.config.enable_persistence;
+                    let client_id_str = client_id.map(|c| c.to_string());
+                    tokio::spawn(async move {
+                        if enable_persistence {
+                            if let Ok(snapshot) = runtime.snapshot(session_id).await {
+                                if let Err(e) = store.save_session_snapshot(&snapshot).await {
+                                    tracing::warn!(error = %e, "Failed to persist snapshot after cancel");
+                                }
+                            }
+                            let _ = store
+                                .record_audit_event(&PersistedAuditEvent {
+                                    action: "cancel-task".into(),
+                                    surface: "daemon".into(),
+                                    outcome: "allow".into(),
+                                    client_id: client_id_str,
+                                    session_id: Some(session_id.to_string()),
+                                    timestamp_secs: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                })
+                                .await;
+                        }
+                    });
+                    ServerMessage::Ok { request_id }
+                }
                 Err(e) => {
                     let code = match &e {
                         RuntimeError::SessionNotFound(_) => ErrorCode::SessionNotFound,
@@ -246,7 +441,36 @@ impl DaemonHost {
                 request_id,
                 session_id,
             } => match self.runtime().cancel_active(session_id).await {
-                Ok(()) => ServerMessage::Ok { request_id },
+                Ok(()) => {
+                    // Persist snapshot and record audit event
+                    let store = self.store.clone();
+                    let runtime = self.runtime.clone();
+                    let enable_persistence = self.config.enable_persistence;
+                    let client_id_str = client_id.map(|c| c.to_string());
+                    tokio::spawn(async move {
+                        if enable_persistence {
+                            if let Ok(snapshot) = runtime.snapshot(session_id).await {
+                                if let Err(e) = store.save_session_snapshot(&snapshot).await {
+                                    tracing::warn!(error = %e, "Failed to persist snapshot after cancel-active");
+                                }
+                            }
+                            let _ = store
+                                .record_audit_event(&PersistedAuditEvent {
+                                    action: "cancel-active".into(),
+                                    surface: "daemon".into(),
+                                    outcome: "allow".into(),
+                                    client_id: client_id_str,
+                                    session_id: Some(session_id.to_string()),
+                                    timestamp_secs: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                })
+                                .await;
+                        }
+                    });
+                    ServerMessage::Ok { request_id }
+                }
                 Err(e) => ServerMessage::Error {
                     request_id,
                     code: ErrorCode::SessionNotFound,
@@ -264,7 +488,30 @@ impl DaemonHost {
                 request_id,
                 session_id,
             } => match self.runtime().snapshot(session_id).await {
-                Ok(_) => ServerMessage::SessionClosed { request_id },
+                Ok(_) => {
+                    // Record audit event for session close
+                    let store = self.store.clone();
+                    let enable_persistence = self.config.enable_persistence;
+                    let client_id_str = client_id.map(|c| c.to_string());
+                    tokio::spawn(async move {
+                        if enable_persistence {
+                            let _ = store
+                                .record_audit_event(&PersistedAuditEvent {
+                                    action: "close-session".into(),
+                                    surface: "daemon".into(),
+                                    outcome: "allow".into(),
+                                    client_id: client_id_str,
+                                    session_id: Some(session_id.to_string()),
+                                    timestamp_secs: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                })
+                                .await;
+                        }
+                    });
+                    ServerMessage::SessionClosed { request_id }
+                }
                 Err(e) => ServerMessage::Error {
                     request_id,
                     code: ErrorCode::SessionNotFound,
@@ -278,11 +525,67 @@ impl DaemonHost {
                 task_id: _,
                 approved: _,
                 reason: _,
-            } => ServerMessage::Error {
+            } => {
+                // Record audit event even though this is not yet wired
+                let _ = self
+                    .record_audit_event(PersistedAuditEvent {
+                        action: "approve-policy".into(),
+                        surface: "daemon".into(),
+                        outcome: "unsupported".into(),
+                        client_id: client_id.map(|c| c.to_string()),
+                        session_id: None,
+                        timestamp_secs: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                    })
+                    .await;
+                ServerMessage::Error {
+                    request_id,
+                    code: ErrorCode::Unsupported,
+                    message: "daemon policy approval is not wired yet".into(),
+                }
+            }
+
+            ClientCommand::ListPersistedSessions { request_id } => {
+                let store = self.store.clone();
+                let result = tokio::task::spawn_blocking(move || store.blocking_list_sessions())
+                    .await
+                    .unwrap_or_else(|e| Err(anyhow::anyhow!("spawn_blocking failed: {}", e)));
+                match result {
+                    Ok(sessions) => ServerMessage::PersistedSessions {
+                        request_id,
+                        sessions,
+                    },
+                    Err(e) => ServerMessage::Error {
+                        request_id,
+                        code: ErrorCode::Internal,
+                        message: e.to_string(),
+                    },
+                }
+            }
+
+            ClientCommand::GetPersistedSnapshot {
                 request_id,
-                code: ErrorCode::Unsupported,
-                message: "daemon policy approval is not wired yet".into(),
-            },
+                session_id,
+            } => {
+                let store = self.store.clone();
+                let sid = session_id;
+                let result = tokio::task::spawn_blocking(move || store.blocking_get_snapshot(&sid))
+                    .await
+                    .unwrap_or_else(|e| Err(anyhow::anyhow!("spawn_blocking failed: {}", e)));
+                match result {
+                    Ok(snapshot) => ServerMessage::PersistedSnapshot {
+                        request_id,
+                        snapshot,
+                    },
+                    Err(e) => ServerMessage::Error {
+                        request_id,
+                        code: ErrorCode::Internal,
+                        message: e.to_string(),
+                    },
+                }
+            }
         }
     }
 
@@ -350,6 +653,7 @@ mod tests {
     use super::*;
     use crate::config::DaemonConfig;
     use crate::protocol::{ClientCommand, ErrorCode, ServerMessage};
+    use crate::store::NoopStore;
     use eggsec_runtime::{
         CancellationToken, RuntimeEventSink, RuntimeTaskExecutor, TaskId, TaskOutcome,
     };
@@ -372,7 +676,11 @@ mod tests {
     }
 
     fn test_host() -> DaemonHost {
-        DaemonHost::new(DaemonConfig::default(), TestExecutor)
+        DaemonHost::new(
+            DaemonConfig::default(),
+            TestExecutor,
+            crate::store::noop_store(),
+        )
     }
 
     /// Declare a test client and return its ID.
@@ -397,10 +705,19 @@ mod tests {
     async fn handle_health() {
         let host = test_host();
         let resp = host
-            .handle_command(ClientCommand::Health { request_id: "req-1".into() }, None)
+            .handle_command(
+                ClientCommand::Health {
+                    request_id: "req-1".into(),
+                },
+                None,
+            )
             .await;
         match resp {
-            ServerMessage::Health { request_id, status, version } => {
+            ServerMessage::Health {
+                request_id,
+                status,
+                version,
+            } => {
                 assert_eq!(request_id, "req-1");
                 assert_eq!(status, "ok");
                 assert!(!version.is_empty());
@@ -413,10 +730,18 @@ mod tests {
     async fn handle_capabilities() {
         let host = test_host();
         let resp = host
-            .handle_command(ClientCommand::Capabilities { request_id: "req-2".into() }, None)
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "req-2".into(),
+                },
+                None,
+            )
             .await;
         match resp {
-            ServerMessage::Capabilities { request_id, capabilities } => {
+            ServerMessage::Capabilities {
+                request_id,
+                capabilities,
+            } => {
                 assert_eq!(request_id, "req-2");
                 assert!(!capabilities.task_kinds.is_empty());
             }
@@ -428,15 +753,21 @@ mod tests {
     async fn handle_create_session_and_list() {
         let host = test_host();
         let resp = host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "req-3".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, None)
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "req-3".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                None,
+            )
             .await;
         let session_id = match resp {
-            ServerMessage::SessionCreated { request_id, session_id } => {
+            ServerMessage::SessionCreated {
+                request_id,
+                session_id,
+            } => {
                 assert_eq!(request_id, "req-3");
                 session_id
             }
@@ -444,10 +775,18 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::ListSessions { request_id: "req-4".into() }, None)
+            .handle_command(
+                ClientCommand::ListSessions {
+                    request_id: "req-4".into(),
+                },
+                None,
+            )
             .await;
         match resp {
-            ServerMessage::Sessions { request_id, sessions } => {
+            ServerMessage::Sessions {
+                request_id,
+                sessions,
+            } => {
                 assert_eq!(request_id, "req-4");
                 assert!(sessions.iter().any(|s| s.session_id == session_id));
             }
@@ -460,12 +799,15 @@ mod tests {
         let host = test_host();
         let client_id = declare_test_client(&host).await;
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(client_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(client_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -473,26 +815,32 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::SubmitTask {
-                request_id: "r2".into(),
-                session_id,
-                request: eggsec_runtime::RunRequest {
-                    task_kind: eggsec_runtime::TaskKind::PortScan(
-                        eggsec_runtime::request::PortScanParams {
-                            target: "10.0.0.1".into(),
-                            ports: Some("80".into()),
-                            scan_type: None,
-                            timeout_ms: None,
-                        },
-                    ),
-                    requested_by: None,
-                    surface: eggsec_runtime::RuntimeSurface::CliManual,
-                    labels: vec![],
+            .handle_command(
+                ClientCommand::SubmitTask {
+                    request_id: "r2".into(),
+                    session_id,
+                    request: eggsec_runtime::RunRequest {
+                        task_kind: eggsec_runtime::TaskKind::PortScan(
+                            eggsec_runtime::request::PortScanParams {
+                                target: "10.0.0.1".into(),
+                                ports: Some("80".into()),
+                                scan_type: None,
+                                timeout_ms: None,
+                            },
+                        ),
+                        requested_by: None,
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        labels: vec![],
+                    },
                 },
-            }, Some(client_id))
+                Some(client_id),
+            )
             .await;
         match resp {
-            ServerMessage::TaskSubmitted { request_id, task_id } => {
+            ServerMessage::TaskSubmitted {
+                request_id,
+                task_id,
+            } => {
                 assert_eq!(request_id, "r2");
                 let _ = task_id;
             }
@@ -505,12 +853,15 @@ mod tests {
         let host = test_host();
         let client_id = declare_test_client(&host).await;
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(client_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(client_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -518,10 +869,19 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::GetSnapshot { request_id: "r2".into(), session_id }, Some(client_id))
+            .handle_command(
+                ClientCommand::GetSnapshot {
+                    request_id: "r2".into(),
+                    session_id,
+                },
+                Some(client_id),
+            )
             .await;
         match resp {
-            ServerMessage::Snapshot { request_id, snapshot } => {
+            ServerMessage::Snapshot {
+                request_id,
+                snapshot,
+            } => {
                 assert_eq!(request_id, "r2");
                 assert_eq!(snapshot.session_id, session_id);
                 assert!(snapshot.active_tasks.is_empty());
@@ -536,12 +896,15 @@ mod tests {
         let host = test_host();
         let client_id = declare_test_client(&host).await;
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(client_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(client_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -549,7 +912,13 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::CancelActive { request_id: "r2".into(), session_id }, Some(client_id))
+            .handle_command(
+                ClientCommand::CancelActive {
+                    request_id: "r2".into(),
+                    session_id,
+                },
+                Some(client_id),
+            )
             .await;
         match resp {
             ServerMessage::Ok { request_id } => assert_eq!(request_id, "r2"),
@@ -563,10 +932,20 @@ mod tests {
         let client_id = declare_test_client(&host).await;
         let fake_id = eggsec_runtime::SessionId::new();
         let resp = host
-            .handle_command(ClientCommand::GetSnapshot { request_id: "r1".into(), session_id: fake_id }, Some(client_id))
+            .handle_command(
+                ClientCommand::GetSnapshot {
+                    request_id: "r1".into(),
+                    session_id: fake_id,
+                },
+                Some(client_id),
+            )
             .await;
         match resp {
-            ServerMessage::Error { request_id, code, message } => {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
                 assert_eq!(request_id, "r1");
                 assert_eq!(code, ErrorCode::SessionNotFound);
                 assert!(message.contains("not found"));
@@ -579,14 +958,20 @@ mod tests {
     async fn handle_declare_client() {
         let host = test_host();
         let resp = host
-            .handle_command(ClientCommand::DeclareClient {
-                request_id: "r1".into(),
-                kind: ClientKind::Tui,
-                label: Some("my-tui".into()),
-            }, None)
+            .handle_command(
+                ClientCommand::DeclareClient {
+                    request_id: "r1".into(),
+                    kind: ClientKind::Tui,
+                    label: Some("my-tui".into()),
+                },
+                None,
+            )
             .await;
         match resp {
-            ServerMessage::ClientDeclared { request_id, client_id } => {
+            ServerMessage::ClientDeclared {
+                request_id,
+                client_id,
+            } => {
                 assert_eq!(request_id, "r1");
                 let _ = client_id;
             }
@@ -599,12 +984,15 @@ mod tests {
         let host = test_host();
         let client_id = declare_test_client(&host).await;
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(client_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(client_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -612,7 +1000,13 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::CloseSession { request_id: "r2".into(), session_id }, Some(client_id))
+            .handle_command(
+                ClientCommand::CloseSession {
+                    request_id: "r2".into(),
+                    session_id,
+                },
+                Some(client_id),
+            )
             .await;
         match resp {
             ServerMessage::SessionClosed { request_id } => assert_eq!(request_id, "r2"),
@@ -626,10 +1020,20 @@ mod tests {
         let client_id = declare_test_client(&host).await;
         let fake_id = eggsec_runtime::SessionId::new();
         let resp = host
-            .handle_command(ClientCommand::CloseSession { request_id: "r1".into(), session_id: fake_id }, Some(client_id))
+            .handle_command(
+                ClientCommand::CloseSession {
+                    request_id: "r1".into(),
+                    session_id: fake_id,
+                },
+                Some(client_id),
+            )
             .await;
         match resp {
-            ServerMessage::Error { request_id, code, message } => {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
                 assert_eq!(request_id, "r1");
                 assert_eq!(code, ErrorCode::SessionNotFound);
                 assert!(message.contains("not found"));
@@ -642,17 +1046,25 @@ mod tests {
     async fn handle_declare_client_stores_in_registry() {
         let host = test_host();
         let resp = host
-            .handle_command(ClientCommand::DeclareClient {
-                request_id: "r1".into(),
-                kind: ClientKind::Agent,
-                label: Some("agent-1".into()),
-            }, None)
+            .handle_command(
+                ClientCommand::DeclareClient {
+                    request_id: "r1".into(),
+                    kind: ClientKind::Agent,
+                    label: Some("agent-1".into()),
+                },
+                None,
+            )
             .await;
         let client_id = match resp {
             ServerMessage::ClientDeclared { client_id, .. } => client_id,
             _ => panic!("expected ClientDeclared"),
         };
-        let stored = host.client_registry.lock().unwrap().get(&client_id).cloned();
+        let stored = host
+            .client_registry
+            .lock()
+            .unwrap()
+            .get(&client_id)
+            .cloned();
         assert!(stored.is_some());
         assert_eq!(stored.unwrap().kind, ClientKind::Agent);
     }
@@ -670,12 +1082,15 @@ mod tests {
         });
 
         let resp = host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(client_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(client_id),
+            )
             .await;
         let session_id = match resp {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -709,12 +1124,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -722,26 +1140,33 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::SubmitTask {
-                request_id: "r2".into(),
-                session_id,
-                request: eggsec_runtime::RunRequest {
-                    task_kind: eggsec_runtime::TaskKind::PortScan(
-                        eggsec_runtime::request::PortScanParams {
-                            target: "10.0.0.1".into(),
-                            ports: Some("80".into()),
-                            scan_type: None,
-                            timeout_ms: None,
-                        },
-                    ),
-                    requested_by: None,
-                    surface: eggsec_runtime::RuntimeSurface::CliManual,
-                    labels: vec![],
+            .handle_command(
+                ClientCommand::SubmitTask {
+                    request_id: "r2".into(),
+                    session_id,
+                    request: eggsec_runtime::RunRequest {
+                        task_kind: eggsec_runtime::TaskKind::PortScan(
+                            eggsec_runtime::request::PortScanParams {
+                                target: "10.0.0.1".into(),
+                                ports: Some("80".into()),
+                                scan_type: None,
+                                timeout_ms: None,
+                            },
+                        ),
+                        requested_by: None,
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        labels: vec![],
+                    },
                 },
-            }, Some(observer_id))
+                Some(observer_id),
+            )
             .await;
         match resp {
-            ServerMessage::Error { code: ErrorCode::PermissionDenied, message, .. } => {
+            ServerMessage::Error {
+                code: ErrorCode::PermissionDenied,
+                message,
+                ..
+            } => {
                 assert!(message.contains("permission-denied"));
             }
             other => panic!("expected PermissionDenied, got {:?}", other),
@@ -770,12 +1195,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -783,10 +1211,20 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::CloseSession { request_id: "r2".into(), session_id }, Some(observer_id))
+            .handle_command(
+                ClientCommand::CloseSession {
+                    request_id: "r2".into(),
+                    session_id,
+                },
+                Some(observer_id),
+            )
             .await;
         match resp {
-            ServerMessage::Error { code: ErrorCode::PermissionDenied, message, .. } => {
+            ServerMessage::Error {
+                code: ErrorCode::PermissionDenied,
+                message,
+                ..
+            } => {
                 assert!(message.contains("permission-denied"));
             }
             other => panic!("expected PermissionDenied, got {:?}", other),
@@ -797,12 +1235,15 @@ mod tests {
     async fn undeclared_client_cannot_submit() {
         let host = test_host();
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, None)
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                None,
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -810,26 +1251,33 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::SubmitTask {
-                request_id: "r2".into(),
-                session_id,
-                request: eggsec_runtime::RunRequest {
-                    task_kind: eggsec_runtime::TaskKind::PortScan(
-                        eggsec_runtime::request::PortScanParams {
-                            target: "10.0.0.1".into(),
-                            ports: Some("80".into()),
-                            scan_type: None,
-                            timeout_ms: None,
-                        },
-                    ),
-                    requested_by: None,
-                    surface: eggsec_runtime::RuntimeSurface::CliManual,
-                    labels: vec![],
+            .handle_command(
+                ClientCommand::SubmitTask {
+                    request_id: "r2".into(),
+                    session_id,
+                    request: eggsec_runtime::RunRequest {
+                        task_kind: eggsec_runtime::TaskKind::PortScan(
+                            eggsec_runtime::request::PortScanParams {
+                                target: "10.0.0.1".into(),
+                                ports: Some("80".into()),
+                                scan_type: None,
+                                timeout_ms: None,
+                            },
+                        ),
+                        requested_by: None,
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        labels: vec![],
+                    },
                 },
-            }, None)
+                None,
+            )
             .await;
         match resp {
-            ServerMessage::Error { code: ErrorCode::ClientNotDeclared, message, .. } => {
+            ServerMessage::Error {
+                code: ErrorCode::ClientNotDeclared,
+                message,
+                ..
+            } => {
                 assert!(message.contains("must declare"));
             }
             other => panic!("expected ClientNotDeclared, got {:?}", other),
@@ -849,12 +1297,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -862,23 +1313,26 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::SubmitTask {
-                request_id: "r2".into(),
-                session_id,
-                request: eggsec_runtime::RunRequest {
-                    task_kind: eggsec_runtime::TaskKind::PortScan(
-                        eggsec_runtime::request::PortScanParams {
-                            target: "10.0.0.1".into(),
-                            ports: Some("80".into()),
-                            scan_type: None,
-                            timeout_ms: None,
-                        },
-                    ),
-                    requested_by: None,
-                    surface: eggsec_runtime::RuntimeSurface::CliManual,
-                    labels: vec![],
+            .handle_command(
+                ClientCommand::SubmitTask {
+                    request_id: "r2".into(),
+                    session_id,
+                    request: eggsec_runtime::RunRequest {
+                        task_kind: eggsec_runtime::TaskKind::PortScan(
+                            eggsec_runtime::request::PortScanParams {
+                                target: "10.0.0.1".into(),
+                                ports: Some("80".into()),
+                                scan_type: None,
+                                timeout_ms: None,
+                            },
+                        ),
+                        requested_by: None,
+                        surface: eggsec_runtime::RuntimeSurface::CliManual,
+                        labels: vec![],
+                    },
                 },
-            }, Some(owner_id))
+                Some(owner_id),
+            )
             .await;
         match resp {
             ServerMessage::TaskSubmitted { .. } => {}
@@ -899,12 +1353,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -912,16 +1369,23 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::ApprovePolicy {
-                request_id: "r2".into(),
-                session_id,
-                task_id: eggsec_runtime::TaskId::new(),
-                approved: true,
-                reason: Some("confirmed".into()),
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::ApprovePolicy {
+                    request_id: "r2".into(),
+                    session_id,
+                    task_id: eggsec_runtime::TaskId::new(),
+                    approved: true,
+                    reason: Some("confirmed".into()),
+                },
+                Some(owner_id),
+            )
             .await;
         match resp {
-            ServerMessage::Error { code: ErrorCode::Unsupported, message, .. } => {
+            ServerMessage::Error {
+                code: ErrorCode::Unsupported,
+                message,
+                ..
+            } => {
                 assert!(message.contains("not wired yet"));
             }
             other => panic!("expected Unsupported error, got {:?}", other),
@@ -950,12 +1414,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::TuiManual,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::TuiManual,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -963,13 +1430,16 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::ApprovePolicy {
-                request_id: "r2".into(),
-                session_id,
-                task_id: eggsec_runtime::TaskId::new(),
-                approved: true,
-                reason: None,
-            }, Some(observer_id))
+            .handle_command(
+                ClientCommand::ApprovePolicy {
+                    request_id: "r2".into(),
+                    session_id,
+                    task_id: eggsec_runtime::TaskId::new(),
+                    approved: true,
+                    reason: None,
+                },
+                Some(observer_id),
+            )
             .await;
         match resp {
             ServerMessage::Error { code, message, .. } => {
@@ -1008,12 +1478,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::Unknown,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::Unknown,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -1021,7 +1494,13 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::GetSnapshot { request_id: "r2".into(), session_id }, Some(observer_id))
+            .handle_command(
+                ClientCommand::GetSnapshot {
+                    request_id: "r2".into(),
+                    session_id,
+                },
+                Some(observer_id),
+            )
             .await;
         match resp {
             ServerMessage::Snapshot { .. } => {}
@@ -1136,7 +1615,13 @@ mod tests {
     async fn client_kind_stored_in_registry() {
         let host = test_host();
 
-        for kind in [ClientKind::Tui, ClientKind::Cli, ClientKind::Mcp, ClientKind::Rest, ClientKind::Agent] {
+        for kind in [
+            ClientKind::Tui,
+            ClientKind::Cli,
+            ClientKind::Mcp,
+            ClientKind::Rest,
+            ClientKind::Agent,
+        ] {
             let resp = host
                 .handle_command(
                     ClientCommand::DeclareClient {
@@ -1151,7 +1636,13 @@ mod tests {
                 ServerMessage::ClientDeclared { client_id, .. } => client_id,
                 other => panic!("expected ClientDeclared for {:?}, got {:?}", kind, other),
             };
-            let stored = host.client_registry.lock().unwrap().get(&client_id).cloned().unwrap();
+            let stored = host
+                .client_registry
+                .lock()
+                .unwrap()
+                .get(&client_id)
+                .cloned()
+                .unwrap();
             assert_eq!(stored.kind, kind);
         }
     }
@@ -1186,7 +1677,10 @@ mod tests {
 
         let access = host.session_access.lock().unwrap();
         let session_access = access.get(&session_id).unwrap();
-        assert_eq!(session_access.surface, eggsec_runtime::RuntimeSurface::McpServer);
+        assert_eq!(
+            session_access.surface,
+            eggsec_runtime::RuntimeSurface::McpServer
+        );
         assert_eq!(session_access.owner_client_kind, ClientKind::Tui);
         assert_eq!(session_access.owner_client_id, Some(owner_id));
     }
@@ -1213,12 +1707,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::McpServer,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::McpServer,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -1226,13 +1723,16 @@ mod tests {
         };
 
         let resp = host
-            .handle_command(ClientCommand::ApprovePolicy {
-                request_id: "r2".into(),
-                session_id,
-                task_id: eggsec_runtime::TaskId::new(),
-                approved: true,
-                reason: None,
-            }, Some(approver_id))
+            .handle_command(
+                ClientCommand::ApprovePolicy {
+                    request_id: "r2".into(),
+                    session_id,
+                    task_id: eggsec_runtime::TaskId::new(),
+                    approved: true,
+                    reason: None,
+                },
+                Some(approver_id),
+            )
             .await;
         match resp {
             ServerMessage::Error { code, message, .. } => {
@@ -1272,12 +1772,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::McpServer,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::McpServer,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -1286,13 +1789,16 @@ mod tests {
 
         // Unrelated TUI client is observer by default, should be denied
         let resp = host
-            .handle_command(ClientCommand::ApprovePolicy {
-                request_id: "r2".into(),
-                session_id,
-                task_id: eggsec_runtime::TaskId::new(),
-                approved: true,
-                reason: None,
-            }, Some(unrelated_id))
+            .handle_command(
+                ClientCommand::ApprovePolicy {
+                    request_id: "r2".into(),
+                    session_id,
+                    task_id: eggsec_runtime::TaskId::new(),
+                    approved: true,
+                    reason: None,
+                },
+                Some(unrelated_id),
+            )
             .await;
         match resp {
             ServerMessage::Error { code, .. } => {
@@ -1320,12 +1826,15 @@ mod tests {
         });
 
         let session_id = match host
-            .handle_command(ClientCommand::CreateSession {
-                request_id: "r1".into(),
-                surface: eggsec_runtime::RuntimeSurface::SecurityAgent,
-                scope: None,
-                labels: vec![],
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::CreateSession {
+                    request_id: "r1".into(),
+                    surface: eggsec_runtime::RuntimeSurface::SecurityAgent,
+                    scope: None,
+                    labels: vec![],
+                },
+                Some(owner_id),
+            )
             .await
         {
             ServerMessage::SessionCreated { session_id, .. } => session_id,
@@ -1334,16 +1843,22 @@ mod tests {
 
         // Even owner on strict session should not get approval success (not wired)
         let resp = host
-            .handle_command(ClientCommand::ApprovePolicy {
-                request_id: "r2".into(),
-                session_id,
-                task_id: eggsec_runtime::TaskId::new(),
-                approved: true,
-                reason: None,
-            }, Some(owner_id))
+            .handle_command(
+                ClientCommand::ApprovePolicy {
+                    request_id: "r2".into(),
+                    session_id,
+                    task_id: eggsec_runtime::TaskId::new(),
+                    approved: true,
+                    reason: None,
+                },
+                Some(owner_id),
+            )
             .await;
         match resp {
-            ServerMessage::Error { code: ErrorCode::Unsupported, .. } => {}
+            ServerMessage::Error {
+                code: ErrorCode::Unsupported,
+                ..
+            } => {}
             other => panic!("expected Unsupported, got {:?}", other),
         }
     }
@@ -1369,5 +1884,12 @@ mod tests {
             ServerMessage::SessionCreated { .. } => {}
             other => panic!("expected SessionCreated, got {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn recover_persisted_state_with_noop_store() {
+        let host = test_host();
+        // NoopStore returns empty sessions, so recovery is a no-op
+        host.recover_persisted_state().await.unwrap();
     }
 }

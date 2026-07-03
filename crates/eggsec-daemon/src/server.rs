@@ -262,7 +262,11 @@ mod tests {
             socket_path: socket_path.clone(),
             ..Default::default()
         };
-        let host = Arc::new(DaemonHost::new(config, TestExecutor));
+        let host = Arc::new(DaemonHost::new(
+            config,
+            TestExecutor,
+            crate::store::noop_store(),
+        ));
         let shutdown = CancellationToken::new();
 
         let host_clone = host.clone();

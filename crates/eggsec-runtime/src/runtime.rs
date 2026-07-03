@@ -523,6 +523,26 @@ impl Runtime {
         Ok(session.snapshot())
     }
 
+    /// Hydrate a session from a snapshot (for daemon recovery on startup).
+    ///
+    /// Reconstructs a `RuntimeSession` from a persisted snapshot and inserts
+    /// it into the runtime's session map. Active tasks from the snapshot are
+    /// not restored (they held runtime handles), but completed task records
+    /// are preserved for history and audit querying.
+    pub async fn hydrate_session(
+        &self,
+        snapshot: SessionSnapshot,
+    ) -> Result<SessionId, RuntimeError> {
+        let session_id = snapshot.session_id;
+        let session = RuntimeSession::hydrate_from_snapshot(snapshot);
+        let mut state = self.state.lock().await;
+        state.sessions.insert(session_id, session);
+        let _ = state
+            .event_tx
+            .send(RuntimeEvent::SessionCreated { session_id });
+        Ok(session_id)
+    }
+
     /// Subscribe to runtime events.
     pub async fn subscribe(&self) -> RuntimeEventReceiver {
         let state = self.state.lock().await;
