@@ -14,6 +14,14 @@ use crate::tool::traits::{
 use crate::tool::{ToolRequest, ToolResponse, ToolResult};
 use eggsec_nse::NseExecutor;
 
+/// NSE Script Runner tool implementation.
+///
+/// # Manual-only (not currently wired up)
+///
+/// This `SecurityTool` impl is defined but not registered in any `ToolRegistry`.
+/// When wired up for automated surfaces (agent, MCP), it must use
+/// `NseExecutor::with_profile()` with an appropriate non-manual profile
+/// instead of `NseExecutor::with_target()`.
 #[derive(Clone)]
 pub struct NseTool {
     scripts_path: Option<std::path::PathBuf>,

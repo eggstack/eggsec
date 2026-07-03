@@ -210,3 +210,41 @@ Before any filesystem access, module names are validated:
 - `ModuleNameRejected` - grammar violation
 - `OversizedRejected` - size limit exceeded
 - `ModuleLoadFailed` - filesystem read error (reported, not silently skipped)
+
+## Resolver-Owned Module Loading (Milestone 1 Closure)
+
+All Lua `require()` filesystem loading delegates to `ScriptResolver::resolve_module()`. The resolver enforces:
+
+1. **Module name grammar** — validated before any filesystem access
+2. **Profile policy** — `allow_filesystem_modules` and `allowed_module_roots` checked
+3. **Canonical root containment** — `canonical_candidate.starts_with(canonical_root)` using path-component semantics (not string prefix)
+4. **Symlink escape rejection** — symlinks resolving outside approved roots are rejected
+5. **Extension allowlist** — `.lua` and `.nse` only
+6. **Size limits** — `max_required_module_bytes` enforced before content evaluation
+
+### Canonical Root Containment
+
+Every script/module filesystem load must prove:
+
+```
+canonical_candidate starts_with one canonical_allowed_root using path-component semantics
+```
+
+`canonicalize()` is required before comparison. `Path::strip_prefix()` provides component semantics — `/tmp/root_evil` does NOT match root `/tmp/root`. Symlinks that resolve outside approved roots are rejected by `validate_symlink_containment()`.
+
+### Automated Surface Profile Enforcement
+
+`ManualPermissive` is manual-only (CLI/TUI). Automated surfaces must use explicit profiles:
+
+| Surface | Required Profile | Enforcement |
+|---------|-----------------|-------------|
+| CLI handler | `ManualPermissive` | Explicit in `handle_nse()` |
+| TUI dispatch | `ManualPermissive` | Explicit in `run_nse()` (currently manual-only path) |
+| Agent/MCP/daemon | `AgentSafe` or `CiSafe` | Via `RunRequest` profile; not yet wired |
+| CI | `CiSafe` | Explicit |
+
+Manual-only constructors (`NseExecutor::new()`, `with_sandbox()`, `with_target()`) are documented with `# Manual-only` doc comments. Automated surfaces must use `with_policy()` or `with_profile()`.
+
+### Cancellation Posture
+
+Lua execution has cooperative cancellation via `NseCancellationToken` (interrupt hook fires between instructions). Core infrastructure paths (`load_script`, `setup_require`) check `is_cancelled()` before file reads. Blocking Rust-side helpers (~170 calls across 40+ library files) do NOT have individual cancellation checks — they are bounded only by the Lua interrupt hook and will be addressed in Milestone 3 via capability wrappers.

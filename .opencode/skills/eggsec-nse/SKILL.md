@@ -24,6 +24,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | `NseExecutor` | `src/executor.rs` | Sync Lua VM wrapper with NSE rule execution |
 | `AsyncNseExecutor` | `src/async_executor.rs` | Async wrapper with tokio runtime |
 | `ExecutorCore` | `src/executor_core.rs` | Shared Lua VM, globals, library registration |
+| `ScriptResolver` | `src/resolver.rs` | Policy-enforcing script/module resolver with diagnostics |
 | `SandboxConfig` | `src/lib.rs:50-76` | Sandbox restrictions for scripts |
 | `ScanContext` | `src/context.rs:141-149` | Host info, ports, output during execution |
 | `NseExecutionLimits` | `src/limits.rs` | Bounded execution: wall-clock, instruction count, output size, script size, resource usage |
@@ -39,7 +40,7 @@ NSE execution profiles provide explicit presets for sandbox config, limits, scri
 
 | Profile | Use Case | Scripts | Network | Limits |
 |---------|----------|---------|---------|--------|
-| `ManualPermissive` | CLI (default) | All builtin + files | AllowAllManual | 120s / 100M / 50MiB |
+| `ManualPermissive` | CLI (manual-only) | All builtin + files | AllowAllManual | 120s / 100M / 50MiB |
 | `ManualStrict` | CLI restricted | Builtin only, restricted roots | AllowCidrs | 120s / 100M / 50MiB |
 | `AgentSafe` | Autonomous agents | Builtin only | From target/scope | 15s / 5M / 2MiB |
 | `CiSafe` | CI pipelines | Builtin only | DenyAll | 15s / 5M / 2MiB |
@@ -263,6 +264,7 @@ cancellation.is_cancelled();  // Check
 
 ```rust
 use eggsec_nse::{NseExecutor, NseExecutionLimits, NseCancellationToken};
+use eggsec_nse::{default_script_policy, default_module_policy};
 
 let limits = NseExecutionLimits::automated_defaults();
 let cancellation = NseCancellationToken::new();
@@ -270,10 +272,18 @@ let executor = NseExecutor::with_policy(
     SandboxConfig::default(),
     limits,
     cancellation,
+    default_script_policy(),
+    default_module_policy(),
 )?;
 let result = executor.run_script_with_limits(script)?;
 let stats = executor.execution_stats();
 ```
+
+> **Manual-only constructors**: `NseExecutor::new()`, `with_sandbox()`, and `with_target()` use permissive defaults. Automated surfaces must use `with_policy()` or `with_profile()`.
+
+### Resolver-Owned Module Loading
+
+Lua `require()` filesystem loading delegates to `ScriptResolver::resolve_module()`. The resolver enforces module name grammar, profile policy, canonical root containment, symlink escape rejection, extension allowlist, and size limits. All script/module loading flows through `ScriptResolver` — no direct `std::fs::read_to_string()` in execution paths.
 
 ## Common Patterns
 

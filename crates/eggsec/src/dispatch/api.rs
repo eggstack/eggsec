@@ -309,6 +309,7 @@ pub async fn run_nse(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::nse::NseExecutor;
+    use eggsec_nse::ResolvedNseExecutionProfile;
 
     send_progress(&progress_tx, 0, 100).await;
 
@@ -317,7 +318,12 @@ pub async fn run_nse(
     let (output, errors, success) = tokio::time::timeout(
         tokio::time::Duration::from_secs(300),
         tokio::task::spawn_blocking(move || {
-            let mut executor = NseExecutor::with_target(&target_clone)
+            // NOTE: This dispatch path is currently only reached from TUI
+            // (a manual surface). When automated surfaces (agent/MCP/daemon)
+            // are added, they must pass an appropriate profile through
+            // RunRequest and construct the executor with that profile.
+            let profile = ResolvedNseExecutionProfile::manual_permissive(Some(&target_clone));
+            let mut executor = NseExecutor::with_profile(&profile)
                 .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
 
             if let Some(ref args) = script_args {
