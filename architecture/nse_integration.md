@@ -118,7 +118,7 @@ NSE execution profiles provide explicit presets that resolve into sandbox config
 
 | Profile | Trust Level | Scripts | Modules | Network | Limits |
 |---------|-------------|---------|---------|---------|--------|
-| `ManualPermissive` | User-controlled, full trust | All builtin + files | All builtin + filesystem | AllowAllManual | 120s / 100M instr / 50MiB |
+| `ManualPermissive` | User-controlled, full trust | All builtin + files | Builtin only (filesystem modules require explicit `allowed_module_roots`) | AllowAllManual | 120s / 100M instr / 50MiB |
 | `ManualStrict` | User-controlled, restricted | Builtin only, restricted roots | Builtin only | AllowCidrs from scope | 120s / 100M / 50MiB |
 | `AgentSafe` | Autonomous agent | Builtin only | Builtin only | Derived from target/scope | 15s / 5M / 2MiB |
 | `CiSafe` | CI pipeline | Builtin only | Builtin only | DenyAll | 15s / 5M / 2MiB |
@@ -289,3 +289,74 @@ The following remain **deferred to Milestone 3**:
 - Rust-side blocking helper cancellation. ~170 calls across 40+ library files do not have individual cancellation checks. They are bounded by the Lua interrupt hook and resource counters. Milestone 3 will introduce capability wrappers with explicit cancellation points.
 
 The empty-roots semantic table above and the read/write helper split are the contractual surface that future maintainers must preserve. Tests in `crates/eggsec-nse/tests/script_file_policy_tests.rs` are the regression net.
+
+## Milestone 1 Closure Index
+
+The following files are the canonical implementation, test, and doc anchors for Milestone 1. Future maintainers should treat them as the authoritative pointers and avoid duplicating their content elsewhere.
+
+### Canonical Implementation
+
+- `crates/eggsec-nse/src/resolver.rs` — `ScriptResolver`, `validate_existing_path_under_roots` (read-only), `validate_parent_under_roots` (write/create, `#[allow(dead_code)]`), module-name grammar, structured diagnostics.
+- `crates/eggsec-nse/src/profile.rs` — `ResolvedNseExecutionProfile` constructors (`manual_permissive`, `manual_strict`, `agent_safe`, `ci_safe`, `compatibility_lab`), `NseScriptPolicy` and `NseModulePolicy` doc tables defining empty-roots semantics.
+- `crates/eggsec-nse/src/executor_core.rs` — `setup_require()` delegates Lua `require()` filesystem loading to `ScriptResolver::resolve_module()`. `default_script_policy()` / `default_module_policy()` mirror `ManualPermissive` and are reserved for manual constructors.
+
+### Canonical Tests
+
+- `crates/eggsec-nse/tests/script_file_policy_tests.rs` — Milestone 1 regression net: manual permissive, strict, agent/CI, module-root, symlink, and CLI resolver-path cases.
+- `crates/eggsec-nse/tests/profile_guard_tests.rs` — Architecture guards: `AgentSafe`/`CiSafe` deny script files and filesystem modules, `CiSafe` has zero network ops, automated timeouts, manual-only constructor warnings.
+- `crates/eggsec-nse/tests/execution_limits_tests.rs` — Wall-clock, instruction-budget, output/script/module size, resource-counter, and cooperative cancellation behavior.
+- `crates/eggsec-nse/tests/profile_tests.rs` — Profile-level invariants: scoped targets, network-policy precedence, audit labels, script-policy consistency, automated vs manual limits.
+- `crates/eggsec-nse/tests/sandbox_tests.rs` — `SandboxConfig` enforcement: path restrictions, command allowlist, CIDR filtering, host resolution.
+
+### Canonical Policy Contract
+
+- `ManualPermissive` is manual-only; automated callers must not use it (constructor emits a non-agent-safe warning).
+- Empty `allowed_script_roots` under `ManualPermissive` means unrestricted manual script-file selection; extension and size limits still apply.
+- Empty `allowed_module_roots` means no filesystem module loading (built-ins only).
+- `AgentSafe` and `CiSafe` reject arbitrary script files and filesystem modules before any path authorization.
+- Restricted profiles (`ManualStrict`, `CompatibilityLab`) require configured roots for filesystem script/module loading.
+- Read-path authorization requires the canonical file to resolve; non-existent files return `IoError`. Parent-based fallback is intentionally not exposed to read paths.
+- Rust-side blocking helper cancellation is deferred to Milestone 3 capability wrappers; current behavior is bounded by the Lua interrupt hook and resource counters.
+
+### Deferred Work
+
+- **Milestone 2 (next)**: library registry, rule semantics, compatibility truthfulness, structured run reports. Begins at library-registry/rule/report-truthfulness, not at loader-policy redesign.
+- **Milestone 3**: Rust-side blocking helper cancellation via capability wrappers.
+
+## Next Work: Milestone 2
+
+The Milestone 1 contract above is the boundary. Future work should:
+
+- Treat the loader and profile enforcement as closed unless regression tests reveal a defect.
+- Build on `ScriptResolver` rather than bypass it.
+- Move library registration toward a declarative registry with a truthfulness matrix.
+- Document approximate NSE rule-matching semantics and known gaps.
+- Expose profile, resolver diagnostics, limits, and compatibility status in structured run reports.
+
+The Milestone 2 plan should be written from this closure index without reopening the loader or profile contracts established here.
+
+## Verification Record (Milestone 1)
+
+The intended Milestone 1 gate is:
+
+```bash
+cargo check -p eggsec-nse                          # baseline (default features); expected to require the `nse` feature for resolver paths
+cargo check -p eggsec-nse --features nse          # primary NSE build
+cargo test -p eggsec-nse --features nse           # all NSE unit + integration tests
+cargo test -p eggsec-nse --features nse,sandbox   # sandbox profile enforcement tests
+cargo check -p eggsec --features nse              # main crate wired with NSE feature
+make test-nse                                     # eggsec-level NSE tests via nextest
+```
+
+Latest observed status (Milestone 1 polish-pass re-run):
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| `cargo check -p eggsec-nse --features nse` | PASS (0 errors, 96 warnings — pre-existing) | Library `unused` warnings are pre-existing |
+| `cargo test -p eggsec-nse --features nse` | **183 passed, 1 ignored** across 7 suites | Includes `script_file_policy_tests` (14), `profile_guard_tests` (14), `profile_tests` (42), `execution_limits_tests` (21), `sandbox_tests` (17), inline `resolver` tests (~75) |
+| `cargo test -p eggsec-nse --features nse,sandbox` | **183 passed, 1 ignored** | Sandbox feature does not regress the suite |
+| `cargo check -p eggsec --features nse` | PASS (0 errors, 100 warnings — pre-existing) | Main crate wires NSE without errors |
+| `cargo test -p eggsec --features nse --test nse_tests` | **174 passed** | Eggsec-level NSE integration tests |
+| `make test-nse` | N/A locally (no `cargo-nextest` installed) | Documented equivalent: the two `cargo test` commands above |
+
+Commands that fail or diverge in a re-run must be documented with the exact command and a follow-up task.

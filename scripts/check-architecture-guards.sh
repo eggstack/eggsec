@@ -386,6 +386,96 @@ else
   echo "PASS: Output free of reverse dependencies."
 fi
 
+# 24. NSE script/module loading flows through ScriptResolver.
+# Direct `std::fs::read_to_string` / `std::fs::read` is only allowed in resolver.rs,
+# executor_core.rs (load_script + setup_require), public_api/api.rs (manual-only),
+# and a narrow metadata-parsing path in executor.rs (`parse_nse_categories`, which
+# reads shipped NSE scripts to extract their `categories = {...}` metadata for
+# category-aware execution, not to load user-provided scripts).
+# `require()` filesystem loading must delegate to ScriptResolver::resolve_module().
+echo ""
+echo "--- Check 24: NSE script/module loading is resolver-owned ---"
+HITS=$(rg -n 'std::fs::read_to_string\(|std::fs::read\(' \
+  crates/eggsec-nse/src/ \
+  --glob='!crates/eggsec-nse/src/resolver.rs' \
+  --glob='!crates/eggsec-nse/src/executor_core.rs' \
+  --glob='!crates/eggsec-nse/src/public_api/api.rs' \
+  --glob='!crates/eggsec-nse/src/libraries/*' \
+  2>/dev/null \
+  || true)
+# Allowlist the parse_nse_categories function body (lines 474-510 of executor.rs as of
+# the Milestone 1 polish pass). Function reads shipped NSE metadata, not user scripts.
+FILTERED=$(printf '%s\n' "$HITS" | awk -F: '
+  /^crates\/eggsec-nse\/src\/executor\.rs:/ {
+    line = $2 + 0
+    if (line >= 474 && line <= 510) { next }
+  }
+  { print }
+' || true)
+if [[ -n "$FILTERED" ]]; then
+  echo "$FILTERED"
+  echo "FAIL: Direct std::fs::read in NSE execution paths outside resolver/executor_core/public_api/libraries."
+  echo "      Route through ScriptResolver or add to the allowlist above."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: NSE script/module loading is resolver-owned."
+fi
+
+# 25. ManualPermissive profile constructors must not be used outside manual CLI/TUI surfaces.
+# Allow list: crates/eggsec-nse/src/profile.rs (canonical constructors),
+#             crates/eggsec-nse/src/lib.rs (run_cli_with_profile default fallback),
+#             crates/eggsec-nse/src/resolver.rs (inline tests),
+#             crates/eggsec-nse/tests/* (regression coverage),
+#             crates/eggsec/src/commands/handlers/scan.rs (CLI handler),
+#             crates/eggsec/src/dispatch/api.rs (CLI dispatch).
+echo ""
+echo "--- Check 25: ManualPermissive stays in manual surfaces ---"
+HITS=$(rg -n 'ResolvedNseExecutionProfile::manual_permissive' \
+  crates/ \
+  --glob='!crates/eggsec-nse/src/profile.rs' \
+  --glob='!crates/eggsec-nse/src/lib.rs' \
+  --glob='!crates/eggsec-nse/src/resolver.rs' \
+  --glob='!crates/eggsec-nse/tests/*' \
+  --glob='!crates/eggsec/src/commands/handlers/scan.rs' \
+  --glob='!crates/eggsec/src/dispatch/api.rs' \
+  2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: ManualPermissive is constructed outside the manual CLI/TUI surface allowlist."
+  echo "      Automated surfaces must use agent_safe() or ci_safe()."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: ManualPermissive use stays in manual surfaces and tests."
+fi
+
+# 26. Manual-only executor constructors stay in manual-only paths.
+# `NseExecutor::new()`, `with_sandbox()`, `with_target()` use permissive defaults.
+# Allow list: profile/executor/executor_core source files, nse crate tests,
+# eggsec crate tests (nse_tests.rs, nse_integration_tests.rs), manual CLI surfaces
+# (commands/handlers/scan.rs, dispatch/api.rs, nse_tool.rs).
+echo ""
+echo "--- Check 26: Manual-only NseExecutor constructors stay manual ---"
+HITS=$(rg -n 'NseExecutor::new\(|NseExecutor::with_sandbox\(|NseExecutor::with_target\(' \
+  crates/ \
+  --glob='!crates/eggsec-nse/src/executor.rs' \
+  --glob='!crates/eggsec-nse/src/executor_core.rs' \
+  --glob='!crates/eggsec-nse/tests/*' \
+  --glob='!crates/eggsec-nse/src/profile.rs' \
+  --glob='!crates/eggsec-nse/src/lib.rs' \
+  --glob='!crates/eggsec/tests/*' \
+  --glob='!crates/eggsec/src/commands/handlers/scan.rs' \
+  --glob='!crates/eggsec/src/dispatch/api.rs' \
+  --glob='!crates/eggsec/src/nse_tool.rs' \
+  2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: Manual-only NseExecutor constructors used outside the manual surface allowlist."
+  echo "      Use with_policy() or with_profile() on automated surfaces."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Manual-only NseExecutor constructors stay in manual surfaces."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

@@ -17,6 +17,8 @@ metadata:
 
 The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine support via a Lua 5.4 interpreter using `mlua`. It allows running standard NSE scripts within Eggsec.
 
+> **Milestone 1 (loader/profile) is closed.** Canonical implementation, tests, policy contract, and deferred work are listed in the [Milestone 1 Closure Index](../../architecture/nse_integration.md#milestone-1-closure-index). Future work should treat that index as the authoritative pointer and not reopen loader/profile policy unless a regression is found.
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -95,7 +97,7 @@ nse-ssh2 = ["nse", "dep:ssh2"]
 nse-sandbox = []  # Enables SandboxConfig enforcement
 ```
 
-## Libraries (80+)
+## Libraries (164)
 
 Located in `src/libraries/`:
 - **socket.rs** (703 lines) - TCP/UDP/SCTP sockets with sandbox enforcement

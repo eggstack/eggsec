@@ -155,7 +155,7 @@ Use this index to navigate to detailed architecture documentation for each compo
 | Module | Purpose | Architecture Doc |
 |--------|---------|------------------|
 | [`ai/`](../crates/eggsec/src/ai/) | AI/LLM client (OpenAI, Anthropic, Azure), cache, planner, script generation, WAF bypass suggestions | [ai_agents.md](ai_agents.md) |
-| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 166 NSE libraries | [nse_integration.md](nse_integration.md) |
+| [`eggsec-nse/`](../crates/eggsec-nse/) | Nmap Scripting Engine support (Lua 5.4), 164 NSE libraries | [nse_integration.md](nse_integration.md) |
 | [`integrations/`](../crates/eggsec/src/integrations/) | Jira, GitHub, GitLab external connectors | [integrations.md](integrations.md) |
 | [`notify/`](../crates/eggsec/src/notify/) | Webhook, Slack, Discord, Teams notifications | [notify.md](notify.md) |
 
@@ -400,7 +400,7 @@ Nmap Scripting Engine compatibility:
 | Component | Description |
 |-----------|-------------|
 | **Lua VM** | Lua 5.4 via mlua crate |
-| **Libraries** | 166 NSE-compatible library modules |
+| **Libraries** | 164 NSE-compatible library modules |
 | **CVE Integration** | NVD, OSV, CISA KEV feeds |
 | **Sandbox** | Restricted Lua operation execution |
 
