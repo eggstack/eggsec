@@ -399,3 +399,48 @@ Latest observed status (Milestone 1 polish-pass re-run):
 | `make test-nse` | N/A locally (no `cargo-nextest` installed) | Documented equivalent: the two `cargo test` commands above |
 
 Commands that fail or diverge in a re-run must be documented with the exact command and a follow-up task.
+
+## Compatibility Corpus
+
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
+
+### Location
+
+- **Fixtures**: `crates/eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
+- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 integration tests gated on `#[cfg(feature = "nse")]`
+
+### Coverage Categories
+
+| Category | Tests | Status | Fidelity |
+|----------|-------|--------|----------|
+| Supported (simple script) | simple_portrule | Compatible | Full |
+| Supported (stdnse output) | stdnse_output | Compatible | Full |
+| Supported (builtin module require) | builtin_module_require | Compatible | Full |
+| Supported (hostrule) | simple_hostrule | Compatible | Full |
+| Supported (builtin script) | builtin_script | Compatible | Full |
+| Supported (inline script) | inline_script | Compatible | Full |
+| Supported (module resolution) | module_resolution | Compatible | Full |
+| Supported (library use report) | library_use_report | Compatible | Full |
+| Supported (exact rule) | exact_rule | Compatible | Full |
+| Supported (mixed diagnostics) | mixed_diagnostics | Compatible | Full |
+| Supported (module not found) | module_not_found | Compatible | Full |
+| Denied (agent policy) | agent_denied | Failed | Full |
+| Error (file not found) | file_not_found | Failed | Full |
+| Error (unsupported behavior) | unsupported_behavior | Failed | Full |
+| Error (rule error) | rule_error | Failed | Full |
+| Unsupported (invalid module) | invalid_module_name | Partial | Minimal |
+| Approximate (approx rule) | approximate_rule | CompatibleWithWarnings | Approximate |
+| Serialization | serialization_roundtrip | — | — |
+
+### Running the Corpus
+
+```bash
+cargo test -p eggsec-nse --features nse compatibility_corpus
+```
+
+### Adding New Cases
+
+1. Add fixture `.nse` or `.lua` to `tests/fixtures/nse_corpus/`
+2. Add a `#[test]` function in `tests/compatibility_corpus_tests.rs` following the existing `make_profile()` + resolver + report pattern
+3. Assert specific fields: `status`, `fidelity`, `resolved_count`, `blocked_count`, `unsupported_features`, `approximations`
+4. Run the corpus test to verify

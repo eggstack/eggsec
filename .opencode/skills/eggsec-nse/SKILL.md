@@ -347,6 +347,16 @@ let result = match executor.run_script(script) {
 };
 ```
 
+## Compatibility Corpus
+
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. Fixtures live in `tests/fixtures/nse_corpus/` with 18 integration tests in `tests/compatibility_corpus_tests.rs`.
+
+```bash
+cargo test -p eggsec-nse --features nse compatibility_corpus
+```
+
+Each test exercises a distinct compatibility path (simple script, stdnse output, builtin module require, agent denial, invalid module name, approximate rule, file not found, etc.) and asserts structured report fields: `status`, `fidelity`, `resolved_count`, `blocked_count`, `unsupported_features`, `approximations`.
+
 ## Testing
 
 ```bash
@@ -357,4 +367,5 @@ cargo test -p eggsec-nse --features nse --test profile_guard_tests
 cargo test -p eggsec-nse --features nse --test profile_tests
 cargo test -p eggsec-nse --features nse --test execution_limits_tests
 cargo test -p eggsec-nse --features nse --test sandbox_tests
+cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests
 ```
