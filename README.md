@@ -554,10 +554,11 @@ Eggsec can run local, repeatable profiles against defensive systems for regressi
 Eggsec borrows proven scanning concepts from Nmap but is not a drop-in replacement.
 
 - **NSE is an optional compatibility layer.** Build with `--features nse` to enable curated Nmap NSE script support.
-- **No full Nmap parity.** Eggsec does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
+- **No full Nmap parity.** Eggsec does not aim to replicate all Nmap behavior. The goal is selective practical NSE compatibility for useful script categories. Library compatibility is defined by `NseLibraryRegistry` metadata (43 descriptors), not by implementation file counts.
 - **NSE is a protocol-testing knowledge source.** Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety.
 - **Execution profiles enforce trust boundaries.** `NseExecutionProfileKind` presets (`ManualPermissive`, `AgentSafe`, `CiSafe`, etc.) resolve into sandbox config, limits, script/module/network policy, and audit metadata. CLI uses `ManualPermissive` by default; agents and CI use restrictive profiles.
 - **Loader policy is closed at Milestone 1.** All script/module filesystem loading flows through `ScriptResolver` with canonical root containment, symlink escape rejection, extension allowlist, and size limits. `ManualPermissive` script-file loading with empty roots is intentionally permissive (manual CLI/TUI discretion); filesystem modules under `ManualPermissive` with empty roots resolve to built-ins only. Restricted profiles enforce roots strictly; automated profiles (`AgentSafe`, `CiSafe`) deny script files and filesystem modules before any path authorization. Read-path authorization cannot authorize non-existent script/module files. Rust-side blocking helper cancellation remains a Milestone 3 follow-up. See `architecture/nse_integration.md` for the empty-roots semantic table and the [Milestone 1 Closure Index](./architecture/nse_integration.md#milestone-1-closure-index).
+- **Milestone 2 is closed.** Run output truthfulness is defined by `NseRunReport`. Rule behavior is defined by `NseRuleEvaluationReport`. The compatibility corpus is representative and local-only by default. See the [Milestone 2 Closure Note](./architecture/nse_integration.md#milestone-2-closure-note).
 
 ## Agent and Orchestration
 

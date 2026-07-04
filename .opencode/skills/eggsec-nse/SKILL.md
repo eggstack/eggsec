@@ -58,6 +58,9 @@ use eggsec_nse::{
     NseScriptPolicy,            // Script access rules
     NseModulePolicy,            // Module access rules
     NseNetworkPolicy,           // Network access rules
+    NseRunReport,               // Structured run output (Milestone 2)
+    NseRuleEvaluationReport,    // Rule evaluation metadata (Milestone 2)
+    NseLibraryDescriptor,       // Library registry descriptor (Milestone 2)
 };
 ```
 
@@ -97,7 +100,7 @@ nse-ssh2 = ["nse", "dep:ssh2"]
 nse-sandbox = []  # Enables SandboxConfig enforcement
 ```
 
-## Libraries (164)
+## Libraries (166 implementations, 43 registry descriptors)
 
 Located in `src/libraries/`:
 - **socket.rs** (703 lines) - TCP/UDP/SCTP sockets with sandbox enforcement
@@ -349,7 +352,7 @@ let result = match executor.run_script(script) {
 
 ## Compatibility Corpus
 
-A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. Fixtures live in `tests/fixtures/nse_corpus/` with 18 integration tests in `tests/compatibility_corpus_tests.rs`.
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Fixtures live in `tests/fixtures/nse_corpus/` with 18 integration tests in `tests/compatibility_corpus_tests.rs`.
 
 ```bash
 cargo test -p eggsec-nse --features nse compatibility_corpus

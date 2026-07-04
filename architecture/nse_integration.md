@@ -42,7 +42,7 @@ pub struct SandboxConfig {
 
 ### NSE Libraries
 
-164 NSE-style library modules implemented including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. All located in `crates/eggsec-nse/src/libraries/`.
+166 library implementation files in `crates/eggsec-nse/src/libraries/` including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. The library registry (`LIBRARY_REGISTRY`) contains 43 curated descriptors covering Nmap's standard Lua library set — registry metadata is the source of truth for compatibility claims, not implementation file counts.
 
 ### CVE Integration
 
@@ -85,7 +85,7 @@ NSE scripts are categorized into support tiers based on risk and resource requir
 | **Tier 3** | Intrusive/brute-force/exploit-adjacent | Scripts requiring explicit opt-in (e.g., `http-brute`, `smb-vuln-*`). |
 | **Unsupported** | Restricted | Scripts requiring unrestricted filesystem/process access, uncontrolled network reachability, or behavior incompatible with Eggsec guardrails. |
 
-Execution profiles (`NseExecutionProfileKind`) encode these tiers as enforceable presets. `CompatibilityLab` corresponds to Tier 1 (full Nmap compatibility), while `AgentSafe` and `CiSafe` correspond to Tier 3 (sandboxed, restricted).
+Execution profiles (`NseExecutionProfileKind`) encode these tiers as enforceable presets. `CompatibilityLab` corresponds to Tier 1 (selective practical NSE compatibility), while `AgentSafe` and `CiSafe` correspond to Tier 3 (sandboxed, restricted).
 
 ## NSE as a Knowledge Source
 
@@ -320,8 +320,51 @@ The following files are the canonical implementation, test, and doc anchors for 
 
 ### Deferred Work
 
-- **Milestone 2 (next)**: library registry, rule semantics, compatibility truthfulness, structured run reports. Begins at library-registry/rule/report-truthfulness, not at loader-policy redesign.
-- **Milestone 3**: Rust-side blocking helper cancellation via capability wrappers.
+- **Milestone 2 (closed)**: Library registry, rule semantics, compatibility truthfulness, structured run reports. See [Milestone 2 Closure Note](#milestone-2-closure-note).
+- **Milestone 3 (next)**: Rust-side blocking helper cancellation via capability wrappers.
+
+## Milestone 2 Closure Note
+
+NSE Milestone 2 is closed. The following are explicitly **closed**:
+
+- **Library registry source of truth**: `NseLibraryDescriptor` / `LIBRARY_REGISTRY` in `resolver/registry.rs` is the canonical inventory of standard Nmap Lua library modules. Compatibility claims must reference registry metadata, not implementation file counts.
+- **Rule semantics report path**: `NseRuleEvaluationReport` provides structured rule-evaluation metadata (kind, status, fidelity, approximations, inputs). Rule behavior is defined by this report, not by prose descriptions.
+- **Structured reports**: `NseRunReport` is the canonical structured output model for NSE runs. Run output truthfulness is defined by `NseRunReport` fields, not by ad-hoc log output.
+- **Compatibility corpus**: A representative corpus of NSE script fixtures in `tests/fixtures/nse_corpus/` verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts.
+- **Documentation/release gate**: Verification commands and compatibility claims are documented and auditable.
+
+The following remain **deferred**:
+
+- **Milestone 3**: Capability wrappers and Rust-side blocking-helper cancellation (~170 calls across 40+ library files).
+- **Full Nmap parity gaps**: Eggsec has selective practical NSE compatibility, not full Nmap parity. Expanding coverage to full parity is not a Milestone 2 goal.
+- **Expanding corpus breadth**: The current corpus is representative; broader coverage is future work.
+- **Additional library behavior upgrades**: Library implementations beyond the current 166 files are not part of Milestone 2.
+
+### Boundary for Future Work
+
+- Loader and profile enforcement remain closed from Milestone 1 (see [Milestone 1 Closure Index](#milestone-1-closure-index)).
+- Library compatibility is defined by `NseLibraryRegistry` metadata, not by implementation file counts.
+- Rule behavior is defined by `NseRuleEvaluationReport` / rule semantics metadata.
+- Run output truthfulness is defined by `NseRunReport`.
+- Future milestones should build on the registry, report, and corpus foundations rather than revisiting them.
+
+### Milestone 2 Verification Record
+
+**Date:** 2026-07-04
+**Commit:** `252292ba`
+
+| Command | Status | Tests | Notes |
+|---------|--------|-------|-------|
+| `cargo check -p eggsec-nse --features nse` | PASS | — | ~96 pre-existing warnings |
+| `cargo test -p eggsec-nse --features nse` | PASS | 253 | 1 ignored |
+| `cargo check -p eggsec --features nse` | PASS | — | ~100 pre-existing warnings |
+| `cargo test -p eggsec --features nse --test nse_tests` | PASS | 174 | — |
+| `bash scripts/check-architecture-guards.sh` | PASS | 32 checks | Including checks 28-31 (Milestone 2) |
+| `cargo fmt --all --check` | PASS | — | — |
+| `cargo clippy --lib -p eggsec-nse --features nse` | PASS | — | 152 pre-existing warnings |
+| `cargo clippy --lib -p eggsec --features nse` | PASS | — | 181 pre-existing warnings |
+
+`cargo-nextest` not installed; `make test-nse` skipped. Closest equivalent: `cargo test -p eggsec-nse --features nse`.
 
 ## Library Registry
 
@@ -362,17 +405,265 @@ Check 27 in `scripts/check-architecture-guards.sh` verifies:
 1. Every registry entry has a corresponding Rust module in `src/libraries/`
 2. Rust modules without registry entries are reported as warnings (protocol-specific implementations)
 
-## Next Work: Milestone 2
+## Compatibility Matrix
 
-The Milestone 1 contract above is the boundary. Future work should:
+The compatibility matrix summarizes the registry's 43 library descriptors. The authoritative source is `LIBRARY_REGISTRY` in `crates/eggsec-nse/src/resolver/registry.rs` — the table below is a representative subset covering all categories.
 
-- Treat the loader and profile enforcement as closed unless regression tests reveal a defect.
-- Build on `ScriptResolver` rather than bypass it.
-- Move library registration toward a declarative registry with a truthfulness matrix.
-- Document approximate NSE rule-matching semantics and known gaps.
-- Expose profile, resolver diagnostics, limits, and compatibility status in structured run reports.
+### Representative Subset (15 of 43)
 
-The Milestone 2 plan should be written from this closure index without reopening the loader or profile contracts established here.
+| Library | Category | Fallback | Side Effects | Sandbox Posture | Known Gaps | Corpus |
+|---------|----------|----------|-------------|-----------------|------------|--------|
+| `stdnse` | Core | HardFail | None | Clean | Full fidelity | Covered |
+| `nmap` | Core | HardFail | EnvAccess, NetworkAccess | Env+net restricted | `nmap.registry` stub; scan-state not live | Covered |
+| `socket` | Protocol | HardFail | NetworkAccess | CIDR-filtered | TLS not natively exposed via socket API | Partial |
+| `http` | Protocol | HardFail | NetworkAccess | CIDR-filtered | HTTP/2 not supported; cookie jar simplified | Partial |
+| `dns` | Protocol | HardFail | NetworkAccess | CIDR-filtered | EDNS0 options limited; DNSSEC validation stubbed | Partial |
+| `ssl` | Protocol | HardFail | NetworkAccess | CIDR-filtered | Requires `openssl` dep; cipher suite enumeration stubbed | Partial |
+| `ssh` | Protocol | GracefulDegrade | NetworkAccess | CIDR-filtered | Requires `libssh2`; auth methods partial | Partial |
+| `smb` | Protocol | GracefulDegrade | NetworkAccess | CIDR-filtered | NTLM auth only; SMBv1 signing incomplete | Partial |
+| `vulns` | Exploit | Skip | NetworkAccess | CIDR-filtered | CVE lookup via NVD/OSV APIs; offline DB not bundled | Covered |
+| `creds` | Auth | Skip | FileSystemRead, NetworkAccess | FS+net restricted | Credential iteration works; file-based wordlists sandboxed | Partial |
+| `io` | Core | GracefulDegrade | FileSystemRead, FileSystemWrite, ProcessExecution | Heavily sandboxed | `popen` restricted to command allowlist; `tmpfile` denied | Covered |
+| `lfs` | Core | GracefulDegrade | FileSystemRead, FileSystemWrite | Restricted to `allowed_dir` | Symlink checks enforced; `attributes` partial | Covered |
+| `tab` | Utility | Skip | None | Clean | Pure utility; full fidelity | Covered |
+| `json` | Utility | Skip | None | Clean | Encode/decode; no streaming parser | Covered |
+| `pcre` | Utility | GracefulDegrade | None | Clean | Optional `pcre` dep; falls back to Lua patterns | Covered |
+
+### Summary by Category
+
+| Category | Count | HardFail | GracefulDegrade | Skip |
+|----------|-------|----------|-----------------|------|
+| Core | 7 | 3 (`stdnse`, `nmap`, `socket`) | 3 (`io`, `os`, `lfs`) | 1 (`target`) |
+| Protocol | 13 | 4 (`socket`, `http`, `dns`, `ssl`) | 9 (`ssh`, `smb`, `smb2`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `openssl`, `comm`) | 0 |
+| Utility | 15 | 0 | 1 (`pcre`) | 14 (all others) |
+| Exploit | 1 | 0 | 0 | 1 (`vulns`) |
+| Auth | 3 | 0 | 0 | 3 (`creds`, `unpwdb`, `brute`) |
+
+### Side-Effect Summary
+
+| Side Effect | Libraries |
+|-------------|-----------|
+| None | `stdnse`, `tab`, `json`, `base64`, `base32`, `bin`, `bit`, `stringaux`, `strbuf`, `nse_string`, `nse_table`, `pcre`, `shortport`, `match_lib`, `matchs`, `datetime`, `rand`, `url`, `unicode` |
+| NetworkAccess | `nmap`, `socket`, `http`, `dns`, `ssl`, `ssh`, `smb`, `smb2`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `vulns`, `brute`, `openssl`, `comm`, `target`, `creds` |
+| FileSystemRead | `lfs`, `creds`, `unpwdb` |
+| FileSystemWrite | `io`, `lfs` |
+| ProcessExecution | `io`, `os` |
+| EnvAccess | `nmap`, `os` |
+
+## Report Examples
+
+`NseRunReport` (defined in `crates/eggsec-nse/src/report.rs`) is the structured output of an NSE script execution. Field names are illustrative — the schema follows the Rust struct definitions and may evolve.
+
+### Example 1: Compatible Run with Warnings
+
+A `ManualPermissive` run of a discovery script that resolved all modules but triggered profile warnings.
+
+```json
+{
+  "target": "192.168.1.10",
+  "script_name": "http-enum",
+  "script_source": {
+    "kind": "builtin",
+    "label": "http-enum",
+    "size": 0
+  },
+  "profile": {
+    "kind": "manual-permissive",
+    "audit_label": "nse:manual-permissive",
+    "warnings": [
+      "manual-permissive profile is not agent-safe"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "feature_compiled": true,
+    "allowed_dir": "/tmp/eggsec-nse",
+    "allowed_commands_count": 0,
+    "allowed_networks_count": 1
+  },
+  "limits": {
+    "wall_clock_timeout_secs": 120.0,
+    "lua_instruction_budget": 100000000,
+    "max_output_bytes": 5242880,
+    "max_script_bytes": 1048576,
+    "max_required_module_bytes": 1048576,
+    "max_network_operations": 500,
+    "max_filesystem_operations": 0,
+    "max_lua_memory_bytes": 52428800
+  },
+  "stats": {
+    "elapsed_secs": 2.34,
+    "output_bytes": 1024,
+    "lua_instruction_count": 45230,
+    "network_operations": 3,
+    "network_bytes_read": 4096,
+    "network_bytes_written": 1024,
+    "filesystem_operations": 0,
+    "filesystem_bytes_read": 0,
+    "limit_violation": null
+  },
+  "resolver": {
+    "total_diagnostics": 3,
+    "resolved_count": 3,
+    "blocked_count": 0,
+    "rejected_count": 0,
+    "diagnostics": [
+      { "kind": "resolved", "source": "stdnse", "detail": "1200 bytes" },
+      { "kind": "resolved", "source": "http", "detail": "8400 bytes" },
+      { "kind": "resolved", "source": "shortport", "detail": "600 bytes" }
+    ]
+  },
+  "libraries": [
+    {
+      "name": "stdnse",
+      "category": "Core",
+      "registered": true,
+      "side_effects": ["None"],
+      "fallback_behavior": "HardFail",
+      "notes": "Core output formatting",
+      "loaded": true,
+      "warnings": []
+    },
+    {
+      "name": "http",
+      "category": "Protocol",
+      "registered": true,
+      "side_effects": ["NetworkAccess"],
+      "fallback_behavior": "HardFail",
+      "notes": "HTTP client library",
+      "loaded": true,
+      "warnings": []
+    },
+    {
+      "name": "shortport",
+      "category": "Utility",
+      "registered": true,
+      "side_effects": ["None"],
+      "fallback_behavior": "Skip",
+      "notes": "Port number normalization",
+      "loaded": true,
+      "warnings": []
+    }
+  ],
+  "rules": [
+    {
+      "kind": "portrule",
+      "evaluated": true,
+      "matched": true,
+      "exactness": "exact",
+      "error": null,
+      "summary": "Port 80 open, http service detected"
+    }
+  ],
+  "output": {
+    "has_output": true,
+    "content": "80/tcp   open  http    Apache/2.4.41\n443/tcp  open  ssl/http Apache/2.4.41",
+    "line_count": 2,
+    "truncated": false
+  },
+  "compatibility": {
+    "status": "compatible-with-warnings",
+    "fidelity": "full",
+    "unsupported_features": [],
+    "approximations": []
+  },
+  "warnings": [
+    "manual-permissive profile is not agent-safe"
+  ],
+  "errors": []
+}
+```
+
+### Example 2: Denied Agent-Safe Arbitrary Script File
+
+An `AgentSafe` run where the resolver rejected an arbitrary script file per profile policy. No execution occurs — the report captures the denial.
+
+```json
+{
+  "target": "10.0.0.5",
+  "script_name": "custom-check.nse",
+  "script_source": {
+    "kind": "file",
+    "label": "/home/user/scripts/custom-check.nse",
+    "size": 2048
+  },
+  "profile": {
+    "kind": "agent-safe",
+    "audit_label": "nse:agent-safe",
+    "warnings": []
+  },
+  "sandbox": {
+    "enabled": true,
+    "feature_compiled": true,
+    "allowed_dir": "/tmp/eggsec-nse",
+    "allowed_commands_count": 0,
+    "allowed_networks_count": 1
+  },
+  "limits": {
+    "wall_clock_timeout_secs": 15.0,
+    "lua_instruction_budget": 5000000,
+    "max_output_bytes": 2097152,
+    "max_script_bytes": 262144,
+    "max_required_module_bytes": 262144,
+    "max_network_operations": 50,
+    "max_filesystem_operations": 0,
+    "max_lua_memory_bytes": 2097152
+  },
+  "stats": {
+    "elapsed_secs": 0.0,
+    "output_bytes": 0,
+    "lua_instruction_count": 0,
+    "network_operations": 0,
+    "network_bytes_read": 0,
+    "network_bytes_written": 0,
+    "filesystem_operations": 0,
+    "filesystem_bytes_read": 0,
+    "limit_violation": null
+  },
+  "resolver": {
+    "total_diagnostics": 1,
+    "resolved_count": 0,
+    "blocked_count": 1,
+    "rejected_count": 0,
+    "diagnostics": [
+      {
+        "kind": "blocked",
+        "source": "/home/user/scripts/custom-check.nse",
+        "detail": "agent-safe profile does not permit arbitrary script files"
+      }
+    ]
+  },
+  "libraries": [],
+  "rules": [],
+  "output": {
+    "has_output": false,
+    "content": "",
+    "line_count": 0,
+    "truncated": false
+  },
+  "compatibility": {
+    "status": "failed",
+    "fidelity": "unknown",
+    "unsupported_features": [],
+    "approximations": []
+  },
+  "warnings": [],
+  "errors": [
+    "Script file denied by policy: agent-safe profile does not permit arbitrary script files"
+  ]
+}
+```
+
+## Next Work: Milestone 3
+
+The Milestone 2 contract above is the boundary. Future work should:
+
+- Treat the library registry, rule semantics report, structured reports, and compatibility corpus as closed unless regression tests reveal a defect.
+- Build on `NseRunReport` and `NseRuleEvaluationReport` rather than bypass them.
+- Focus Milestone 3 on Rust-side blocking-helper cancellation via capability wrappers.
+- Expand corpus breadth and library behavior upgrades as separate scoped work.
+
+The Milestone 3 plan should be written from this closure index without reopening the Milestone 2 truthfulness contracts established here.
 
 ## Verification Record (Milestone 1)
 

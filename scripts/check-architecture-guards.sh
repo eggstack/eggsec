@@ -532,6 +532,112 @@ if [[ -n "$UNREGISTERED" ]]; then
   echo "      (These are likely protocol-specific implementations, not standard Nmap Lua libraries.)"
 fi
 
+# 28. NseLibraryDescriptor must only be instantiated in the registry module.
+# Direct construction outside registry.rs bypasses the registry metadata contract
+# and prevents policy evaluation, diagnostics, and compatibility reporting.
+echo ""
+echo "--- Check 28: NseLibraryDescriptor instantiation is registry-owned ---"
+HITS=$(rg -n 'NseLibraryDescriptor\s*\{' \
+  crates/eggsec-nse/src/ \
+  --glob='!crates/eggsec-nse/src/resolver/registry.rs' \
+  --glob='!crates/eggsec-nse/src/resolver/registry/*' \
+  2>/dev/null || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: NseLibraryDescriptor constructed outside registry module."
+  echo "      All library metadata must go through LIBRARY_REGISTRY in resolver/registry.rs."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: NseLibraryDescriptor instantiation is registry-owned."
+fi
+
+# 29. run_cli_with_profile() JSON path must populate library and rule metadata.
+# The NseRunReport must include library use reports and rule evaluation reports
+# for structured output to be complete. Once these APIs exist, skipping them
+# produces empty arrays that hide compatibility truth.
+echo ""
+echo "--- Check 29: run_cli_with_profile() JSON path populates report metadata ---"
+SECTION_FAIL=0
+# Check that the JSON path calls with_rules()
+if ! rg -q 'with_rules\(' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
+  echo "FAIL: run_cli_with_profile() does not call .with_rules() on NseRunReport."
+  echo "      Rule evaluation metadata must be included in structured JSON output."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Check that the JSON path calls with_libraries()
+if ! rg -q 'with_libraries\(' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
+  echo "FAIL: run_cli_with_profile() does not call .with_libraries() on NseRunReport."
+  echo "      Library use metadata must be included in structured JSON output."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: run_cli_with_profile() JSON path populates library and rule metadata."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 30. New rule-evaluation convenience APIs must produce NseRuleEvaluationReport metadata.
+# Any public convenience function added to public_api/ that evaluates NSE rules
+# (port rules, script rules, host rules) must populate NseRuleEvaluationReport
+# entries so compatibility status is visible. Core executor functions are exempt
+# (they are implementation, not convenience APIs).
+echo ""
+echo "--- Check 30: Rule evaluation convenience APIs produce NseRuleEvaluationReport ---"
+if [[ -d "crates/eggsec-nse/src/public_api" ]]; then
+  RULE_FUNCS=$(rg -n 'pub fn.*(?:rule|eval).*\(' \
+    crates/eggsec-nse/src/public_api/ \
+    2>/dev/null || true)
+  if [[ -n "$RULE_FUNCS" ]]; then
+    SECTION_FAIL=0
+    while IFS= read -r func_line; do
+      file=$(echo "$func_line" | cut -d: -f1)
+      line_num=$(echo "$func_line" | cut -d: -f2)
+      func_context=$(sed -n "${line_num},$((line_num + 30))p" "$file" 2>/dev/null || true)
+      if ! echo "$func_context" | rg -q 'NseRuleEvaluationReport' 2>/dev/null; then
+        echo "$func_line"
+        echo "  -> Rule evaluation convenience API does not produce NseRuleEvaluationReport."
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done <<< "$RULE_FUNCS"
+    if [[ $SECTION_FAIL -gt 0 ]]; then
+      echo "FAIL: $SECTION_FAIL rule-evaluation convenience API(s) missing NseRuleEvaluationReport."
+      echo "      New convenience APIs must produce structured report metadata."
+      FAIL=$((FAIL + 1))
+    else
+      echo "PASS: All rule evaluation convenience APIs produce NseRuleEvaluationReport."
+    fi
+  else
+    echo "PASS: No rule-evaluation convenience APIs in public_api/ (none to audit)."
+  fi
+else
+  echo "PASS: No public_api/ directory found (none to audit)."
+fi
+
+# 31. No docs claim full Nmap compatibility or parity.
+# Eggsec has selective practical NSE compatibility, not full Nmap parity.
+# Compatibility status is defined by NseLibraryRegistry metadata and
+# NseRuleEvaluationReport fidelity, not by documentation claims.
+echo ""
+echo "--- Check 31: No docs claim full Nmap parity ---"
+HITS=$(rg -in 'full\s+nmap\s+(compat|parity|support|compatible)|100%\s+nmap|complete\s+nmap\s+(compat|parity|support)|nmap\s+compatible\s+replacement|drop.in\s+nmap\s+replacement' \
+  --glob='*.md' \
+  docs/ architecture/ README.md .opencode/skills/ \
+  2>/dev/null \
+  | grep -v 'plans/' \
+  | grep -v 'not ' \
+  | grep -v 'does not' \
+  | grep -v 'without' \
+  | grep -v 'instead of' \
+  || true)
+if [[ -n "$HITS" ]]; then
+  echo "$HITS"
+  echo "FAIL: Found docs claiming full Nmap parity/compatibility."
+  echo "      Use 'selective practical NSE compatibility' instead."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: No docs claim full Nmap parity."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
