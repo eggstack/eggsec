@@ -398,6 +398,7 @@ echo "--- Check 24: NSE script/module loading is resolver-owned ---"
 HITS=$(rg -n 'std::fs::read_to_string\(|std::fs::read\(' \
   crates/eggsec-nse/src/ \
   --glob='!crates/eggsec-nse/src/resolver.rs' \
+  --glob='!crates/eggsec-nse/src/resolver/mod.rs' \
   --glob='!crates/eggsec-nse/src/executor_core.rs' \
   --glob='!crates/eggsec-nse/src/public_api/api.rs' \
   --glob='!crates/eggsec-nse/src/libraries/*' \
@@ -435,6 +436,7 @@ HITS=$(rg -n 'ResolvedNseExecutionProfile::manual_permissive' \
   --glob='!crates/eggsec-nse/src/profile.rs' \
   --glob='!crates/eggsec-nse/src/lib.rs' \
   --glob='!crates/eggsec-nse/src/resolver.rs' \
+  --glob='!crates/eggsec-nse/src/resolver/mod.rs' \
   --glob='!crates/eggsec-nse/tests/*' \
   --glob='!crates/eggsec/src/commands/handlers/scan.rs' \
   --glob='!crates/eggsec/src/dispatch/api.rs' \
@@ -474,6 +476,60 @@ if [[ -n "$HITS" ]]; then
   FAIL=$((FAIL + 1))
 else
   echo "PASS: Manual-only NseExecutor constructors stay in manual surfaces."
+fi
+
+echo ""
+echo "--- Check 27: NSE registry entries have corresponding Rust modules ---"
+SECTION_FAIL=0
+# Nmap Lua library names that map to different Rust module names.
+# Format: "nmap_name:rust_module1,rust_module2"
+declare -A NSE_NAME_MAP=(
+  ["ssl"]="sslcert,openssl"
+  ["lfs"]="lfs"
+)
+REGISTRY_NAMES=$(rg -o 'name: "[^"]*"' crates/eggsec-nse/src/resolver/registry.rs \
+  | sed 's/.*name: "\([^"]*\)".*/\1/' | sort -u)
+for NAME in $REGISTRY_NAMES; do
+  # Direct match first
+  if rg -q "^pub mod ${NAME};" crates/eggsec-nse/src/libraries/mod.rs 2>/dev/null; then
+    continue
+  fi
+  # Check name mapping
+  MAPPED="${NSE_NAME_MAP[$NAME]:-}"
+  FOUND=0
+  if [[ -n "$MAPPED" ]]; then
+    IFS=',' read -ra MODULES <<< "$MAPPED"
+    for MOD in "${MODULES[@]}"; do
+      if rg -q "^pub mod ${MOD};" crates/eggsec-nse/src/libraries/mod.rs 2>/dev/null; then
+        FOUND=1
+        break
+      fi
+    done
+  fi
+  if [[ $FOUND -eq 0 ]]; then
+    echo "FAIL: Registry entry '${NAME}' has no corresponding Rust module in libraries/mod.rs"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -gt 0 ]]; then
+  echo "FAIL: $SECTION_FAIL registry entry/entries missing corresponding Rust module."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: All NSE registry entries have corresponding Rust modules."
+fi
+
+# Reverse check: warn if Rust modules exist without a registry entry
+MODULE_NAMES=$(rg -o '^pub mod [a-z_]+;' crates/eggsec-nse/src/libraries/mod.rs \
+  | sed 's/^pub mod \([a-z_]*\);/\1/' | sort -u)
+UNREGISTERED=""
+for NAME in $MODULE_NAMES; do
+  if ! rg -q "name: \"${NAME}\"" crates/eggsec-nse/src/resolver/registry.rs 2>/dev/null; then
+    UNREGISTERED="${UNREGISTERED} ${NAME}"
+  fi
+done
+if [[ -n "$UNREGISTERED" ]]; then
+  echo "WARN: Rust modules without registry entries:${UNREGISTERED}"
+  echo "      (These are likely protocol-specific implementations, not standard Nmap Lua libraries.)"
 fi
 
 echo ""

@@ -97,6 +97,7 @@ cargo clippy --lib -p eggsec --features db-pentest
 cargo check -p eggsec-nse --features nse
 cargo test -p eggsec-nse --features nse
 cargo test -p eggsec-nse --test execution_limits_tests
+cargo test -p eggsec-nse --lib -- registry      # library registry
 cargo test -p eggsec-nse --test profile_tests
 cargo test -p eggsec-nse --test profile_guard_tests
 cargo test -p eggsec-nse --test script_file_policy_tests
@@ -373,6 +374,10 @@ Canonical reference points when updating guidance or skills:
 - `NseNetworkPolicy` - NSE network access policy: `AllowAllManual`, `DenyAll`, `AllowCidrs`, `AllowResolvedTargetSet`.
 - `NseScriptSource` - Explicit script source kind for resolver (Builtin, TrustedRegistry, File, InlineManual) in `eggsec-nse::resolver`
 - `NseModuleName` - Validated module name type with strict grammar enforcement in `eggsec-nse::resolver`
+- `NseLibraryDescriptor` - Declarative descriptor for NSE library modules (`resolver::registry`); fields: `name`, `category`, `sandbox_side_effects`, `optional_deps`, `fallback_behavior`, `notes`
+- `NseLibraryCategory` - Functional category enum: `Core`, `Protocol`, `Utility`, `Exploit`, `Auth` (`resolver::registry`)
+- `NseSandboxSideEffect` - Sandbox side effect enum: `None`, `FileSystemRead`, `FileSystemWrite`, `NetworkAccess`, `ProcessExecution`, `EnvAccess` (`resolver::registry`)
+- `NseFallbackBehavior` - Fallback behavior enum: `HardFail`, `GracefulDegrade`, `Skip` (`resolver::registry`)
 - `ResolvedNseScript` - Resolved script with content and metadata in `eggsec-nse::resolver`
 - `ResolvedNseModule` - Resolved module with content and metadata in `eggsec-nse::resolver`
 - `NseLoadError` - Structured load error type for script/module resolution in `eggsec-nse::resolver`

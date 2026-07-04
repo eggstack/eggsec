@@ -323,6 +323,45 @@ The following files are the canonical implementation, test, and doc anchors for 
 - **Milestone 2 (next)**: library registry, rule semantics, compatibility truthfulness, structured run reports. Begins at library-registry/rule/report-truthfulness, not at loader-policy redesign.
 - **Milestone 3**: Rust-side blocking helper cancellation via capability wrappers.
 
+## Library Registry
+
+The library registry (`src/resolver/registry.rs`) provides a declarative, machine-readable inventory of standard Nmap Lua library modules. It is used for policy evaluation, diagnostics, and compatibility reporting.
+
+### Registry Structure
+
+| Type | Description |
+|------|-------------|
+| `NseLibraryDescriptor` | Declarative descriptor for a single library module |
+| `NseLibraryCategory` | Functional category: `Core`, `Protocol`, `Utility`, `Exploit`, `Auth` |
+| `NseSandboxSideEffect` | Side effects: `None`, `FileSystemRead`, `FileSystemWrite`, `NetworkAccess`, `ProcessExecution`, `EnvAccess` |
+| `NseFallbackBehavior` | Fallback: `HardFail`, `GracefulDegrade`, `Skip` |
+
+### Static Registry
+
+`LIBRARY_REGISTRY: &[NseLibraryDescriptor]` contains 43 entries covering Nmap's standard Lua library set (24 main + 19 auxiliary). The orchestrator `nse.lua` is intentionally excluded.
+
+### Lookup Functions
+
+| Function | Purpose |
+|----------|---------|
+| `find_library(name)` | Find a library descriptor by name |
+| `all_libraries()` | Return all registered descriptors |
+| `libraries_by_category(cat)` | Filter by category |
+| `libraries_with_side_effects()` | Libraries with non-None side effects |
+| `sandbox_policy_for_library(name)` | Effective sandbox side effects (None if clean) |
+| `libraries_missing_from_nmap()` | Libraries with optional deps |
+| `registry_count()` | Total registered count |
+
+### Feature Gate
+
+The registry compiles with the `nse` feature **off** — it contains no Lua or mlua dependencies. This allows policy code to query library metadata without requiring the full NSE runtime.
+
+### Architecture Guard
+
+Check 27 in `scripts/check-architecture-guards.sh` verifies:
+1. Every registry entry has a corresponding Rust module in `src/libraries/`
+2. Rust modules without registry entries are reported as warnings (protocol-specific implementations)
+
 ## Next Work: Milestone 2
 
 The Milestone 1 contract above is the boundary. Future work should:
