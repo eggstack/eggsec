@@ -683,6 +683,17 @@ else
   echo "PASS: No docs claim full Nmap parity."
 fi
 
+# 33. NSE capability wrappers: direct high-risk ops (informational, not failing yet)
+echo ""
+echo "--- Check 33: NSE direct high-risk ops outside wrappers (info only) ---"
+NSE_DIRECT_HITS=$(rg -n 'std::process::Command|std::fs::read_to_string|std::fs::write|remove_file|rename|TcpStream|UdpSocket' --glob='*.rs' crates/eggsec-nse/src/libraries/ 2>/dev/null | head -20 || true)
+if [[ -n "$NSE_DIRECT_HITS" ]]; then
+  echo "$NSE_DIRECT_HITS"
+  echo "INFO: Found direct high-risk ops in NSE libraries. These will be migrated to capability wrappers in future phases."
+else
+  echo "PASS: No direct high-risk ops found in NSE libraries."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

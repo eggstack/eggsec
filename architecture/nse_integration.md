@@ -722,6 +722,25 @@ Migration priority order:
 8. Time/randomness/environment reads
 9. Pure CPU helpers (no migration needed)
 
+### Capability Context and Decision Engine (Phase 02 Complete)
+
+`NseCapabilityContext` and decision engine (`capabilities.rs`) provide centralized policy enforcement for all side-effecting helpers. Key components:
+
+- **`NseCapabilityKind`** — 11 operation classes (FilesystemRead/Write, ProcessExec, NetworkTcp/Udp, DnsResolution, TimeClock, Randomness, Crypto, Compression, Environment)
+- **`NseCapabilityRequest`** — operation request with kind, target, bytes hint, operation name
+- **`NseCapabilityDecision`** — Allow, Deny{reason}, AllowWithWarning{warning}
+- **`NseCapabilityEvent`** — recorded event for report integration
+- **`NseCapabilityContext`** — central context with profile-specific policy checks, cancellation, resource counters
+
+Profile-specific behavior:
+- **ManualPermissive**: allows everything, warns on risky ops (process exec, FS write)
+- **ManualStrict**: denies process exec, enforces path roots on FS write, enforces network CIDRs
+- **AgentSafe**: denies process exec + FS write, scope-only network + DNS
+- **CiSafe**: denies process exec + FS write + all network + DNS
+- **CompatibilityLab**: allows with warnings, sandbox network check
+
+`NseCapabilityEvent` integration into `NseRunReport.capability_events` — denied operations affect compatibility status (`Partial`). Pilot wrappers in `wrappers.rs` demonstrate the pattern. `ExecutorCore` stores the capability context, constructed from `with_policy()` defaults or `with_profile()` overrides. Architecture guards detect direct high-risk ops in NSE libraries (informational, will tighten as wrappers migrate).
+
 ## Verification Record (Milestone 1)
 
 The intended Milestone 1 gate is:
