@@ -758,11 +758,55 @@ Profile-specific behavior:
 - `wrappers.rs` contains pilot wrapper functions demonstrating the pattern
 
 **Migration status:**
-- TimeClock, FilesystemRead, NetworkTcp, ProcessExec, DnsResolution, Environment: wrapped
-- FilesystemWrite, NetworkUdp, Compression, Crypto: pending migration
+- TimeClock, FilesystemRead, FilesystemWrite, NetworkTcp, ProcessExec, DnsResolution, Environment: wrapped
+- NetworkUdp, Compression, Crypto: pending migration
 - Randomness: no wrapper needed (pure CPU)
 
-**Architecture guard:** Check 33 (informational) detects direct high-risk ops in NSE libraries; Check 34 (informational) verifies capability context integration.
+**Architecture guard:** Check 33 (FAIL) detects direct `std::process::Command` in NSE libraries (all process exec migrated); Check 33b (informational) detects direct filesystem ops in unmigrated libraries; Check 34 (informational) verifies capability context integration.
+
+### Filesystem and Process Wrappers (Phase 03 Complete)
+
+Phase 03 migrated filesystem and process operations through `NseCapabilityContext`. All side-effecting helpers in the core libraries now route through capability wrappers before performing the actual operation.
+
+#### Migrated Libraries
+
+| Library | Operations Migrated | Wrapper Functions Used |
+|---------|--------------------|-----------------------|
+| `io.rs` | `io.open()`, `io.read()`, `io.lines()`, `io.popen()`, `io.tmpfile()`, `io.write()` | `check_fs_read()`, `check_fs_write()`, `check_process_exec()`, executing wrappers (`nse_fs_read_to_string`, `nse_fs_write`, etc.) |
+| `lfs.rs` | `lfs.attributes()`, `lfs.dir()`, `lfs.mkdir()`, `lfs.rmdir()`, `lfs.remove()`, `lfs.rename()`, `lfs.link()`, `lfs.touch()`, `lfs.set_mode()`, `lfs.chdir()`, `lfs.symlinkattributes()` | `check_fs_read()`, `check_fs_write()` via `NseCapabilityContext::check_capability()` |
+| `os.rs` | `os.remove()`, `os.rename()` | `check_fs_write()` |
+| `nmap.rs` | `nmap.is_admin()`, `nmap.is_privileged()` | `check_process_exec()` |
+
+#### Profile-Specific Behavior
+
+| Profile | Process Exec | Filesystem Write | Notes |
+|---------|-------------|-----------------|-------|
+| `ManualPermissive` | Allow with warning | Allow with warning | Warns on process exec and FS write; accounting only |
+| `ManualStrict` | Allow (sandboxed popen) | Allow within roots | `get_allowed_path()` enforced; process exec via `is_command_allowed()` |
+| `AgentSafe` | **Deny** | **Deny** | No process execution, no filesystem writes |
+| `CiSafe` | **Deny** | **Deny** | No process execution, no filesystem writes |
+| `CompatibilityLab` | Allow with warning | Allow with warning | Includes nmap paths; sandbox checks |
+
+#### Executing Wrappers
+
+Phase 03 introduced executing wrappers in `wrappers.rs` that combine capability checking with the actual filesystem operation. These wrappers handle cancellation checks, capability evaluation, resource counter updates, and event recording:
+
+- `nse_fs_read_to_string()` — read file contents with FS read check
+- `nse_fs_read()` — read file bytes with FS read check
+- `nse_fs_write()` — write bytes with FS write check
+- `nse_fs_metadata()` — stat file with FS read check
+- `nse_fs_read_dir()` — list directory with FS read check
+- `nse_fs_remove_file()` — delete file with FS write check
+- `nse_fs_remove_dir()` — delete directory with FS write check
+- `nse_fs_create_dir()` — create directory with FS write check
+- `nse_fs_rename()` — rename with FS write check
+- `nse_process_exec()` — execute command with process exec check
+
+Libraries that accept `&NseCapabilityContext` in their registration function pass it to closures for use in capability checks. The context is cloned per-closure as needed.
+
+#### Architecture Guard
+
+Check 33 now **fails** for direct `std::process::Command` in NSE library files (outside `wrappers.rs`, `executor_core.rs`, and `tests/`), since all process execution is migrated. Check 33b remains informational for direct filesystem ops in libraries not yet fully migrated (e.g., `unpwdb`, `brute`, `datafiles`).
 
 ## Verification Record (Milestone 1)
 

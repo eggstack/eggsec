@@ -23,6 +23,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **Milestone 3 Phase 02 complete.** `NseCapabilityContext` and decision engine (`capabilities.rs`) provide centralized policy enforcement. `NseCapabilityKind` covers 11 operation classes. Profile-specific checks: ManualPermissive allows all with warnings, ManualStrict enforces path/network policy, AgentSafe denies process exec + FS write, CiSafe denies all side effects. `NseCapabilityEvent` integration into `NseRunReport.capability_events`. Pilot wrappers in `wrappers.rs` demonstrate the pattern. `ExecutorCore` stores the capability context. Architecture guards detect direct high-risk ops in NSE libraries (informational). **New side-effecting helpers must route through `NseCapabilityContext` via wrapper functions in `wrappers.rs`.** Direct use of high-risk ops (process exec, filesystem write, network TCP/UDP) in library code is detectable by Check 33 (informational) and will be tightened in future phases.
 
+> **Milestone 3 Phase 03 complete.** Filesystem and process wrappers are now fully migrated through `NseCapabilityContext`. Libraries `io.rs`, `lfs.rs`, `os.rs`, and `nmap.rs` route all side-effecting operations through capability checks. Executing wrappers (`nse_fs_read_to_string`, `nse_fs_write`, `nse_fs_remove_file`, `nse_fs_create_dir`, `nse_fs_rename`, `nse_process_exec`, etc.) combine capability checking with the actual operation, handling cancellation, resource counters, and event recording. `AgentSafe` and `CiSafe` deny process execution and filesystem writes by default. `ManualPermissive` allows with warnings. Architecture guard Check 33 now fails for direct `std::process::Command` in NSE libraries (outside wrappers.rs/executor_core.rs/tests). Library registration functions now take `&NseCapabilityContext` parameter. Network TCP/UDP, compression, and crypto remain pending for future phases.
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -136,15 +138,15 @@ Located in `src/libraries/`:
 
 ### Library Registration
 
-Libraries are registered via `register_*_library()` functions. See `executor_core.rs:272-450` for the full list of modules registered as NSE globals.
+Libraries are registered via `register_*_library()` functions. All side-effecting libraries (`io`, `lfs`, `os`, `nmap`) accept `&NseCapabilityContext` for capability-gated operations. See `executor_core.rs:272-450` for the full list of modules registered as NSE globals.
 
 ## Sandbox Enforcement
 
 | Library | Sandbox Enforcement |
 |---------|---------------------|
-| `io` | `is_path_allowed()` validates paths against `allowed_dir` |
-| `lfs` | Path checks + violation counter (`LFS_SANDBOX_VIOLATIONS`) |
-| `os` | `getenv/setenv` blocked, file ops path-checked |
+| `io` | `is_path_allowed()` validates paths; `check_fs_read()`/`check_fs_write()`/`check_process_exec()` via capability context |
+| `lfs` | Path checks + capability context `check_fs_read()`/`check_fs_write()` |
+| `os` | `getenv/setenv` blocked; `check_fs_write()` via capability context for file ops |
 | `socket` | `is_host_allowed()` validates hosts against `allowed_networks` CIDR |
 
 ### SandboxConfig

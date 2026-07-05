@@ -1,6 +1,6 @@
 # NSE Capability Inventory
 
-> **Milestone 3 Phase 01** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. This is the source-of-truth inventory that drives wrapper migration in later phases.
+> **Milestone 3 Phase 03** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. Filesystem and process operations are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
 
 ## Overview
 
@@ -42,10 +42,10 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/io.rs:263-359` | `io.popen(cmd, mode)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | needs check | `process_exec` | Arbitrary command execution via `sh -c`; sandbox checks `is_command_allowed()` blocks shell metacharacters |
+| `libraries/io.rs:263-359` | `io.popen(cmd, mode)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — arbitrary command execution via `sh -c`; routed through `check_process_exec()` capability wrapper |
 | `libraries/os.rs:145-156` | `os.execute(cmd)` | `process_exec` | ProcessExecution | high | `manual_allowed`, `agent_deny`, `ci_deny` | `process_operations` | needs check | `process_exec` | **Safe stub** — returns status=1, no real execution |
-| `libraries/nmap.rs:715-729` | `nmap.is_admin()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | needs check | `process_exec` | Executes `id -u` without sandbox checks; reads effective UID |
-| `libraries/nmap.rs:1124-1139` | `nmap.is_privileged()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | needs check | `process_exec` | Executes `id -u` without sandbox checks; same as is_admin |
+| `libraries/nmap.rs:715-729` | `nmap.is_admin()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — executes `id -u` via `check_process_exec()` capability wrapper |
+| `libraries/nmap.rs:1124-1139` | `nmap.is_privileged()` | `process_exec` | ProcessExecution | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `process_operations` | **migrated** | `process_exec` | **Migrated (Phase 03)** — executes `id -u` via `check_process_exec()` capability wrapper |
 
 ---
 
@@ -55,19 +55,19 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/io.rs:48-123` | `io.open(filename, mode)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations`, `filesystem_bytes_written` | needs check | `fs_write` | Modes "w", "a", "r+", "w+", "a+" create/modify files; `get_allowed_path()` check |
-| `libraries/io.rs:164-182` | `io.write(file, content)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_bytes_written` | needs check | `fs_write` | **TOCTOU risk** — no per-call check; relies on open-time check |
-| `libraries/io.rs:362-402` | `io.tmpfile()` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Creates temp file in sandbox allowed_dir |
-| `libraries/os.rs:159-178` | `os.remove(filename)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | File deletion; `get_allowed_path()` check |
-| `libraries/os.rs:182-207` | `os.rename(old, new)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | File rename; `get_allowed_path()` check on both paths |
+| `libraries/io.rs:48-123` | `io.open(filename, mode)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations`, `filesystem_bytes_written` | **migrated** | `fs_write` | **Migrated (Phase 03)** — modes "w", "a", "r+", "w+", "a+" create/modify files; routed through `check_fs_write()` capability wrapper |
+| `libraries/io.rs:164-182` | `io.write(file, content)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_bytes_written` | **migrated** | `fs_write` | **Migrated (Phase 03)** — routed through `check_fs_write()` per-call, mitigating TOCTOU risk |
+| `libraries/io.rs:362-402` | `io.tmpfile()` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — creates temp file; routed through `check_fs_write()` capability wrapper |
+| `libraries/os.rs:159-178` | `os.remove(filename)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — file deletion; routed through `check_fs_write()` capability wrapper |
+| `libraries/os.rs:182-207` | `os.rename(old, new)` | `filesystem_write` | FileSystemWrite | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — file rename; routed through `check_fs_write()` capability wrapper |
 | `libraries/os.rs:216-236` | `os.chdir(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Changes process working directory; `get_allowed_path()` check |
-| `libraries/lfs.rs:146-162` | `lfs.mkdir(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Directory creation; `get_allowed_path()` check |
-| `libraries/lfs.rs:166-182` | `lfs.rmdir(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Directory removal; `get_allowed_path()` check |
-| `libraries/lfs.rs:186-202` | `lfs.remove(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | File removal; `get_allowed_path()` check |
-| `libraries/lfs.rs:206-227` | `lfs.rename(old, new)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Rename; `get_allowed_path()` check on both |
-| `libraries/lfs.rs:231-264` | `lfs.link(source, link, symbolic)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Link creation; `get_allowed_path()` check on both |
-| `libraries/lfs.rs:298-321` | `lfs.touch(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | Create empty file if missing; `get_allowed_path()` check |
-| `libraries/lfs.rs:336-358` | `lfs.set_mode(path, mode)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_write` | chmod equivalent; `get_allowed_path()` check |
+| `libraries/lfs.rs:146-162` | `lfs.mkdir(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — directory creation; routed through `check_fs_write()` capability wrapper |
+| `libraries/lfs.rs:166-182` | `lfs.rmdir(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — directory removal; routed through `check_fs_write()` capability wrapper |
+| `libraries/lfs.rs:186-202` | `lfs.remove(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — file removal; routed through `check_fs_write()` capability wrapper |
+| `libraries/lfs.rs:206-227` | `lfs.rename(old, new)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — rename; routed through `check_fs_write()` capability wrapper |
+| `libraries/lfs.rs:231-264` | `lfs.link(source, link, symbolic)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — link creation; routed through `check_fs_write()` capability wrapper |
+| `libraries/lfs.rs:298-321` | `lfs.touch(path)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — create empty file if missing; routed through `check_fs_write()` capability wrapper |
+| `libraries/lfs.rs:336-358` | `lfs.set_mode(path, mode)` | `filesystem_write` | FileSystemWrite | low | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_write` | **Migrated (Phase 03)** — chmod equivalent; routed through `check_fs_write()` capability wrapper |
 
 ---
 
@@ -77,10 +77,10 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/io.rs:138-162` | `io.read(file, size)` | `filesystem_read` | FileSystemRead | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_bytes_read` | needs check | `fs_read` | **TOCTOU risk** — no per-call check; relies on open-time check |
-| `libraries/io.rs:240-260` | `io.lines(filename)` | `filesystem_read` | FileSystemRead | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_bytes_read` | needs check | `fs_read` | Reads entire file; `get_allowed_path()` check |
-| `libraries/lfs.rs:46-111` | `lfs.attributes(path)` | `filesystem_read` | FileSystemRead | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_read` | File metadata; `get_allowed_path()` check |
-| `libraries/lfs.rs:115-142` | `lfs.dir(path)` | `filesystem_read` | FileSystemRead | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_read` | Directory listing; `get_allowed_path()` check |
+| `libraries/io.rs:138-162` | `io.read(file, size)` | `filesystem_read` | FileSystemRead | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_bytes_read` | **migrated** | `fs_read` | **Migrated (Phase 03)** — routed through `check_fs_read()` per-call, mitigating TOCTOU risk |
+| `libraries/io.rs:240-260` | `io.lines(filename)` | `filesystem_read` | FileSystemRead | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_bytes_read` | **migrated** | `fs_read` | **Migrated (Phase 03)** — reads entire file; routed through `check_fs_read()` capability wrapper |
+| `libraries/lfs.rs:46-111` | `lfs.attributes(path)` | `filesystem_read` | FileSystemRead | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_read` | **Migrated (Phase 03)** — file metadata; routed through `check_fs_read()` capability wrapper |
+| `libraries/lfs.rs:115-142` | `lfs.dir(path)` | `filesystem_read` | FileSystemRead | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_operations` | **migrated** | `fs_read` | **Migrated (Phase 03)** — directory listing; routed through `check_fs_read()` capability wrapper |
 | `libraries/lfs.rs:267-274` | `lfs.currentdir()` | `filesystem_read` | FileSystemRead | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | none | none | `fs_read` | Returns cwd; no sandbox check |
 | `libraries/lfs.rs:362-395` | `lfs.symlinkattributes(path)` | `filesystem_read` | FileSystemRead | low | `manual_allowed`, `agent_allow_if_scoped`, `ci_allow_local_only` | `filesystem_operations` | needs check | `fs_read` | Symlink metadata; `get_allowed_path()` check |
 | `libraries/unpwdb.rs` | `unpwdb.*` | `filesystem_read` | FileSystemRead | medium | `manual_allowed`, `agent_deny`, `ci_allow_local_only` | `filesystem_bytes_read` | needs check | `fs_read` | Reads credential files |
@@ -206,9 +206,18 @@ These libraries perform pure computation with no I/O side effects. They require 
 | Library | Enforcement | Gap |
 |---------|-------------|-----|
 | `socket` | `allowed_networks` check on every connect/resolve | `nmap.socket_*()` and `nmap.async_socket_*()` bypass |
-| `io` | `get_allowed_path()` on open/lines; `is_command_allowed()` on popen | `io.write()` TOCTOU risk; `io.read()` TOCTOU risk |
-| `os` | `get_allowed_path()` on remove/rename/chdir; sandbox blocks setenv/unsetenv | `os.execute()` is safe stub; `nmap.is_admin()` bypass |
-| `lfs` | `get_allowed_path()` on attributes/dir/mkdir/rmdir/remove/rename/link/touch/symlinkattributes/set_mode/chdir | None significant |
+| `io` | `get_allowed_path()` on open/lines; `is_command_allowed()` on popen; capability context checks via `check_fs_read()`, `check_fs_write()`, `check_process_exec()` | `io.write()` TOCTOU risk mitigated by per-call checks; `io.read()` TOCTOU risk mitigated |
+| `os` | `get_allowed_path()` on remove/rename/chdir; capability context checks via `check_fs_write()`; sandbox blocks setenv/unsetenv | `os.execute()` is safe stub; `nmap.is_admin()` now routed through `check_process_exec()` |
+| `lfs` | `get_allowed_path()` on all operations; capability context checks via `check_fs_read()`, `check_fs_write()` | None significant |
+
+### Migrated to Capability Context (Phase 03)
+
+| Library | Operations | Wrapper Used |
+|---------|-----------|--------------|
+| `io.rs` | `io.open()`, `io.read()`, `io.lines()`, `io.popen()`, `io.tmpfile()`, `io.write()` | `check_fs_read()`, `check_fs_write()`, `check_process_exec()` + executing wrappers |
+| `lfs.rs` | All `lfs.*` operations | `check_fs_read()`, `check_fs_write()` via `NseCapabilityContext::check_capability()` |
+| `os.rs` | `os.remove()`, `os.rename()` | `check_fs_write()` |
+| `nmap.rs` | `nmap.is_admin()`, `nmap.is_privileged()` | `check_process_exec()` |
 
 ### NOT Sandboxed (all others)
 
@@ -577,4 +586,4 @@ bash scripts/check-architecture-guards.sh
 
 ### Architecture Guard
 
-Check 33 in `scripts/check-architecture-guards.sh` detects direct high-risk ops in NSE libraries (informational only). Check 34 verifies capability context integration.
+Check 33 in `scripts/check-architecture-guards.sh` detects direct `std::process::Command` in NSE libraries (FAIL after Phase 03). Check 33b detects direct filesystem ops in unmigrated libraries (informational). Check 34 verifies capability context integration.

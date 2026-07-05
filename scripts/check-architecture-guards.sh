@@ -402,6 +402,7 @@ HITS=$(rg -n 'std::fs::read_to_string\(|std::fs::read\(' \
   --glob='!crates/eggsec-nse/src/executor_core.rs' \
   --glob='!crates/eggsec-nse/src/public_api/api.rs' \
   --glob='!crates/eggsec-nse/src/libraries/*' \
+  --glob='!crates/eggsec-nse/src/wrappers.rs' \
   2>/dev/null \
   || true)
 # Allowlist the parse_nse_categories function body in executor.rs. Function reads
@@ -683,15 +684,41 @@ else
   echo "PASS: No docs claim full Nmap parity."
 fi
 
-# 33. NSE capability wrappers: direct high-risk ops (informational, not failing yet)
+# 33. NSE capability wrappers: direct process exec in libraries must be migrated
+# Phase 03 migrated filesystem and process wrappers through NseCapabilityContext.
+# std::process::Command in library files (outside wrappers.rs, executor_core.rs, tests/)
+# now FAILS because all process exec is routed through check_process_exec.
+# nmap.rs is excluded because all its std::process::Command calls are guarded by
+# check_process_exec() (nmap.is_admin, nmap.is_privileged).
+# std::fs remains informational since not all libraries (unpwdb, brute, datafiles, etc.)
+# are migrated yet.
 echo ""
-echo "--- Check 33: NSE direct high-risk ops outside wrappers (info only) ---"
-NSE_DIRECT_HITS=$(rg -n 'std::process::Command|std::fs::read_to_string|std::fs::write|remove_file|rename|TcpStream|UdpSocket' --glob='*.rs' crates/eggsec-nse/src/libraries/ 2>/dev/null | head -20 || true)
-if [[ -n "$NSE_DIRECT_HITS" ]]; then
-  echo "$NSE_DIRECT_HITS"
-  echo "INFO: Found direct high-risk ops in NSE libraries. These will be migrated to capability wrappers in future phases."
+echo "--- Check 33: NSE direct process exec outside wrappers (FAIL) ---"
+NSE_PROC_HITS=$(rg -n 'std::process::Command' --glob='*.rs' crates/eggsec-nse/src/libraries/ \
+  --glob='!wrappers.rs' --glob='!executor_core.rs' --glob='!nmap.rs' --glob='!tests/' 2>/dev/null \
+  | grep -v 'tests/' || true)
+if [[ -n "$NSE_PROC_HITS" ]]; then
+  echo "$NSE_PROC_HITS"
+  echo "FAIL: Found direct std::process::Command in NSE libraries outside wrappers.rs."
+  echo "      Phase 03 migrated all process exec through NseCapabilityContext via check_process_exec()."
+  FAIL=$((FAIL + 1))
 else
-  echo "PASS: No direct high-risk ops found in NSE libraries."
+  echo "PASS: No direct std::process::Command in NSE libraries outside wrappers."
+fi
+
+echo ""
+echo "--- Check 33b: NSE direct filesystem ops outside wrappers (info only) ---"
+NSE_FS_HITS=$(rg -n 'std::fs::read_to_string|std::fs::write|std::fs::remove_file|std::fs::rename|std::fs::create_dir_all' \
+  --glob='*.rs' crates/eggsec-nse/src/libraries/ \
+  --glob='!wrappers.rs' --glob='!executor_core.rs' --glob='!tests/' 2>/dev/null \
+  | grep -v 'tests/' | head -20 || true)
+if [[ -n "$NSE_FS_HITS" ]]; then
+  echo "$NSE_FS_HITS"
+  echo "INFO: Found direct filesystem ops in NSE libraries outside wrappers."
+  echo "      Some are migrated (io.rs, os.rs have capability checks before these calls)."
+  echo "      Others (unpwdb, brute, datafiles) are not yet migrated."
+else
+  echo "PASS: No direct filesystem ops found in NSE libraries outside wrappers."
 fi
 
 # 34. NSE capability context integration (info only, not failing yet)
