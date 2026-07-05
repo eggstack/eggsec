@@ -758,11 +758,11 @@ Profile-specific behavior:
 - `wrappers.rs` contains pilot wrapper functions demonstrating the pattern
 
 **Migration status:**
-- TimeClock, FilesystemRead, FilesystemWrite, NetworkTcp, ProcessExec, DnsResolution, Environment: wrapped
-- NetworkUdp, Compression, Crypto: pending migration
+- TimeClock, FilesystemRead, FilesystemWrite, NetworkTcp, NetworkUdp, ProcessExec, DnsResolution, Environment: wrapped
+- Compression, Crypto: pending migration
 - Randomness: no wrapper needed (pure CPU)
 
-**Architecture guard:** Check 33 (FAIL) detects direct `std::process::Command` in NSE libraries (all process exec migrated); Check 33b (informational) detects direct filesystem ops in unmigrated libraries; Check 34 (informational) verifies capability context integration.
+**Architecture guard:** Check 33 (FAIL) detects direct `std::process::Command` in NSE libraries (all process exec migrated); Check 33b (informational) detects direct filesystem ops in unmigrated libraries; Check 33c (informational) detects direct network calls in unmigrated libraries; Check 34 (informational) verifies capability context integration.
 
 ### Filesystem and Process Wrappers (Phase 03 Complete)
 
@@ -807,6 +807,50 @@ Libraries that accept `&NseCapabilityContext` in their registration function pas
 #### Architecture Guard
 
 Check 33 now **fails** for direct `std::process::Command` in NSE library files (outside `wrappers.rs`, `executor_core.rs`, and `tests/`), since all process execution is migrated. Check 33b remains informational for direct filesystem ops in libraries not yet fully migrated (e.g., `unpwdb`, `brute`, `datafiles`).
+
+### Network/DNS Wrappers (Phase 04 Complete)
+
+Phase 04 migrated network TCP/UDP and DNS resolution through `NseCapabilityContext`. Libraries performing network I/O now route through capability wrappers before performing the actual operations.
+
+#### Migrated Libraries
+
+| Library | Operations Migrated | Wrapper Functions Used |
+|---------|--------------------|-----------------------|
+| `socket.rs` | `socket.tcp_connect()`, `socket.connect()`, `socket.connect_udp()`, `socket.send()`, `socket.receive()`, `socket.sendto()`, `socket.receive_from()` | `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive`, `nse_network_udp_send`, `nse_network_udp_receive`, `check_network_udp` |
+| `comm.rs` | `comm.get_banner()`, `comm.exchange()`, `comm.tryssl()` | `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive` |
+| `dns.rs` | `dns.resolve()`, `dns.query()`, `dns.forward()`, `dns.ptr()` | `nse_dns_lookup` |
+
+#### Executing Wrappers
+
+Phase 04 introduced network/DNS executing wrappers in `wrappers.rs` that combine capability checking with the actual network operation. These wrappers handle cancellation checks, capability evaluation, resource counter updates, and event recording:
+
+- `nse_network_tcp_connect()` — TCP connect with network TCP check
+- `nse_network_tcp_send()` — TCP send with network TCP check and bytes accounting
+- `nse_network_tcp_receive()` — TCP receive with network TCP check and bytes accounting
+- `nse_network_udp_send()` — UDP send with network UDP check and bytes accounting
+- `nse_network_udp_receive()` — UDP receive with network UDP check and bytes accounting
+- `nse_dns_lookup()` — DNS resolution with DNS resolution check
+- `check_network_udp()` — Check-only function for UDP operations (no executing wrapper)
+
+#### Library Registration Changes
+
+- `register_socket_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for network operations
+- `register_comm_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for banner/exchange operations
+- `register_dns_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for DNS resolution
+
+#### Profile-Specific Behavior
+
+| Profile | Network TCP | Network UDP | DNS | Notes |
+|---------|------------|-------------|-----|-------|
+| `ManualPermissive` | Allow with warning | Allow with warning | Allow with warning | Accounting only; warns on network ops |
+| `ManualStrict` | Allow within CIDRs | Allow within CIDRs | Allow within CIDRs | Scope-derived CIDR enforcement |
+| `AgentSafe` | Allow if scoped | Allow if scoped | Allow if scoped | Only resolved target IPs |
+| `CiSafe` | **Deny** | **Deny** | **Deny** | Zero network operations |
+| `CompatibilityLab` | Allow with warning | Allow with warning | Allow | Full access for compat testing |
+
+#### Architecture Guard
+
+Check 33c (informational) detects direct network calls (TCP connect, UDP sendto, DNS resolution) in unmigrated library files. This check will tighten as more protocol libraries are migrated.
 
 ## Verification Record (Milestone 1)
 

@@ -25,6 +25,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **Milestone 3 Phase 03 complete.** Filesystem and process wrappers are now fully migrated through `NseCapabilityContext`. Libraries `io.rs`, `lfs.rs`, `os.rs`, and `nmap.rs` route all side-effecting operations through capability checks. Executing wrappers (`nse_fs_read_to_string`, `nse_fs_write`, `nse_fs_remove_file`, `nse_fs_create_dir`, `nse_fs_rename`, `nse_process_exec`, etc.) combine capability checking with the actual operation, handling cancellation, resource counters, and event recording. `AgentSafe` and `CiSafe` deny process execution and filesystem writes by default. `ManualPermissive` allows with warnings. Architecture guard Check 33 now fails for direct `std::process::Command` in NSE libraries (outside wrappers.rs/executor_core.rs/tests). Library registration functions now take `&NseCapabilityContext` parameter. Network TCP/UDP, compression, and crypto remain pending for future phases.
 
+> **Milestone 3 Phase 04 complete.** Network TCP/UDP and DNS wrappers migrated through `NseCapabilityContext`. Executing wrappers added: `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive`, `nse_network_udp_send`, `nse_network_udp_receive`, `nse_dns_lookup`, plus check-only `check_network_udp`. Libraries `socket.rs`, `comm.rs`, and `dns.rs` now accept `&NseCapabilityContext` in their registration functions and route network/DNS operations through capability wrappers before performing the actual operations. Architecture guard Check 33c (informational) detects direct network calls in unmigrated libraries. All 318 tests pass. Compression, crypto/TLS, and protocol-specific libraries (smb, ssh, ftp, http, etc.) remain unmigrated.
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -138,7 +140,7 @@ Located in `src/libraries/`:
 
 ### Library Registration
 
-Libraries are registered via `register_*_library()` functions. All side-effecting libraries (`io`, `lfs`, `os`, `nmap`) accept `&NseCapabilityContext` for capability-gated operations. See `executor_core.rs:272-450` for the full list of modules registered as NSE globals.
+Libraries are registered via `register_*_library()` functions. All side-effecting libraries (`io`, `lfs`, `os`, `nmap`, `socket`, `comm`, `dns`) accept `&NseCapabilityContext` for capability-gated operations. See `executor_core.rs:272-450` for the full list of modules registered as NSE globals.
 
 ## Sandbox Enforcement
 
@@ -147,7 +149,9 @@ Libraries are registered via `register_*_library()` functions. All side-effectin
 | `io` | `is_path_allowed()` validates paths; `check_fs_read()`/`check_fs_write()`/`check_process_exec()` via capability context |
 | `lfs` | Path checks + capability context `check_fs_read()`/`check_fs_write()` |
 | `os` | `getenv/setenv` blocked; `check_fs_write()` via capability context for file ops |
-| `socket` | `is_host_allowed()` validates hosts against `allowed_networks` CIDR |
+| `socket` | `is_host_allowed()` validates hosts; `nse_network_tcp_connect`/`nse_network_udp_send`/`nse_dns_lookup` via capability context |
+| `comm` | `nse_network_tcp_connect`/`nse_network_tcp_send`/`nse_network_tcp_receive` via capability context |
+| `dns` | `nse_dns_lookup` via capability context |
 
 ### SandboxConfig
 

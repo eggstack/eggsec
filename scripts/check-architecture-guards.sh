@@ -721,6 +721,21 @@ else
   echo "PASS: No direct filesystem ops found in NSE libraries outside wrappers."
 fi
 
+echo ""
+echo "--- Check 33c: NSE direct network calls outside wrappers (info only) ---"
+NSE_NET_HITS=$(rg -n 'TcpStream::connect|UdpSocket::bind|TcpStream::connect_timeout' \
+  --glob='*.rs' crates/eggsec-nse/src/libraries/ \
+  --glob='!wrappers.rs' --glob='!executor_core.rs' --glob='!socket.rs' --glob='!comm.rs' --glob='!dns.rs' --glob='!tests/' 2>/dev/null \
+  | grep -v 'tests/' | head -20 || true)
+if [[ -n "$NSE_NET_HITS" ]]; then
+  echo "$NSE_NET_HITS"
+  echo "INFO: Found direct TcpStream/UdpSocket usage in NSE libraries outside wrappers."
+  echo "      socket.rs, comm.rs, and dns.rs are migrated (capability checks before connect)."
+  echo "      Protocol libraries (smb, ssh, ftp, etc.) are not yet migrated."
+else
+  echo "PASS: No direct network calls found in NSE libraries outside wrappers."
+fi
+
 # 34. NSE capability context integration (info only, not failing yet)
 echo ""
 echo "--- Check 34: NSE capability context integration (info only) ---"

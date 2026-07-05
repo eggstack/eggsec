@@ -1,6 +1,6 @@
 # NSE Capability Inventory
 
-> **Milestone 3 Phase 03** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. Filesystem and process operations are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
+> **Milestone 3 Phase 04** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. Filesystem, process, network TCP/UDP, and DNS operations are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
 
 ## Overview
 
@@ -96,15 +96,15 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/socket.rs` (all) | `socket.tcp()`, `socket.udp()`, `socket.sctp()` | `network_tcp`, `network_udp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_connect` | **FULLY SANDBOXED** — `allowed_networks` check on connect/resolve |
-| `libraries/socket.rs` | `socket.tcp_connect()`, `socket.connect()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations` | needs check | `net_connect` | Sandboxed host validation |
-| `libraries/socket.rs` | `socket.send()`, `socket.receive()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_bytes_read`, `network_bytes_written` | needs check | `net_io` | Sandboxed |
-| `libraries/socket.rs` | `socket.sendto()`, `socket.receive_from()` | `network_udp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_bytes_read`, `network_bytes_written` | needs check | `net_io` | Sandboxed via `connect_udp()` |
-| `libraries/socket.rs:664-704` | `socket.resolve_async()` | `dns_resolution` | NetworkAccess | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations` | needs check | `net_resolve` | Sandboxed — `allowed_networks` check |
+| `libraries/socket.rs` (all) | `socket.tcp()`, `socket.udp()`, `socket.sctp()` | `network_tcp`, `network_udp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | **migrated** | `net_connect` | **Migrated (Phase 04)** — capability context routes connect/send/receive through `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive`, `nse_network_udp_send`, `nse_network_udp_receive` |
+| `libraries/socket.rs` | `socket.tcp_connect()`, `socket.connect()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations` | **migrated** | `net_connect` | **Migrated (Phase 04)** — routed through `nse_network_tcp_connect` capability wrapper |
+| `libraries/socket.rs` | `socket.send()`, `socket.receive()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_bytes_read`, `network_bytes_written` | **migrated** | `net_io` | **Migrated (Phase 04)** — routed through `nse_network_tcp_send`/`nse_network_tcp_receive` |
+| `libraries/socket.rs` | `socket.sendto()`, `socket.receive_from()` | `network_udp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_bytes_read`, `network_bytes_written` | **migrated** | `net_io` | **Migrated (Phase 04)** — routed through `nse_network_udp_send`/`nse_network_udp_receive` |
+| `libraries/socket.rs:664-704` | `socket.resolve_async()` | `dns_resolution` | NetworkAccess | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations` | **migrated** | `net_resolve` | **Migrated (Phase 04)** — routed through `nse_dns_lookup` capability wrapper |
 | `libraries/nmap.rs:306-387` | `nmap.socket_connect()`, `nmap.socket_send()`, `nmap.socket_receive()`, `nmap.socket_close()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_connect` | **NO sandbox check** — connection registry bypass |
 | `libraries/nmap.rs:1271-1451` | `nmap.async_socket_connect()`, `nmap.async_socket_send()`, `nmap.async_socket_receive()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_connect` | **NO sandbox check** — async socket bypass |
-| `libraries/comm.rs` (all) | `comm.get_banner()`, `comm.exchange()`, `comm.tryssl()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_connect` | **NO sandbox check** — raw TCP banner grabbing |
-| `libraries/comm.rs` (all) | `comm.get_banner_async()`, `comm.exchange_async()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_connect` | **NO sandbox check** — async banner grabbing |
+| `libraries/comm.rs` (all) | `comm.get_banner()`, `comm.exchange()`, `comm.tryssl()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | **migrated** | `net_connect` | **Migrated (Phase 04)** — routed through `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive` capability wrappers |
+| `libraries/comm.rs` (all) | `comm.get_banner_async()`, `comm.exchange_async()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_connect` | **NO sandbox check** — async banner grabbing (not yet migrated) |
 | `libraries/http.rs` (all) | `http.get()`, `http.post()`, `http.put()`, `http.delete()`, `http.head()`, `http.options()`, `http.request()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_http` | **NO sandbox check** — full HTTP client |
 | `libraries/http.rs` (all) | `http.post_host()`, `http.put_data()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_http` | **NO sandbox check** |
 | `libraries/http.rs` (all) | `http.async_get()`, `http.async_post()`, `http.async_request()` | `network_tcp` | NetworkAccess | high | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations`, `network_bytes_read`, `network_bytes_written` | needs check | `net_http` | **NO sandbox check** — async HTTP |
@@ -120,7 +120,7 @@ This inventory classifies every side-effecting helper operation across the 167 l
 
 | File | Function | Capability | Side Effect | Blocking Risk | Profile Policy | Accounting | Cancellation | Report Event | Notes |
 |------|----------|------------|-------------|---------------|----------------|------------|--------------|--------------|-------|
-| `libraries/dns.rs` (all) | `dns.resolve()`, `dns.reverse()`, `dns.query()`, `dns.forward()`, `dns.ptr()` | `dns_resolution` | NetworkAccess | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations` | needs check | `net_resolve` | **NO sandbox check** — uses hickory-resolver |
+| `libraries/dns.rs` (all) | `dns.resolve()`, `dns.reverse()`, `dns.query()`, `dns.forward()`, `dns.ptr()` | `dns_resolution` | NetworkAccess | medium | `manual_allowed`, `agent_allow_if_scoped`, `ci_deny` | `network_operations` | **migrated** | `net_resolve` | **Migrated (Phase 04)** — routed through `nse_dns_lookup` capability wrapper |
 
 ---
 
@@ -210,18 +210,21 @@ These libraries perform pure computation with no I/O side effects. They require 
 | `os` | `get_allowed_path()` on remove/rename/chdir; capability context checks via `check_fs_write()`; sandbox blocks setenv/unsetenv | `os.execute()` is safe stub; `nmap.is_admin()` now routed through `check_process_exec()` |
 | `lfs` | `get_allowed_path()` on all operations; capability context checks via `check_fs_read()`, `check_fs_write()` | None significant |
 
-### Migrated to Capability Context (Phase 03)
+### Migrated to Capability Context (Phase 03 + 04)
 
-| Library | Operations | Wrapper Used |
-|---------|-----------|--------------|
-| `io.rs` | `io.open()`, `io.read()`, `io.lines()`, `io.popen()`, `io.tmpfile()`, `io.write()` | `check_fs_read()`, `check_fs_write()`, `check_process_exec()` + executing wrappers |
-| `lfs.rs` | All `lfs.*` operations | `check_fs_read()`, `check_fs_write()` via `NseCapabilityContext::check_capability()` |
-| `os.rs` | `os.remove()`, `os.rename()` | `check_fs_write()` |
-| `nmap.rs` | `nmap.is_admin()`, `nmap.is_privileged()` | `check_process_exec()` |
+| Library | Operations | Wrapper Used | Phase |
+|---------|-----------|--------------|-------|
+| `io.rs` | `io.open()`, `io.read()`, `io.lines()`, `io.popen()`, `io.tmpfile()`, `io.write()` | `check_fs_read()`, `check_fs_write()`, `check_process_exec()` + executing wrappers | Phase 03 |
+| `lfs.rs` | All `lfs.*` operations | `check_fs_read()`, `check_fs_write()` via `NseCapabilityContext::check_capability()` | Phase 03 |
+| `os.rs` | `os.remove()`, `os.rename()` | `check_fs_write()` | Phase 03 |
+| `nmap.rs` | `nmap.is_admin()`, `nmap.is_privileged()` | `check_process_exec()` | Phase 03 |
+| `socket.rs` | `socket.tcp_connect()`, `socket.connect()`, `socket.connect_udp()`, `socket.send()`, `socket.receive()`, `socket.sendto()`, `socket.receive_from()` | `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive`, `nse_network_udp_send`, `nse_network_udp_receive`, `check_network_udp` | Phase 04 |
+| `comm.rs` | `comm.get_banner()`, `comm.exchange()`, `comm.tryssl()` | `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive` | Phase 04 |
+| `dns.rs` | `dns.resolve()`, `dns.query()`, `dns.forward()`, `dns.ptr()` | `nse_dns_lookup` | Phase 04 |
 
 ### NOT Sandboxed (all others)
 
-All network protocol libraries (http, dns, smtp, ssh2, comm, mysql, postgres, etc.) and the `nmap` library's own socket operations bypass sandbox checks entirely. The `stdnse.sleep()` family blocks the thread without cancellation checks.
+All network protocol libraries (http, smtp, ssh2, mysql, postgres, etc.) and the `nmap` library's own socket operations bypass sandbox checks entirely. `socket.rs`, `comm.rs`, and `dns.rs` are now migrated to capability context (Phase 04) but remain in the "already sandboxed" category for legacy checks. The `stdnse.sleep()` family blocks the thread without cancellation checks.
 
 ---
 
@@ -586,4 +589,4 @@ bash scripts/check-architecture-guards.sh
 
 ### Architecture Guard
 
-Check 33 in `scripts/check-architecture-guards.sh` detects direct `std::process::Command` in NSE libraries (FAIL after Phase 03). Check 33b detects direct filesystem ops in unmigrated libraries (informational). Check 34 verifies capability context integration.
+Check 33 in `scripts/check-architecture-guards.sh` detects direct `std::process::Command` in NSE libraries (FAIL after Phase 03). Check 33b detects direct filesystem ops in unmigrated libraries (informational). Check 33c detects direct network calls in unmigrated libraries (informational). Check 34 verifies capability context integration.
