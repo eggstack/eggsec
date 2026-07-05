@@ -529,3 +529,52 @@ cargo check -p eggsec-nse --features nse
 cargo test -p eggsec-nse --features nse
 bash scripts/check-architecture-guards.sh
 ```
+
+---
+
+## Phase 02: Capability Context (Complete)
+
+`NseCapabilityContext` in `capabilities.rs` provides centralized policy enforcement for all side-effecting NSE helpers. This replaces per-profile scattered checks with a single decision engine.
+
+### Core Types
+
+| Type | Location | Purpose |
+|------|----------|---------|
+| `NseCapabilityContext` | `capabilities.rs:26-45` | Central enforcement: profile_kind, network_policy, limits, cancellation, counters, events |
+| `NseCapabilityKind` | `capabilities.rs:48-72` | 11 operation classes: FilesystemRead, FilesystemWrite, ProcessExec, NetworkTcp, NetworkUdp, DnsResolution, TimeClock, Randomness, Crypto, Compression, Environment |
+| `NseCapabilityRequest` | `capabilities.rs:93-103` | Request with kind, target, bytes_hint, operation name |
+| `NseCapabilityDecision` | `capabilities.rs:106-114` | Allow / Deny{reason} / AllowWithWarning{warning} |
+| `NseCapabilityEvent` | `capabilities.rs:145-159` | Recorded event with kind, operation, target, allowed, reason, bytes |
+
+### Profile-Specific Policy
+
+| Profile | Process Exec | FS Write | Network TCP/UDP | DNS | Time/Clock | Environment |
+|---------|-------------|----------|-----------------|-----|------------|-------------|
+| ManualPermissive | Allow+Warn | Allow+Warn | Allow (sandbox check) | Allow | Allow | Allow |
+| ManualStrict | Deny | Allow (sandbox path) | AllowCidrs | Allow | Allow | Deny |
+| AgentSafe | Deny | Deny | Scoped to target | Allow | Allow | Deny |
+| CiSafe | Deny | Deny | DenyAll | Deny | Deny | Deny |
+| CompatibilityLab | Allow+Warn | Allow+Warn | Allow+Warn | Allow | Allow | Allow |
+
+### Integration Points
+
+- **ExecutorCore**: `executor_core.rs` stores `NseCapabilityContext` in `capability_context` field, constructed via `with_policy()` or `with_profile()`
+- **NseRunReport**: `report.rs` includes `capability_events: Vec<NseCapabilityEvent>` and `capability_event_summary: Option<NseCapabilityEventSummary>`
+- **Wrappers**: `wrappers.rs` contains pilot wrapper functions (check_time_clock, check_fs_read, check_fs_write, check_network_tcp, check_process_exec, check_dns) that route operations through the capability context
+
+### Migration Priority (from Phase 01)
+
+1. Process execution (already wrapped)
+2. Filesystem write
+3. Filesystem read (already wrapped)
+4. Network TCP/UDP (TCP already wrapped)
+5. DNS resolution (already wrapped)
+6. Compression
+7. Crypto/TLS
+8. Time/randomness (already wrapped)
+9. Environment (already wrapped)
+10. Pure CPU (no wrapper needed)
+
+### Architecture Guard
+
+Check 33 in `scripts/check-architecture-guards.sh` detects direct high-risk ops in NSE libraries (informational only). Check 34 verifies capability context integration.

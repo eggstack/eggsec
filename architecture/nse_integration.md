@@ -741,6 +741,29 @@ Profile-specific behavior:
 
 `NseCapabilityEvent` integration into `NseRunReport.capability_events` — denied operations affect compatibility status (`Partial`). Pilot wrappers in `wrappers.rs` demonstrate the pattern. `ExecutorCore` stores the capability context, constructed from `with_policy()` defaults or `with_profile()` overrides. Architecture guards detect direct high-risk ops in NSE libraries (informational, will tighten as wrappers migrate).
 
+### NSE Capability Context
+
+`NseCapabilityContext` (defined in `capabilities.rs`) provides centralized policy enforcement for all side-effecting NSE helper operations. It evaluates each operation against the active execution profile and returns Allow, Deny, or AllowWithWarning.
+
+**Core decision flow:**
+1. Helper calls wrapper function (e.g., `check_network_tcp()`)
+2. Wrapper constructs `NseCapabilityRequest` with operation details
+3. `NseCapabilityContext::check_capability()` evaluates against profile policy
+4. Decision returned: Allow, Deny{reason}, or AllowWithWarning{warning}
+5. Event recorded in `NseCapabilityEvent` for run report
+
+**Integration points:**
+- `ExecutorCore` stores the capability context (constructed in `with_policy()` or `with_profile()`)
+- `NseRunReport` includes `capability_events` and `capability_event_summary`
+- `wrappers.rs` contains pilot wrapper functions demonstrating the pattern
+
+**Migration status:**
+- TimeClock, FilesystemRead, NetworkTcp, ProcessExec, DnsResolution, Environment: wrapped
+- FilesystemWrite, NetworkUdp, Compression, Crypto: pending migration
+- Randomness: no wrapper needed (pure CPU)
+
+**Architecture guard:** Check 33 (informational) detects direct high-risk ops in NSE libraries; Check 34 (informational) verifies capability context integration.
+
 ## Verification Record (Milestone 1)
 
 The intended Milestone 1 gate is:

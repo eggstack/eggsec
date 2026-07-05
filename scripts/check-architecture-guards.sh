@@ -694,6 +694,16 @@ else
   echo "PASS: No direct high-risk ops found in NSE libraries."
 fi
 
+# 34. NSE capability context integration (info only, not failing yet)
+echo ""
+echo "--- Check 34: NSE capability context integration (info only) ---"
+NSE_CAP_HITS=$(rg -n 'NseCapabilityContext|NseCapabilityKind|NseCapabilityEvent|check_capability' --glob='*.rs' crates/eggsec-nse/src/ 2>/dev/null | head -20 || true)
+if [[ -n "$NSE_CAP_HITS" ]]; then
+  echo "PASS: NSE capability context types found in crates/eggsec-nse/src/"
+else
+  echo "INFO: No NSE capability context types found. Capability context integration may not be complete."
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
