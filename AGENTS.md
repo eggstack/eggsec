@@ -103,6 +103,7 @@ cargo test -p eggsec-nse --test profile_guard_tests
 cargo test -p eggsec-nse --test script_file_policy_tests
 cargo test -p eggsec-nse --test sandbox_tests
 cargo test -p eggsec-nse --test compatibility_corpus_tests
+cargo test -p eggsec-nse --test rule_evaluation_tests
 cargo clippy -p eggsec-nse --features nse
 
 # Wireless
@@ -389,7 +390,7 @@ Canonical reference points when updating guidance or skills:
 - `NseRuleEvaluationReport` - Rule evaluation metadata (`eggsec-nse::report`); rule behavior is defined by this type (kind, status, fidelity, approximations, inputs).
 
 > **NSE Milestone 1 (loader/profile) is closed.** The canonical implementation, tests, and policy contract are listed in the [Milestone 1 Closure Index](./architecture/nse_integration.md#milestone-1-closure-index). Future work should not reopen loader/profile policy unless a regression is found.
-> **NSE Milestone 2 (registry/report/corpus) is closed.** Library compatibility is defined by `NseLibraryRegistry` metadata (43 descriptors). Rule behavior is defined by `NseRuleEvaluationReport`. Run output truthfulness is defined by `NseRunReport`. The compatibility corpus is representative and local-only. See the [Milestone 2 Closure Note](./architecture/nse_integration.md#milestone-2-closure-note).
+> **NSE Milestone 2 (registry/report/corpus) is closed.** Library compatibility is defined by `NseLibraryRegistry` metadata (43 descriptors). Rule behavior is defined by `NseRuleEvaluationReport`. Rule evaluation produces structured reports via `evaluate_rule()`. Library reports populated from registry metadata by `build_library_reports()`. Error paths emit full reports via `build_failure_report()`. Run output truthfulness is defined by `NseRunReport`. The compatibility corpus is representative and local-only. See the [Milestone 2 Closure Note](./architecture/nse_integration.md#milestone-2-closure-note).
 - `SessionId` - Opaque session identifier (`eggsec-runtime::ids`)
 - `TaskId` - Opaque task identifier (`eggsec-runtime::ids`)
 - `ClientId` - Opaque client identifier (`eggsec-runtime::ids`)

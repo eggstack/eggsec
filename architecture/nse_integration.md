@@ -320,7 +320,7 @@ The following files are the canonical implementation, test, and doc anchors for 
 
 ### Deferred Work
 
-- **Milestone 2 (closed)**: Library registry, rule semantics, compatibility truthfulness, structured run reports. See [Milestone 2 Closure Note](#milestone-2-closure-note).
+- **Milestone 2 (closed)**: Library registry, rule semantics, compatibility truthfulness, structured run reports, rule evaluation reports, library reports populated by runtime. See [Milestone 2 Closure Note](#milestone-2-closure-note).
 - **Milestone 3 (next)**: Rust-side blocking helper cancellation via capability wrappers.
 
 ## Milestone 2 Closure Note
@@ -329,6 +329,9 @@ NSE Milestone 2 is closed. The following are explicitly **closed**:
 
 - **Library registry source of truth**: `NseLibraryDescriptor` / `LIBRARY_REGISTRY` in `resolver/registry.rs` is the canonical inventory of standard Nmap Lua library modules. Compatibility claims must reference registry metadata, not implementation file counts.
 - **Rule semantics report path**: `NseRuleEvaluationReport` provides structured rule-evaluation metadata (kind, status, fidelity, approximations, inputs). Rule behavior is defined by this report, not by prose descriptions.
+- **Rule evaluation**: `evaluate_rule()` in `report.rs` converts Lua rule results into structured `NseRuleEvaluationReport` instances. Outcomes: evaluated+matched (bool true), evaluated+not-matched (bool false or nil), unsupported return type (non-bool with `unsupported` field), and errored (lua error). `evaluate_rule_value()` in `executor.rs` provides inline evaluation. `evaluate_rule()` is the canonical path for CLI runtime (`run_script_with_rules()`).
+- **Library reports**: `build_library_reports()` in `lib.rs` populates `NseLibraryUseReport` entries from registry metadata for every run. All runs include library data in the JSON report regardless of execution outcome.
+- **Error path reports**: `build_failure_report()` in `lib.rs` produces a full `NseRunReport` for error paths, including library reports and error information. No execution produces a report with empty data.
 - **Structured reports**: `NseRunReport` is the canonical structured output model for NSE runs. Run output truthfulness is defined by `NseRunReport` fields, not by ad-hoc log output.
 - **Compatibility corpus**: A representative corpus of NSE script fixtures in `tests/fixtures/nse_corpus/` verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts.
 - **Documentation/release gate**: Verification commands and compatibility claims are documented and auditable.
@@ -344,8 +347,9 @@ The following remain **deferred**:
 
 - Loader and profile enforcement remain closed from Milestone 1 (see [Milestone 1 Closure Index](#milestone-1-closure-index)).
 - Library compatibility is defined by `NseLibraryRegistry` metadata, not by implementation file counts.
-- Rule behavior is defined by `NseRuleEvaluationReport` / rule semantics metadata.
+- Rule behavior is defined by `NseRuleEvaluationReport` / `evaluate_rule()` / rule semantics metadata.
 - Run output truthfulness is defined by `NseRunReport`.
+- Library reports are populated by `build_library_reports()` from registry metadata on every run.
 - Future milestones should build on the registry, report, and corpus foundations rather than revisiting them.
 
 ### Milestone 2 Verification Record

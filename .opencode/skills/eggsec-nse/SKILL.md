@@ -33,6 +33,25 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | `NseCancellationToken` | `src/limits.rs` | Cooperative cancellation via `Arc<AtomicBool>` |
 | `NseResourceCounters` | `src/limits.rs` | Atomic counters for network/filesystem operations |
 | `NseExecutionStats` | `src/limits.rs` | Execution stats snapshot (elapsed, instructions, bytes, violation) |
+| `evaluate_rule()` | `src/report.rs` | Converts Lua rule results to structured `NseRuleEvaluationReport` |
+| `build_library_reports()` | `src/lib.rs` | Populates library reports from registry metadata for all runs |
+| `build_failure_report()` | `src/lib.rs` | Builds full `NseRunReport` for error paths with library data |
+
+## Rule Evaluation Reports
+
+`evaluate_rule()` in `report.rs` converts Lua rule return values into structured `NseRuleEvaluationReport` instances. The CLI runtime path (`run_script_with_rules()`) calls `evaluate_rule()` for each rule result.
+
+| Outcome | `evaluated` | `matched` | `exactness` | `unsupported` | Description |
+|---------|-------------|-----------|-------------|---------------|-------------|
+| Boolean true | true | true | `"exact"` | None | Rule matched |
+| Boolean false | true | false | `"exact"` | None | Rule did not match |
+| Nil | true | false | `"exact"` | None | Rule returned nil |
+| Non-boolean | false | false | `"unsupported"` | Some | Return type not supported by NSE semantics |
+| Lua error | false | false | `"exact"` | None | `error` field populated with error message |
+
+`build_library_reports()` in `lib.rs` populates `NseLibraryUseReport` entries from `NseLibraryDescriptor` registry metadata on every run, including error paths. `build_failure_report()` produces a full `NseRunReport` for error paths with library data and error information.
+
+The `unsupported` field on `NseRuleEvaluationReport` is `Option<String>` and is `#[serde(skip_serializing_if = "Option::is_none")]` — it only appears in serialized output when present (non-boolean return types).
 
 ## Execution Profiles
 
@@ -371,4 +390,5 @@ cargo test -p eggsec-nse --features nse --test profile_tests
 cargo test -p eggsec-nse --features nse --test execution_limits_tests
 cargo test -p eggsec-nse --features nse --test sandbox_tests
 cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests
+cargo test -p eggsec-nse --features nse --test rule_evaluation_tests
 ```
