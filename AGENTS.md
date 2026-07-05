@@ -257,6 +257,7 @@ Canonical reference points when updating guidance or skills:
 - `architecture/hunt.md` - Vulnerability hunting workflows
 - `architecture/browser.md` - Headless browser security testing
 - `architecture/nse_integration.md` - NSE/Lua script integration
+- `architecture/nse_capability_inventory.md` - NSE helper capability inventory, risk classification, and migration priority ranking
 - `docs/FEATURE_MATRIX.md` - Feature inventory, classification, naming conventions, build profiles, and cross-reference
 - `docs/EXTENSIBILITY.md` - Contributor extensibility guide: operations, domains, commands, tool exposure, TUI actions, reports, features, tests
 - `docs/extending/operations.md` - Adding new OperationMetadata
@@ -391,6 +392,7 @@ Canonical reference points when updating guidance or skills:
 
 > **NSE Milestone 1 (loader/profile) is closed.** The canonical implementation, tests, and policy contract are listed in the [Milestone 1 Closure Index](./architecture/nse_integration.md#milestone-1-closure-index). Future work should not reopen loader/profile policy unless a regression is found.
 > **NSE Milestone 2 (registry/report/corpus) is closed.** Library compatibility is defined by `NseLibraryRegistry` metadata (43 descriptors). `NseRunReport.libraries` records per-run required/attempted library usage, not a capability snapshot, and the later truthfulness follow-up refined that reporting without reopening Milestone 2. Rule behavior is defined by `NseRuleEvaluationReport`. Rule evaluation produces structured reports via `evaluate_rule()`. Error paths emit full reports by `build_failure_report()`. Run output truthfulness is defined by `NseRunReport`. The compatibility corpus is representative and local-only. See the [Milestone 2 Closure Note](./architecture/nse_integration.md#milestone-2-closure-note).
+> **NSE Milestone 3 (capability wrappers) Phase 01 complete.** A complete capability inventory and risk classification exists at `architecture/nse_capability_inventory.md`. The inventory classifies all side-effecting NSE helper operations by capability class, blocking risk, profile policy, accounting needs, cancellation requirements, and report events. Key findings: 4 libraries sandboxed (socket, io, os, lfs), all protocol libraries (~100+) bypass sandbox, `nmap.socket_*()` bypasses socket sandbox, `stdnse.sleep()` blocks without cancellation checks. Migration priority: process execution → filesystem write → filesystem read → network TCP/UDP → DNS → compression → crypto/TLS → time/randomness → pure CPU.
 - `SessionId` - Opaque session identifier (`eggsec-runtime::ids`)
 - `TaskId` - Opaque task identifier (`eggsec-runtime::ids`)
 - `ClientId` - Opaque client identifier (`eggsec-runtime::ids`)

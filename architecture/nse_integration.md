@@ -691,6 +691,37 @@ The Milestone 2 contract above is the boundary. Future work should:
 
 The Milestone 3 plan should be written from this closure index without reopening the Milestone 2 truthfulness contracts established here.
 
+### Capability Inventory (Phase 01 Complete)
+
+A complete capability inventory and risk classification exists at [`architecture/nse_capability_inventory.md`](./nse_capability_inventory.md). The inventory classifies all side-effecting NSE helper operations by:
+
+- **Capability class** (filesystem_read/write, process_exec, network_tcp/udp, dns_resolution, tls_crypto, compression, time_clock, randomness, environment, pure_cpu)
+- **Blocking risk** (none, low, medium, high)
+- **Profile policy** (manual_allowed, agent_deny, ci_deny, agent_allow_if_scoped, ci_allow_local_only)
+- **Accounting needs** (filesystem_operations, network_operations, process_operations, etc.)
+- **Cancellation requirements** (pre-call checks needed)
+- **Report events** (event types for NseRunReport integration)
+
+Key findings from the inventory:
+
+1. **4 libraries** have sandbox enforcement (socket, io, os, lfs)
+2. **All protocol libraries** (~100+) bypass sandbox entirely
+3. **`nmap.socket_*()` and `nmap.async_socket_*()`** bypass socket sandbox
+4. **`stdnse.sleep()`** blocks the thread without cancellation checks
+5. **`io.read()` and `io.write()`** have TOCTOU risks
+6. **`nmap.is_admin()`/`nmap.is_privileged()`** execute shell commands without sandbox
+
+Migration priority order:
+1. Process execution (`io.popen`)
+2. Filesystem write/delete/rename
+3. Filesystem read outside roots
+4. Network TCP/UDP (all protocol libs)
+5. DNS lookups
+6. Compression on untrusted inputs
+7. Crypto/TLS blocking
+8. Time/randomness/environment reads
+9. Pure CPU helpers (no migration needed)
+
 ## Verification Record (Milestone 1)
 
 The intended Milestone 1 gate is:
