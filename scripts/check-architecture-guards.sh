@@ -404,12 +404,12 @@ HITS=$(rg -n 'std::fs::read_to_string\(|std::fs::read\(' \
   --glob='!crates/eggsec-nse/src/libraries/*' \
   2>/dev/null \
   || true)
-# Allowlist the parse_nse_categories function body (lines 474-510 of executor.rs as of
-# the Milestone 1 polish pass). Function reads shipped NSE metadata, not user scripts.
+# Allowlist the parse_nse_categories function body in executor.rs. Function reads
+# shipped NSE metadata, not user scripts.
 FILTERED=$(printf '%s\n' "$HITS" | awk -F: '
   /^crates\/eggsec-nse\/src\/executor\.rs:/ {
     line = $2 + 0
-    if (line >= 474 && line <= 510) { next }
+    if (line >= 521 && line <= 545) { next }
   }
   { print }
 ' || true)
@@ -422,7 +422,22 @@ else
   echo "PASS: NSE script/module loading is resolver-owned."
 fi
 
-# 25. ManualPermissive profile constructors must not be used outside manual CLI/TUI surfaces.
+# 25. No registry inventory is mislabeled as runtime library usage.
+echo ""
+echo "--- Check 25: Registry inventory is not mislabeled as runtime usage ---"
+REGISTRY_HITS=$(rg -n 'registry::all_libraries\(\)' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
+LOADED_HITS=$(rg -n 'loaded:\s*true' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
+if [[ -n "$REGISTRY_HITS" && -n "$LOADED_HITS" ]]; then
+  echo "$REGISTRY_HITS"
+  echo "$LOADED_HITS"
+  echo "FAIL: Production report paths must not map registry inventory directly into loaded runtime libraries."
+  echo "      Use per-run require tracking, or expose capability snapshots under a separate field."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Runtime library usage is not derived from registry inventory."
+fi
+
+# 26. ManualPermissive profile constructors must not be used outside manual CLI/TUI surfaces.
 # Allow list: crates/eggsec-nse/src/profile.rs (canonical constructors),
 #             crates/eggsec-nse/src/lib.rs (run_cli_with_profile default fallback),
 #             crates/eggsec-nse/src/resolver.rs (inline tests),
@@ -430,7 +445,7 @@ fi
 #             crates/eggsec/src/commands/handlers/scan.rs (CLI handler),
 #             crates/eggsec/src/dispatch/api.rs (CLI dispatch).
 echo ""
-echo "--- Check 25: ManualPermissive stays in manual surfaces ---"
+echo "--- Check 26: ManualPermissive stays in manual surfaces ---"
 HITS=$(rg -n 'ResolvedNseExecutionProfile::manual_permissive' \
   crates/ \
   --glob='!crates/eggsec-nse/src/profile.rs' \
@@ -450,13 +465,13 @@ else
   echo "PASS: ManualPermissive use stays in manual surfaces and tests."
 fi
 
-# 26. Manual-only executor constructors stay in manual-only paths.
+# 27. Manual-only executor constructors stay in manual-only paths.
 # `NseExecutor::new()`, `with_sandbox()`, `with_target()` use permissive defaults.
 # Allow list: profile/executor/executor_core source files, nse crate tests,
 # eggsec crate tests (nse_tests.rs, nse_integration_tests.rs), manual CLI surfaces
 # (commands/handlers/scan.rs, dispatch/api.rs, nse_tool.rs).
 echo ""
-echo "--- Check 26: Manual-only NseExecutor constructors stay manual ---"
+echo "--- Check 27: Manual-only NseExecutor constructors stay manual ---"
 HITS=$(rg -n 'NseExecutor::new\(|NseExecutor::with_sandbox\(|NseExecutor::with_target\(' \
   crates/ \
   --glob='!crates/eggsec-nse/src/executor.rs' \
@@ -479,7 +494,7 @@ else
 fi
 
 echo ""
-echo "--- Check 27: NSE registry entries have corresponding Rust modules ---"
+echo "--- Check 28: NSE registry entries have corresponding Rust modules ---"
 SECTION_FAIL=0
 # Nmap Lua library names that map to different Rust module names.
 # Format: "nmap_name:rust_module1,rust_module2"
@@ -532,11 +547,11 @@ if [[ -n "$UNREGISTERED" ]]; then
   echo "      (These are likely protocol-specific implementations, not standard Nmap Lua libraries.)"
 fi
 
-# 28. NseLibraryDescriptor must only be instantiated in the registry module.
+# 29. NseLibraryDescriptor must only be instantiated in the registry module.
 # Direct construction outside registry.rs bypasses the registry metadata contract
 # and prevents policy evaluation, diagnostics, and compatibility reporting.
 echo ""
-echo "--- Check 28: NseLibraryDescriptor instantiation is registry-owned ---"
+echo "--- Check 29: NseLibraryDescriptor instantiation is registry-owned ---"
 HITS=$(rg -n 'NseLibraryDescriptor\s*\{' \
   crates/eggsec-nse/src/ \
   --glob='!crates/eggsec-nse/src/resolver/registry.rs' \
@@ -551,12 +566,12 @@ else
   echo "PASS: NseLibraryDescriptor instantiation is registry-owned."
 fi
 
-# 29. run_cli_with_profile() JSON path must populate library and rule metadata.
+# 30. run_cli_with_profile() JSON path must populate library and rule metadata.
 # The NseRunReport must include library use reports and rule evaluation reports
 # for structured output to be complete. Once these APIs exist, skipping them
 # produces empty arrays that hide compatibility truth.
 echo ""
-echo "--- Check 29: run_cli_with_profile() JSON path populates report metadata ---"
+echo "--- Check 30: run_cli_with_profile() JSON path populates report metadata ---"
 SECTION_FAIL=0
 # Check that the JSON path calls with_rules()
 if ! rg -q 'with_rules\(' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
@@ -576,13 +591,13 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 30. New rule-evaluation convenience APIs must produce NseRuleEvaluationReport metadata.
+# 31. New rule-evaluation convenience APIs must produce NseRuleEvaluationReport metadata.
 # Any public convenience function added to public_api/ that evaluates NSE rules
 # (port rules, script rules, host rules) must populate NseRuleEvaluationReport
 # entries so compatibility status is visible. Core executor functions are exempt
 # (they are implementation, not convenience APIs).
 echo ""
-echo "--- Check 30: Rule evaluation convenience APIs produce NseRuleEvaluationReport ---"
+echo "--- Check 31: Rule evaluation convenience APIs produce NseRuleEvaluationReport ---"
 if [[ -d "crates/eggsec-nse/src/public_api" ]]; then
   RULE_FUNCS=$(rg -n 'pub fn.*(?:rule|eval).*\(' \
     crates/eggsec-nse/src/public_api/ \
@@ -613,12 +628,12 @@ else
   echo "PASS: No public_api/ directory found (none to audit)."
 fi
 
-# 31. No docs claim full Nmap compatibility or parity.
+# 32. No docs claim full Nmap compatibility or parity.
 # Eggsec has selective practical NSE compatibility, not full Nmap parity.
 # Compatibility status is defined by NseLibraryRegistry metadata and
 # NseRuleEvaluationReport fidelity, not by documentation claims.
 echo ""
-echo "--- Check 31: No docs claim full Nmap parity ---"
+echo "--- Check 32: No docs claim full Nmap parity ---"
 HITS=$(rg -in 'full\s+nmap\s+(compat|parity|support|compatible)|100%\s+nmap|complete\s+nmap\s+(compat|parity|support)|nmap\s+compatible\s+replacement|drop.in\s+nmap\s+replacement' \
   --glob='*.md' \
   docs/ architecture/ README.md .opencode/skills/ \

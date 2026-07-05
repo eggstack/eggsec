@@ -320,7 +320,7 @@ The following files are the canonical implementation, test, and doc anchors for 
 
 ### Deferred Work
 
-- **Milestone 2 (closed)**: Library registry, rule semantics, compatibility truthfulness, structured run reports, rule evaluation reports, library reports populated by runtime. See [Milestone 2 Closure Note](#milestone-2-closure-note).
+- **Milestone 2 (closed)**: Library registry, rule semantics, compatibility truthfulness, structured run reports, rule evaluation reports, and per-run library-usage reporting. See [Milestone 2 Closure Note](#milestone-2-closure-note).
 - **Milestone 3 (next)**: Rust-side blocking helper cancellation via capability wrappers.
 
 ## Milestone 2 Closure Note
@@ -330,10 +330,11 @@ NSE Milestone 2 is closed. The following are explicitly **closed**:
 - **Library registry source of truth**: `NseLibraryDescriptor` / `LIBRARY_REGISTRY` in `resolver/registry.rs` is the canonical inventory of standard Nmap Lua library modules. Compatibility claims must reference registry metadata, not implementation file counts.
 - **Rule semantics report path**: `NseRuleEvaluationReport` provides structured rule-evaluation metadata (kind, status, fidelity, approximations, inputs). Rule behavior is defined by this report, not by prose descriptions.
 - **Rule evaluation**: `evaluate_rule()` in `report.rs` converts Lua rule results into structured `NseRuleEvaluationReport` instances. Outcomes: evaluated+matched (bool true), evaluated+not-matched (bool false or nil), unsupported return type (non-bool with `unsupported` field), and errored (lua error). `evaluate_rule_value()` in `executor.rs` provides inline evaluation. `evaluate_rule()` is the canonical path for CLI runtime (`run_script_with_rules()`).
-- **Library reports**: `build_library_reports()` in `lib.rs` populates `NseLibraryUseReport` entries from registry metadata for every run. All runs include library data in the JSON report regardless of execution outcome.
-- **Error path reports**: `build_failure_report()` in `lib.rs` produces a full `NseRunReport` for error paths, including library reports and error information. No execution produces a report with empty data.
+- **Library reports**: `NseRunReport.libraries` records the libraries required or attempted by each run, along with per-run diagnostics. It is not a capability snapshot and should not be read as a static inventory of all supported NSE libraries.
+- **Error path reports**: `build_failure_report()` in `lib.rs` produces a full `NseRunReport` for error paths, including library reports and error information. Empty `libraries` is valid when no runtime or static `require()` evidence is available; the report must not fabricate unobserved libraries.
 - **Structured reports**: `NseRunReport` is the canonical structured output model for NSE runs. Run output truthfulness is defined by `NseRunReport` fields, not by ad-hoc log output.
 - **Compatibility corpus**: A representative corpus of NSE script fixtures in `tests/fixtures/nse_corpus/` verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts.
+- **Truthfulness follow-up**: `NseRunReport.libraries` was later refined to reflect per-run usage rather than a capability snapshot. That follow-up did not reopen Milestone 2.
 - **Documentation/release gate**: Verification commands and compatibility claims are documented and auditable.
 
 The following remain **deferred**:
@@ -348,8 +349,7 @@ The following remain **deferred**:
 - Loader and profile enforcement remain closed from Milestone 1 (see [Milestone 1 Closure Index](#milestone-1-closure-index)).
 - Library compatibility is defined by `NseLibraryRegistry` metadata, not by implementation file counts.
 - Rule behavior is defined by `NseRuleEvaluationReport` / `evaluate_rule()` / rule semantics metadata.
-- Run output truthfulness is defined by `NseRunReport`.
-- Library reports are populated by `build_library_reports()` from registry metadata on every run.
+- `NseRunReport.libraries` records per-run required/attempted library usage; compatibility claims still come from registry metadata.
 - Future milestones should build on the registry, report, and corpus foundations rather than revisiting them.
 
 ### Milestone 2 Verification Record
@@ -457,6 +457,8 @@ The compatibility matrix summarizes the registry's 43 library descriptors. The a
 ## Report Examples
 
 `NseRunReport` (defined in `crates/eggsec-nse/src/report.rs`) is the structured output of an NSE script execution. Field names are illustrative — the schema follows the Rust struct definitions and may evolve.
+
+`NseRunReport.libraries` is a per-run record of the libraries required or attempted by that execution, together with any diagnostics from the run. It does not describe the full capability set of Eggsec NSE support. In denied or blocked runs, the field may be empty because no script execution occurred.
 
 ### Example 1: Compatible Run with Warnings
 
