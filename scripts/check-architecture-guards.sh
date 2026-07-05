@@ -422,9 +422,30 @@ else
   echo "PASS: NSE script/module loading is resolver-owned."
 fi
 
-# 25. No registry inventory is mislabeled as runtime library usage.
+# 25. NseRunReport.libraries is per-run require activity, not registry capability dump.
+# Production report paths must use runtime observation (executor.library_reports(),
+# required_modules(), library_use_reports_from_required_modules()) or explicitly
+# labeled static fallback (library_use_reports_from_static_requires() with loaded=false).
+# Registry::all_libraries() may only appear in docs/matrix generation or test code,
+# never in production report paths.
 echo ""
-echo "--- Check 25: Registry inventory is not mislabeled as runtime usage ---"
+echo "--- Check 25: NseRunReport.libraries is per-run require activity ---"
+# Detect fabrication patterns: registry iteration with loaded: true in production paths
+FABRICATION_HITS=$(rg -n 'all_libraries\(\).*loaded:\s*true|registry.*map.*loaded:\s*true' \
+  crates/eggsec-nse/src/ crates/eggsec/src/ \
+  --glob='!*.rs.bak' \
+  2>/dev/null || true)
+if [[ -n "$FABRICATION_HITS" ]]; then
+  echo "$FABRICATION_HITS"
+  echo "FAIL: NseRunReport.libraries must not fabricate loaded status from registry inventory."
+  echo "      Registry::all_libraries() describes capability metadata; per-run libraries"
+  echo "      must come from runtime require tracking or labeled static fallback."
+  FAIL=$((FAIL + 1))
+  SECTION_FAIL=1
+else
+  SECTION_FAIL=0
+fi
+# Also detect the narrow co-occurrence in lib.rs/executor.rs (original check)
 REGISTRY_HITS=$(rg -n 'registry::all_libraries\(\)' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
 LOADED_HITS=$(rg -n 'loaded:\s*true' crates/eggsec-nse/src/lib.rs crates/eggsec-nse/src/executor.rs 2>/dev/null || true)
 if [[ -n "$REGISTRY_HITS" && -n "$LOADED_HITS" ]]; then
@@ -433,8 +454,17 @@ if [[ -n "$REGISTRY_HITS" && -n "$LOADED_HITS" ]]; then
   echo "FAIL: Production report paths must not map registry inventory directly into loaded runtime libraries."
   echo "      Use per-run require tracking, or expose capability snapshots under a separate field."
   FAIL=$((FAIL + 1))
+  SECTION_FAIL=1
+fi
+# Positive evidence: production lib.rs uses runtime observation
+if rg -q 'library_use_reports_from_required_modules|library_use_reports_from_static_requires|executor\.library_reports' crates/eggsec-nse/src/lib.rs 2>/dev/null; then
+  echo "PASS: Production report path uses runtime observation functions."
 else
-  echo "PASS: Runtime library usage is not derived from registry inventory."
+  echo "WARN: Could not confirm runtime observation functions in lib.rs."
+  echo "      Expected: library_use_reports_from_required_modules, library_use_reports_from_static_requires, or executor.library_reports()."
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: NseRunReport.libraries is per-run require activity, not registry dump."
 fi
 
 # 26. ManualPermissive profile constructors must not be used outside manual CLI/TUI surfaces.

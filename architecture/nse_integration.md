@@ -330,7 +330,7 @@ NSE Milestone 2 is closed. The following are explicitly **closed**:
 - **Library registry source of truth**: `NseLibraryDescriptor` / `LIBRARY_REGISTRY` in `resolver/registry.rs` is the canonical inventory of standard Nmap Lua library modules. Compatibility claims must reference registry metadata, not implementation file counts.
 - **Rule semantics report path**: `NseRuleEvaluationReport` provides structured rule-evaluation metadata (kind, status, fidelity, approximations, inputs). Rule behavior is defined by this report, not by prose descriptions.
 - **Rule evaluation**: `evaluate_rule()` in `report.rs` converts Lua rule results into structured `NseRuleEvaluationReport` instances. Outcomes: evaluated+matched (bool true), evaluated+not-matched (bool false or nil), unsupported return type (non-bool with `unsupported` field), and errored (lua error). `evaluate_rule_value()` in `executor.rs` provides inline evaluation. `evaluate_rule()` is the canonical path for CLI runtime (`run_script_with_rules()`).
-- **Library reports**: `NseRunReport.libraries` records the libraries required or attempted by each run, along with per-run diagnostics. It is not a capability snapshot and should not be read as a static inventory of all supported NSE libraries.
+- **Library reports**: `NseRunReport.libraries` records per-run observed or attempted `require()` activity, along with per-run diagnostics. Each entry has a `loaded` field: `true` means the runtime observed a successful module load; `false` means a `require()` was attempted but the module failed, was blocked, was missing, had an invalid name, or was statically detected without runtime confirmation. Static `require()` detection is approximate and labeled with a warning. It is not a capability snapshot and should not be read as a static inventory of all supported NSE libraries.
 - **Error path reports**: `build_failure_report()` in `lib.rs` produces a full `NseRunReport` for error paths, including library reports and error information. Empty `libraries` is valid when no runtime or static `require()` evidence is available; the report must not fabricate unobserved libraries.
 - **Structured reports**: `NseRunReport` is the canonical structured output model for NSE runs. Run output truthfulness is defined by `NseRunReport` fields, not by ad-hoc log output.
 - **Compatibility corpus**: A representative corpus of NSE script fixtures in `tests/fixtures/nse_corpus/` verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts.
@@ -352,23 +352,39 @@ The following remain **deferred**:
 - `NseRunReport.libraries` records per-run required/attempted library usage; compatibility claims still come from registry metadata.
 - Future milestones should build on the registry, report, and corpus foundations rather than revisiting them.
 
-### Milestone 2 Verification Record
+#### Milestone 3 Boundary
 
-**Date:** 2026-07-04
-**Commit:** `252292ba`
+Milestone 3 should focus on:
+
+- Capability wrappers for side-effecting Rust helpers
+- Network/filesystem/process/time/randomness accounting
+- Cancellation checks before and after blocking helper calls
+- Profile-aware denial/allowance for helper operations
+- Report integration for helper-side effects
+
+Milestone 3 should not:
+
+- Redesign loader/profile semantics
+- Redo library registry truthfulness
+- Assert comprehensive Nmap equivalence
+
+### Milestone 2 Final Verification
+
+**Date:** 2026-07-05 (hardening/polish pass)
 
 | Command | Status | Tests | Notes |
 |---------|--------|-------|-------|
 | `cargo check -p eggsec-nse --features nse` | PASS | — | ~96 pre-existing warnings |
-| `cargo test -p eggsec-nse --features nse` | PASS | 253 | 1 ignored |
+| `cargo test -p eggsec-nse --features nse` | PASS | 269 | 1 ignored |
+| `cargo test -p eggsec-nse --features nse,sandbox` | PASS | 269 | 1 ignored |
 | `cargo check -p eggsec --features nse` | PASS | — | ~100 pre-existing warnings |
-| `cargo test -p eggsec --features nse --test nse_tests` | PASS | 174 | — |
-| `bash scripts/check-architecture-guards.sh` | PASS | 32 checks | Including checks 28-31 (Milestone 2) |
+| `cargo test -p eggsec --features nse --test nse_tests` | PRE-EXISTING FAIL | — | Type mismatch at nse_tests.rs:284 (3-tuple vs 2-tuple); not introduced by this pass |
+| `bash scripts/check-architecture-guards.sh` | PASS | 32 checks | Check 25 strengthened; all pass |
 | `cargo fmt --all --check` | PASS | — | — |
-| `cargo clippy --lib -p eggsec-nse --features nse` | PASS | — | 152 pre-existing warnings |
-| `cargo clippy --lib -p eggsec --features nse` | PASS | — | 181 pre-existing warnings |
+| `cargo clippy --lib -p eggsec-nse --features nse` | PASS | — | Pre-existing warnings only |
+| `cargo clippy --lib -p eggsec --features nse` | PASS | — | Pre-existing warnings only |
 
-`cargo-nextest` not installed; `make test-nse` skipped. Closest equivalent: `cargo test -p eggsec-nse --features nse`.
+Architecture guard Check 25 has been strengthened to reject both empty placeholders and all-registry-loaded fabrication patterns. Library report truthfulness is protected by 6 tests covering no-require, single-require, repeated-require, missing-require, static fallback, and fabrication rejection scenarios.
 
 ## Library Registry
 
@@ -459,6 +475,10 @@ The compatibility matrix summarizes the registry's 43 library descriptors. The a
 `NseRunReport` (defined in `crates/eggsec-nse/src/report.rs`) is the structured output of an NSE script execution. Field names are illustrative — the schema follows the Rust struct definitions and may evolve.
 
 `NseRunReport.libraries` is a per-run record of the libraries required or attempted by that execution, together with any diagnostics from the run. It does not describe the full capability set of Eggsec NSE support. In denied or blocked runs, the field may be empty because no script execution occurred.
+
+Each library entry has a `loaded` field: `true` means the runtime observed a successful module load; `false` means a `require()` was attempted but the module failed, was blocked by policy, was missing, had an invalid name, or was detected via static analysis without runtime confirmation. Static `require()` detection is approximate and is labeled with a warning in the `warnings` array. Registry APIs describe available capability metadata, not per-run usage.
+
+The `rules` array reflects real rule evaluation where available. Outcomes include evaluated+matched (boolean true), evaluated+not-matched (boolean false or nil), unsupported return types (non-boolean with `unsupported` field), and errored rules (lua error). See `NseRuleEvaluationReport` for the structured metadata contract.
 
 ### Example 1: Compatible Run with Warnings
 

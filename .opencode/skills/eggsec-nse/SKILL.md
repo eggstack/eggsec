@@ -49,7 +49,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | Non-boolean | false | false | `"unsupported"` | Some | Return type not supported by NSE semantics |
 | Lua error | false | false | `"exact"` | None | `error` field populated with error message |
 
-Runtime `require()` tracking in `executor_core.rs`, surfaced through `run_cli_with_profile()` and `NseExecutor::build_report()`, populates `NseRunReport.libraries` with the libraries required or attempted during that execution, including error paths. The field records per-run usage and diagnostics; it is not a capability snapshot. `build_failure_report()` produces a full `NseRunReport` for error paths with library data and error information.
+Runtime `require()` tracking in `executor_core.rs`, surfaced through `run_cli_with_profile()` and `NseExecutor::build_report()`, populates `NseRunReport.libraries` with per-run observed or attempted `require()` activity, including error paths. Each entry has a `loaded` field: `true` means the runtime observed a successful module load; `false` means a `require()` was attempted but the module failed, was blocked, was missing, had an invalid name, or was statically detected without runtime confirmation. Static `require()` detection is approximate and labeled with a warning. The field records per-run usage and diagnostics; it is not a capability snapshot. `build_failure_report()` produces a full `NseRunReport` for error paths with library data and error information.
 
 The `unsupported` field on `NseRuleEvaluationReport` is `Option<String>` and is `#[serde(skip_serializing_if = "Option::is_none")]` — it only appears in serialized output when present (non-boolean return types).
 
