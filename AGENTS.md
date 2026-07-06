@@ -103,6 +103,7 @@ cargo test -p eggsec-nse --test profile_guard_tests
 cargo test -p eggsec-nse --test script_file_policy_tests
 cargo test -p eggsec-nse --test sandbox_tests
 cargo test -p eggsec-nse --test compatibility_corpus_tests
+cargo test -p eggsec-nse --test compatibility_corpus_tests -- corpus_harness  # data-driven harness only
 cargo test -p eggsec-nse --test rule_evaluation_tests
 cargo test -p eggsec-nse --test profile_propagation_tests
 cargo clippy -p eggsec-nse --features nse

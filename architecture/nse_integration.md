@@ -1080,45 +1080,43 @@ Commands that fail or diverge in a re-run must be documented with the exact comm
 
 ## Compatibility Corpus
 
-A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Milestone 4 Phase 01 expanded the corpus from 18 individual tests into a data-driven regression suite with 21 fixtures organized by category.
 
 ### Location
 
 - **Fixtures**: `crates/eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
-- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 integration tests gated on `#[cfg(feature = "nse")]`
+- **Manifest**: `crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, and capability events per fixture
+- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 20 data-driven harness tests gated on `#[cfg(feature = "nse")]`
 
-### Coverage Categories
+### Corpus Categories
 
-| Category | Tests | Status | Fidelity |
-|----------|-------|--------|----------|
-| Supported (simple script) | simple_portrule | Compatible | Full |
-| Supported (stdnse output) | stdnse_output | Compatible | Full |
-| Supported (builtin module require) | builtin_module_require | Compatible | Full |
-| Supported (hostrule) | simple_hostrule | Compatible | Full |
-| Supported (builtin script) | builtin_script | Compatible | Full |
-| Supported (inline script) | inline_script | Compatible | Full |
-| Supported (module resolution) | module_resolution | Compatible | Full |
-| Supported (library use report) | library_use_report | Compatible | Full |
-| Supported (exact rule) | exact_rule | Compatible | Full |
-| Supported (mixed diagnostics) | mixed_diagnostics | Compatible | Full |
-| Supported (module not found) | module_not_found | Compatible | Full |
-| Denied (agent policy) | agent_denied | Failed | Full |
-| Error (file not found) | file_not_found | Failed | Full |
-| Error (unsupported behavior) | unsupported_behavior | Failed | Full |
-| Error (rule error) | rule_error | Failed | Full |
-| Unsupported (invalid module) | invalid_module_name | Partial | Minimal |
-| Approximate (approx rule) | approximate_rule | CompatibleWithWarnings | Approximate |
-| Serialization | serialization_roundtrip | — | — |
+| Category | Fixtures | Description |
+|----------|----------|-------------|
+| discovery | 5 | Script rule types: portrule, hostrule, prerule, postrule, no-require |
+| version | 1 | Service version detection pattern |
+| default | 3 | Core module usage: builtin require, stdnse output, vulns |
+| protocol | 2 | HTTP title mock, DNS lookup mock |
+| auth | 1 | Credential shape (brute-force pattern) |
+| partial | 1 | Approximate compatibility warning |
+| unsupported | 6 | Agent denied, process/fs denied, non-boolean rule, false/error portrule |
+| regression | 2 | Capability fs-deny, compression bounded |
 
-### Running the Corpus
+### Data-Driven Harness
 
-```bash
-cargo test -p eggsec-nse --features nse compatibility_corpus
-```
+The corpus harness (`corpus_harness` module in `compatibility_corpus_tests.rs`) loads `manifest.toml`, iterates fixtures, and asserts semantic report fields:
+
+- **Status**: `compatible`, `compatible_with_warnings`, `partial`, `unsupported`, `failed`
+- **Fidelity**: `full`, `approximate`, `minimal`
+- **Resolution**: script resolved or blocked by policy
+- **Libraries**: expected `require()` entries (name, loaded, registered)
+- **Rules**: expected rule evaluations (kind, evaluated, matched, exactness)
+- **Capability events**: expected denials/warnings (kind, allowed)
+
+Harness tests: `loads_manifest`, `fixture_files_exist`, `manifest_parse_roundtrip`, `all_fixtures_execute`, per-category tests, `capability_event_summary_fields`, `rule_report_fields`, `library_report_fields`, `diagnostics_threaded`, `capability_event_with_bytes`, `report_identity_fields`, `rejects_unknown_status`, `rejects_unknown_fidelity`.
 
 ### Adding New Cases
 
-1. Add fixture `.nse` or `.lua` to `tests/fixtures/nse_corpus/`
-2. Add a `#[test]` function in `tests/compatibility_corpus_tests.rs` following the existing `make_profile()` + resolver + report pattern
-3. Assert specific fields: `status`, `fidelity`, `resolved_count`, `blocked_count`, `unsupported_features`, `approximations`
-4. Run the corpus test to verify
+1. Add fixture `.nse` or `.lua` to `tests/fixtures/nse_corpus/scripts/<category>/`
+2. Add entry to `manifest.toml` with `id`, `name`, `category`, `path`, `profile`, expected fields
+3. Run the data-driven harness: `cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- corpus_harness`
+4. For protocol tests requiring services, add local mock servers in-process (TCP/UDP echo)

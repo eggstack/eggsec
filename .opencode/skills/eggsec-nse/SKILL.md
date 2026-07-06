@@ -32,6 +32,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 > **NSE Milestone 3 (capability wrappers) is closed.** All side-effecting helper classes (filesystem, process, network, DNS, time, randomness, environment, compression, crypto) are routed through `NseCapabilityContext`. Protocol-specific libraries beyond network I/O remain deferred. Capability events are visible in `NseRunReport.capability_events`. Architecture guards prevent new direct bypasses. See the [Milestone 3 Closure Note](../../architecture/nse_integration.md#milestone-3-closure-note) for the canonical summary.
 > **Milestone 3 Closure Verification (2026-07-06).** Final verification: 369 tests, 37 architecture guard checks, fmt/clippy clean. New end-to-end profile/report tests in `tests/profile_report_tests.rs`. See [Milestone 3 Final Verification](../../architecture/nse_integration.md#milestone-3-final-verification).
 
+> **NSE Milestone 4 Phase 01 (corpus expansion) complete.** Compatibility corpus expanded from 18 individual tests into 21 fixtures organized by 8 categories with a data-driven harness (`manifest.toml`). Harness tests assert semantic report fields: status, fidelity, resolution, libraries, rules, capability events. 389 tests pass (1 ignored), architecture guards pass. See [Milestone 4 Phase 01](../../architecture/nse_integration.md#compatibility-corpus).
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -396,13 +398,21 @@ let result = match executor.run_script(script) {
 
 ## Compatibility Corpus
 
-A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Fixtures live in `tests/fixtures/nse_corpus/` with 18 integration tests in `tests/compatibility_corpus_tests.rs`.
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
+
+- **Fixtures**: `tests/fixtures/nse_corpus/` — 21 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression)
+- **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, and capability events
+- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 20 data-driven harness tests
 
 ```bash
+# Data-driven harness (all fixtures from manifest)
+cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- corpus_harness
+
+# Legacy individual tests
 cargo test -p eggsec-nse --features nse compatibility_corpus
 ```
 
-Each test exercises a distinct compatibility path (simple script, stdnse output, builtin module require, agent denial, invalid module name, approximate rule, file not found, etc.) and asserts structured report fields: `status`, `fidelity`, `resolved_count`, `blocked_count`, `unsupported_features`, `approximations`.
+Harness tests assert semantic report fields: `status`, `fidelity`, resolved/blocked state, `libraries`, `rules`, and `capability_events`. Adding a new fixture requires only a `.nse`/`.lua` file and a `manifest.toml` entry.
 
 ## Testing
 
