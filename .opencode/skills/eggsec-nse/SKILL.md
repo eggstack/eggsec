@@ -400,9 +400,9 @@ let result = match executor.run_script(script) {
 
 A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
 
-- **Fixtures**: `tests/fixtures/nse_corpus/` — 21 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression)
-- **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, and capability events
-- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 20 data-driven harness tests
+- **Fixtures**: `tests/fixtures/nse_corpus/` — 37 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
+- **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification
+- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests
 
 ```bash
 # Data-driven harness (all fixtures from manifest)
@@ -412,7 +412,7 @@ cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- cor
 cargo test -p eggsec-nse --features nse compatibility_corpus
 ```
 
-Harness tests assert semantic report fields: `status`, `fidelity`, resolved/blocked state, `libraries`, `rules`, and `capability_events`. Adding a new fixture requires only a `.nse`/`.lua` file and a `manifest.toml` entry.
+Harness tests assert semantic report fields: `status`, `fidelity`, resolved/blocked state, `libraries`, `rules`, `capability_events`, provenance metadata, and gap classification. Adding a new fixture requires only a `.nse`/`.lua` file and a `manifest.toml` entry with provenance and gap classification.
 
 ## Testing
 

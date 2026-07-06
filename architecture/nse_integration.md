@@ -1080,13 +1080,13 @@ Commands that fail or diverge in a re-run must be documented with the exact comm
 
 ## Compatibility Corpus
 
-A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Milestone 4 Phase 01 expanded the corpus from 18 individual tests into a data-driven regression suite with 21 fixtures organized by category.
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Milestone 4 Phase 01 expanded the corpus from 18 individual tests into a data-driven regression suite with 21 fixtures organized by category. Phase 02 added upstream-style fixtures with provenance tracking and gap classification.
 
 ### Location
 
 - **Fixtures**: `crates/eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
-- **Manifest**: `crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, and capability events per fixture
-- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 20 data-driven harness tests gated on `#[cfg(feature = "nse")]`
+- **Manifest**: `crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification per fixture
+- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`
 
 ### Corpus Categories
 
@@ -1100,6 +1100,26 @@ A representative corpus of NSE script fixtures verifies supported, partial, appr
 | partial | 1 | Approximate compatibility warning |
 | unsupported | 6 | Agent denied, process/fs denied, non-boolean rule, false/error portrule |
 | regression | 2 | Capability fs-deny, compression bounded |
+| upstream | 16 | Upstream-style patterns: shortport, sslcert, http, dns, vulns, stdnse tables, banners, etc. |
+
+### Provenance Tracking
+
+Every fixture declares provenance metadata:
+- `provenance`: `clean-room` (original) or `upstream-derived` (pattern from Nmap)
+- `upstream_reference`: description of the upstream pattern tested
+- `license_note`: always "No upstream source copied" for clean-room fixtures
+- `local_fixture`: `true` — all fixtures are local-only
+- `public_network_required`: `false` — no fixtures require public network access
+
+### Gap Classification
+
+Every fixture declares a gap classification:
+- `supported` — fully supported behavior in Eggsec
+- `approximate` — supported with approximations or warnings
+- `capability_denied` — blocked by capability context (e.g., AgentSafe process exec)
+- `missing_library` — library not implemented in Eggsec (e.g., ssh2 under nse-ssh2)
+- `context_gap` — behavior depends on runtime context not available in harness
+- `unsupported_runtime` — Lua runtime limitation or Nmap-specific API
 
 ### Data-Driven Harness
 
@@ -1111,12 +1131,30 @@ The corpus harness (`corpus_harness` module in `compatibility_corpus_tests.rs`) 
 - **Libraries**: expected `require()` entries (name, loaded, registered)
 - **Rules**: expected rule evaluations (kind, evaluated, matched, exactness)
 - **Capability events**: expected denials/warnings (kind, allowed)
+- **Provenance**: fixture provenance metadata present and valid
+- **Gap classification**: gap classification is one of the defined categories
 
-Harness tests: `loads_manifest`, `fixture_files_exist`, `manifest_parse_roundtrip`, `all_fixtures_execute`, per-category tests, `capability_event_summary_fields`, `rule_report_fields`, `library_report_fields`, `diagnostics_threaded`, `capability_event_with_bytes`, `report_identity_fields`, `rejects_unknown_status`, `rejects_unknown_fidelity`.
+Harness tests: `loads_manifest`, `fixture_files_exist`, `manifest_parse_roundtrip`, `all_fixtures_execute`, per-category tests (including `upstream`), `capability_event_summary_fields`, `rule_report_fields`, `library_report_fields`, `diagnostics_threaded`, `capability_event_with_bytes`, `report_identity_fields`, `rejects_unknown_status`, `rejects_unknown_fidelity`, `provenance_checks`, `gap_classification_valid`, `upstream_local_only`, `fixture_count_range`.
 
 ### Adding New Cases
 
 1. Add fixture `.nse` or `.lua` to `tests/fixtures/nse_corpus/scripts/<category>/`
-2. Add entry to `manifest.toml` with `id`, `name`, `category`, `path`, `profile`, expected fields
+2. Add entry to `manifest.toml` with `id`, `name`, `category`, `path`, `profile`, expected fields, provenance, and gap classification
 3. Run the data-driven harness: `cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- corpus_harness`
 4. For protocol tests requiring services, add local mock servers in-process (TCP/UDP echo)
+
+### Milestone 4 Phase 02: Upstream Subset Validation
+
+Phase 02 adds deterministic validation against a curated upstream-style NSE subset. The goal is to verify that Eggsec's NSE engine handles the most common Nmap API patterns correctly, without copying upstream code.
+
+**Selection criteria** (10-25 fixtures per plan; 16 implemented):
+- Patterns from Nmap's most common NSE categories (discovery, default, safe, vuln)
+- API surface coverage: shortport, sslcert, http, dns, vulns, stdnse output/args
+- All fixtures are clean-room reimplementations — no upstream source copied
+
+**What was added**:
+- 16 new upstream-style fixtures in `scripts/upstream/` covering: shortport patterns, sslcert, HTTP GET/POST, DNS reverse lookup, stdnse args/output tables, hostname hostrule, graceful degradation, vulns, brute categories, nmap.fetch_file, structured output, banner parsing
+- Provenance metadata on all 37 fixtures (clean-room/upstream-derived, reference, license)
+- Gap classification on all 37 fixtures (supported/approximate/capability_denied/missing_library/context_gap/unsupported_runtime)
+- 4 new validation tests: provenance checks, gap classification validation, upstream local-only constraints, fixture count range (10-25)
+- Regression guard (Check 38) in `scripts/check-architecture-guards.sh` verifying all fixtures are local-only

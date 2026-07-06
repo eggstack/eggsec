@@ -821,6 +821,21 @@ else
 fi
 
 echo ""
+echo "--- Check 38: NSE upstream corpus has local-only fixtures (INFO) ---"
+UPSTREAM_LOCAL_ONLY=$(grep -c 'local_fixture = true' crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml 2>/dev/null || echo "0")
+UPSTREAM_TOTAL=$(grep -c '\[\[fixture\]\]' crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml 2>/dev/null || echo "0")
+if [[ "$UPSTREAM_LOCAL_ONLY" -lt "$UPSTREAM_TOTAL" ]]; then
+  echo "FAIL: Not all fixtures have local_fixture = true ($UPSTREAM_LOCAL_ONLY / $UPSTREAM_TOTAL)"
+  echo "      All NSE corpus fixtures must be local-only to avoid upstream license dependencies."
+  FAIL=$((FAIL + 1))
+elif [[ "$UPSTREAM_TOTAL" -lt 10 ]]; then
+  echo "INFO: Corpus has only $UPSTREAM_TOTAL fixtures. Expected 10-37."
+  echo "      Corpus should remain representative but not claim full upstream coverage."
+else
+  echo "PASS: All $UPSTREAM_TOTAL corpus fixtures are local-only ($UPSTREAM_LOCAL_ONLY with local_fixture=true)."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."
