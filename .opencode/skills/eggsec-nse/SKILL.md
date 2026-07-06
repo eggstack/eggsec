@@ -34,6 +34,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **NSE Milestone 4 Phase 01 (corpus expansion) complete.** Compatibility corpus expanded from 18 individual tests into 21 fixtures organized by 8 categories with a data-driven harness (`manifest.toml`). Harness tests assert semantic report fields: status, fidelity, resolution, libraries, rules, capability events. 389 tests pass (1 ignored), architecture guards pass. See [Milestone 4 Phase 01](../../architecture/nse_integration.md#compatibility-corpus).
 
+> **NSE Milestone 4 Phase 03 (context fidelity) complete.** Structured context types (`NseHostContext`, `NsePortContext`, `NseServiceContext`, `NseContextSource`) provide typed Lua table construction with provenance tracking. `hostrule(host)` receives structured host table (not raw nmap global). `portrule(host, port)` receives (host, port) pair matching Nmap signature. `NseRuleEvaluationReport` extended with context fidelity fields. 402 tests pass, 8 new context fidelity tests. See [Milestone 4 Phase 03](../../architecture/nse_integration.md#milestone-4-phase-03-host-port-and-service-context-fidelity).
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -44,6 +46,10 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 | `ScriptResolver` | `src/resolver.rs` | Policy-enforcing script/module resolver with diagnostics |
 | `SandboxConfig` | `src/lib.rs:50-76` | Sandbox restrictions for scripts |
 | `ScanContext` | `src/context.rs:141-149` | Host info, ports, output during execution |
+| `NseHostContext` | `src/context.rs` | Structured host data with provenance for rule evaluation |
+| `NsePortContext` | `src/context.rs` | Structured port data with service context for rule evaluation |
+| `NseServiceContext` | `src/context.rs` | Service metadata (name, product, version, tunnel, confidence) |
+| `NseContextSource` | `src/context.rs` | Provenance enum: Scan, Fixture, Synthetic, Unknown |
 | `NseExecutionLimits` | `src/limits.rs` | Bounded execution: wall-clock, instruction count, output size, script size, resource usage |
 | `NseCancellationToken` | `src/limits.rs` | Cooperative cancellation via `Arc<AtomicBool>` |
 | `NseResourceCounters` | `src/limits.rs` | Atomic counters for network/filesystem operations |
@@ -95,6 +101,10 @@ use eggsec_nse::{
     NseRunReport,               // Structured run output (Milestone 2; per-run library usage)
     NseRuleEvaluationReport,    // Rule evaluation metadata (Milestone 2)
     NseLibraryDescriptor,       // Library registry descriptor (Milestone 2)
+    NseHostContext,             // Structured host data with provenance (Milestone 4 Phase 03)
+    NsePortContext,             // Structured port data with service context (Milestone 4 Phase 03)
+    NseServiceContext,          // Service metadata (Milestone 4 Phase 03)
+    NseContextSource,           // Context provenance enum (Milestone 4 Phase 03)
 };
 ```
 

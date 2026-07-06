@@ -1080,19 +1080,19 @@ Commands that fail or diverge in a re-run must be documented with the exact comm
 
 ## Compatibility Corpus
 
-A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Milestone 4 Phase 01 expanded the corpus from 18 individual tests into a data-driven regression suite with 21 fixtures organized by category. Phase 02 added upstream-style fixtures with provenance tracking and gap classification.
+A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity. Milestone 4 Phase 01 expanded the corpus from 18 individual tests into a data-driven regression suite with 21 fixtures organized by category. Phase 02 added upstream-style fixtures with provenance tracking and gap classification. Phase 03 added host/port/service context fidelity fixtures.
 
 ### Location
 
 - **Fixtures**: `crates/eggsec-nse/tests/fixtures/nse_corpus/` — minimal `.nse` and `.lua` files exercising distinct compatibility paths
 - **Manifest**: `crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification per fixture
-- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`
+- **Tests**: `crates/eggsec-nse/tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests gated on `#[cfg(feature = "nse")]`, plus `tests/context_fidelity_tests.rs` — 8 context fidelity unit tests
 
 ### Corpus Categories
 
 | Category | Fixtures | Description |
 |----------|----------|-------------|
-| discovery | 5 | Script rule types: portrule, hostrule, prerule, postrule, no-require |
+| discovery | 8 | Script rule types: portrule, hostrule, prerule, postrule, no-require, portrule(host,port), hostrule context, service context |
 | version | 1 | Service version detection pattern |
 | default | 3 | Core module usage: builtin require, stdnse output, vulns |
 | protocol | 2 | HTTP title mock, DNS lookup mock |
@@ -1158,3 +1158,33 @@ Phase 02 adds deterministic validation against a curated upstream-style NSE subs
 - Gap classification on all 37 fixtures (supported/approximate/capability_denied/missing_library/context_gap/unsupported_runtime)
 - 4 new validation tests: provenance checks, gap classification validation, upstream local-only constraints, fixture count range (10-25)
 - Regression guard (Check 38) in `scripts/check-architecture-guards.sh` verifying all fixtures are local-only
+
+### Milestone 4 Phase 03: Host, Port, and Service Context Fidelity
+
+Phase 03 introduces structured context types for host, port, and service data, replacing raw Lua table construction with typed builders. The goal is to ensure `hostrule(host)`, `portrule(host, port)`, and `action(host, port)` receive correctly-shaped Lua tables matching Nmap's API contract, with provenance tracking for context sources.
+
+**Context types** (in `context.rs`):
+- `NseContextSource` — enum: `Scan`, `Fixture`, `Synthetic`, `Unknown` — provenance for context data
+- `NseHostContext` — structured host data: `ip`, `hostname`, `target_label`, `source` + `to_table()`, `from_host_info()`, `synthetic()`
+- `NsePortContext` — structured port data: `port`, `protocol`, `state`, `service: Option<NseServiceContext>`, `source` + `to_table()`, `from_port_info()`, `minimal()`
+- `NseServiceContext` — service metadata: `name`, `product`, `version`, `tunnel`, `confidence` + `to_table()` + `Default`
+
+**Lua table construction** (in `executor.rs`):
+- `hostrule` receives a structured host table from `NseHostContext::to_table()` (not raw `nmap` global)
+- `portrule` receives `(host_table, port_table)` matching Nmap's `portrule(host, port)` signature
+- `action()` after hostrule: `action(host_table)`; after portrule: `action(host_table, port_table)`
+- `evaluate_rule_with_context()` annotates reports with context source provenance
+
+**Rule report fidelity fields** (in `report.rs`):
+- `host_context_source: Option<String>` — provenance of host context (e.g., "synthetic", "scan")
+- `port_context_source: Option<String>` — provenance of port context
+- `service_context_available: Option<bool>` — whether service sub-table was present
+- `fidelity_reason: Option<String>` — why exactness was downgraded (e.g., "synthetic host context")
+- `evaluate_rule_with_context()` — constructs reports with context annotations; synthetic contexts downgrade exactness to "approximate"
+
+**What was added**:
+- 4 new context types in `context.rs` with Lua table builders and provenance tracking
+- 3 new corpus fixtures: `portrule_host_port.nse`, `hostrule_host_context.nse`, `portrule_service_context.nse`
+- 8 new unit tests in `tests/context_fidelity_tests.rs`
+- Manifest entries with `gap_classification = "approximate"` and `expected_fidelity = "approximate"`
+- 402 tests pass (1 ignored), 0 compilation errors
