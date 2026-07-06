@@ -408,11 +408,12 @@ HITS=$(rg -n 'std::fs::read_to_string\(|std::fs::read\(' \
 # Allowlist the parse_nse_categories function body in executor.rs. Function reads
 # shipped NSE metadata, not user scripts. Range covers line numbers as of the
 # NSE Milestone 3 corrective pass (line count grew ~58 lines due to the
-# with_full_policy / capability_context additions).
+# with_full_policy / capability_context additions). Widened for the Milestone 4
+# closure pass to cover the relocated parse_nse_categories helper.
 FILTERED=$(printf '%s\n' "$HITS" | awk -F: '
   /^crates\/eggsec-nse\/src\/executor\.rs:/ {
     line = $2 + 0
-    if (line >= 575 && line <= 605) { next }
+    if (line >= 575 && line <= 665) { next }
   }
   { print }
 ' || true)
@@ -872,6 +873,39 @@ else
   else
     echo "PASS: NSE_COMPATIBILITY.md exists ($MAT_LINES lines)."
   fi
+fi
+
+echo ""
+echo "--- Check 42: NSE runtime corpus tests live in a separate test binary ---"
+if [[ ! -f crates/eggsec-nse/tests/runtime_corpus_tests.rs ]]; then
+  echo "FAIL: crates/eggsec-nse/tests/runtime_corpus_tests.rs does not exist."
+  echo "      Milestone 4 requires a dedicated runtime corpus test binary."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: runtime_corpus_tests.rs exists."
+fi
+
+echo ""
+echo "--- Check 43: NSE runtime corpus tests use NseExecutor::with_profile ---"
+RUNTIME_PROFILE_USE=$(rg -l 'NseExecutor::with_profile|ExecutorCore::with_profile' crates/eggsec-nse/tests/runtime_corpus_tests.rs 2>/dev/null || true)
+if [[ -z "$RUNTIME_PROFILE_USE" ]]; then
+  echo "FAIL: runtime_corpus_tests.rs does not call NseExecutor::with_profile."
+  echo "      Runtime corpus tests must drive execution through the resolved profile path."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: runtime_corpus_tests.rs uses NseExecutor::with_profile."
+fi
+
+echo ""
+echo "--- Check 44: NSE static corpus harness does not execute scripts ---"
+STATIC_EXEC=$(rg -n 'run_script_with_rules' crates/eggsec-nse/tests/compatibility_corpus_tests.rs 2>/dev/null || true)
+if [[ -n "$STATIC_EXEC" ]]; then
+  echo "$STATIC_EXEC"
+  echo "FAIL: Static corpus harness (compatibility_corpus_tests.rs) calls run_script_with_rules."
+  echo "      Static harness must remain resolver-only; runtime verification belongs in runtime_corpus_tests.rs."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Static corpus harness is resolver-only (no run_script_with_rules)."
 fi
 
 echo ""

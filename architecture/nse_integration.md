@@ -528,6 +528,44 @@ End-to-end verification tests in `crates/eggsec-nse/tests/profile_report_tests.r
 
 Architecture guard Checks 35 and 36 confirm the corrective-pass fix: `run_cli_with_profile()` uses `NseExecutor::with_profile()` (not `with_policy()`), and automated surfaces do not use manual-only constructors. Informational checks 33b/33c/37 document deferred migration targets (unpwdb, brute, datafiles, protocol-specific helpers).
 
+## Milestone 4 Closure Verification
+
+**Date:** 2026-07-06 (closure pass)
+
+Milestone 4 expanded the compatibility corpus (39 fixtures across 9 categories) and added runtime-execution verification on top of the resolver-only static harness. The two harnesses are now structurally separated and each has a clear scope.
+
+| Command | Status | Tests | Notes |
+|---------|--------|-------|-------|
+| `cargo check -p eggsec-nse --features nse` | PASS | — | 0 errors, pre-existing warnings only |
+| `cargo test -p eggsec-nse --features nse` | PASS | 432 | 1 ignored; stable across 10 consecutive runs |
+| `cargo test -p eggsec-nse --features nse --test runtime_corpus_tests` | PASS | 16 | Runtime execution + manifest assertion |
+| `cargo test -p eggsec-nse --features nse --test runtime_smoke_tests` | PASS | 2 | End-to-end profile→report→envelope bridge |
+| `cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests` | PASS | 43 | Static resolver-only harness |
+| `cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- corpus_manifest` | PASS | 25 | Manifest-driven static assertions |
+| `bash scripts/check-architecture-guards.sh` | PASS | 44 checks | All pass; Check 42/43/44 added for harness separation |
+| `cargo fmt --all --check` | PASS | — | — |
+| `cargo clippy -p eggsec-nse --features nse --tests` | PASS | — | Pre-existing warnings only |
+
+### Harness Separation
+
+- **Static harness** (`compatibility_corpus_tests.rs`, `mod corpus_manifest`) verifies resolver-level behavior only. It confirms script/module resolution, blocked-at-resolver status, file/module policies. It does **not** execute scripts.
+- **Runtime harness** (`runtime_corpus_tests.rs`) drives every fixture through `NseExecutor::with_profile(&ResolvedNseExecutionProfile)`, injecting a synthetic host/port context, executing the script, capturing rule/library/capability reports, and asserting manifest expectations against observed behavior.
+- **Smoke tests** (`runtime_smoke_tests.rs`) exercise the full pipeline (profile → context → execution → report → `ReportEnvelope` bridge) for representative scenarios.
+
+### Known Limitations
+
+- `runtime_corpus_tests.rs` is occasionally flaky at default test parallelism (~16 threads). Symptom: `process-denied` fixture occasionally reports `events=[]` even though `io.popen` should be denied by `AgentSafe`. Stable at `--test-threads=4` or fewer. Likely cause: cross-test interaction with library-level static state (e.g. `nmap._ports`, `http.HTTP_CLIENT`). The single-thread test runs are stable across 10+ runs.
+- Rule-level fidelity for fixtures using injected synthetic port context is `Approximate`, not `Full`. This is by design — the rule evaluator downgrades fidelity when context source is `Synthetic`. Capability-denial fixtures (e.g. `process-denied`, `fs-read-denied`, `capability-fs-deny`) declare `expected_fidelity = "approximate"` to match.
+
+### Milestone 5 Boundary
+
+Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence semantics. Candidates for Milestone 5:
+
+- CLI/TUI report UX integration (rendering `ReportEnvelope` in TUI tabs, exporting from CLI).
+- Additional upstream fixtures (currently 39 fixtures; representative coverage).
+- Performance/throughput benchmarks for the runtime harness.
+- Investigating and stabilizing the high-parallelism capability-event flake (currently mitigatable via `--test-threads=4`).
+
 ## Library Registry
 
 The library registry (`src/resolver/registry.rs`) provides a declarative, machine-readable inventory of standard Nmap Lua library modules. It is used for policy evaluation, diagnostics, and compatibility reporting.

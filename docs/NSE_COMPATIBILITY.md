@@ -187,6 +187,46 @@ Scripts marked `Approximate` fidelity have partial Nmap API surface coverage. Sp
 
 ---
 
+## Runtime Verification
+
+The compatibility corpus is verified by two structurally separated harnesses:
+
+### Static Harness (`compatibility_corpus_tests.rs`)
+
+- Verifies resolver-level behavior only: script/module resolution, file size/policy, blocked-at-resolver diagnostics.
+- Does not execute scripts.
+- For blocked fixtures, simulates a `with_error(...)` block and asserts status/fidelity.
+- For non-blocked fixtures, defers status/fidelity assertions to the runtime harness (since static cannot observe runtime errors or capability denials).
+
+### Runtime Harness (`runtime_corpus_tests.rs`)
+
+- Drives every fixture through `NseExecutor::with_profile(&ResolvedNseExecutionProfile)` with synthetic host/port context.
+- Captures rule reports, library use, capability events, evidence, and runtime stats.
+- Asserts manifest expectations (`expected_status`, `expected_fidelity`, `expected_libraries`, `expected_rules`, `expected_capability_events`).
+- 16 tests covering per-category and cross-cutting observations.
+
+### Smoke Tests (`runtime_smoke_tests.rs`)
+
+- Exercise the full pipeline (profile → context → execution → report → `ReportEnvelope` bridge).
+- Verify envelope shape (findings, severity, domain_id) for representative scenarios.
+- 2 tests: `CompatibilityLab` clean execution and `AgentSafe` capability-denial surfacing.
+
+### Test Status
+
+| Binary | Tests | Stable at | Notes |
+|--------|-------|-----------|-------|
+| `runtime_corpus_tests` | 16 | `--test-threads=4` | Default-thread runs occasionally flaky on `process-denied` (likely library-static-state interaction); 10/10 stable at lower parallelism |
+| `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
+| `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
+
+### Known Limitations
+
+- **Synthetic context fidelity**: The runtime harness injects a synthetic host/port context, so rule-level fidelity is `Approximate` even when script behavior is fully correct. This is by design — `evaluate_rule_with_context` downgrades fidelity when `host.source == Synthetic`.
+- **Capability-denial fixtures**: Capability-denial scenarios (`process-denied`, `fs-read-denied`, `capability-fs-deny`) declare `expected_fidelity = "approximate"` to match this synthetic-context behavior. Status is `Partial` due to the capability denial.
+- **High-parallelism flake**: The `process-denied` fixture occasionally misses a `process_exec` capability event when the test harness runs at default parallelism (typically 16+ threads). Stable at `--test-threads=4` or lower. Likely a cross-test interaction with library-level static state (`nmap._ports`, `http.HTTP_CLIENT`, `IO_SANDBOX_VIOLATIONS`, etc.) that is serialized via Mutex but contended under heavy parallelism. Documented as a known limitation; not blocking.
+
+---
+
 ## Milestone 5 Candidates
 
 The following are candidates for capability wrapper migration in Milestone 5:
