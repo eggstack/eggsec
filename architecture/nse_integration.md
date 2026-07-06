@@ -554,8 +554,23 @@ Milestone 4 expanded the compatibility corpus (39 fixtures across 9 categories) 
 
 ### Known Limitations
 
-- `runtime_corpus_tests.rs` is occasionally flaky at default test parallelism (~16 threads). Symptom: `process-denied` fixture occasionally reports `events=[]` even though `io.popen` should be denied by `AgentSafe`. Stable at `--test-threads=4` or fewer. Likely cause: cross-test interaction with library-level static state (e.g. `nmap._ports`, `http.HTTP_CLIENT`). The single-thread test runs are stable across 10+ runs.
 - Rule-level fidelity for fixtures using injected synthetic port context is `Approximate`, not `Full`. This is by design — the rule evaluator downgrades fidelity when context source is `Synthetic`. Capability-denial fixtures (e.g. `process-denied`, `fs-read-denied`, `capability-fs-deny`) declare `expected_fidelity = "approximate"` to match.
+
+### Milestone 4 Closure Verification (2026-07-06)
+
+Final verification pass: 369 tests pass (1 ignored), architecture guards all pass (37 checks), fmt/clippy clean. New end-to-end profile/report tests in `crates/eggsec-nse/tests/profile_report_tests.rs` verify the profile→context→event→report pipeline for AgentSafe (process exec denial, unscoped/scoped FS read), CiSafe (network/DNS denial), and ManualPermissive (process exec warning). See [Milestone 3 Final Verification](./nse_integration.md#milestone-3-final-verification).
+
+### Milestone 5 Phase 01: Runtime Corpus Flake Isolation (2026-07-06)
+
+**Status:** Complete
+
+**Problem:** `runtime_corpus_tests.rs` was flaky at default test parallelism (~16 threads). Symptom: fixtures like `error-portrule` and `process-denied` occasionally reported missing capability events or empty rule reports. Stable at `--test-threads=4`.
+
+**Root cause:** `run_fixture_runtime()` used `std::process::id()` (PID) for temp dir naming. All 16 `#[test]` functions in the binary share the same PID. When two test functions executed the same fixture concurrently (e.g., `corpus_runtime_all_fixtures_execute_and_assert` and `corpus_runtime_unsupported_fixtures` both running `error-portrule`), they wrote to the same temp file path and interacted with the same shared Lua/library statics, causing races.
+
+**Fix:** Added a global `AtomicU32` invocation counter. Each call to `run_fixture_runtime()` obtains a unique monotonic ID, producing temp dirs like `eggsec-nse-runtime-corpus-{fixture}-{pid}-{invocation_id}`. This prevents concurrent test functions from sharing file paths or interfering with each other's Lua VM state. Also upgraded `add_port` failure logging from `debug` to `warn` for visibility.
+
+**Verification:** 10 consecutive runs at default parallelism, all 16 tests pass every time (previously flaky on ~40% of runs).
 
 ### Milestone 5 Boundary
 
@@ -564,7 +579,6 @@ Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence se
 - CLI/TUI report UX integration (rendering `ReportEnvelope` in TUI tabs, exporting from CLI).
 - Additional upstream fixtures (currently 39 fixtures; representative coverage).
 - Performance/throughput benchmarks for the runtime harness.
-- Investigating and stabilizing the high-parallelism capability-event flake (currently mitigatable via `--test-threads=4`).
 
 ## Library Registry
 
