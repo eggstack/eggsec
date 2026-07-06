@@ -498,6 +498,36 @@ New integration tests in `crates/eggsec-nse/tests/profile_propagation_tests.rs` 
 | Check 36 | `automated surfaces must not use with_policy` | Detects automated entry points (run_cli_with_profile, agent/MCP/REST paths) calling `with_policy()` which hardcodes ManualPermissive |
 | Check 37 | `ExecutorCore::with_policy callers info` | Informational: lists all callers of `ExecutorCore::with_policy()` for audit |
 
+### New Profile/Report Tests
+
+End-to-end verification tests in `crates/eggsec-nse/tests/profile_report_tests.rs` exercise the full profile→context→event→report pipeline:
+
+| Test | Profile | Capability | Verifies |
+|------|---------|------------|----------|
+| `agent_safe_process_exec_denied_in_report` | AgentSafe | ProcessExec | Denied; event in report with `allowed=false`; compatibility degrades to `Partial` |
+| `agent_safe_unscoped_fs_read_denied_in_report` | AgentSafe | FilesystemRead | Denied without sandbox; event in report with `allowed=false` |
+| `agent_safe_scoped_fs_read_allowed_in_report` | AgentSafe | FilesystemRead | Allowed with sandbox `allowed_dir`; event in report with `allowed=true` |
+| `ci_safe_network_dns_denied_in_report` | CiSafe | NetworkTcp + DnsResolution | Both denied; events in report with `allowed=false`; compatibility `Partial` |
+| `manual_permissive_process_exec_warning_in_report` | ManualPermissive | ProcessExec | Allowed with warning; event in report with `allowed=true` and warning reason |
+
+## Milestone 3 Final Verification
+
+**Date:** 2026-07-06 (closure verification pass)
+
+| Command | Status | Tests | Notes |
+|---------|--------|-------|-------|
+| `cargo check -p eggsec-nse --features nse` | PASS | — | 0 errors, 98 pre-existing warnings |
+| `cargo test -p eggsec-nse --features nse` | PASS | 369 | 1 ignored |
+| `cargo test -p eggsec-nse --features nse --test profile_propagation_tests` | PASS | 7 | Profile→capability regression tests |
+| `cargo test -p eggsec-nse --features nse --test profile_report_tests` | PASS | 5 | New end-to-end profile/report tests |
+| `cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests` | PASS | 14 | Corpus compatibility verification |
+| `bash scripts/check-architecture-guards.sh` | PASS | 37 checks | All pass (33b/33c/34/37 are INFO-only) |
+| `cargo fmt --all --check` | PASS | — | — |
+| `cargo clippy --lib -p eggsec-nse --features nse` | PASS | — | Pre-existing warnings only |
+| `cargo clippy --lib -p eggsec --features nse` | PASS | — | Pre-existing warnings only |
+
+Architecture guard Checks 35 and 36 confirm the corrective-pass fix: `run_cli_with_profile()` uses `NseExecutor::with_profile()` (not `with_policy()`), and automated surfaces do not use manual-only constructors. Informational checks 33b/33c/37 document deferred migration targets (unpwdb, brute, datafiles, protocol-specific helpers).
+
 ## Library Registry
 
 The library registry (`src/resolver/registry.rs`) provides a declarative, machine-readable inventory of standard Nmap Lua library modules. It is used for policy evaluation, diagnostics, and compatibility reporting.
