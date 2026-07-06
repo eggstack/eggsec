@@ -27,6 +27,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **Milestone 3 Phase 04 complete.** Network TCP/UDP and DNS wrappers migrated through `NseCapabilityContext`. Executing wrappers added: `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive`, `nse_network_udp_send`, `nse_network_udp_receive`, `nse_dns_lookup`, plus check-only `check_network_udp`. Libraries `socket.rs`, `comm.rs`, and `dns.rs` now accept `&NseCapabilityContext` in their registration functions and route network/DNS operations through capability wrappers before performing the actual operations. Architecture guard Check 33c (informational) detects direct network calls in unmigrated libraries. All 318 tests pass. Compression, crypto/TLS, and protocol-specific libraries (smb, ssh, ftp, http, etc.) remain unmigrated.
 
+> **Milestone 3 Phase 05 complete.** Time, randomness, environment, crypto, and compression helpers are now routed through `NseCapabilityContext`. Executing wrappers added: `nse_time_now`, `nse_random_bytes`, `nse_env_var`, `nse_compress`, `nse_decompress`. Check-only wrappers added: `check_randomness`, `check_environment`, `check_crypto`, `check_compression`. Profile-specific policies: AgentSafe denies environment access, warns on randomness; CiSafe denies environment and randomness, warns on time nondeterminism. Compression enforces 64 MiB input and 256 MiB output limits. Libraries migrated: `datetime.rs`, `rand.rs`, `openssl.rs`, `tls.rs`, `sslcert.rs`, `zlib.rs` now accept `&NseCapabilityContext`. All 200+ tests pass.
+
 ## Key Components
 
 | Component | File | Purpose |

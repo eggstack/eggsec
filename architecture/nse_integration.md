@@ -758,9 +758,8 @@ Profile-specific behavior:
 - `wrappers.rs` contains pilot wrapper functions demonstrating the pattern
 
 **Migration status:**
-- TimeClock, FilesystemRead, FilesystemWrite, NetworkTcp, NetworkUdp, ProcessExec, DnsResolution, Environment: wrapped
-- Compression, Crypto: pending migration
-- Randomness: no wrapper needed (pure CPU)
+- TimeClock, FilesystemRead, FilesystemWrite, NetworkTcp, NetworkUdp, ProcessExec, DnsResolution, Environment, Compression, Crypto, Randomness: wrapped (Phase 03–05)
+- All side-effecting helper classes are now migrated
 
 **Architecture guard:** Check 33 (FAIL) detects direct `std::process::Command` in NSE libraries (all process exec migrated); Check 33b (informational) detects direct filesystem ops in unmigrated libraries; Check 33c (informational) detects direct network calls in unmigrated libraries; Check 34 (informational) verifies capability context integration.
 
@@ -851,6 +850,65 @@ Phase 04 introduced network/DNS executing wrappers in `wrappers.rs` that combine
 #### Architecture Guard
 
 Check 33c (informational) detects direct network calls (TCP connect, UDP sendto, DNS resolution) in unmigrated library files. This check will tighten as more protocol libraries are migrated.
+
+### Time/Randomness/Environment/Compression Wrappers (Phase 05 Complete)
+
+Phase 05 migrated time, randomness, environment, crypto, and compression operations through `NseCapabilityContext`. Libraries performing these operations now route through capability wrappers before performing the actual operations.
+
+#### Migrated Libraries
+
+| Library | Operations Migrated | Wrapper Functions Used |
+|---------|--------------------|-----------------------|
+| `datetime.rs` | `datetime.now()`, `datetime.clock()`, `datetime.date()`, `datetime.time()` | `nse_time_now`, `check_time_clock` |
+| `rand.rs` | `rand.random()`, `rand.num_range()`, `rand.random_string()`, `rand.seed()` | `nse_random_bytes`, `check_randomness` |
+| `openssl.rs` | OpenSSL crypto operations, certificate handling | `check_crypto` |
+| `tls.rs` | TLS connection setup, cipher suite operations | `check_crypto` |
+| `sslcert.rs` | SSL certificate parsing and validation | `check_crypto` |
+| `zlib.rs` | `zlib.compress()`, `zlib.decompress()` | `nse_compress`, `nse_decompress`, `check_compression` |
+
+#### Executing Wrappers
+
+Phase 05 introduced time/randomness/environment/compression executing wrappers in `wrappers.rs` that combine capability checking with the actual operation:
+
+- `nse_time_now()` — wall-clock time read with time clock check
+- `nse_random_bytes()` — random byte generation with randomness check
+- `nse_env_var()` — environment variable read with environment check
+- `nse_compress()` — compression with compression check and 64 MiB input limit
+- `nse_decompress()` — decompression with compression check and 256 MiB output limit
+
+#### Check-Only Wrappers
+
+- `check_randomness()` — policy check for randomness operations (no executing wrapper)
+- `check_environment()` — policy check for environment variable access (no executing wrapper)
+- `check_crypto()` — policy check for crypto/TLS operations (no executing wrapper)
+- `check_compression()` — policy check for compression operations (no executing wrapper)
+
+#### Library Registration Changes
+
+- `register_datetime_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for time operations
+- `register_rand_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for randomness operations
+- `register_openssl_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for crypto operations
+- `register_zlib_library()` now accepts `capability_ctx: Option<NseCapabilityContext>` and passes it to closures for compression operations
+
+#### Profile-Specific Behavior
+
+| Profile | Time | Randomness | Environment | Compression | Crypto | Notes |
+|---------|------|------------|-------------|-------------|--------|-------|
+| `ManualPermissive` | Allow | Allow | Allow (NSE_ENV only) | Allow | Allow | Accounting only; time nondeterminism allowed |
+| `ManualStrict` | Allow | Allow | Allow (NSE_ENV only) | Allow | Allow within CIDRs | Scope-derived CIDR enforcement for crypto |
+| `AgentSafe` | Allow (warn nondeterminism) | Allow (warn) | **Deny** | Allow | Allow if scoped | Environment access denied; randomness warned |
+| `CiSafe` | Allow (warn nondeterminism) | **Deny** | **Deny** | Allow | **Deny** | Environment and randomness denied; time warned |
+| `CompatibilityLab` | Allow | Allow | Allow | Allow | Allow | Full access for compat testing |
+
+#### Compression Limits
+
+- Input limit: 64 MiB (67,108,864 bytes)
+- Output limit: 256 MiB (268,435,456 bytes)
+- Limits enforced before compression/decompression; exceeded limits return `NseCapabilityDecision::Deny`
+
+#### Architecture Guard
+
+Check 33d (informational) detects direct crypto/compression operations in unmigrated library files. This check will tighten as protocol-specific libraries are migrated.
 
 ## Verification Record (Milestone 1)
 

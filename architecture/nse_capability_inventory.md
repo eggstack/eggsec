@@ -210,7 +210,7 @@ These libraries perform pure computation with no I/O side effects. They require 
 | `os` | `get_allowed_path()` on remove/rename/chdir; capability context checks via `check_fs_write()`; sandbox blocks setenv/unsetenv | `os.execute()` is safe stub; `nmap.is_admin()` now routed through `check_process_exec()` |
 | `lfs` | `get_allowed_path()` on all operations; capability context checks via `check_fs_read()`, `check_fs_write()` | None significant |
 
-### Migrated to Capability Context (Phase 03 + 04)
+### Migrated to Capability Context (Phase 03–05)
 
 | Library | Operations | Wrapper Used | Phase |
 |---------|-----------|--------------|-------|
@@ -221,6 +221,12 @@ These libraries perform pure computation with no I/O side effects. They require 
 | `socket.rs` | `socket.tcp_connect()`, `socket.connect()`, `socket.connect_udp()`, `socket.send()`, `socket.receive()`, `socket.sendto()`, `socket.receive_from()` | `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive`, `nse_network_udp_send`, `nse_network_udp_receive`, `check_network_udp` | Phase 04 |
 | `comm.rs` | `comm.get_banner()`, `comm.exchange()`, `comm.tryssl()` | `nse_network_tcp_connect`, `nse_network_tcp_send`, `nse_network_tcp_receive` | Phase 04 |
 | `dns.rs` | `dns.resolve()`, `dns.query()`, `dns.forward()`, `dns.ptr()` | `nse_dns_lookup` | Phase 04 |
+| `datetime.rs` | `datetime.now()`, `datetime.clock()`, `datetime.date()`, `datetime.time()` | `nse_time_now`, `check_time_clock` | Phase 05 |
+| `rand.rs` | `rand.random()`, `rand.num_range()`, `rand.random_string()`, `rand.seed()` | `nse_random_bytes`, `check_randomness` | Phase 05 |
+| `openssl.rs` | OpenSSL crypto operations, certificate handling | `check_crypto` | Phase 05 |
+| `tls.rs` | TLS connection setup, cipher suite operations | `check_crypto` | Phase 05 |
+| `sslcert.rs` | SSL certificate parsing and validation | `check_crypto` | Phase 05 |
+| `zlib.rs` | `zlib.compress()`, `zlib.decompress()` | `nse_compress`, `nse_decompress`, `check_compression` | Phase 05 |
 
 ### NOT Sandboxed (all others)
 
@@ -572,7 +578,7 @@ bash scripts/check-architecture-guards.sh
 
 - **ExecutorCore**: `executor_core.rs` stores `NseCapabilityContext` in `capability_context` field, constructed via `with_policy()` or `with_profile()`
 - **NseRunReport**: `report.rs` includes `capability_events: Vec<NseCapabilityEvent>` and `capability_event_summary: Option<NseCapabilityEventSummary>`
-- **Wrappers**: `wrappers.rs` contains pilot wrapper functions (check_time_clock, check_fs_read, check_fs_write, check_network_tcp, check_process_exec, check_dns) that route operations through the capability context
+- **Wrappers**: `wrappers.rs` contains wrapper functions (check_time_clock, check_fs_read, check_fs_write, check_network_tcp, check_process_exec, check_dns, check_randomness, check_environment, check_crypto, check_compression, plus executing wrappers for all migrated classes) that route operations through the capability context
 
 ### Migration Priority (from Phase 01)
 
