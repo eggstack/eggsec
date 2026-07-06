@@ -836,6 +836,45 @@ else
 fi
 
 echo ""
+echo "--- Check 39: NSE evidence extraction goes through extract_evidence() (INFO) ---"
+EVIDENCE_BYPASS=$(rg -n 'NseEvidenceItem\s*\{' --glob='*.rs' crates/ 2>/dev/null \
+  | grep -v 'extract_evidence' \
+  | grep -v 'report.rs' \
+  | grep -v '/tests/' || true)
+if [[ -n "$EVIDENCE_BYPASS" ]]; then
+  echo "$EVIDENCE_BYPASS"
+  echo "INFO: Found direct NseEvidenceItem construction outside extract_evidence/report.rs."
+  echo "      Evidence items should be produced by extract_evidence() for consistency."
+else
+  echo "PASS: No NseEvidenceItem construction outside extract_evidence/report.rs."
+fi
+
+echo ""
+echo "--- Check 40: NSE bridge module exists for ReportEnvelope (INFO) ---"
+if [[ ! -f crates/eggsec-nse/src/bridge.rs ]]; then
+  echo "FAIL: crates/eggsec-nse/src/bridge.rs does not exist."
+  echo "      NSE evidence must bridge to ReportEnvelope via bridge.rs."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: NSE bridge module exists."
+fi
+
+echo ""
+echo "--- Check 41: NSE compatibility matrix exists ---"
+if [[ ! -f docs/NSE_COMPATIBILITY.md ]]; then
+  echo "FAIL: docs/NSE_COMPATIBILITY.md does not exist."
+  echo "      Milestone 4 requires a published compatibility matrix."
+  FAIL=$((FAIL + 1))
+else
+  MAT_LINES=$(wc -l < docs/NSE_COMPATIBILITY.md)
+  if [[ "$MAT_LINES" -lt 100 ]]; then
+    echo "INFO: NSE_COMPATIBILITY.md has only $MAT_LINES lines. Expected 100+."
+  else
+    echo "PASS: NSE_COMPATIBILITY.md exists ($MAT_LINES lines)."
+  fi
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

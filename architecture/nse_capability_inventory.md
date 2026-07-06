@@ -2,6 +2,8 @@
 
 > **Milestone 3 Phase 05 Complete** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. All primary helper classes (filesystem, process, network TCP/UDP, DNS, time, randomness, environment, compression, crypto/TLS) are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
 
+> **Milestone 4 complete.** Structured evidence reports are now extracted from capability events, compatibility diagnostics, rule evaluation, and script output. See `NseRunReport.evidence` and `docs/NSE_COMPATIBILITY.md`.
+
 ## Overview
 
 The `eggsec-nse` crate provides Lua 5.4 script execution via `mlua`. Lua execution hooks can interrupt Lua bytecode, but once a Lua script enters Rust helper code, blocking filesystem, network, DNS, process, crypto, compression, time, or randomness work must enforce limits and cancellation cooperatively inside the helper path.

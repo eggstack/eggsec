@@ -1,5 +1,7 @@
 # NSE Milestone 4 Phase 05: UX, Docs, Compatibility Matrix, and Release Closure
 
+> **Status: Executed** — Completed 2026-07-06.
+
 ## Purpose
 
 Close Milestone 4 by making expanded NSE compatibility understandable to users and maintainers through CLI/TUI output, docs, compatibility matrix, architecture guards, and verification records.

@@ -1961,6 +1961,8 @@ dependencies = [
  "chrono",
  "dashmap",
  "des",
+ "eggsec-core",
+ "eggsec-output",
  "flate2",
  "hex",
  "hickory-resolver",

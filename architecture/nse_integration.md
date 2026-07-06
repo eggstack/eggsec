@@ -1188,3 +1188,56 @@ Phase 03 introduces structured context types for host, port, and service data, r
 - 8 new unit tests in `tests/context_fidelity_tests.rs`
 - Manifest entries with `gap_classification = "approximate"` and `expected_fidelity = "approximate"`
 - 402 tests pass (1 ignored), 0 compilation errors
+
+### Milestone 4 Phase 04: Structured Evidence Reports
+
+Phase 04 introduces structured evidence extraction from NSE run reports, bridging NSE execution results into the normalized `ReportEnvelope` used by cross-domain reporting.
+
+**Evidence model** (in `report.rs`):
+- `NseEvidenceKind` — 8-variant enum: `ServiceFingerprint`, `VersionInfo`, `CertificateInfo`, `VulnerabilitySignal`, `Misconfiguration`, `CapabilityDenial`, `CompatibilityWarning`, `ScriptOutput`
+- `NseEvidenceItem` — structured evidence record: `id`, `kind`, `title`, `summary`, `target`, `port`, `service`, `confidence` (0.0–1.0), `source`, `raw_excerpt`, `references`, `tags`
+- `NseRunReport.evidence: Vec<NseEvidenceItem>` — evidence field on the canonical run report
+- `extract_evidence()` — conservative extraction function operating on `NseRunReport` fields: capability denials → `CapabilityDenial`, unsupported features → `CompatibilityWarning`, approximate rules → `CompatibilityWarning`, rule errors → `Misconfiguration`, script output with service/version signals → `ServiceFingerprint`/`VersionInfo`
+
+**Report envelope bridge** (in `bridge.rs`):
+- `to_report_envelope()` — converts `NseRunReport` → `ReportEnvelope` following the db-pentest bridge pattern
+- Maps `NseEvidenceKind` → `eggsec_output::envelope::EvidenceKind` and `eggsec_core::Severity`
+- Attaches `ToolMetadata { tool_name: "eggsec-nse", ... }`
+- Calls `envelope.refresh_evidence_manifest()` before return
+
+**What was added**:
+- `NseEvidenceKind` enum, `NseEvidenceItem` struct, `extract_evidence()` in `report.rs`
+- `evidence` field on `NseRunReport` with `with_evidence()` builder
+- `extract_evidence()` wired into `run_cli_with_profile()` JSON path
+- `bridge.rs` module with `to_report_envelope()` and mapping functions
+- `eggsec-core` and `eggsec-output` dependencies in `Cargo.toml`
+- 12 evidence tests in `tests/evidence_tests.rs` — all pass
+
+### Milestone 4 Closure Note
+
+Milestone 4 is complete. The following summarizes all Phase 01–05 deliverables:
+
+**Corpus expansion (Phase 01)**: 40 total fixtures across 5 categories (12 core, 9 partial/unsupported/regression, 16 upstream-style, 3 context fidelity). All local-only, with provenance tracking and gap classification.
+
+**Upstream subset validation (Phase 02)**: 16 upstream-style fixtures covering shortport, HTTP, DNS, stdnse output, vulns, brute, and banner parsing patterns. No upstream Nmap code is copied.
+
+**Context fidelity (Phase 03)**: 3 context fidelity fixtures validating portrule/hostrule host, port, and service context injection. Synthetic context with `eggsec_context_source` provenance tracking.
+
+**Structured evidence reports (Phase 04)**: `NseEvidenceKind` (8 variants), `NseEvidenceItem`, `extract_evidence()` for conservative extraction from capability events, compatibility, rules, and output. `bridge.rs` maps NSE evidence to `ReportEnvelope`. 12 evidence tests pass.
+
+**CLI UX (Phase 05)**: `print_human_report()` produces human-readable output showing profile, compatibility, rule evaluation, library use, capability denials, evidence, errors, warnings, and raw output (truncated at 20 lines).
+
+**Compatibility matrix**: `docs/NSE_COMPATIBILITY.md` — 43 library entries, 40 corpus fixtures, profile compatibility, known gaps, and Milestone 5 candidates.
+
+**Architecture guards**: 3 new checks (39–41) for evidence extraction consistency, bridge module existence, and compatibility matrix presence.
+
+**Test results**: 414 tests pass (1 ignored), 41 architecture guards (38 existing + 3 new), `cargo fmt` clean.
+
+**Deferred to Milestone 5**:
+- Protocol library wrappers (ssl, ssh, smb, mysql, postgres, redis, mongodb, ldap, snmp)
+- Authentication library wrappers (creds, unpwdb, brute)
+- `stdnse.sleep()` cancellation integration
+- Structured Lua output table parsing
+- TUI-first compatibility debugging workflow
+- Performance/caching for large corpus runs
+- Total: 414 tests (0 failures, 1 ignored)

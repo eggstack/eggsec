@@ -36,6 +36,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **NSE Milestone 4 Phase 03 (context fidelity) complete.** Structured context types (`NseHostContext`, `NsePortContext`, `NseServiceContext`, `NseContextSource`) provide typed Lua table construction with provenance tracking. `hostrule(host)` receives structured host table (not raw nmap global). `portrule(host, port)` receives (host, port) pair matching Nmap signature. `NseRuleEvaluationReport` extended with context fidelity fields. 402 tests pass, 8 new context fidelity tests. See [Milestone 4 Phase 03](../../architecture/nse_integration.md#milestone-4-phase-03-host-port-and-service-context-fidelity).
 
+> **Milestone 4 complete.** Structured evidence reports (`NseEvidenceKind`, `NseEvidenceItem`, `extract_evidence()`), bridge to `ReportEnvelope` (`bridge.rs`), CLI human-readable output (`print_human_report()`), upstream-style corpus (16 fixtures), context fidelity fixtures (3), compatibility matrix (`docs/NSE_COMPATIBILITY.md`), 43 library registry entries, 40 corpus fixtures total.
+
 ## Key Components
 
 | Component | File | Purpose |
