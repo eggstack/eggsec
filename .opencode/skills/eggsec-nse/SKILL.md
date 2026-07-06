@@ -112,12 +112,14 @@ let profile = ResolvedNseExecutionProfile::ci_safe();
 ### Running with Profile
 
 ```rust
-// Profile-aware execution
+// Profile-aware execution — capability context matches the resolved profile
 eggsec_nse::run_cli_with_profile(config, Some(profile)).await?;
 
 // Fallback to manual_permissive if None
 eggsec_nse::run_cli_with_profile(config, None).await?;
 ```
+
+`run_cli_with_profile()` constructs the executor via `NseExecutor::with_profile(&resolved_profile)` so the capability context matches the resolved profile. `NseExecutor::with_profile()` is the preferred constructor for CLI and automated surfaces.
 
 ### CLI Handler Integration
 
@@ -317,7 +319,15 @@ let result = executor.run_script_with_limits(script)?;
 let stats = executor.execution_stats();
 ```
 
-> **Manual-only constructors**: `NseExecutor::new()`, `with_sandbox()`, and `with_target()` use permissive defaults. Automated surfaces must use `with_policy()` or `with_profile()`.
+> **Manual-only constructors**: `NseExecutor::new()`, `with_sandbox()`, and `with_target()` use permissive defaults. Automated surfaces must use `with_profile()` or `with_full_policy(...)`.
+>
+> **Profile-aware constructors**:
+> - `NseExecutor::with_profile(profile)` — preferred for CLI and automated surfaces; capability context derives from the resolved profile.
+> - `NseExecutor::with_full_policy(profile_kind, sandbox, limits, cancellation, script_policy, module_policy, network_policy)` — explicit control over every policy parameter.
+> - `AsyncNseExecutor::with_full_policy(...)` — async counterpart.
+> - `ExecutorCore::with_full_policy(...)` — core-level explicit control.
+>
+> **AgentSafe filesystem reads**: Scoped-only. A filesystem read is allowed only when the path is under the sandbox `allowed_dir` (with sandbox enabled) or an explicit root entry. Unscoped reads are denied.
 
 ### Resolver-Owned Module Loading
 
@@ -405,4 +415,5 @@ cargo test -p eggsec-nse --features nse --test execution_limits_tests
 cargo test -p eggsec-nse --features nse --test sandbox_tests
 cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests
 cargo test -p eggsec-nse --features nse --test rule_evaluation_tests
+cargo test -p eggsec-nse --features nse --test profile_propagation_tests
 ```

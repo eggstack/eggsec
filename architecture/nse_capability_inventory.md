@@ -284,7 +284,7 @@ All network protocol libraries (http, smtp, ssh2, mysql, postgres, etc.) and the
 
 | Capability Class | Policy | Notes |
 |------------------|--------|-------|
-| `filesystem_read` | deny | Script files and FS modules denied |
+| `filesystem_read` | deny | Unscoped reads denied; scoped reads only (path under sandbox `allowed_dir` or explicit root) |
 | `filesystem_write` | deny | Script files and FS modules denied |
 | `process_exec` | deny | No process execution |
 | `network_tcp` | allow if scoped | `socket` sandboxed; protocol libs unsandboxed |
@@ -576,7 +576,7 @@ bash scripts/check-architecture-guards.sh
 
 ### Integration Points
 
-- **ExecutorCore**: `executor_core.rs` stores `NseCapabilityContext` in `capability_context` field, constructed via `with_policy()` or `with_profile()`
+- **ExecutorCore**: `executor_core.rs` stores `NseCapabilityContext` in `capability_context` field, constructed via `with_policy()` (manual-only), `with_profile()` (preferred for CLI/automated), or `with_full_policy()` (explicit control over all policies)
 - **NseRunReport**: `report.rs` includes `capability_events: Vec<NseCapabilityEvent>` and `capability_event_summary: Option<NseCapabilityEventSummary>`
 - **Wrappers**: `wrappers.rs` contains wrapper functions (check_time_clock, check_fs_read, check_fs_write, check_network_tcp, check_process_exec, check_dns, check_randomness, check_environment, check_crypto, check_compression, plus executing wrappers for all migrated classes) that route operations through the capability context
 
@@ -636,3 +636,6 @@ These deferred items are protocol-specific internal helpers that do not have the
 | Check 33b | INFO | Detects direct filesystem ops in unmigrated libraries |
 | Check 33c | INFO | Detects direct network calls in unmigrated libraries |
 | Check 34 | PASS | Verifies capability context integration |
+| Check 35 | PASS | Verifies `run_cli_with_profile()` uses `with_profile()` (not `with_policy()`) |
+| Check 36 | PASS | Detects automated surfaces calling `with_policy()` (should use `with_profile()` or `with_full_policy()`) |
+| Check 37 | INFO | Lists all callers of `ExecutorCore::with_policy()` for audit |

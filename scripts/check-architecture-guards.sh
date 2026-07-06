@@ -406,11 +406,13 @@ HITS=$(rg -n 'std::fs::read_to_string\(|std::fs::read\(' \
   2>/dev/null \
   || true)
 # Allowlist the parse_nse_categories function body in executor.rs. Function reads
-# shipped NSE metadata, not user scripts.
+# shipped NSE metadata, not user scripts. Range covers line numbers as of the
+# NSE Milestone 3 corrective pass (line count grew ~58 lines due to the
+# with_full_policy / capability_context additions).
 FILTERED=$(printf '%s\n' "$HITS" | awk -F: '
   /^crates\/eggsec-nse\/src\/executor\.rs:/ {
     line = $2 + 0
-    if (line >= 521 && line <= 545) { next }
+    if (line >= 575 && line <= 605) { next }
   }
   { print }
 ' || true)
@@ -744,6 +746,78 @@ if [[ -n "$NSE_CAP_HITS" ]]; then
   echo "PASS: NSE capability context types found in crates/eggsec-nse/src/"
 else
   echo "INFO: No NSE capability context types found. Capability context integration may not be complete."
+fi
+
+# 35. NSE run_cli_with_profile() must construct executor via with_profile or with_full_policy
+# Profile propagation regression: using with_policy() here silently downgrades
+# AgentSafe/CiSafe capability decisions to ManualPermissive because with_policy
+# hardcodes ManualPermissive + AllowAllManual in the capability context.
+# See plans/nse-milestone-3-corrective-pass.md (Workstream 2).
+echo ""
+echo "--- Check 35: run_cli_with_profile must use with_profile/with_full_policy (FAIL) ---"
+NSE_RUNCLI_WITH_POLICY_HITS=$(rg -n 'NseExecutor::with_policy' --glob='*.rs' crates/eggsec-nse/src/lib.rs 2>/dev/null \
+  | grep -E 'run_cli_with_profile|run_cli\b' || true)
+if [[ -n "$NSE_RUNCLI_WITH_POLICY_HITS" ]]; then
+  echo "$NSE_RUNCLI_WITH_POLICY_HITS"
+  echo "FAIL: run_cli_with_profile() constructs NseExecutor with with_policy()."
+  echo "      Use NseExecutor::with_profile(&resolved_profile) or NseExecutor::with_full_policy(...)"
+  echo "      so capability context profile_kind/network_policy match the resolved profile."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: run_cli_with_profile() does not use with_policy() for executor construction."
+fi
+
+# 36. NSE automated surfaces must not use with_policy() (manual-only API)
+# The with_policy() constructor hardcodes ManualPermissive profile kind and
+# AllowAllManual network policy. Automated surfaces (MCP, agent, REST, daemon,
+# CI) MUST use with_profile() or with_full_policy() so the capability engine
+# enforces the resolved profile. Manual CLI/TUI is the only accepted caller.
+# See plans/nse-milestone-3-corrective-pass.md (Workstream 3).
+echo ""
+echo "--- Check 36: automated NSE surfaces must not use with_policy() (FAIL) ---"
+NSE_AUTOMATED_DIRS=(
+  "crates/eggsec/src/dispatch"
+  "crates/eggsec/src/agent"
+  "crates/eggsec/src/mcp"
+  "crates/eggsec/src/rest"
+  "crates/eggsec/src/grpc"
+  "crates/eggsec-daemon/src"
+)
+NSE_AUTOMATED_HITS=""
+for dir in "${NSE_AUTOMATED_DIRS[@]}"; do
+  if [[ -d "$dir" ]]; then
+    hits=$(rg -n 'NseExecutor::with_policy|NseExecutor::new|NseExecutor::with_sandbox|NseExecutor::with_target' \
+      --glob='*.rs' "$dir" 2>/dev/null || true)
+    if [[ -n "$hits" ]]; then
+      NSE_AUTOMATED_HITS="${NSE_AUTOMATED_HITS}${hits}"$'\n'
+    fi
+  fi
+done
+if [[ -n "$NSE_AUTOMATED_HITS" ]]; then
+  echo "$NSE_AUTOMATED_HITS"
+  echo "FAIL: Found automated-surface NseExecutor constructor that bypasses with_profile()."
+  echo "      with_policy()/new()/with_sandbox()/with_target() are manual-only and hardcode"
+  echo "      ManualPermissive in the capability context. Use with_profile(&profile) or"
+  echo "      with_full_policy(...) so AgentSafe/CiSafe capability decisions are honored."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: No automated-surface NseExecutor uses manual-only constructors."
+fi
+
+# 37. ExecutorCore::with_policy must remain a manual-only compatibility wrapper
+# Direct calls to ExecutorCore::with_policy outside manual surfaces are
+# discouraged. Automated surfaces should use with_full_policy or with_profile.
+echo ""
+echo "--- Check 37: ExecutorCore::with_policy manual-only callers (INFO) ---"
+NSE_CORE_POLICY_HITS=$(rg -n 'ExecutorCore::with_policy' --glob='*.rs' crates/ 2>/dev/null \
+  | grep -v 'crates/eggsec-nse/src/executor_core.rs' | grep -v '/tests/' || true)
+if [[ -n "$NSE_CORE_POLICY_HITS" ]]; then
+  echo "$NSE_CORE_POLICY_HITS"
+  echo "INFO: Found ExecutorCore::with_policy callers outside executor_core.rs."
+  echo "      This is allowed for manual CLI/TUI surfaces but not for automated surfaces."
+  echo "      Automated surfaces should use ExecutorCore::with_full_policy or with_profile."
+else
+  echo "PASS: No ExecutorCore::with_policy callers outside executor_core.rs."
 fi
 
 echo ""

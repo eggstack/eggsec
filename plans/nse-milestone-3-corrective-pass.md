@@ -296,10 +296,34 @@ cargo clippy --lib -p eggsec --features nse
 
 If any command is unavailable, record the reason and closest equivalent.
 
+### Recorded Results (commit pending)
+
+Executed on the corrective-pass branch (after Workstreams 1–7):
+
+| Command | Result |
+|---|---|
+| `cargo check -p eggsec-nse --features nse` | 0 errors, 98 warnings (all pre-existing) |
+| `cargo test -p eggsec-nse --features nse` | **364 passed, 1 ignored** (10 suites — 357 original + 7 new profile-propagation tests) |
+| `cargo test -p eggsec-nse --features nse,sandbox` | **364 passed, 1 ignored** (same; `sandbox` feature builds + tests cleanly) |
+| `cargo test -p eggsec-nse --features nse --test profile_propagation_tests` | **7 passed** (all new tests, including regression coverage for `run_cli_with_profile()` profile propagation) |
+| `cargo test -p eggsec-nse --features nse --test profile_guard_tests` | 14 passed |
+| `cargo test -p eggsec-nse --features nse --test sandbox_tests` | 17 passed |
+| `cargo test --lib -p eggsec --features nse` | **1603 passed** |
+| `cargo check -p eggsec --features nse` | 0 errors, 102 warnings (all pre-existing) |
+| `bash scripts/check-architecture-guards.sh` | **ALL PASSED** — Checks 1–37 pass (Check 35–37 added in this pass; Check 24 line range updated for `parse_nse_categories`) |
+| `cargo fmt --all --check` | clean |
+| `cargo clippy --lib -p eggsec-nse --features nse` | 0 errors, 158 warnings (all pre-existing) |
+| `cargo clippy --lib -p eggsec --features nse` | 0 errors, 187 warnings (all pre-existing) |
+| `cargo test -p eggsec --features nse --test nse_tests` | **pre-existing failure**: 2 errors at `crates/eggsec/tests/nse_tests.rs:284` and `:308` where existing tests do `let (output, _) = result.unwrap();` against the 3-tuple returned by `run_script_with_rules()`. These errors exist on `main` before the corrective pass and are NOT introduced by this work; the plan does not require fixing pre-existing test bugs. Confirmed via `git stash` baseline check. |
+
+Notes:
+- `cargo test` filter "capability" matched only one test (`test_capability_event_warnings` in `capabilities::tests`), not the broader capability module. Used the broader `cargo test -p eggsec-nse --features nse` invocation instead, which exercises all 364 tests.
+- The `eggsec-nse` pre-existing `unwrap_or_default`-style and dead-code warnings are documented in AGENTS.md as expected.
+
 ### Acceptance Criteria
 
-- Verification is recorded outside commit messages.
-- Failures are not hidden.
+- Verification is recorded outside commit messages. **Met** (this section).
+- Failures are not hidden. **Met** (the `nse_tests.rs` pre-existing failure is documented above).
 
 ## Final Acceptance Criteria
 

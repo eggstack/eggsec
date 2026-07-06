@@ -104,6 +104,7 @@ cargo test -p eggsec-nse --test script_file_policy_tests
 cargo test -p eggsec-nse --test sandbox_tests
 cargo test -p eggsec-nse --test compatibility_corpus_tests
 cargo test -p eggsec-nse --test rule_evaluation_tests
+cargo test -p eggsec-nse --test profile_propagation_tests
 cargo clippy -p eggsec-nse --features nse
 
 # Wireless
@@ -400,6 +401,8 @@ Canonical reference points when updating guidance or skills:
 > **NSE Milestone 3 Phase 05 complete.** Time, randomness, environment, crypto, and compression helpers are now routed through `NseCapabilityContext`. Executing wrappers added: `nse_time_now`, `nse_random_bytes`, `nse_env_var`, `nse_compress`, `nse_decompress`. Check-only wrappers added: `check_randomness`, `check_environment`, `check_crypto`, `check_compression`. Profile-specific policies: AgentSafe denies environment access, warns on randomness; CiSafe denies environment and randomness, warns on time nondeterminism. Compression enforces 64 MiB input and 256 MiB output limits. Libraries migrated: `datetime.rs`, `rand.rs`, `openssl.rs`, `tls.rs`, `sslcert.rs`, `zlib.rs` now accept `&NseCapabilityContext`. All 200+ tests pass.
 
 > **NSE Milestone 3 (capability wrappers) is closed.** All side-effecting helper classes (filesystem, process, network, DNS, time, randomness, environment, compression, crypto) are routed through `NseCapabilityContext`. Protocol-specific libraries beyond network I/O remain deferred. Capability events are visible in `NseRunReport.capability_events`. Architecture guards (Check 33/33b/33c) prevent new direct bypasses. See the [Milestone 3 Closure Note](./architecture/nse_integration.md#milestone-3-closure-note).
+>
+> **Milestone 3 Corrective Pass (profile propagation).** `run_cli_with_profile()` now uses `NseExecutor::with_profile(&resolved_profile)` instead of `NseExecutor::with_policy(...)`, which previously hardcoded `ManualPermissive` in the capability context. New constructors: `NseExecutor::with_full_policy(...)`, `AsyncNseExecutor::with_full_policy(...)`, `ExecutorCore::with_full_policy(...)` for explicit policy control. `NseExecutor::capability_context()` accessor added. AgentSafe filesystem reads are now scoped-only (path must be under sandbox `allowed_dir` or explicit root). New architecture guards: Check 35 (run_cli_with_profile uses with_profile), Check 36 (automated surfaces must not use with_policy), Check 37 (ExecutorCore::with_policy callers info). New integration tests in `crates/eggsec-nse/tests/profile_propagation_tests.rs`. See [Milestone 3 Corrective Pass](./architecture/nse_integration.md#milestone-3-corrective-pass-profile-propagation) and `plans/nse-milestone-3-corrective-pass.md`.
 - `SessionId` - Opaque session identifier (`eggsec-runtime::ids`)
 - `TaskId` - Opaque task identifier (`eggsec-runtime::ids`)
 - `ClientId` - Opaque client identifier (`eggsec-runtime::ids`)
@@ -558,7 +561,7 @@ Use the `skill` tool to load relevant skills when tackling tasks in their domain
 
 ## Planning Notes for Future Agents
 
-1. **Plan lifecycle**: Implementation plans in `plans/` are executed and deleted after completion. Focus on the current codebase state rather than plan files.
+1. **Plan lifecycle**: Implementation plans in `plans/` are normally executed and deleted after completion. However, plan files are part of the handoff/audit trail and should be **retained** (with a `Status: Executed` header) for milestones where reviewers benefit from tracing overview → phase plans → corrective passes — specifically NSE milestones and other multi-phase correctness efforts. Do not delete phase plan files ad hoc; either retain them with a `Status` header or move them into a documented `plans/archive/` convention. Focus reasoning on the current codebase state rather than plan files, but use plan files for historical/audit context.
 2. **Verify before implementing**: Always verify file paths, line numbers, and whether issues still exist before implementing.
 3. **Error pattern verification**: Some `let _ =` patterns are followed by proper error logging via `tracing::warn!`. Verify the full context before claiming silent suppression.
 4. **Wave plan verification**: Plans may contain stale assertions. Use subagents to check actual codebase state.

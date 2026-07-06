@@ -267,7 +267,7 @@ Read paths must never authorize non-existent script/module files. The split is d
 | Agent/MCP/daemon | `AgentSafe` or `CiSafe` | Via `RunRequest` profile; not yet wired |
 | CI | `CiSafe` | Explicit |
 
-Manual-only constructors (`NseExecutor::new()`, `with_sandbox()`, `with_target()`) are documented with `# Manual-only` doc comments. Automated surfaces must use `with_policy()` or `with_profile()`.
+Manual-only constructors (`NseExecutor::new()`, `with_sandbox()`, `with_target()`, `with_policy()`) are documented with `# Manual-only` doc comments. Automated surfaces must use `with_profile()` or `with_full_policy()`.
 
 ### Cancellation Posture
 
@@ -447,6 +447,56 @@ Helper denials affect `NseRunReport.compatibility` status. If any required helpe
 | `cargo clippy --lib -p eggsec --features nse` | PASS | — | Pre-existing warnings only |
 
 Architecture guard Check 25 has been strengthened to reject both empty placeholders and all-registry-loaded fabrication patterns. Library report truthfulness is protected by 6 tests covering no-require, single-require, repeated-require, missing-require, static fallback, and fabrication rejection scenarios.
+
+## Milestone 3 Corrective Pass (profile propagation)
+
+**Date:** 2026-07-06
+**Source plan:** `plans/nse-milestone-3-corrective-pass.md`
+
+### Bug
+
+`run_cli_with_profile()` previously constructed executors via `NseExecutor::with_policy(...)`, which hardcodes `ManualPermissive` and `AllowAllManual` in the capability context. This meant that even when a non-manual profile (e.g., `AgentSafe`) was provided, the capability context was constructed with manual-permissive defaults — defeating the purpose of profile-aware execution.
+
+### Fix
+
+`run_cli_with_profile()` now uses `NseExecutor::with_profile(&resolved_profile)` so the capability context matches the resolved profile. The fix also adds new constructors that give callers explicit control over the profile kind and network policy.
+
+### New Constructors
+
+| Constructor | Type | Purpose |
+|-------------|------|---------|
+| `NseExecutor::with_profile(profile)` | Sync executor | Constructs executor from a `ResolvedNseExecutionProfile`. Capability context, limits, and policies all derive from the profile. Preferred for CLI and automated surfaces. |
+| `NseExecutor::with_full_policy(profile_kind, sandbox, limits, cancellation, script_policy, module_policy, network_policy)` | Sync executor | Explicit control over every policy parameter. Use when callers need to override individual policies without constructing a full `ResolvedNseExecutionProfile`. |
+| `AsyncNseExecutor::with_full_policy(profile_kind, sandbox, limits, cancellation, script_policy, module_policy, network_policy)` | Async executor | Async counterpart of `with_full_policy`. Same explicit control over all policy parameters. |
+| `ExecutorCore::with_full_policy(profile_kind, sandbox, limits, cancellation, script_policy, module_policy, network_policy)` | Core | Explicit control over all policies at the core level. Used by the executor constructors above. |
+
+### Accessor
+
+- `NseExecutor::capability_context()` — returns `&NseCapabilityContext` for callers that need to inspect or pass the capability context (e.g., library registration).
+
+### AgentSafe Filesystem-Read Semantics
+
+AgentSafe filesystem reads now follow **Option A: scoped reads only**. A filesystem read is allowed only when:
+1. The path is under the sandbox `allowed_dir` (i.e., `SandboxConfig.enabled` with `allowed_dir` configured), **or**
+2. The path is under an explicit `allowed_script_roots` or `allowed_module_roots` entry.
+
+Unscoped filesystem reads (reading arbitrary paths outside any configured root) are denied under AgentSafe. This tightens the previous behavior where `agent_allow_if_scoped` did not enforce path containment for reads.
+
+### New Integration Tests
+
+New integration tests in `crates/eggsec-nse/tests/profile_propagation_tests.rs` verify:
+- `run_cli_with_profile()` constructs a capability context matching the resolved profile
+- AgentSafe profile denies unscoped filesystem reads
+- `with_full_policy()` constructors produce correct policy states
+- `capability_context()` accessor returns the expected context
+
+### New Architecture Guards
+
+| Guard | Check | Description |
+|-------|-------|-------------|
+| Check 35 | `run_cli_with_profile uses with_profile` | Verifies `run_cli_with_profile()` calls `NseExecutor::with_profile()` (not `with_policy()`) |
+| Check 36 | `automated surfaces must not use with_policy` | Detects automated entry points (run_cli_with_profile, agent/MCP/REST paths) calling `with_policy()` which hardcodes ManualPermissive |
+| Check 37 | `ExecutorCore::with_policy callers info` | Informational: lists all callers of `ExecutorCore::with_policy()` for audit |
 
 ## Library Registry
 
@@ -801,7 +851,7 @@ Profile-specific behavior:
 - **CiSafe**: denies process exec + FS write + all network + DNS
 - **CompatibilityLab**: allows with warnings, sandbox network check
 
-`NseCapabilityEvent` integration into `NseRunReport.capability_events` — denied operations affect compatibility status (`Partial`). Pilot wrappers in `wrappers.rs` demonstrate the pattern. `ExecutorCore` stores the capability context, constructed from `with_policy()` defaults or `with_profile()` overrides. Architecture guards detect direct high-risk ops in NSE libraries (informational, will tighten as wrappers migrate).
+`NseCapabilityEvent` integration into `NseRunReport.capability_events` — denied operations affect compatibility status (`Partial`). Pilot wrappers in `wrappers.rs` demonstrate the pattern. `ExecutorCore` stores the capability context, constructed from `with_full_policy()` (canonical), `with_profile()` (profile-derived), or `with_policy()` (manual-only compatibility). Architecture guards detect direct high-risk ops in NSE libraries (informational, will tighten as wrappers migrate).
 
 ### NSE Capability Context
 
