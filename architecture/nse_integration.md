@@ -321,7 +321,7 @@ The following files are the canonical implementation, test, and doc anchors for 
 ### Deferred Work
 
 - **Milestone 2 (closed)**: Library registry, rule semantics, compatibility truthfulness, structured run reports, rule evaluation reports, and per-run library-usage reporting. See [Milestone 2 Closure Note](#milestone-2-closure-note).
-- **Milestone 3 (next)**: Rust-side blocking helper cancellation via capability wrappers.
+- **Milestone 3 (closed)**: Rust-side blocking helper cancellation via capability wrappers. See [Milestone 3 Closure Note](#milestone-3-closure-note).
 
 ## Milestone 2 Closure Note
 
@@ -367,6 +367,68 @@ Milestone 3 should not:
 - Redesign loader/profile semantics
 - Redo library registry truthfulness
 - Assert comprehensive Nmap equivalence
+
+## Milestone 3 Closure Note
+
+**Status:** Complete
+
+### Wrapped Helper Classes (fully migrated through NseCapabilityContext)
+
+- **Filesystem**: `io.rs`, `lfs.rs`, `os.rs` — all read/write/remove/rename/create operations route through capability checks
+- **Process execution**: `os.rs`, `nmap.rs` — `std::process::Command` gated by `check_process_exec()`
+- **Network TCP/UDP**: `socket.rs`, `comm.rs` — connect/send/receive gated by network capability checks
+- **DNS**: `dns.rs` — resolver calls gated by `check_dns()`
+- **Time**: `datetime.rs` — time access gated by `check_time()`
+- **Randomness**: `rand.rs` — random byte generation gated by `check_randomness()`
+- **Environment**: `os.rs` — environment variable reads gated by `check_environment()`
+- **Compression**: `zlib.rs` — compress/decompress gated by `check_compression()` with size limits (64 MiB input, 256 MiB output)
+- **Crypto/TLS**: `openssl.rs`, `tls.rs`, `sslcert.rs` — crypto operations gated by `check_crypto()`
+
+### Partially Wrapped
+
+- Protocol-specific libraries (smb, ssh, ftp, http, etc.) use socket.rs/comm.rs for network I/O but may have unmigrated helper calls within their protocol logic
+
+### Deferred (not yet migrated)
+
+- `unpwdb.rs` — password database file reads
+- `brute.rs` — brute force helper operations
+- `datafiles.rs` — data file reads
+- Protocol-specific internal helpers beyond network I/O
+
+### Profile Behavior Summary
+
+| Profile | FS Read | FS Write | Process Exec | Network | DNS | Env | Random | Time | Compression |
+|---------|---------|----------|--------------|---------|-----|-----|--------|------|-------------|
+| ManualPermissive | Allow (warn) | Allow (warn) | Allow (warn) | Allow (warn) | Allow (warn) | Allow (warn) | Allow (warn) | Allow (warn) | Allow (warn) |
+| ManualStrict | Allow (policy) | Allow (policy) | Allow (policy) | Allow (policy) | Allow (policy) | Allow (policy) | Allow (policy) | Allow (warn) | Allow (policy) |
+| AgentSafe | Allow | **Deny** | **Deny** | Allow | Allow | **Deny** | Allow (warn) | Allow | Allow |
+| CiSafe | **Deny** | **Deny** | **Deny** | **Deny** | **Deny** | **Deny** | **Deny** | Allow (warn) | Allow |
+
+### How Reports Expose Helper Decisions
+
+`NseRunReport.capability_events` contains a serializable summary of each capability check performed during script execution. Each event records:
+- `kind`: operation class (e.g., "filesystem_write", "process_exec")
+- `operation`: specific helper (e.g., "io.write", "os.execute")
+- `target`: path/host/command (where applicable)
+- `allowed`: whether the operation was permitted
+- `reason`: denial or warning reason
+
+Helper denials affect `NseRunReport.compatibility` status. If any required helper is denied, compatibility degrades accordingly.
+
+### What Milestone 4 Should Address
+
+- Broader compatibility corpus coverage
+- Upstream NSE script subset conformance testing
+- Advanced service/port context fidelity
+- Richer structured evidence reports
+- UX polish for CLI/TUI report display
+- Migration of deferred protocol-specific helpers
+
+### What Remains Intentionally Different
+
+- `ManualPermissive` allows all operations with warnings (intentional for interactive use)
+- `AgentSafe` and `CiSafe` deny high-risk operations by default (intentional for automated safety)
+- Static `require()` detection is approximate and labeled with warnings
 
 ### Milestone 2 Final Verification
 
@@ -680,16 +742,16 @@ An `AgentSafe` run where the resolver rejected an arbitrary script file per prof
 }
 ```
 
-## Next Work: Milestone 3
+## Next Work: Milestone 4
 
-The Milestone 2 contract above is the boundary. Future work should:
+Milestones 2 and 3 are now closed. Future work should:
 
-- Treat the library registry, rule semantics report, structured reports, and compatibility corpus as closed unless regression tests reveal a defect.
+- Treat the library registry, rule semantics report, structured reports, compatibility corpus, and capability wrappers as closed unless regression tests reveal a defect.
 - Build on `NseRunReport` and `NseRuleEvaluationReport` rather than bypass them.
-- Focus Milestone 3 on Rust-side blocking-helper cancellation via capability wrappers.
 - Expand corpus breadth and library behavior upgrades as separate scoped work.
+- Address Milestone 4 candidates listed in the [Milestone 3 Closure Note](#milestone-3-closure-note).
 
-The Milestone 3 plan should be written from this closure index without reopening the Milestone 2 truthfulness contracts established here.
+The Milestone 4 plan should be written from the closure indices established in Milestones 1–3 without reopening previously closed contracts.
 
 ### Capability Inventory (Phase 01 Complete)
 

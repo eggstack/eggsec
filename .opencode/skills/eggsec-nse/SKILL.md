@@ -29,6 +29,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **Milestone 3 Phase 05 complete.** Time, randomness, environment, crypto, and compression helpers are now routed through `NseCapabilityContext`. Executing wrappers added: `nse_time_now`, `nse_random_bytes`, `nse_env_var`, `nse_compress`, `nse_decompress`. Check-only wrappers added: `check_randomness`, `check_environment`, `check_crypto`, `check_compression`. Profile-specific policies: AgentSafe denies environment access, warns on randomness; CiSafe denies environment and randomness, warns on time nondeterminism. Compression enforces 64 MiB input and 256 MiB output limits. Libraries migrated: `datetime.rs`, `rand.rs`, `openssl.rs`, `tls.rs`, `sslcert.rs`, `zlib.rs` now accept `&NseCapabilityContext`. All 200+ tests pass.
 
+> **NSE Milestone 3 (capability wrappers) is closed.** All side-effecting helper classes (filesystem, process, network, DNS, time, randomness, environment, compression, crypto) are routed through `NseCapabilityContext`. Protocol-specific libraries beyond network I/O remain deferred. Capability events are visible in `NseRunReport.capability_events`. Architecture guards prevent new direct bypasses. See the [Milestone 3 Closure Note](../../architecture/nse_integration.md#milestone-3-closure-note) for the canonical summary.
+
 ## Key Components
 
 | Component | File | Purpose |

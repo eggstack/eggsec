@@ -1,6 +1,6 @@
 # NSE Capability Inventory
 
-> **Milestone 3 Phase 04** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. Filesystem, process, network TCP/UDP, and DNS operations are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
+> **Milestone 3 Phase 05 Complete** — Complete inventory of side-effecting NSE Rust helper operations, classified by risk, blocking behavior, profile policy, accounting, cancellation, and reporting needs. All primary helper classes (filesystem, process, network TCP/UDP, DNS, time, randomness, environment, compression, crypto/TLS) are now migrated through `NseCapabilityContext`. This is the source-of-truth inventory that drives wrapper migration in later phases.
 
 ## Overview
 
@@ -596,3 +596,43 @@ bash scripts/check-architecture-guards.sh
 ### Architecture Guard
 
 Check 33 in `scripts/check-architecture-guards.sh` detects direct `std::process::Command` in NSE libraries (FAIL after Phase 03). Check 33b detects direct filesystem ops in unmigrated libraries (informational). Check 33c detects direct network calls in unmigrated libraries (informational). Check 34 verifies capability context integration.
+
+## Milestone 3 Completion Summary
+
+**Date:** 2026-07-06
+
+All primary helper classes are migrated through `NseCapabilityContext`. The inventory is complete for: filesystem (io/lfs/os), process execution (os/nmap), network TCP/UDP (socket/comm), DNS (dns), time (datetime), randomness (rand), environment (os), compression (zlib), and crypto/TLS (openssl/tls/sslcert).
+
+### Migration Status
+
+| Capability Class | Status | Libraries | Wrappers |
+|-----------------|--------|-----------|----------|
+| Filesystem Read | ✅ Migrated | `io.rs`, `lfs.rs`, `os.rs` | `check_fs_read()`, `nse_fs_read_to_string()`, `nse_fs_read()` |
+| Filesystem Write | ✅ Migrated | `io.rs`, `lfs.rs`, `os.rs` | `check_fs_write()`, `nse_fs_write()`, `nse_fs_remove_file()`, `nse_fs_create_dir()`, `nse_fs_rename()` |
+| Process Execution | ✅ Migrated | `io.rs`, `os.rs`, `nmap.rs` | `check_process_exec()`, `nse_process_exec()` |
+| Network TCP | ✅ Migrated | `socket.rs`, `comm.rs` | `nse_network_tcp_connect()`, `nse_network_tcp_send()`, `nse_network_tcp_receive()` |
+| Network UDP | ✅ Migrated | `socket.rs` | `nse_network_udp_send()`, `nse_network_udp_receive()`, `check_network_udp()` |
+| DNS Resolution | ✅ Migrated | `dns.rs` | `nse_dns_lookup()` |
+| Time Clock | ✅ Migrated | `datetime.rs` | `nse_time_now()`, `check_time_clock()` |
+| Randomness | ✅ Migrated | `rand.rs` | `nse_random_bytes()`, `check_randomness()` |
+| Environment | ✅ Migrated | `os.rs` | `nse_env_var()`, `check_environment()` |
+| Compression | ✅ Migrated | `zlib.rs` | `nse_compress()`, `nse_decompress()`, `check_compression()` |
+| Crypto/TLS | ✅ Migrated | `openssl.rs`, `tls.rs`, `sslcert.rs` | `check_crypto()` |
+
+### Remaining Deferred Items
+
+- `unpwdb.rs` — password database file reads (protocol-specific internal helper)
+- `brute.rs` — brute force helper operations (protocol-specific internal helper)
+- `datafiles.rs` — data file reads (protocol-specific internal helper)
+- Protocol-specific internal helpers beyond network I/O (smb, ssh, ftp, http, etc.)
+
+These deferred items are protocol-specific internal helpers that do not have their own capability classes. They use migrated network I/O wrappers but may have unmigrated helper calls within their protocol logic.
+
+### Architecture Guard Posture
+
+| Guard | Status | Description |
+|-------|--------|-------------|
+| Check 33 | FAIL | Detects direct `std::process::Command` in NSE libraries |
+| Check 33b | INFO | Detects direct filesystem ops in unmigrated libraries |
+| Check 33c | INFO | Detects direct network calls in unmigrated libraries |
+| Check 34 | PASS | Verifies capability context integration |

@@ -22,7 +22,7 @@ Eggsec is a command-line security assessment tool designed for security professi
 | **Structured Outputs** | JSON, SARIF, JUnit, HTML, CSV for humans, CI, and agents |
 | **WAF and Defense Validation** | Detection of 34 WAF products with evasion-resistance testing |
 | **Local Lab/Regression Workflows** | Repeatable profiles against local test environments |
-| **Optional NSE Compatibility** | Curated Nmap NSE script support as an optional layer |
+| **Optional NSE Compatibility** | Curated Nmap NSE script support as an optional layer. **NSE Capability Wrappers (Milestone 3 complete)**: All side-effecting helper operations (filesystem, process, network, DNS, time, randomness, environment, compression, crypto) are now routed through centralized capability enforcement. Profile-specific policies control access for manual, agent, and CI surfaces. See `architecture/nse_integration.md` for details. |
 
 ### Core Capabilities
 
