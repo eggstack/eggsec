@@ -19,7 +19,7 @@
 | datetime | Time | Wrapped | Wall-clock access | Warn | `nse_time_now()` emits nondeterminism warning in CiSafe |
 | rand | Random | Wrapped | Random bytes | Warn | `nse_random_bytes()` denied in CiSafe; warned in AgentSafe |
 | stdnse | Utility | PartiallyWrapped | Output, script args | Graceful degrade | Output table construction allowed; `stdnse.sleep()` blocked without cancellation |
-| http | Network | PartiallyWrapped | HTTP requests | Deny | Network checks via `NseCapabilityContext`; reqwest performs actual I/O (bypasses capability context) |
+| http | Network | Wrapped | HTTP requests | Deny | All network operations gated via `check_network_tcp()`; denied requests never reach reqwest |
 | ssl | Network | Wrapped | TLS handshake | Deny | Wrapped since Milestone 3 Phase 05; TLS ops routed through `NseCapabilityContext` |
 | ssh | Network | Deferred | SSH connections | — | No capability wrapper yet; full SSH protocol library |
 | smb | Network | Deferred | SMB/CIFS I/O | — | No capability wrapper yet; Windows file sharing protocol |
@@ -226,7 +226,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
 | `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
-| `local_protocol_tests` | 16 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03 |
+| `local_protocol_tests` | 17 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03; AgentSafe HTTP assertions tightened in Milestone 6 |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
 
@@ -313,7 +313,7 @@ The following are candidates for capability wrapper migration in Milestone 5:
 - **Phase 01**: CLI report formatting (`format.rs`) with 29 snapshot tests
 - **Phase 02**: Strict runtime assertions, `LazyLock<Manifest>` caching, timing instrumentation
 - **Phase 03**: Local TCP/HTTP/UDP protocol fixtures, 5 new `.nse` scripts, 16 runtime tests
-- **Phase 04**: Deferred library migration — `unpwdb.rs` → Wrapped (FS reads), `http.rs` → PartiallyWrapped (advisory network checks)
+- **Phase 04**: Deferred library migration — `unpwdb.rs` → Wrapped (FS reads), `http.rs` → Wrapped (network checks block before reqwest)
 - **Phase 05**: ReportEnvelope bridge (11 evidence tests, 4 envelope shape tests), TUI/frontend data contract
 - **Phase 06**: Release closure — 16-command verification matrix, bug fixes, documentation
 
@@ -322,7 +322,7 @@ The following are candidates for capability wrapper migration in Milestone 5:
 | Binary | Tests | Notes |
 |--------|-------|-------|
 | `runtime_corpus_tests` | 18 | Strict manifest assertions, stable at all parallelism |
-| `local_protocol_tests` | 16 (15 pass, 1 known reqwest bypass) | `local_http_get_agent_safe_documentation` documented |
+| `local_protocol_tests` | 17 (all pass) | AgentSafe HTTP strict denial verified with server hit counters |
 | `runtime_smoke_tests` | 2 | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | Resolver-only assertions |
 | `evidence_tests` | 19 | Evidence extraction + bridge |
@@ -337,15 +337,13 @@ The following are candidates for capability wrapper migration in Milestone 5:
 
 ### Remaining Known Limitations
 
-1. **reqwest HTTP bypass**: `http.rs` is PartiallyWrapped — `reqwest` HTTP library bypasses `NseCapabilityContext`. TCP denial events are not intercepted for reqwest calls. Documented; full interception requires reqwest hook or alternative HTTP client.
-2. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, brute, target — 12 libraries remain deferred to Milestone 6.
-3. **`stdnse.sleep()` cancellation**: No cancellation token integration; sleep blocks without checking task cancellation.
+1. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, brute, target — 12 libraries remain deferred to Milestone 6.
+2. **`stdnse.sleep()` cancellation**: No cancellation token integration; sleep blocks without checking task cancellation.
 
 ### Milestone 6 Candidates
 
-- Protocol library wrappers (smb, ssh, ftp, http, mysql, postgres, redis, mongodb, ldap, snmp)
+- Protocol library wrappers (smb, ssh, ftp, mysql, postgres, redis, mongodb, ldap, snmp)
 - `stdnse.sleep()` cancellation integration
 - Structured Lua output table parsing
 - TUI-first compatibility debugging workflow
-- HTTP reqwest capability context bypass
 - Performance/caching for large corpus runs

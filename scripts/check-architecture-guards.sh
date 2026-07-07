@@ -975,6 +975,43 @@ else
 fi
 
 echo ""
+echo "--- Check 48: HTTP check_network_tcp before reqwest ---"
+http_file="crates/eggsec-nse/src/libraries/http.rs"
+if [ -f "$http_file" ]; then
+    check_count=$(grep -c "check_network_tcp" "$http_file" || echo 0)
+    if [ "$check_count" -lt 5 ]; then
+        echo "FAIL: http.rs has only $check_count check_network_tcp calls (expected >= 5)"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: http.rs has $check_count check_network_tcp calls."
+    fi
+else
+    echo "SKIP: http.rs not found (nse feature not enabled)."
+fi
+
+echo ""
+echo "--- Check 49: No permissive AgentSafe HTTP text ---"
+HITS=$(rg -n 'should complete.*not crash|AgentSafe.*accepts either|is_ok.*is_err' crates/eggsec-nse/tests/ 2>/dev/null | grep -i 'http\|agent' | grep -v '// ' || true)
+if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: Found lenient permissive text for AgentSafe HTTP."
+    FAIL=$((FAIL + 1))
+else
+    echo "PASS: No lenient permissive text for AgentSafe HTTP."
+fi
+
+echo ""
+echo "--- Check 50: No lenient library assertions in runtime tests ---"
+HITS=$(rg -n 'is_empty\(\) \|\| found|\.is_empty\(\).*found' crates/eggsec-nse/tests/ 2>/dev/null | grep -v '// ' | grep -v 'allow_missing' || true)
+if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: Found lenient library assertions."
+    FAIL=$((FAIL + 1))
+else
+    echo "PASS: No lenient library assertions."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."
