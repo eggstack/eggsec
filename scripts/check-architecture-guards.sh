@@ -1065,6 +1065,78 @@ else
 fi
 
 echo ""
+echo "--- Check 51: Every .send() in http.rs has a preflight gate within 15 lines ---"
+http_file="crates/eggsec-nse/src/libraries/http.rs"
+if [ -f "$http_file" ]; then
+    SEND_HITS=$(awk '/\.send\(\)/{send_line=NR; send_content=$0} /check_network_tcp|maybe_denied_response/{check_line=NR} send_line>0 && check_line>0 && check_line>=send_line-15 && check_line<=send_line{found=1} send_line>0 && NR>send_line+15 && !found{print send_line": "send_content; found=0; send_line=0; check_line=0} END{if(send_line>0 && !found) print send_line": "send_content}' "$http_file" 2>/dev/null)
+    if [[ -n "$SEND_HITS" ]]; then
+        echo "$SEND_HITS"
+        echo "FAIL: Found .send() calls without a preflight gate within 15 lines."
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: All .send() calls in http.rs have a preflight gate within 15 lines."
+    fi
+else
+    echo "SKIP: http.rs not found."
+fi
+
+echo ""
+echo "--- Check 51b: Async HTTP functions use check_network_tcp directly (documented pattern) ---"
+http_file="crates/eggsec-nse/src/libraries/http.rs"
+if [ -f "$http_file" ]; then
+    # The 3 async functions use check_network_tcp directly + denied_response(),
+    # which is equivalent to maybe_denied_response() but inlined for async control flow.
+    # They are registered as closures via http.set(), so we search for the registration name.
+    missing_async=""
+    for name in "async_get" "async_post" "async_request"; do
+        # Find the line with the registration, then check next 25 lines for check_network_tcp
+        reg_line=$(grep -n "\"$name\"" "$http_file" | head -1 | cut -d: -f1)
+        if [ -n "$reg_line" ]; then
+            end_line=$((reg_line + 25))
+            if ! sed -n "${reg_line},${end_line}p" "$http_file" | grep -q "check_network_tcp"; then
+                missing_async="$missing_async $name"
+            fi
+        else
+            missing_async="$missing_async $name"
+        fi
+    done
+    if [ -n "$missing_async" ]; then
+        echo "FAIL: Async HTTP functions missing check_network_tcp:$missing_async"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: All async HTTP functions use check_network_tcp directly."
+    fi
+else
+    echo "SKIP: http.rs not found."
+fi
+
+echo ""
+echo "--- Check 52: Async HTTP functions are sync Lua closures using block_on (not true async) ---"
+http_file="crates/eggsec-nse/src/libraries/http.rs"
+if [ -f "$http_file" ]; then
+    missing_blockon=""
+    for name in "async_get" "async_post" "async_request"; do
+        reg_line=$(grep -n "\"$name\"" "$http_file" | head -1 | cut -d: -f1)
+        if [ -n "$reg_line" ]; then
+            end_line=$((reg_line + 30))
+            if ! sed -n "${reg_line},${end_line}p" "$http_file" | grep -q "block_on"; then
+                missing_blockon="$missing_blockon $name"
+            fi
+        else
+            missing_blockon="$missing_blockon $name"
+        fi
+    done
+    if [ -n "$missing_blockon" ]; then
+        echo "FAIL: Async HTTP functions missing block_on (not sync Lua closures):$missing_blockon"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: All async HTTP functions use block_on (sync Lua closures wrapping async reqwest)."
+    fi
+else
+    echo "SKIP: http.rs not found."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

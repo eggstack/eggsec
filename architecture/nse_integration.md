@@ -1507,11 +1507,28 @@ Phase 02 extended the HTTP capability-bypass proof across all HTTP network metho
 
 **Verification:** All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have ManualPermissive success tests and automated-profile zero-hit denial tests. Architecture guards 48-50 plus 48b-48d pass.
 
+### Milestone 6 Phase 03 (2026-07-07, CiSafe symmetry, send-path guards, method/path assertions)
+
+Phase 03 completes the HTTP enforcement polish by closing test symmetry gaps, adding runtime structural guards, and strengthening success test assertions.
+
+#### Changes
+
+1. **CiSafe HTTP denial symmetry**: Added 5 new CiSafe denial tests (PUT, DELETE, HEAD, OPTIONS, request) to match the existing AgentSafe coverage. All 7 HTTP methods now have both AgentSafe and CiSafe denial tests. Total HTTP tests: 21 (7 ManualPermissive + 7 AgentSafe + 7 CiSafe).
+
+2. **Send-path architecture guards**: Check 51 verifies every `.send()` call in `http.rs` is preceded by a capability check within 15 lines. Check 51b verifies all 3 async HTTP functions (`async_get`, `async_post`, `async_request`) use `check_network_tcp` directly. Guard script now has 52 checks (1-50, 51, 51b).
+
+3. **Method/path assertions in success tests**: All 7 ManualPermissive HTTP success tests now assert `server.last_method()` and `server.last_path()` in addition to hit count and status. This proves requests reach the correct HTTP method handler on the test server.
+
+4. **Async HTTP documentation**: Async HTTP functions are explicitly documented as synchronous Lua-callable functions using `block_on()`, not true async. Architecture guard Check 52 enforces this naming invariant.
+
+5. **Documentation consistency**: NSE_COMPATIBILITY.md header updated from Milestone 4 to Milestone 6. SKILL.md stale "Known limitation: HTTP library (reqwest) bypasses NseCapabilityContext" removed (resolved in Phase 04/06). Deferred items updated to remove reqwest bypass.
+
+**Verification:** 511 NSE tests pass (1 ignored), 52 architecture guards pass. All HTTP methods covered by all 3 test profiles.
+
 ### Milestone 6 Candidates
 
 - Protocol library wrappers (smb, ssh, ftp, mysql, postgres, redis, mongodb, ldap, snmp)
 - `stdnse.sleep()` cancellation integration
-- Async HTTP method denial tests
 - Structured Lua output table parsing
 - TUI-first compatibility debugging workflow
 - Performance/caching for large corpus runs

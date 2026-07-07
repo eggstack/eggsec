@@ -1,6 +1,6 @@
-# NSE Compatibility Matrix — Milestone 4
+# NSE Compatibility Matrix — Milestone 6
 
-> **Scope**: This document describes the NSE compatibility status for Milestone 4 — a sandboxed Lua execution environment with capability-gated side effects. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
+> **Scope**: This document describes the NSE compatibility status for Milestone 6 — a sandboxed Lua execution environment with capability-gated side effects and comprehensive HTTP method enforcement. It does **not** claim full Nmap NSE parity. Compatibility is measured against the local corpus fixtures, not the upstream Nmap NSE library.
 
 ---
 
@@ -231,7 +231,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
 | `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
-| `local_protocol_tests` | 29 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phase 02 |
+| `local_protocol_tests` | 34 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phases 02-03 |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
 
@@ -327,7 +327,7 @@ The following are candidates for capability wrapper migration in Milestone 5:
 | Binary | Tests | Notes |
 |--------|-------|-------|
 | `runtime_corpus_tests` | 18 | Strict manifest assertions, stable at all parallelism |
-| `local_protocol_tests` | 29 (all pass) | HTTP method coverage expanded; all methods have zero-hit denial tests |
+| `local_protocol_tests` | 34 (all pass) | HTTP method coverage expanded; all methods have zero-hit denial tests for AgentSafe and CiSafe |
 | `runtime_smoke_tests` | 2 | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | Resolver-only assertions |
 | `evidence_tests` | 19 | Evidence extraction + bridge |
