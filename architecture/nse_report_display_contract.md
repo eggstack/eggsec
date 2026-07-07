@@ -155,3 +155,54 @@ When rendering from `ReportEnvelope` instead of `NseRunReport`:
 - Evidence confidence levels determine visual prominence, not severity.
 - Capability denials are execution limitations, not target vulnerabilities.
 - Raw output is always available separately from evidence items.
+- The TUI consumes structured report fields from `NseRunReport` — it does not parse human-formatted text.
+- Raw output is rendered separately from evidence items and is never treated as evidence.
+
+## TUI Implementation (Phase 01)
+
+### Data Flow
+
+The NSE dispatch layer (`run_nse()` in `crates/eggsec/src/dispatch/api.rs`) builds an `NseRunReport` after `run_script_with_rules()` completes. The report is carried through `NseResults { report: Option<NseRunReport>, output: String, ... }` into the TUI rendering path.
+
+The TUI consumes `NseRunReport` directly via `nse_report_view::render_report()` in `crates/eggsec-tui/src/tabs/nse_report_view.rs`. When `NseRunReport` is absent (e.g. legacy dispatch path or parse failure), the TUI falls back to simple text rendering of the raw output string.
+
+### Report Construction
+
+```
+run_script_with_rules() → NseExecutor::build_report() → NseRunReport
+         ↓
+   run_nse() stores report in NseResults
+         ↓
+   TUI receives NseResults via progress channel
+         ↓
+   render_report() maps NseRunReport → styled ratatui::text::Lines
+```
+
+### View Model
+
+`render_report()` maps all 7 display sections defined in this contract to styled `ratatui::text::Line` values:
+
+| Section | Mapping |
+|---------|---------|
+| Summary | Target, script, source, profile, elapsed, status, fidelity |
+| Rule Evaluation | Per-rule kind/matched/exactness/summary with context source |
+| Libraries | Per-library name/category/status/side-effects/warnings |
+| Capability Denials | Filtered `capability_events` where `allowed == false`, prefixed `[!]` |
+| Evidence | Per-evidence kind/title/summary/confidence/target/references |
+| Raw Output | `output.content` with truncation indicator |
+| Diagnostics | Resolver, errors, warnings, unsupported features, approximations |
+
+### Visual Treatment
+
+- **Capability denials** are prefixed with `[!]` and colored as errors. They represent execution limitations enforced by the profile, not vulnerabilities found on the target.
+- **Evidence items** and **raw output** are rendered as separate, visually distinct sections. Evidence is structured observation data; raw output is the script's stdout/stderr. They are never conflated.
+- **Empty sections** render their descriptive empty-state text ("No rules evaluated.", "No libraries loaded.", etc.) and are collapsible.
+
+### Test Coverage
+
+Tests in `crates/eggsec-tui/src/tabs/nse_report_view.rs` cover:
+
+- **Compatible report**: All 7 sections populated, full display.
+- **Denied report**: Capability denials present, denials panel populated with `[!]` prefixed lines.
+- **Empty report**: All optional sections empty, empty-state text rendered.
+- **Partial report**: Some sections present (e.g. rules + evidence), others absent — only populated sections rendered.

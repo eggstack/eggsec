@@ -465,4 +465,5 @@ cargo test -p eggsec-nse --features nse --test bridge_tests
 cargo test -p eggsec-nse --features nse --test runtime_corpus_tests
 cargo test -p eggsec-nse --features nse --test runtime_smoke_tests
 cargo test -p eggsec-nse --features nse --test local_protocol_tests
+cargo test -p eggsec-tui --features nse -- nse_report_view
 ```

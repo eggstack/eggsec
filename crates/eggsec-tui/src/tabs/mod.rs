@@ -19,6 +19,8 @@ pub mod integrations;
 mod load;
 #[cfg(feature = "nse")]
 pub mod nse;
+#[cfg(feature = "nse")]
+pub mod nse_report_view;
 pub mod oauth;
 pub mod packet;
 pub mod proxy;

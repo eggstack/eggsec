@@ -3,6 +3,8 @@ use std::time::Duration;
 #[cfg(feature = "nse")]
 use crate::dispatch::types::NseResults;
 use crate::dispatch::types::{send_progress, GraphQlResults, OAuthResults, TaskResult};
+#[cfg(feature = "nse")]
+use eggsec_nse::NseScriptSource;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_graphql(
@@ -315,7 +317,7 @@ pub async fn run_nse(
 
     let target_clone = target.clone();
     let script_clone = script.clone();
-    let (output, errors, success) = tokio::time::timeout(
+    let (output, errors, success, report) = tokio::time::timeout(
         tokio::time::Duration::from_secs(300),
         tokio::task::spawn_blocking(move || {
             // NOTE: This dispatch path is currently only reached from TUI
@@ -332,19 +334,31 @@ pub async fn run_nse(
                     .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
             }
 
-            let script_content = if let Some(ref script_path) = custom_script {
-                std::fs::read_to_string(script_path).map_err(|e| {
+            let (script_content, script_source) = if let Some(ref script_path) = custom_script {
+                let content = std::fs::read_to_string(script_path).map_err(|e| {
                     anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e)
-                })?
+                })?;
+                let source = NseScriptSource::File {
+                    path: std::path::PathBuf::from(script_path),
+                };
+                (content, source)
             } else {
-                crate::nse::get_builtin_script(&script_clone)
+                let content = crate::nse::get_builtin_script(&script_clone);
+                let source = NseScriptSource::Builtin {
+                    name: script_clone.clone(),
+                };
+                (content, source)
             };
 
-            let output = executor
-                .run_script(&script_content)
+            let (output, _outputs, rule_reports) = executor
+                .run_script_with_rules(&script_content)
                 .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
 
-            Ok::<_, anyhow::Error>((output, String::new(), true))
+            let success = rule_reports.iter().any(|r| r.matched) || !output.is_empty();
+
+            let report = executor.build_report(&profile, &script_source, &output, &[]);
+
+            Ok::<_, anyhow::Error>((output, String::new(), success, Some(report)))
         }),
     )
     .await
@@ -370,6 +384,7 @@ pub async fn run_nse(
         output,
         errors,
         success,
+        report,
     };
 
     Ok(TaskResult::Nse(results))

@@ -41,6 +41,8 @@ pub struct NseResults {
     pub output: String,
     pub errors: String,
     pub success: bool,
+    #[cfg(feature = "nse")]
+    pub report: Option<eggsec_nse::NseRunReport>,
 }
 
 /// A single hop in a traceroute result.

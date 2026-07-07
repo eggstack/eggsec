@@ -237,6 +237,10 @@ if let Err(e) = result_tx.send(result).await {
 
 ## Common Tasks
 
+### NSE Report View Model
+The `nse_report_view` module in `tabs/` converts `NseRunReport` to styled `Line`s for TUI rendering.
+Use `render_report(&report)` to get display lines. The NSE tab uses this when a structured report is available.
+
 ### Adding a New Tab
 1. Create tab module in `crates/eggsec-tui/src/tabs/`
 2. Implement `TabState`, `TabInput`, `TabRender` traits
@@ -247,6 +251,7 @@ if let Err(e) = result_tx.send(result).await {
 
 ```bash
 cargo test --lib -p eggsec-tui tui::
+cargo test -p eggsec-tui --features nse -- nse_report_view
 ```
 
 ### Visual Regression Tests

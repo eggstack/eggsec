@@ -16,6 +16,8 @@ pub struct NseTab {
     pub core: TabCore,
     pub script_selector: Selector,
     pub focus_area: NseFocusArea,
+    #[cfg(feature = "nse")]
+    pub structured_report: Option<eggsec_nse::NseRunReport>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,6 +52,8 @@ impl NseTab {
             core: TabCore::new("NSE Scan", "NSE Results").with_inputs(inputs),
             script_selector,
             focus_area: NseFocusArea::Inputs,
+            #[cfg(feature = "nse")]
+            structured_report: None,
         }
     }
 
@@ -83,6 +87,16 @@ impl NseTab {
         let view = &mut self.core.results_view;
         self.core.state = AppState::Completed;
         view.clear();
+
+        #[cfg(feature = "nse")]
+        if let Some(report) = results.report {
+            self.structured_report = Some(report.clone());
+            let lines = super::nse_report_view::render_report(&report);
+            for line in lines {
+                view.add_line(line);
+            }
+            return;
+        }
 
         view.add_line(Line::from(Span::styled(
             format!("NSE Script Results: {}", results.script),
@@ -137,6 +151,10 @@ impl TabState for NseTab {
         self.script_selector.select(0);
         self.script_selector.blur();
         self.focus_area = NseFocusArea::Inputs;
+        #[cfg(feature = "nse")]
+        {
+            self.structured_report = None;
+        }
     }
 }
 

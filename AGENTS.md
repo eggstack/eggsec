@@ -96,6 +96,7 @@ cargo clippy --lib -p eggsec --features db-pentest
 # NSE (domain crate)
 cargo check -p eggsec-nse --features nse
 cargo test -p eggsec-nse --features nse
+cargo test -p eggsec-tui --features nse -- nse_report_view
 cargo test -p eggsec-nse --test execution_limits_tests
 cargo test -p eggsec-nse --lib -- registry      # library registry
 cargo test -p eggsec-nse --test profile_tests
@@ -392,6 +393,7 @@ Canonical reference points when updating guidance or skills:
 - `ScopeInput` - Scope input for network policy derivation in NSE profiles: `target_ip`, `resolved_ips`, `scope_cidrs`.
 - `NseRunReport` - Structured run output model for NSE execution (`eggsec-nse::report`); run output truthfulness is defined by this type, and `NseRunReport.libraries` records per-run required/attempted library usage rather than a capability snapshot.
 - `NseRuleEvaluationReport` - Rule evaluation metadata (`eggsec-nse::report`); rule behavior is defined by this type (kind, status, fidelity, approximations, inputs).
+- `nse_report_view::render_report()` - View model converting `NseRunReport` to styled TUI lines (`eggsec-tui::tabs::nse_report_view`)
 
 > **NSE Milestone 1 (loader/profile) is closed.** The canonical implementation, tests, and policy contract are listed in the [Milestone 1 Closure Index](./architecture/nse_integration.md#milestone-1-closure-index). Future work should not reopen loader/profile policy unless a regression is found.
 > **NSE Milestone 2 (registry/report/corpus) is closed.** Library compatibility is defined by `NseLibraryRegistry` metadata (43 descriptors). `NseRunReport.libraries` records per-run required/attempted library usage, not a capability snapshot, and the later truthfulness follow-up refined that reporting without reopening Milestone 2. Rule behavior is defined by `NseRuleEvaluationReport`. Rule evaluation produces structured reports via `evaluate_rule()`. Error paths emit full reports by `build_failure_report()`. Run output truthfulness is defined by `NseRunReport`. The compatibility corpus is representative and local-only. See the [Milestone 2 Closure Note](./architecture/nse_integration.md#milestone-2-closure-note).
