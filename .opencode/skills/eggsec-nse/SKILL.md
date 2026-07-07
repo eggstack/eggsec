@@ -43,6 +43,7 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 > **Milestone 5 Phase 01 (2026-07-06, flake isolation).** The `runtime_corpus_tests` parallel-execution flake has been fixed. Root cause: `run_fixture_runtime()` used PID-only temp dir naming, causing concurrent test functions to share file paths. Fix: global `AtomicU32` invocation counter ensures each call gets a unique temp dir (`{fixture}-{pid}-{invocation_id}`). Stable at default parallelism — no `--test-threads` workaround needed. See [Milestone 5 Phase 01](../../architecture/nse_integration.md#milestone-5-phase-01-runtime-corpus-flake-isolation-2026-07-06).
 
 > **Milestone 5 Phase 03 (2026-07-06, local protocol fixtures).** Local TCP/HTTP/UDP fixture harness with real listeners, 5 new `.nse` scripts, 16 runtime tests in `local_protocol_tests.rs`. Manifest `local_service` metadata enables runtime harness skip. Architecture guard Check 47. Known limitation: HTTP library (reqwest) bypasses `NseCapabilityContext`. 452 NSE tests pass, 47 architecture guards pass.
+> **Milestone 5 Phase 04 (2026-07-06, deferred library migration).** `unpwdb.rs` migrated from Deferred to Wrapped (FS reads through `nse_fs_read_to_string`). `http.rs` migrated to PartiallyWrapped (advisory network checks via `check_network_tcp`). `ssl` registry entry corrected to Wrapped. 182 lib tests, 43 corpus tests, 47 architecture guards pass.
 
 ## Key Components
 

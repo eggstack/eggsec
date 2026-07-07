@@ -390,7 +390,7 @@ Milestone 3 should not:
 
 ### Deferred (not yet migrated)
 
-- `unpwdb.rs` — password database file reads
+- ~~`unpwdb.rs` — password database file reads~~ **Wrapped** (Milestone 5 Phase 04)
 - `brute.rs` — brute force helper operations
 - `datafiles.rs` — data file reads
 - Protocol-specific internal helpers beyond network I/O
@@ -625,6 +625,26 @@ Final verification pass: 369 tests pass (1 ignored), architecture guards all pas
 
 **Verification:** 452 NSE tests pass (1 ignored), all 47 architecture guards pass, clippy clean.
 
+### Milestone 5 Phase 04: Deferred Library Migration (2026-07-06)
+
+**Status:** Complete
+
+**Problem:** Several NSE libraries had unguarded side-effecting operations that bypassed `NseCapabilityContext`. The `unpwdb` library performed direct `std::fs::read_to_string()` calls without capability checks, and the `http` library's network checks were incomplete (reqwest calls bypassed the capability context). The `ssl` library's registry entry was stale (marked Deferred despite being wrapped since Milestone 3 Phase 05).
+
+**Changes across 5 workstreams:**
+
+1. **unpwdb.rs migration**: Added `&NseCapabilityContext` parameter to `register_unpwdb_library()`. Replaced all 6 direct `std::fs::read_to_string()` calls with `wrappers::nse_fs_read_to_string()`. Each closure clones the capability context. Filesystem reads now produce capability events and are denied under AgentSafe/CiSafe profiles. Registry updated from `Deferred` to `Wrapped`.
+
+2. **http.rs migration**: Added `&NseCapabilityContext` parameter to `register_http_library()`. Added `denied_response()` helper function. Added `wrappers::check_network_tcp()` calls before every network-performing function (get, post, put, delete, head, options, request, post_host, put_data, async_get, async_post, async_request). Fixed compilation error: replaced `error_response(lua, reqwest::Error::from(std::io::Error::new(...)))` pattern with `denied_response(lua, reason)` across all 11 instances. Registry notes updated to document the capability check advisory pattern.
+
+3. **executor_core.rs**: Updated both `register_http_library()` and `register_unpwdb_library()` calls to pass `&self.capability_context`.
+
+4. **Registry updates**: `ssl` (tls.rs) updated from `Deferred` to `Wrapped` (stale entry from Milestone 3 Phase 05). `unpwdb` updated from `Deferred` to `Wrapped`. `http` remains `PartiallyWrapped` (advisory checks, reqwest bypass). Tests updated: `wrapped_libraries_include_known_wrapped` now asserts `unpwdb` and `ssl`; `deferred_libraries_include_auth_and_protocol` no longer asserts those libraries.
+
+5. **Documentation**: `docs/NSE_COMPATIBILITY.md` updated: http/ssl/unpwdb rows reflect new statuses, deferred count reduced from 14 to 12, Milestone 5 candidates updated to remove migrated libraries.
+
+**Verification:** 0 compilation errors, 27 registry tests pass.
+
 ### Milestone 5 Boundary
 
 Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence semantics. Candidates for Milestone 5:
@@ -632,7 +652,7 @@ Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence se
 - CLI/TUI report UX integration (rendering `ReportEnvelope` in TUI tabs, exporting from CLI).
 - Additional upstream fixtures (currently 44 fixtures; representative coverage).
 - Performance/throughput benchmarks for the runtime harness.
-- HTTP library capability integration (bypasses NseCapabilityContext for reqwest calls).
+- ~~HTTP library capability integration~~ — Partially addressed in Phase 04 (advisory network checks added; reqwest bypass remains documented).
 
 ## Library Registry
 

@@ -1,5 +1,7 @@
 # NSE Milestone 5 Phase 04: Deferred Library Migration
 
+> **Status: Executed** (2026-07-06)
+
 ## Purpose
 
 Start reducing the deferred NSE library surface identified at Milestone 4 closure. The goal is not broad parity; it is to migrate the highest-value deferred or partially wrapped library classes behind capability wrappers with runtime corpus coverage.

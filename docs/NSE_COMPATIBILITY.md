@@ -19,8 +19,8 @@
 | datetime | Time | Wrapped | Wall-clock access | Warn | `nse_time_now()` emits nondeterminism warning in CiSafe |
 | rand | Random | Wrapped | Random bytes | Warn | `nse_random_bytes()` denied in CiSafe; warned in AgentSafe |
 | stdnse | Utility | PartiallyWrapped | Output, script args | Graceful degrade | Output table construction allowed; `stdnse.sleep()` blocked without cancellation |
-| http | Network | PartiallyWrapped | HTTP requests | Deny | HTTP GET/POST mocked in corpus; real I/O gated through network policy |
-| ssl | Network | Deferred | TLS handshake | — | No capability wrapper yet; full TLS protocol library |
+| http | Network | PartiallyWrapped | HTTP requests | Deny | Network checks via `NseCapabilityContext`; reqwest performs actual I/O (bypasses capability context) |
+| ssl | Network | Wrapped | TLS handshake | Deny | Wrapped since Milestone 3 Phase 05; TLS ops routed through `NseCapabilityContext` |
 | ssh | Network | Deferred | SSH connections | — | No capability wrapper yet; full SSH protocol library |
 | smb | Network | Deferred | SMB/CIFS I/O | — | No capability wrapper yet; Windows file sharing protocol |
 | smb2 | Network | Deferred | SMB2 I/O | — | No capability wrapper yet; SMB version 2 |
@@ -31,7 +31,7 @@
 | ldap | Network | Deferred | LDAP queries | — | No capability wrapper yet; directory protocol |
 | snmp | Network | Deferred | SNMP queries | — | No capability wrapper yet; network management protocol |
 | creds | Auth | Deferred | Credential lookup | — | No capability wrapper yet; credential store |
-| unpwdb | Auth | Deferred | Username/password DB | — | No capability wrapper yet; wordlist database |
+| unpwdb | Auth | Wrapped | Username/password DB | Deny | Wrapped since Milestone 5 Phase 04; filesystem reads routed through `NseCapabilityContext` |
 | brute | Auth | Deferred | Brute force attempts | — | No capability wrapper yet; brute force framework |
 | target | Core | Deferred | Target manipulation | — | No capability wrapper yet; target registry |
 | tab | Utility | Pure | None | N/A | Pure Lua table utilities; no side effects |
@@ -158,13 +158,12 @@
 
 ## Known Gaps
 
-### Deferred Libraries (14)
+### Deferred Libraries (12)
 
 These libraries have no capability wrappers and are unavailable in AgentSafe and CiSafe profiles:
 
 | Library | Protocol/Domain | Impact |
 |---------|----------------|--------|
-| ssl | TLS/SSL | Cannot perform TLS handshakes; scripts requiring HTTPS connections fail |
 | ssh | SSH | Cannot establish SSH connections; remote command execution unavailable |
 | smb | SMB/CIFS | Cannot access SMB shares; Windows file sharing scripts unavailable |
 | smb2 | SMB v2 | Cannot access SMB2 shares; modern Windows file sharing unavailable |
@@ -175,7 +174,6 @@ These libraries have no capability wrappers and are unavailable in AgentSafe and
 | ldap | LDAP | Cannot query LDAP directories; directory enumeration unavailable |
 | snmp | SNMP | Cannot query SNMP; network management scripts unavailable |
 | creds | Credentials | Cannot access credential stores; credential-based scripts unavailable |
-| unpwdb | Wordlist | Cannot access password databases; dictionary attacks unavailable |
 | brute | Brute force | Cannot perform brute force authentication; auth testing unavailable |
 | target | Target | Cannot manipulate target registry; advanced target handling unavailable |
 
@@ -246,9 +244,7 @@ The following are candidates for capability wrapper migration in Milestone 5:
 
 ### Priority 1: Protocol Libraries
 
-- **ssl** — TLS/SSL handshake and certificate operations; required for HTTPS scripts
 - **ssh** — SSH connection and command execution; required for remote audit scripts
-- **http** — Full HTTP/HTTPS client; upgrade from PartiallyWrapped to fully wrapped
 
 ### Priority 2: Database Libraries
 
@@ -261,7 +257,6 @@ The following are candidates for capability wrapper migration in Milestone 5:
 
 - **brute** — Brute force framework; required for authentication testing
 - **creds** — Credential store access; required for credential-based testing
-- **unpwdb** — Wordlist access; required for dictionary attacks
 
 ### Priority 4: Network Protocol Libraries
 
