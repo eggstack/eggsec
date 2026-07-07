@@ -56,6 +56,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **NSE Milestone 6 Phase 03 (2026-07-06, TLS/sslcert local fixtures).** `TlsEchoServer` in `local_fixtures.rs` generates self-signed X.509 certs at startup via openssl, creates `native_tls::Identity` via PKCS12, binds `127.0.0.1:0` (ephemeral), accepts TLS connections with per-connection thread spawning. 5 sslcert `.nse` fixture scripts exercise `get_certificate`, `parse_cert`, `get_subject`, `get_chain_certs`, and `is_valid`. All 5 manifest entries with `local_service.type = "tls_echo"`. 5 NSE integration tests + 1 unit test (40 total in local_protocol_tests). Architecture guard Check 53 added. `sslcert.rs` fixed to return actual PEM-encoded certificates. 518 eggsec-nse tests pass, 53 architecture guards pass. See [Milestone 6 Phase 03](../../architecture/nse_integration.md#milestone-6-phase-03).
 
+> **NSE Expansion Phase 04 (2026-07-07, upstream-style corpus growth).** 6 new upstream-style fixtures: SSH host key verification, SMB discovery, LDAP search, multi-step discovery, conditional portrule, timestamp extraction. Corpus: 39→45 fixtures, 16→22 upstream. New manifest metadata fields: `expected_profile_set`, `expected_evidence_kinds`, `expected_denial_kinds`. Architecture guard Check 54 enforces local-only, clean-room, no public network. 518 eggsec-nse tests pass, 54 architecture guards pass. Plan: `plans/nse-expansion-phase-04-upstream-style-corpus-growth.md`.
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -430,9 +432,9 @@ let result = match executor.run_script(script) {
 
 A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
 
-- **Fixtures**: `tests/fixtures/nse_corpus/` — 44 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
-- **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification
-- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests
+- **Fixtures**: `tests/fixtures/nse_corpus/` — 50 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
+- **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, gap classification, and Phase 04 profile/evidence metadata
+- **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 31 data-driven harness tests
 
 ```bash
 # Data-driven harness (all fixtures from manifest)

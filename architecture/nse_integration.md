@@ -1531,3 +1531,25 @@ Phase 03 completes the HTTP enforcement polish by closing test symmetry gaps, ad
 - Structured Lua output table parsing
 - TUI-first compatibility debugging workflow
 - Performance/caching for large corpus runs
+
+### NSE Expansion Phase 04 (2026-07-07, upstream-style corpus growth)
+
+Phase 04 broadens representative NSE compatibility coverage with curated, local-only, upstream-style scripts covering additional protocol patterns.
+
+#### Changes
+
+1. **6 new upstream-style fixtures**: SSH host key verification (`ssh_hostkey_check.nse`), SMB discovery (`smb_discovery.nse`), LDAP search (`ldap_search.nse`), multi-step discovery chaining stdnse+nmap (`multi_step_discovery.nse`), conditional portrule with script args (`conditional_portrule.nse`), and timestamp extraction for structured logging (`timestamp_extract.nse`).
+
+2. **Corpus expansion**: 39 → 45 fixtures, 16 → 22 upstream-style scripts. New protocol patterns covered: SSH, SMB, LDAP (approximate — connections may fail locally). Pure-output fixtures: conditional portrule and timestamp extraction are `compatible` under all profiles; multi-step discovery gets `compatible_with_warnings` (hostrule fires with synthetic host context → approximate fidelity).
+
+3. **Manifest metadata extensions**: New fields `expected_profile_set`, `expected_evidence_kinds`, `expected_denial_kinds` added to upstream fixtures for richer provenance and verification metadata.
+
+4. **Architecture guard Check 54**: Verifies all upstream-category fixtures are local-only (`local_fixture = true`), clean-room (`provenance = "clean-room"`), and public-network-free (`public_network_required = false`).
+
+#### Key Decisions
+
+- **Script shapes over library breadth**: Prioritized common NSE script patterns (SSH, SMB, LDAP, multi-step, conditional, timestamp) rather than exhaustive library coverage.
+- **Approximate fidelity for protocol fixtures**: SSH/SMB/LDAP fixtures use `expected_status = "compatible_with_warnings"` because connections may fail locally, but the library loading and pattern matching work correctly.
+- **No public network dependencies**: All fixtures are self-contained and run without internet access.
+
+**Verification:** Compatibility corpus tests, runtime corpus tests, and architecture guard Check 54 all pass. Plan: `plans/nse-expansion-phase-04-upstream-style-corpus-growth.md`.

@@ -1166,6 +1166,79 @@ else
 fi
 
 echo ""
+echo "--- Check 54: Upstream-style fixtures are local-only, clean-room, no public network ---"
+upstream_manifest="crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml"
+if [ -f "$upstream_manifest" ]; then
+    # Extract upstream fixture blocks and check provenance/public_network/local_fixture
+    upstream_bad=""
+    upstream_count=0
+    in_upstream=false
+    current_id=""
+    current_provenance=""
+    current_public_net=""
+    current_local=""
+    while IFS= read -r line; do
+        # Detect start of a new fixture block
+        if [[ "$line" == '[['*']]' ]]; then
+            # Check previous entry if it was upstream
+            if [ "$in_upstream" = true ]; then
+                if [ "$current_provenance" != "clean-room" ]; then
+                    upstream_bad="$upstream_bad $current_id (provenance=$current_provenance)"
+                fi
+                if [ "$current_public_net" = "true" ]; then
+                    upstream_bad="$upstream_bad $current_id (public_network_required=true)"
+                fi
+                if [ "$current_local" != "true" ]; then
+                    upstream_bad="$upstream_bad $current_id (local_fixture=$current_local)"
+                fi
+            fi
+            in_upstream=false
+            current_id=""
+            current_provenance=""
+            current_public_net=""
+            current_local=""
+        fi
+        # Parse fields
+        if [[ "$line" =~ ^id\ =\ \"(.*)\" ]]; then
+            current_id="${BASH_REMATCH[1]}"
+        fi
+        if [[ "$line" =~ ^category\ =\ \"upstream\" ]]; then
+            in_upstream=true
+            upstream_count=$((upstream_count + 1))
+        fi
+        if [[ "$line" =~ ^provenance\ =\ \"(.*)\" ]]; then
+            current_provenance="${BASH_REMATCH[1]}"
+        fi
+        if [[ "$line" =~ ^public_network_required\ =\ (.*) ]]; then
+            current_public_net="${BASH_REMATCH[1]}"
+        fi
+        if [[ "$line" =~ ^local_fixture\ =\ (.*) ]]; then
+            current_local="${BASH_REMATCH[1]}"
+        fi
+    done < "$upstream_manifest"
+    # Check last entry
+    if [ "$in_upstream" = true ]; then
+        if [ "$current_provenance" != "clean-room" ]; then
+            upstream_bad="$upstream_bad $current_id (provenance=$current_provenance)"
+        fi
+        if [ "$current_public_net" = "true" ]; then
+            upstream_bad="$upstream_bad $current_id (public_network_required=true)"
+        fi
+        if [ "$current_local" != "true" ]; then
+            upstream_bad="$upstream_bad $current_id (local_fixture=$current_local)"
+        fi
+    fi
+    if [ -n "$upstream_bad" ]; then
+        echo "FAIL: Upstream fixtures with bad metadata:$upstream_bad"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: All $upstream_count upstream fixtures are local-only, clean-room, no public network."
+    fi
+else
+    echo "SKIP: manifest.toml not found."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

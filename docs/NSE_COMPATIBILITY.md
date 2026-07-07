@@ -97,6 +97,12 @@
 | upstream-nmap-fetch-file | Upstream | Partial | Approximate | ManualPermissive | hard | skip | — | — | nmap.fetch_file(); partially mocked |
 | upstream-structured-output | Upstream | Full | Complete | All | hard | skip | — | — | Structured XML/JSON output pattern |
 | upstream-banner-parse | Upstream | Full | Complete | All | hard | skip | — | — | Service banner parsing |
+| upstream-ssh-hostkey | Upstream | Partial | Approximate | CompatibilityLab, ManualPermissive | hard | skip | — | — | SSH host key verification pattern; ssh library available but connection may fail locally |
+| upstream-smb-discovery | Upstream | Partial | Approximate | CompatibilityLab, ManualPermissive | hard | skip | — | — | SMB discovery pattern; smb library available but connection may fail locally |
+| upstream-ldap-search | Upstream | Partial | Approximate | CompatibilityLab, ManualPermissive | hard | skip | — | — | LDAP search pattern; ldap library available but connection may fail locally |
+| upstream-multi-step-discovery | Upstream | Full | Complete | All | hard | skip | — | — | Multi-step chaining stdnse+nmap helpers; pure output, no side effects |
+| upstream-conditional-portrule | Upstream | Full | Complete | All | hard | skip | — | — | Conditional portrule with script args and table lookups |
+| upstream-timestamp-extract | Upstream | Full | Complete | All | hard | skip | — | — | Timestamp extraction for structured logging; os.date() pattern |
 | portrule-host-port | Context | Full | Complete | All | hard | hard | — | — | Portrule receives host/port correctly |
 | hostrule-host-context | Context | Full | Complete | All | hard | hard | — | — | Hostrule receives host context correctly |
 | portrule-service-context | Context | Full | Complete | All | hard | hard | — | — | Portrule receives service/context info |
@@ -239,7 +245,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 | `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
 | `local_protocol_tests` | 40 | any | Local TCP/HTTP/UDP/TLS fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phases 02-03; TLS/sslcert fixtures added |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
-| `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
+| `compatibility_corpus_tests` | 49 | any | Resolver-only assertions (6 new Phase 04 upstream fixtures) |
 
 ### Known Limitations
 
@@ -316,6 +322,21 @@ The following are candidates for capability wrapper migration in Milestone 7:
 - ~~**Real DNS in corpus**~~ — DNS denial tested via local_protocol_tests; real resolution requires local DNS server (deferred)
 - **Profile-specific corpus tagging** — Tag fixtures with expected profile compatibility
 
+### Phase 04: Upstream-Style Corpus Growth (2026-07-07)
+
+6 new upstream-style fixtures added, expanding the corpus from 39 to 45 fixtures and from 16 to 22 upstream-style scripts:
+
+| Fixture ID | Category | Pattern | Gap | Notes |
+|------------|----------|---------|-----|-------|
+| `upstream-ssh-hostkey` | Upstream | SSH host key verification | approximate | ssh library available; connection may fail locally |
+| `upstream-smb-discovery` | Upstream | SMB discovery | approximate | smb library available; connection may fail locally |
+| `upstream-ldap-search` | Upstream | LDAP search | approximate | ldap library available; connection may fail locally |
+| `upstream-multi-step-discovery` | Upstream | Multi-step chaining | supported | Pure output; stdnse+nmap helpers |
+| `upstream-conditional-portrule` | Upstream | Conditional portrule | supported | Script args, table lookups |
+| `upstream-timestamp-extract` | Upstream | Timestamp extraction | supported | os.date() structured output |
+
+New manifest metadata fields: `expected_profile_set`, `expected_evidence_kinds`, `expected_denial_kinds`. Architecture guard Check 54 enforces upstream fixtures are local-only, clean-room, and public-network-free. Plan: `plans/nse-expansion-phase-04-upstream-style-corpus-growth.md`.
+
 ---
 
 ## Milestone 5 Closure (2026-07-06)
@@ -342,10 +363,10 @@ The following are candidates for capability wrapper migration in Milestone 7:
 | `format_tests` | 29 | CLI formatting snapshots |
 | `profile_propagation_tests` | 4 | Profile → context pipeline |
 | `profile_report_tests` | 4 | End-to-end profile/report |
-| **eggsec-nse total** | **499 passed, 1 ignored** | |
+| **eggsec-nse total** | **518 passed, 1 ignored** | |
 | `nse_tests` (eggsec crate) | 174 | Integration tests |
 | `feature_matrix` + `enforcement_matrix` | 352 | Feature metadata validation |
-| **Grand total** | **1,019+** | |
+| **Grand total** | **~1,044+** | |
 
 ### Remaining Known Limitations
 
