@@ -1483,10 +1483,35 @@ Phase 01 closed the HTTP capability bypass gap and tightened runtime test strict
 
 **Verification:** 494 NSE tests pass (1 ignored), 50 architecture guards pass.
 
+### Milestone 6 Phase 02: HTTP Method Coverage and Guard Hardening (2026-07-07)
+
+**Status:** Complete
+
+Phase 02 extended the HTTP capability-bypass proof across all HTTP network methods and replaced coarse guards with method/path-specific guardrails.
+
+#### Changes
+
+1. **HttpServer method/path tracking**: `HttpServer` in `local_fixtures.rs` gained `last_method` and `last_path` tracking via `Arc<Mutex<Option<String>>>`. New accessors `last_method()` and `last_path()` enable precise test assertions.
+
+2. **Local fixture scripts for all HTTP methods**: Added `http_put_local.nse`, `http_delete_local.nse`, `http_head_local.nse`, `http_options_local.nse`, and `http_request_local.nse` under `scripts/protocol/`. Each exercises the corresponding HTTP library method against a local server.
+
+3. **ManualPermissive success tests for all methods**: PUT, DELETE, HEAD, OPTIONS, and generic `request` now have ManualPermissive success tests proving real local server contact with hit count and method assertions.
+
+4. **AgentSafe/CiSafe zero-hit denial tests**: Every covered HTTP method (GET, POST, PUT, DELETE, HEAD, OPTIONS, request) has at least one automated-profile denial test asserting `network_tcp` denial events and zero server hits.
+
+5. **Centralized HTTP policy check**: `maybe_denied_response()` helper in `http.rs` consolidates the repeated `check_network_tcp` + `denied_response` pattern. All synchronous HTTP methods use the same denial helper.
+
+6. **Path-specific architecture guards**: Checks 48b-48d verify HTTP method operation strings exist in `http.rs`, local denied tests assert strict zero hits, and no permissive language appears in automated HTTP denial tests.
+
+7. **Manifest and documentation updates**: New fixtures registered in `manifest.toml` with `[local_service]` metadata. NSE_COMPATIBILITY.md, registry, AGENTS.override.md, SKILL.md, and AGENTS.md updated.
+
+**Verification:** All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have ManualPermissive success tests and automated-profile zero-hit denial tests. Architecture guards 48-50 plus 48b-48d pass.
+
 ### Milestone 6 Candidates
 
 - Protocol library wrappers (smb, ssh, ftp, mysql, postgres, redis, mongodb, ldap, snmp)
 - `stdnse.sleep()` cancellation integration
+- Async HTTP method denial tests
 - Structured Lua output table parsing
 - TUI-first compatibility debugging workflow
 - Performance/caching for large corpus runs

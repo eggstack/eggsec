@@ -19,7 +19,7 @@
 | datetime | Time | Wrapped | Wall-clock access | Warn | `nse_time_now()` emits nondeterminism warning in CiSafe |
 | rand | Random | Wrapped | Random bytes | Warn | `nse_random_bytes()` denied in CiSafe; warned in AgentSafe |
 | stdnse | Utility | PartiallyWrapped | Output, script args | Graceful degrade | Output table construction allowed; `stdnse.sleep()` blocked without cancellation |
-| http | Network | Wrapped | HTTP requests | Deny | All network operations gated via `check_network_tcp()`; denied requests never reach reqwest |
+| http | Network | Wrapped | HTTP requests | Deny | All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) gated via `check_network_tcp()` or `maybe_denied_response()`; denied requests never reach reqwest |
 | ssl | Network | Wrapped | TLS handshake | Deny | Wrapped since Milestone 3 Phase 05; TLS ops routed through `NseCapabilityContext` |
 | ssh | Network | Deferred | SSH connections | — | No capability wrapper yet; full SSH protocol library |
 | smb | Network | Deferred | SMB/CIFS I/O | — | No capability wrapper yet; Windows file sharing protocol |
@@ -105,6 +105,11 @@
 | http-get-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP GET; title extraction |
 | http-post-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP POST |
 | udp-echo | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local UDP echo; sendto/receive_from |
+| http-put-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP PUT |
+| http-delete-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP DELETE |
+| http-head-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP HEAD |
+| http-options-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP OPTIONS |
+| http-request-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP generic request |
 
 ---
 
@@ -179,7 +184,7 @@ These libraries have no capability wrappers and are unavailable in AgentSafe and
 
 ### Unsupported Patterns
 
-- **Real HTTP/HTTPS**: Corpus uses mocks; real I/O requires network policy and capability wrapper for `http.request()`
+- **Real HTTP/HTTPS**: All core HTTP methods now have local fixture scripts with zero-hit denial tests; no mock fallback for tested methods
 - **Real DNS resolution**: Corpus uses mocks; real DNS requires network policy
 - **`stdnse.sleep()`**: Blocked without cancellation token support; scripts using sleep will hang or error
 - **Process execution**: Fully denied in AgentSafe/CiSafe; only ManualPermissive allows
@@ -226,7 +231,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
 | `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
-| `local_protocol_tests` | 17 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03; AgentSafe HTTP assertions tightened in Milestone 6 |
+| `local_protocol_tests` | 29 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phase 02 |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
 
@@ -300,7 +305,7 @@ The following are candidates for capability wrapper migration in Milestone 5:
 ### Infrastructure Improvements
 
 - **Cancellation token support** — Enable `stdnse.sleep()` to respect task cancellation
-- ~~**Real HTTP/HTTPS in corpus**~~ — Local HTTP fixtures added in Milestone 5 Phase 03; reqwest capability bypass documented
+- ~~**Real HTTP/HTTPS in corpus**~~ — All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have local fixtures with zero-hit denial tests for automated profiles
 - ~~**Real DNS in corpus**~~ — DNS denial tested via local_protocol_tests; real resolution requires local DNS server (deferred)
 - **Profile-specific corpus tagging** — Tag fixtures with expected profile compatibility
 
@@ -322,7 +327,7 @@ The following are candidates for capability wrapper migration in Milestone 5:
 | Binary | Tests | Notes |
 |--------|-------|-------|
 | `runtime_corpus_tests` | 18 | Strict manifest assertions, stable at all parallelism |
-| `local_protocol_tests` | 17 (all pass) | AgentSafe HTTP strict denial verified with server hit counters |
+| `local_protocol_tests` | 29 (all pass) | HTTP method coverage expanded; all methods have zero-hit denial tests |
 | `runtime_smoke_tests` | 2 | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | Resolver-only assertions |
 | `evidence_tests` | 19 | Evidence extraction + bridge |

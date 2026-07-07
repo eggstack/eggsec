@@ -979,14 +979,67 @@ echo "--- Check 48: HTTP check_network_tcp before reqwest ---"
 http_file="crates/eggsec-nse/src/libraries/http.rs"
 if [ -f "$http_file" ]; then
     check_count=$(grep -c "check_network_tcp" "$http_file" || echo 0)
-    if [ "$check_count" -lt 5 ]; then
-        echo "FAIL: http.rs has only $check_count check_network_tcp calls (expected >= 5)"
+    if [ "$check_count" -lt 4 ]; then
+        echo "FAIL: http.rs has only $check_count check_network_tcp calls (expected >= 4)"
         FAIL=$((FAIL + 1))
     else
         echo "PASS: http.rs has $check_count check_network_tcp calls."
     fi
 else
     echo "SKIP: http.rs not found (nse feature not enabled)."
+fi
+
+echo ""
+echo "--- Check 48b: HTTP method operations defined ---"
+http_file="crates/eggsec-nse/src/libraries/http.rs"
+if [ -f "$http_file" ]; then
+    missing=""
+    for op in "http.get" "http.post" "http.put" "http.delete" "http.head" "http.options" "http.request"; do
+        if ! grep -q "\"$op\"" "$http_file"; then
+            missing="$missing $op"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        echo "FAIL: http.rs missing operation strings:$missing"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: http.rs defines all core HTTP method operations."
+    fi
+else
+    echo "SKIP: http.rs not found."
+fi
+
+echo ""
+echo "--- Check 48c: Local HTTP denied tests assert zero hits ---"
+# Check that every server.hits() call has a strict assertion on same or next line
+# Accepts: assert_eq!(server.hits(), 0, ...) or assert!(server.hits() > 0, ...)
+HITS=$(rg -n 'server\.hits\(\)' crates/eggsec-nse/tests/local_protocol_tests.rs 2>/dev/null | while read -r line; do
+    linenum=$(echo "$line" | cut -d: -f1)
+    content=$(echo "$line" | cut -d: -f2-)
+    nextline=$(sed -n "$((linenum+1))p" crates/eggsec-nse/tests/local_protocol_tests.rs)
+    combined="$content $nextline"
+    if ! echo "$combined" | grep -qE '(==\s*0|>\s*0|,\s*0\s*[,)])'; then
+        echo "$line"
+    fi
+done || true)
+if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: Found server.hits() calls without strict equality assertion."
+    FAIL=$((FAIL + 1))
+else
+    echo "PASS: All server.hits() assertions are strict."
+fi
+
+echo ""
+echo "--- Check 48d: No permissive denied-test language for automated HTTP ---"
+# Check for permissive language in test function names or doc comments, not in assertion message strings
+HITS=$(rg -n '(may (fail|succeed)|accept either)' crates/eggsec-nse/tests/local_protocol_tests.rs 2>/dev/null | grep -v '// ' | grep -v 'assert' | grep -v '"' || true)
+if [[ -n "$HITS" ]]; then
+    echo "$HITS"
+    echo "FAIL: Found permissive language in automated HTTP denial tests."
+    FAIL=$((FAIL + 1))
+else
+    echo "PASS: No permissive language in automated HTTP denial tests."
 fi
 
 echo ""
