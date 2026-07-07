@@ -445,6 +445,41 @@ cargo test -p eggsec-nse --features nse --test local_protocol_tests
 
 Harness tests assert semantic report fields: `status`, `fidelity`, resolved/blocked state, `libraries`, `rules`, `capability_events`, provenance metadata, and gap classification. Adding a new fixture requires only a `.nse`/`.lua` file and a `manifest.toml` entry with provenance and gap classification. All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have local fixture scripts with zero-hit denial tests for automated profiles.
 
+## TUI Report Filtering and Navigation
+
+The NSE report view supports section-aware filtering and search in the TUI.
+
+### Section Types
+
+| Section | Index | Content |
+|---------|-------|---------|
+| Summary | 1 | Target, script, source, profile, elapsed, status, fidelity |
+| Compatibility | 2 | Status, unsupported features, approximations |
+| Rule Evaluation | 3 | Rule kind, match status, exactness, context sources |
+| Libraries | 4 | Library name, category, load status, side effects |
+| Capability Denials | 5 | Denied operations with `[!]` prefix |
+| Evidence | 6 | Structured observations with confidence levels |
+| Raw Output | 7 | Script stdout/stderr with truncation |
+| Diagnostics | 8 | Errors, warnings, resolver summary |
+
+### Keyboard Shortcuts (NSE Results Focus)
+
+| Key | Action |
+|-----|--------|
+| `f` | Cycle filter: None → Summary → ... → Diagnostics → None |
+| `1`-`8` | Jump to section by index |
+| `s` | Start search mode (type to search within sections) |
+| `Backspace` | Remove last search character |
+| `Esc` | Clear search → clear filter → normal escape |
+
+### Implementation
+
+- `NseReportSection` enum in `nse_report_view.rs`
+- `render_report_sections()` produces section-aware `Vec<NseSectionContent>`
+- `render_filtered_report()` filters by section and searches within content
+- `NseTab` manages filter state, search query, and section jump index
+- Results title updates to show `[SectionName]` and `/query` when active
+
 ## Testing
 
 ```bash

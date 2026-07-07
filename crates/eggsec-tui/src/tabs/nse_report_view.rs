@@ -13,27 +13,185 @@ use crate::tc;
 const MAX_RAW_OUTPUT_LINES: usize = 200;
 const TRUNCATION_NOTICE: &str = "...(output truncated, showing first 200 lines)";
 
-/// Render a full `NseRunReport` into a sequence of styled `Line`s for TUI display.
-pub fn render_report(report: &NseRunReport) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
+/// Sections of an NSE report for filtering and navigation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NseReportSection {
+    Summary,
+    Compatibility,
+    RuleEvaluation,
+    Libraries,
+    CapabilityDenials,
+    Evidence,
+    RawOutput,
+    Diagnostics,
+}
 
-    lines.extend(render_summary(report));
-    lines.push(Line::from(""));
-    lines.extend(render_compatibility(&report.compatibility));
-    lines.push(Line::from(""));
-    lines.extend(render_rule_evaluation(&report.rules));
-    lines.push(Line::from(""));
-    lines.extend(render_libraries(&report.libraries));
-    lines.push(Line::from(""));
-    lines.extend(render_capability_denials(&report.capability_events));
-    lines.push(Line::from(""));
-    lines.extend(render_evidence(&report.evidence));
-    lines.push(Line::from(""));
-    lines.extend(render_raw_output(&report.output));
-    lines.push(Line::from(""));
-    lines.extend(render_diagnostics(report));
+impl NseReportSection {
+    pub const ALL: &'static [NseReportSection] = &[
+        NseReportSection::Summary,
+        NseReportSection::Compatibility,
+        NseReportSection::RuleEvaluation,
+        NseReportSection::Libraries,
+        NseReportSection::CapabilityDenials,
+        NseReportSection::Evidence,
+        NseReportSection::RawOutput,
+        NseReportSection::Diagnostics,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Summary => "Summary",
+            Self::Compatibility => "Compatibility",
+            Self::RuleEvaluation => "Rule Evaluation",
+            Self::Libraries => "Libraries",
+            Self::CapabilityDenials => "Capability Denials",
+            Self::Evidence => "Evidence",
+            Self::RawOutput => "Raw Output",
+            Self::Diagnostics => "Diagnostics",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        match self {
+            Self::Summary => 0,
+            Self::Compatibility => 1,
+            Self::RuleEvaluation => 2,
+            Self::Libraries => 3,
+            Self::CapabilityDenials => 4,
+            Self::Evidence => 5,
+            Self::RawOutput => 6,
+            Self::Diagnostics => 7,
+        }
+    }
+}
+
+/// A rendered section with its lines and metadata for search/navigation.
+#[derive(Debug, Clone)]
+pub struct NseSectionContent {
+    pub section: NseReportSection,
+    pub lines: Vec<Line<'static>>,
+    pub line_start: usize,
+    pub line_count: usize,
+    /// Text content for search indexing (plain text, no styling).
+    pub text_content: String,
+}
+
+/// Render a full `NseRunReport` into section-aware content for filtering/navigation.
+pub fn render_report_sections(report: &NseRunReport) -> Vec<NseSectionContent> {
+    let mut sections = Vec::new();
+    let mut offset = 0;
+
+    let section_data: Vec<(NseReportSection, Vec<Line<'static>>)> = vec![
+        (NseReportSection::Summary, render_summary(report)),
+        (
+            NseReportSection::Compatibility,
+            render_compatibility(&report.compatibility),
+        ),
+        (
+            NseReportSection::RuleEvaluation,
+            render_rule_evaluation(&report.rules),
+        ),
+        (
+            NseReportSection::Libraries,
+            render_libraries(&report.libraries),
+        ),
+        (
+            NseReportSection::CapabilityDenials,
+            render_capability_denials(&report.capability_events),
+        ),
+        (
+            NseReportSection::Evidence,
+            render_evidence(&report.evidence),
+        ),
+        (
+            NseReportSection::RawOutput,
+            render_raw_output(&report.output),
+        ),
+        (NseReportSection::Diagnostics, render_diagnostics(report)),
+    ];
+
+    for (section, lines) in section_data {
+        let line_count = lines.len();
+        let text_content = extract_text(&lines);
+        sections.push(NseSectionContent {
+            section,
+            lines,
+            line_start: offset,
+            line_count,
+            text_content,
+        });
+        offset += line_count;
+    }
+
+    sections
+}
+
+/// Filter sections and produce a flat `Vec<Line>` with section separators.
+pub fn render_filtered_report(
+    sections: &[NseSectionContent],
+    filter: Option<NseReportSection>,
+    search_query: Option<&str>,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let mut has_content = false;
+
+    for section in sections {
+        if let Some(f) = filter {
+            if section.section != f {
+                continue;
+            }
+        }
+
+        let section_lines: Vec<Line<'static>> = if let Some(query) = search_query {
+            if !query.is_empty() {
+                let query_lower = query.to_lowercase();
+                section
+                    .lines
+                    .iter()
+                    .filter(|line| {
+                        let text = extract_line_text(line);
+                        text.to_lowercase().contains(&query_lower)
+                    })
+                    .cloned()
+                    .collect()
+            } else {
+                section.lines.clone()
+            }
+        } else {
+            section.lines.clone()
+        };
+
+        if !section_lines.is_empty() {
+            if has_content {
+                lines.push(Line::from(""));
+            }
+            lines.extend(section_lines);
+            has_content = true;
+        }
+    }
 
     lines
+}
+
+fn extract_line_text(line: &Line<'_>) -> String {
+    line.spans
+        .iter()
+        .map(|s| s.content.as_ref())
+        .collect::<String>()
+}
+
+fn extract_text(lines: &[Line<'_>]) -> String {
+    lines
+        .iter()
+        .map(extract_line_text)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Render a full `NseRunReport` into a sequence of styled `Line`s for TUI display.
+pub fn render_report(report: &NseRunReport) -> Vec<Line<'static>> {
+    let sections = render_report_sections(report);
+    render_filtered_report(&sections, None, None)
 }
 
 fn section_header(title: &str) -> Line<'static> {
@@ -820,5 +978,123 @@ mod tests {
             full.contains("limit violation"),
             "should show limit violation"
         );
+    }
+
+    // ── Section-aware rendering tests ──────────────────────────────────────
+
+    #[test]
+    fn test_render_report_sections_produces_all_sections() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        assert_eq!(sections.len(), 8, "should produce 8 sections");
+        assert_eq!(sections[0].section, NseReportSection::Summary);
+        assert_eq!(sections[1].section, NseReportSection::Compatibility);
+        assert_eq!(sections[2].section, NseReportSection::RuleEvaluation);
+        assert_eq!(sections[3].section, NseReportSection::Libraries);
+        assert_eq!(sections[4].section, NseReportSection::CapabilityDenials);
+        assert_eq!(sections[5].section, NseReportSection::Evidence);
+        assert_eq!(sections[6].section, NseReportSection::RawOutput);
+        assert_eq!(sections[7].section, NseReportSection::Diagnostics);
+    }
+
+    #[test]
+    fn test_render_report_sections_line_offsets() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        let mut expected_offset = 0;
+        for section in &sections {
+            assert_eq!(section.line_start, expected_offset);
+            expected_offset += section.line_count;
+        }
+    }
+
+    #[test]
+    fn test_render_report_sections_text_content_non_empty() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        for section in &sections {
+            assert!(
+                !section.text_content.is_empty(),
+                "section {:?} should have non-empty text content",
+                section.section
+            );
+        }
+    }
+
+    #[test]
+    fn test_filtered_report_no_filter_shows_all() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        let filtered = render_filtered_report(&sections, None, None);
+        let all = render_report(&report);
+        assert_eq!(filtered.len(), all.len());
+    }
+
+    #[test]
+    fn test_filtered_report_single_section() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        let filtered = render_filtered_report(&sections, Some(NseReportSection::Summary), None);
+        let text = extract_text(&filtered);
+        assert!(text.contains("Target"), "should contain Summary content");
+        assert!(
+            !text.contains("── Compatibility"),
+            "should not contain other sections"
+        );
+    }
+
+    #[test]
+    fn test_filtered_report_search_matches() {
+        let report = make_denied_report();
+        let sections = render_report_sections(&report);
+        let filtered = render_filtered_report(&sections, None, Some("process_exec"));
+        let text = extract_text(&filtered);
+        assert!(text.contains("process_exec"), "should match search query");
+    }
+
+    #[test]
+    fn test_filtered_report_search_no_match() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        let filtered = render_filtered_report(&sections, None, Some("zzzznonexistent"));
+        assert!(
+            filtered.is_empty(),
+            "non-matching search should produce empty output"
+        );
+    }
+
+    #[test]
+    fn test_filtered_report_search_case_insensitive() {
+        let report = make_compatible_report();
+        let sections = render_report_sections(&report);
+        let filtered = render_filtered_report(&sections, None, Some("SSL"));
+        let text = extract_text(&filtered);
+        assert!(
+            text.contains("ssl-cert"),
+            "search should be case-insensitive"
+        );
+    }
+
+    #[test]
+    fn test_filtered_report_search_within_filtered_section() {
+        let report = make_denied_report();
+        let sections = render_report_sections(&report);
+        let filtered = render_filtered_report(
+            &sections,
+            Some(NseReportSection::CapabilityDenials),
+            Some("process_exec"),
+        );
+        let text = extract_text(&filtered);
+        assert!(
+            text.contains("process_exec"),
+            "should search within filtered section"
+        );
+    }
+
+    #[test]
+    fn test_section_index_matches_label() {
+        assert_eq!(NseReportSection::Summary.index(), 0);
+        assert_eq!(NseReportSection::Diagnostics.index(), 7);
+        assert_eq!(NseReportSection::ALL.len(), 8);
     }
 }

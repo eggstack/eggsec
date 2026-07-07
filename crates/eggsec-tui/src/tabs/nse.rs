@@ -1,14 +1,14 @@
-use crate::components::{empty_state_paragraph, Selector, SelectorItem};
-use crate::tabs::core::{
-    self, render_config_block, render_error_block, render_input_fields, TabCore,
+use super::nse_report_view::{
+    render_filtered_report, render_report_sections, NseReportSection, NseSectionContent,
 };
+use crate::components::{empty_state_paragraph, Selector, SelectorItem};
+use crate::tabs::core::{render_config_block, render_error_block, render_input_fields, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_input_boilerplate, tab_state_boilerplate, tc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders},
     Frame,
 };
 
@@ -18,6 +18,16 @@ pub struct NseTab {
     pub focus_area: NseFocusArea,
     #[cfg(feature = "nse")]
     pub structured_report: Option<eggsec_nse::NseRunReport>,
+    #[cfg(feature = "nse")]
+    pub report_sections: Vec<NseSectionContent>,
+    #[cfg(feature = "nse")]
+    pub report_filter: Option<NseReportSection>,
+    #[cfg(feature = "nse")]
+    pub report_search: String,
+    #[cfg(feature = "nse")]
+    pub detail_view_active: bool,
+    #[cfg(feature = "nse")]
+    pub detail_section_index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -54,6 +64,16 @@ impl NseTab {
             focus_area: NseFocusArea::Inputs,
             #[cfg(feature = "nse")]
             structured_report: None,
+            #[cfg(feature = "nse")]
+            report_sections: Vec::new(),
+            #[cfg(feature = "nse")]
+            report_filter: None,
+            #[cfg(feature = "nse")]
+            report_search: String::new(),
+            #[cfg(feature = "nse")]
+            detail_view_active: false,
+            #[cfg(feature = "nse")]
+            detail_section_index: 0,
         }
     }
 
@@ -91,7 +111,12 @@ impl NseTab {
         #[cfg(feature = "nse")]
         if let Some(report) = results.report {
             self.structured_report = Some(report.clone());
-            let lines = super::nse_report_view::render_report(&report);
+            self.report_sections = render_report_sections(&report);
+            self.report_filter = None;
+            self.report_search.clear();
+            self.detail_view_active = false;
+            self.detail_section_index = 0;
+            let lines = render_filtered_report(&self.report_sections, self.report_filter, None);
             for line in lines {
                 view.add_line(line);
             }
@@ -154,6 +179,11 @@ impl TabState for NseTab {
         #[cfg(feature = "nse")]
         {
             self.structured_report = None;
+            self.report_sections.clear();
+            self.report_filter = None;
+            self.report_search.clear();
+            self.detail_view_active = false;
+            self.detail_section_index = 0;
         }
     }
 }
@@ -217,7 +247,24 @@ impl TabRender for NseTab {
                     empty_state_paragraph("Results", "Results will appear here after running");
                 f.render_widget(placeholder, *results_area);
             } else {
-                self.core.results_view.render(f, *results_area, None);
+                // Build title with filter/search info
+                let mut title = "NSE Results".to_string();
+                #[cfg(feature = "nse")]
+                {
+                    if let Some(filter) = self.filter_label() {
+                        title = format!("NSE Results [{}]", filter);
+                    }
+                    if !self.report_search.is_empty() {
+                        title = format!(
+                            "{} /{}",
+                            title,
+                            &self.report_search[..self.report_search.len().min(20)]
+                        );
+                    }
+                }
+                let mut view = self.core.results_view.clone();
+                view.title = title;
+                view.render(f, *results_area, None);
             }
         }
     }
@@ -235,10 +282,47 @@ impl TabInput for NseTab {
     fn handle_char(&mut self, c: char) {
         let running = self.is_running();
         let inputs = self.focus_area == NseFocusArea::Inputs;
+
+        // Search mode: all chars go to search query when in Results focus
+        #[cfg(feature = "nse")]
+        if self.focus_area == NseFocusArea::Results && self.detail_view_active {
+            self.search_push_char(c);
+            return;
+        }
+
         crate::tabs::core::tab_input_char(&mut self.core, c, running, inputs);
+
+        // Filter cycling: 'f' in Results focus
+        #[cfg(feature = "nse")]
+        if self.focus_area == NseFocusArea::Results && c == 'f' && !running && self.has_report() {
+            self.cycle_report_filter();
+        }
+
+        // Section jump: '1'-'8' in Results focus
+        #[cfg(feature = "nse")]
+        if self.focus_area == NseFocusArea::Results && !running && self.has_report() {
+            if let Some(digit) = c.to_digit(10) {
+                let idx = digit as usize;
+                if idx >= 1 && idx <= NseReportSection::ALL.len() {
+                    self.jump_to_section(idx - 1);
+                }
+            }
+            // Start search mode
+            if c == 's' {
+                self.detail_view_active = true;
+                self.report_search.clear();
+                return;
+            }
+        }
     }
 
     fn handle_backspace(&mut self) {
+        #[cfg(feature = "nse")]
+        if self.detail_view_active && !self.report_search.is_empty() {
+            self.search_pop_char();
+            return;
+        }
+
         let running = self.is_running();
         let inputs = self.focus_area == NseFocusArea::Inputs;
         crate::tabs::core::tab_input_backspace(&mut self.core, running, inputs);
@@ -330,6 +414,17 @@ impl TabInput for NseTab {
             self.core.stop();
             return;
         }
+        // Clear search first, then filter, then normal escape
+        #[cfg(feature = "nse")]
+        if self.detail_view_active && !self.report_search.is_empty() {
+            self.search_clear();
+            return;
+        }
+        #[cfg(feature = "nse")]
+        if self.detail_view_active || self.report_filter.is_some() {
+            self.clear_filter();
+            return;
+        }
         self.core.inputs.blur();
         self.script_selector.blur();
         self.focus_area = NseFocusArea::Inputs;
@@ -396,5 +491,112 @@ impl NseTab {
             self.core.progress.total = 0;
             self.core.state = AppState::Running;
         }
+    }
+
+    /// Cycle through report filters: None → Summary → Compatibility → ... → Diagnostics → None.
+    #[cfg(feature = "nse")]
+    pub fn cycle_report_filter(&mut self) {
+        self.report_filter = match self.report_filter {
+            None => Some(NseReportSection::Summary),
+            Some(NseReportSection::Summary) => Some(NseReportSection::Compatibility),
+            Some(NseReportSection::Compatibility) => Some(NseReportSection::RuleEvaluation),
+            Some(NseReportSection::RuleEvaluation) => Some(NseReportSection::Libraries),
+            Some(NseReportSection::Libraries) => Some(NseReportSection::CapabilityDenials),
+            Some(NseReportSection::CapabilityDenials) => Some(NseReportSection::Evidence),
+            Some(NseReportSection::Evidence) => Some(NseReportSection::RawOutput),
+            Some(NseReportSection::RawOutput) => Some(NseReportSection::Diagnostics),
+            Some(NseReportSection::Diagnostics) => None,
+        };
+        self.refresh_filtered_view();
+    }
+
+    /// Jump to a specific section by index (0-based among visible sections).
+    #[cfg(feature = "nse")]
+    pub fn jump_to_section(&mut self, index: usize) {
+        if index < NseReportSection::ALL.len() {
+            self.detail_section_index = index;
+            self.detail_view_active = true;
+            self.refresh_filtered_view();
+        }
+    }
+
+    /// Clear the active filter, showing all sections.
+    #[cfg(feature = "nse")]
+    pub fn clear_filter(&mut self) {
+        self.report_filter = None;
+        self.report_search.clear();
+        self.detail_view_active = false;
+        self.detail_section_index = 0;
+        self.refresh_filtered_view();
+    }
+
+    /// Add a character to the search query.
+    #[cfg(feature = "nse")]
+    pub fn search_push_char(&mut self, c: char) {
+        self.report_search.push(c);
+        self.refresh_filtered_view();
+    }
+
+    /// Remove the last character from the search query.
+    #[cfg(feature = "nse")]
+    pub fn search_pop_char(&mut self) {
+        self.report_search.pop();
+        self.refresh_filtered_view();
+    }
+
+    /// Clear the search query.
+    #[cfg(feature = "nse")]
+    pub fn search_clear(&mut self) {
+        self.report_search.clear();
+        self.refresh_filtered_view();
+    }
+
+    /// Refresh the results view based on current filter and search state.
+    #[cfg(feature = "nse")]
+    fn refresh_filtered_view(&mut self) {
+        if self.report_sections.is_empty() {
+            return;
+        }
+        let view = &mut self.core.results_view;
+        view.clear();
+
+        let filter = if self.detail_view_active {
+            NseReportSection::ALL
+                .get(self.detail_section_index)
+                .copied()
+        } else {
+            self.report_filter
+        };
+
+        let search = if self.report_search.is_empty() {
+            None
+        } else {
+            Some(self.report_search.as_str())
+        };
+
+        let lines = render_filtered_report(&self.report_sections, filter, search);
+        for line in lines {
+            view.add_line(line);
+        }
+    }
+
+    /// Get the current filter label for display.
+    #[cfg(feature = "nse")]
+    pub fn filter_label(&self) -> Option<&'static str> {
+        if let Some(filter) = self.report_filter {
+            Some(filter.label())
+        } else if self.detail_view_active {
+            NseReportSection::ALL
+                .get(self.detail_section_index)
+                .map(|s| s.label())
+        } else {
+            None
+        }
+    }
+
+    /// Check if a structured report is loaded.
+    #[cfg(feature = "nse")]
+    pub fn has_report(&self) -> bool {
+        self.structured_report.is_some()
     }
 }

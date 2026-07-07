@@ -98,6 +98,45 @@ Only executable operations produce audit events. TUI uses `ExecutionSurface::Tui
 
 - **Configurable auto-save interval**: Settings > Session panel now allows configuring auto-save interval (previously hardcoded to 30s)
 
+## NSE Report Filtering and Navigation (2026-07-07)
+
+The NSE tab now supports section-aware report filtering and search. Key components:
+
+### Section-Aware Rendering (`nse_report_view.rs`)
+
+- `NseReportSection` enum: Summary, Compatibility, RuleEvaluation, Libraries, CapabilityDenials, Evidence, RawOutput, Diagnostics
+- `NseSectionContent` struct: section + lines + line_start + line_count + text_content
+- `render_report_sections()`: produces `Vec<NseSectionContent>` from `NseRunReport`
+- `render_filtered_report()`: filters sections and searches within content
+
+### NseTab State (`nse.rs`)
+
+New fields (all `#[cfg(feature = "nse")]`):
+- `report_sections: Vec<NseSectionContent>` — pre-rendered section data
+- `report_filter: Option<NseReportSection>` — active section filter
+- `report_search: String` — search query
+- `detail_view_active: bool` — search/detail mode flag
+- `detail_section_index: usize` — section jump index
+
+### Keyboard Shortcuts (NSE Results Focus)
+
+| Key | Action |
+|-----|--------|
+| `f` | Cycle filter: None → Summary → Compatibility → ... → Diagnostics → None |
+| `1`-`8` | Jump to section by index |
+| `s` | Start search mode |
+| `Backspace` | Remove last search character |
+| `Esc` | Clear search → clear filter → normal escape |
+
+### Methods
+
+- `cycle_report_filter()`: cycles through filter states
+- `jump_to_section(index)`: jumps to section by 0-based index
+- `clear_filter()`: resets all filter/search state
+- `search_push_char(c)` / `search_pop_char()` / `search_clear()`: search query management
+- `refresh_filtered_view()`: re-renders results based on current filter/search state
+- `filter_label()` / `has_report()`: state accessors
+
 ## Phase 8: TUI Architecture Tightening (2026-06-30)
 
 ### EnforcementFacade Extraction

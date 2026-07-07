@@ -206,3 +206,38 @@ Tests in `crates/eggsec-tui/src/tabs/nse_report_view.rs` cover:
 - **Denied report**: Capability denials present, denials panel populated with `[!]` prefixed lines.
 - **Empty report**: All optional sections empty, empty-state text rendered.
 - **Partial report**: Some sections present (e.g. rules + evidence), others absent — only populated sections rendered.
+- **Section-aware rendering**: `render_report_sections()` produces `NseSectionContent` with line offsets and text content.
+- **Filtering**: `render_filtered_report()` with section filter and search query produces correct subsets.
+- **Search**: Case-insensitive search across all section content, combined with section filtering.
+
+## TUI Implementation (Phase 02) — Filtering and Navigation
+
+### Section-Aware Rendering
+
+`render_report_sections()` produces `Vec<NseSectionContent>` from an `NseRunReport`. Each `NseSectionContent` carries:
+- `section`: `NseReportSection` enum variant
+- `lines`: rendered `Vec<Line<'static>>`
+- `line_start` / `line_count`: offset metadata for navigation
+- `text_content`: plain-text extraction for search indexing
+
+`render_filtered_report()` accepts sections, an optional filter (`NseReportSection`), and an optional search query string. It produces a flat `Vec<Line>` with section separators between non-empty sections.
+
+### Keyboard Shortcuts (NSE Results Focus)
+
+| Key | Action |
+|-----|--------|
+| `f` | Cycle filter: None → Summary → Compatibility → ... → Diagnostics → None |
+| `1`-`8` | Jump to section by index (1=Summary, 8=Diagnostics) |
+| `s` | Start search mode (all subsequent chars match within section content) |
+| `Backspace` | Remove last search character |
+| `Esc` | Clear search → clear filter → normal escape |
+
+### Filter State
+
+`NseTab` tracks filter state via:
+- `report_filter: Option<NseReportSection>` — active section filter
+- `report_search: String` — current search query
+- `detail_view_active: bool` — whether search/detail mode is active
+- `detail_section_index: usize` — index for section jump
+
+The results view title updates to show `[SectionName]` when filtered and `/query` when searching.
