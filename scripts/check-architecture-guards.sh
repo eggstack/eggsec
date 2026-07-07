@@ -945,6 +945,36 @@ else
 fi
 
 echo ""
+echo "--- Check 47: Local protocol fixtures have local_service metadata ---"
+# All local protocol fixtures (those bound to 127.0.0.1 with local servers)
+# must declare [local_service] in manifest.toml to signal the runtime harness
+# that they require a real listener (not synthetic context).
+LOCAL_FIXTURES=$(rg -l 'local_service' crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml 2>/dev/null || true)
+if [[ -n "$LOCAL_FIXTURES" ]]; then
+  echo "PASS: Local protocol fixtures declare local_service metadata."
+else
+  echo "WARN: No local_service metadata found in manifest.toml."
+  echo "      Local protocol fixtures should declare [local_service] for harness skipping."
+fi
+# Verify runtime harness has local_service skip logic
+SKIP_PRESENT=$(rg -c 'local_service' crates/eggsec-nse/tests/runtime_corpus_tests.rs 2>/dev/null || true)
+if [[ -n "$SKIP_PRESENT" && "$SKIP_PRESENT" -gt 0 ]]; then
+  echo "PASS: Runtime corpus harness has local_service skip logic."
+else
+  echo "FAIL: Runtime corpus harness does not skip local_service fixtures."
+  echo "      Add local_service.is_some() skip checks in runtime iteration sites."
+  FAIL=$((FAIL + 1))
+fi
+# Verify local_protocol_tests.rs exists for local fixture coverage
+if [[ -f crates/eggsec-nse/tests/local_protocol_tests.rs ]]; then
+  echo "PASS: local_protocol_tests.rs exists for local protocol fixture coverage."
+else
+  echo "FAIL: local_protocol_tests.rs does not exist."
+  echo "      Local protocol fixtures need dedicated runtime tests with real listeners."
+  FAIL=$((FAIL + 1))
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

@@ -596,13 +596,43 @@ Final verification pass: 369 tests pass (1 ignored), architecture guards all pas
 
 **Verification:** 17 runtime corpus tests pass, 2 smoke tests pass, all 46 architecture guards pass, clippy clean.
 
+### Milestone 5 Phase 03: Local Protocol Fixtures (2026-07-06)
+
+**Status:** Complete
+
+**Problem:** The compatibility corpus relied entirely on mocked protocol interactions and synthetic context. No fixtures exercised real TCP/HTTP/UDP local protocol connectivity through the NSE capability wrapper pipeline. This left a gap in verifying that network wrappers (TCP connect/send/receive, UDP send/receive, HTTP GET/POST) produce correct capability events and evidence when connected to real local services.
+
+**Changes across 7 workstreams:**
+
+1. **Local fixture harness** (`local_fixtures.rs`): Reusable test infrastructure with `TcpEchoServer`, `HttpServer`, and `UdpEchoServer` bound to `127.0.0.1` with dynamic ports. Each server runs in a background thread with graceful shutdown. Unit tests verify roundtrip behavior.
+
+2. **NSE fixture scripts** (5 new files in `tests/fixtures/nse_corpus/scripts/protocol/`):
+   - `tcp_connect_echo.nse` — socket.tcp() connect/send/receive against local TCP echo
+   - `tcp_connect_denied.nse` — same pattern, expects denial under AgentSafe/CiSafe
+   - `http_get_local.nse` — `http.get()` against local HTTP server, extracts `<title>`
+   - `http_post_local.nse` — `http.post()` against local HTTP server
+   - `udp_echo.nse` — socket.udp() sendto/receive_from against local UDP echo
+
+3. **Runtime tests** (`local_protocol_tests.rs`): 16 tests exercising all local protocol fixtures through `NseExecutor::with_profile()` with real listeners. Covers TCP success/denial (AgentSafe, CiSafe), HTTP GET/POST success, UDP success/denial, DNS denial (AgentSafe), report JSON roundtrip, envelope bridge, evidence extraction, and profile comparison.
+
+4. **Manifest integration** (`manifest.toml`): 7 local protocol fixtures declared with `[local_service]` metadata (server type, dynamic ports). `expected_status = "compatible_with_warnings"` for all. Runtime corpus harness skips `local_service` fixtures (7 iteration sites updated).
+
+5. **Runtime harness skip**: `runtime_corpus_tests.rs` added `LocalService` deserialization, `local_service: Option<LocalService>` field on `FixtureEntry`, and `entry.local_service.is_none()` filter in all 7 runtime iteration sites.
+
+6. **Architecture guard**: Check 47 verifies local protocol fixtures declare `local_service` metadata, runtime harness has skip logic, and `local_protocol_tests.rs` exists.
+
+7. **Known limitation documented**: HTTP library (`reqwest`) bypasses the NSE capability context entirely — no `NetworkTcp` denial events under AgentSafe. This is a pre-existing gap in the HTTP library's capability integration.
+
+**Verification:** 452 NSE tests pass (1 ignored), all 47 architecture guards pass, clippy clean.
+
 ### Milestone 5 Boundary
 
 Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence semantics. Candidates for Milestone 5:
 
 - CLI/TUI report UX integration (rendering `ReportEnvelope` in TUI tabs, exporting from CLI).
-- Additional upstream fixtures (currently 39 fixtures; representative coverage).
+- Additional upstream fixtures (currently 44 fixtures; representative coverage).
 - Performance/throughput benchmarks for the runtime harness.
+- HTTP library capability integration (bypasses NseCapabilityContext for reqwest calls).
 
 ## Library Registry
 

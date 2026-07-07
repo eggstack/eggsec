@@ -42,6 +42,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 >
 > **Milestone 5 Phase 01 (2026-07-06, flake isolation).** The `runtime_corpus_tests` parallel-execution flake has been fixed. Root cause: `run_fixture_runtime()` used PID-only temp dir naming, causing concurrent test functions to share file paths. Fix: global `AtomicU32` invocation counter ensures each call gets a unique temp dir (`{fixture}-{pid}-{invocation_id}`). Stable at default parallelism — no `--test-threads` workaround needed. See [Milestone 5 Phase 01](../../architecture/nse_integration.md#milestone-5-phase-01-runtime-corpus-flake-isolation-2026-07-06).
 
+> **Milestone 5 Phase 03 (2026-07-06, local protocol fixtures).** Local TCP/HTTP/UDP fixture harness with real listeners, 5 new `.nse` scripts, 16 runtime tests in `local_protocol_tests.rs`. Manifest `local_service` metadata enables runtime harness skip. Architecture guard Check 47. Known limitation: HTTP library (reqwest) bypasses `NseCapabilityContext`. 452 NSE tests pass, 47 architecture guards pass.
+
 ## Key Components
 
 | Component | File | Purpose |
@@ -416,7 +418,7 @@ let result = match executor.run_script(script) {
 
 A representative corpus of NSE script fixtures verifies supported, partial, approximate, unsupported, denied, and errored behavior. The corpus is representative and local-only by default — it does not cover all Nmap scripts. The corpus makes compatibility claims testable and prevents overclaiming Nmap parity.
 
-- **Fixtures**: `tests/fixtures/nse_corpus/` — 37 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
+- **Fixtures**: `tests/fixtures/nse_corpus/` — 44 `.nse` and `.lua` files organized by category (discovery, version, default, protocol, auth, partial, unsupported, regression, upstream)
 - **Manifest**: `tests/fixtures/nse_corpus/manifest.toml` — data-driven fixture registry with expected status, fidelity, libraries, rules, capability events, provenance, and gap classification
 - **Tests**: `tests/compatibility_corpus_tests.rs` — 18 legacy individual tests + 25 data-driven harness tests
 
@@ -426,6 +428,9 @@ cargo test -p eggsec-nse --features nse --test compatibility_corpus_tests -- cor
 
 # Legacy individual tests
 cargo test -p eggsec-nse --features nse compatibility_corpus
+
+# Local protocol fixtures (TCP/HTTP/UDP with real listeners)
+cargo test -p eggsec-nse --features nse --test local_protocol_tests
 ```
 
 Harness tests assert semantic report fields: `status`, `fidelity`, resolved/blocked state, `libraries`, `rules`, `capability_events`, provenance metadata, and gap classification. Adding a new fixture requires only a `.nse`/`.lua` file and a `manifest.toml` entry with provenance and gap classification.

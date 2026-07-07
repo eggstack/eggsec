@@ -100,6 +100,11 @@
 | portrule-host-port | Context | Full | Complete | All | hard | hard | — | — | Portrule receives host/port correctly |
 | hostrule-host-context | Context | Full | Complete | All | hard | hard | — | — | Hostrule receives host context correctly |
 | portrule-service-context | Context | Full | Complete | All | hard | hard | — | — | Portrule receives service/context info |
+| tcp-connect-echo | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TCP echo; socket connect/send/receive |
+| tcp-connect-denied | Protocol | Denied | Complete | AgentSafe, CiSafe | hard | skip | required | CapabilityDenial | TCP connect denied under restricted profiles |
+| http-get-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP GET; title extraction |
+| http-post-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP POST |
+| udp-echo | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local UDP echo; sendto/receive_from |
 
 ---
 
@@ -223,6 +228,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
 | `runtime_corpus_tests` | 17 | `--test-threads=1` | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake under high parallelism |
+| `local_protocol_tests` | 16 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03 |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
 
@@ -270,6 +276,6 @@ The following are candidates for capability wrapper migration in Milestone 5:
 ### Infrastructure Improvements
 
 - **Cancellation token support** — Enable `stdnse.sleep()` to respect task cancellation
-- **Real HTTP/HTTPS in corpus** — Replace mocks with wiremock-based integration tests
-- **Real DNS in corpus** — Replace mocks with local DNS test server
+- ~~**Real HTTP/HTTPS in corpus**~~ — Local HTTP fixtures added in Milestone 5 Phase 03; reqwest capability bypass documented
+- ~~**Real DNS in corpus**~~ — DNS denial tested via local_protocol_tests; real resolution requires local DNS server (deferred)
 - **Profile-specific corpus tagging** — Tag fixtures with expected profile compatibility
