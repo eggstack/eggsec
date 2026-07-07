@@ -54,6 +54,8 @@ The `eggsec-nse` crate (`crates/eggsec-nse/`) provides Nmap Scripting Engine sup
 
 > **NSE Milestone 6 is closed (2026-07-06).** HTTP method coverage complete — all HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have local fixture scripts with zero-hit denial tests for AgentSafe and CiSafe. HTTP library (`reqwest`) fully migrated to Wrapped status. Architecture guards 48-50 enforce strict assertions. 511 tests pass, 52 architecture guards pass. Remaining deferred: protocol library wrappers, `stdnse.sleep()` cancellation. See [Milestone 6 Closure](../../architecture/nse_integration.md#milestone-6-closure-verification-2026-07-06).
 
+> **NSE Milestone 6 Phase 03 (2026-07-06, TLS/sslcert local fixtures).** `TlsEchoServer` in `local_fixtures.rs` generates self-signed X.509 certs at startup via openssl, creates `native_tls::Identity` via PKCS12, binds `127.0.0.1:0` (ephemeral), accepts TLS connections with per-connection thread spawning. 5 sslcert `.nse` fixture scripts exercise `get_certificate`, `parse_cert`, `get_subject`, `get_chain_certs`, and `is_valid`. All 5 manifest entries with `local_service.type = "tls_echo"`. 5 NSE integration tests + 1 unit test (40 total in local_protocol_tests). Architecture guard Check 53 added. `sslcert.rs` fixed to return actual PEM-encoded certificates. 518 eggsec-nse tests pass, 53 architecture guards pass. See [Milestone 6 Phase 03](../../architecture/nse_integration.md#milestone-6-phase-03).
+
 ## Key Components
 
 | Component | File | Purpose |

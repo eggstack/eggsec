@@ -1137,6 +1137,35 @@ else
 fi
 
 echo ""
+echo "--- Check 53: TLS local fixture scripts exist and are declared in manifest ---"
+tls_scripts_dir="crates/eggsec-nse/tests/fixtures/nse_corpus/scripts/protocol"
+tls_manifest="crates/eggsec-nse/tests/fixtures/nse_corpus/manifest.toml"
+tls_missing=""
+for script in "sslcert_get_certificate_local.nse" "sslcert_parse_cert_local.nse" "sslcert_get_subject_local.nse" "sslcert_get_chain_certs_local.nse" "sslcert_is_valid_local.nse"; do
+    if [ ! -f "$tls_scripts_dir/$script" ]; then
+        tls_missing="$tls_missing $script"
+    fi
+done
+if [ -n "$tls_missing" ]; then
+    echo "FAIL: Missing TLS fixture scripts:$tls_missing"
+    FAIL=$((FAIL + 1))
+else
+    # Check manifest declares them
+    manifest_missing=""
+    for script in "sslcert_get_certificate_local" "sslcert_parse_cert_local" "sslcert_get_subject_local" "sslcert_get_chain_certs_local" "sslcert_is_valid_local"; do
+        if ! grep -q "$script" "$tls_manifest" 2>/dev/null; then
+            manifest_missing="$manifest_missing $script"
+        fi
+    done
+    if [ -n "$manifest_missing" ]; then
+        echo "FAIL: TLS scripts not declared in manifest:$manifest_missing"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: All 5 TLS fixture scripts exist and are declared in manifest."
+    fi
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

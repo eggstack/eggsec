@@ -110,6 +110,11 @@
 | http-head-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP HEAD |
 | http-options-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP OPTIONS |
 | http-request-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local HTTP generic request |
+| sslcert-get-certificate-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_certificate() with PEM extraction |
+| sslcert-parse-cert-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.parse_cert() on live certificate |
+| sslcert-get-subject-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_subject() on live certificate |
+| sslcert-get-chain-certs-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.get_chain_certs() chain enumeration |
+| sslcert-is-valid-local | Protocol | Full | Complete | ManualPermissive | hard | skip | — | — | Real local TLS; sslcert.is_valid() validity check |
 
 ---
 
@@ -185,6 +190,7 @@ These libraries have no capability wrappers and are unavailable in AgentSafe and
 ### Unsupported Patterns
 
 - **Real HTTP/HTTPS**: All core HTTP methods now have local fixture scripts with zero-hit denial tests; no mock fallback for tested methods
+- **Real TLS/SSL**: sslcert library has 5 local fixture scripts with real TLS handshake against self-signed cert; tls and openssl libraries remain stubbed (hardcoded version/cipher strings)
 - **Real DNS resolution**: Corpus uses mocks; real DNS requires network policy
 - **`stdnse.sleep()`**: Blocked without cancellation token support; scripts using sleep will hang or error
 - **Process execution**: Fully denied in AgentSafe/CiSafe; only ManualPermissive allows
@@ -231,7 +237,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
 | `runtime_corpus_tests` | 18 | any | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake resolved; stable at all parallelism levels |
-| `local_protocol_tests` | 34 | any | Local TCP/HTTP/UDP fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phases 02-03 |
+| `local_protocol_tests` | 40 | any | Local TCP/HTTP/UDP/TLS fixtures with real listeners; added in Milestone 5 Phase 03; HTTP method coverage expanded in Milestone 6 Phases 02-03; TLS/sslcert fixtures added |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
 
@@ -306,6 +312,7 @@ The following are candidates for capability wrapper migration in Milestone 7:
 
 - **Cancellation token support** — Enable `stdnse.sleep()` to respect task cancellation
 - ~~**Real HTTP/HTTPS in corpus**~~ — All HTTP methods (GET/POST/PUT/DELETE/HEAD/OPTIONS/request) have local fixtures with zero-hit denial tests for automated profiles
+- ~~**Real TLS/SSL in corpus**~~ — TLS/sslcert local fixtures with real TLS handshake (self-signed cert, 5 test scripts)
 - ~~**Real DNS in corpus**~~ — DNS denial tested via local_protocol_tests; real resolution requires local DNS server (deferred)
 - **Profile-specific corpus tagging** — Tag fixtures with expected profile compatibility
 
@@ -327,7 +334,7 @@ The following are candidates for capability wrapper migration in Milestone 7:
 | Binary | Tests | Notes |
 |--------|-------|-------|
 | `runtime_corpus_tests` | 18 | Strict manifest assertions, stable at all parallelism |
-| `local_protocol_tests` | 34 (all pass) | HTTP method coverage expanded; all methods have zero-hit denial tests for AgentSafe and CiSafe |
+| `local_protocol_tests` | 40 (all pass) | HTTP method coverage expanded; all methods have zero-hit denial tests for AgentSafe and CiSafe; TLS/sslcert fixtures added |
 | `runtime_smoke_tests` | 2 | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | Resolver-only assertions |
 | `evidence_tests` | 19 | Evidence extraction + bridge |
@@ -335,7 +342,7 @@ The following are candidates for capability wrapper migration in Milestone 7:
 | `format_tests` | 29 | CLI formatting snapshots |
 | `profile_propagation_tests` | 4 | Profile → context pipeline |
 | `profile_report_tests` | 4 | End-to-end profile/report |
-| **eggsec-nse total** | **493 passed, 1 ignored** | |
+| **eggsec-nse total** | **499 passed, 1 ignored** | |
 | `nse_tests` (eggsec crate) | 174 | Integration tests |
 | `feature_matrix` + `enforcement_matrix` | 352 | Feature metadata validation |
 | **Grand total** | **1,019+** | |

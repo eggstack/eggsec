@@ -613,7 +613,7 @@ Final verification pass: 369 tests pass (1 ignored), architecture guards all pas
    - `http_post_local.nse` — `http.post()` against local HTTP server
    - `udp_echo.nse` — socket.udp() sendto/receive_from against local UDP echo
 
-3. **Runtime tests** (`local_protocol_tests.rs`): 16 tests exercising all local protocol fixtures through `NseExecutor::with_profile()` with real listeners. Covers TCP success/denial (AgentSafe, CiSafe), HTTP GET/POST success, UDP success/denial, DNS denial (AgentSafe), report JSON roundtrip, envelope bridge, evidence extraction, and profile comparison.
+3. **Runtime tests** (`local_protocol_tests.rs`): 21 tests exercising all local protocol fixtures through `NseExecutor::with_profile()` with real listeners. Covers TCP success/denial (AgentSafe, CiSafe), HTTP GET/POST success, UDP success/denial, DNS denial (AgentSafe), TLS/sslcert local fixtures (self-signed cert generation, `get_certificate`, `parse_cert`, `get_subject`, `get_chain_certs`, `is_valid`), report JSON roundtrip, envelope bridge, evidence extraction, and profile comparison.
 
 4. **Manifest integration** (`manifest.toml`): 7 local protocol fixtures declared with `[local_service]` metadata (server type, dynamic ports). `expected_status = "compatible_with_warnings"` for all. Runtime corpus harness skips `local_service` fixtures (7 iteration sites updated).
 
