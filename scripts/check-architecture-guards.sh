@@ -909,6 +909,42 @@ else
 fi
 
 echo ""
+echo "--- Check 45: No self-referential expected value construction in runtime corpus tests ---"
+# Runtime corpus tests must not construct expected values by calling production APIs.
+# Expected values (expected_libraries, expected_rules, expected_capability_events)
+# must come from the manifest.toml, not from calling production APIs like
+# Registry::all_libraries(), resolve_script(), or NseCapabilityContext methods.
+# Self-referential tests would always pass regardless of production code bugs.
+SELF_REF_HITS=$(rg -n 'Registry::all_libraries|LIBRARY_REGISTRY' \
+  crates/eggsec-nse/tests/runtime_corpus_tests.rs \
+  2>/dev/null || true)
+if [[ -n "$SELF_REF_HITS" ]]; then
+  echo "$SELF_REF_HITS"
+  echo "FAIL: Runtime corpus tests reference production code to build expected values."
+  echo "      Expected values must come from manifest.toml, not production APIs."
+  echo "      Self-referential tests always pass regardless of production code bugs."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: Runtime corpus tests use static manifest data for expected values."
+fi
+
+echo ""
+echo "--- Check 46: Runtime corpus test assertions must not be trivially satisfiable ---"
+# Hard assertions (assert!, assert_eq!) in corpus_runtime_observed_* functions
+# must compare against actual data, not always-true conditions.
+TRIVIAL_HITS=$(rg -n 'assert!\(true\)|assert_eq!\(report\.\w+\.len\(\), report\.\w+\.len\(\)\)' \
+  crates/eggsec-nse/tests/runtime_corpus_tests.rs \
+  2>/dev/null || true)
+if [[ -n "$TRIVIAL_HITS" ]]; then
+  echo "$TRIVIAL_HITS"
+  echo "FAIL: Found trivially satisfiable assertions in runtime corpus tests."
+  echo "      Assertions must compare against actual expected values from the manifest."
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS: No trivially satisfiable assertions found in runtime corpus tests."
+fi
+
+echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
   echo "FAILED: $FAIL check(s) failed."

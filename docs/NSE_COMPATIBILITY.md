@@ -56,48 +56,50 @@
 
 ## Script/Pattern Compatibility
 
-| Fixture ID | Category | Gap Classification | Fidelity | Profile Compatibility | Notes |
-|------------|----------|-------------------|----------|----------------------|-------|
-| simple-portrule | Core | Full | Complete | All | Basic portrule pattern; trivial script |
-| simple-hostrule | Core | Full | Complete | All | Basic hostrule pattern; host matching |
-| no-require | Core | Full | Complete | All | Script with no external dependencies |
-| prerule | Core | Full | Complete | All | Prerule execution pattern |
-| postrule | Core | Full | Complete | All | Postrule execution pattern |
-| version-detect | Core | Full | Complete | All | Nmap version detection output |
-| builtin-module-require | Core | Full | Complete | All | Requires built-in Lua module |
-| stdnse-output | Core | Full | Complete | All | `stdnse.output_table()` pattern |
-| stdnse-vulns | Core | Full | Complete | All | Vulnerability reporting via vulns module |
-| http-title-mock | Core | Full | Complete | ManualPermissive, ManualGuarded | HTTP title fetch; mocked in corpus |
-| dns-lookup-mock | Core | Full | Complete | ManualPermissive, ManualGuarded | DNS lookup; mocked in corpus |
-| brute-shape | Core | Full | Complete | ManualPermissive | Brute force shape; no real auth |
-| approximate-compat | Partial | Approximate | Approximate | ManualPermissive | Partial Nmap API surface; some calls stubbed |
-| agent-denied-file | Regression | Denied | Complete | AgentSafe, CiSafe | Agent profile correctly denies file access |
-| process-denied | Regression | Denied | Complete | AgentSafe, CiSafe | Agent profile correctly denies process exec |
-| fs-read-denied | Regression | Denied | Complete | AgentSafe, CiSafe | Agent profile denies unscoped filesystem read |
-| unsupported-rule | Partial | Unsupported | Unknown | All | Rule type not yet supported by engine |
-| false-portrule | Partial | Incorrect | Unknown | All | Portrule returns false; no scan action |
-| error-portrule | Partial | Error | Complete | All | Script error during execution; handled gracefully |
-| capability-fs-deny | Regression | Denied | Complete | AgentSafe, CiSafe | Capability context denies filesystem operation |
-| capability-compress | Partial | Denied | Complete | AgentSafe, CiSafe | Compression denied or limited by policy |
-| upstream-shortport-portrule | Upstream | Full | Complete | All | Upstream shortport portrule pattern |
-| upstream-shortport-port | Upstream | Full | Complete | All | Upstream shortport port selection |
-| upstream-categories-multi | Upstream | Partial | Approximate | ManualPermissive | Multiple script categories; partial support |
-| upstream-ssl-cert-summary | Upstream | Partial | Approximate | ManualPermissive | SSL cert summary; TLS protocol mocked |
-| upstream-http-get-mock | Upstream | Full | Complete | ManualPermissive, ManualGuarded | HTTP GET; mocked in corpus |
-| upstream-http-post-mock | Upstream | Full | Complete | ManualPermissive, ManualGuarded | HTTP POST; mocked in corpus |
-| upstream-dns-reverse | Upstream | Full | Complete | ManualPermissive, ManualGuarded | DNS reverse lookup; mocked |
-| upstream-stdnse-scripts-args | Upstream | Full | Complete | All | Script argument passing via stdnse |
-| upstream-stdnse-output-table | Upstream | Full | Complete | All | stdnse.output_table() pattern |
-| upstream-hostrule-hostname | Upstream | Full | Complete | All | Hostrule hostname matching |
-| upstream-graceful-degrade | Upstream | Full | Complete | All | Graceful degradation on missing deps |
-| upstream-vulns-check | Upstream | Full | Complete | All | vulns.exists() pattern |
-| upstream-brute-categories | Upstream | Partial | Approximate | ManualPermissive | Brute categories; brute lib deferred |
-| upstream-nmap-fetch-file | Upstream | Partial | Approximate | ManualPermissive | nmap.fetch_file(); partially mocked |
-| upstream-structured-output | Upstream | Full | Complete | All | Structured XML/JSON output pattern |
-| upstream-banner-parse | Upstream | Full | Complete | All | Service banner parsing |
-| portrule-host-port | Context | Full | Complete | All | Portrule receives host/port correctly |
-| hostrule-host-context | Context | Full | Complete | All | Hostrule receives host context correctly |
-| portrule-service-context | Context | Full | Complete | All | Portrule receives service/context info |
+**Verification mode legend**: Libraries = hard assert (default) or soft (harness flag); Rules = hard assert when ports declared, skip otherwise; CapEvents = `required=true` hard asserts denial, `required=false` accepts resolver-block substitute; Evidence = `expected_evidence_kinds` hard asserts presence.
+
+| Fixture ID | Category | Gap | Fidelity | Profiles | Libs | Rules | CapEvents | Evidence | Notes |
+|------------|----------|-----|----------|----------|------|-------|-----------|----------|-------|
+| simple-portrule | Core | Full | Complete | All | hard | skip | — | — | Basic portrule pattern; trivial script |
+| simple-hostrule | Core | Full | Complete | All | hard | skip | — | — | Basic hostrule pattern; host matching |
+| no-require | Core | Full | Complete | All | hard | skip | — | — | Script with no external dependencies |
+| prerule | Core | Full | Complete | All | hard | skip | — | — | Prerule execution pattern |
+| postrule | Core | Full | Complete | All | hard | skip | — | — | Postrule execution pattern |
+| version-detect | Core | Full | Complete | All | hard | skip | — | — | Nmap version detection output |
+| builtin-module-require | Core | Full | Complete | All | hard | skip | — | — | Requires built-in Lua module |
+| stdnse-output | Core | Full | Complete | All | hard | skip | — | — | `stdnse.output_table()` pattern |
+| stdnse-vulns | Core | Full | Complete | All | hard | skip | — | — | Vulnerability reporting via vulns module |
+| http-title-mock | Core | Full | Complete | ManualPermissive, ManualGuarded | hard | skip | — | — | HTTP title fetch; mocked in corpus |
+| dns-lookup-mock | Core | Full | Complete | ManualPermissive, ManualGuarded | hard | skip | — | — | DNS lookup; mocked in corpus |
+| brute-shape | Core | Full | Complete | ManualPermissive | hard | skip | — | — | Brute force shape; no real auth |
+| approximate-compat | Partial | Approximate | Approximate | ManualPermissive | hard | skip | — | — | Partial Nmap API surface; some calls stubbed |
+| agent-denied-file | Regression | Denied | Complete | AgentSafe, CiSafe | hard | skip | required | CapabilityDenial | Agent profile correctly denies file access |
+| process-denied | Regression | Denied | Complete | AgentSafe, CiSafe | hard | skip | required | CapabilityDenial | Agent profile correctly denies process exec |
+| fs-read-denied | Regression | Denied | Complete | AgentSafe, CiSafe | hard | skip | — | — | Agent profile denies unscoped filesystem read |
+| unsupported-rule | Partial | Unsupported | Unknown | All | hard | skip | — | — | Rule type not yet supported by engine |
+| false-portrule | Partial | Incorrect | Unknown | All | hard | skip | — | — | Portrule returns false; no scan action |
+| error-portrule | Partial | Error | Complete | All | hard | skip | — | — | Script error during execution; handled gracefully |
+| capability-fs-deny | Regression | Denied | Complete | AgentSafe, CiSafe | hard | skip | required | CapabilityDenial | Capability context denies filesystem operation |
+| capability-compress | Partial | Denied | Complete | AgentSafe, CiSafe | hard | skip | — | — | Compression denied or limited by policy |
+| upstream-shortport-portrule | Upstream | Full | Complete | All | hard | skip | — | — | Upstream shortport portrule pattern |
+| upstream-shortport-port | Upstream | Full | Complete | All | hard | skip | — | — | Upstream shortport port selection |
+| upstream-categories-multi | Upstream | Partial | Approximate | ManualPermissive | hard | skip | — | — | Multiple script categories; partial support |
+| upstream-ssl-cert-summary | Upstream | Partial | Approximate | ManualPermissive | hard | skip | — | — | SSL cert summary; TLS protocol mocked |
+| upstream-http-get-mock | Upstream | Full | Complete | ManualPermissive, ManualGuarded | hard | skip | — | — | HTTP GET; mocked in corpus |
+| upstream-http-post-mock | Upstream | Full | Complete | ManualPermissive, ManualGuarded | hard | skip | — | — | HTTP POST; mocked in corpus |
+| upstream-dns-reverse | Upstream | Full | Complete | ManualPermissive, ManualGuarded | hard | skip | — | — | DNS reverse lookup; mocked |
+| upstream-stdnse-scripts-args | Upstream | Full | Complete | All | hard | skip | — | — | Script argument passing via stdnse |
+| upstream-stdnse-output-table | Upstream | Full | Complete | All | hard | skip | — | — | stdnse.output_table() pattern |
+| upstream-hostrule-hostname | Upstream | Full | Complete | All | hard | skip | — | — | Hostrule hostname matching |
+| upstream-graceful-degrade | Upstream | Full | Complete | All | hard | skip | — | — | Graceful degradation on missing deps |
+| upstream-vulns-check | Upstream | Full | Complete | All | hard | skip | — | — | vulns.exists() pattern |
+| upstream-brute-categories | Upstream | Partial | Approximate | ManualPermissive | hard | skip | — | — | Brute categories; brute lib deferred |
+| upstream-nmap-fetch-file | Upstream | Partial | Approximate | ManualPermissive | hard | skip | — | — | nmap.fetch_file(); partially mocked |
+| upstream-structured-output | Upstream | Full | Complete | All | hard | skip | — | — | Structured XML/JSON output pattern |
+| upstream-banner-parse | Upstream | Full | Complete | All | hard | skip | — | — | Service banner parsing |
+| portrule-host-port | Context | Full | Complete | All | hard | hard | — | — | Portrule receives host/port correctly |
+| hostrule-host-context | Context | Full | Complete | All | hard | hard | — | — | Hostrule receives host context correctly |
+| portrule-service-context | Context | Full | Complete | All | hard | hard | — | — | Portrule receives service/context info |
 
 ---
 
@@ -203,7 +205,12 @@ The compatibility corpus is verified by two structurally separated harnesses:
 - Drives every fixture through `NseExecutor::with_profile(&ResolvedNseExecutionProfile)` with synthetic host/port context.
 - Captures rule reports, library use, capability events, evidence, and runtime stats.
 - Asserts manifest expectations (`expected_status`, `expected_fidelity`, `expected_libraries`, `expected_rules`, `expected_capability_events`).
-- 16 tests covering per-category and cross-cutting observations.
+- **Strict assertions (Milestone 5 Phase 02)**:
+  - **Libraries**: Hard assert by default; `allow_missing_runtime_libraries = true` downgrades to soft (log-only). Empty library reports (short-circuited execution) pass regardless.
+  - **Rules**: Hard assert when fixture declares `[[fixture.ports]]` (portrule can fire). Skip when no ports (portrule cannot fire). `allow_missing_runtime_rules = true` always skips empty rules.
+  - **Capability events**: `required = true` hard asserts the denial is observed (no resolver-block/error substitute). `required = false` (default) accepts resolver block or error as substitute.
+  - **Evidence**: `expected_evidence_kinds` hard asserts each kind is present. `optional_evidence_kinds` logged as informational.
+- 17 tests covering per-category and cross-cutting observations.
 
 ### Smoke Tests (`runtime_smoke_tests.rs`)
 
@@ -215,7 +222,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 
 | Binary | Tests | Stable at | Notes |
 |--------|-------|-----------|-------|
-| `runtime_corpus_tests` | 16 | `--test-threads=4` | Default-thread runs occasionally flaky on `process-denied` (likely library-static-state interaction); 10/10 stable at lower parallelism |
+| `runtime_corpus_tests` | 17 | `--test-threads=1` | Strict assertions added in Milestone 5 Phase 02; `process-denied` flake under high parallelism |
 | `runtime_smoke_tests` | 2 | any | Smoke + envelope bridge |
 | `compatibility_corpus_tests` | 43 | any | Resolver-only assertions |
 

@@ -572,6 +572,30 @@ Final verification pass: 369 tests pass (1 ignored), architecture guards all pas
 
 **Verification:** 10 consecutive runs at default parallelism, all 16 tests pass every time (previously flaky on ~40% of runs).
 
+### Milestone 5 Phase 02: Strict Runtime Assertions (2026-07-06)
+
+**Status:** Complete
+
+**Problem:** Runtime corpus assertions were lenient — missing libraries were logged but not failed, missing rules were silently skipped, capability denials accepted resolver-block substitutes, and no evidence assertions existed. This allowed regressions to pass silently.
+
+**Changes across 7 workstreams:**
+
+1. **Manifest extensions** (`manifest.toml`): Added `required: bool` to `ExpectedCapabilityEvent`, `optional_libraries`/`optional_rules`/`expected_evidence_kinds`/`optional_evidence_kinds` to `FixtureEntry`, `allow_missing_runtime_libraries`/`allow_missing_runtime_rules` to `FixtureHarness`. Updated 3 representative fixtures with `required=true` and evidence expectations.
+
+2. **Hard library assertions** (`runtime_corpus_tests.rs:707`): Default is now hard assert. `allow_missing_runtime_libraries = true` downgrades to soft (log-only). Empty library reports (short-circuited execution) pass regardless.
+
+3. **Hard rule assertions** (`runtime_corpus_tests.rs:737`): Hard assert when fixture declares `[[fixture.ports]]` (portrule can fire). Skip when no ports (portrule cannot fire). `allow_missing_runtime_rules = true` always skips empty rules.
+
+4. **Hard capability event assertions**: `required = true` hard asserts denial is observed (no resolver-block/error substitute). `required = false` (default) accepts resolver block or error as substitute.
+
+5. **Evidence assertions** (new test `corpus_runtime_strict_evidence_assertions`): `expected_evidence_kinds` hard asserts each kind is present. `optional_evidence_kinds` logged as informational.
+
+6. **Architecture guards**: Check 45 (no self-referential expected value construction — detects `Registry::all_libraries`/`LIBRARY_REGISTRY` in runtime tests). Check 46 (no trivially satisfiable assertions — detects `assert!(true)` and self-comparing patterns). Both pass.
+
+7. **Compatibility matrix** (`docs/NSE_COMPATIBILITY.md`): Added verification mode columns (Libs/Rules/CapEvents/Evidence) to the Script/Pattern Compatibility table. Updated test count from 16 to 17.
+
+**Verification:** 17 runtime corpus tests pass, 2 smoke tests pass, all 46 architecture guards pass, clippy clean.
+
 ### Milestone 5 Boundary
 
 Milestone 4 is closed. Future work should not reopen corpus/fidelity/evidence semantics. Candidates for Milestone 5:
