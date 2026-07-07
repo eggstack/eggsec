@@ -621,7 +621,7 @@ Final verification pass: 369 tests pass (1 ignored), architecture guards all pas
 
 6. **Architecture guard**: Check 47 verifies local protocol fixtures declare `local_service` metadata, runtime harness has skip logic, and `local_protocol_tests.rs` exists.
 
-7. **Known limitation documented**: HTTP library (`reqwest`) bypasses the NSE capability context entirely — no `NetworkTcp` denial events under AgentSafe. This is a pre-existing gap in the HTTP library's capability integration.
+7. **Known limitation resolved**: HTTP library (`reqwest`) capability bypass was resolved in Milestone 6 Phase 01 — all network operations now gated via `check_network_tcp()`, denied requests never reach reqwest. AgentSafe HTTP tests upgraded to strict denial assertions (server hits == 0).
 
 **Verification:** 452 NSE tests pass (1 ignored), all 47 architecture guards pass, clippy clean.
 
@@ -693,7 +693,6 @@ Candidates for future milestones:
 - Additional upstream fixtures (currently 39 fixtures; representative coverage)
 - Protocol library wrappers (ssh, smb, mysql, postgres, redis, mongodb, ldap, snmp)
 - `stdnse.sleep()` cancellation integration
-- HTTP library reqwest capability bypass resolution
 
 ## Library Registry
 
@@ -989,16 +988,16 @@ An `AgentSafe` run where the resolver rejected an arbitrary script file per prof
 }
 ```
 
-## Next Work: Milestone 4
+## Next Work: Milestone 7
 
-Milestones 2 and 3 are now closed. Future work should:
+Milestones 1–6 are now closed. Future work should:
 
-- Treat the library registry, rule semantics report, structured reports, compatibility corpus, and capability wrappers as closed unless regression tests reveal a defect.
+- Treat the library registry, rule semantics report, structured reports, compatibility corpus, capability wrappers, HTTP library capability integration, and report UX/performance as closed unless regression tests reveal a defect.
 - Build on `NseRunReport` and `NseRuleEvaluationReport` rather than bypass them.
 - Expand corpus breadth and library behavior upgrades as separate scoped work.
-- Address Milestone 4 candidates listed in the [Milestone 3 Closure Note](#milestone-3-closure-note).
+- Address Milestone 7 candidates listed in the [Milestone 6 Closure Note](#milestone-6-closure-note).
 
-The Milestone 4 plan should be written from the closure indices established in Milestones 1–3 without reopening previously closed contracts.
+The Milestone 7 plan should be written from the closure indices established in Milestones 1–6 without reopening previously closed contracts.
 
 ### Capability Inventory (Phase 01 Complete)
 
@@ -1438,7 +1437,7 @@ Milestone 4 is complete. The following summarizes all Phase 01–05 deliverables
 
 **`test_nse_prerule_postrule`** (nse_tests.rs): prerule/postrule functions must return booleans (`true`) for `evaluate_rule()` to set `evaluated: true`. String returns produce "unsupported" reports that are silently dropped by the executor guard. Fixed to use `stdnse.register_prerule(func)` / `stdnse.register_postrule(func)` with boolean returns.
 
-**`local_http_get_agent_safe_documentation`** (local_protocol_tests.rs): Updated assertion to match actual AgentSafe output (`"HTTP GET failed"` not `"HTTP request failed"`). reqwest HTTP library bypasses `NseCapabilityContext` — known partial-wrap limitation documented in M5 Phase 04.
+**`local_http_get_agent_safe_documentation`** (local_protocol_tests.rs): Updated assertion to match actual AgentSafe output (`"HTTP GET failed"` not `"HTTP request failed"`). HTTP library now fully capability-gated — resolved in Milestone 6 Phase 01.
 
 ### Final Counts
 

@@ -239,7 +239,7 @@ The compatibility corpus is verified by two structurally separated harnesses:
 
 - **Synthetic context fidelity**: The runtime harness injects a synthetic host/port context, so rule-level fidelity is `Approximate` even when script behavior is fully correct. This is by design — `evaluate_rule_with_context` downgrades fidelity when `host.source == Synthetic`.
 - **Capability-denial fixtures**: Capability-denial scenarios (`process-denied`, `fs-read-denied`, `capability-fs-deny`) declare `expected_fidelity = "approximate"` to match this synthetic-context behavior. Status is `Partial` due to the capability denial.
-- **High-parallelism flake**: The `process-denied` fixture occasionally misses a `process_exec` capability event when the test harness runs at default parallelism (typically 16+ threads). Stable at `--test-threads=4` or lower. Likely a cross-test interaction with library-level static state (`nmap._ports`, `http.HTTP_CLIENT`, `IO_SANDBOX_VIOLATIONS`, etc.) that is serialized via Mutex but contended under heavy parallelism. Documented as a known limitation; not blocking.
+- **High-parallelism flake** (RESOLVED): The `process-denied` fixture flake was fixed in Milestone 5 Phase 01 — root cause was PID-only temp dir naming causing concurrent test functions to share file paths. Fix: global `AtomicU32` invocation counter ensures unique temp dirs. Stable at default parallelism.
 
 ---
 
@@ -272,9 +272,9 @@ The display model for TUI and future frontends is defined in `architecture/nse_r
 
 ---
 
-## Milestone 5 Candidates
+## Milestone 7 Candidates
 
-The following are candidates for capability wrapper migration in Milestone 5:
+The following are candidates for capability wrapper migration in Milestone 7:
 
 ### Priority 1: Protocol Libraries
 
@@ -342,10 +342,10 @@ The following are candidates for capability wrapper migration in Milestone 5:
 
 ### Remaining Known Limitations
 
-1. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, brute, target — 12 libraries remain deferred to Milestone 6.
+1. **Deferred protocol libraries**: ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, creds, brute, target — 12 libraries remain deferred to Milestone 7.
 2. **`stdnse.sleep()` cancellation**: No cancellation token integration; sleep blocks without checking task cancellation.
 
-### Milestone 6 Candidates
+### Milestone 7 Candidates
 
 - Protocol library wrappers (smb, ssh, ftp, mysql, postgres, redis, mongodb, ldap, snmp)
 - `stdnse.sleep()` cancellation integration
